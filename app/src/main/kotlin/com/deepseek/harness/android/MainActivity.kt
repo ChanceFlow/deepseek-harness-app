@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.deepseek.harness.android.ui.chat.ChatRoute
+import com.deepseek.harness.android.ui.root.AppRoot
 import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             DeepSeekHarnessAndroidTheme {
-                ChatRoute()
+                AppRoot()
             }
         }
     }

@@ -2,6 +2,10 @@ package com.deepseek.harness.android.domain.repository
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.SessionModels
+import com.deepseek.harness.android.domain.model.SessionSearchResult
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.SendMessageRequest
@@ -38,6 +42,20 @@ interface ChatRepository {
         requestId: String,
         evidence: QuestionEvidence,
     )
+
+    fun observeWorkspaces(): Flow<List<WorkspaceSummary>>
+
+    suspend fun refreshWorkspaces()
+
+    suspend fun createWorkspace(path: String): WorkspaceSummary
+
+    suspend fun deleteWorkspace(workspaceId: String)
+
+    suspend fun loadModels(sessionId: String): SessionModels
+
+    suspend fun selectModel(sessionId: String, selection: ModelSelection): ModelSelection
+
+    suspend fun searchSessions(query: String): List<SessionSearchResult>
 }
 
 data class QuestionEvidence(

@@ -4,6 +4,10 @@ import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
+import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.SessionModels
+import com.deepseek.harness.android.domain.model.SessionSearchResult
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
@@ -14,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -59,6 +65,7 @@ class ChatViewModelTest {
             ),
         )
         val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
         viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
@@ -167,6 +174,35 @@ class ChatViewModelTest {
             requestId: String,
             evidence: QuestionEvidence,
         ) = Unit
+
+        private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
+        private val searchResults = mutableListOf<SessionSearchResult>()
+
+        override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =
+            workspaces
+
+        override suspend fun refreshWorkspaces() {
+            workspaces.value = emptyList()
+        }
+
+        override suspend fun createWorkspace(path: String): WorkspaceSummary {
+            return WorkspaceSummary(workspaceId = "workspace-1", path = path, title = path)
+        }
+
+        override suspend fun deleteWorkspace(workspaceId: String) = Unit
+
+        override suspend fun loadModels(sessionId: String): SessionModels {
+            return SessionModels(
+                current = ModelSelection(provider = "test", model = "test"),
+                routable = true,
+            )
+        }
+
+        override suspend fun selectModel(sessionId: String, selection: ModelSelection): ModelSelection =
+            selection
+
+        override suspend fun searchSessions(query: String): List<SessionSearchResult> =
+            searchResults.toList()
 
         companion object {
             val initialSession = SessionSummary(

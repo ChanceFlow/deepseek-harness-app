@@ -189,9 +189,9 @@ class DshConnectionManager @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                failure.trySend(error).getOrThrow()
+                if (!failure.isCompleted) failure.complete(error)
             } finally {
-                failure.trySend(null)
+                if (!failure.isCompleted) failure.complete(null)
             }
         }
     }

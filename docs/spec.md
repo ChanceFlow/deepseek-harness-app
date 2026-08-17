@@ -140,8 +140,9 @@ Text extraction handles `text` blocks and nested `tool-result` content.
 
 ## 7. Android UI Contract
 
-`ChatScreen` is stateless; `ChatRoute` owns `ChatViewModel` and collects
-`StateFlow<ChatUiState>`.
+``AppRoot` owns bottom navigation. `ChatScreen`, `WorkspaceScreen`, and
+`ModelsScreen` are all stateless screens; each route owns a Hilt ViewModel
+collecting `StateFlow` UI state.
 
 - `ChatUiState` is `@Immutable`.
 - `ChatAction` is a `sealed interface`.
@@ -172,8 +173,8 @@ Text extraction handles `text` blocks and nested `tool-result` content.
   will still display finalized blocks from `assistant/message`.
 - **No session title in list rows yet.** Titles are available through session
   projections and are not read in this milestone.
-- **No workspace/model/settings screens yet.** MVP focuses on session list, chat,
-  tool call rows, approvals, and questions.
+- **No settings screen yet.** Workspaces and model selection are MVP screens;
+  credential and plugin settings remain out of scope.
 - **No session search.** `session.search` is defined in the contract but not wired.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.

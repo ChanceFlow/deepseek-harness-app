@@ -4,17 +4,38 @@ import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
+import com.deepseek.harness.android.domain.model.ModelCatalogFailure
+import com.deepseek.harness.android.domain.model.ModelCatalogModel
+import com.deepseek.harness.android.domain.model.ModelProviderGroup
+import com.deepseek.harness.android.domain.model.ModelReasoning
+import com.deepseek.harness.android.domain.model.ModelReasoningEffort
+import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.SessionModels
+import com.deepseek.harness.android.domain.model.SessionSearchResult
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
+import kotlinx.coroutines.CancellationException
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.harness.dto.SessionCancelValue
 import com.deepseek.harness.android.harness.dto.SessionCreateValue
 import com.deepseek.harness.android.harness.dto.SessionHistoryValue
+import com.deepseek.harness.android.harness.dto.ModelCatalogFailureWire
+import com.deepseek.harness.android.harness.dto.ModelCatalogModelWire
+import com.deepseek.harness.android.harness.dto.ModelProviderGroupWire
+import com.deepseek.harness.android.harness.dto.ModelReasoningWire
+import com.deepseek.harness.android.harness.dto.ModelSelectionWire
 import com.deepseek.harness.android.harness.dto.SessionListValue
+import com.deepseek.harness.android.harness.dto.SessionModelsValue
+import com.deepseek.harness.android.harness.dto.SessionSearchValue
+import com.deepseek.harness.android.harness.dto.SessionSelectModelValue
+import com.deepseek.harness.android.harness.dto.WorkspaceCreateValue
+import com.deepseek.harness.android.harness.dto.WorkspaceListValue
+import com.deepseek.harness.android.harness.dto.WorkspaceWire
 import com.deepseek.harness.android.harness.dto.SessionPromptValue
 import com.deepseek.harness.android.network.DshBusinessException
 import com.deepseek.harness.android.network.DshRpcClient
@@ -40,6 +61,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
@@ -48,6 +70,12 @@ private const val SESSION_CREATE = "session.create"
 private const val SESSION_HISTORY = "session.history"
 private const val SESSION_PROMPT = "session.prompt"
 private const val SESSION_CANCEL = "session.cancel"
+private const val SESSION_MODELS = "session.models"
+private const val SESSION_SELECT_MODEL = "session.selectModel"
+private const val SESSION_SEARCH = "session.search"
+private const val WORKSPACE_LIST = "workspace.list"
+private const val WORKSPACE_CREATE = "workspace.create"
+private const val WORKSPACE_DELETE = "workspace.delete"
 
 @Singleton
 class HarnessRepositoryImpl @Inject constructor(
@@ -59,6 +87,7 @@ class HarnessRepositoryImpl @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectionGeneration = MutableStateFlow(0L)
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
+    private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
     private val sessionStates = ConcurrentHashMap<String, SessionState>()
     private val resyncMutex = Mutex()
 
@@ -169,7 +198,7 @@ class HarnessRepositoryImpl @Inject constructor(
                                             "selected",
                                             buildJsonArray {
                                                 answer.selectedOptions.forEach { selected ->
-                                                    this.add(selected)
+                                                    add(JsonPrimitive(selected))
                                                 }
                                             },
                                         )
@@ -186,6 +215,62 @@ class HarnessRepositoryImpl @Inject constructor(
             rpcId = requestId,
             result = RpcResult(ok = true, value = value),
         )
+    }
+
+    override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =
+        workspaces.asStateFlow()
+
+    override suspend fun refreshWorkspaces() {
+        val result = rpcClient.call(WORKSPACE_LIST, WORKSPACE_LIST, buildJsonObject {}).valueOrThrow()
+        val listing = json.decodeFromJsonElement<WorkspaceListValue>(result)
+        workspaces.value = listing.items.map { it.toDomain() }
+    }
+
+    override suspend fun createWorkspace(path: String): WorkspaceSummary {
+        val result = rpcClient.call(
+            WORKSPACE_CREATE,
+            WORKSPACE_CREATE,
+            buildJsonObject { put("path", path) },
+        ).valueOrThrow()
+        val created = json.decodeFromJsonElement<WorkspaceCreateValue>(result)
+        workspaces.value = loadWorkspaces()
+        return created.workspace.toDomain()
+    }
+
+    override suspend fun deleteWorkspace(workspaceId: String) {
+        rpcClient.call(
+            WORKSPACE_DELETE,
+            WORKSPACE_DELETE,
+            buildJsonObject { put("workspaceId", workspaceId) },
+        ).valueOrThrow()
+        workspaces.value = loadWorkspaces()
+    }
+
+    override suspend fun loadModels(sessionId: String): SessionModels {
+        val result = rpcClient.call(
+            SESSION_MODELS,
+            SESSION_MODELS,
+            buildJsonObject { put("sessionId", sessionId) },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SessionModelsValue>(result).toDomain()
+    }
+
+    override suspend fun selectModel(sessionId: String, selection: ModelSelection): ModelSelection {
+        val payload = buildJsonObject {
+            put("sessionId", sessionId)
+            put("provider", selection.provider)
+            put("model", selection.model)
+            selection.reasoningEffort?.let { put("reasoningEffort", it) }
+        }
+        val result = rpcClient.call(SESSION_SELECT_MODEL, SESSION_SELECT_MODEL, payload).valueOrThrow()
+        return json.decodeFromJsonElement<SessionSelectModelValue>(result).selected.toDomain()
+    }
+
+    override suspend fun searchSessions(query: String): List<SessionSearchResult> {
+        val result = rpcClient.call(SESSION_SEARCH, SESSION_SEARCH, buildJsonObject { put("query", query) }).valueOrThrow()
+        return json.decodeFromJsonElement<SessionSearchValue>(result).items.map { item ->
+            SessionSearchResult(sessionId = item.sessionId, snippet = item.snippet)
+        }
     }
 
     private fun collectConnection() {
@@ -233,6 +318,13 @@ class HarnessRepositoryImpl @Inject constructor(
                             // Retried on next generation.
                         }
                     }
+                    "host/workspace-changed", "host/workspace-removed", "host/workspace-order-changed" -> {
+                        try {
+                            refreshWorkspaces()
+                        } catch (_: Throwable) {
+                            // Retried on next generation.
+                        }
+                    }
                 }
             }
         }
@@ -243,6 +335,7 @@ class HarnessRepositoryImpl @Inject constructor(
             sessionStates.values.forEach { state -> state.prepareResync() }
             try {
                 refreshSessions()
+                refreshWorkspaces()
             } catch (_: Throwable) {
                 // List failure does not block timeline recovery.
             }
@@ -320,6 +413,55 @@ class HarnessRepositoryImpl @Inject constructor(
 
     private fun ServerRequest.frameSessionId(): String? =
         payload["sessionId"]?.jsonPrimitive?.contentOrNull
+
+    private suspend fun loadWorkspaces(): List<WorkspaceSummary> {
+        val result = rpcClient.call(WORKSPACE_LIST, WORKSPACE_LIST, buildJsonObject {}).valueOrThrow()
+        return json.decodeFromJsonElement<WorkspaceListValue>(result).items.map { it.toDomain() }
+    }
+
+    private fun WorkspaceWire.toDomain(): WorkspaceSummary = WorkspaceSummary(
+        workspaceId = workspaceId,
+        path = path,
+        title = title,
+        sessionIds = sessionIds,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
+    private fun SessionModelsValue.toDomain(): SessionModels = SessionModels(
+        current = current.toDomain(),
+        routable = routable,
+        groups = groups.map { group ->
+            ModelProviderGroup(
+                id = group.id,
+                name = group.name,
+                models = group.models.map { it.toDomain() },
+            )
+        },
+        failures = failures.map { failure ->
+            ModelCatalogFailure(id = failure.id, name = failure.name, message = failure.message)
+        },
+    )
+
+    private fun ModelSelectionWire.toDomain(): ModelSelection = ModelSelection(
+        provider = provider,
+        model = model,
+        reasoningEffort = reasoningEffort,
+    )
+
+    private fun ModelCatalogModelWire.toDomain(): ModelCatalogModel = ModelCatalogModel(
+        id = id,
+        name = name,
+        description = description,
+        reasoning = reasoning?.toDomain(),
+    )
+
+    private fun ModelReasoningWire.toDomain(): ModelReasoning = ModelReasoning(
+        efforts = efforts.map { effort ->
+            ModelReasoningEffort(id = effort.id, name = effort.name, description = effort.description)
+        },
+        defaultEffort = defaultEffort,
+    )
 
     private fun RpcResult.valueOrThrow(): JsonObject {
         if (ok) {

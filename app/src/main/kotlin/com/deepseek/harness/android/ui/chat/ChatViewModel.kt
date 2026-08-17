@@ -6,6 +6,7 @@ import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
+import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
@@ -32,23 +33,43 @@ class ChatViewModel @Inject constructor(
     private val isSending = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ChatUiState> = combine(
-        chatRepository.observeConnectionState(),
-        chatRepository.observeSessions(),
-        selectedSessionId,
-        timeline,
-        isSending,
-        errorMessage,
-    ) { connection, sessions, selected, items, sending, error ->
-        ChatUiState(
+    private data class ChatUiCore(
+        val connection: ConnectionState,
+        val sessions: List<SessionSummary>,
+        val selectedSessionId: String?,
+        val timeline: List<TimelineItem>,
+        val isSending: Boolean,
+    ) {
+        fun toUiState(error: String?): ChatUiState = ChatUiState(
             connection = connection,
             sessions = sessions,
-            selectedSessionId = selected,
-            timeline = items,
-            isSending = sending,
+            selectedSessionId = selectedSessionId,
+            timeline = timeline,
+            isSending = isSending,
             errorMessage = error,
         )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ChatUiState> = combine(
+        combine(
+            chatRepository.observeConnectionState(),
+            chatRepository.observeSessions(),
+            selectedSessionId,
+            timeline,
+            isSending,
+        ) { connection, sessions, selected, items, sending ->
+            ChatUiCore(
+                connection = connection,
+                sessions = sessions,
+                selectedSessionId = selected,
+                timeline = items,
+                isSending = sending,
+            )
+        },
+        errorMessage,
+    ) { core, error ->
+        core.toUiState(error)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),

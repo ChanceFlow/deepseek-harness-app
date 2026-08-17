@@ -1,5 +1,6 @@
 # Android / Gradle
 .gradle/
+.kotlin/
 build/
 local.properties
 captures/
@@ -17,5 +18,3 @@ captures/
 
 # Local server config
 app/src/main/assets/server.properties
-
-# Submodule working tree is tracked as a gitlink; never ignore .gitmodules
