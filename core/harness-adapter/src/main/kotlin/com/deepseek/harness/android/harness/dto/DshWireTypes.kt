@@ -22,6 +22,7 @@ internal data class SessionWire(
     val parentSessionId: String? = null,
     val origin: String? = null,
     val cwd: String? = null,
+    val agentPreset: String? = null,
     val projections: SessionProjectionsValue? = null,
 )
 
@@ -74,6 +75,11 @@ internal data class WorkspaceWire(
 internal data class WorkspaceCreateValue(
     val workspace: WorkspaceWire,
     val created: Boolean = false,
+)
+
+@Serializable
+internal data class WorkspaceRenameValue(
+    val workspace: WorkspaceWire,
 )
 
 @Serializable

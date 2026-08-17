@@ -173,15 +173,17 @@ rename/fork, queue steer/remove, approvals, and questions.
 - **Streaming is chunk-oriented, not final-block-oriented.** The reducer favors
   `text-delta`/`reasoning-delta`; provider adapters that emit only block events
   will still display finalized blocks from `assistant/message`.
-- **No session title in list rows yet.** Titles are available through session
-  projections and are not read in this milestone.
+- **Titles are display-only.** `session/projection` title frames and history
+  projections are read, but identity always remains `sessionId`.
 - **No settings screen yet.** Workspaces and model selection are MVP screens;
   credential and plugin settings remain out of scope.
-- **No subagent/settings screens yet.** MVP focuses on the high-frequency chat/workspace/model workflows.
+- **Settings remain deferred.** Credential, plugin, and general settings stay
+  out of scope for this MVP. Subagent history/prompt/interrupt is implemented
+  with parent-session scoping (Section 11).
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
-- **Question cards are MVP-only.** Multi-select is supported, but rich rendering
-  and plan-review intents are not.
+- **Question cards are MVP-only.** Multi-select, optionless text, and custom
+  text answers are supported; rich rendering and plan-review intents are not.
 
 ## 11. Subagent Ownership
 

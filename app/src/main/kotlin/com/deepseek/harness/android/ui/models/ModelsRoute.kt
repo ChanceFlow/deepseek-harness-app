@@ -48,7 +48,7 @@ fun ModelsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !selected,
                 ) {
-                    Text(session.title ?: "Session ${session.id.take(8)}")
+                    Text(session.displayTitle)
                 }
             }
         }
@@ -61,13 +61,73 @@ fun ModelsScreen(
                 }
                 items(group.models, key = { "${group.id}:${it.id}" }) { model ->
                     val isCurrent = uiState.selected?.provider == group.id && uiState.selected?.model == model.id
+                    val defaultEffort = model.reasoning?.defaultEffort
+                    val selectedEffort = when {
+                        isCurrent -> uiState.selected?.reasoningEffort ?: defaultEffort
+                        else -> defaultEffort
+                    }
                     if (isCurrent) {
-                        Button(onClick = { onAction(ModelsAction.SelectModel(group.id, model.id)) }) {
+                        Button(
+                            onClick = {
+                                onAction(
+                                    ModelsAction.SelectModel(group.id, model.id, selectedEffort),
+                                )
+                            },
+                        ) {
                             Text("${model.name} (current)")
                         }
                     } else {
-                        OutlinedButton(onClick = { onAction(ModelsAction.SelectModel(group.id, model.id)) }) {
+                        OutlinedButton(
+                            onClick = {
+                                onAction(ModelsAction.SelectModel(group.id, model.id, selectedEffort))
+                            },
+                        ) {
                             Text(model.name)
+                        }
+                    }
+                    model.description?.let { description ->
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 8.dp, top = 2.dp),
+                        )
+                    }
+                    if (isCurrent && !model.reasoning?.efforts.isNullOrEmpty()) {
+                        Column(modifier = Modifier.padding(start = 8.dp, top = 4.dp)) {
+                            Text(
+                                text = "Reasoning effort",
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            model.reasoning?.efforts?.forEach { effort ->
+                                val effortSelected =
+                                    uiState.selected?.reasoningEffort == effort.id ||
+                                        (uiState.selected?.reasoningEffort == null && defaultEffort == effort.id)
+                                if (effortSelected) {
+                                    Button(
+                                        onClick = {
+                                            onAction(
+                                                ModelsAction.SelectModel(
+                                                    provider = group.id,
+                                                    model = model.id,
+                                                    reasoningEffort = effort.id,
+                                                ),
+                                            )
+                                        },
+                                    ) { Text(effort.name) }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = {
+                                            onAction(
+                                                ModelsAction.SelectModel(
+                                                    provider = group.id,
+                                                    model = model.id,
+                                                    reasoningEffort = effort.id,
+                                                ),
+                                            )
+                                        },
+                                    ) { Text(effort.name) }
+                                }
+                            }
                         }
                     }
                 }

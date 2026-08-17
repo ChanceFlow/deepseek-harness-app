@@ -44,6 +44,7 @@ class WorkspaceViewModel @Inject constructor(
     fun onAction(action: WorkspaceAction) {
         when (action) {
             is WorkspaceAction.Create -> create(action.path)
+            is WorkspaceAction.Rename -> rename(action.workspaceId, action.title)
             is WorkspaceAction.Delete -> delete(action.workspaceId)
             WorkspaceAction.Refresh -> refresh()
             WorkspaceAction.DismissError -> errorMessage.value = null
@@ -62,6 +63,18 @@ class WorkspaceViewModel @Inject constructor(
             isLoading.value = true
             try {
                 runCatchingForUi { chatRepository.createWorkspace(path.trim()) }
+            } finally {
+                isLoading.value = false
+            }
+        }
+    }
+
+    private fun rename(workspaceId: String, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                runCatchingForUi { chatRepository.renameWorkspace(workspaceId, title.trim()) }
             } finally {
                 isLoading.value = false
             }

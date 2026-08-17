@@ -12,6 +12,7 @@ data class WorkspaceUiState(
 
 sealed interface WorkspaceAction {
     data class Create(val path: String) : WorkspaceAction
+    data class Rename(val workspaceId: String, val title: String) : WorkspaceAction
     data class Delete(val workspaceId: String) : WorkspaceAction
     data object Refresh : WorkspaceAction
     data object DismissError : WorkspaceAction

@@ -148,6 +148,71 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `question frame keeps header and option descriptions and resolution removes it`() {
+        val reducer = TimelineReducer("s1")
+        val requested = ServerRequest(
+            type = "server-request",
+            rpcId = "rpc-question",
+            method = "question/requested",
+            payload = buildJsonObject {
+                put("type", "question/requested")
+                put("sessionId", "s1")
+                put(
+                    "questions",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("id", "q1")
+                                put("header", "Before continuing")
+                                put("question", "Proceed?")
+                                put("detail", "This command writes files")
+                                put("multiSelect", true)
+                                put(
+                                    "options",
+                                    buildJsonArray {
+                                        add(
+                                            buildJsonObject {
+                                                put("label", "yes")
+                                                put("description", "Continue now")
+                                            },
+                                        )
+                                        add(buildJsonObject { put("label", "no") })
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
+            },
+        )
+
+        reducer.ingestFrame(requested)
+
+        val question = reducer.snapshot().single() as TimelineItem.QuestionRequest
+        val item = question.questions.single()
+        assertEquals("q1", item.id)
+        assertEquals("Before continuing", item.header)
+        assertTrue(item.multiSelect)
+        assertEquals("Continue now", item.optionDescriptions["yes"])
+        assertEquals(listOf("yes", "no"), item.options)
+
+        reducer.ingestFrame(
+            ServerRequest(
+                type = "server-request",
+                rpcId = "rpc-resolved",
+                method = "question/resolved",
+                payload = buildJsonObject {
+                    put("type", "question/resolved")
+                    put("sessionId", "s1")
+                    put("questionRpcId", "rpc-question")
+                    put("outcome", "answered")
+                },
+            ),
+        )
+        assertTrue(reducer.snapshot().isEmpty())
+    }
+
+    @Test
     fun `session jobs frame becomes job snapshot`() {
         val reducer = TimelineReducer("s1")
         val frame = ServerRequest(

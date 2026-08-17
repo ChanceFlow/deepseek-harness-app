@@ -2,16 +2,19 @@ package com.deepseek.harness.android.ui.chat
 
 import androidx.compose.runtime.Immutable
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 
 @Immutable
 data class ChatUiState(
     val connection: ConnectionState = ConnectionState(),
     val sessions: List<SessionSummary> = emptyList(),
+    val workspaces: List<WorkspaceSummary> = emptyList(),
     val selectedSessionId: String? = null,
     val timeline: List<TimelineItem> = emptyList(),
     val searchResults: List<SessionSearchResult> = emptyList(),
@@ -21,9 +24,13 @@ data class ChatUiState(
 
 sealed interface ChatAction {
     data class SelectSession(val sessionId: String) : ChatAction
-    data class SendPrompt(val text: String) : ChatAction
+    data class SendPrompt(
+        val text: String,
+        val mode: PromptMode = PromptMode.QUEUE,
+    ) : ChatAction
     data object CancelTurn : ChatAction
     data object CreateSession : ChatAction
+    data class CreateSessionInWorkspace(val workspaceId: String? = null) : ChatAction
     data object DismissError : ChatAction
     data object RetrySessions : ChatAction
 

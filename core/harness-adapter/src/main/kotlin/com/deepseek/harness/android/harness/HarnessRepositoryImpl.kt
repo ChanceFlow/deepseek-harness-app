@@ -49,6 +49,7 @@ import com.deepseek.harness.android.harness.dto.SessionSearchValue
 import com.deepseek.harness.android.harness.dto.SessionSelectModelValue
 import com.deepseek.harness.android.harness.dto.WorkspaceCreateValue
 import com.deepseek.harness.android.harness.dto.WorkspaceListValue
+import com.deepseek.harness.android.harness.dto.WorkspaceRenameValue
 import com.deepseek.harness.android.harness.dto.WorkspaceWire
 import com.deepseek.harness.android.harness.dto.SessionPromptValue
 import com.deepseek.harness.android.harness.dto.SessionQueueUpdateValue
@@ -100,6 +101,7 @@ private const val SESSION_FORK = "session.fork"
 private const val SESSION_UPDATE_QUEUE = "session.updateQueue"
 private const val WORKSPACE_LIST = "workspace.list"
 private const val WORKSPACE_CREATE = "workspace.create"
+private const val WORKSPACE_RENAME = "workspace.rename"
 private const val WORKSPACE_DELETE = "workspace.delete"
 private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
@@ -436,6 +438,20 @@ class HarnessRepositoryImpl @Inject constructor(
         return created.workspace.toDomain()
     }
 
+    override suspend fun renameWorkspace(workspaceId: String, title: String): WorkspaceSummary {
+        val result = rpcClient.call(
+            WORKSPACE_RENAME,
+            WORKSPACE_RENAME,
+            buildJsonObject {
+                put("workspaceId", workspaceId)
+                put("title", title)
+            },
+        ).valueOrThrow()
+        val renamed = json.decodeFromJsonElement<WorkspaceRenameValue>(result)
+        workspaces.value = loadWorkspaces()
+        return renamed.workspace.toDomain()
+    }
+
     override suspend fun deleteWorkspace(workspaceId: String) {
         rpcClient.call(
             WORKSPACE_DELETE,
@@ -595,6 +611,8 @@ class HarnessRepositoryImpl @Inject constructor(
         running = running,
         blank = blank,
         updatedAtEpochMs = updatedAt,
+        cwd = cwd,
+        agentPreset = agentPreset,
     )
 
     private fun SessionWire.titleFromProjections(): String? {

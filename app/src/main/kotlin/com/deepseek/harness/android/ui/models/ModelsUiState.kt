@@ -17,7 +17,11 @@ data class ModelsUiState(
 
 sealed interface ModelsAction {
     data class SelectSession(val sessionId: String) : ModelsAction
-    data class SelectModel(val provider: String, val model: String) : ModelsAction
+    data class SelectModel(
+        val provider: String,
+        val model: String,
+        val reasoningEffort: String? = null,
+    ) : ModelsAction
     data object Refresh : ModelsAction
     data object DismissError : ModelsAction
 }

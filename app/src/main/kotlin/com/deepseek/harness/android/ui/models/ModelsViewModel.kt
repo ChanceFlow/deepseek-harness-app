@@ -57,7 +57,7 @@ class ModelsViewModel @Inject constructor(
     fun onAction(action: ModelsAction) {
         when (action) {
             is ModelsAction.SelectSession -> selectSession(action.sessionId)
-            is ModelsAction.SelectModel -> selectModel(action.provider, action.model)
+            is ModelsAction.SelectModel -> selectModel(action.provider, action.model, action.reasoningEffort)
             ModelsAction.Refresh -> refresh()
             ModelsAction.DismissError -> errorMessage.value = null
         }
@@ -75,11 +75,22 @@ class ModelsViewModel @Inject constructor(
         viewModelScope.launch { loadModels(sessionId) }
     }
 
-    private fun selectModel(provider: String, model: String) {
+    private fun selectModel(
+        provider: String,
+        model: String,
+        reasoningEffort: String?,
+    ) {
         val sessionId = selectedSessionId.value ?: return
         viewModelScope.launch {
             runCatchingForUi {
-                chatRepository.selectModel(sessionId, ModelSelection(provider = provider, model = model))
+                chatRepository.selectModel(
+                    sessionId,
+                    ModelSelection(
+                        provider = provider,
+                        model = model,
+                        reasoningEffort = reasoningEffort,
+                    ),
+                )
             }?.let { selected.value = it }
         }
     }

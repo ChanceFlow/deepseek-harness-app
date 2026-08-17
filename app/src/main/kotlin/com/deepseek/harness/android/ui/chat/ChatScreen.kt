@@ -38,6 +38,7 @@ import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueuePlacement
 import com.deepseek.harness.android.domain.model.SessionQueueItem
@@ -46,6 +47,7 @@ import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 
 @Composable
@@ -81,10 +83,11 @@ fun ChatScreen(
                     Row(modifier = Modifier.fillMaxSize()) {
                         SessionPanel(
                             sessions = uiState.sessions,
+                            workspaces = uiState.workspaces,
                             searchResults = uiState.searchResults,
                             selectedSessionId = uiState.selectedSessionId,
                             onSelectSession = { onAction(ChatAction.SelectSession(it)) },
-                            onCreateSession = { onAction(ChatAction.CreateSession) },
+                            onCreateSession = { onAction(ChatAction.CreateSessionInWorkspace(it)) },
                             onSearchSessions = { onAction(ChatAction.SearchSessions(it)) },
                             modifier = Modifier.width(320.dp),
                         )
@@ -98,10 +101,11 @@ fun ChatScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         SessionPanel(
                             sessions = uiState.sessions,
+                            workspaces = uiState.workspaces,
                             searchResults = uiState.searchResults,
                             selectedSessionId = uiState.selectedSessionId,
                             onSelectSession = { onAction(ChatAction.SelectSession(it)) },
-                            onCreateSession = { onAction(ChatAction.CreateSession) },
+                            onCreateSession = { onAction(ChatAction.CreateSessionInWorkspace(it)) },
                             onSearchSessions = { onAction(ChatAction.SearchSessions(it)) },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -141,21 +145,75 @@ private fun ConnectionBanner(uiState: ChatUiState) {
 @Composable
 private fun SessionPanel(
     sessions: List<SessionSummary>,
+    workspaces: List<WorkspaceSummary>,
     searchResults: List<SessionSearchResult>,
     selectedSessionId: String?,
     onSelectSession: (String) -> Unit,
-    onCreateSession: () -> Unit,
+    onCreateSession: (String?) -> Unit,
     onSearchSessions: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
+    var showNewSessionDialog by remember { mutableStateOf(false) }
     Column(modifier = modifier.padding(8.dp)) {
         OutlinedButton(
-            onClick = onCreateSession,
+            onClick = { showNewSessionDialog = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("New session")
         }
+
+        if (showNewSessionDialog) {
+            AlertDialog(
+                onDismissRequest = { showNewSessionDialog = false },
+                title = { Text("New session") },
+                text = {
+                    Column {
+                        if (workspaces.isEmpty()) {
+                            Text("No workspaces registered.")
+                            Text(
+                                text = "Use the Workspaces tab to register a directory first, or choose Default to create an unaccounted session.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        } else {
+                            Text(
+                                text = "Choose a workspace or keep the default.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            workspaces.forEach { workspace ->
+                                OutlinedButton(
+                                    onClick = {
+                                        onCreateSession(workspace.workspaceId)
+                                        showNewSessionDialog = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        text = "${workspace.title} — ${workspace.path}",
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onCreateSession(null)
+                            showNewSessionDialog = false
+                        },
+                    ) { Text("Default") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showNewSessionDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
+
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = query,
@@ -194,7 +252,7 @@ private fun SessionPanel(
                 ) {
                     val status = if (session.running) " ●" else ""
                     Text(
-                        text = (session.title ?: "Session ${session.id.take(8)}") + status,
+                        text = session.displayTitle + status,
                         maxLines = 1,
                     )
                 }
@@ -211,7 +269,11 @@ private fun ChatPanel(
 ) {
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTitle by remember { mutableStateOf("") }
+    var promptMode by remember(uiState.selectedSessionId) { mutableStateOf(PromptMode.QUEUE) }
     val selectedSessionId = uiState.selectedSessionId
+    val isSessionRunning = uiState.sessions
+        .firstOrNull { it.id == selectedSessionId }
+        ?.running == true
 
     Column(modifier = modifier.padding(12.dp)) {
         if (selectedSessionId != null) {
@@ -269,7 +331,17 @@ private fun ChatPanel(
             ComposerBar(
                 enabled = uiState.selectedSessionId != null && !uiState.isSending,
                 isSending = uiState.isSending,
-                onSend = { onAction(ChatAction.SendPrompt(it)) },
+                running = isSessionRunning,
+                mode = promptMode,
+                onModeChange = { promptMode = it },
+                onSend = {
+                    onAction(
+                        ChatAction.SendPrompt(
+                            text = it,
+                            mode = if (isSessionRunning) promptMode else PromptMode.QUEUE,
+                        ),
+                    )
+                },
                 modifier = Modifier.weight(1f),
             )
             Button(
@@ -460,63 +532,123 @@ private fun QuestionRow(
     request: TimelineItem.QuestionRequest,
     onAction: (ChatAction) -> Unit,
 ) {
-    var selections by remember(request.requestId) {
-        mutableStateOf<Map<String, Set<String>>>(emptyMap())
+    var drafts by remember(request.requestId) {
+        mutableStateOf<Map<String, QuestionDraft>>(emptyMap())
+    }
+    val answerEnabled = request.questions.isNotEmpty() && request.questions.all { question ->
+        val draft = drafts[question.id] ?: QuestionDraft()
+        draft.selected.isNotEmpty() || draft.customText.isNotBlank()
     }
     Column(modifier = Modifier.fillMaxWidth()) {
         request.questions.forEach { question ->
             QuestionItemEditor(
                 question = question,
-                selected = selections[question.id].orEmpty(),
-                onSelect = { selected ->
-                    selections = selections + (question.id to selected)
+                draft = drafts[question.id] ?: QuestionDraft(),
+                onDraftChange = { updated ->
+                    drafts = drafts + (question.id to updated)
                 },
             )
         }
         Button(
             onClick = {
                 val answers = request.questions.map { question ->
+                    val draft = drafts[question.id] ?: QuestionDraft()
+                    val custom = draft.customText.trim()
                     QuestionAnswer(
                         questionId = question.id,
-                        selectedOptions = selections[question.id]?.toList().orEmpty(),
+                        selectedOptions = if (
+                            custom.isNotEmpty() && !question.multiSelect
+                        ) {
+                            emptyList()
+                        } else {
+                            draft.selected.toList()
+                        },
+                        customText = custom.ifBlank { null },
                     )
                 }
                 onAction(ChatAction.AnswerQuestion(request.requestId, answers))
             },
-            enabled = request.questions.all { question ->
-                question.options.isEmpty() || !selections[question.id].isNullOrEmpty()
-            },
+            enabled = answerEnabled,
         ) {
             Text("Answer")
         }
     }
 }
 
+private data class QuestionDraft(
+    val selected: Set<String> = emptySet(),
+    val customText: String = "",
+)
+
 @Composable
 private fun QuestionItemEditor(
     question: QuestionItem,
-    selected: Set<String>,
-    onSelect: (Set<String>) -> Unit,
+    draft: QuestionDraft,
+    onDraftChange: (QuestionDraft) -> Unit,
 ) {
+    val selected = draft.selected
     Column {
+        question.header?.let { Text(text = it, style = MaterialTheme.typography.labelLarge) }
         Text(text = question.question, style = MaterialTheme.typography.titleSmall)
         question.detail?.let { Text(text = it, style = MaterialTheme.typography.bodySmall) }
         question.options.forEach { option ->
             val isSelected = option in selected
             if (isSelected) {
                 Button(
-                    onClick = { onSelect(selectedWithout(selected, option, question.multiSelect)) },
+                    onClick = {
+                        onDraftChange(
+                            QuestionDraft(
+                                selected = selectedWithout(selected, option, question.multiSelect),
+                                customText = draft.customText,
+                            ),
+                        )
+                    },
                 ) {
                     Text(option)
                 }
             } else {
                 OutlinedButton(
-                    onClick = { onSelect(selectedWith(selected, option, question.multiSelect)) },
+                    onClick = {
+                        onDraftChange(
+                            QuestionDraft(
+                                selected = selectedWith(selected, option, question.multiSelect),
+                                customText = if (question.multiSelect) draft.customText else "",
+                            ),
+                        )
+                    },
                 ) {
-                    Text(option)
+                    Column {
+                        Text(option)
+                        question.optionDescriptions[option]?.let { description ->
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
             }
         }
+        OutlinedTextField(
+            value = draft.customText,
+            onValueChange = { text ->
+                onDraftChange(
+                    QuestionDraft(
+                        selected = if (
+                            text.isNotBlank() && !question.multiSelect
+                        ) {
+                            emptySet()
+                        } else {
+                            draft.selected
+                        },
+                        customText = text,
+                    ),
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Type your answer") },
+            singleLine = true,
+        )
     }
 }
 
@@ -530,31 +662,85 @@ private fun selectedWithout(current: Set<String>, option: String, multi: Boolean
 private fun ComposerBar(
     enabled: Boolean,
     isSending: Boolean,
+    running: Boolean,
+    mode: PromptMode,
+    onModeChange: (PromptMode) -> Unit,
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            modifier = Modifier.weight(1f),
-            enabled = enabled,
-            placeholder = { Text("Message DeepSeek Harness") },
-        )
-        Button(
-            onClick = {
-                onSend(draft)
-                draft = ""
-            },
-            modifier = Modifier.padding(start = 8.dp),
-            enabled = enabled && !isSending && draft.isNotBlank(),
-        ) {
-            Text(if (isSending) "Sending" else "Send")
+    val effectiveMode = if (running) mode else PromptMode.QUEUE
+    Column(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Delivery",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            ModeChip(
+                label = "Queue",
+                selected = effectiveMode == PromptMode.QUEUE,
+                enabled = enabled,
+                onClick = { onModeChange(PromptMode.QUEUE) },
+            )
+            ModeChip(
+                label = "Steer",
+                selected = effectiveMode == PromptMode.STEER,
+                enabled = enabled && running,
+                onClick = { onModeChange(PromptMode.STEER) },
+            )
         }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                placeholder = {
+                    Text(
+                        if (effectiveMode == PromptMode.STEER) {
+                            "Steer the running turn"
+                        } else {
+                            "Message DeepSeek Harness"
+                        },
+                    )
+                },
+            )
+            Button(
+                onClick = {
+                    onSend(draft)
+                    draft = ""
+                },
+                modifier = Modifier.padding(start = 8.dp),
+                enabled = enabled && !isSending && draft.isNotBlank(),
+            ) {
+                Text(if (isSending) "Sending" else "Send")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.padding(end = 4.dp),
+        ) { Text(label) }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.padding(end = 4.dp),
+        ) { Text(label) }
     }
 }
 

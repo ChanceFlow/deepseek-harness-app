@@ -11,6 +11,7 @@ import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +41,7 @@ class ChatViewModel @Inject constructor(
     private data class ChatUiCore(
         val connection: ConnectionState,
         val sessions: List<SessionSummary>,
+        val workspaces: List<WorkspaceSummary>,
         val selectedSessionId: String?,
         val timeline: List<TimelineItem>,
         val isSending: Boolean,
@@ -50,6 +52,7 @@ class ChatViewModel @Inject constructor(
         ): ChatUiState = ChatUiState(
             connection = connection,
             sessions = sessions,
+            workspaces = workspaces,
             selectedSessionId = selectedSessionId,
             timeline = timeline,
             isSending = isSending,
@@ -58,18 +61,34 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    private data class ChatBaseline(
+        val connection: ConnectionState,
+        val sessions: List<SessionSummary>,
+        val workspaces: List<WorkspaceSummary>,
+    )
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
         combine(
-            chatRepository.observeConnectionState(),
-            chatRepository.observeSessions(),
+            combine(
+                chatRepository.observeConnectionState(),
+                chatRepository.observeSessions(),
+                chatRepository.observeWorkspaces(),
+            ) { connection, sessions, workspaces ->
+                ChatBaseline(
+                    connection = connection,
+                    sessions = sessions,
+                    workspaces = workspaces,
+                )
+            },
             selectedSessionId,
             timeline,
             isSending,
-        ) { connection, sessions, selected, items, sending ->
+        ) { baseline, selected, items, sending ->
             ChatUiCore(
-                connection = connection,
-                sessions = sessions,
+                connection = baseline.connection,
+                sessions = baseline.sessions,
+                workspaces = baseline.workspaces,
                 selectedSessionId = selected,
                 timeline = items,
                 isSending = sending,
@@ -86,18 +105,19 @@ class ChatViewModel @Inject constructor(
     )
 
     init {
-        refreshSessions()
+        refresh()
         observeSelectedTimeline()
     }
 
     fun onAction(action: ChatAction) {
         when (action) {
             is ChatAction.SelectSession -> selectSession(action.sessionId)
-            is ChatAction.SendPrompt -> sendPrompt(action.text)
+            is ChatAction.SendPrompt -> sendPrompt(action)
             ChatAction.CancelTurn -> cancelTurn()
-            ChatAction.CreateSession -> createSession()
+            ChatAction.CreateSession -> createSession(workspaceId = null)
+            is ChatAction.CreateSessionInWorkspace -> createSession(action.workspaceId)
             ChatAction.DismissError -> errorMessage.value = null
-            ChatAction.RetrySessions -> refreshSessions()
+            ChatAction.RetrySessions -> refresh()
             is ChatAction.RespondApproval -> respondApproval(action)
             is ChatAction.AnswerQuestion -> answerQuestion(action)
             is ChatAction.SearchSessions -> searchSessions(action.query)
@@ -115,21 +135,26 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun refreshSessions() {
+    private fun refresh() {
         viewModelScope.launch {
             runCatchingForUi { chatRepository.refreshSessions() }
+            runCatchingForUi { chatRepository.refreshWorkspaces() }
         }
     }
 
-    private fun sendPrompt(text: String) {
+    private fun sendPrompt(action: ChatAction.SendPrompt) {
         val sessionId = selectedSessionId.value ?: return
-        if (text.isBlank()) return
+        if (action.text.isBlank()) return
         viewModelScope.launch {
             isSending.value = true
             try {
                 runCatchingForUi {
                     chatRepository.sendMessage(
-                        SendMessageRequest(sessionId = sessionId, text = text.trim()),
+                        SendMessageRequest(
+                            sessionId = sessionId,
+                            text = action.text.trim(),
+                            mode = action.mode,
+                        ),
                     )
                 }
             } finally {
@@ -145,10 +170,12 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun createSession() {
+    private fun createSession(workspaceId: String?) {
         viewModelScope.launch {
             val session = runCatchingForUi {
-                chatRepository.createSession(CreateSessionRequest())
+                chatRepository.createSession(
+                    CreateSessionRequest(workspaceId = workspaceId),
+                )
             } ?: return@launch
             selectedSessionId.value = session.id
             runCatchingForUi { chatRepository.openSession(session.id) }

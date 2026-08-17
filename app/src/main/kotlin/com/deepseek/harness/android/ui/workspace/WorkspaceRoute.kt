@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +41,8 @@ fun WorkspaceScreen(
     modifier: Modifier = Modifier,
 ) {
     var path by remember { mutableStateOf("") }
+    var renameTargetId by remember { mutableStateOf<String?>(null) }
+    var renameTitle by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Text(text = "Workspaces", style = MaterialTheme.typography.titleLarge)
         uiState.errorMessage?.let {
@@ -70,11 +73,46 @@ fun WorkspaceScreen(
                         text = "sessions: ${workspace.sessionIds.size}",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    OutlinedButton(onClick = { onAction(WorkspaceAction.Delete(workspace.workspaceId)) }) {
-                        Text("Delete workspace")
+                    Row {
+                        OutlinedButton(
+                            onClick = {
+                                renameTargetId = workspace.workspaceId
+                                renameTitle = workspace.title
+                            },
+                        ) { Text("Rename") }
+                        OutlinedButton(
+                            onClick = { onAction(WorkspaceAction.Delete(workspace.workspaceId)) },
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) { Text("Delete workspace") }
                     }
                 }
             }
         }
+    }
+
+    renameTargetId?.let { workspaceId ->
+        AlertDialog(
+            onDismissRequest = { renameTargetId = null },
+            title = { Text("Rename workspace") },
+            text = {
+                OutlinedTextField(
+                    value = renameTitle,
+                    onValueChange = { renameTitle = it },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onAction(WorkspaceAction.Rename(workspaceId, renameTitle))
+                        renameTargetId = null
+                        renameTitle = ""
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { renameTargetId = null }) { Text("Cancel") }
+            },
+        )
     }
 }

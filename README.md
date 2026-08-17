@@ -40,11 +40,19 @@ See [reference/README.md](reference/README.md) for details and the source-of-tru
 
 ## Development
 
-The first milestone is wiring, not feature completion:
+Build and test from the repository root:
 
-1. Implement `DshRpcClient` and `DshEventSocket` against a local dsh web server.
-2. Implement `HarnessAdapter` translation for the MVP event set.
-3. Keep `ChatScreen` consuming only `ChatUiState` / domain models.
+```sh
+./gradlew :app:testDebugUnitTest :core:network:test :core:harness-adapter:test
+./gradlew :app:assembleDebug
+```
+
+The default base URL is `http://10.0.2.2:3080`. Override it for a physical
+device or a LAN host:
+
+```sh
+./gradlew :app:assembleDebug -PDSH_BASE_URL=http://192.168.1.10:3080
+```
 
 A local dev server can be reached with:
 
@@ -66,4 +74,18 @@ See [docs/kotlin-best-practices.md](docs/kotlin-best-practices.md) for the rules
 
 ## Current status
 
-Skeleton plus transport/adapter contracts. The chat screen is still a preview path until the adapter wiring is completed. The checked-in UI is a placeholder preview; it does not call the backend yet.
+The MVP client is wired end-to-end against a running `dsh web` host:
+
+- `:core:network` — JSON-RPC envelopes over OkHttp plus the two downlink-only
+  WebSocket streams (`/api/events.mux`, `/api/events.host`).
+- `:core:harness-adapter` — connection generations with exponential backoff,
+  reconnect resync, buffered frame replay, history/timeline folding, and the
+  complete unary method set used by the MVP.
+- `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
+  and Goals. Chat supports session search/create/rename/fork, queue steer and
+  remove (including Queue/Steer composer delivery), approvals, custom and
+  multi-select questions, live titles, goals, and background jobs.
+
+Still deferred, matching [docs/spec.md](docs/spec.md): settings/credentials,
+attachment uploads, markdown and trajectory/plan rendering, history
+pagination, session archiving, and workspace ordering.

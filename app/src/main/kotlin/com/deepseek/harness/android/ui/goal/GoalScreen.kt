@@ -42,13 +42,24 @@ fun GoalScreen(
     modifier: Modifier = Modifier,
 ) {
     var objective by remember { mutableStateOf("") }
+    var maxRoundsText by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Text("Goal", style = MaterialTheme.typography.titleLarge)
         uiState.errorMessage?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
         }
 
-        Text("Session", style = MaterialTheme.typography.labelLarge)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Session",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(
+                onClick = { onAction(GoalAction.Refresh) },
+                enabled = uiState.selectedSessionId != null,
+            ) { Text("Refresh") }
+        }
         LazyColumn(modifier = Modifier.height(150.dp)) {
             items(uiState.sessions, key = { it.id }) { session ->
                 OutlinedButton(
@@ -56,7 +67,7 @@ fun GoalScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = session.id != uiState.selectedSessionId,
                 ) {
-                    Text(session.title ?: "Session ${session.id.take(8)}")
+                    Text(session.displayTitle)
                 }
             }
         }
@@ -66,15 +77,29 @@ fun GoalScreen(
         val goal = uiState.goal
         if (goal == null) {
             Text("No current goal", style = MaterialTheme.typography.titleSmall)
+            OutlinedTextField(
+                value = objective,
+                onValueChange = { objective = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Goal objective") },
+            )
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = objective,
-                    onValueChange = { objective = it },
+                    value = maxRoundsText,
+                    onValueChange = { text -> maxRoundsText = text.filter { it.isDigit() } },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Goal objective") },
+                    placeholder = { Text("Max goal rounds (optional)") },
+                    singleLine = true,
                 )
                 Button(
-                    onClick = { onAction(GoalAction.Create(objective, null)) },
+                    onClick = {
+                        onAction(
+                            GoalAction.Create(
+                                objective = objective,
+                                maxRounds = maxRoundsText.toLongOrNull(),
+                            ),
+                        )
+                    },
                     modifier = Modifier.padding(start = 8.dp),
                     enabled = objective.isNotBlank() && uiState.selectedSessionId != null,
                 ) {

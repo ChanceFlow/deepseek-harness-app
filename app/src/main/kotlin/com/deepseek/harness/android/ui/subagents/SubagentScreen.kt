@@ -115,7 +115,7 @@ private fun ParentPicker(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = session.id != selectedParentId,
             ) {
-                Text(session.title ?: "Session ${session.id.take(8)}")
+                Text(session.displayTitle)
             }
         }
     }

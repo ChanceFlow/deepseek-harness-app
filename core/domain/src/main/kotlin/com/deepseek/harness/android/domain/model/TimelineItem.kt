@@ -58,6 +58,8 @@ data class QuestionItem(
     val options: List<String> = emptyList(),
     val multiSelect: Boolean = false,
     val detail: String? = null,
+    val header: String? = null,
+    val optionDescriptions: Map<String, String> = emptyMap(),
 )
 
 data class ApprovalAnswer(

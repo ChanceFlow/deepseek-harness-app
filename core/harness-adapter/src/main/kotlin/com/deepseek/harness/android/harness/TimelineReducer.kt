@@ -331,15 +331,27 @@ internal class TimelineReducer(
 
     private fun JsonObject.toQuestionItem(): QuestionItem? {
         val id = string("id") ?: return null
-        val options = get("options")?.jsonArray
+        val optionArray = get("options")?.jsonArray
+        val options = optionArray
             ?.mapNotNull { it.jsonObject.string("label") }
             .orEmpty()
+        val optionDescriptions = optionArray
+            ?.mapNotNull { option ->
+                val obj = option.jsonObject
+                obj.string("label")?.let { label ->
+                    obj.string("description")?.let { description -> label to description }
+                }
+            }
+            .orEmpty()
+            .toMap()
         return QuestionItem(
             id = id,
             question = string("question") ?: "",
             detail = string("detail"),
             options = options,
             multiSelect = boolean("multiSelect"),
+            header = string("header"),
+            optionDescriptions = optionDescriptions,
         )
     }
 

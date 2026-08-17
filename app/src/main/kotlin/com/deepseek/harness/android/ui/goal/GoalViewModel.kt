@@ -124,7 +124,7 @@ class GoalViewModel @Inject constructor(
         val sessionId = selectedSessionId.value ?: return
         viewModelScope.launch {
             runCatchingForUi { chatRepository.refreshSessions() }
-            goal.value = chatRepository.observeGoal(sessionId).let { null }
+            runCatchingForUi { chatRepository.openSession(sessionId) }
         }
     }
 

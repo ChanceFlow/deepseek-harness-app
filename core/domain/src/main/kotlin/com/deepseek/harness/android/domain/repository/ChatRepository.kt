@@ -54,6 +54,14 @@ interface ChatRepository {
 
     suspend fun createWorkspace(path: String): WorkspaceSummary
 
+    /**
+     * Rename a registered workspace. Production adapters override this with
+     * the dsh `workspace.rename` call. Test doubles may leave the default
+     * implementation and only stub the operations their scenario exercises.
+     */
+    suspend fun renameWorkspace(workspaceId: String, title: String): WorkspaceSummary =
+        unsupported("renameWorkspace")
+
     suspend fun deleteWorkspace(workspaceId: String)
 
     suspend fun loadModels(sessionId: String): SessionModels
@@ -88,6 +96,9 @@ interface ChatRepository {
 
     suspend fun clearGoal(sessionId: String, ref: GoalRef)
 }
+
+private fun unsupported(operation: String): Nothing =
+    throw UnsupportedOperationException("$operation is not supported by this repository double")
 
 data class QuestionEvidence(
     val sessionId: String,

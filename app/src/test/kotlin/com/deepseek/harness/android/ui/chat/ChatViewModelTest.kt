@@ -8,6 +8,7 @@ import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SessionModels
 import com.deepseek.harness.android.domain.model.SessionSearchResult
@@ -103,6 +104,39 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `send prompt honours steer delivery mode`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(ChatAction.SendPrompt("take over", PromptMode.STEER))
+        advanceUntilIdle()
+
+        assertEquals(
+            SendMessageRequest(
+                sessionId = FakeChatRepository.initialSession.id,
+                text = "take over",
+                mode = PromptMode.STEER,
+            ),
+            repository.sentMessages.single(),
+        )
+    }
+
+    @Test
+    fun `workspace scoped new session passes workspace request through`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.CreateSessionInWorkspace("workspace-1"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(CreateSessionRequest(workspaceId = "workspace-1")), repository.createRequests)
+        assertEquals(FakeChatRepository.initialSession.id, repository.openedSessionIds.single())
+    }
+
+    @Test
     fun `approval action delegates`() = runTest(dispatcher) {
         val repository = FakeChatRepository()
         val viewModel = ChatViewModel(repository)
@@ -137,6 +171,8 @@ class ChatViewModelTest {
         val sentMessages = mutableListOf<SendMessageRequest>()
         val openedSessionIds = mutableListOf<String>()
         val approvalAnswers = mutableListOf<ApprovalAnswer>()
+        val createRequests = mutableListOf<CreateSessionRequest>()
+        val renamedWorkspaces = mutableListOf<Pair<String, String>>()
 
         override fun observeConnectionState(): Flow<ConnectionState> =
             MutableStateFlow(
@@ -153,8 +189,10 @@ class ChatViewModelTest {
             sessions.value = listOf(initialSession)
         }
 
-        override suspend fun createSession(request: CreateSessionRequest): SessionSummary =
-            initialSession
+        override suspend fun createSession(request: CreateSessionRequest): SessionSummary {
+            createRequests += request
+            return initialSession
+        }
 
         override suspend fun openSession(sessionId: String) {
             openedSessionIds += sessionId
@@ -194,6 +232,12 @@ class ChatViewModelTest {
         override suspend fun createWorkspace(path: String): WorkspaceSummary {
             return WorkspaceSummary(workspaceId = "workspace-1", path = path, title = path)
         }
+
+        override suspend fun renameWorkspace(workspaceId: String, title: String): WorkspaceSummary = WorkspaceSummary(
+            workspaceId = workspaceId,
+            path = title,
+            title = title,
+        ).also { renamedWorkspaces += workspaceId to title }
 
         override suspend fun deleteWorkspace(workspaceId: String) = Unit
 
