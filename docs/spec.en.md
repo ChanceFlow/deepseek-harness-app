@@ -42,3 +42,9 @@ MVP supports subagent.list, subagent.history, subagent.prompt, subagent.interrup
 ## Session Titles
 Initial titles come from session.list projections.values.title.
 Live title projection frames update the session list. Titles are display only.
+
+
+## Goal Flow
+GoalRef/GoalProjection/GoalPhase are domain models.
+Adapter wires goal.create/pause/resume/complete/clear; state comes from projection key=goal.
+UI is session-scoped.

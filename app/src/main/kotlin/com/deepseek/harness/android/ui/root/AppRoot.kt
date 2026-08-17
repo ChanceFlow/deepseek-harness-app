@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import com.deepseek.harness.android.ui.chat.ChatRoute
 import com.deepseek.harness.android.ui.models.ModelsRoute
 import com.deepseek.harness.android.ui.subagents.SubagentRoute
+import com.deepseek.harness.android.ui.goal.GoalRoute
 import com.deepseek.harness.android.ui.workspace.WorkspaceRoute
 
 private enum class AppDestination(val label: String) {
@@ -23,6 +24,7 @@ private enum class AppDestination(val label: String) {
     WORKSPACES("Workspaces"),
     MODELS("Models"),
     SUBAGENTS("Subagents"),
+    GOALS("Goals"),
 }
 
 @Composable
@@ -54,6 +56,7 @@ fun AppRoot(modifier: Modifier = Modifier) {
                 AppDestination.WORKSPACES -> WorkspaceRoute()
                 AppDestination.MODELS -> ModelsRoute()
                 AppDestination.SUBAGENTS -> SubagentRoute()
+                AppDestination.GOALS -> GoalRoute()
             }
         }
     }

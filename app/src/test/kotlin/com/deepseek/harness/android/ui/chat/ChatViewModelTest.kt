@@ -2,6 +2,9 @@ package com.deepseek.harness.android.ui.chat
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
+import com.deepseek.harness.android.domain.model.GoalProjection
+import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelSelection
@@ -222,6 +225,16 @@ class ChatViewModelTest {
         override suspend fun loadSubagentHistory(parentSessionId: String, childSessionId: String): List<TimelineItem> = emptyList()
 
         override suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String = "msg-1"
+
+        override fun observeGoal(sessionId: String): Flow<GoalProjection?> = MutableStateFlow(null)
+
+        override suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long?): GoalRef =
+            GoalRef(id = "g1", revision = 1)
+
+        override suspend fun pauseGoal(sessionId: String, ref: GoalRef): GoalRef = ref
+        override suspend fun resumeGoal(sessionId: String, ref: GoalRef): GoalRef = ref
+        override suspend fun completeGoal(sessionId: String, ref: GoalRef): GoalRef = ref
+        override suspend fun clearGoal(sessionId: String, ref: GoalRef) = Unit
 
         companion object {
             val initialSession = SessionSummary(

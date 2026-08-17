@@ -195,3 +195,10 @@ rename/fork, queue steer/remove, approvals, and questions.
 - `session.list` `projections.values.title` is parsed on initial load.
 - mux `session/projection` frames with `key == title` update `sessions` in place.
 - Titles are display only; identity remains `sessionId`.
+
+## 13. Goal Flow
+
+- Domain carries `GoalRef`, `GoalProjection`, `GoalPhase`.
+- Adapter wires `goal.create/pause/resume/complete/clear`.
+- Goal state is read from `session/projection` frames with key `goal`; it is never guessed client-side.
+- Goal UI is parent/session scoped exactly like Subagents.

@@ -3,6 +3,10 @@ package com.deepseek.harness.android.harness
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.GoalPhase
+import com.deepseek.harness.android.domain.model.GoalProjection
+import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelCatalogFailure
 import com.deepseek.harness.android.domain.model.ModelCatalogModel
@@ -28,6 +32,11 @@ import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.harness.dto.SessionCancelValue
 import com.deepseek.harness.android.harness.dto.SessionCreateValue
 import com.deepseek.harness.android.harness.dto.SessionHistoryValue
+import com.deepseek.harness.android.harness.dto.GoalProjectionWire
+import com.deepseek.harness.android.harness.dto.GoalSnapshotWire
+import com.deepseek.harness.android.harness.dto.GoalBlockReasonWire
+import com.deepseek.harness.android.harness.dto.GoalRefValue
+import com.deepseek.harness.android.harness.dto.GoalRefWire
 import com.deepseek.harness.android.harness.dto.ModelCatalogFailureWire
 import com.deepseek.harness.android.harness.dto.ModelCatalogModelWire
 import com.deepseek.harness.android.harness.dto.ModelProviderGroupWire
@@ -68,6 +77,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -95,6 +105,11 @@ private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
 private const val SUBAGENT_HISTORY = "subagent.history"
 private const val SUBAGENT_PROMPT = "subagent.prompt"
+private const val GOAL_CREATE = "goal.create"
+private const val GOAL_PAUSE = "goal.pause"
+private const val GOAL_RESUME = "goal.resume"
+private const val GOAL_COMPLETE = "goal.complete"
+private const val GOAL_CLEAR = "goal.clear"
 
 @Singleton
 class HarnessRepositoryImpl @Inject constructor(
@@ -108,6 +123,7 @@ class HarnessRepositoryImpl @Inject constructor(
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
     private val sessionStates = ConcurrentHashMap<String, SessionState>()
+    private val goalProjections = ConcurrentHashMap<String, MutableStateFlow<GoalProjection?>>()
     private val resyncMutex = Mutex()
 
     init {
@@ -350,6 +366,56 @@ class HarnessRepositoryImpl @Inject constructor(
         return json.decodeFromJsonElement<SubagentPromptValue>(value).messageId
     }
 
+    override fun observeGoal(sessionId: String): Flow<GoalProjection?> =
+        goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }
+
+    override suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long?): GoalRef {
+        val value = rpcClient.call(
+            GOAL_CREATE,
+            GOAL_CREATE,
+            buildJsonObject {
+                put("sessionId", sessionId)
+                put("objective", objective)
+                maxGoalRounds?.let { put("maxGoalRounds", it) }
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<GoalRefValue>(value).ref.toDomain()
+    }
+
+    override suspend fun pauseGoal(sessionId: String, ref: GoalRef): GoalRef =
+        goalMutation(GOAL_PAUSE, sessionId, ref)
+
+    override suspend fun resumeGoal(sessionId: String, ref: GoalRef): GoalRef =
+        goalMutation(GOAL_RESUME, sessionId, ref)
+
+    override suspend fun completeGoal(sessionId: String, ref: GoalRef): GoalRef =
+        goalMutation(GOAL_COMPLETE, sessionId, ref)
+
+    override suspend fun clearGoal(sessionId: String, ref: GoalRef) {
+        rpcClient.call(
+            GOAL_CLEAR,
+            GOAL_CLEAR,
+            goalPayload(sessionId, ref),
+        ).valueOrThrow()
+        goalProjections[sessionId]?.value = null
+    }
+
+    private suspend fun goalMutation(endpoint: String, sessionId: String, ref: GoalRef): GoalRef {
+        val value = rpcClient.call(endpoint, endpoint, goalPayload(sessionId, ref)).valueOrThrow()
+        return json.decodeFromJsonElement<GoalRefValue>(value).ref.toDomain()
+    }
+
+    private fun goalPayload(sessionId: String, ref: GoalRef): JsonObject = buildJsonObject {
+        put("sessionId", sessionId)
+        put(
+            "ref",
+            buildJsonObject {
+                put("id", ref.id)
+                put("revision", ref.revision)
+            },
+        )
+    }
+
     override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =
         workspaces.asStateFlow()
 
@@ -424,7 +490,7 @@ class HarnessRepositoryImpl @Inject constructor(
             connectionManager.muxFrames.collect { frame ->
                 val type = frame.payload["type"]?.jsonPrimitive?.contentOrNull
                 if (type == "session/projection") {
-                    handleTitleProjection(frame)
+                    handleProjection(frame)
                     return@collect
                 }
                 val sessionId = frame.frameSessionId() ?: return@collect
@@ -434,19 +500,32 @@ class HarnessRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun handleTitleProjection(frame: ServerRequest) {
+    private fun handleProjection(frame: ServerRequest) {
         val sessionId = frame.frameSessionId() ?: return
-        if (frame.payload["key"]?.jsonPrimitive?.contentOrNull != "title") return
-        val title = frame.payload["value"]?.jsonPrimitive?.contentOrNull
-        if (title != null && title == "null") {
-            sessions.update { current ->
-                current.map { if (it.id == sessionId) it.copy(title = null) else it }
+        when (frame.payload["key"]?.jsonPrimitive?.contentOrNull) {
+            "title" -> {
+                val title = frame.payload["value"]?.jsonPrimitive?.contentOrNull
+                if (title != null && title != "null") {
+                    sessions.update { current ->
+                        current.map { if (it.id == sessionId) it.copy(title = title) else it }
+                    }
+                } else {
+                    sessions.update { current ->
+                        current.map { if (it.id == sessionId) it.copy(title = null) else it }
+                    }
+                }
             }
-            return
-        }
-        if (title != null) {
-            sessions.update { current ->
-                current.map { if (it.id == sessionId) it.copy(title = title) else it }
+            "goal" -> {
+                val value = frame.payload["value"]
+                val projection = runCatching {
+                    if (value == null || value.jsonPrimitive?.contentOrNull == "null") null
+                    else json.decodeFromJsonElement<GoalProjectionWire>(value)
+                }.getOrNull()
+                if (projection == null) {
+                    goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value = null
+                } else {
+                    goalProjections.getOrPut(sessionId) { MutableStateFlow(projection.toDomain()) }.value = projection.toDomain()
+                }
             }
         }
     }
@@ -529,8 +608,43 @@ class HarnessRepositoryImpl @Inject constructor(
         }
         val value = rpcClient.call(SESSION_HISTORY, SESSION_HISTORY, payload).valueOrThrow()
         val history = json.decodeFromJsonElement<SessionHistoryValue>(value)
+        history.projections?.values?.get("goal")?.let { goalValue ->
+            goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value =
+                parseGoalProjection(goalValue)
+        }
         return history.events.map { it.event }
     }
+
+    private fun parseGoalProjection(value: JsonElement?): GoalProjection? {
+        if (value == null || value.jsonPrimitive?.contentOrNull == "null") return null
+        return runCatching { json.decodeFromJsonElement<GoalProjectionWire>(value).toDomain() }.getOrNull()
+    }
+
+    private fun GoalRefWire.toDomain(): GoalRef = GoalRef(
+        id = id,
+        revision = revision,
+    )
+
+    private fun GoalProjectionWire.toDomain(): GoalProjection = GoalProjection(
+        goal = goal.toDomain(),
+        roundsStarted = roundsStarted,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
+    private fun GoalSnapshotWire.toDomain(): GoalSnapshot = GoalSnapshot(
+        id = id,
+        revision = revision,
+        objective = objective,
+        phase = when (phase) {
+            "paused" -> GoalPhase.PAUSED
+            "blocked" -> GoalPhase.BLOCKED
+            "complete" -> GoalPhase.COMPLETE
+            else -> GoalPhase.ACTIVE
+        },
+        blockedReason = blockedReason?.message,
+        maxGoalRounds = maxGoalRounds,
+    )
 
     private inner class SessionState(
         val sessionId: String,

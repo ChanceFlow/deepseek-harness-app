@@ -44,6 +44,7 @@ internal data class SessionCancelValue(
 internal data class SessionHistoryValue(
     val events: List<HistoryEntryWire> = emptyList(),
     val hasMore: Boolean = false,
+    val projections: SessionProjectionsValue? = null,
 )
 
 @Serializable
@@ -181,4 +182,42 @@ internal data class SubagentInterruptValue(
 @Serializable
 internal data class SubagentPromptValue(
     val messageId: String,
+)
+
+
+// Goal domain shapes. Values are decoded only inside the adapter.
+
+@Serializable
+internal data class GoalRefWire(
+    val id: String,
+    val revision: Long,
+)
+
+@Serializable
+internal data class GoalSnapshotWire(
+    val id: String,
+    val revision: Long,
+    val objective: String,
+    val phase: String,
+    val blockedReason: GoalBlockReasonWire? = null,
+    val maxGoalRounds: Long,
+)
+
+@Serializable
+internal data class GoalBlockReasonWire(
+    val code: String,
+    val message: String,
+)
+
+@Serializable
+internal data class GoalProjectionWire(
+    val goal: GoalSnapshotWire,
+    val roundsStarted: Long = 0L,
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+)
+
+@Serializable
+internal data class GoalRefValue(
+    val ref: GoalRefWire,
 )

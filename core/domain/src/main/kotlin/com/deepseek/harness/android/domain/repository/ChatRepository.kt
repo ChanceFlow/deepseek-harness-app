@@ -2,6 +2,8 @@ package com.deepseek.harness.android.domain.repository
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.GoalProjection
+import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
@@ -73,6 +75,18 @@ interface ChatRepository {
     suspend fun loadSubagentHistory(parentSessionId: String, childSessionId: String): List<TimelineItem>
 
     suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String
+
+    fun observeGoal(sessionId: String): Flow<GoalProjection?>
+
+    suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long? = null): GoalRef
+
+    suspend fun pauseGoal(sessionId: String, ref: GoalRef): GoalRef
+
+    suspend fun resumeGoal(sessionId: String, ref: GoalRef): GoalRef
+
+    suspend fun completeGoal(sessionId: String, ref: GoalRef): GoalRef
+
+    suspend fun clearGoal(sessionId: String, ref: GoalRef)
 }
 
 data class QuestionEvidence(
