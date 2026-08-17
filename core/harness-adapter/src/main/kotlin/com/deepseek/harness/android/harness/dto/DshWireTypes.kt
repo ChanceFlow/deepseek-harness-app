@@ -149,3 +149,30 @@ internal data class SessionForkValue(
 internal data class SessionQueueUpdateValue(
     val accepted: Boolean = true,
 )
+
+@Serializable
+internal data class SubagentListValue(
+    val entries: List<SubagentEntryWire> = emptyList(),
+    val parentAvailable: Boolean = false,
+)
+
+@Serializable
+internal data class SubagentEntryWire(
+    val kind: String = "child",
+    val id: String,
+    val mode: String? = null,
+    val activity: String? = null,
+    val hasChildren: Boolean = false,
+    val label: String? = null,
+    val reason: String? = null,
+)
+
+@Serializable
+internal data class SubagentInterruptValue(
+    val accepted: Boolean = true,
+)
+
+@Serializable
+internal data class SubagentPromptValue(
+    val messageId: String,
+)

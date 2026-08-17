@@ -19,6 +19,8 @@ import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SubagentCatalog
+import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import kotlinx.coroutines.CancellationException
@@ -40,6 +42,10 @@ import com.deepseek.harness.android.harness.dto.WorkspaceListValue
 import com.deepseek.harness.android.harness.dto.WorkspaceWire
 import com.deepseek.harness.android.harness.dto.SessionPromptValue
 import com.deepseek.harness.android.harness.dto.SessionQueueUpdateValue
+import com.deepseek.harness.android.harness.dto.SubagentEntryWire
+import com.deepseek.harness.android.harness.dto.SubagentInterruptValue
+import com.deepseek.harness.android.harness.dto.SubagentListValue
+import com.deepseek.harness.android.harness.dto.SubagentPromptValue
 import com.deepseek.harness.android.harness.dto.SessionRenameValue
 import com.deepseek.harness.android.harness.dto.SessionForkValue
 import com.deepseek.harness.android.network.DshBusinessException
@@ -84,6 +90,10 @@ private const val SESSION_UPDATE_QUEUE = "session.updateQueue"
 private const val WORKSPACE_LIST = "workspace.list"
 private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_DELETE = "workspace.delete"
+private const val SUBAGENT_LIST = "subagent.list"
+private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
+private const val SUBAGENT_HISTORY = "subagent.history"
+private const val SUBAGENT_PROMPT = "subagent.prompt"
 
 @Singleton
 class HarnessRepositoryImpl @Inject constructor(
@@ -267,6 +277,76 @@ class HarnessRepositoryImpl @Inject constructor(
             },
         ).valueOrThrow()
         json.decodeFromJsonElement<SessionQueueUpdateValue>(result)
+    }
+
+    override suspend fun loadSubagents(parentSessionId: String): SubagentCatalog {
+        val value = rpcClient.call(
+            SUBAGENT_LIST,
+            SUBAGENT_LIST,
+            buildJsonObject { put("parentSessionId", parentSessionId) },
+        ).valueOrThrow()
+        val wire = json.decodeFromJsonElement<SubagentListValue>(value)
+        return SubagentCatalog(
+            entries = wire.entries.map { entry ->
+                SubagentEntry(
+                    id = entry.id,
+                    kind = entry.kind,
+                    mode = entry.mode,
+                    activity = entry.activity,
+                    hasChildren = entry.hasChildren,
+                    label = entry.label,
+                    reason = entry.reason,
+                )
+            },
+            parentAvailable = wire.parentAvailable,
+        )
+    }
+
+    override suspend fun interruptSubagent(parentSessionId: String, childSessionId: String) {
+        rpcClient.call(
+            SUBAGENT_INTERRUPT,
+            SUBAGENT_INTERRUPT,
+            buildJsonObject {
+                put("parentSessionId", parentSessionId)
+                put("childSessionId", childSessionId)
+                put("mode", "continuable")
+            },
+        ).valueOrThrow()
+    }
+
+    override suspend fun loadSubagentHistory(parentSessionId: String, childSessionId: String): List<TimelineItem> {
+        val value = rpcClient.call(
+            SUBAGENT_HISTORY,
+            SUBAGENT_HISTORY,
+            buildJsonObject {
+                put("parentSessionId", parentSessionId)
+                put("childSessionId", childSessionId)
+                put("mode", "continuable")
+            },
+        ).valueOrThrow()
+        val history = json.decodeFromJsonElement<SessionHistoryValue>(value)
+        val reducer = TimelineReducer(childSessionId)
+        reducer.reset(history.events.map { it.event })
+        return reducer.snapshot()
+    }
+
+    override suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String {
+        val value = rpcClient.call(
+            SUBAGENT_PROMPT,
+            SUBAGENT_PROMPT,
+            buildJsonObject {
+                put("parentSessionId", parentSessionId)
+                put("childSessionId", childSessionId)
+                put("mode", "continuable")
+                put(
+                    "content",
+                    buildJsonArray {
+                        add(buildJsonObject { put("type", "text"); put("text", text) })
+                    },
+                )
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SubagentPromptValue>(value).messageId
     }
 
     override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =

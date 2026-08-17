@@ -12,6 +12,8 @@ import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SubagentEntry
+import com.deepseek.harness.android.domain.model.SubagentCatalog
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
@@ -211,6 +213,15 @@ class ChatViewModelTest {
             initialSession
 
         override suspend fun updateQueue(request: QueueUpdateRequest) = Unit
+
+        override suspend fun loadSubagents(parentSessionId: String): SubagentCatalog =
+            SubagentCatalog()
+
+        override suspend fun interruptSubagent(parentSessionId: String, childSessionId: String) = Unit
+
+        override suspend fun loadSubagentHistory(parentSessionId: String, childSessionId: String): List<TimelineItem> = emptyList()
+
+        override suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String = "msg-1"
 
         companion object {
             val initialSession = SessionSummary(

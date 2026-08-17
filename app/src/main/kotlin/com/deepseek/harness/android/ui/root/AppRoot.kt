@@ -15,12 +15,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.deepseek.harness.android.ui.chat.ChatRoute
 import com.deepseek.harness.android.ui.models.ModelsRoute
+import com.deepseek.harness.android.ui.subagents.SubagentRoute
 import com.deepseek.harness.android.ui.workspace.WorkspaceRoute
 
 private enum class AppDestination(val label: String) {
     CHAT("Chat"),
     WORKSPACES("Workspaces"),
     MODELS("Models"),
+    SUBAGENTS("Subagents"),
 }
 
 @Composable
@@ -51,6 +53,7 @@ fun AppRoot(modifier: Modifier = Modifier) {
                 AppDestination.CHAT -> ChatRoute()
                 AppDestination.WORKSPACES -> WorkspaceRoute()
                 AppDestination.MODELS -> ModelsRoute()
+                AppDestination.SUBAGENTS -> SubagentRoute()
             }
         }
     }

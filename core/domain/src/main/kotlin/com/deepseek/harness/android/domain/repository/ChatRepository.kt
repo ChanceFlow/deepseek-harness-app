@@ -9,6 +9,8 @@ import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionModels
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SubagentCatalog
+import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.QuestionAnswer
@@ -63,6 +65,14 @@ interface ChatRepository {
     suspend fun forkSession(sessionId: String, atSeq: Long? = null): SessionSummary
 
     suspend fun updateQueue(request: QueueUpdateRequest)
+
+    suspend fun loadSubagents(parentSessionId: String): SubagentCatalog
+
+    suspend fun interruptSubagent(parentSessionId: String, childSessionId: String)
+
+    suspend fun loadSubagentHistory(parentSessionId: String, childSessionId: String): List<TimelineItem>
+
+    suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String
 }
 
 data class QuestionEvidence(

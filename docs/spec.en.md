@@ -32,3 +32,8 @@ Raw dsh events fold into `TimelineItem.Message`, `TimelineItem.ToolCall`,
 
 ## Known Limitations
 MVP now includes workspaces, model selection, session search/rename/fork, queue steer/remove, approvals, and questions. Settings, subagents, and rich plan/trajectory rendering remain deferred.
+
+
+## Subagent Ownership
+Address by parentSessionId + childSessionId. Never derive identity from labels.
+MVP supports subagent.list, subagent.history, subagent.prompt, subagent.interrupt.

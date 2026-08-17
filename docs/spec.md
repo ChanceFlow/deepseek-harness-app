@@ -182,3 +182,10 @@ rename/fork, queue steer/remove, approvals, and questions.
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select is supported, but rich rendering
   and plan-review intents are not.
+
+## 11. Subagent Ownership
+
+- A subagent is addressed by `parentSessionId` + `childSessionId`, never by display label.
+- `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`.
+- `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent.
+- MVP supports `subagent.list`, `subagent.history`, `subagent.prompt`, and `subagent.interrupt`.
