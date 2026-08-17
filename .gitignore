@@ -1,0 +1,21 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local server config
+app/src/main/assets/server.properties
+
+# Submodule working tree is tracked as a gitlink; never ignore .gitmodules
