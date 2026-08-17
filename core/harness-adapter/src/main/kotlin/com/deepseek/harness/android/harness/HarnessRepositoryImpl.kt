@@ -34,6 +34,7 @@ import com.deepseek.harness.android.harness.dto.ModelProviderGroupWire
 import com.deepseek.harness.android.harness.dto.ModelReasoningWire
 import com.deepseek.harness.android.harness.dto.ModelSelectionWire
 import com.deepseek.harness.android.harness.dto.SessionListValue
+import com.deepseek.harness.android.harness.dto.SessionWire
 import com.deepseek.harness.android.harness.dto.SessionModelsValue
 import com.deepseek.harness.android.harness.dto.SessionSearchValue
 import com.deepseek.harness.android.harness.dto.SessionSelectModelValue
@@ -421,9 +422,31 @@ class HarnessRepositoryImpl @Inject constructor(
     private fun collectMuxFrames() {
         scope.launch {
             connectionManager.muxFrames.collect { frame ->
+                val type = frame.payload["type"]?.jsonPrimitive?.contentOrNull
+                if (type == "session/projection") {
+                    handleTitleProjection(frame)
+                    return@collect
+                }
                 val sessionId = frame.frameSessionId() ?: return@collect
                 val state = sessionStates[sessionId] ?: return@collect
                 state.handleFrame(frame)
+            }
+        }
+    }
+
+    private fun handleTitleProjection(frame: ServerRequest) {
+        val sessionId = frame.frameSessionId() ?: return
+        if (frame.payload["key"]?.jsonPrimitive?.contentOrNull != "title") return
+        val title = frame.payload["value"]?.jsonPrimitive?.contentOrNull
+        if (title != null && title == "null") {
+            sessions.update { current ->
+                current.map { if (it.id == sessionId) it.copy(title = null) else it }
+            }
+            return
+        }
+        if (title != null) {
+            sessions.update { current ->
+                current.map { if (it.id == sessionId) it.copy(title = title) else it }
             }
         }
     }
@@ -484,14 +507,20 @@ class HarnessRepositoryImpl @Inject constructor(
     private suspend fun loadSessions(): List<SessionSummary> {
         val value = rpcClient.call(SESSION_LIST, SESSION_LIST, buildJsonObject {}).valueOrThrow()
         val listing = json.decodeFromJsonElement<SessionListValue>(value)
-        return listing.items.map { session ->
-            SessionSummary(
-                id = session.sessionId,
-                running = session.running,
-                blank = session.blank,
-                updatedAtEpochMs = session.updatedAt,
-            )
-        }
+        return listing.items.map { it.toDomain() }
+    }
+
+    private fun SessionWire.toDomain(): SessionSummary = SessionSummary(
+        id = sessionId,
+        title = titleFromProjections(),
+        running = running,
+        blank = blank,
+        updatedAtEpochMs = updatedAt,
+    )
+
+    private fun SessionWire.titleFromProjections(): String? {
+        val value = projections?.values?.get("title") ?: return null
+        return value.jsonPrimitive?.contentOrNull
     }
 
     private suspend fun loadHistory(sessionId: String): List<JsonObject> {

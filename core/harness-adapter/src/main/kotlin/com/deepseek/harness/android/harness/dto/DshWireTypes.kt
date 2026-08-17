@@ -9,6 +9,11 @@ internal data class SessionListValue(
 )
 
 @Serializable
+internal data class SessionProjectionsValue(
+    val values: JsonObject? = null,
+)
+
+@Serializable
 internal data class SessionWire(
     val sessionId: String,
     val updatedAt: Long = 0L,
@@ -17,6 +22,7 @@ internal data class SessionWire(
     val parentSessionId: String? = null,
     val origin: String? = null,
     val cwd: String? = null,
+    val projections: SessionProjectionsValue? = null,
 )
 
 @Serializable

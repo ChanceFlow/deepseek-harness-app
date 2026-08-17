@@ -37,3 +37,8 @@ MVP now includes workspaces, model selection, session search/rename/fork, queue 
 ## Subagent Ownership
 Address by parentSessionId + childSessionId. Never derive identity from labels.
 MVP supports subagent.list, subagent.history, subagent.prompt, subagent.interrupt.
+
+
+## Session Titles
+Initial titles come from session.list projections.values.title.
+Live title projection frames update the session list. Titles are display only.

@@ -189,3 +189,9 @@ rename/fork, queue steer/remove, approvals, and questions.
 - `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`.
 - `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent.
 - MVP supports `subagent.list`, `subagent.history`, `subagent.prompt`, and `subagent.interrupt`.
+
+## 12. Session Titles
+
+- `session.list` `projections.values.title` is parsed on initial load.
+- mux `session/projection` frames with `key == title` update `sessions` in place.
+- Titles are display only; identity remains `sessionId`.
