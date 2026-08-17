@@ -1,6 +1,8 @@
 package com.deepseek.harness.android.harness
 
 import com.deepseek.harness.android.domain.model.ChatMessage
+import com.deepseek.harness.android.domain.model.JobStatus
+import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionItem
 import com.deepseek.harness.android.domain.model.QueuePlacement
@@ -78,6 +80,15 @@ internal class TimelineReducer(
                 upsertByKey(
                     key = "queue",
                     item = TimelineItem.Queue(items = items),
+                )
+            }
+            "session/jobs" -> {
+                val jobs = frame["jobs"]?.jsonArray
+                    ?.mapNotNull { it.jsonObject.toJobView() }
+                    .orEmpty()
+                upsertByKey(
+                    key = "jobs",
+                    item = TimelineItem.Jobs(jobs = jobs),
                 )
             }
         }
@@ -280,6 +291,7 @@ internal class TimelineReducer(
         is TimelineItem.ApprovalRequest -> "approval:${item.approvalId}"
         is TimelineItem.QuestionRequest -> "question:${item.requestId}"
         is TimelineItem.Queue -> "queue"
+        is TimelineItem.Jobs -> "jobs"
         else -> ""
     }
 
@@ -295,6 +307,25 @@ internal class TimelineReducer(
             itemId = itemId,
             placement = placement,
             text = message.extractText(),
+        )
+    }
+
+    private fun JsonObject.toJobView(): JobView? {
+        val id = string("id") ?: return null
+        return JobView(
+            id = id,
+            kind = string("kind") ?: "unknown",
+            label = string("label") ?: "",
+            status = when (string("status")) {
+                "stopping" -> JobStatus.STOPPING
+                "completed" -> JobStatus.COMPLETED
+                "killed" -> JobStatus.KILLED
+                "failed" -> JobStatus.FAILED
+                else -> JobStatus.RUNNING
+            },
+            detail = string("detail"),
+            startedAt = long("startedAt"),
+            finishedAt = get("finishedAt")?.jsonPrimitive?.contentOrNull?.toLongOrNull(),
         )
     }
 

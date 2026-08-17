@@ -1,5 +1,6 @@
 package com.deepseek.harness.android.harness
 
+import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
@@ -144,6 +145,41 @@ class TimelineReducerTest {
 
         reducer.ingestFrame(resolved)
         assertTrue(reducer.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `session jobs frame becomes job snapshot`() {
+        val reducer = TimelineReducer("s1")
+        val frame = ServerRequest(
+            type = "server-request",
+            rpcId = "rpc-jobs",
+            method = "session/jobs",
+            payload = buildJsonObject {
+                put("type", "session/jobs")
+                put("sessionId", "s1")
+                put(
+                    "jobs",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("id", "bash-1")
+                                put("kind", "bash")
+                                put("label", "sleep 10")
+                                put("status", "running")
+                                put("startedAt", 10L)
+                            },
+                        )
+                    },
+                )
+            },
+        )
+
+        reducer.ingestFrame(frame)
+
+        val jobs = reducer.snapshot().single() as TimelineItem.Jobs
+        assertEquals(1, jobs.jobs.size)
+        assertEquals("bash-1", jobs.jobs.single().id)
+        assertEquals(JobStatus.RUNNING, jobs.jobs.single().status)
     }
 
     private fun event(seq: Long, type: String, data: JsonObject): JsonObject =

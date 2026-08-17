@@ -202,3 +202,9 @@ rename/fork, queue steer/remove, approvals, and questions.
 - Adapter wires `goal.create/pause/resume/complete/clear`.
 - Goal state is read from `session/projection` frames with key `goal`; it is never guessed client-side.
 - Goal UI is parent/session scoped exactly like Subagents.
+
+## 14. Background Jobs
+
+- `session/jobs` mux frames fold into `TimelineItem.Jobs`.
+- Job identity is backend-issued `id`; kind/status/detail/label stay display-only.
+- Jobs are live snapshots, not durable session events; history replay does not reconstruct them.

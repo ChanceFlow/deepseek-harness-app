@@ -35,6 +35,8 @@ import com.deepseek.harness.android.domain.model.ChatMessage
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.HostDescription
+import com.deepseek.harness.android.domain.model.JobStatus
+import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueuePlacement
@@ -304,6 +306,7 @@ private fun TimelineRow(
             items = item.items,
             onAction = onAction,
         )
+        is TimelineItem.Jobs -> JobsRow(item.jobs)
         is TimelineItem.Error -> Text(
             text = item.message,
             color = MaterialTheme.colorScheme.error,
@@ -354,6 +357,26 @@ private fun ToolRunStatus.label(): String = when (this) {
     ToolRunStatus.RUNNING -> "running..."
     ToolRunStatus.COMPLETED -> "done"
     ToolRunStatus.FAILED -> "failed"
+}
+
+@Composable
+private fun JobsRow(jobs: List<JobView>) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text("Background jobs", style = MaterialTheme.typography.labelLarge)
+        jobs.forEach { job ->
+            Text(
+                text = "${job.kind} · ${job.label} · ${job.status}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            job.detail?.let { Text(text = it, style = MaterialTheme.typography.bodySmall) }
+            if (job.finishedAt != null) {
+                Text(
+                    text = "finished @ ${job.finishedAt}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -541,6 +564,7 @@ private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.ApprovalRequest -> "approval:${item.requestId}"
     is TimelineItem.QuestionRequest -> "question:${item.requestId}"
     is TimelineItem.Queue -> "queue"
+    is TimelineItem.Jobs -> "jobs"
     is TimelineItem.Error -> "error:${item.id}"
 }
 

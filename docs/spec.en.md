@@ -48,3 +48,7 @@ Live title projection frames update the session list. Titles are display only.
 GoalRef/GoalProjection/GoalPhase are domain models.
 Adapter wires goal.create/pause/resume/complete/clear; state comes from projection key=goal.
 UI is session-scoped.
+
+
+## Background Jobs
+session/jobs mux frames fold into TimelineItem.Jobs. Jobs are live snapshots, not durable history.

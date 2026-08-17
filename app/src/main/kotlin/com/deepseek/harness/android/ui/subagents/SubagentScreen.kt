@@ -179,6 +179,10 @@ private fun ChildTimeline(
                     text = "Queue: ${item.items.size}",
                     modifier = Modifier.fillMaxWidth(),
                 )
+                is TimelineItem.Jobs -> Text(
+                    text = "Jobs: ${item.jobs.size}",
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 is TimelineItem.Error -> Text(
                     text = item.message,
                     color = MaterialTheme.colorScheme.error,
@@ -195,5 +199,6 @@ private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.ApprovalRequest -> "a:${item.requestId}"
     is TimelineItem.QuestionRequest -> "q:${item.requestId}"
     is TimelineItem.Queue -> "queue"
+    is TimelineItem.Jobs -> "jobs"
     is TimelineItem.Error -> "e:${item.id}"
 }

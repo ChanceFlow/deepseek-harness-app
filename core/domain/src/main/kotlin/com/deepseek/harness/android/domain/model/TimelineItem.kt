@@ -41,6 +41,10 @@ sealed interface TimelineItem {
         val items: List<SessionQueueItem> = emptyList(),
     ) : TimelineItem
 
+    data class Jobs(
+        val jobs: List<JobView> = emptyList(),
+    ) : TimelineItem
+
     data class Error(
         val id: String,
         val message: String,
