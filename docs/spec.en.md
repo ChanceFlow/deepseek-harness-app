@@ -31,7 +31,7 @@ Raw dsh events fold into `TimelineItem.Message`, `TimelineItem.ToolCall`,
 `ChatScreen` is stateless; `ChatRoute` owns `ChatViewModel`. Layout is local to Android.
 
 ## Known Limitations
-The MVP now includes workspaces (create/rename/delete), model and reasoning-effort selection, session search/create/rename/fork, queue vs steer delivery, queue steer/remove, approvals, multi-select and custom-text questions, subagents, goals, titles, and background jobs. Settings, attachments, markdown, and rich plan/trajectory rendering remain deferred.
+The MVP now includes workspaces (create/rename/delete), model and reasoning-effort selection, session search/create/rename/archive/fork, queue vs steer delivery, queue steer/remove, approvals, multi-select and custom-text questions, subagents, goals, titles, background jobs, page-at-a-time older-history loading, and non-destructive session archiving. Settings, attachments, markdown, rich plan/trajectory rendering, and manual workspace ordering remain deferred.
 
 
 ## Subagent Ownership

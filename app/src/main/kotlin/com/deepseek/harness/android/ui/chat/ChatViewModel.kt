@@ -10,7 +10,7 @@ import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
-import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.model.TimelineWindow
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
@@ -33,7 +33,7 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val selectedSessionId = MutableStateFlow<String?>(null)
-    private val timeline = MutableStateFlow<List<TimelineItem>>(emptyList())
+    private val timelineWindow = MutableStateFlow(TimelineWindow())
     private val isSending = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
     private val searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
@@ -43,7 +43,7 @@ class ChatViewModel @Inject constructor(
         val sessions: List<SessionSummary>,
         val workspaces: List<WorkspaceSummary>,
         val selectedSessionId: String?,
-        val timeline: List<TimelineItem>,
+        val timelineWindow: TimelineWindow,
         val isSending: Boolean,
     ) {
         fun toUiState(
@@ -54,7 +54,9 @@ class ChatViewModel @Inject constructor(
             sessions = sessions,
             workspaces = workspaces,
             selectedSessionId = selectedSessionId,
-            timeline = timeline,
+            timeline = timelineWindow.items,
+            hasMoreOlder = timelineWindow.hasMoreOlder,
+            isLoadingOlder = timelineWindow.isLoadingOlder,
             isSending = isSending,
             errorMessage = error,
             searchResults = search,
@@ -82,15 +84,15 @@ class ChatViewModel @Inject constructor(
                 )
             },
             selectedSessionId,
-            timeline,
+            timelineWindow,
             isSending,
-        ) { baseline, selected, items, sending ->
+        ) { baseline, selected, window, sending ->
             ChatUiCore(
                 connection = baseline.connection,
                 sessions = baseline.sessions,
                 workspaces = baseline.workspaces,
                 selectedSessionId = selected,
-                timeline = items,
+                timelineWindow = window,
                 isSending = sending,
             )
         },
@@ -107,6 +109,7 @@ class ChatViewModel @Inject constructor(
     init {
         refresh()
         observeSelectedTimeline()
+        observeSelectedSessionRemoval()
     }
 
     fun onAction(action: ChatAction) {
@@ -118,9 +121,11 @@ class ChatViewModel @Inject constructor(
             is ChatAction.CreateSessionInWorkspace -> createSession(action.workspaceId)
             ChatAction.DismissError -> errorMessage.value = null
             ChatAction.RetrySessions -> refresh()
+            ChatAction.LoadOlderHistory -> loadOlderHistory()
             is ChatAction.RespondApproval -> respondApproval(action)
             is ChatAction.AnswerQuestion -> answerQuestion(action)
             is ChatAction.SearchSessions -> searchSessions(action.query)
+            is ChatAction.ArchiveSession -> archiveSession(action.sessionId)
             is ChatAction.RenameSession -> renameSession(action.sessionId, action.title)
             is ChatAction.ForkSession -> forkSession(action.sessionId)
             is ChatAction.UpdateQueue -> updateQueue(action.itemId, action.kind)
@@ -129,9 +134,16 @@ class ChatViewModel @Inject constructor(
 
     private fun selectSession(sessionId: String) {
         selectedSessionId.value = sessionId
-        timeline.value = emptyList()
+        timelineWindow.value = TimelineWindow()
         viewModelScope.launch {
             runCatchingForUi { chatRepository.openSession(sessionId) }
+        }
+    }
+
+    private fun loadOlderHistory() {
+        val sessionId = selectedSessionId.value ?: return
+        viewModelScope.launch {
+            runCatchingForUi { chatRepository.loadOlderHistory(sessionId) }
         }
     }
 
@@ -139,6 +151,24 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             runCatchingForUi { chatRepository.refreshSessions() }
             runCatchingForUi { chatRepository.refreshWorkspaces() }
+        }
+    }
+
+    private fun observeSelectedSessionRemoval() {
+        viewModelScope.launch {
+            chatRepository.observeSessions().collect { sessions ->
+                val selected = selectedSessionId.value ?: return@collect
+                if (sessions.none { it.id == selected }) {
+                    selectedSessionId.value = null
+                    timelineWindow.value = TimelineWindow()
+                }
+            }
+        }
+    }
+
+    private fun archiveSession(sessionId: String) {
+        viewModelScope.launch {
+            runCatchingForUi { chatRepository.archiveSession(sessionId) }
         }
     }
 
@@ -218,10 +248,13 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             selectedSessionId
                 .flatMapLatest { sessionId ->
-                    if (sessionId == null) flowOf(emptyList())
-                    else chatRepository.observeTimeline(sessionId)
+                    if (sessionId == null) {
+                        flowOf(TimelineWindow())
+                    } else {
+                        chatRepository.observeTimelineWindow(sessionId)
+                    }
                 }
-                .collect { timeline.value = it }
+                .collect { timelineWindow.value = it }
         }
     }
 
@@ -247,7 +280,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val forked = runCatchingForUi { chatRepository.forkSession(sessionId) } ?: return@launch
             selectedSessionId.value = forked.id
-            timeline.value = emptyList()
+            timelineWindow.value = TimelineWindow()
             runCatchingForUi { chatRepository.openSession(forked.id) }
         }
     }

@@ -26,6 +26,7 @@ import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.SubagentCatalog
 import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.model.TimelineWindow
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import kotlinx.coroutines.CancellationException
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
@@ -47,6 +48,7 @@ import com.deepseek.harness.android.harness.dto.SessionWire
 import com.deepseek.harness.android.harness.dto.SessionModelsValue
 import com.deepseek.harness.android.harness.dto.SessionSearchValue
 import com.deepseek.harness.android.harness.dto.SessionSelectModelValue
+import com.deepseek.harness.android.harness.dto.WorkspaceArchiveValue
 import com.deepseek.harness.android.harness.dto.WorkspaceCreateValue
 import com.deepseek.harness.android.harness.dto.WorkspaceListValue
 import com.deepseek.harness.android.harness.dto.WorkspaceRenameValue
@@ -73,6 +75,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -85,6 +88,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
@@ -103,6 +107,8 @@ private const val WORKSPACE_LIST = "workspace.list"
 private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_RENAME = "workspace.rename"
 private const val WORKSPACE_DELETE = "workspace.delete"
+private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
+private const val HISTORY_PAGE_MESSAGES = 50
 private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
 private const val SUBAGENT_HISTORY = "subagent.history"
@@ -112,6 +118,11 @@ private const val GOAL_PAUSE = "goal.pause"
 private const val GOAL_RESUME = "goal.resume"
 private const val GOAL_COMPLETE = "goal.complete"
 private const val GOAL_CLEAR = "goal.clear"
+
+private data class HistoryPage(
+    val events: List<JsonObject>,
+    val hasMore: Boolean,
+)
 
 @Singleton
 class HarnessRepositoryImpl @Inject constructor(
@@ -124,6 +135,7 @@ class HarnessRepositoryImpl @Inject constructor(
     private val connectionGeneration = MutableStateFlow(0L)
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
+    private val archivedSessionIds = MutableStateFlow<Set<String>>(emptySet())
     private val sessionStates = ConcurrentHashMap<String, SessionState>()
     private val goalProjections = ConcurrentHashMap<String, MutableStateFlow<GoalProjection?>>()
     private val resyncMutex = Mutex()
@@ -139,7 +151,9 @@ class HarnessRepositoryImpl @Inject constructor(
         connectionManager.state
 
     override fun observeSessions(): Flow<List<SessionSummary>> =
-        sessions.asStateFlow()
+        combine(sessions, archivedSessionIds) { current, archived ->
+            if (archived.isEmpty()) current else current.filterNot { it.id in archived }
+        }
 
     override suspend fun refreshSessions() {
         val current = loadSessions()
@@ -162,7 +176,7 @@ class HarnessRepositoryImpl @Inject constructor(
     override suspend fun openSession(sessionId: String) {
         val state = sessionStates.getOrPut(sessionId) { SessionState(sessionId) }
         try {
-            state.ensureLoaded { loadHistory(sessionId) }
+            state.ensureLoaded { beforeSeq -> loadHistory(sessionId, beforeSeq) }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
@@ -173,6 +187,19 @@ class HarnessRepositoryImpl @Inject constructor(
     override fun observeTimeline(sessionId: String): Flow<List<TimelineItem>> {
         val state = sessionStates.getOrPut(sessionId) { SessionState(sessionId) }
         return state.timeline
+    }
+
+    override fun observeArchivedSessionIds(): Flow<Set<String>> =
+        archivedSessionIds.asStateFlow()
+
+    override fun observeTimelineWindow(sessionId: String): Flow<TimelineWindow> {
+        val state = sessionStates.getOrPut(sessionId) { SessionState(sessionId) }
+        return state.window
+    }
+
+    override suspend fun loadOlderHistory(sessionId: String): Boolean {
+        val state = sessionStates[sessionId] ?: return false
+        return state.loadOlder { beforeSeq -> loadHistory(sessionId, beforeSeq) }
     }
 
     override suspend fun sendMessage(request: SendMessageRequest) {
@@ -422,9 +449,17 @@ class HarnessRepositoryImpl @Inject constructor(
         workspaces.asStateFlow()
 
     override suspend fun refreshWorkspaces() {
+        applyWorkspaceListing(loadWorkspaceListing())
+    }
+
+    private suspend fun loadWorkspaceListing(): WorkspaceListValue {
         val result = rpcClient.call(WORKSPACE_LIST, WORKSPACE_LIST, buildJsonObject {}).valueOrThrow()
-        val listing = json.decodeFromJsonElement<WorkspaceListValue>(result)
+        return json.decodeFromJsonElement<WorkspaceListValue>(result)
+    }
+
+    private fun applyWorkspaceListing(listing: WorkspaceListValue) {
         workspaces.value = listing.items.map { it.toDomain() }
+        archivedSessionIds.value = listing.archivedSessionIds.toSet()
     }
 
     override suspend fun createWorkspace(path: String): WorkspaceSummary {
@@ -434,7 +469,7 @@ class HarnessRepositoryImpl @Inject constructor(
             buildJsonObject { put("path", path) },
         ).valueOrThrow()
         val created = json.decodeFromJsonElement<WorkspaceCreateValue>(result)
-        workspaces.value = loadWorkspaces()
+        applyWorkspaceListing(loadWorkspaceListing())
         return created.workspace.toDomain()
     }
 
@@ -448,8 +483,18 @@ class HarnessRepositoryImpl @Inject constructor(
             },
         ).valueOrThrow()
         val renamed = json.decodeFromJsonElement<WorkspaceRenameValue>(result)
-        workspaces.value = loadWorkspaces()
+        applyWorkspaceListing(loadWorkspaceListing())
         return renamed.workspace.toDomain()
+    }
+
+    override suspend fun archiveSession(sessionId: String) {
+        val result = rpcClient.call(
+            WORKSPACE_ARCHIVE_SESSION,
+            WORKSPACE_ARCHIVE_SESSION,
+            buildJsonObject { put("sessionId", sessionId) },
+        ).valueOrThrow()
+        val archived = json.decodeFromJsonElement<WorkspaceArchiveValue>(result)
+        archivedSessionIds.value = archived.archivedSessionIds.toSet()
     }
 
     override suspend fun deleteWorkspace(workspaceId: String) {
@@ -458,7 +503,7 @@ class HarnessRepositoryImpl @Inject constructor(
             WORKSPACE_DELETE,
             buildJsonObject { put("workspaceId", workspaceId) },
         ).valueOrThrow()
-        workspaces.value = loadWorkspaces()
+        applyWorkspaceListing(loadWorkspaceListing())
     }
 
     override suspend fun loadModels(sessionId: String): SessionModels {
@@ -575,6 +620,12 @@ class HarnessRepositoryImpl @Inject constructor(
                             // Retried on next generation.
                         }
                     }
+                    "host/archived-sessions-changed" -> {
+                        frame.payload["archivedSessionIds"]?.jsonArray
+                            ?.mapNotNull { it.jsonPrimitive?.contentOrNull }
+                            ?.toSet()
+                            ?.let { archivedSessionIds.value = it }
+                    }
                 }
             }
         }
@@ -591,7 +642,7 @@ class HarnessRepositoryImpl @Inject constructor(
             }
             sessionStates.values.forEach { state ->
                 try {
-                    state.ensureLoaded { loadHistory(state.sessionId) }
+                    state.ensureLoaded { beforeSeq -> loadHistory(state.sessionId, beforeSeq) }
                 } catch (_: Throwable) {
                     // Pending state retries on the next generation.
                 }
@@ -620,9 +671,14 @@ class HarnessRepositoryImpl @Inject constructor(
         return value.jsonPrimitive?.contentOrNull
     }
 
-    private suspend fun loadHistory(sessionId: String): List<JsonObject> {
+    private suspend fun loadHistory(
+        sessionId: String,
+        beforeSeq: Long? = null,
+    ): HistoryPage {
         val payload = buildJsonObject {
             put("sessionId", sessionId)
+            beforeSeq?.let { put("beforeSeq", it) }
+            put("maxMessages", HISTORY_PAGE_MESSAGES)
         }
         val value = rpcClient.call(SESSION_HISTORY, SESSION_HISTORY, payload).valueOrThrow()
         val history = json.decodeFromJsonElement<SessionHistoryValue>(value)
@@ -630,7 +686,10 @@ class HarnessRepositoryImpl @Inject constructor(
             goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value =
                 parseGoalProjection(goalValue)
         }
-        return history.events.map { it.event }
+        return HistoryPage(
+            events = history.events.map { it.event },
+            hasMore = history.hasMore,
+        )
     }
 
     private fun parseGoalProjection(value: JsonElement?): GoalProjection? {
@@ -668,27 +727,40 @@ class HarnessRepositoryImpl @Inject constructor(
         val sessionId: String,
     ) {
         val timeline = MutableStateFlow<List<TimelineItem>>(emptyList())
+        val window = MutableStateFlow(TimelineWindow())
         private val mutex = Mutex()
         private var reducer = TimelineReducer(sessionId)
         private var ready = false
+        private var hasMoreOlder = false
+        private var loadingOlder = false
+        private val history = mutableListOf<JsonObject>()
         private val pending = mutableListOf<ServerRequest>()
+        private val framesAfterOpen = mutableListOf<ServerRequest>()
 
-        suspend fun ensureLoaded(loader: suspend () -> List<JsonObject>) {
+        suspend fun ensureLoaded(loader: suspend (beforeSeq: Long?) -> HistoryPage) {
             mutex.withLock {
                 if (ready) return
-                val events = loader()
+                val page = loader(null)
+                history.clear()
+                history.addAll(page.events.sortedBy { it.historyEventSeq() })
+                hasMoreOlder = page.hasMore
                 reducer = TimelineReducer(sessionId)
-                reducer.reset(events)
+                reducer.reset(history)
+                framesAfterOpen.clear()
+                framesAfterOpen.addAll(pending)
                 pending.forEach(reducer::ingestFrame)
                 pending.clear()
                 ready = true
-                timeline.value = reducer.snapshot()
+                publish()
             }
         }
 
         suspend fun prepareResync() {
             mutex.withLock {
                 ready = false
+                loadingOlder = false
+                hasMoreOlder = false
+                framesAfterOpen.clear()
             }
         }
 
@@ -699,18 +771,62 @@ class HarnessRepositoryImpl @Inject constructor(
                     return
                 }
                 reducer.ingestFrame(frame)
-                timeline.value = reducer.snapshot()
+                framesAfterOpen += frame
+                publish()
             }
+        }
+
+        suspend fun loadOlder(loader: suspend (beforeSeq: Long) -> HistoryPage): Boolean =
+            mutex.withLock {
+                if (!ready || !hasMoreOlder || loadingOlder) return@withLock false
+                val baseSeq = history.firstOrNull()?.historyEventSeq() ?: return@withLock false
+                loadingOlder = true
+                publish()
+                try {
+                    val page = loader(baseSeq)
+                    if (page.events.isEmpty()) {
+                        hasMoreOlder = page.hasMore
+                        return@withLock true
+                    }
+                    val older = page.events.sortedBy { it.historyEventSeq() }
+                    val tailSeq = older.last().historyEventSeq()
+                    if (tailSeq + 1 != baseSeq) {
+                        hasMoreOlder = false
+                        return@withLock false
+                    }
+                    history.addAll(0, older)
+                    hasMoreOlder = page.hasMore
+                    rebuild()
+                    true
+                } finally {
+                    loadingOlder = false
+                    publish()
+                }
+            }
+
+        private fun rebuild() {
+            reducer = TimelineReducer(sessionId)
+            reducer.reset(history)
+            framesAfterOpen.forEach(reducer::ingestFrame)
+        }
+
+        private fun publish() {
+            val items = reducer.snapshot()
+            timeline.value = items
+            window.value = TimelineWindow(
+                items = items,
+                hasMoreOlder = hasMoreOlder,
+                isLoadingOlder = loadingOlder,
+            )
         }
     }
 
     private fun ServerRequest.frameSessionId(): String? =
         payload["sessionId"]?.jsonPrimitive?.contentOrNull
 
-    private suspend fun loadWorkspaces(): List<WorkspaceSummary> {
-        val result = rpcClient.call(WORKSPACE_LIST, WORKSPACE_LIST, buildJsonObject {}).valueOrThrow()
-        return json.decodeFromJsonElement<WorkspaceListValue>(result).items.map { it.toDomain() }
-    }
+    private fun JsonObject.historyEventSeq(): Long =
+        get("seq")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+
 
     private fun WorkspaceWire.toDomain(): WorkspaceSummary = WorkspaceSummary(
         workspaceId = workspaceId,

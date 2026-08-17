@@ -137,6 +137,32 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `load older history delegates to repository`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(ChatAction.LoadOlderHistory)
+        advanceUntilIdle()
+
+        assertEquals(listOf(FakeChatRepository.initialSession.id), repository.olderHistorySessionIds)
+    }
+
+    @Test
+    fun `archive session delegates to repository`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(ChatAction.ArchiveSession(FakeChatRepository.initialSession.id))
+        advanceUntilIdle()
+
+        assertEquals(listOf(FakeChatRepository.initialSession.id), repository.archivedSessionIds)
+    }
+
+    @Test
     fun `approval action delegates`() = runTest(dispatcher) {
         val repository = FakeChatRepository()
         val viewModel = ChatViewModel(repository)
@@ -172,6 +198,8 @@ class ChatViewModelTest {
         val openedSessionIds = mutableListOf<String>()
         val approvalAnswers = mutableListOf<ApprovalAnswer>()
         val createRequests = mutableListOf<CreateSessionRequest>()
+        val olderHistorySessionIds = mutableListOf<String>()
+        val archivedSessionIds = mutableListOf<String>()
         val renamedWorkspaces = mutableListOf<Pair<String, String>>()
 
         override fun observeConnectionState(): Flow<ConnectionState> =
@@ -203,6 +231,15 @@ class ChatViewModelTest {
 
         override fun observeTimeline(sessionId: String): Flow<List<TimelineItem>> =
             timeline
+
+        override suspend fun loadOlderHistory(sessionId: String): Boolean {
+            olderHistorySessionIds += sessionId
+            return true
+        }
+
+        override suspend fun archiveSession(sessionId: String) {
+            archivedSessionIds += sessionId
+        }
 
         override suspend fun sendMessage(request: SendMessageRequest) {
             sentMessages += request

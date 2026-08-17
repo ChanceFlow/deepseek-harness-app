@@ -17,6 +17,8 @@ data class ChatUiState(
     val workspaces: List<WorkspaceSummary> = emptyList(),
     val selectedSessionId: String? = null,
     val timeline: List<TimelineItem> = emptyList(),
+    val hasMoreOlder: Boolean = false,
+    val isLoadingOlder: Boolean = false,
     val searchResults: List<SessionSearchResult> = emptyList(),
     val isSending: Boolean = false,
     val errorMessage: String? = null,
@@ -33,6 +35,7 @@ sealed interface ChatAction {
     data class CreateSessionInWorkspace(val workspaceId: String? = null) : ChatAction
     data object DismissError : ChatAction
     data object RetrySessions : ChatAction
+    data object LoadOlderHistory : ChatAction
 
     data class RespondApproval(
         val requestId: String,
@@ -47,6 +50,7 @@ sealed interface ChatAction {
 
     data class SearchSessions(val query: String) : ChatAction
     data class RenameSession(val sessionId: String, val title: String) : ChatAction
+    data class ArchiveSession(val sessionId: String) : ChatAction
     data class ForkSession(val sessionId: String) : ChatAction
     data class UpdateQueue(val itemId: String, val kind: QueueUpdateKind) : ChatAction
 }

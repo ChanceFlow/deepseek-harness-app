@@ -82,10 +82,11 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   reconnect resync, buffered frame replay, history/timeline folding, and the
   complete unary method set used by the MVP.
 - `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
-  and Goals. Chat supports session search/create/rename/fork, queue steer and
-  remove (including Queue/Steer composer delivery), approvals, custom and
-  multi-select questions, live titles, goals, and background jobs.
+  and Goals. Chat supports session search/create/rename/archive/fork, queue
+  steer and remove (including Queue/Steer composer delivery), approvals,
+  custom and multi-select questions, live titles, goals, background jobs, and
+  page-at-a-time older-history loading.
 
 Still deferred, matching [docs/spec.md](docs/spec.md): settings/credentials,
-attachment uploads, markdown and trajectory/plan rendering, history
-pagination, session archiving, and workspace ordering.
+attachment uploads, markdown and trajectory/plan rendering, and manual
+workspace ordering.

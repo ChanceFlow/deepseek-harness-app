@@ -59,6 +59,7 @@ internal data class HistoryEntryWire(
 @Serializable
 internal data class WorkspaceListValue(
     val items: List<WorkspaceWire> = emptyList(),
+    val archivedSessionIds: List<String> = emptyList(),
 )
 
 @Serializable
@@ -80,6 +81,11 @@ internal data class WorkspaceCreateValue(
 @Serializable
 internal data class WorkspaceRenameValue(
     val workspace: WorkspaceWire,
+)
+
+@Serializable
+internal data class WorkspaceArchiveValue(
+    val archivedSessionIds: List<String> = emptyList(),
 )
 
 @Serializable

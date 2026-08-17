@@ -269,11 +269,11 @@ private fun ChatPanel(
 ) {
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameTitle by remember { mutableStateOf("") }
+    var showArchiveDialog by remember { mutableStateOf(false) }
     var promptMode by remember(uiState.selectedSessionId) { mutableStateOf(PromptMode.QUEUE) }
     val selectedSessionId = uiState.selectedSessionId
-    val isSessionRunning = uiState.sessions
-        .firstOrNull { it.id == selectedSessionId }
-        ?.running == true
+    val selectedSession = uiState.sessions.firstOrNull { it.id == selectedSessionId }
+    val isSessionRunning = selectedSession?.running == true
 
     Column(modifier = modifier.padding(12.dp)) {
         if (selectedSessionId != null) {
@@ -283,8 +283,34 @@ private fun ChatPanel(
                     onClick = { onAction(ChatAction.ForkSession(selectedSessionId)) },
                     modifier = Modifier.padding(start = 4.dp),
                 ) { Text("Fork") }
+                OutlinedButton(
+                    onClick = { showArchiveDialog = true },
+                    enabled = selectedSession?.blank != true,
+                    modifier = Modifier.padding(start = 4.dp),
+                ) { Text("Archive") }
             }
             Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (showArchiveDialog && selectedSessionId != null) {
+            AlertDialog(
+                onDismissRequest = { showArchiveDialog = false },
+                title = { Text("Archive session") },
+                text = {
+                    Text("The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onAction(ChatAction.ArchiveSession(selectedSessionId))
+                            showArchiveDialog = false
+                        },
+                    ) { Text("Archive") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showArchiveDialog = false }) { Text("Cancel") }
+                },
+            )
         }
 
         if (showRenameDialog && selectedSessionId != null) {

@@ -14,9 +14,12 @@ import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.SubagentCatalog
 import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.model.TimelineWindow
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 /**
  * Domain-owned repository contract.
@@ -37,6 +40,21 @@ interface ChatRepository {
 
     fun observeTimeline(sessionId: String): Flow<List<TimelineItem>>
 
+    /**
+     * Pagination-aware timeline window. The default derives from
+     * [observeTimeline] so legacy fakes keep working untouched; the harness
+     * adapter overrides this with a journal-backed state machine.
+     */
+    fun observeTimelineWindow(sessionId: String): Flow<TimelineWindow> =
+        observeTimeline(sessionId).map { items -> TimelineWindow(items = items) }
+
+    /**
+     * Load the previous history page. Returns true when an older page was
+     * accepted and folded, false when there is no more history or loading is
+     * already in flight. The default no-op keeps old test doubles valid.
+     */
+    suspend fun loadOlderHistory(sessionId: String): Boolean = false
+
     suspend fun sendMessage(request: SendMessageRequest)
 
     suspend fun cancelTurn(sessionId: String)
@@ -50,7 +68,15 @@ interface ChatRepository {
 
     fun observeWorkspaces(): Flow<List<WorkspaceSummary>>
 
+    /** Registry-global archive set mirrored from `workspace.list` and host frames. */
+    fun observeArchivedSessionIds(): Flow<Set<String>> = flowOf(emptySet())
+
     suspend fun refreshWorkspaces()
+
+    /** Archive a session without deleting its log or workspace accounting slot. */
+    suspend fun archiveSession(sessionId: String) {
+        unsupported("archiveSession")
+    }
 
     suspend fun createWorkspace(path: String): WorkspaceSummary
 
