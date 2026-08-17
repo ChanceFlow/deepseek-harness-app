@@ -42,17 +42,45 @@ class OkHttpDshRpcClient(
             rpcId = rpcId,
             result = result,
         )
-        execute("api/respond", request.jsonText(), rpcId)
+        val responseText = executeRaw("api/respond", request.jsonText())
+        val receipt = runCatching {
+            json.decodeFromString<RpcReceipt>(responseText)
+        }.getOrElse { error ->
+            throw DshTransportException("invalid server receipt for api/respond", error)
+        }
+        if (!receipt.accepted) {
+            throw DshBusinessException(
+                code = receipt.reason ?: "bad-response",
+                message = "server did not accept client response",
+            )
+        }
     }
 
     private suspend fun execute(
         path: String,
         requestJson: String,
         expectedRpcId: String,
-    ): ServerResponse = withContext(Dispatchers.IO) {
+    ): ServerResponse {
+        val responseText = executeRaw(path, requestJson)
+        val decoded = runCatching {
+            json.decodeFromString<ServerResponse>(responseText)
+        }.getOrElse { error ->
+            throw DshTransportException("invalid server-response for $path", error)
+        }
+        if (decoded.rpcId != expectedRpcId) {
+            throw DshTransportException(
+                "rpcId mismatch for $path: expected $expectedRpcId, got ${decoded.rpcId}",
+            )
+        }
+        return decoded
+    }
+
+    private suspend fun executeRaw(
+        path: String,
+        requestJson: String,
+    ): String = withContext(Dispatchers.IO) {
         val url = baseUrl.resolve(path)
             ?: throw DshTransportException("cannot resolve $path against $baseUrl")
-
         val request = Request.Builder()
             .url(url)
             .post(requestJson.toRequestBody(jsonMediaType))
@@ -66,19 +94,7 @@ class OkHttpDshRpcClient(
                     "HTTP ${response.code} for $path: ${responseText.take(300)}",
                 )
             }
-
-            val decoded = runCatching {
-                json.decodeFromString<ServerResponse>(responseText)
-            }.getOrElse { error ->
-                throw DshTransportException("invalid server-response for $path", error)
-            }
-
-            if (decoded.rpcId != expectedRpcId) {
-                throw DshTransportException(
-                    "rpcId mismatch for $path: expected $expectedRpcId, got ${decoded.rpcId}",
-                )
-            }
-            decoded
+            responseText
         }
     }
 

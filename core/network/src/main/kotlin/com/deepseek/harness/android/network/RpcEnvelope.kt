@@ -46,3 +46,9 @@ data class RpcError(
     val message: String,
     val details: JsonObject? = null,
 )
+
+@Serializable
+data class RpcReceipt(
+    val accepted: Boolean,
+    val reason: String? = null,
+)

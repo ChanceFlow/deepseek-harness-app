@@ -1,65 +1,83 @@
 package com.deepseek.harness.android.harness
 
-import com.deepseek.harness.android.domain.model.ChatMessage
+import com.deepseek.harness.android.domain.model.ApprovalAnswer
+import com.deepseek.harness.android.domain.model.ConnectionPhase
+import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
-import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.PromptMode
+import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
+import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.harness.dto.SessionCancelValue
 import com.deepseek.harness.android.harness.dto.SessionCreateValue
+import com.deepseek.harness.android.harness.dto.SessionHistoryValue
 import com.deepseek.harness.android.harness.dto.SessionListValue
 import com.deepseek.harness.android.harness.dto.SessionPromptValue
 import com.deepseek.harness.android.network.DshBusinessException
-import com.deepseek.harness.android.network.DshEventSocket
 import com.deepseek.harness.android.network.DshRpcClient
 import com.deepseek.harness.android.network.RpcResult
 import com.deepseek.harness.android.network.ServerRequest
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 private const val SESSION_LIST = "session.list"
 private const val SESSION_CREATE = "session.create"
+private const val SESSION_HISTORY = "session.history"
 private const val SESSION_PROMPT = "session.prompt"
 private const val SESSION_CANCEL = "session.cancel"
-private const val MUX_STREAM_PATH = "/api/events.mux"
 
-/**
- * The anti-corruption layer implementation.
- *
- * It is the only production code allowed to understand dsh endpoints and
- * frame shapes. Everything leaving this class is a neutral domain model.
- */
 @Singleton
 class HarnessRepositoryImpl @Inject constructor(
     private val rpcClient: DshRpcClient,
-    private val eventSocket: DshEventSocket,
+    private val connectionManager: DshConnectionManager,
     private val json: Json,
 ) : ChatRepository {
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val connectionGeneration = MutableStateFlow(0L)
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
+    private val sessionStates = ConcurrentHashMap<String, SessionState>()
+    private val resyncMutex = Mutex()
+
+    init {
+        connectionManager.start()
+        collectConnection()
+        collectMuxFrames()
+        collectHostFrames()
+    }
+
+    override fun observeConnectionState(): Flow<ConnectionState> =
+        connectionManager.state
 
     override fun observeSessions(): Flow<List<SessionSummary>> =
         sessions.asStateFlow()
 
     override suspend fun refreshSessions() {
-        sessions.value = loadSessions()
+        val current = loadSessions()
+        sessions.value = current
     }
 
     override suspend fun createSession(request: CreateSessionRequest): SessionSummary {
@@ -71,15 +89,24 @@ class HarnessRepositoryImpl @Inject constructor(
         }
         val value = rpcClient.call(SESSION_CREATE, SESSION_CREATE, payload).valueOrThrow()
         val created = json.decodeFromJsonElement<SessionCreateValue>(value)
+        sessions.value = loadSessions()
         return SessionSummary(id = created.sessionId, blank = true)
     }
 
-    override suspend fun cancelTurn(sessionId: String) {
-        val payload = buildJsonObject {
-            put("sessionId", sessionId)
+    override suspend fun openSession(sessionId: String) {
+        val state = sessionStates.getOrPut(sessionId) { SessionState(sessionId) }
+        try {
+            state.ensureLoaded { loadHistory(sessionId) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            // A failed first load stays pending; the next generation retries it.
         }
-        val value = rpcClient.call(SESSION_CANCEL, SESSION_CANCEL, payload).valueOrThrow()
-        json.decodeFromJsonElement<SessionCancelValue>(value)
+    }
+
+    override fun observeTimeline(sessionId: String): Flow<List<TimelineItem>> {
+        val state = sessionStates.getOrPut(sessionId) { SessionState(sessionId) }
+        return state.timeline
     }
 
     override suspend fun sendMessage(request: SendMessageRequest) {
@@ -102,10 +129,132 @@ class HarnessRepositoryImpl @Inject constructor(
         json.decodeFromJsonElement<SessionPromptValue>(value)
     }
 
-    override fun observeTimeline(sessionId: String): Flow<TimelineItem> =
-        eventSocket.connect(MUX_STREAM_PATH)
-            .filter { envelope -> envelope.frameSessionId() == sessionId }
-            .mapNotNull { envelope -> envelope.translate(sessionId) }
+    override suspend fun cancelTurn(sessionId: String) {
+        val payload = buildJsonObject {
+            put("sessionId", sessionId)
+        }
+        val value = rpcClient.call(SESSION_CANCEL, SESSION_CANCEL, payload).valueOrThrow()
+        json.decodeFromJsonElement<SessionCancelValue>(value)
+    }
+
+    override suspend fun respondToApproval(answer: ApprovalAnswer) {
+        val value = buildJsonObject {
+            put("sessionId", answer.sessionId)
+            put("approvalId", answer.approvalId)
+            put("outcome", if (answer.allowed) "allowed-once" else "rejected")
+        }
+        rpcClient.respond(
+            rpcId = answer.requestId,
+            result = RpcResult(ok = true, value = value),
+        )
+    }
+
+    override suspend fun answerQuestions(
+        requestId: String,
+        evidence: QuestionEvidence,
+    ) {
+        val value = buildJsonObject {
+            put("sessionId", evidence.sessionId)
+            put(
+                "answer",
+                buildJsonObject {
+                    put(
+                        "answers",
+                        buildJsonArray {
+                            evidence.answers.forEach { answer ->
+                                add(
+                                    buildJsonObject {
+                                        put("id", answer.questionId)
+                                        put(
+                                            "selected",
+                                            buildJsonArray {
+                                                answer.selectedOptions.forEach { selected ->
+                                                    this.add(selected)
+                                                }
+                                            },
+                                        )
+                                        answer.customText?.let { put("custom", it) }
+                                    },
+                                )
+                            }
+                        },
+                    )
+                },
+            )
+        }
+        rpcClient.respond(
+            rpcId = requestId,
+            result = RpcResult(ok = true, value = value),
+        )
+    }
+
+    private fun collectConnection() {
+        scope.launch {
+            connectionManager.state.collect { connection ->
+                if (connection.phase == ConnectionPhase.CONNECTED
+                    && connection.generation != connectionGeneration.value
+                ) {
+                    connectionGeneration.value = connection.generation
+                    resync(connection)
+                }
+            }
+        }
+    }
+
+    private fun collectMuxFrames() {
+        scope.launch {
+            connectionManager.muxFrames.collect { frame ->
+                val sessionId = frame.frameSessionId() ?: return@collect
+                val state = sessionStates[sessionId] ?: return@collect
+                state.handleFrame(frame)
+            }
+        }
+    }
+
+    private fun collectHostFrames() {
+        scope.launch {
+            connectionManager.hostFrames.collect { frame ->
+                val type = frame.payload["type"]?.jsonPrimitive?.contentOrNull ?: return@collect
+                val sessionId = frame.payload["sessionId"]?.jsonPrimitive?.contentOrNull
+                when (type) {
+                    "host/session-status" -> {
+                        if (sessionId == null) return@collect
+                        val running = frame.payload["running"]?.jsonPrimitive?.content == "true"
+                        sessions.update { current ->
+                            current.map { item ->
+                                if (item.id == sessionId) item.copy(running = running) else item
+                            }
+                        }
+                    }
+                    "host/session-added", "host/session-removed" -> {
+                        try {
+                            refreshSessions()
+                        } catch (_: Throwable) {
+                            // Retried on next generation.
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun resync(connection: ConnectionState) {
+        resyncMutex.withLock {
+            sessionStates.values.forEach { state -> state.prepareResync() }
+            try {
+                refreshSessions()
+            } catch (_: Throwable) {
+                // List failure does not block timeline recovery.
+            }
+            sessionStates.values.forEach { state ->
+                try {
+                    state.ensureLoaded { loadHistory(state.sessionId) }
+                } catch (_: Throwable) {
+                    // Pending state retries on the next generation.
+                }
+            }
+        }
+    }
 
     private suspend fun loadSessions(): List<SessionSummary> {
         val value = rpcClient.call(SESSION_LIST, SESSION_LIST, buildJsonObject {}).valueOrThrow()
@@ -120,57 +269,57 @@ class HarnessRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun loadHistory(sessionId: String): List<JsonObject> {
+        val payload = buildJsonObject {
+            put("sessionId", sessionId)
+        }
+        val value = rpcClient.call(SESSION_HISTORY, SESSION_HISTORY, payload).valueOrThrow()
+        val history = json.decodeFromJsonElement<SessionHistoryValue>(value)
+        return history.events.map { it.event }
+    }
+
+    private inner class SessionState(
+        val sessionId: String,
+    ) {
+        val timeline = MutableStateFlow<List<TimelineItem>>(emptyList())
+        private val mutex = Mutex()
+        private var reducer = TimelineReducer(sessionId)
+        private var ready = false
+        private val pending = mutableListOf<ServerRequest>()
+
+        suspend fun ensureLoaded(loader: suspend () -> List<JsonObject>) {
+            mutex.withLock {
+                if (ready) return
+                val events = loader()
+                reducer = TimelineReducer(sessionId)
+                reducer.reset(events)
+                pending.forEach(reducer::ingestFrame)
+                pending.clear()
+                ready = true
+                timeline.value = reducer.snapshot()
+            }
+        }
+
+        suspend fun prepareResync() {
+            mutex.withLock {
+                ready = false
+            }
+        }
+
+        suspend fun handleFrame(frame: ServerRequest) {
+            mutex.withLock {
+                if (!ready) {
+                    pending += frame
+                    return
+                }
+                reducer.ingestFrame(frame)
+                timeline.value = reducer.snapshot()
+            }
+        }
+    }
+
     private fun ServerRequest.frameSessionId(): String? =
         payload["sessionId"]?.jsonPrimitive?.contentOrNull
-
-    private fun ServerRequest.translate(sessionId: String): TimelineItem? {
-        val frameType = payload["type"]?.jsonPrimitive?.contentOrNull ?: return null
-        return when (frameType) {
-            "session/event" -> TimelineItem.Message(
-                value = payload.toChatMessage(sessionId) ?: return null,
-            )
-            "approval/requested" -> TimelineItem.ApprovalRequest(
-                id = payload["approvalId"]?.jsonPrimitive?.contentOrNull ?: rpcId,
-                toolName = payload["toolName"]?.jsonPrimitive?.contentOrNull ?: "unknown",
-                reason = payload["reason"]?.jsonPrimitive?.contentOrNull,
-            )
-            else -> null
-        }
-    }
-
-    private fun JsonObject.toChatMessage(sessionId: String): ChatMessage? {
-        val event = get("event")?.jsonObject ?: return null
-        val eventType = event["type"]?.jsonPrimitive?.contentOrNull ?: return null
-        val role = when (eventType) {
-            "user/message" -> MessageRole.USER
-            "assistant/message" -> MessageRole.ASSISTANT
-            else -> return null
-        }
-        val message = event["data"]?.jsonObject?.get("message")?.jsonObject ?: return null
-        val id = message["id"]?.jsonPrimitive?.contentOrNull
-            ?: event["seq"]?.jsonPrimitive?.contentOrNull
-            ?: return null
-        val time = event["time"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
-        return ChatMessage(
-            id = id,
-            sessionId = sessionId,
-            role = role,
-            text = message.extractText(),
-            createdAtEpochMs = time,
-        )
-    }
-
-    private fun JsonObject.extractText(): String {
-        val content = get("content")?.jsonArray ?: return ""
-        return content.mapNotNull { block ->
-            val obj = block.jsonObject
-            if (obj["type"]?.jsonPrimitive?.contentOrNull == "text") {
-                obj["text"]?.jsonPrimitive?.contentOrNull
-            } else {
-                null
-            }
-        }.joinToString(separator = "")
-    }
 
     private fun RpcResult.valueOrThrow(): JsonObject {
         if (ok) {

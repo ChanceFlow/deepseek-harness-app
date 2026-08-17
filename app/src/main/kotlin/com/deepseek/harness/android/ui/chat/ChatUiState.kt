@@ -1,11 +1,14 @@
 package com.deepseek.harness.android.ui.chat
 
 import androidx.compose.runtime.Immutable
+import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 
 @Immutable
 data class ChatUiState(
+    val connection: ConnectionState = ConnectionState(),
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSessionId: String? = null,
     val timeline: List<TimelineItem> = emptyList(),
@@ -20,4 +23,15 @@ sealed interface ChatAction {
     data object CreateSession : ChatAction
     data object DismissError : ChatAction
     data object RetrySessions : ChatAction
+
+    data class RespondApproval(
+        val requestId: String,
+        val approvalId: String,
+        val allowed: Boolean,
+    ) : ChatAction
+
+    data class AnswerQuestion(
+        val requestId: String,
+        val answers: List<QuestionAnswer>,
+    ) : ChatAction
 }

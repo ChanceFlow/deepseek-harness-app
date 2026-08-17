@@ -5,20 +5,62 @@ package com.deepseek.harness.android.domain.model
  *
  * Only :core:harness-adapter is allowed to create these from dsh events.
  */
+enum class ToolRunStatus {
+    RUNNING,
+    COMPLETED,
+    FAILED,
+}
+
 sealed interface TimelineItem {
     data class Message(val value: ChatMessage) : TimelineItem
 
     data class ToolCall(
         val id: String,
         val name: String,
-        val input: String? = null,
-        val output: String? = null,
-        val success: Boolean? = null,
+        val arguments: String? = null,
+        val result: String? = null,
+        val isError: Boolean = false,
+        val status: ToolRunStatus = ToolRunStatus.RUNNING,
     ) : TimelineItem
 
     data class ApprovalRequest(
-        val id: String,
+        val requestId: String,
+        val sessionId: String,
+        val approvalId: String,
         val toolName: String,
+        val callId: String? = null,
         val reason: String? = null,
     ) : TimelineItem
+
+    data class QuestionRequest(
+        val requestId: String,
+        val questions: List<QuestionItem>,
+    ) : TimelineItem
+
+    data class Error(
+        val id: String,
+        val message: String,
+        val code: String? = null,
+    ) : TimelineItem
 }
+
+data class QuestionItem(
+    val id: String,
+    val question: String,
+    val options: List<String> = emptyList(),
+    val multiSelect: Boolean = false,
+    val detail: String? = null,
+)
+
+data class ApprovalAnswer(
+    val requestId: String,
+    val sessionId: String,
+    val approvalId: String,
+    val allowed: Boolean,
+)
+
+data class QuestionAnswer(
+    val questionId: String,
+    val selectedOptions: List<String>,
+    val customText: String? = null,
+)

@@ -1,16 +1,9 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.jvm)
 }
 
-android {
-    namespace = "com.deepseek.harness.android.domain"
-    compileSdk = 35
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {

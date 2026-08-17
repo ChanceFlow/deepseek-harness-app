@@ -56,6 +56,7 @@ pnpm dsh web --port 3080
 ## Kotlin best practices
 
 See [docs/kotlin-best-practices.md](docs/kotlin-best-practices.md) for the rules this repository follows.
+- Android MVP specification: [docs/spec.md](docs/spec.md)
 
 - Hilt constructor injection in `:app`
 - MVVM + UDF + `StateFlow`

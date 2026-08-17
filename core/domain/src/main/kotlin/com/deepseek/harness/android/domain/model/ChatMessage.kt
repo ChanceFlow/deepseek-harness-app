@@ -15,5 +15,7 @@ data class ChatMessage(
     val sessionId: String,
     val role: MessageRole,
     val text: String,
+    val reasoning: String? = null,
+    val streaming: Boolean = false,
     val createdAtEpochMs: Long = 0L,
 )

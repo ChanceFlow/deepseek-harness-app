@@ -19,7 +19,10 @@ class OkHttpDshEventSocket(
     private val json: Json,
 ) : DshEventSocket {
 
-    override fun connect(path: String): Flow<ServerRequest> = callbackFlow {
+    override fun connect(
+        path: String,
+        onOpen: () -> Unit,
+    ): Flow<ServerRequest> = callbackFlow {
         val httpUrl = baseUrl.resolve(path)
             ?: throw DshTransportException("cannot resolve $path against $baseUrl")
         val webSocketUrl = httpUrl.newBuilder()
@@ -27,6 +30,10 @@ class OkHttpDshEventSocket(
             .build()
 
         val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                onOpen()
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
                 runCatching {
                     json.decodeFromString<ServerRequest>(text)

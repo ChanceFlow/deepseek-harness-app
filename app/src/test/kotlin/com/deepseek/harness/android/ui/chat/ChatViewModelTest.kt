@@ -1,15 +1,19 @@
 package com.deepseek.harness.android.ui.chat
 
+import com.deepseek.harness.android.domain.model.ApprovalAnswer
+import com.deepseek.harness.android.domain.model.ConnectionPhase
+import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
+import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
+import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -46,6 +50,25 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `select session loads timeline`() = runTest(dispatcher) {
+        val repository = FakeChatRepository(
+            timeline = MutableStateFlow(
+                listOf(
+                    TimelineItem.Error(id = "e1", message = "offline fixture"),
+                ),
+            ),
+        )
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        advanceUntilIdle()
+
+        assertEquals(FakeChatRepository.initialSession.id, repository.openedSessionIds.single())
+        assertEquals(1, viewModel.uiState.value.timeline.size)
+    }
+
+    @Test
     fun `send prompt delegates to repository`() = runTest(dispatcher) {
         val repository = FakeChatRepository()
         val viewModel = ChatViewModel(repository)
@@ -53,7 +76,6 @@ class ChatViewModelTest {
 
         viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
         viewModel.onAction(ChatAction.SendPrompt("hello"))
-
         advanceUntilIdle()
 
         assertEquals(
@@ -67,9 +89,49 @@ class ChatViewModelTest {
         )
     }
 
-    private class FakeChatRepository : ChatRepository {
+    @Test
+    fun `approval action delegates`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(
+            ChatAction.RespondApproval(
+                requestId = "rpc-1",
+                approvalId = "approval-1",
+                allowed = true,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            ApprovalAnswer(
+                requestId = "rpc-1",
+                sessionId = FakeChatRepository.initialSession.id,
+                approvalId = "approval-1",
+                allowed = true,
+            ),
+            repository.approvalAnswers.single(),
+        )
+    }
+
+    private class FakeChatRepository(
+        private val timeline: MutableStateFlow<List<TimelineItem>> =
+            MutableStateFlow(emptyList()),
+    ) : ChatRepository {
         val sessions = MutableStateFlow(listOf(initialSession))
         val sentMessages = mutableListOf<SendMessageRequest>()
+        val openedSessionIds = mutableListOf<String>()
+        val approvalAnswers = mutableListOf<ApprovalAnswer>()
+
+        override fun observeConnectionState(): Flow<ConnectionState> =
+            MutableStateFlow(
+                ConnectionState(
+                    phase = ConnectionPhase.CONNECTED,
+                    hostDescription = HostDescription(version = "test", cwd = "/tmp"),
+                ),
+            )
 
         override fun observeSessions(): Flow<List<SessionSummary>> =
             sessions.asStateFlow()
@@ -81,18 +143,30 @@ class ChatViewModelTest {
         override suspend fun createSession(request: CreateSessionRequest): SessionSummary =
             initialSession
 
+        override suspend fun openSession(sessionId: String) {
+            openedSessionIds += sessionId
+            timeline.value = listOf(
+                TimelineItem.Error(id = "e1", message = "offline fixture"),
+            )
+        }
+
+        override fun observeTimeline(sessionId: String): Flow<List<TimelineItem>> =
+            timeline
+
         override suspend fun sendMessage(request: SendMessageRequest) {
             sentMessages += request
         }
 
-        override suspend fun cancelTurn(sessionId: String) {
-            lastCancelledSession = sessionId
+        override suspend fun cancelTurn(sessionId: String) = Unit
+
+        override suspend fun respondToApproval(answer: ApprovalAnswer) {
+            approvalAnswers += answer
         }
 
-        var lastCancelledSession: String? = null
-
-        override fun observeTimeline(sessionId: String): Flow<TimelineItem> =
-            emptyFlow()
+        override suspend fun answerQuestions(
+            requestId: String,
+            evidence: QuestionEvidence,
+        ) = Unit
 
         companion object {
             val initialSession = SessionSummary(
