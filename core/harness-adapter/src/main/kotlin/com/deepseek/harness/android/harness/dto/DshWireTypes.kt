@@ -134,3 +134,18 @@ internal data class SessionSearchItemWire(
     val sessionId: String,
     val snippet: String,
 )
+
+@Serializable
+internal data class SessionRenameValue(
+    val title: String,
+)
+
+@Serializable
+internal data class SessionForkValue(
+    val sessionId: String,
+)
+
+@Serializable
+internal data class SessionQueueUpdateValue(
+    val accepted: Boolean = true,
+)

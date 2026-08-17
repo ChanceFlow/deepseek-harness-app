@@ -135,6 +135,7 @@ Raw dsh session events are folded by `TimelineReducer` into neutral items.
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
+| `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries |
 
 Text extraction handles `text` blocks and nested `tool-result` content.
 
@@ -142,7 +143,8 @@ Text extraction handles `text` blocks and nested `tool-result` content.
 
 ``AppRoot` owns bottom navigation. `ChatScreen`, `WorkspaceScreen`, and
 `ModelsScreen` are all stateless screens; each route owns a Hilt ViewModel
-collecting `StateFlow` UI state.
+collecting `StateFlow` UI state. Chat additionally supports session search,
+rename/fork, queue steer/remove, approvals, and questions.
 
 - `ChatUiState` is `@Immutable`.
 - `ChatAction` is a `sealed interface`.
@@ -175,7 +177,7 @@ collecting `StateFlow` UI state.
   projections and are not read in this milestone.
 - **No settings screen yet.** Workspaces and model selection are MVP screens;
   credential and plugin settings remain out of scope.
-- **No session search.** `session.search` is defined in the contract but not wired.
+- **No subagent/settings screens yet.** MVP focuses on the high-frequency chat/workspace/model workflows.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select is supported, but rich rendering

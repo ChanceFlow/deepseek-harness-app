@@ -5,6 +5,7 @@ import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SessionModels
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
@@ -203,6 +204,13 @@ class ChatViewModelTest {
 
         override suspend fun searchSessions(query: String): List<SessionSearchResult> =
             searchResults.toList()
+
+        override suspend fun renameSession(sessionId: String, title: String): String = title
+
+        override suspend fun forkSession(sessionId: String, atSeq: Long?): SessionSummary =
+            initialSession
+
+        override suspend fun updateQueue(request: QueueUpdateRequest) = Unit
 
         companion object {
             val initialSession = SessionSummary(

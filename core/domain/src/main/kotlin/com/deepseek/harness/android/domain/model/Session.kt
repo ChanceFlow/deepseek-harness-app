@@ -15,3 +15,20 @@ data class CreateSessionRequest(
     val cwd: String? = null,
     val agentPreset: String? = null,
 )
+
+enum class QueuePlacement {
+    QUEUED,
+    STEERING,
+    CONTEXT,
+}
+
+enum class QueueUpdateKind {
+    REMOVE,
+    STEER,
+}
+
+data class QueueUpdateRequest(
+    val sessionId: String,
+    val itemId: String,
+    val kind: QueueUpdateKind,
+)

@@ -3,6 +3,8 @@ package com.deepseek.harness.android.ui.chat
 import androidx.compose.runtime.Immutable
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.QuestionAnswer
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
+import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 
@@ -12,6 +14,7 @@ data class ChatUiState(
     val sessions: List<SessionSummary> = emptyList(),
     val selectedSessionId: String? = null,
     val timeline: List<TimelineItem> = emptyList(),
+    val searchResults: List<SessionSearchResult> = emptyList(),
     val isSending: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -34,4 +37,9 @@ sealed interface ChatAction {
         val requestId: String,
         val answers: List<QuestionAnswer>,
     ) : ChatAction
+
+    data class SearchSessions(val query: String) : ChatAction
+    data class RenameSession(val sessionId: String, val title: String) : ChatAction
+    data class ForkSession(val sessionId: String) : ChatAction
+    data class UpdateQueue(val itemId: String, val kind: QueueUpdateKind) : ChatAction
 }

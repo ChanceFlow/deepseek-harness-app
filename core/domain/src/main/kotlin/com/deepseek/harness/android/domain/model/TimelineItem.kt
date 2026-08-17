@@ -37,6 +37,10 @@ sealed interface TimelineItem {
         val questions: List<QuestionItem>,
     ) : TimelineItem
 
+    data class Queue(
+        val items: List<SessionQueueItem> = emptyList(),
+    ) : TimelineItem
+
     data class Error(
         val id: String,
         val message: String,
@@ -63,4 +67,10 @@ data class QuestionAnswer(
     val questionId: String,
     val selectedOptions: List<String>,
     val customText: String? = null,
+)
+
+data class SessionQueueItem(
+    val itemId: String,
+    val placement: QueuePlacement,
+    val text: String,
 )

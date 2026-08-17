@@ -31,4 +31,4 @@ Raw dsh events fold into `TimelineItem.Message`, `TimelineItem.ToolCall`,
 `ChatScreen` is stateless; `ChatRoute` owns `ChatViewModel`. Layout is local to Android.
 
 ## Known Limitations
-MVP does not include workspaces, models, settings, session search, or rich question rendering.
+MVP now includes workspaces, model selection, session search/rename/fork, queue steer/remove, approvals, and questions. Settings, subagents, and rich plan/trajectory rendering remain deferred.

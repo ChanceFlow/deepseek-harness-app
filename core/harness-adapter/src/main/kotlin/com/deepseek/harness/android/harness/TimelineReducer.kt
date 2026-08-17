@@ -3,6 +3,8 @@ package com.deepseek.harness.android.harness
 import com.deepseek.harness.android.domain.model.ChatMessage
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionItem
+import com.deepseek.harness.android.domain.model.QueuePlacement
+import com.deepseek.harness.android.domain.model.SessionQueueItem
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.network.ServerRequest
@@ -69,6 +71,15 @@ internal class TimelineReducer(
                 )
             }
             "question/resolved" -> removeByKey("question:${frame.string("questionRpcId")}")
+            "session/queue" -> {
+                val items = frame["items"]?.jsonArray
+                    ?.mapNotNull { it.jsonObject.toQueueItem() }
+                    .orEmpty()
+                upsertByKey(
+                    key = "queue",
+                    item = TimelineItem.Queue(items = items),
+                )
+            }
         }
     }
 
@@ -268,7 +279,23 @@ internal class TimelineReducer(
     private fun itemKey(item: TimelineItem): String = when (item) {
         is TimelineItem.ApprovalRequest -> "approval:${item.approvalId}"
         is TimelineItem.QuestionRequest -> "question:${item.requestId}"
+        is TimelineItem.Queue -> "queue"
         else -> ""
+    }
+
+    private fun JsonObject.toQueueItem(): SessionQueueItem? {
+        val itemId = string("id") ?: return null
+        val message = get("message")?.jsonObject ?: return null
+        val placement = when (string("placement")) {
+            "steering" -> QueuePlacement.STEERING
+            "context" -> QueuePlacement.CONTEXT
+            else -> QueuePlacement.QUEUED
+        }
+        return SessionQueueItem(
+            itemId = itemId,
+            placement = placement,
+            text = message.extractText(),
+        )
     }
 
     private fun JsonObject.toQuestionItem(): QuestionItem? {

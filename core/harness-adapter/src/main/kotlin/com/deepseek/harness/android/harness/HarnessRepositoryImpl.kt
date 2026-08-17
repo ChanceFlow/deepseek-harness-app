@@ -10,11 +10,13 @@ import com.deepseek.harness.android.domain.model.ModelProviderGroup
 import com.deepseek.harness.android.domain.model.ModelReasoning
 import com.deepseek.harness.android.domain.model.ModelReasoningEffort
 import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.SessionModels
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
+import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
@@ -37,6 +39,9 @@ import com.deepseek.harness.android.harness.dto.WorkspaceCreateValue
 import com.deepseek.harness.android.harness.dto.WorkspaceListValue
 import com.deepseek.harness.android.harness.dto.WorkspaceWire
 import com.deepseek.harness.android.harness.dto.SessionPromptValue
+import com.deepseek.harness.android.harness.dto.SessionQueueUpdateValue
+import com.deepseek.harness.android.harness.dto.SessionRenameValue
+import com.deepseek.harness.android.harness.dto.SessionForkValue
 import com.deepseek.harness.android.network.DshBusinessException
 import com.deepseek.harness.android.network.DshRpcClient
 import com.deepseek.harness.android.network.RpcResult
@@ -73,6 +78,9 @@ private const val SESSION_CANCEL = "session.cancel"
 private const val SESSION_MODELS = "session.models"
 private const val SESSION_SELECT_MODEL = "session.selectModel"
 private const val SESSION_SEARCH = "session.search"
+private const val SESSION_RENAME = "session.rename"
+private const val SESSION_FORK = "session.fork"
+private const val SESSION_UPDATE_QUEUE = "session.updateQueue"
 private const val WORKSPACE_LIST = "workspace.list"
 private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_DELETE = "workspace.delete"
@@ -215,6 +223,50 @@ class HarnessRepositoryImpl @Inject constructor(
             rpcId = requestId,
             result = RpcResult(ok = true, value = value),
         )
+    }
+
+    override suspend fun renameSession(sessionId: String, title: String): String {
+        val result = rpcClient.call(
+            SESSION_RENAME,
+            SESSION_RENAME,
+            buildJsonObject {
+                put("sessionId", sessionId)
+                put("title", title)
+            },
+        ).valueOrThrow()
+        val renamed = json.decodeFromJsonElement<SessionRenameValue>(result)
+        sessions.value = loadSessions()
+        return renamed.title
+    }
+
+    override suspend fun forkSession(sessionId: String, atSeq: Long?): SessionSummary {
+        val result = rpcClient.call(
+            SESSION_FORK,
+            SESSION_FORK,
+            buildJsonObject {
+                put("sessionId", sessionId)
+                atSeq?.let { put("atSeq", it) }
+            },
+        ).valueOrThrow()
+        val forked = json.decodeFromJsonElement<SessionForkValue>(result)
+        sessions.value = loadSessions()
+        return SessionSummary(id = forked.sessionId, blank = false)
+    }
+
+    override suspend fun updateQueue(request: QueueUpdateRequest) {
+        val action = buildJsonObject {
+            put("kind", if (request.kind == QueueUpdateKind.REMOVE) "remove" else "steer")
+        }
+        val result = rpcClient.call(
+            SESSION_UPDATE_QUEUE,
+            SESSION_UPDATE_QUEUE,
+            buildJsonObject {
+                put("sessionId", request.sessionId)
+                put("itemId", request.itemId)
+                put("action", action)
+            },
+        ).valueOrThrow()
+        json.decodeFromJsonElement<SessionQueueUpdateValue>(result)
     }
 
     override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =

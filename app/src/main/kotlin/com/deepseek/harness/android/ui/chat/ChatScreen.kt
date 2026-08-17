@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +37,10 @@ import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionAnswer
+import com.deepseek.harness.android.domain.model.QueuePlacement
+import com.deepseek.harness.android.domain.model.SessionQueueItem
 import com.deepseek.harness.android.domain.model.QuestionItem
+import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
@@ -75,9 +79,11 @@ fun ChatScreen(
                     Row(modifier = Modifier.fillMaxSize()) {
                         SessionPanel(
                             sessions = uiState.sessions,
+                            searchResults = uiState.searchResults,
                             selectedSessionId = uiState.selectedSessionId,
                             onSelectSession = { onAction(ChatAction.SelectSession(it)) },
                             onCreateSession = { onAction(ChatAction.CreateSession) },
+                            onSearchSessions = { onAction(ChatAction.SearchSessions(it)) },
                             modifier = Modifier.width(320.dp),
                         )
                         ChatPanel(
@@ -90,9 +96,11 @@ fun ChatScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         SessionPanel(
                             sessions = uiState.sessions,
+                            searchResults = uiState.searchResults,
                             selectedSessionId = uiState.selectedSessionId,
                             onSelectSession = { onAction(ChatAction.SelectSession(it)) },
                             onCreateSession = { onAction(ChatAction.CreateSession) },
+                            onSearchSessions = { onAction(ChatAction.SearchSessions(it)) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(160.dp),
@@ -131,17 +139,44 @@ private fun ConnectionBanner(uiState: ChatUiState) {
 @Composable
 private fun SessionPanel(
     sessions: List<SessionSummary>,
+    searchResults: List<SessionSearchResult>,
     selectedSessionId: String?,
     onSelectSession: (String) -> Unit,
     onCreateSession: () -> Unit,
+    onSearchSessions: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var query by remember { mutableStateOf("") }
     Column(modifier = modifier.padding(8.dp)) {
         OutlinedButton(
             onClick = onCreateSession,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("New session")
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Search sessions") },
+                singleLine = true,
+            )
+            Button(
+                onClick = { onSearchSessions(query) },
+                modifier = Modifier.padding(start = 4.dp),
+                enabled = query.isNotBlank(),
+            ) {
+                Text("Go")
+            }
+        }
+        searchResults.forEach { result ->
+            OutlinedButton(
+                onClick = { onSelectSession(result.sessionId) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Search: ${result.snippet}", maxLines = 1)
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(
@@ -172,7 +207,48 @@ private fun ChatPanel(
     onAction: (ChatAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameTitle by remember { mutableStateOf("") }
+    val selectedSessionId = uiState.selectedSessionId
+
     Column(modifier = modifier.padding(12.dp)) {
+        if (selectedSessionId != null) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { showRenameDialog = true }) { Text("Rename") }
+                OutlinedButton(
+                    onClick = { onAction(ChatAction.ForkSession(selectedSessionId)) },
+                    modifier = Modifier.padding(start = 4.dp),
+                ) { Text("Fork") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (showRenameDialog && selectedSessionId != null) {
+            AlertDialog(
+                onDismissRequest = { showRenameDialog = false },
+                title = { Text("Rename session") },
+                text = {
+                    OutlinedTextField(
+                        value = renameTitle,
+                        onValueChange = { renameTitle = it },
+                        singleLine = true,
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onAction(ChatAction.RenameSession(selectedSessionId, renameTitle))
+                            showRenameDialog = false
+                            renameTitle = ""
+                        },
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
+                },
+            )
+        }
+
         uiState.errorMessage?.let { error ->
             Text(text = error, color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(8.dp))
@@ -222,6 +298,10 @@ private fun TimelineRow(
         )
         is TimelineItem.QuestionRequest -> QuestionRow(
             request = item,
+            onAction = onAction,
+        )
+        is TimelineItem.Queue -> QueueRow(
+            items = item.items,
             onAction = onAction,
         )
         is TimelineItem.Error -> Text(
@@ -274,6 +354,52 @@ private fun ToolRunStatus.label(): String = when (this) {
     ToolRunStatus.RUNNING -> "running..."
     ToolRunStatus.COMPLETED -> "done"
     ToolRunStatus.FAILED -> "failed"
+}
+
+@Composable
+private fun QueueRow(
+    items: List<SessionQueueItem>,
+    onAction: (ChatAction) -> Unit,
+) {
+    items.forEach { item ->
+        val prefix = when (item.placement) {
+            QueuePlacement.QUEUED -> "Queued"
+            QueuePlacement.STEERING -> "Steering"
+            QueuePlacement.CONTEXT -> "Context"
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+        ) {
+            Text(text = "$prefix: ${item.text}", style = MaterialTheme.typography.bodySmall)
+            if (item.placement != QueuePlacement.CONTEXT) {
+                Row {
+                    OutlinedButton(
+                        onClick = {
+                            onAction(
+                                ChatAction.UpdateQueue(
+                                    itemId = item.itemId,
+                                    kind = com.deepseek.harness.android.domain.model.QueueUpdateKind.STEER,
+                                ),
+                            )
+                        },
+                    ) { Text("Steer") }
+                    OutlinedButton(
+                        onClick = {
+                            onAction(
+                                ChatAction.UpdateQueue(
+                                    itemId = item.itemId,
+                                    kind = com.deepseek.harness.android.domain.model.QueueUpdateKind.REMOVE,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.padding(start = 4.dp),
+                    ) { Text("Remove") }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -414,6 +540,7 @@ private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.ToolCall -> "tool:${item.id}:${item.status}"
     is TimelineItem.ApprovalRequest -> "approval:${item.requestId}"
     is TimelineItem.QuestionRequest -> "question:${item.requestId}"
+    is TimelineItem.Queue -> "queue"
     is TimelineItem.Error -> "error:${item.id}"
 }
 

@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
+import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
+import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.ChatRepository
@@ -32,6 +35,7 @@ class ChatViewModel @Inject constructor(
     private val timeline = MutableStateFlow<List<TimelineItem>>(emptyList())
     private val isSending = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
+    private val searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
 
     private data class ChatUiCore(
         val connection: ConnectionState,
@@ -40,13 +44,17 @@ class ChatViewModel @Inject constructor(
         val timeline: List<TimelineItem>,
         val isSending: Boolean,
     ) {
-        fun toUiState(error: String?): ChatUiState = ChatUiState(
+        fun toUiState(
+            error: String?,
+            search: List<SessionSearchResult>,
+        ): ChatUiState = ChatUiState(
             connection = connection,
             sessions = sessions,
             selectedSessionId = selectedSessionId,
             timeline = timeline,
             isSending = isSending,
             errorMessage = error,
+            searchResults = search,
         )
     }
 
@@ -68,8 +76,9 @@ class ChatViewModel @Inject constructor(
             )
         },
         errorMessage,
-    ) { core, error ->
-        core.toUiState(error)
+        searchResults,
+    ) { core, error, search ->
+        core.toUiState(error, search)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
@@ -91,6 +100,10 @@ class ChatViewModel @Inject constructor(
             ChatAction.RetrySessions -> refreshSessions()
             is ChatAction.RespondApproval -> respondApproval(action)
             is ChatAction.AnswerQuestion -> answerQuestion(action)
+            is ChatAction.SearchSessions -> searchSessions(action.query)
+            is ChatAction.RenameSession -> renameSession(action.sessionId, action.title)
+            is ChatAction.ForkSession -> forkSession(action.sessionId)
+            is ChatAction.UpdateQueue -> updateQueue(action.itemId, action.kind)
         }
     }
 
@@ -182,6 +195,48 @@ class ChatViewModel @Inject constructor(
                     else chatRepository.observeTimeline(sessionId)
                 }
                 .collect { timeline.value = it }
+        }
+    }
+
+    private fun searchSessions(query: String) {
+        if (query.isBlank()) {
+            searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            val results = runCatchingForUi { chatRepository.searchSessions(query) }
+            searchResults.value = results.orEmpty()
+        }
+    }
+
+    private fun renameSession(sessionId: String, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            runCatchingForUi { chatRepository.renameSession(sessionId, title) }
+        }
+    }
+
+    private fun forkSession(sessionId: String) {
+        viewModelScope.launch {
+            val forked = runCatchingForUi { chatRepository.forkSession(sessionId) } ?: return@launch
+            selectedSessionId.value = forked.id
+            timeline.value = emptyList()
+            runCatchingForUi { chatRepository.openSession(forked.id) }
+        }
+    }
+
+    private fun updateQueue(itemId: String, kind: QueueUpdateKind) {
+        val sessionId = selectedSessionId.value ?: return
+        viewModelScope.launch {
+            runCatchingForUi {
+                chatRepository.updateQueue(
+                    QueueUpdateRequest(
+                        sessionId = sessionId,
+                        itemId = itemId,
+                        kind = kind,
+                    ),
+                )
+            }
         }
     }
 
