@@ -1,0 +1,23 @@
+package com.deepseek.harness.android.ui.chat
+
+import androidx.compose.runtime.Immutable
+import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.TimelineItem
+
+@Immutable
+data class ChatUiState(
+    val sessions: List<SessionSummary> = emptyList(),
+    val selectedSessionId: String? = null,
+    val timeline: List<TimelineItem> = emptyList(),
+    val isSending: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+sealed interface ChatAction {
+    data class SelectSession(val sessionId: String) : ChatAction
+    data class SendPrompt(val text: String) : ChatAction
+    data object CancelTurn : ChatAction
+    data object CreateSession : ChatAction
+    data object DismissError : ChatAction
+    data object RetrySessions : ChatAction
+}

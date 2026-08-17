@@ -3,20 +3,45 @@ package com.deepseek.harness.android.harness.dto
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-/**
- * A small subset of the dsh wire vocabulary. These types exist only in this
- * module; they must never leak into :core:domain or :app.
- */
+/** Session list value decoded from the dsh unary response. */
 @Serializable
-data class MuxFrame(
-    val type: String,
-    val sessionId: String? = null,
-    val event: JsonObject? = null,
+internal data class SessionListValue(
+    val items: List<SessionWire> = emptyList(),
 )
 
 @Serializable
-data class HostFrame(
-    val type: String,
+internal data class SessionWire(
+    val sessionId: String,
+    val updatedAt: Long = 0L,
+    val running: Boolean = false,
+    val blank: Boolean = true,
+    val parentSessionId: String? = null,
+    val origin: String? = null,
+    val cwd: String? = null,
+)
+
+@Serializable
+internal data class SessionCreateValue(
+    val sessionId: String,
+)
+
+@Serializable
+internal data class SessionPromptValue(
+    val accepted: Boolean = true,
+)
+
+@Serializable
+internal data class SessionCancelValue(
+    val accepted: Boolean = true,
+)
+
+/** A decoded mux envelope. `event` stays wide until the event-type switch. */
+@Serializable
+internal data class MuxEnvelope(
+    val type: String? = null,
     val sessionId: String? = null,
-    val running: Boolean? = null,
+    val event: JsonObject? = null,
+    val approvalId: String? = null,
+    val toolName: String? = null,
+    val reason: String? = null,
 )

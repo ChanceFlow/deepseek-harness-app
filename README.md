@@ -53,6 +53,16 @@ adb reverse tcp:3080 tcp:3080
 pnpm dsh web --port 3080
 ```
 
+## Kotlin best practices
+
+See [docs/kotlin-best-practices.md](docs/kotlin-best-practices.md) for the rules this repository follows.
+
+- Hilt constructor injection in `:app`
+- MVVM + UDF + `StateFlow`
+- stateless Compose screens with a stateful `ChatRoute`
+- anti-corruption layer in `:core:harness-adapter`
+- JVM tests for the ViewModel
+
 ## Current status
 
-Skeleton only. The checked-in UI is a placeholder preview; it does not call the backend yet.
+Skeleton plus transport/adapter contracts. The chat screen is still a preview path until the adapter wiring is completed. The checked-in UI is a placeholder preview; it does not call the backend yet.

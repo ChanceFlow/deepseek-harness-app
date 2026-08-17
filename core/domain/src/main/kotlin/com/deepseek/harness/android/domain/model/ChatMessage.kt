@@ -6,8 +6,9 @@ enum class MessageRole {
 }
 
 /**
- * UI-facing chat message. This model intentionally does not mention
- * dsh SessionEvent, ContentBlock, or MuxFrame.
+ * UI-facing chat message.
+ *
+ * Deliberately contains no dsh SessionEvent, ContentBlock, or MuxFrame type.
  */
 data class ChatMessage(
     val id: String,

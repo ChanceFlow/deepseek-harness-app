@@ -8,4 +8,9 @@ interface DshRpcClient {
         method: String,
         payload: JsonObject,
     ): RpcResult
+
+    suspend fun respond(
+        rpcId: String,
+        result: RpcResult,
+    )
 }

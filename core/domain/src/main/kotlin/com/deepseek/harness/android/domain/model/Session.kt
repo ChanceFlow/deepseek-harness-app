@@ -8,3 +8,10 @@ data class SessionSummary(
     val workspaceId: String? = null,
     val updatedAtEpochMs: Long = 0L,
 )
+
+data class CreateSessionRequest(
+    val sessionId: String? = null,
+    val workspaceId: String? = null,
+    val cwd: String? = null,
+    val agentPreset: String? = null,
+)

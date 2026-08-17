@@ -12,6 +12,13 @@ data class ClientRequest(
 )
 
 @Serializable
+data class ClientResponse(
+    val type: String = "client-response",
+    val rpcId: String,
+    val result: RpcResult,
+)
+
+@Serializable
 data class ServerResponse(
     val type: String = "server-response",
     val rpcId: String,
