@@ -20,6 +20,7 @@ export 'package:network/rpc_envelope.dart';
 import '../config.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
+import '../ui/models/models_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 
 /// Raw transport seams, overridable in tests.
@@ -62,6 +63,13 @@ final chatControllerProvider = Provider<ChatController>((ref) {
 final chatUiStateProvider = StreamProvider<ChatUiState>(
   (ref) => ref.watch(chatControllerProvider).uiState,
 );
+
+/// Models screen controller (UDF).
+final modelsControllerProvider = Provider<ModelsController>((ref) {
+  final controller = ModelsController(ref.watch(chatRepositoryProvider));
+  ref.onDispose(controller.dispose);
+  return controller;
+});
 
 /// Workspace screen controller (UDF).
 final workspaceControllerProvider = Provider<WorkspaceController>((ref) {

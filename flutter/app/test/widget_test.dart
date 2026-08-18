@@ -77,14 +77,16 @@ void main() {
     expect(find.text('Create'), findsOneWidget);
   });
 
-  testWidgets('unported destinations show pending placeholders',
+  testWidgets('models tab renders its catalog surface; settings stays pending',
       (tester) async {
     await _pumpApp(tester);
     await tester.pump();
 
     await tester.tap(find.text('Models').last);
     await tester.pumpAndSettle();
-    expect(find.text('Models screen pending port'), findsOneWidget);
+    expect(find.text('Models'), findsNWidgets(2)); // title + nav label
+    expect(find.text('Session'), findsOneWidget);
+    expect(find.text('Providers'), findsOneWidget);
 
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
