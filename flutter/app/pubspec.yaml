@@ -14,6 +14,8 @@ dependencies:
   network: ^0.1.0
   harness_adapter: ^0.1.0
   flutter_riverpod: ^3.4.2
+  image_picker: ^1.2.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

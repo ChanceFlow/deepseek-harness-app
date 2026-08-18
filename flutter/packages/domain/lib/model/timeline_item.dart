@@ -302,6 +302,17 @@ final class QuestionAnswer {
   final String questionId;
   final List<String> selectedOptions;
   final String? customText;
+
+  @override
+  bool operator ==(Object other) =>
+      other is QuestionAnswer &&
+      other.questionId == questionId &&
+      _listEquals(other.selectedOptions, selectedOptions) &&
+      other.customText == customText;
+
+  @override
+  int get hashCode =>
+      Object.hash(questionId, Object.hashAll(selectedOptions), customText);
 }
 
 final class SessionQueueItem {
