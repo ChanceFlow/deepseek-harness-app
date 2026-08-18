@@ -21,6 +21,7 @@ import '../config.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
 import '../ui/models/models_controller.dart';
+import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 
 /// Raw transport seams, overridable in tests.
@@ -67,6 +68,13 @@ final chatUiStateProvider = StreamProvider<ChatUiState>(
 /// Models screen controller (UDF).
 final modelsControllerProvider = Provider<ModelsController>((ref) {
   final controller = ModelsController(ref.watch(chatRepositoryProvider));
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Subagents screen controller (UDF).
+final subagentControllerProvider = Provider<SubagentController>((ref) {
+  final controller = SubagentController(ref.watch(chatRepositoryProvider));
   ref.onDispose(controller.dispose);
   return controller;
 });

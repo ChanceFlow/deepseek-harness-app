@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../chat/chat_screen.dart';
 import '../models/models_screen.dart';
+import '../subagents/subagent_screen.dart';
 import '../workspace/workspace_screen.dart';
 
 enum AppDestination {
@@ -40,7 +41,7 @@ class _AppRootState extends State<AppRoot> {
         AppDestination.chat => const ChatRoute(),
         AppDestination.workspaces => const WorkspaceRoute(),
         AppDestination.models => const ModelsRoute(),
-        AppDestination.subagents => const _PlaceholderScreen('Subagents'),
+        AppDestination.subagents => const SubagentRoute(),
         AppDestination.goals => const _PlaceholderScreen('Goals'),
         AppDestination.settings => const _PlaceholderScreen('Settings'),
       },
