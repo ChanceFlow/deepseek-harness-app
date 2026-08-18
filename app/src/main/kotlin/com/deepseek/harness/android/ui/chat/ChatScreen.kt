@@ -694,37 +694,72 @@ private fun QueueRow(
     }
 
     editingItemId?.let { targetId ->
-        AlertDialog(
-            onDismissRequest = { editingItemId = null },
-            title = { Text("Edit queued message") },
-            text = {
-                OutlinedTextField(
-                    value = editingText,
-                    onValueChange = { editingText = it },
-                    singleLine = true,
+        QueueEditDialog(
+            itemId = targetId,
+            initialText = editingText,
+            onSave = { edited ->
+                onAction(
+                    ChatAction.UpdateQueue(
+                        itemId = targetId,
+                        kind = QueueUpdateKind.EDIT,
+                        text = edited,
+                    ),
                 )
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (editingText.isNotBlank()) {
-                            onAction(
-                                ChatAction.UpdateQueue(
-                                    itemId = targetId,
-                                    kind = QueueUpdateKind.EDIT,
-                                    text = editingText.trim(),
-                                ),
-                            )
-                        }
-                        editingItemId = null
-                    },
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { editingItemId = null }) {
-                    Text("Cancel")
-                }
-            },
+            onDismiss = { editingItemId = null },
+        )
+    }
+}
+
+/**
+ * Queue text edit: blank text never dispatches (Save no-ops), matching the
+ * Web composer's non-empty constraint for queue edits.
+ */
+@Composable
+private fun QueueEditDialog(
+    itemId: String,
+    initialText: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(itemId) { mutableStateOf(initialText) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit queued message") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (text.isNotBlank()) {
+                        onSave(text.trim())
+                    }
+                    onDismiss()
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun QueueEditDialogPreview() {
+    DeepSeekHarnessAndroidTheme {
+        QueueEditDialog(
+            itemId = "queued-1",
+            initialText = "revised prompt",
+            onSave = {},
+            onDismiss = {},
         )
     }
 }

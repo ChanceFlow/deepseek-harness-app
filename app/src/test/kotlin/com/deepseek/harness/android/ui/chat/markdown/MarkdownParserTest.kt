@@ -105,19 +105,53 @@ class MarkdownParserTest {
         val list = blocks[0] as MarkdownBlock.BulletList
         assertEquals(2, list.items.size)
         assertEquals(
-            listOf(
-                MarkdownInline.Text("first "),
-                MarkdownInline.Bold(listOf(MarkdownInline.Text("bold"))),
-                MarkdownInline.Text(" item"),
+            MarkdownBlock.BulletEntry(
+                inlines = listOf(
+                    MarkdownInline.Text("first "),
+                    MarkdownInline.Bold(listOf(MarkdownInline.Text("bold"))),
+                    MarkdownInline.Text(" item"),
+                ),
+                depth = 0,
             ),
             list.items[0],
         )
         assertEquals(
-            listOf(MarkdownInline.Text("second item")),
+            MarkdownBlock.BulletEntry(
+                inlines = listOf(MarkdownInline.Text("second item")),
+                depth = 0,
+            ),
             list.items[1],
         )
         assertEquals(
             listOf(MarkdownInline.Text("plain")),
+            (blocks[1] as MarkdownBlock.Paragraph).inlines,
+        )
+    }
+
+    @Test
+    fun `indented bullets nest up to two levels`() {
+        val blocks = MarkdownParser.parse("- top\n  - nested\n    - deeper flattens\n      - beyond flattens")
+
+        val list = blocks.single() as MarkdownBlock.BulletList
+        assertEquals(listOf(0, 1, 2, 2), list.items.map { it.depth })
+        assertEquals("beyond flattens", (list.items[3].inlines.single() as MarkdownInline.Text).text)
+    }
+
+    @Test
+    fun `quote lines fold into one block quote`() {
+        val blocks = MarkdownParser.parse("> quoted **strong**\n> second line\n\nafter")
+
+        val quote = blocks[0] as MarkdownBlock.BlockQuote
+        assertEquals(
+            listOf(
+                MarkdownInline.Text("quoted "),
+                MarkdownInline.Bold(listOf(MarkdownInline.Text("strong"))),
+                MarkdownInline.Text("\nsecond line"),
+            ),
+            quote.inlines,
+        )
+        assertEquals(
+            listOf(MarkdownInline.Text("after")),
             (blocks[1] as MarkdownBlock.Paragraph).inlines,
         )
     }

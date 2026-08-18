@@ -1,12 +1,17 @@
 package com.deepseek.harness.android.ui.chat.markdown
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,19 +58,36 @@ fun MarkdownText(
                 )
 
                 is MarkdownBlock.BulletList -> Column {
-                    block.items.forEach { item ->
-                        Row {
+                    block.items.forEach { entry ->
+                        Row(modifier = Modifier.padding(start = (entry.depth * 16).dp)) {
                             Text(
-                                text = "•  ",
+                                text = if (entry.depth == 0) "•  " else "–  ",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = inlineAnnotated(item),
+                                text = inlineAnnotated(entry.inlines),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(bottom = 2.dp),
                             )
                         }
                     }
+                }
+
+                is MarkdownBlock.BlockQuote -> Row {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(20.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.outlineVariant),
+                    )
+                    Text(
+                        text = inlineAnnotated(block.inlines),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
 
                 is MarkdownBlock.Table -> TableBlock(block)

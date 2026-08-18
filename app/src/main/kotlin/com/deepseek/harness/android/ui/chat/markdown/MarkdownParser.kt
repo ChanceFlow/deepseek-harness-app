@@ -22,7 +22,18 @@ sealed interface MarkdownBlock {
     ) : MarkdownBlock
 
     data class BulletList(
-        val items: List<List<MarkdownInline>>,
+        val items: List<BulletEntry>,
+    ) : MarkdownBlock
+
+    /** One bullet row; depth 0 is top level, each two-space indent adds one. */
+    data class BulletEntry(
+        val inlines: List<MarkdownInline>,
+        val depth: Int,
+    )
+
+    /** `>`-prefixed consecutive lines; the markers drop, inlines remain. */
+    data class BlockQuote(
+        val inlines: List<MarkdownInline>,
     ) : MarkdownBlock
 
     /** GFM pipe table; column count follows the header, short rows pad empty. */
@@ -50,9 +61,13 @@ sealed interface MarkdownInline {
 
 object MarkdownParser {
 
+    /** Nesting levels the MVP renders; deeper indents flatten onto level two. */
+    const val MAX_BULLET_DEPTH: Int = 2
+
     private val fence = Regex("^(`{3,})\\s*([A-Za-z0-9_+-]*)\\s*$")
-    private val bullet = Regex("^[*-] (\\S.*)$")
+    private val bullet = Regex("^(\\s*)[*-] (\\S.*)$")
     private val heading = Regex("^(#{1,6}) (.*)$")
+    private val quote = Regex("^>\\s?(.*)$")
     private val delimiterCell = Regex("^:?-+:?$")
 
     /** Parse one message body into ordered blocks. */
@@ -62,7 +77,7 @@ object MarkdownParser {
         var index = 0
 
         var paragraph = mutableListOf<String>()
-        var bullets = mutableListOf<MutableList<MarkdownInline>>()
+        var bullets = mutableListOf<MarkdownBlock.BulletEntry>()
 
         fun flushParagraph() {
             if (paragraph.isNotEmpty()) {
@@ -73,7 +88,7 @@ object MarkdownParser {
 
         fun flushBullets() {
             if (bullets.isNotEmpty()) {
-                blocks += MarkdownBlock.BulletList(bullets.map { it.toList() })
+                blocks += MarkdownBlock.BulletList(bullets.toList())
                 bullets = mutableListOf()
             }
         }
@@ -129,6 +144,22 @@ object MarkdownParser {
                 continue
             }
 
+            val quoteStart = quote.matchEntire(line)
+            if (quoteStart != null) {
+                flushParagraph()
+                flushBullets()
+                val quoted = mutableListOf(quoteStart.groupValues[1])
+                index++
+                while (index < lines.size) {
+                    val nextQuote = quote.matchEntire(lines[index])
+                    if (nextQuote == null) break
+                    quoted += nextQuote.groupValues[1]
+                    index++
+                }
+                blocks += MarkdownBlock.BlockQuote(parseInlines(quoted.joinToString("\n")))
+                continue
+            }
+
             val headingMatch = heading.matchEntire(line)
             if (headingMatch != null) {
                 flushParagraph()
@@ -144,7 +175,11 @@ object MarkdownParser {
             val bulletMatch = bullet.matchEntire(line)
             if (bulletMatch != null) {
                 flushParagraph()
-                bullets += parseInlines(bulletMatch.groupValues[1]).toMutableList()
+                val indent = bulletMatch.groupValues[1].count { it == ' ' }
+                bullets += MarkdownBlock.BulletEntry(
+                    inlines = parseInlines(bulletMatch.groupValues[2]),
+                    depth = (indent / 2).coerceAtMost(MAX_BULLET_DEPTH),
+                )
                 index++
                 continue
             }

@@ -96,9 +96,11 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   approvals, custom, multi-select, and skippable questions, live titles,
   goals (create/pause/resume/edit/complete/clear), background jobs, and
 page-at-a-time older-history loading. Message bodies render markdown
-(fenced code with language label and streaming-open fences, headings, bullet
-lists, pipe tables, inline code, bold/italic, and clickable links) through a
-pure-Kotlin parser with theme-owned Compose styling. The composer attaches
+(fenced code with language label and streaming-open fences, headings, nested
+bullet lists, block quotes, pipe tables, inline code, bold/italic, and
+clickable links) through a pure-Kotlin parser with theme-owned Compose
+styling. Queue rows edit into a previewable dialog that never dispatches a
+blank text. The composer attaches
 images (photo picker, host `imageLimits` projection gating type/size/count,
 decoded thumbnails on the pending chips) that ride the prompt as inline
 parts, and timeline image blocks download lazily through `session.attachment`
