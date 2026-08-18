@@ -26,6 +26,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepseek.harness.android.domain.model.SessionSummary
 import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
+import androidx.compose.ui.tooling.preview.Preview
+import com.deepseek.harness.android.domain.model.SubagentCatalog
+import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 
 @Composable
 fun SubagentRoute(
@@ -204,4 +207,35 @@ private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.Queue -> "queue"
     is TimelineItem.Jobs -> "jobs"
     is TimelineItem.Error -> "e:${item.id}"
+}
+
+
+@Preview(showBackground = true)
+@Composable
+private fun SubagentScreenPreview() {
+    DeepSeekHarnessAndroidTheme {
+        SubagentScreen(
+            uiState = SubagentUiState(
+                sessions = listOf(
+                    SessionSummary(id = "parent-session", title = "Parent session", blank = false),
+                ),
+                selectedParentId = "parent-session",
+                catalog = SubagentCatalog(
+                    parentSessionId = "parent-session",
+                    parentAvailable = true,
+                    entries = listOf(
+                        SubagentEntry(
+                            id = "child-session",
+                            kind = "child",
+                            mode = "continuable",
+                            activity = "running",
+                            hasChildren = true,
+                            label = "Preview child",
+                        ),
+                    ),
+                ),
+            ),
+            onAction = {},
+        )
+    }
 }

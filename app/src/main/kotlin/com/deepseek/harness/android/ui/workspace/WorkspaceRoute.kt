@@ -21,9 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepseek.harness.android.domain.model.WorkspaceSummary
+import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 
 @Composable
 fun WorkspaceRoute(
@@ -113,6 +116,26 @@ fun WorkspaceScreen(
             dismissButton = {
                 OutlinedButton(onClick = { renameTargetId = null }) { Text("Cancel") }
             },
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun WorkspaceScreenPreview() {
+    DeepSeekHarnessAndroidTheme {
+        WorkspaceScreen(
+            uiState = WorkspaceUiState(
+                workspaces = listOf(
+                    WorkspaceSummary(
+                        workspaceId = "workspace-preview",
+                        path = "/home/user/workspace",
+                        title = "workspace",
+                        sessionIds = listOf("session-1", "session-2"),
+                    ),
+                ),
+            ),
+            onAction = {},
         )
     }
 }

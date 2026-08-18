@@ -630,13 +630,9 @@ class HarnessRepositoryImpl @Inject constructor(
                             // Retried on next generation.
                         }
                     }
-                    "host/workspace-changed", "host/workspace-removed", "host/workspace-order-changed" -> {
-                        try {
-                            refreshWorkspaces()
-                        } catch (_: Throwable) {
-                            // Retried on next generation.
-                        }
-                    }
+                    "host/workspace-changed" -> applyWorkspaceChanged(frame)
+                    "host/workspace-removed" -> applyWorkspaceRemoved(frame)
+                    "host/workspace-order-changed" -> applyWorkspaceOrder(frame)
                     "host/archived-sessions-changed" -> {
                         frame.payload["archivedSessionIds"]?.jsonArray
                             ?.mapNotNull { it.jsonPrimitive?.contentOrNull }
@@ -644,6 +640,50 @@ class HarnessRepositoryImpl @Inject constructor(
                             ?.let { archivedSessionIds.value = it }
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Full-snapshot increment carried by `host/workspace-changed`: upsert one
+     * workspace without an extra `workspace.list` round-trip.
+     */
+    private fun applyWorkspaceChanged(frame: ServerRequest) {
+        val element = frame.payload["workspace"] ?: return
+        val wire = runCatching {
+            json.decodeFromJsonElement<WorkspaceWire>(element)
+        }.getOrNull() ?: return
+        val workspace = wire.toDomain()
+        workspaces.update { current ->
+            val index = current.indexOfFirst { it.workspaceId == workspace.workspaceId }
+            if (index < 0) {
+                current + workspace
+            } else {
+                current.toMutableList().also { it[index] = workspace }
+            }
+        }
+    }
+
+    private fun applyWorkspaceRemoved(frame: ServerRequest) {
+        val workspaceId = frame.payload["workspaceId"]?.jsonPrimitive?.contentOrNull ?: return
+        workspaces.update { current ->
+            current.filterNot { it.workspaceId == workspaceId }
+        }
+    }
+
+    /**
+     * `host/workspace-order-changed` carries the full durable registry order.
+     * Unknown workspaces append behind known ones rather than disappearing.
+     */
+    private fun applyWorkspaceOrder(frame: ServerRequest) {
+        val orderedIds = frame.payload["workspaceIds"]?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive?.contentOrNull }
+            .orEmpty()
+        if (orderedIds.isEmpty()) return
+        workspaces.update { current ->
+            current.sortedBy { workspace ->
+                val orderedIndex = orderedIds.indexOf(workspace.workspaceId)
+                if (orderedIndex >= 0) orderedIndex else orderedIds.size + current.indexOf(workspace)
             }
         }
     }

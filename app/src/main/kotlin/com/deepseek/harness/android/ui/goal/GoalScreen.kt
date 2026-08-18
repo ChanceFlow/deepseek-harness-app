@@ -25,6 +25,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepseek.harness.android.domain.model.GoalPhase
 import com.deepseek.harness.android.domain.model.SessionSummary
+import androidx.compose.ui.tooling.preview.Preview
+import com.deepseek.harness.android.domain.model.GoalProjection
+import com.deepseek.harness.android.domain.model.GoalSnapshot
+import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 
 @Composable
 fun GoalRoute(
@@ -135,5 +139,34 @@ fun GoalScreen(
                 }
             }
         }
+    }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+private fun GoalScreenPreview() {
+    DeepSeekHarnessAndroidTheme {
+        GoalScreen(
+            uiState = GoalUiState(
+                sessions = listOf(
+                    SessionSummary(id = "session-1", title = "Goal preview session", blank = false),
+                ),
+                selectedSessionId = "session-1",
+                goal = GoalProjection(
+                    goal = GoalSnapshot(
+                        id = "goal-1",
+                        revision = 3L,
+                        objective = "Finish the Android MVP",
+                        phase = GoalPhase.ACTIVE,
+                        maxGoalRounds = 10L,
+                    ),
+                    roundsStarted = 2L,
+                    createdAt = 0L,
+                    updatedAt = 0L,
+                ),
+            ),
+            onAction = {},
+        )
     }
 }

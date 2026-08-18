@@ -10,11 +10,10 @@ import com.deepseek.harness.android.network.ServerRequest
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -40,9 +39,36 @@ private const val EVENTS_MUX_PATH = "/api/events.mux"
 private const val EVENTS_HOST_PATH = "/api/events.host"
 private const val HOST_DESCRIBE = "host.describe"
 private const val STREAM_OPEN_TIMEOUT_MS = 3_000L
-private const val BACKOFF_BASE_MS = 500L
-private const val BACKOFF_FACTOR = 2.0
-private const val BACKOFF_MAX_MS = 10_000L
+
+/**
+ * Retry-time policy seam. The product uses exponential backoff; tests inject a
+ * deterministic schedule so generation transitions are exact-time assertions.
+ */
+fun interface DshBackoffDelay {
+    fun delayMillis(attempt: Int): Long
+}
+
+class ExponentialDshBackoffDelay(
+    private val baseMillis: Long = 500L,
+    private val maxMillis: Long = 10_000L,
+) : DshBackoffDelay {
+    override fun delayMillis(attempt: Int): Long {
+        val cap = exponentialCap(attempt.coerceAtMost(20))
+        return cap / 2 + kotlin.random.Random.nextLong(cap / 2 + 1)
+    }
+
+    private fun exponentialCap(times: Int): Long {
+        var value = baseMillis.coerceAtLeast(1L).coerceAtMost(maxMillis)
+        repeat(times) {
+            value = if (value > maxMillis / 2L) {
+                maxMillis
+            } else {
+                minOf(maxMillis, value * 2L)
+            }
+        }
+        return value
+    }
+}
 
 @Serializable
 private data class HostDescriptionWire(
@@ -59,8 +85,10 @@ class DshConnectionManager @Inject constructor(
     private val rpcClient: DshRpcClient,
     private val eventSocket: DshEventSocket,
     private val json: Json,
+    private val ioDispatcher: CoroutineDispatcher,
+    private val backoffDelay: DshBackoffDelay,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private val startMutex = Mutex()
     private val generation = AtomicLong(0L)
     private val _state = MutableStateFlow(ConnectionState())
@@ -96,16 +124,20 @@ class DshConnectionManager @Inject constructor(
         scope.launch {
             var attempt = 0
             while (scope.isActive) {
-                runGeneration()
+                val connected = runGeneration()
                 _hostDescription.value = null
                 _state.update { it.copy(phase = ConnectionPhase.RECONNECTING) }
-                delay(backoffDelay(attempt))
+                // A generation that reached CONNECTED was healthy until stream
+                // loss; its loss starts a fresh backoff sequence.
+                if (connected) attempt = 0
+                delay(backoffDelay.delayMillis(attempt))
                 attempt += 1
             }
         }
     }
 
-    private suspend fun runGeneration() {
+    private suspend fun runGeneration(): Boolean {
+        var connected = false
         val generationId = generation.incrementAndGet()
         val generationJob = Job()
         val generationScope = CoroutineScope(scope.coroutineContext + generationJob)
@@ -164,6 +196,7 @@ class DshConnectionManager @Inject constructor(
                 hostDescription = host,
                 generation = generationId,
             )
+            connected = true
 
             if (!failure.isCompleted) failure.await()
         } catch (error: CancellationException) {
@@ -173,6 +206,7 @@ class DshConnectionManager @Inject constructor(
         } finally {
             generationJob.cancel()
         }
+        return connected
     }
 
     private fun pump(
@@ -196,19 +230,4 @@ class DshConnectionManager @Inject constructor(
         }
     }
 
-    private fun backoffDelay(attempt: Int): Long {
-        val cap = minOf(
-            BACKOFF_MAX_MS,
-            (BACKOFF_BASE_MS * FAST_POW[attempt.coerceAtMost(20)]).toLong(),
-        )
-        return cap / 2 + Random.nextLong(cap / 2 + 1)
-    }
-
-    companion object {
-        private val FAST_POW = LongArray(21) { index ->
-            var value = 1L
-            repeat(index) { value = (value * BACKOFF_FACTOR).toLong() }
-            value
-        }
-    }
 }

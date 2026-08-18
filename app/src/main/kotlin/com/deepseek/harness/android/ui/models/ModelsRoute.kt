@@ -18,6 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.tooling.preview.Preview
+import com.deepseek.harness.android.domain.model.ModelCatalogModel
+import com.deepseek.harness.android.domain.model.ModelProviderGroup
+import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.SessionModels
+import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
 
 @Composable
 fun ModelsRoute(
@@ -138,5 +145,48 @@ fun ModelsScreen(
                 }
             }
         }
+    }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+private fun ModelsScreenPreview() {
+    DeepSeekHarnessAndroidTheme {
+        ModelsScreen(
+            uiState = ModelsUiState(
+                sessions = listOf(
+                    SessionSummary(id = "session-1", title = "Models preview session", blank = false),
+                ),
+                selectedSessionId = "session-1",
+                models = SessionModels(
+                    current = ModelSelection(
+                        provider = "preview",
+                        model = "preview-model",
+                        reasoningEffort = "high",
+                    ),
+                    routable = true,
+                    groups = listOf(
+                        ModelProviderGroup(
+                            id = "preview",
+                            name = "Preview provider",
+                            models = listOf(
+                                ModelCatalogModel(
+                                    id = "preview-model",
+                                    name = "Preview model",
+                                    description = "Static preview data",
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                selected = ModelSelection(
+                    provider = "preview",
+                    model = "preview-model",
+                    reasoningEffort = "high",
+                ),
+            ),
+            onAction = {},
+        )
     }
 }
