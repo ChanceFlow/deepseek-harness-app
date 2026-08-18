@@ -189,11 +189,73 @@ class ChatViewModelTest {
         )
     }
 
+    @Test
+    fun `blank session rows are hidden unless selected`() = runTest(dispatcher) {
+        val blankSession = SessionSummary(
+            id = "provisional",
+            blank = true,
+            cwd = "/tmp/provisional",
+        )
+        val repository = FakeChatRepository(
+            initialSessions = listOf(FakeChatRepository.initialSession, blankSession),
+        )
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(FakeChatRepository.initialSession.id),
+            viewModel.uiState.value.sessions.map { it.id },
+        )
+
+        viewModel.onAction(ChatAction.SelectSession(blankSession.id))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(FakeChatRepository.initialSession.id, blankSession.id),
+            viewModel.uiState.value.sessions.map { it.id },
+        )
+    }
+
+    @Test
+    fun `workspace create reuses the workspace blank session`() = runTest(dispatcher) {
+        val blankSession = SessionSummary(
+            id = "blank-workspace-session",
+            blank = true,
+            cwd = "/tmp/reusable-workspace",
+        )
+        val workspace = WorkspaceSummary(
+            workspaceId = "workspace-1",
+            path = "/tmp/reusable-workspace",
+            title = "Workspace",
+            sessionIds = listOf(blankSession.id),
+        )
+        val repository = FakeChatRepository(
+            initialSessions = listOf(blankSession),
+            initialWorkspaces = listOf(workspace),
+        )
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.CreateSessionInWorkspace(workspace.workspaceId))
+        advanceUntilIdle()
+
+        assertEquals(emptyList<CreateSessionRequest>(), repository.createRequests)
+        assertEquals(listOf(blankSession.id), repository.openedSessionIds)
+        assertEquals(blankSession.id, viewModel.uiState.value.selectedSessionId)
+    }
+
     private class FakeChatRepository(
         private val timeline: MutableStateFlow<List<TimelineItem>> =
             MutableStateFlow(emptyList()),
+        initialSessions: List<SessionSummary> = listOf(initialSession),
+        initialWorkspaces: List<WorkspaceSummary> = emptyList(),
     ) : ChatRepository {
-        val sessions = MutableStateFlow(listOf(initialSession))
+        private val baselineSessions = initialSessions
+        private val baselineWorkspaces = initialWorkspaces
+        val sessions = MutableStateFlow(baselineSessions)
+        val workspaces = MutableStateFlow(baselineWorkspaces)
         val sentMessages = mutableListOf<SendMessageRequest>()
         val openedSessionIds = mutableListOf<String>()
         val approvalAnswers = mutableListOf<ApprovalAnswer>()
@@ -214,7 +276,7 @@ class ChatViewModelTest {
             sessions.asStateFlow()
 
         override suspend fun refreshSessions() {
-            sessions.value = listOf(initialSession)
+            sessions.value = baselineSessions
         }
 
         override suspend fun createSession(request: CreateSessionRequest): SessionSummary {
@@ -256,14 +318,13 @@ class ChatViewModelTest {
             evidence: QuestionEvidence,
         ) = Unit
 
-        private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
         private val searchResults = mutableListOf<SessionSearchResult>()
 
         override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =
             workspaces
 
         override suspend fun refreshWorkspaces() {
-            workspaces.value = emptyList()
+            workspaces.value = baselineWorkspaces
         }
 
         override suspend fun createWorkspace(path: String): WorkspaceSummary {

@@ -73,7 +73,9 @@ class SubagentViewModel @Inject constructor(
             isSendingChild: Boolean,
             errorMessage: String?,
         ): SubagentUiState = SubagentUiState(
-            sessions = sessions,
+            sessions = sessions.filter { session ->
+                !session.blank || session.id == selectedParentId
+            },
             selectedParentId = selectedParentId,
             catalog = catalog,
             selectedChildId = selectedChildId,

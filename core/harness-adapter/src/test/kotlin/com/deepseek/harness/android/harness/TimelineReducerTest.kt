@@ -112,6 +112,60 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `tool result block isError marks the paired call failed`() {
+        val history = listOf(
+            event(
+                seq = 1L,
+                type = "tool/call",
+                data = buildJsonObject {
+                    put("turn", 1)
+                    put("step", 1)
+                    put("callId", "call-failed")
+                    put("name", "bash")
+                    put("arguments", "{}")
+                },
+            ),
+            event(
+                seq = 2L,
+                type = "tool/result",
+                data = buildJsonObject {
+                    put("turn", 1)
+                    put("step", 1)
+                    put(
+                        "message",
+                        buildJsonObject {
+                            put(
+                                "content",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "tool-result")
+                                            put("toolCallId", "call-failed")
+                                            put(
+                                                "content",
+                                                buildJsonArray { add(textBlock("boom")) },
+                                            )
+                                            put("isError", true)
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                },
+            ),
+        )
+
+        val reducer = TimelineReducer("s1")
+        reducer.reset(history)
+
+        val tool = reducer.snapshot().single() as TimelineItem.ToolCall
+        assertEquals(ToolRunStatus.FAILED, tool.status)
+        assertEquals(true, tool.isError)
+        assertEquals("boom", tool.result)
+    }
+
+    @Test
     fun `approval frame becomes answerable card and resolved removes it`() {
         val reducer = TimelineReducer("s1")
         val requested = ServerRequest(

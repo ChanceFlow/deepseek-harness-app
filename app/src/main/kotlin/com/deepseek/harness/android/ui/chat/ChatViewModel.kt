@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -49,18 +50,25 @@ class ChatViewModel @Inject constructor(
         fun toUiState(
             error: String?,
             search: List<SessionSearchResult>,
-        ): ChatUiState = ChatUiState(
-            connection = connection,
-            sessions = sessions,
-            workspaces = workspaces,
-            selectedSessionId = selectedSessionId,
-            timeline = timelineWindow.items,
-            hasMoreOlder = timelineWindow.hasMoreOlder,
-            isLoadingOlder = timelineWindow.isLoadingOlder,
-            isSending = isSending,
-            errorMessage = error,
-            searchResults = search,
-        )
+        ): ChatUiState {
+            // Matches the Web client grouping rule: store keeps every row,
+            // while list surfaces hide blank placeholders unless selected.
+            val visibleSessions = sessions.filter { session ->
+                !session.blank || session.id == selectedSessionId
+            }
+            return ChatUiState(
+                connection = connection,
+                sessions = visibleSessions,
+                workspaces = workspaces,
+                selectedSessionId = selectedSessionId,
+                timeline = timelineWindow.items,
+                hasMoreOlder = timelineWindow.hasMoreOlder,
+                isLoadingOlder = timelineWindow.isLoadingOlder,
+                isSending = isSending,
+                errorMessage = error,
+                searchResults = search,
+            )
+        }
     }
 
     private data class ChatBaseline(
@@ -202,14 +210,33 @@ class ChatViewModel @Inject constructor(
 
     private fun createSession(workspaceId: String?) {
         viewModelScope.launch {
-            val session = runCatchingForUi {
-                chatRepository.createSession(
-                    CreateSessionRequest(workspaceId = workspaceId),
-                )
-            } ?: return@launch
-            selectedSessionId.value = session.id
-            runCatchingForUi { chatRepository.openSession(session.id) }
+            // Web parity: a workspace's blank session is the provisional New
+            // Session row. Reuse it instead of minting another hidden row.
+            val sessionId = workspaceId?.let { reusableBlankSessionId(it) }
+                ?: runCatchingForUi {
+                    chatRepository.createSession(
+                        CreateSessionRequest(workspaceId = workspaceId),
+                    )
+                }?.id
+                ?: return@launch
+            selectedSessionId.value = sessionId
+            runCatchingForUi { chatRepository.openSession(sessionId) }
         }
+    }
+
+    private suspend fun reusableBlankSessionId(workspaceId: String): String? {
+        val workspace = chatRepository.observeWorkspaces()
+            .first()
+            .firstOrNull { it.workspaceId == workspaceId }
+            ?: return null
+        return chatRepository.observeSessions()
+            .first()
+            .firstOrNull { session ->
+                session.blank &&
+                    session.cwd == workspace.path &&
+                    workspace.sessionIds.contains(session.id)
+            }
+            ?.id
     }
 
     private fun respondApproval(action: ChatAction.RespondApproval) {

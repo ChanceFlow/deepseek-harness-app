@@ -37,7 +37,9 @@ class GoalViewModel @Inject constructor(
             isLoading,
         ) { sessions, selected, projection, loading ->
             GoalUiState(
-                sessions = sessions,
+                sessions = sessions.filter { session ->
+                    !session.blank || session.id == selected
+                },
                 selectedSessionId = selected,
                 goal = projection,
                 isLoading = loading,

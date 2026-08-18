@@ -34,7 +34,9 @@ class ModelsViewModel @Inject constructor(
         isLoading,
     ) { sessions, sessionId, catalog, chosen, loading ->
         ModelsUiState(
-            sessions = sessions,
+            sessions = sessions.filter { session ->
+                !session.blank || session.id == sessionId
+            },
             selectedSessionId = sessionId,
             models = catalog,
             selected = chosen,

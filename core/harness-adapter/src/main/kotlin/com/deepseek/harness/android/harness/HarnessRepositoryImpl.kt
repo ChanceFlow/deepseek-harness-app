@@ -219,7 +219,13 @@ class HarnessRepositoryImpl @Inject constructor(
             )
         }
         val value = rpcClient.call(SESSION_PROMPT, SESSION_PROMPT, payload).valueOrThrow()
-        json.decodeFromJsonElement<SessionPromptValue>(value)
+        val accepted = json.decodeFromJsonElement<SessionPromptValue>(value)
+        if (accepted.accepted) {
+            // Web parity: a successful first prompt proves the user message
+            // is in the host log, so the provisional blank session is retired
+            // without waiting for the next list pull.
+            markSessionNoLongerBlank(request.sessionId)
+        }
     }
 
     override suspend fun cancelTurn(sessionId: String) {
@@ -333,6 +339,7 @@ class HarnessRepositoryImpl @Inject constructor(
         ).valueOrThrow()
         val wire = json.decodeFromJsonElement<SubagentListValue>(value)
         return SubagentCatalog(
+            parentSessionId = parentSessionId,
             entries = wire.entries.map { entry ->
                 SubagentEntry(
                     id = entry.id,
@@ -602,7 +609,17 @@ class HarnessRepositoryImpl @Inject constructor(
                         val running = frame.payload["running"]?.jsonPrimitive?.content == "true"
                         sessions.update { current ->
                             current.map { item ->
-                                if (item.id == sessionId) item.copy(running = running) else item
+                                if (item.id == sessionId) {
+                                    // Web parity: a blank session never runs; the
+                                    // first running:true is the cross-client flip
+                                    // that clears the placeholder locally.
+                                    item.copy(
+                                        running = running,
+                                        blank = item.blank && !running,
+                                    )
+                                } else {
+                                    item
+                                }
                             }
                         }
                     }
@@ -823,6 +840,14 @@ class HarnessRepositoryImpl @Inject constructor(
 
     private fun ServerRequest.frameSessionId(): String? =
         payload["sessionId"]?.jsonPrimitive?.contentOrNull
+
+    private fun markSessionNoLongerBlank(sessionId: String) {
+        sessions.update { current ->
+            current.map { session ->
+                if (session.id == sessionId) session.copy(blank = false) else session
+            }
+        }
+    }
 
     private fun JsonObject.historyEventSeq(): Long =
         get("seq")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L

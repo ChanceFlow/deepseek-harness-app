@@ -250,9 +250,10 @@ private fun SessionPanel(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !selected,
                 ) {
-                    val status = if (session.running) " ●" else ""
+                    val displayTitle = if (session.blank) "New session" else session.displayTitle
+                    val status = if (!session.blank && session.running) " ●" else ""
                     Text(
-                        text = session.displayTitle + status,
+                        text = displayTitle + status,
                         maxLines = 1,
                     )
                 }

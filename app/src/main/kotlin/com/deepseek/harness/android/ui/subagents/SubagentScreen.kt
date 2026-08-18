@@ -145,7 +145,10 @@ private fun SubagentEntryRow(
                 }
             }
         }
-        Text("kind=${entry.kind} mode=${entry.mode.orEmpty()} activity=${entry.activity.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+        Text(
+            text = "kind=${entry.kind} mode=${entry.mode.orEmpty()} activity=${entry.activity.orEmpty()} children=${entry.hasChildren}",
+            style = MaterialTheme.typography.bodySmall,
+        )
         entry.label?.let { Text("label=$it", style = MaterialTheme.typography.bodySmall) }
         entry.reason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }

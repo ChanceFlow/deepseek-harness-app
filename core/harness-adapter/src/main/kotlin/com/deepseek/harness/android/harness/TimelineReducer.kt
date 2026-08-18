@@ -236,7 +236,11 @@ internal class TimelineReducer(
             ?: data.string("callId")
             ?: "tool-result:$lastSeq"
         val resultText = toolMessage.extractText()
-        val isError = toolMessage.boolean("isError") || data["error"] != null
+        // dsh writes tool failures in either the `tool/result` event's
+        // optional `error` field or the ToolResultBlock's `isError` flag.
+        val isError = toolMessage.boolean("isError") ||
+            resultBlock?.boolean("isError") == true ||
+            data["error"] != null
 
         val index = items.indexOfFirst { item ->
             item is TimelineItem.ToolCall && item.id == callId
