@@ -1,11 +1,14 @@
 package com.deepseek.harness.android.domain.repository
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
+import com.deepseek.harness.android.domain.model.AttachmentData
+import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -81,6 +84,13 @@ interface ChatRepository {
     suspend fun loadOlderHistory(sessionId: String): Boolean = false
 
     suspend fun sendMessage(request: SendMessageRequest)
+
+    /** Download one durable image; bytes are session-authorized. */
+    suspend fun readAttachment(sessionId: String, attachmentId: String): AttachmentData =
+        unsupported("readAttachment")
+
+    /** Host image admission limits from the `imageLimits` session projection. */
+    fun observeImageLimits(): Flow<ImageLimits?> = flowOf(null)
 
     suspend fun cancelTurn(sessionId: String)
 

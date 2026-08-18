@@ -18,4 +18,6 @@ data class ChatMessage(
     val reasoning: String? = null,
     val streaming: Boolean = false,
     val createdAtEpochMs: Long = 0L,
+    /** Durable image references carried by this message's content blocks. */
+    val images: List<AttachmentRef> = emptyList(),
 )

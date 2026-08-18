@@ -1,6 +1,8 @@
 package com.deepseek.harness.android.harness
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
+import com.deepseek.harness.android.domain.model.AttachmentData
+import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CredentialStatus
@@ -9,6 +11,7 @@ import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalPhase
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
@@ -43,6 +46,9 @@ import com.deepseek.harness.android.harness.dto.DirectoryCreateValue
 import com.deepseek.harness.android.harness.dto.DirectoryEntryWire
 import com.deepseek.harness.android.harness.dto.DirectoryListingValue
 import com.deepseek.harness.android.harness.dto.CredentialsDescribeValue
+import com.deepseek.harness.android.harness.dto.AttachmentRefWire
+import com.deepseek.harness.android.harness.dto.ImageLimitsWire
+import com.deepseek.harness.android.harness.dto.SessionAttachmentValue
 import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
 import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
@@ -109,6 +115,7 @@ private const val SESSION_LIST = "session.list"
 private const val SESSION_CREATE = "session.create"
 private const val SESSION_HISTORY = "session.history"
 private const val SESSION_PROMPT = "session.prompt"
+private const val SESSION_ATTACHMENT = "session.attachment"
 private const val SESSION_CANCEL = "session.cancel"
 private const val SESSION_MODELS = "session.models"
 private const val SESSION_SELECT_MODEL = "session.selectModel"
@@ -156,6 +163,7 @@ class HarnessRepositoryImpl @Inject constructor(
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
     private val archivedSessionIds = MutableStateFlow<Set<String>>(emptySet())
+    private val imageLimits = MutableStateFlow<ImageLimits?>(null)
     private val sessionStates = ConcurrentHashMap<String, SessionState>()
     private val goalProjections = ConcurrentHashMap<String, MutableStateFlow<GoalProjection?>>()
     private val resyncMutex = Mutex()
@@ -294,6 +302,16 @@ class HarnessRepositoryImpl @Inject constructor(
                             put("text", request.text)
                         },
                     )
+                    request.images.forEach { image ->
+                        add(
+                            buildJsonObject {
+                                put("type", "image")
+                                put("mediaType", image.mediaType)
+                                put("data", image.base64Data)
+                                image.name?.let { put("name", it) }
+                            },
+                        )
+                    }
                 },
             )
         }
@@ -314,6 +332,24 @@ class HarnessRepositoryImpl @Inject constructor(
         val value = rpcClient.call(SESSION_CANCEL, SESSION_CANCEL, payload).valueOrThrow()
         json.decodeFromJsonElement<SessionCancelValue>(value)
     }
+
+    override suspend fun readAttachment(sessionId: String, attachmentId: String): AttachmentData {
+        val value = rpcClient.call(
+            SESSION_ATTACHMENT,
+            SESSION_ATTACHMENT,
+            buildJsonObject {
+                put("sessionId", sessionId)
+                put("attachmentId", attachmentId)
+            },
+        ).valueOrThrow()
+        val downloaded = json.decodeFromJsonElement<SessionAttachmentValue>(value)
+        return AttachmentData(
+            ref = downloaded.attachment.toDomain(),
+            data = java.util.Base64.getDecoder().decode(downloaded.data),
+        )
+    }
+
+    override fun observeImageLimits(): Flow<ImageLimits?> = imageLimits.asStateFlow()
 
     override suspend fun respondToApproval(answer: ApprovalAnswer) {
         val value = buildJsonObject {
@@ -823,6 +859,9 @@ class HarnessRepositoryImpl @Inject constructor(
     private suspend fun loadSessions(): List<SessionSummary> {
         val value = rpcClient.call(SESSION_LIST, SESSION_LIST, buildJsonObject {}).valueOrThrow()
         val listing = json.decodeFromJsonElement<SessionListValue>(value)
+        listing.items.firstNotNullOfOrNull { it.imageLimitsFromProjections() }?.let { parsed ->
+            if (imageLimits.value != parsed) imageLimits.value = parsed
+        }
         return listing.items.map { it.toDomain() }
     }
 
@@ -840,6 +879,30 @@ class HarnessRepositoryImpl @Inject constructor(
         val value = projections?.values?.get("title") ?: return null
         return value.jsonPrimitive?.contentOrNull
     }
+
+    /** `imageLimits` is a host-config projection; one value serves all sessions. */
+    private fun SessionWire.imageLimitsFromProjections(): ImageLimits? {
+        val value = projections?.values?.get("imageLimits") ?: return null
+        return runCatching { json.decodeFromJsonElement<ImageLimitsWire>(value).toDomain() }
+            .getOrNull()
+    }
+
+    private fun ImageLimitsWire.toDomain(): ImageLimits = ImageLimits(
+        maxImageBytes = maxImageBytes,
+        maxImagesPerMessage = maxImagesPerMessage,
+        maxMessageImageBytes = maxMessageImageBytes,
+        maxImagePixels = maxImagePixels,
+        mediaTypes = mediaTypes.ifEmpty { ImageLimits.DEFAULT_MEDIA_TYPES },
+    )
+
+    private fun AttachmentRefWire.toDomain(): AttachmentRef = AttachmentRef(
+        attachmentId = attachmentId,
+        mediaType = mediaType,
+        bytes = bytes,
+        width = width,
+        height = height,
+        name = name,
+    )
 
     private suspend fun loadHistory(
         sessionId: String,

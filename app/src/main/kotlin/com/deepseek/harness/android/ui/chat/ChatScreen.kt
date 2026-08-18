@@ -1,5 +1,11 @@
 package com.deepseek.harness.android.ui.chat
 
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -9,12 +15,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -23,21 +35,29 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ChatMessage
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.HostDescription
+import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.PendingImage
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueuePlacement
@@ -50,6 +70,13 @@ import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
+import java.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Decodes one durable attachment lazily; returns null on any failure. */
+typealias AttachmentLoader = suspend (sessionId: String, ref: AttachmentRef) -> ByteArray?
 
 @Composable
 fun ChatRoute(
@@ -61,6 +88,7 @@ fun ChatRoute(
         uiState = uiState,
         onAction = viewModel::onAction,
         modifier = modifier,
+        loadAttachment = viewModel::loadAttachmentBytes,
     )
 }
 
@@ -69,6 +97,7 @@ fun ChatScreen(
     uiState: ChatUiState,
     onAction: (ChatAction) -> Unit,
     modifier: Modifier = Modifier,
+    loadAttachment: AttachmentLoader = { _, _ -> null },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val useTwoPanes = maxWidth >= 720.dp
@@ -95,6 +124,7 @@ fun ChatScreen(
                         ChatPanel(
                             uiState = uiState,
                             onAction = onAction,
+                            loadAttachment = loadAttachment,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -115,6 +145,7 @@ fun ChatScreen(
                         ChatPanel(
                             uiState = uiState,
                             onAction = onAction,
+                            loadAttachment = loadAttachment,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -267,6 +298,7 @@ private fun SessionPanel(
 private fun ChatPanel(
     uiState: ChatUiState,
     onAction: (ChatAction) -> Unit,
+    loadAttachment: AttachmentLoader,
     modifier: Modifier = Modifier,
 ) {
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -351,7 +383,7 @@ private fun ChatPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(uiState.timeline, key = { timelineKey(it) }) { item ->
-                TimelineRow(item = item, onAction = onAction)
+                TimelineRow(item = item, onAction = onAction, loadAttachment = loadAttachment)
             }
         }
 
@@ -362,6 +394,9 @@ private fun ChatPanel(
                 running = isSessionRunning,
                 mode = promptMode,
                 onModeChange = { promptMode = it },
+                pendingImages = uiState.pendingImages,
+                imageLimits = uiState.imageLimits,
+                onAction = onAction,
                 onSend = {
                     onAction(
                         ChatAction.SendPrompt(
@@ -387,9 +422,10 @@ private fun ChatPanel(
 private fun TimelineRow(
     item: TimelineItem,
     onAction: (ChatAction) -> Unit,
+    loadAttachment: AttachmentLoader,
 ) {
     when (item) {
-        is TimelineItem.Message -> MessageRow(item.value)
+        is TimelineItem.Message -> MessageRow(item.value, loadAttachment)
         is TimelineItem.ToolCall -> ToolCallRow(item)
         is TimelineItem.ApprovalRequest -> ApprovalRow(
             requestId = item.requestId,
@@ -416,7 +452,10 @@ private fun TimelineRow(
 }
 
 @Composable
-private fun MessageRow(message: ChatMessage) {
+private fun MessageRow(
+    message: ChatMessage,
+    loadAttachment: AttachmentLoader,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = if (message.role == MessageRole.USER) "You" else "Assistant",
@@ -430,12 +469,53 @@ private fun MessageRow(message: ChatMessage) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(text = message.text)
+        if (message.text.isNotEmpty()) {
+            Text(text = message.text)
+        }
+        message.images.forEach { ref ->
+            AttachmentImageRow(sessionId = message.sessionId, ref = ref, loadAttachment = loadAttachment)
+        }
         if (message.streaming) {
             CircularProgressIndicator(
                 modifier = Modifier
                     .width(12.dp)
                     .height(12.dp),
+            )
+        }
+    }
+}
+
+/** One durable image: lazy download through the loader, placeholder on failure. */
+@Composable
+private fun AttachmentImageRow(
+    sessionId: String,
+    ref: AttachmentRef,
+    loadAttachment: AttachmentLoader,
+) {
+    val bitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        key1 = sessionId,
+        key2 = ref.attachmentId,
+    ) {
+        val bytes = loadAttachment(sessionId, ref)
+        value = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = ref.name ?: "image attachment",
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+            )
+        } else {
+            Text(
+                text = "image ${ref.width}×${ref.height} (${ref.bytes} bytes)" +
+                    (ref.name?.let { " · $it" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -778,11 +858,47 @@ private fun ComposerBar(
     running: Boolean,
     mode: PromptMode,
     onModeChange: (PromptMode) -> Unit,
+    pendingImages: List<PendingImage>,
+    imageLimits: ImageLimits,
+    onAction: (ChatAction) -> Unit,
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var draft by remember { mutableStateOf("") }
     val effectiveMode = if (running) mode else PromptMode.QUEUE
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pickImages = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            val loaded = mutableListOf<PendingImage>()
+            var failure: String? = null
+            withContext(Dispatchers.IO) {
+                uris.forEach { uri ->
+                    runCatching {
+                        val mediaType = context.contentResolver.getType(uri)
+                            ?: guessImageMediaType(uri)
+                        require(mediaType != null) { "unknown image type for ${uri.lastPathSegment}" }
+                        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        requireNotNull(bytes) { "cannot read ${uri.lastPathSegment}" }
+                        PendingImage(
+                            id = uri.toString(),
+                            mediaType = mediaType,
+                            base64Data = Base64.getEncoder().encodeToString(bytes),
+                            name = uri.lastPathSegment,
+                            byteSize = bytes.size.toLong(),
+                        )
+                    }.onSuccess { loaded += it }
+                        .onFailure { failure = it.message ?: it.javaClass.simpleName }
+                }
+            }
+            if (loaded.isNotEmpty()) onAction(ChatAction.ImagesLoaded(loaded))
+            failure?.let { onAction(ChatAction.ImagePickError(it)) }
+        }
+    }
+    val attachAllowed = enabled && pendingImages.size < imageLimits.maxImagesPerMessage
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -803,9 +919,41 @@ private fun ComposerBar(
                 onClick = { onModeChange(PromptMode.STEER) },
             )
         }
+        if (pendingImages.isNotEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                pendingImages.forEach { image ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 8.dp),
+                    ) {
+                        Text(
+                            text = image.name ?: image.id.substringAfterLast('/'),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        IconButton(onClick = { onAction(ChatAction.RemovePendingImage(image.id)) }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Remove ${image.name ?: "attachment"}",
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(
+                onClick = {
+                    pickImages.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                enabled = attachAllowed,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Attach images")
+            }
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
@@ -827,13 +975,23 @@ private fun ComposerBar(
                     draft = ""
                 },
                 modifier = Modifier.padding(start = 8.dp),
-                enabled = enabled && !isSending && draft.isNotBlank(),
+                enabled = enabled && !isSending && (draft.isNotBlank() || pendingImages.isNotEmpty()),
             ) {
                 Text(if (isSending) "Sending" else "Send")
             }
         }
     }
 }
+
+/** Photo-picker fallback when the resolver reports no MIME type. */
+private fun guessImageMediaType(uri: Uri): String? =
+    when (uri.lastPathSegment?.substringAfterLast('.', "")?.lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        else -> null
+    }
 
 @Composable
 private fun ModeChip(
@@ -886,6 +1044,24 @@ private fun ChatScreenPreview() {
                             sessionId = "s1",
                             role = MessageRole.ASSISTANT,
                             text = "Kotlin best-practice skeleton.",
+                        ),
+                    ),
+                    TimelineItem.Message(
+                        ChatMessage(
+                            id = "m2",
+                            sessionId = "s1",
+                            role = MessageRole.USER,
+                            text = "Screenshot attached.",
+                            images = listOf(
+                                AttachmentRef(
+                                    attachmentId = "preview-image-1",
+                                    mediaType = "image/png",
+                                    bytes = 20_480L,
+                                    width = 640,
+                                    height = 480,
+                                    name = "screenshot.png",
+                                ),
+                            ),
                         ),
                     ),
                     TimelineItem.ToolCall(

@@ -1,5 +1,6 @@
 package com.deepseek.harness.android.harness
 
+import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ChatMessage
 import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.JobView
@@ -121,6 +122,7 @@ internal class TimelineReducer(
                 role = MessageRole.USER,
                 text = text,
                 createdAtEpochMs = event.eventTime(),
+                images = data.extractImages(),
             ),
         )
     }
@@ -138,6 +140,7 @@ internal class TimelineReducer(
                 text = message.extractText(),
                 reasoning = message.extractReasoning(),
                 createdAtEpochMs = event.eventTime(),
+                images = message.extractImages(),
             ),
         )
 
@@ -400,6 +403,25 @@ internal class TimelineReducer(
             if (obj.type() == "reasoning") obj.string("text") else null
         }.joinToString(separator = "")
         return value.ifEmpty { null }
+    }
+
+    /** Image blocks carry a durable `attachment` reference, never inline data. */
+    private fun JsonObject.extractImages(): List<AttachmentRef> {
+        val content = get("content")?.jsonArray ?: return emptyList()
+        return content.mapNotNull { block ->
+            val obj = block.jsonObject
+            if (obj.type() != "image") return@mapNotNull null
+            val attachment = obj["attachment"]?.jsonObject ?: return@mapNotNull null
+            val id = attachment.string("attachmentId") ?: return@mapNotNull null
+            AttachmentRef(
+                attachmentId = id,
+                mediaType = attachment.string("mediaType").orEmpty(),
+                bytes = attachment.long("bytes"),
+                width = attachment.long("width").toInt(),
+                height = attachment.long("height").toInt(),
+                name = attachment.string("name"),
+            )
+        }
     }
 
     private fun turnStepKey(turn: Long, step: Long): String = "$turn:$step"

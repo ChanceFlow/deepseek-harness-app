@@ -7,7 +7,9 @@ import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
+import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.ModelSelection
+import com.deepseek.harness.android.domain.model.PendingImage
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -104,6 +106,114 @@ class ChatViewModelTest {
             ),
             repository.sentMessages,
         )
+    }
+
+    @Test
+    fun `send prompt includes pending images and clears them on success`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        val image = PendingImage(
+            id = "content://media/1",
+            mediaType = "image/png",
+            base64Data = "aGk=",
+            name = "shot.png",
+            byteSize = 2L,
+        )
+        viewModel.onAction(ChatAction.ImagesLoaded(listOf(image)))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.pendingImages.size)
+
+        viewModel.onAction(ChatAction.SendPrompt("see this"))
+        advanceUntilIdle()
+
+        val sent = repository.sentMessages.single()
+        assertEquals("see this", sent.text)
+        assertEquals(listOf(image), sent.images)
+        assertEquals(0, viewModel.uiState.value.pendingImages.size)
+    }
+
+    @Test
+    fun `send prompt with only images still sends`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(
+            ChatAction.ImagesLoaded(
+                listOf(
+                    PendingImage(id = "u1", mediaType = "image/jpeg", base64Data = "aGk=", byteSize = 2L),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        viewModel.onAction(ChatAction.SendPrompt(""))
+        advanceUntilIdle()
+
+        assertEquals(1, repository.sentMessages.single().images.size)
+    }
+
+    @Test
+    fun `unsupported image media type is rejected`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onAction(
+            ChatAction.ImagesLoaded(
+                listOf(
+                    PendingImage(id = "u1", mediaType = "image/bmp", base64Data = "aGk=", byteSize = 2L),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.pendingImages.size)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("image/bmp"))
+    }
+
+    @Test
+    fun `pending image count is capped at the per-message limit`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val batch = (1..25).map { index ->
+            PendingImage(id = "u$index", mediaType = "image/png", base64Data = "aGk=", byteSize = 2L)
+        }
+        viewModel.onAction(ChatAction.ImagesLoaded(batch))
+        advanceUntilIdle()
+
+        assertEquals(ImageLimits.DEFAULT_MAX_IMAGES_PER_MESSAGE, viewModel.uiState.value.pendingImages.size)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("more image"))
+    }
+
+    @Test
+    fun `remove pending image drops only that image`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onAction(
+            ChatAction.ImagesLoaded(
+                listOf(
+                    PendingImage(id = "u1", mediaType = "image/png", base64Data = "aGk=", byteSize = 2L),
+                    PendingImage(id = "u2", mediaType = "image/png", base64Data = "aGk=", byteSize = 2L),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        viewModel.onAction(ChatAction.RemovePendingImage("u1"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("u2"), viewModel.uiState.value.pendingImages.map { it.id })
     }
 
     @Test

@@ -197,6 +197,14 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   matching the Web client.
 - **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
   verb; phase and blocked reason never change on edit, matching the host API.
+- **Attachments are images-only and MVP-scoped.** Picked images (png/jpeg/
+  webp/gif) ride `session.prompt` as inline base64 parts after the text part;
+  the host `imageLimits` projection (via `session.list`/`session.history`
+  projections) gates media type, per-image bytes, and per-message count on the
+  client, with fixture-matching defaults until the projection arrives. Timeline
+  image blocks (`{type:'image', attachment:{...}}`) fold into `AttachmentRef`
+  and download lazily through `session.attachment` (bytes cached, bounded).
+  Re-encoding/downscaling, drag-drop, and clipboard paste stay out of scope.
 - **Directory browsing is listing-only.** `host.listDirectory` /
   `host.createDirectory` power an in-app folder picker (navigate, create
   folder, select path back into the workspace field); manual workspace

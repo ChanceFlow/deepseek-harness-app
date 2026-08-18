@@ -301,6 +301,54 @@ class TimelineReducerTest {
         assertEquals(JobStatus.RUNNING, jobs.jobs.single().status)
     }
 
+    @Test
+    fun `user message image blocks fold into attachment refs`() {
+        val history = listOf(
+            event(
+                seq = 1L,
+                type = "user/message",
+                data = buildJsonObject {
+                    put("id", "user-1")
+                    put(
+                        "content",
+                        buildJsonArray {
+                            add(textBlock("look at this"))
+                            add(
+                                buildJsonObject {
+                                    put("type", "image")
+                                    put(
+                                        "attachment",
+                                        buildJsonObject {
+                                            put("attachmentId", "sha256:abc")
+                                            put("mediaType", "image/png")
+                                            put("bytes", 2048)
+                                            put("width", 640)
+                                            put("height", 480)
+                                            put("name", "shot.png")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                },
+            ),
+        )
+
+        val reducer = TimelineReducer("s1")
+        reducer.reset(history)
+
+        val message = (reducer.snapshot().single() as TimelineItem.Message).value
+        assertEquals("look at this", message.text)
+        val image = message.images.single()
+        assertEquals("sha256:abc", image.attachmentId)
+        assertEquals("image/png", image.mediaType)
+        assertEquals(2048L, image.bytes)
+        assertEquals(640, image.width)
+        assertEquals(480, image.height)
+        assertEquals("shot.png", image.name)
+    }
+
     private fun event(seq: Long, type: String, data: JsonObject): JsonObject =
         buildJsonObject {
             put("type", type)

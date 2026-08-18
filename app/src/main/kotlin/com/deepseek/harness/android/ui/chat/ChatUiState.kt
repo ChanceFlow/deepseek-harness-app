@@ -2,6 +2,8 @@ package com.deepseek.harness.android.ui.chat
 
 import androidx.compose.runtime.Immutable
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.ImageLimits
+import com.deepseek.harness.android.domain.model.PendingImage
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -22,6 +24,10 @@ data class ChatUiState(
     val searchResults: List<SessionSearchResult> = emptyList(),
     val isSending: Boolean = false,
     val errorMessage: String? = null,
+    /** Composer images awaiting the next send. */
+    val pendingImages: List<PendingImage> = emptyList(),
+    /** Host image admission limits; defaults until the projection arrives. */
+    val imageLimits: ImageLimits = ImageLimits(),
 )
 
 sealed interface ChatAction {
@@ -57,4 +63,12 @@ sealed interface ChatAction {
         val kind: QueueUpdateKind,
         val text: String? = null,
     ) : ChatAction
+
+    /** Picked images encoded by the picker interop, ready for admission. */
+    data class ImagesLoaded(val images: List<PendingImage>) : ChatAction
+
+    data class RemovePendingImage(val id: String) : ChatAction
+
+    /** Picker/read failures surface in the shared error strip. */
+    data class ImagePickError(val message: String) : ChatAction
 }

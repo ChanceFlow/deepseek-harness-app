@@ -3,7 +3,10 @@ package com.deepseek.harness.android.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
+import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.ImageLimits
+import com.deepseek.harness.android.domain.model.PendingImage
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
@@ -27,6 +30,11 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/** Bounded attachment byte cache; decoded images are bounded by the same count. */
+private const val ATTACHMENT_CACHE_LIMIT = 24
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -38,6 +46,12 @@ class ChatViewModel @Inject constructor(
     private val isSending = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
     private val searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
+    private val pendingImages = MutableStateFlow<List<PendingImage>>(emptyList())
+    private val imageLimits = MutableStateFlow(ImageLimits())
+
+    /** Decoded attachment bytes cache; scroll re-entry must not re-download. */
+    private val attachmentBytes = LinkedHashMap<String, ByteArray>()
+    private val attachmentMutex = Mutex()
 
     private data class ChatUiCore(
         val connection: ConnectionState,
@@ -46,6 +60,8 @@ class ChatViewModel @Inject constructor(
         val selectedSessionId: String?,
         val timelineWindow: TimelineWindow,
         val isSending: Boolean,
+        val pendingImages: List<PendingImage>,
+        val imageLimits: ImageLimits,
     ) {
         fun toUiState(
             error: String?,
@@ -67,6 +83,8 @@ class ChatViewModel @Inject constructor(
                 isSending = isSending,
                 errorMessage = error,
                 searchResults = search,
+                pendingImages = pendingImages,
+                imageLimits = imageLimits,
             )
         }
     }
@@ -75,6 +93,7 @@ class ChatViewModel @Inject constructor(
         val connection: ConnectionState,
         val sessions: List<SessionSummary>,
         val workspaces: List<WorkspaceSummary>,
+        val imageLimits: ImageLimits,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -84,17 +103,20 @@ class ChatViewModel @Inject constructor(
                 chatRepository.observeConnectionState(),
                 chatRepository.observeSessions(),
                 chatRepository.observeWorkspaces(),
-            ) { connection, sessions, workspaces ->
+                chatRepository.observeImageLimits(),
+            ) { connection, sessions, workspaces, limits ->
                 ChatBaseline(
                     connection = connection,
                     sessions = sessions,
                     workspaces = workspaces,
+                    imageLimits = limits ?: ImageLimits(),
                 )
             },
             selectedSessionId,
             timelineWindow,
             isSending,
-        ) { baseline, selected, window, sending ->
+            pendingImages,
+        ) { baseline, selected, window, sending, images ->
             ChatUiCore(
                 connection = baseline.connection,
                 sessions = baseline.sessions,
@@ -102,6 +124,8 @@ class ChatViewModel @Inject constructor(
                 selectedSessionId = selected,
                 timelineWindow = window,
                 isSending = sending,
+                pendingImages = images,
+                imageLimits = baseline.imageLimits,
             )
         },
         errorMessage,
@@ -137,6 +161,9 @@ class ChatViewModel @Inject constructor(
             is ChatAction.RenameSession -> renameSession(action.sessionId, action.title)
             is ChatAction.ForkSession -> forkSession(action.sessionId)
             is ChatAction.UpdateQueue -> updateQueue(action.itemId, action.kind, action.text)
+            is ChatAction.ImagesLoaded -> admitPendingImages(action.images)
+            is ChatAction.RemovePendingImage -> removePendingImage(action.id)
+            is ChatAction.ImagePickError -> errorMessage.value = action.message
         }
     }
 
@@ -182,22 +209,83 @@ class ChatViewModel @Inject constructor(
 
     private fun sendPrompt(action: ChatAction.SendPrompt) {
         val sessionId = selectedSessionId.value ?: return
-        if (action.text.isBlank()) return
+        val images = pendingImages.value
+        if (action.text.isBlank() && images.isEmpty()) return
         viewModelScope.launch {
             isSending.value = true
             try {
-                runCatchingForUi {
+                val sent = runCatchingForUi {
                     chatRepository.sendMessage(
                         SendMessageRequest(
                             sessionId = sessionId,
                             text = action.text.trim(),
                             mode = action.mode,
+                            images = images,
                         ),
                     )
                 }
+                // Keep drafts only on failure, mirroring the text composer.
+                if (sent != null) pendingImages.value = emptyList()
             } finally {
                 isSending.value = false
             }
+        }
+    }
+
+    /** Validate picked images against the host limits, then queue the rest. */
+    private fun admitPendingImages(images: List<PendingImage>) {
+        if (images.isEmpty()) return
+        val limits = imageLimits.value
+        val admitted = mutableListOf<PendingImage>()
+        val rejected = mutableListOf<String>()
+        images.forEach { image ->
+            when {
+                image.mediaType !in limits.mediaTypes ->
+                    rejected += "${image.name ?: image.id}: unsupported type ${image.mediaType}"
+                image.byteSize > limits.maxImageBytes ->
+                    rejected += "${image.name ?: image.id}: exceeds ${limits.maxImageBytes} bytes"
+                else -> admitted += image
+            }
+        }
+        val room = (limits.maxImagesPerMessage - pendingImages.value.size).coerceAtLeast(0)
+        val keep = admitted.take(room)
+        val overflow = admitted.drop(room)
+        if (keep.isNotEmpty()) {
+            pendingImages.value = pendingImages.value + keep
+        }
+        if (overflow.isNotEmpty()) {
+            rejected += "only $room more image(s) allowed per message"
+        }
+        if (rejected.isNotEmpty()) {
+            errorMessage.value = rejected.joinToString("; ")
+        }
+    }
+
+    private fun removePendingImage(id: String) {
+        pendingImages.value = pendingImages.value.filterNot { it.id == id }
+    }
+
+    /**
+     * Download one durable image through `session.attachment`, caching bytes
+     * per attachment id. Returns null on failure; the UI shows a placeholder.
+     */
+    suspend fun loadAttachmentBytes(sessionId: String, ref: AttachmentRef): ByteArray? {
+        attachmentMutex.withLock {
+            attachmentBytes[ref.attachmentId]?.let { return it }
+        }
+        return try {
+            val downloaded = chatRepository.readAttachment(sessionId, ref.attachmentId)
+            attachmentMutex.withLock {
+                if (attachmentBytes.size >= ATTACHMENT_CACHE_LIMIT) {
+                    attachmentBytes.remove(attachmentBytes.keys.first())
+                }
+                attachmentBytes[ref.attachmentId] = downloaded.data
+            }
+            downloaded.data
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            null
         }
     }
 

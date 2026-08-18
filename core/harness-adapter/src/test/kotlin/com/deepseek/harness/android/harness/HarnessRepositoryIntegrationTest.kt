@@ -3,9 +3,11 @@ package com.deepseek.harness.android.harness
 import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.PendingImage
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
+import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
@@ -29,6 +31,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -298,6 +301,105 @@ class HarnessRepositoryIntegrationTest {
         assertEquals(emptyList<CredentialStatus>(), repository.describeCredentials(emptyList()))
         assertEquals(0, rpc.payloads("credentials.describe").size)
     }
+
+    @Test
+    fun `prompt with images appends image content parts`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.sendMessage(
+            SendMessageRequest(
+                sessionId = "session-1",
+                text = "see this",
+                images = listOf(
+                    PendingImage(
+                        id = "u1",
+                        mediaType = "image/png",
+                        base64Data = "aGk=",
+                        name = "shot.png",
+                    ),
+                ),
+            ),
+        )
+
+        val payload = rpc.payloads("session.prompt").single()
+        val content = payload["content"]?.jsonArray.orEmpty()
+        assertEquals(2, content.size)
+        assertEquals("text", content[0].jsonObject["type"]?.jsonPrimitive?.content)
+        assertEquals("see this", content[0].jsonObject["text"]?.jsonPrimitive?.content)
+        val image = content[1].jsonObject
+        assertEquals("image", image["type"]?.jsonPrimitive?.content)
+        assertEquals("image/png", image["mediaType"]?.jsonPrimitive?.content)
+        assertEquals("aGk=", image["data"]?.jsonPrimitive?.content)
+        assertEquals("shot.png", image["name"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `read attachment sends ids and decodes base64 payload`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val downloaded = repository.readAttachment("session-1", "sha256:abc")
+
+        val payload = rpc.payloads("session.attachment").single()
+        assertEquals("session-1", payload["sessionId"]?.jsonPrimitive?.content)
+        assertEquals("sha256:abc", payload["attachmentId"]?.jsonPrimitive?.content)
+        assertEquals("sha256:abc", downloaded.ref.attachmentId)
+        assertEquals("image/png", downloaded.ref.mediaType)
+        assertEquals(2, downloaded.ref.bytes)
+        assertTrue(downloaded.data.contentEquals(byteArrayOf(0x68, 0x69)))
+    }
+
+    @Test
+    fun `image limits projection flows from session list`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val session = buildJsonObject {
+            put("sessionId", "session-1")
+            put(
+                "projections",
+                buildJsonObject {
+                    put(
+                        "values",
+                        buildJsonObject {
+                            put("title", "titled")
+                            put(
+                                "imageLimits",
+                                buildJsonObject {
+                                    put("maxImageBytes", 1_048_576)
+                                    put("maxImagesPerMessage", 4)
+                                    put("maxMessageImageBytes", 2_097_152)
+                                    put("maxImagePixels", 1_000_000)
+                                    put(
+                                        "mediaTypes",
+                                        buildJsonArray {
+                                            add("image/png")
+                                            add("image/jpeg")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                },
+            )
+        }
+        val rpc = HarnessFakeRpc(initialSessions = buildJsonArray { add(session) })
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.refreshSessions()
+
+        val limits = repository.observeImageLimits().first()
+        assertEquals(1_048_576L, limits?.maxImageBytes)
+        assertEquals(4, limits?.maxImagesPerMessage)
+        assertEquals(2_097_152L, limits?.maxMessageImageBytes)
+        assertEquals(1_000_000L, limits?.maxImagePixels)
+        assertEquals(listOf("image/png", "image/jpeg"), limits?.mediaTypes)
+    }
 }
 private fun harnessRepository(
     rpc: DshRpcClient,
@@ -361,6 +463,20 @@ private class HarnessFakeRpc(
             "session.history" -> buildJsonObject {
                 put("events", buildJsonArray {})
                 put("hasMore", false)
+            }
+            "session.attachment" -> buildJsonObject {
+                put(
+                    "attachment",
+                    buildJsonObject {
+                        put("attachmentId", "sha256:abc")
+                        put("mediaType", "image/png")
+                        put("bytes", 2)
+                        put("width", 1)
+                        put("height", 1)
+                        put("name", "shot.png")
+                    },
+                )
+                put("data", "aGk=")
             }
             "host.listDirectory" -> buildJsonObject {
                 put("path", "/tmp/chosen")

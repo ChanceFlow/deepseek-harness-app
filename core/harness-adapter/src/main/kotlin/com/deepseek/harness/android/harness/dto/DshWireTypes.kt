@@ -298,3 +298,32 @@ internal data class CredentialViewWire(
 internal data class CredentialsDescribeValue(
     val credentials: Map<String, CredentialViewWire> = emptyMap(),
 )
+
+// Image attachment shapes: inline prompt parts plus the durable
+// `session.attachment` download view and the `imageLimits` projection.
+
+@Serializable
+internal data class AttachmentRefWire(
+    val attachmentId: String,
+    val mediaType: String,
+    val bytes: Long = 0L,
+    val width: Int = 0,
+    val height: Int = 0,
+    val name: String? = null,
+)
+
+@Serializable
+internal data class SessionAttachmentValue(
+    val attachment: AttachmentRefWire,
+    /** Base64-encoded image bytes. */
+    val data: String,
+)
+
+@Serializable
+internal data class ImageLimitsWire(
+    val maxImageBytes: Long,
+    val maxImagesPerMessage: Int,
+    val maxMessageImageBytes: Long,
+    val maxImagePixels: Long,
+    val mediaTypes: List<String> = emptyList(),
+)
