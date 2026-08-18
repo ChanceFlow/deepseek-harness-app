@@ -53,6 +53,7 @@ import com.deepseek.harness.android.harness.dto.ImageLimitsWire
 import com.deepseek.harness.android.harness.dto.PlanProjectionWire
 import com.deepseek.harness.android.harness.dto.SessionAttachmentValue
 import com.deepseek.harness.android.harness.dto.SkillListValue
+import com.deepseek.harness.android.harness.dto.WorkspaceInsertBeforeValue
 import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
 import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
@@ -131,6 +132,7 @@ private const val WORKSPACE_LIST = "workspace.list"
 private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_RENAME = "workspace.rename"
 private const val WORKSPACE_DELETE = "workspace.delete"
+private const val WORKSPACE_INSERT_BEFORE = "workspace.insertBefore"
 private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
 private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
@@ -689,6 +691,20 @@ class HarnessRepositoryImpl @Inject constructor(
         applyWorkspaceListing(loadWorkspaceListing())
     }
 
+    override suspend fun moveWorkspace(workspaceId: String, beforeWorkspaceId: String?): List<String> {
+        val value = rpcClient.call(
+            WORKSPACE_INSERT_BEFORE,
+            WORKSPACE_INSERT_BEFORE,
+            buildJsonObject {
+                put("workspaceId", workspaceId)
+                beforeWorkspaceId?.let { put("beforeWorkspaceId", it) }
+            },
+        ).valueOrThrow()
+        val orderedIds = json.decodeFromJsonElement<WorkspaceInsertBeforeValue>(value).workspaceIds
+        applyWorkspaceOrder(orderedIds)
+        return orderedIds
+    }
+
     override suspend fun loadModels(sessionId: String): SessionModels {
         val result = rpcClient.call(
             SESSION_MODELS,
@@ -864,6 +880,11 @@ class HarnessRepositoryImpl @Inject constructor(
             ?.mapNotNull { it.jsonPrimitive?.contentOrNull }
             .orEmpty()
         if (orderedIds.isEmpty()) return
+        applyWorkspaceOrder(orderedIds)
+    }
+
+    /** The response order is authoritative; unknown rows keep relative order at the end. */
+    private fun applyWorkspaceOrder(orderedIds: List<String>) {
         workspaces.update { current ->
             current.sortedBy { workspace ->
                 val orderedIndex = orderedIds.indexOf(workspace.workspaceId)

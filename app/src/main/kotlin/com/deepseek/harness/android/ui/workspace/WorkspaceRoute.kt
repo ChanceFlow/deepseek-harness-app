@@ -78,6 +78,7 @@ fun WorkspaceScreen(
         Spacer(modifier = Modifier.height(12.dp))
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(uiState.workspaces, key = { it.workspaceId }) { workspace ->
+                val index = uiState.workspaces.indexOfFirst { it.workspaceId == workspace.workspaceId }
                 Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Text(text = workspace.title, style = MaterialTheme.typography.titleSmall)
                     Text(text = workspace.path, style = MaterialTheme.typography.bodySmall)
@@ -96,6 +97,16 @@ fun WorkspaceScreen(
                             onClick = { onAction(WorkspaceAction.Delete(workspace.workspaceId)) },
                             modifier = Modifier.padding(start = 8.dp),
                         ) { Text("Delete workspace") }
+                        OutlinedButton(
+                            onClick = { onAction(WorkspaceAction.MoveUp(workspace.workspaceId)) },
+                            enabled = index > 0,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) { Text("Up") }
+                        OutlinedButton(
+                            onClick = { onAction(WorkspaceAction.MoveDown(workspace.workspaceId)) },
+                            enabled = index < uiState.workspaces.lastIndex,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) { Text("Down") }
                     }
                 }
             }

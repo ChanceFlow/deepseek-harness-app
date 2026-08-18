@@ -208,13 +208,19 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   by `session/projection` frames) renders a chat-header state label;
   switching happens by sending the `/plan` slash command in the composer, as
   on the Web. The full plan-review conversation intents stay deferred.
+- **Workspace ordering is durable via `workspace.insertBefore`.** Up/Down
+  buttons anchor on the row above / two below (append past the end); the
+  response carries the complete order and the adapter re-sorts the local list
+  with it (the same path `host/workspace-order-changed` frames take, unknown
+  ids keep relative order at the end). Drag-and-drop stays out of scope.
 - **Markdown rendering is a minimal pure-Kotlin slice.** Message bodies parse
   into blocks (fenced code with language label, headings 1-6, bullet lists,
-  paragraphs) and inline runs (code, bold, italic, styled non-clickable
-  links); an unterminated fence renders as an open `code (streaming)` block so
-  streaming bodies stay readable. The parser is plain JVM-tested Kotlin in
+  paragraphs) and inline runs (code, bold, italic, links); an unterminated
+  fence renders as an open `code (streaming)` block so
+  streaming bodies stay readable. Links are clickable spans opening through
+  the platform URI handler. The parser is plain JVM-tested Kotlin in
   `:app`; colors/fonts/shapes live in the Compose layer only. Tables, block
-  quotes, nested lists, and link clicks stay out of scope.
+  quotes, and nested lists stay out of scope.
 - **Attachments are images-only and MVP-scoped.** Picked images (png/jpeg/
   webp/gif) ride `session.prompt` as inline base64 parts after the text part;
   the host `imageLimits` projection (via `session.list`/`session.history`

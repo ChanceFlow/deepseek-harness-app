@@ -347,3 +347,9 @@ internal data class SkillEntryWire(
 internal data class SkillListValue(
     val skills: List<SkillEntryWire> = emptyList(),
 )
+
+/** workspace.insertBefore response: the complete durable display order. */
+@Serializable
+internal data class WorkspaceInsertBeforeValue(
+    val workspaceIds: List<String> = emptyList(),
+)

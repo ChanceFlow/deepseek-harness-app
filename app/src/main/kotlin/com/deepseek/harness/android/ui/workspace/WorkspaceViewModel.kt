@@ -59,12 +59,33 @@ class WorkspaceViewModel @Inject constructor(
             is WorkspaceAction.Create -> create(action.path)
             is WorkspaceAction.Rename -> rename(action.workspaceId, action.title)
             is WorkspaceAction.Delete -> delete(action.workspaceId)
+            is WorkspaceAction.MoveUp -> move(action.workspaceId, up = true)
+            is WorkspaceAction.MoveDown -> move(action.workspaceId, up = false)
             WorkspaceAction.Refresh -> refresh()
             WorkspaceAction.DismissError -> errorMessage.value = null
             WorkspaceAction.OpenDirectoryBrowser -> openDirectoryBrowser()
             WorkspaceAction.CloseDirectoryBrowser -> closeDirectoryBrowser()
             is WorkspaceAction.NavigateDirectory -> navigateDirectory(action.path)
             is WorkspaceAction.CreateDirectory -> createDirectory(action.parentPath, action.name)
+        }
+    }
+
+    /**
+     * Reorder through `workspace.insertBefore`: moving up anchors on the row
+     * above, moving down anchors on the row two below (append when that is
+     * past the end). The host response re-orders the local list.
+     */
+    private fun move(workspaceId: String, up: Boolean) {
+        val current = uiState.value.workspaces
+        val index = current.indexOfFirst { it.workspaceId == workspaceId }
+        if (index < 0) return
+        val anchor: String? = if (up) {
+            current.getOrNull(index - 1)?.workspaceId ?: return
+        } else {
+            current.getOrNull(index + 2)?.workspaceId
+        }
+        viewModelScope.launch {
+            runCatchingForUi { chatRepository.moveWorkspace(workspaceId, anchor) }
         }
     }
 

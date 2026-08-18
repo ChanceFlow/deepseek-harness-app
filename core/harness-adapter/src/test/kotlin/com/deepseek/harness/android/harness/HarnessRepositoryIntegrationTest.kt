@@ -370,6 +370,46 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `move workspace sends anchor and applies response order`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc(
+            initialWorkspaces = buildJsonArray {
+                add(workspaceJson("ws-a", "/a", "A"))
+                add(workspaceJson("ws-b", "/b", "B"))
+                add(workspaceJson("ws-c", "/c", "C"))
+            },
+        )
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+        repository.refreshWorkspaces()
+
+        val orderedIds = repository.moveWorkspace("ws-a", beforeWorkspaceId = "ws-c")
+
+        assertEquals(listOf("ws-b", "ws-a", "ws-c"), orderedIds)
+        val payload = rpc.payloads("workspace.insertBefore").single()
+        assertEquals("ws-a", payload["workspaceId"]?.jsonPrimitive?.content)
+        assertEquals("ws-c", payload["beforeWorkspaceId"]?.jsonPrimitive?.content)
+        assertEquals(
+            listOf("ws-b", "ws-a", "ws-c"),
+            repository.observeWorkspaces().first().map { it.workspaceId },
+        )
+    }
+
+    @Test
+    fun `move workspace without anchor omits the field`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.moveWorkspace("ws-a", beforeWorkspaceId = null)
+
+        val payload = rpc.payloads("workspace.insertBefore").single()
+        assertEquals("ws-a", payload["workspaceId"]?.jsonPrimitive?.content)
+        assertEquals(null, payload["beforeWorkspaceId"])
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -526,6 +566,16 @@ private class HarnessFakeRpc(
             "workspace.list" -> buildJsonObject {
                 put("items", initialWorkspaces)
                 put("archivedSessionIds", buildJsonArray {})
+            }
+            "workspace.insertBefore" -> buildJsonObject {
+                put(
+                    "workspaceIds",
+                    buildJsonArray {
+                        add(JsonPrimitive("ws-b"))
+                        add(JsonPrimitive("ws-a"))
+                        add(JsonPrimitive("ws-c"))
+                    },
+                )
             }
             "session.history" -> buildJsonObject {
                 put("events", buildJsonArray {})

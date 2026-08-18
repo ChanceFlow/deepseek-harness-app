@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -139,7 +141,20 @@ private fun AnnotatedString.Builder.renderInlines(
                 renderInlines(inline.inlines, codeStyle, boldStyle, italicStyle, linkStyle)
             }
 
-            is MarkdownInline.Link -> withStyle(linkStyle) { append(inline.label) }
+            is MarkdownInline.Link -> {
+                // Clickable span: the default handler opens the URI through
+                // the platform; the styled span covers the label only.
+                val start = length
+                append(inline.label)
+                addLink(
+                    LinkAnnotation.Url(
+                        inline.url,
+                        TextLinkStyles(style = linkStyle),
+                    ),
+                    start,
+                    length,
+                )
+            }
         }
     }
 }

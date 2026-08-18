@@ -131,6 +131,13 @@ interface ChatRepository {
 
     suspend fun deleteWorkspace(workspaceId: String)
 
+    /**
+     * Move one workspace in the durable display order; a null anchor appends
+     * to the end. Returns the complete order after the move.
+     */
+    suspend fun moveWorkspace(workspaceId: String, beforeWorkspaceId: String?): List<String> =
+        unsupported("moveWorkspace")
+
     suspend fun loadModels(sessionId: String): SessionModels
 
     suspend fun selectModel(sessionId: String, selection: ModelSelection): ModelSelection
