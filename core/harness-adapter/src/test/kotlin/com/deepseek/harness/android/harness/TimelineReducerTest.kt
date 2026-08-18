@@ -7,6 +7,7 @@ import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.network.ServerRequest
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -435,6 +436,31 @@ class TimelineReducerTest {
         assertEquals(listOf(1L, 2L), turns.map { it.turn })
         assertEquals(0, snapshot.indexOfFirst { it is TimelineItem.TurnBoundary && it.turn == 1L })
         assertEquals(2, snapshot.indexOfFirst { it is TimelineItem.TurnBoundary && it.turn == 2L })
+    }
+
+    @Test
+    fun `compaction summary folds into a shadowed-count marker`() {
+        val history = listOf(
+            event(
+                seq = 1L,
+                type = "compaction/summary",
+                data = buildJsonObject {
+                    put("compactionId", "c-1")
+                    put(
+                        "shadowedSeqs",
+                        buildJsonArray {
+                            (1..4).forEach { add(JsonPrimitive(it)) }
+                        },
+                    )
+                },
+            ),
+        )
+
+        val reducer = TimelineReducer("s1")
+        reducer.reset(history)
+
+        val marker = reducer.snapshot().single() as TimelineItem.Compaction
+        assertEquals(4, marker.shadowedCount)
     }
 
     private fun event(seq: Long, type: String, data: JsonObject): JsonObject =

@@ -518,6 +518,31 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `move session sends anchors and applies the updated workspace`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc(
+            initialWorkspaces = buildJsonArray {
+                add(workspaceJson("ws-a", "/a", "A", listOf("s1", "s2", "s3")))
+            },
+        )
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+        repository.refreshWorkspaces()
+
+        val updated = repository.moveSession("ws-a", "s1", beforeSessionId = "s3")
+
+        val payload = rpc.payloads("workspace.insertSessionBefore").single()
+        assertEquals("ws-a", payload["workspaceId"]?.jsonPrimitive?.content)
+        assertEquals("s1", payload["sessionId"]?.jsonPrimitive?.content)
+        assertEquals("s3", payload["beforeSessionId"]?.jsonPrimitive?.content)
+        assertEquals("ws-a", updated.workspaceId)
+        assertEquals(
+            listOf("ws-a"),
+            repository.observeWorkspaces().first().map { it.workspaceId },
+        )
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -719,6 +744,9 @@ private class HarnessFakeRpc(
                     },
                 )
                 put("data", "aGk=")
+            }
+            "workspace.insertSessionBefore" -> buildJsonObject {
+                put("workspace", workspaceJson("ws-a", "/a", "A", listOf("s2", "s3", "s1")))
             }
             "skill.list" -> buildJsonObject {
                 put(

@@ -175,6 +175,12 @@ private fun ChildTimeline(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                is TimelineItem.Compaction -> Text(
+                    text = "▤ Compacted ${item.shadowedCount} messages",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 is TimelineItem.ToolCall -> Text(
                     text = "Tool ${item.name}: ${item.result ?: item.arguments.orEmpty()}",
                     modifier = Modifier.fillMaxWidth(),
@@ -208,6 +214,7 @@ private fun ChildTimeline(
 private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.Message -> "m:${item.value.id}:${item.value.streaming}"
     is TimelineItem.TurnBoundary -> "turn:${item.turn}"
+    is TimelineItem.Compaction -> "compaction:${item.id}"
     is TimelineItem.ToolCall -> "t:${item.id}:${item.status}"
     is TimelineItem.ApprovalRequest -> "a:${item.requestId}"
     is TimelineItem.QuestionRequest -> "q:${item.requestId}"

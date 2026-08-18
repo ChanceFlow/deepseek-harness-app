@@ -180,6 +180,11 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   will still display finalized blocks from `assistant/message`.
 - **Titles are display-only.** `session/projection` title frames and history
   projections are read, but identity always remains `sessionId`.
+- **Compaction marks the shadowed range.** `compaction/summary` events fold
+  into `TimelineItem.Compaction` keeping only the `shadowedSeqs` count;
+  timelines render a "▤ Compacted N messages" marker. The summary body
+  itself arrives as the following user message (host contract), so no extra
+  rendering is owed.
 - **Turn grouping is a collapsible outline.** Logged `turn/start` events
   fold into `TimelineItem.TurnBoundary`; the chat timeline offers a flat view
   (divider rows) and an outline view whose group headers show the counts, a

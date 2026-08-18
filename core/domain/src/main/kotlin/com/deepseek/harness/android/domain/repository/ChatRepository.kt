@@ -179,6 +179,17 @@ interface ChatRepository {
     suspend fun moveWorkspace(workspaceId: String, beforeWorkspaceId: String?): List<String> =
         unsupported("moveWorkspace")
 
+    /**
+     * Move one session inside its workspace's durable order; a null anchor
+     * appends to the end. Returns the owning workspace summary.
+     */
+    suspend fun moveSession(
+        workspaceId: String,
+        sessionId: String,
+        beforeSessionId: String?,
+    ): WorkspaceSummary =
+        unsupported("moveSession")
+
     suspend fun loadModels(sessionId: String): SessionModels
 
     suspend fun selectModel(sessionId: String, selection: ModelSelection): ModelSelection

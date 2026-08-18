@@ -17,6 +17,12 @@ sealed interface TimelineItem {
     /** Turn boundary from a logged `turn/start`; groups the transcript ledger-style. */
     data class TurnBoundary(val turn: Long) : TimelineItem
 
+    /** Context compaction from a logged `compaction/summary` event. */
+    data class Compaction(
+        val id: String,
+        val shadowedCount: Int,
+    ) : TimelineItem
+
     data class ToolCall(
         val id: String,
         val name: String,

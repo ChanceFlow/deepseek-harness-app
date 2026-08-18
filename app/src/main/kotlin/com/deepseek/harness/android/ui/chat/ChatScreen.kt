@@ -487,6 +487,7 @@ private fun TimelineRow(
     when (item) {
         is TimelineItem.Message -> MessageRow(item.value, loadAttachment)
         is TimelineItem.TurnBoundary -> TurnBoundaryRow(item.turn)
+        is TimelineItem.Compaction -> CompactionRow(item.shadowedCount)
         is TimelineItem.ToolCall -> ToolCallRow(item)
         is TimelineItem.ApprovalRequest -> ApprovalRow(
             requestId = item.requestId,
@@ -1271,6 +1272,7 @@ private fun ModeChip(
 private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.Message -> "message:${item.value.id}:${item.value.streaming}"
     is TimelineItem.TurnBoundary -> "turn:${item.turn}"
+    is TimelineItem.Compaction -> "compaction:${item.id}"
     is TimelineItem.ToolCall -> "tool:${item.id}:${item.status}"
     is TimelineItem.ApprovalRequest -> "approval:${item.requestId}"
     is TimelineItem.QuestionRequest -> "question:${item.requestId}"
@@ -1384,6 +1386,17 @@ private fun TurnBoundaryRow(turn: Long) {
         )
         HorizontalDivider(modifier = Modifier.weight(1f))
     }
+}
+
+/** Context-compaction marker: the summary replaced N older messages. */
+@Composable
+private fun CompactionRow(shadowedCount: Int) {
+    Text(
+        text = "▤ Compacted $shadowedCount messages",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    )
 }
 
 @Preview(showBackground = true, widthDp = 840)

@@ -55,6 +55,7 @@ import com.deepseek.harness.android.harness.dto.PlanProjectionWire
 import com.deepseek.harness.android.harness.dto.SessionAttachmentValue
 import com.deepseek.harness.android.harness.dto.SkillListValue
 import com.deepseek.harness.android.harness.dto.WorkspaceInsertBeforeValue
+import com.deepseek.harness.android.harness.dto.WorkspaceInsertSessionValue
 import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
 import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
@@ -134,6 +135,7 @@ private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_RENAME = "workspace.rename"
 private const val WORKSPACE_DELETE = "workspace.delete"
 private const val WORKSPACE_INSERT_BEFORE = "workspace.insertBefore"
+private const val WORKSPACE_INSERT_SESSION_BEFORE = "workspace.insertSessionBefore"
 private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
 private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
@@ -796,6 +798,27 @@ class HarnessRepositoryImpl @Inject constructor(
         val orderedIds = json.decodeFromJsonElement<WorkspaceInsertBeforeValue>(value).workspaceIds
         applyWorkspaceOrder(orderedIds)
         return orderedIds
+    }
+
+    override suspend fun moveSession(
+        workspaceId: String,
+        sessionId: String,
+        beforeSessionId: String?,
+    ): WorkspaceSummary {
+        val value = rpcClient.call(
+            WORKSPACE_INSERT_SESSION_BEFORE,
+            WORKSPACE_INSERT_SESSION_BEFORE,
+            buildJsonObject {
+                put("workspaceId", workspaceId)
+                put("sessionId", sessionId)
+                beforeSessionId?.let { put("beforeSessionId", it) }
+            },
+        ).valueOrThrow()
+        val updated = json.decodeFromJsonElement<WorkspaceInsertSessionValue>(value).workspace.toDomain()
+        workspaces.update { current ->
+            current.map { if (it.workspaceId == workspaceId) updated else it }
+        }
+        return updated
     }
 
     override suspend fun loadModels(sessionId: String): SessionModels {

@@ -123,10 +123,19 @@ plus credential management — describe, store (`credentials.set`), and clear
 (`credentials.unset`) for writable refs; the host serves the whole plane
 only to loopback connections.
 
-Still deferred, matching [docs/spec.md](docs/spec.md): schema-driven
-settings forms and secret-slot writes, rich plan/trajectory rendering
-beyond the turn outline, and attachment downsampling as a deliberate
-divergence.
+Wire coverage: 40 of the 48 host RPC methods, every interactive frontend
+surface reproduced (conversation, queue, approvals, questions including
+plan-review, markdown, image attachments, the `/` skill source, plan mode,
+trajectory outline with compaction markers, workspaces with browsing and
+durable reordering, models, goals, subagents, jobs, settings four verbs,
+credentials three verbs). The eight remaining methods are host-desktop
+verbs (`host.pickDirectory` has an in-app equivalent, `openPath`/`openDocument`
+open the host desktop) or loopback-privileged deep-settings surfaces
+(`llm.*` directory join, `agentPreset.*` roster); see [docs/spec.md](docs/spec.md).
+
+Deferred beyond MVP, matching [docs/spec.md](docs/spec.md): schema-driven
+settings forms and secret-slot writes, session-drag ordering, and attachment
+downsampling as a deliberate divergence.
 
 Verification: the normal JVM suite (`app` ViewModel, envelope,
 TimelineReducer, ConnectionManager fake transport, Hermetic

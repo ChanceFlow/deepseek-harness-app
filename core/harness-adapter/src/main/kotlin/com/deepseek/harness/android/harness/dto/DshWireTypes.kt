@@ -84,6 +84,12 @@ internal data class WorkspaceRenameValue(
     val workspace: WorkspaceWire,
 )
 
+/** workspace.insertSessionBefore response: the updated owning workspace. */
+@Serializable
+internal data class WorkspaceInsertSessionValue(
+    val workspace: WorkspaceWire,
+)
+
 @Serializable
 internal data class WorkspaceArchiveValue(
     val archivedSessionIds: List<String> = emptyList(),

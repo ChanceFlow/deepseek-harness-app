@@ -105,6 +105,7 @@ internal class TimelineReducer(
 
         when (event.type()) {
             "turn/start" -> appendTurnStart(event)
+            "compaction/summary" -> appendCompaction(event)
             "user/message" -> appendUserMessage(event)
             "assistant/message" -> appendAssistantFinal(event)
             "assistant/chunk" -> appendAssistantDelta(event)
@@ -119,6 +120,15 @@ internal class TimelineReducer(
         if (turn <= 0L || !seenTurns.add(turn)) return
         finalizePartial()
         items += TimelineItem.TurnBoundary(turn)
+    }
+
+    /** A summary shadows its range; the marker keeps only the count. */
+    private fun appendCompaction(event: JsonObject) {
+        val shadowed = event.eventData()["shadowedSeqs"]?.jsonArray?.size ?: 0
+        items += TimelineItem.Compaction(
+            id = "compaction:$lastSeq",
+            shadowedCount = shadowed,
+        )
     }
 
     private fun appendUserMessage(event: JsonObject) {
