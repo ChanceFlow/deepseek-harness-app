@@ -1,18 +1,21 @@
 # DeepSeek Harness Android Client Spec
 
-Status: draft for MVP
-Target: Kotlin native Android client for an already running dsh web backend.
-Related code: `app/`, `core/domain/`, `core/network/`, `core/harness-adapter/`.
+Status: MVP closed on the legacy Kotlin stack; Flutter rewrite in progress
+(see [ADR-0001](adr-0001-flutter-rewrite.md) and [ROADMAP.md](../ROADMAP.md)).
+Target: Flutter client for an already running dsh web backend.
+Related code: `flutter/app/`, `flutter/packages/domain/`,
+`flutter/packages/network/`, `flutter/packages/harness_adapter/`
+(legacy: `app/`, `core/domain/`, `core/network/`, `core/harness-adapter/`).
 
 ## 1. Goal
 
-Provide a native Kotlin/Jetpack Compose Android client that reproduces the
-core Web chat experience of DeepSeek Harness while keeping every dsh wire
-concept behind an anti-corruption layer.
+Provide a native Flutter client that reproduces the core Web chat experience
+of DeepSeek Harness while keeping every dsh wire concept behind an
+anti-corruption layer.
 
 ## 2. Non-Goals
 
-- No WebView UI, no React Native, no Flutter, no server-driven UI.
+- No WebView UI, no React Native, no server-driven UI.
 - No changes to the dsh backend in this phase.
 - No client-side agent/tool execution; the backend remains the only harness runtime.
 - No authentication layer in the first milestone; deployment hardening is external.

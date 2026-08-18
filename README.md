@@ -1,15 +1,36 @@
 # deepseek-harness-android
 
-Kotlin-native Android client for DeepSeek Harness.
+Cross-platform client for DeepSeek Harness, being rewritten in Flutter.
+
+> **Migration in progress.** Per [ADR-0001](docs/adr-0001-flutter-rewrite.md)
+> the codebase is being rewritten in Flutter (route A: same-repo monorepo
+> rewrite, branch `flutter-rewrite`). The Kotlin/Compose stack under `app/`
+> and `core/` is **frozen legacy** (P0 fixes only) until parity, then removed.
+> Progress lives in [ROADMAP.md](ROADMAP.md); the migration analysis is
+> [docs/flutter-migration-analysis.md](docs/flutter-migration-analysis.md).
 
 ## Goals
 
-- 100% Kotlin + Jetpack Compose. No WebView UI, no React Native, no server-driven UI.
-- UI spatial layout is fully owned by Android code and can be rearranged freely.
-- dsh harness concepts are isolated in `:core:harness-adapter`; UI code only sees neutral domain models.
-- The dsh backend stays unchanged. Translation happens client-side inside the adapter module.
+- Flutter (3.47 stable) + Dart; Riverpod UDF state/DI. No WebView UI, no
+  React Native, no server-driven UI.
+- UI spatial layout is fully owned by client code and can be rearranged freely.
+- dsh harness concepts are isolated in `packages/harness_adapter`; UI code only
+  sees neutral domain models.
+- The dsh backend stays unchanged. Translation happens client-side inside the
+  adapter package.
 
 ## Module boundaries
+
+Target layout (pub workspace under `flutter/`):
+
+```text
+flutter/app                    Flutter UI. May only read packages/domain.
+flutter/packages/domain        Neutral UI-facing models: ChatMessage, Session, TimelineItem.
+flutter/packages/harness_adapter   The ONLY package that understands dsh wire protocol.
+flutter/packages/network       Transport primitives: RPC envelopes, HTTP/WebSocket seams.
+```
+
+Legacy (frozen, removed at parity):
 
 ```text
 app                    Kotlin/Compose UI. May only read :core:domain.
@@ -18,16 +39,16 @@ core:harness-adapter   The ONLY module that understands dsh wire protocol.
 core:network           Transport primitives: RPC envelopes, HTTP/WebSocket seams.
 ```
 
-Dependency direction:
+Dependency direction (identical in both stacks):
 
 ```text
-app -> :core:domain
+app -> domain
 app -> assembly wiring
-:core:harness-adapter -> :core:domain
-:core:harness-adapter -> :core:network
+harness_adapter -> domain
+harness_adapter -> network
 ```
 
-Forbidden import: `app` or `:core:domain` must never import from `:core:harness-adapter` or
+Forbidden import: `app` or `domain` must never import from `harness_adapter` or
 any dsh type such as `SessionEvent`, `MuxFrame`, or `HostFrame`.
 
 ## Backend reference
@@ -48,19 +69,28 @@ how to refresh them.
 
 ## Development
 
-Build and test from the repository root:
+Flutter workspace (target stack):
+
+```sh
+export PATH="$HOME/tools/flutter-3.47.0/bin:$PATH"
+cd flutter
+flutter analyze
+flutter test
+flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
+```
+
+The default base URL is `http://10.0.2.2:3080` (Android emulator loopback);
+override with `--dart-define=DSH_BASE_URL=http://192.168.1.10:3080`.
+
+Legacy Kotlin stack (frozen, removed at parity):
 
 ```sh
 ./gradlew :app:testDebugUnitTest :core:network:test :core:harness-adapter:test
 ./gradlew :app:assembleDebug
 ```
 
-The default base URL is `http://10.0.2.2:3080`. Override it for a physical
-device or a LAN host:
-
-```sh
-./gradlew :app:assembleDebug -PDSH_BASE_URL=http://192.168.1.10:3080
-```
+The legacy Gradle build overrides the base URL with
+`-PDSH_BASE_URL=http://192.168.1.10:3080`.
 
 A local dev server can be reached with:
 
