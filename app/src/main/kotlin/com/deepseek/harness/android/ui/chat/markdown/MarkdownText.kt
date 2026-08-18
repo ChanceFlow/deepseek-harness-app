@@ -68,10 +68,53 @@ fun MarkdownText(
                     }
                 }
 
+                is MarkdownBlock.Table -> TableBlock(block)
+
                 is MarkdownBlock.Paragraph -> Text(
                     text = inlineAnnotated(block.inlines),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+        }
+    }
+}
+
+/** Pipe table: header row plus body rows, equal-weight columns. */
+@Composable
+private fun TableBlock(block: MarkdownBlock.Table) {
+    val columns = block.header.size.coerceAtLeast(1)
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                block.header.forEach { cell ->
+                    Text(
+                        text = inlineAnnotated(cell),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            block.rows.forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    repeat(columns) { columnIndex ->
+                        val cell = row.getOrNull(columnIndex).orEmpty()
+                        Text(
+                            text = inlineAnnotated(cell),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
+                }
             }
         }
     }

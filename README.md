@@ -97,11 +97,13 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   goals (create/pause/resume/edit/complete/clear), background jobs, and
 page-at-a-time older-history loading. Message bodies render markdown
 (fenced code with language label and streaming-open fences, headings, bullet
-lists, inline code, bold/italic, and clickable links) through a pure-Kotlin
-parser with theme-owned Compose styling. The composer attaches images (photo
-picker, host `imageLimits` projection gating type/size/count) that ride the
-prompt as inline parts, and timeline image blocks download lazily through
-`session.attachment`. The chat header mirrors the `plan` session projection
+lists, pipe tables, inline code, bold/italic, and clickable links) through a
+pure-Kotlin parser with theme-owned Compose styling. The composer attaches
+images (photo picker, host `imageLimits` projection gating type/size/count,
+decoded thumbnails on the pending chips) that ride the prompt as inline
+parts, and timeline image blocks download lazily through `session.attachment`
+with a retry on failure. The chat header mirrors the `plan` session
+projection
 (active/pending; `/plan` in the composer toggles it), and the composer offers
 the session's skill catalog as `/` slash candidates (one `skill.list` per
 session, cached; picking lands the literal `/name ` text). Workspaces gain an

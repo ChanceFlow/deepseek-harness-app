@@ -146,4 +146,56 @@ class MarkdownParserTest {
 
         assertEquals(listOf(MarkdownInline.Text("2 * 3 = 6 and a_b_c stay")), inlines)
     }
+
+    @Test
+    fun `pipe table parses header and body rows with inline runs`() {
+        val blocks = MarkdownParser.parse(
+            "intro\n\n| Name | Notes |\n| --- | --- |\n| `code` | **bold** |\n| plain | b |\n\nafter",
+        )
+
+        assertEquals(3, blocks.size)
+        val table = blocks[1] as MarkdownBlock.Table
+        assertEquals(
+            listOf(
+                listOf(MarkdownInline.Text("Name")),
+                listOf(MarkdownInline.Text("Notes")),
+            ),
+            table.header,
+        )
+        assertEquals(2, table.rows.size)
+        assertEquals(
+            listOf(MarkdownInline.Code("code")),
+            table.rows[0][0],
+        )
+        assertEquals(
+            listOf(MarkdownInline.Bold(listOf(MarkdownInline.Text("bold")))),
+            table.rows[0][1],
+        )
+        assertEquals(
+            listOf(MarkdownInline.Text("plain")),
+            table.rows[1][0],
+        )
+        assertEquals(
+            listOf(MarkdownInline.Text("after")),
+            (blocks[2] as MarkdownBlock.Paragraph).inlines,
+        )
+    }
+
+    @Test
+    fun `pipe row without delimiter line stays a paragraph`() {
+        val blocks = MarkdownParser.parse("a | b\nc | d")
+
+        val paragraph = blocks.single() as MarkdownBlock.Paragraph
+        assertEquals("a | b\nc | d", (paragraph.inlines.single() as MarkdownInline.Text).text)
+    }
+
+    @Test
+    fun `short table rows render with missing cells`() {
+        val blocks = MarkdownParser.parse("| a | b |\n| --- | --- |\n| only-one")
+
+        val table = blocks.single() as MarkdownBlock.Table
+        assertEquals(1, table.rows.size)
+        assertEquals(1, table.rows.single().size)
+        assertEquals(listOf(MarkdownInline.Text("only-one")), table.rows.single().single())
+    }
 }

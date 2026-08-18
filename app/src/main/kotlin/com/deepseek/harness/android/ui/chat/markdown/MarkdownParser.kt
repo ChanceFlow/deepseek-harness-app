@@ -25,6 +25,12 @@ sealed interface MarkdownBlock {
         val items: List<List<MarkdownInline>>,
     ) : MarkdownBlock
 
+    /** GFM pipe table; column count follows the header, short rows pad empty. */
+    data class Table(
+        val header: List<List<MarkdownInline>>,
+        val rows: List<List<List<MarkdownInline>>>,
+    ) : MarkdownBlock
+
     data class Paragraph(
         val inlines: List<MarkdownInline>,
     ) : MarkdownBlock
@@ -47,6 +53,7 @@ object MarkdownParser {
     private val fence = Regex("^(`{3,})\\s*([A-Za-z0-9_+-]*)\\s*$")
     private val bullet = Regex("^[*-] (\\S.*)$")
     private val heading = Regex("^(#{1,6}) (.*)$")
+    private val delimiterCell = Regex("^:?-+:?$")
 
     /** Parse one message body into ordered blocks. */
     fun parse(text: String): List<MarkdownBlock> {
@@ -105,6 +112,20 @@ object MarkdownParser {
                 flushParagraph()
                 flushBullets()
                 index++
+                continue
+            }
+
+            if (isTableStart(lines, index)) {
+                flushParagraph()
+                flushBullets()
+                val header = splitTableRow(line)
+                index += 2
+                val rows = mutableListOf<List<List<MarkdownInline>>>()
+                while (index < lines.size && lines[index].contains('|') && lines[index].isNotBlank()) {
+                    rows += splitTableRow(lines[index])
+                    index++
+                }
+                blocks += MarkdownBlock.Table(header = header, rows = rows)
                 continue
             }
 
@@ -227,4 +248,31 @@ object MarkdownParser {
         }
         return -1
     }
+
+    /** A pipe row starts a table only when the next line is a delimiter row. */
+    private fun isTableStart(lines: List<String>, index: Int): Boolean {
+        val line = lines[index]
+        if (!line.contains('|')) return false
+        val next = lines.getOrNull(index + 1) ?: return false
+        val cells = splitTableRow(next)
+        return cells.isNotEmpty() && cells.all { delimiterCell.matches(it.text().ifEmpty { "-" }) }
+    }
+
+    /** Split one pipe row into inline cells; outer pipes optional. */
+    private fun splitTableRow(line: String): List<List<MarkdownInline>> {
+        val trimmed = line.trim().removePrefix("|").removeSuffix("|")
+        return trimmed.split('|').map { cell -> parseInlines(cell.trim()) }
+    }
+
+    /** Plain text of one parsed cell, for delimiter-row matching. */
+    private fun List<MarkdownInline>.text(): String =
+        joinToString(separator = "") { inline ->
+            when (inline) {
+                is MarkdownInline.Text -> inline.text
+                is MarkdownInline.Code -> inline.code
+                is MarkdownInline.Bold, is MarkdownInline.Italic,
+                is MarkdownInline.Link,
+                -> ""
+            }
+        }
 }

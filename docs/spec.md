@@ -215,12 +215,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   ids keep relative order at the end). Drag-and-drop stays out of scope.
 - **Markdown rendering is a minimal pure-Kotlin slice.** Message bodies parse
   into blocks (fenced code with language label, headings 1-6, bullet lists,
-  paragraphs) and inline runs (code, bold, italic, links); an unterminated
-  fence renders as an open `code (streaming)` block so
+  GFM pipe tables, paragraphs) and inline runs (code, bold, italic, links);
+  an unterminated fence renders as an open `code (streaming)` block so
   streaming bodies stay readable. Links are clickable spans opening through
-  the platform URI handler. The parser is plain JVM-tested Kotlin in
-  `:app`; colors/fonts/shapes live in the Compose layer only. Tables, block
-  quotes, and nested lists stay out of scope.
+  the platform URI handler; tables render equal-weight columns on a tonal
+  surface. The parser is plain JVM-tested Kotlin in `:app`; colors/fonts/
+  shapes live in the Compose layer only. Block quotes and nested lists stay
+  out of scope.
 - **Attachments are images-only and MVP-scoped.** Picked images (png/jpeg/
   webp/gif) ride `session.prompt` as inline base64 parts after the text part;
   the host `imageLimits` projection (via `session.list`/`session.history`

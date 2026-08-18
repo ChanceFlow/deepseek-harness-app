@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -517,6 +518,44 @@ private fun MessageRow(
     }
 }
 
+/**
+ * Draft-image thumbnail: decode the pending base64 payload once per image,
+ * downsampled to icon size, off the main thread. The name chip stays if the
+ * bytes fail to decode.
+ */
+@Composable
+private fun PendingImageThumbnail(image: PendingImage) {
+    val bitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        key1 = image.id,
+        key2 = image.base64Data,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            runCatching {
+                val bytes = Base64.getDecoder().decode(image.base64Data)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                BitmapFactory.Options().apply {
+                    inSampleSize = maxOf(1, minOf(bounds.outWidth, bounds.outHeight) / 128)
+                }.let { options ->
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                }
+            }.getOrNull()
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = image.name ?: "pending image",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .padding(end = 4.dp)
+                .size(36.dp)
+                .clip(RoundedCornerShape(4.dp)),
+        )
+    }
+}
+
 /** One durable image: lazy download through the loader, placeholder on failure. */
 @Composable
 private fun AttachmentImageRow(
@@ -524,10 +563,12 @@ private fun AttachmentImageRow(
     ref: AttachmentRef,
     loadAttachment: AttachmentLoader,
 ) {
+    var retryCount by remember(ref.attachmentId) { mutableStateOf(0) }
     val bitmap by produceState<android.graphics.Bitmap?>(
         initialValue = null,
         key1 = sessionId,
         key2 = ref.attachmentId,
+        key3 = retryCount,
     ) {
         val bytes = loadAttachment(sessionId, ref)
         value = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
@@ -543,12 +584,16 @@ private fun AttachmentImageRow(
                     .height(180.dp),
             )
         } else {
-            Text(
-                text = "image ${ref.width}×${ref.height} (${ref.bytes} bytes)" +
-                    (ref.name?.let { " · $it" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "image ${ref.width}×${ref.height} (${ref.bytes} bytes)" +
+                        (ref.name?.let { " · $it" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedButton(onClick = { retryCount++ }) { Text("Retry") }
+            }
         }
     }
 }
@@ -959,6 +1004,7 @@ private fun ComposerBar(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
+                        PendingImageThumbnail(image)
                         Text(
                             text = image.name ?: image.id.substringAfterLast('/'),
                             style = MaterialTheme.typography.bodySmall,
