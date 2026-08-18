@@ -19,4 +19,10 @@ sealed interface SettingsAction {
     data object DismissError : SettingsAction
     data class SetCredential(val ref: String, val value: String) : SettingsAction
     data class UnsetCredential(val ref: String) : SettingsAction
+    data class UpdateSetting(
+        val ns: String,
+        val key: String,
+        val jsonValue: String,
+        val expectedRevision: Long?,
+    ) : SettingsAction
 }

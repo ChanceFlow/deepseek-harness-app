@@ -33,6 +33,7 @@ import kotlinx.serialization.json.add
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -438,6 +439,31 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `setting update sends patch with cas revision and maps view`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val updated = repository.updateSetting(
+            ns = "llm-deepseek",
+            key = "retry",
+            jsonValue = """{"attempts": 5}""",
+            expectedRevision = 3L,
+        )
+
+        val payload = rpc.payloads("settings.update").single()
+        assertEquals("llm-deepseek", payload["ns"]?.jsonPrimitive?.content)
+        assertEquals(3L, payload["expectedRevision"]?.jsonPrimitive?.long)
+        val patch = payload["patch"]?.jsonObject ?: error("missing patch")
+        assertEquals(5L, patch["retry"]?.jsonObject?.get("attempts")?.jsonPrimitive?.long)
+        // The response arm reuses the settings.describe namespace fixture.
+        assertEquals("llm-deepseek", updated.ns)
+        assertEquals(3L, updated.revision)
+        assertEquals(true, updated.hasUserLayer)
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -755,6 +781,14 @@ private class HarnessFakeRpc(
                         )
                     },
                 )
+            }
+            "settings.update" -> buildJsonObject {
+                put("ns", "llm-deepseek")
+                put("value", buildJsonObject { })
+                put("user", buildJsonObject { put("touched", true) })
+                put("applies", "live")
+                put("secrets", buildJsonArray { })
+                put("revision", 3)
             }
             "goal.edit" -> buildJsonObject {
                 put(

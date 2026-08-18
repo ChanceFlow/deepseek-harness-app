@@ -110,7 +110,7 @@ private fun SnapshotBody(
         Spacer(modifier = Modifier.height(12.dp))
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(snapshot.namespaces, key = { it.ns }) { namespace ->
-                NamespaceRow(namespace)
+                NamespaceRow(namespace, writable = snapshot.writable, onAction = onAction)
             }
             if (credentials.isNotEmpty()) {
                 item(key = "credentials-header") {
@@ -136,7 +136,14 @@ private fun SnapshotBody(
 }
 
 @Composable
-private fun NamespaceRow(namespace: SettingsNamespace) {
+private fun NamespaceRow(
+    namespace: SettingsNamespace,
+    writable: Boolean,
+    onAction: (SettingsAction) -> Unit,
+) {
+    var editing by remember(namespace.ns) { mutableStateOf(false) }
+    var key by remember(namespace.ns) { mutableStateOf("") }
+    var jsonValue by remember(namespace.ns) { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(text = namespace.ns, style = MaterialTheme.typography.titleSmall)
         Text(
@@ -147,6 +154,55 @@ private fun NamespaceRow(namespace: SettingsNamespace) {
                 if (namespace.secretCount > 0) "${namespace.secretCount} secrets set" else null,
             ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
+        )
+        if (writable) {
+            OutlinedButton(onClick = { editing = true }) { Text("Edit key") }
+        }
+    }
+    if (editing) {
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Patch ${namespace.ns}") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = key,
+                        onValueChange = { key = it },
+                        singleLine = true,
+                        label = { Text("Top-level key") },
+                    )
+                    OutlinedTextField(
+                        value = jsonValue,
+                        onValueChange = { jsonValue = it },
+                        label = { Text("JSON value") },
+                        placeholder = { Text("true / 42 / \"text\" / {…}") },
+                    )
+                    Text(
+                        text = "CAS revision ${namespace.revision}; host validates against the schema",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onAction(
+                            SettingsAction.UpdateSetting(
+                                ns = namespace.ns,
+                                key = key,
+                                jsonValue = jsonValue,
+                                expectedRevision = namespace.revision,
+                            ),
+                        )
+                        editing = false
+                    },
+                    enabled = key.isNotBlank() && jsonValue.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { editing = false }) { Text("Cancel") }
+            },
         )
     }
 }

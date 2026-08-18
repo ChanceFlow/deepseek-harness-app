@@ -137,6 +137,7 @@ private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
 private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
 private const val SETTINGS_DESCRIBE = "settings.describe"
+private const val SETTINGS_UPDATE = "settings.update"
 private const val CREDENTIALS_DESCRIBE = "credentials.describe"
 private const val CREDENTIALS_SET = "credentials.set"
 private const val CREDENTIALS_UNSET = "credentials.unset"
@@ -288,6 +289,24 @@ class HarnessRepositoryImpl @Inject constructor(
             CREDENTIALS_UNSET,
             buildJsonObject { put("ref", ref) },
         ).valueOrThrow()
+    }
+
+    override suspend fun updateSetting(
+        ns: String,
+        key: String,
+        jsonValue: String,
+        expectedRevision: Long?,
+    ): SettingsNamespace {
+        val value = rpcClient.call(
+            SETTINGS_UPDATE,
+            SETTINGS_UPDATE,
+            buildJsonObject {
+                put("ns", ns)
+                put("patch", buildJsonObject { put(key, json.parseToJsonElement(jsonValue)) })
+                expectedRevision?.let { put("expectedRevision", it) }
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SettingsNamespaceWire>(value).toDomain()
     }
 
     override suspend fun openSession(sessionId: String) {

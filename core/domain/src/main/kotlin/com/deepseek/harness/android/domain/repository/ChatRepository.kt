@@ -10,6 +10,7 @@ import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.PlanState
+import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
 import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.ModelSelection
@@ -58,6 +59,19 @@ interface ChatRepository {
      */
     suspend fun describeSettings(): SettingsSnapshot =
         unsupported("describeSettings")
+
+    /**
+     * Patch one top-level key of a settings namespace. [jsonValue] is raw
+     * JSON validated by the adapter; [expectedRevision] is the CAS guard
+     * from the last describe. Returns the updated namespace row.
+     */
+    suspend fun updateSetting(
+        ns: String,
+        key: String,
+        jsonValue: String,
+        expectedRevision: Long? = null,
+    ): SettingsNamespace =
+        unsupported("updateSetting")
 
     /**
      * Read-only probe of credential references. Like settings describe, the

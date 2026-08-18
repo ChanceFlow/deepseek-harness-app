@@ -61,6 +61,28 @@ class SettingsViewModel @Inject constructor(
             SettingsAction.DismissError -> errorMessage.value = null
             is SettingsAction.SetCredential -> writeCredential(action.ref, action.value)
             is SettingsAction.UnsetCredential -> clearCredential(action.ref)
+            is SettingsAction.UpdateSetting -> updateSetting(action)
+        }
+    }
+
+    /** One-key namespace patch with the described revision as CAS guard. */
+    private fun updateSetting(action: SettingsAction.UpdateSetting) {
+        if (action.key.isBlank() || action.jsonValue.isBlank()) return
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                val updated = runCatchingForUi {
+                    chatRepository.updateSetting(
+                        ns = action.ns,
+                        key = action.key.trim(),
+                        jsonValue = action.jsonValue.trim(),
+                        expectedRevision = action.expectedRevision,
+                    )
+                }
+                if (updated != null) refresh()
+            } finally {
+                isLoading.value = false
+            }
         }
     }
 

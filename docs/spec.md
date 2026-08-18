@@ -180,16 +180,15 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   will still display finalized blocks from `assistant/message`.
 - **Titles are display-only.** `session/projection` title frames and history
   projections are read, but identity always remains `sessionId`.
-- **Settings are read-only; credentials are writable per-ref.**
-  `settings.describe` / `credentials.describe` back the overview screen
-  (namespaces with applies/revision/user-layer/secret counts, credentials
-  with configured/source/writable). Writable credential rows gain
-  store/replace (`credentials.set {ref, value}`, blank never dispatches) and
-  clear (`credentials.unset {ref}`); both re-describe after success.
-  Settings-namespace writes (`settings.update`/`replace`/`mutate`) and
-  plugin management stay deferred. The host pins the whole plane to loopback
-  connections: remote sources (e.g. emulator `10.0.2.2` without
-  `adb reverse`) surface the transport error instead of the page.
+- **Settings namespaces patch one top-level key at a time.** For writable
+  hosts (`describe.writable`), each namespace row opens a key + raw-JSON
+  editor that sends `settings.update {ns, patch: {key: value},
+  expectedRevision}` — the revision from the last describe acts as the CAS
+  guard, the host validates against the namespace schema, and the response
+  view re-describes the page. Schema-driven forms (the Web's schema-form
+  engine), full-namespace `settings.replace`/`mutate`, and secret-slot
+  writes stay deferred. `credentials.set`/`unset` store and clear writable
+  credential refs; the whole plane stays loopback-gated.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select, optionless text, custom

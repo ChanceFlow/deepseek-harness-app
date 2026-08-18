@@ -111,13 +111,14 @@ the session's skill catalog as `/` slash candidates (one `skill.list` per
 session, cached; picking lands the literal `/name ` text). Workspaces gain an
 in-app directory browser (`host.listDirectory`/`host.createDirectory`) and
 durable manual reordering (`workspace.insertBefore`), and Settings renders
-the settings overview plus credential management — describe, store
-(`credentials.set`), and clear (`credentials.unset`) for writable refs; the
-host serves the whole plane only to loopback connections.
+the settings overview with per-namespace one-key patching (`settings.update`
+with revision CAS for writable hosts) plus credential management — describe,
+store (`credentials.set`), and clear (`credentials.unset`) for writable
+refs; the host serves the whole plane only to loopback connections.
 
-Still deferred, matching [docs/spec.md](docs/spec.md): settings-namespace
-writes and plugin management, rich plan/trajectory rendering, and markdown
-table alignment/HTML beyond the basic set.
+Still deferred, matching [docs/spec.md](docs/spec.md): schema-driven
+settings forms and full-namespace replace/mutate, plugin and skill
+management, rich plan/trajectory rendering, and attachment downsampling.
 
 Verification: the normal JVM suite (`app` ViewModel, envelope,
 TimelineReducer, ConnectionManager fake transport, Hermetic
