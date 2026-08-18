@@ -5,6 +5,7 @@ import com.deepseek.harness.android.domain.model.ChatMessage
 import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.QuestionIntent
 import com.deepseek.harness.android.domain.model.QuestionItem
 import com.deepseek.harness.android.domain.model.QueuePlacement
 import com.deepseek.harness.android.domain.model.SessionQueueItem
@@ -369,6 +370,12 @@ internal class TimelineReducer(
             multiSelect = boolean("multiSelect"),
             header = string("header"),
             optionDescriptions = optionDescriptions,
+            intent = get("intent")?.jsonObject?.let { intent ->
+                QuestionIntent(
+                    kind = intent.string("kind") ?: return@let null,
+                    approve = intent.string("approve"),
+                )
+            },
         )
     }
 

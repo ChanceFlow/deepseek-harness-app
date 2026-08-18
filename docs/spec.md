@@ -212,6 +212,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   a single slash token, candidates filter by prefix (max 6); picking lands
   the literal `/name ` text — the host-side pre-step owns recognition. Skill
   authoring/management stays deferred.
+- **Plan review is a question presentation intent.** The host's
+  `exit_plan_mode` asks through the ordinary question channel with
+  `intent {kind: 'plan-review', approve}`; the Android client parses the
+  intent and renders a decision card — the detail slot (the markdown plan
+  body) renders through MarkdownText, the approve option is the primary
+  action, other options stay secondary, and answering rides the same
+  `AnswerQuestion` flow. Generic questions render the generic editor.
 - **Plan mode is projection-mirrored.** The `plan` session projection
   (`{active, pending}`, seeded from `session.history` projections and updated
   by `session/projection` frames) renders a chat-header state label;

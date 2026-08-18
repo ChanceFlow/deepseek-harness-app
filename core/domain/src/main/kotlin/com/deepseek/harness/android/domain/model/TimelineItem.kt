@@ -63,6 +63,14 @@ data class QuestionItem(
     val detail: String? = null,
     val header: String? = null,
     val optionDescriptions: Map<String, String> = emptyMap(),
+    /** Presentation-only hint; `plan-review` renders a review decision card. */
+    val intent: QuestionIntent? = null,
+)
+
+/** Wire presentation intent carried on one question. */
+data class QuestionIntent(
+    val kind: String,
+    val approve: String? = null,
 )
 
 data class ApprovalAnswer(

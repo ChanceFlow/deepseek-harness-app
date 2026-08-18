@@ -93,7 +93,9 @@ The MVP client is wired end-to-end against a running `dsh web` host:
 - `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
   Goals, and Settings. Chat supports session search/create/rename/archive/fork,
   queue text edit/steer/remove (including Queue/Steer composer delivery),
-  approvals, custom, multi-select, and skippable questions, live titles,
+  approvals, custom, multi-select, and skippable questions (plan-review
+intents render a decision card with the markdown plan body and a primary
+approve action), live titles,
   goals (create/pause/resume/edit/complete/clear), background jobs, and
 page-at-a-time older-history loading, and a ledger-style trajectory outline —
 `turn/start` events fold into collapsible turn groups (message/tool counts

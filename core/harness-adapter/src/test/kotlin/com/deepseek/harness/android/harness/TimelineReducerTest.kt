@@ -2,6 +2,7 @@ package com.deepseek.harness.android.harness
 
 import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.QuestionIntent
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.network.ServerRequest
@@ -199,6 +200,53 @@ class TimelineReducerTest {
 
         reducer.ingestFrame(resolved)
         assertTrue(reducer.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `question intent parses for plan review presentation`() {
+        val reducer = TimelineReducer("s1")
+        reducer.ingestFrame(
+            ServerRequest(
+                type = "server-request",
+                rpcId = "rpc-plan",
+                method = "question/requested",
+                payload = buildJsonObject {
+                    put("type", "question/requested")
+                    put("sessionId", "s1")
+                    put(
+                        "questions",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("id", "plan-review")
+                                    put("header", "Plan review")
+                                    put("question", "Approve this plan and leave plan mode?")
+                                    put("detail", "# The plan")
+                                    put(
+                                        "options",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("label", "Approve plan") })
+                                            add(buildJsonObject { put("label", "Keep planning") })
+                                        },
+                                    )
+                                    put(
+                                        "intent",
+                                        buildJsonObject {
+                                            put("kind", "plan-review")
+                                            put("approve", "Approve plan")
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )
+                },
+            ),
+        )
+
+        val question = (reducer.snapshot().single() as TimelineItem.QuestionRequest).questions.single()
+        assertEquals(QuestionIntent(kind = "plan-review", approve = "Approve plan"), question.intent)
+        assertEquals("# The plan", question.detail)
     }
 
     @Test

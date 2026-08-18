@@ -877,6 +877,58 @@ private fun QuestionRow(
     }
 }
 
+/**
+ * Plan-review decision card: the plan body renders as markdown (the detail
+ * slot carries it), the approve option is the primary action, and any other
+ * option stays secondary. Answers use the same question channel.
+ */
+@Composable
+private fun PlanReviewEditor(
+    question: QuestionItem,
+    draft: QuestionDraft,
+    onDraftChange: (QuestionDraft) -> Unit,
+) {
+    val approve = question.intent?.approve
+    val chosen = draft.selected.singleOrNull()
+    Column {
+        Text(
+            text = question.header ?: "Plan review",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(text = question.question, style = MaterialTheme.typography.titleSmall)
+        question.detail?.let { plan ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            ) {
+                MarkdownText(
+                    text = plan,
+                    modifier = Modifier.padding(8.dp),
+                )
+            }
+        }
+        Row {
+            val approveOption = question.options.firstOrNull { it == approve }
+                ?: question.options.firstOrNull()
+            approveOption?.let { option ->
+                Button(onClick = { onDraftChange(draft.copy(selected = setOf(option))) }) {
+                    Text(if (chosen == option) "✓ $option" else option)
+                }
+            }
+            question.options.filterNot { it == approveOption }.forEach { option ->
+                OutlinedButton(
+                    onClick = { onDraftChange(draft.copy(selected = setOf(option))) },
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Text(if (chosen == option) "✓ $option" else option)
+                }
+            }
+        }
+    }
+}
+
 private data class QuestionDraft(
     val selected: Set<String> = emptySet(),
     val customText: String = "",
@@ -889,6 +941,10 @@ private fun QuestionItemEditor(
     draft: QuestionDraft,
     onDraftChange: (QuestionDraft) -> Unit,
 ) {
+    if (question.intent?.kind == "plan-review") {
+        PlanReviewEditor(question = question, draft = draft, onDraftChange = onDraftChange)
+        return
+    }
     val selected = draft.selected
     Column {
         question.header?.let { Text(text = it, style = MaterialTheme.typography.labelLarge) }
