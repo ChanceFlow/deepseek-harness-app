@@ -77,7 +77,7 @@ void main() {
     expect(find.text('Create'), findsOneWidget);
   });
 
-  testWidgets('models tab renders its catalog surface; settings stays pending',
+  testWidgets('models and settings tabs render their live surfaces',
       (tester) async {
     await _pumpApp(tester);
     await tester.pump();
@@ -90,6 +90,8 @@ void main() {
 
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
-    expect(find.text('Settings screen pending port'), findsOneWidget);
+    // Settings describe fails against the fake rpc → loopback hint shows.
+    expect(find.text('Settings'), findsNWidgets(2)); // title + nav label
+    expect(find.text('Refresh'), findsOneWidget);
   });
 }

@@ -7,7 +7,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../chat/chat_screen.dart';
+import '../goal/goal_screen.dart';
 import '../models/models_screen.dart';
+import '../settings/settings_screen.dart';
 import '../subagents/subagent_screen.dart';
 import '../workspace/workspace_screen.dart';
 
@@ -42,8 +44,8 @@ class _AppRootState extends State<AppRoot> {
         AppDestination.workspaces => const WorkspaceRoute(),
         AppDestination.models => const ModelsRoute(),
         AppDestination.subagents => const SubagentRoute(),
-        AppDestination.goals => const _PlaceholderScreen('Goals'),
-        AppDestination.settings => const _PlaceholderScreen('Settings'),
+        AppDestination.goals => const GoalRoute(),
+        AppDestination.settings => const SettingsRoute(),
       },
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
@@ -57,20 +59,6 @@ class _AppRootState extends State<AppRoot> {
             ),
         ],
       ),
-    );
-  }
-}
-
-/// Temporary stand-in for the four routes not yet ported.
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(child: Text('$title screen pending port')),
     );
   }
 }

@@ -20,7 +20,9 @@ export 'package:network/rpc_envelope.dart';
 import '../config.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
+import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
+import '../ui/settings/settings_controller.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 
@@ -75,6 +77,20 @@ final modelsControllerProvider = Provider<ModelsController>((ref) {
 /// Subagents screen controller (UDF).
 final subagentControllerProvider = Provider<SubagentController>((ref) {
   final controller = SubagentController(ref.watch(chatRepositoryProvider));
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Goal screen controller (UDF).
+final goalControllerProvider = Provider<GoalController>((ref) {
+  final controller = GoalController(ref.watch(chatRepositoryProvider));
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Settings screen controller (UDF).
+final settingsControllerProvider = Provider<SettingsController>((ref) {
+  final controller = SettingsController(ref.watch(chatRepositoryProvider));
   ref.onDispose(controller.dispose);
   return controller;
 });
