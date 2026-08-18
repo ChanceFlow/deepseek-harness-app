@@ -114,6 +114,7 @@ private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
 private const val SUBAGENT_HISTORY = "subagent.history"
 private const val SUBAGENT_PROMPT = "subagent.prompt"
 private const val GOAL_CREATE = "goal.create"
+private const val GOAL_EDIT = "goal.edit"
 private const val GOAL_PAUSE = "goal.pause"
 private const val GOAL_RESUME = "goal.resume"
 private const val GOAL_COMPLETE = "goal.complete"
@@ -436,6 +437,9 @@ class HarnessRepositoryImpl @Inject constructor(
         return json.decodeFromJsonElement<GoalRefValue>(value).ref.toDomain()
     }
 
+    override suspend fun editGoal(sessionId: String, ref: GoalRef, objective: String): GoalRef =
+        goalMutation(GOAL_EDIT, sessionId, ref, objective)
+
     override suspend fun pauseGoal(sessionId: String, ref: GoalRef): GoalRef =
         goalMutation(GOAL_PAUSE, sessionId, ref)
 
@@ -454,12 +458,25 @@ class HarnessRepositoryImpl @Inject constructor(
         goalProjections[sessionId]?.value = null
     }
 
-    private suspend fun goalMutation(endpoint: String, sessionId: String, ref: GoalRef): GoalRef {
-        val value = rpcClient.call(endpoint, endpoint, goalPayload(sessionId, ref)).valueOrThrow()
+    private suspend fun goalMutation(
+        endpoint: String,
+        sessionId: String,
+        ref: GoalRef,
+        objective: String? = null,
+    ): GoalRef {
+        val value = rpcClient.call(
+            endpoint,
+            endpoint,
+            goalPayload(sessionId, ref, objective),
+        ).valueOrThrow()
         return json.decodeFromJsonElement<GoalRefValue>(value).ref.toDomain()
     }
 
-    private fun goalPayload(sessionId: String, ref: GoalRef): JsonObject = buildJsonObject {
+    private fun goalPayload(
+        sessionId: String,
+        ref: GoalRef,
+        objective: String? = null,
+    ): JsonObject = buildJsonObject {
         put("sessionId", sessionId)
         put(
             "ref",
@@ -468,6 +485,7 @@ class HarnessRepositoryImpl @Inject constructor(
                 put("revision", ref.revision)
             },
         )
+        objective?.let { put("objective", it) }
     }
 
     override fun observeWorkspaces(): Flow<List<WorkspaceSummary>> =

@@ -114,6 +114,14 @@ interface ChatRepository {
 
     suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long? = null): GoalRef
 
+    /**
+     * Replaces the current goal's objective without changing its phase.
+     * Test doubles may use the default [unsupported] implementation unless
+     * their scenario explicitly exercises the Web GoalBar edit verb.
+     */
+    suspend fun editGoal(sessionId: String, ref: GoalRef, objective: String): GoalRef =
+        unsupported("editGoal")
+
     suspend fun pauseGoal(sessionId: String, ref: GoalRef): GoalRef
 
     suspend fun resumeGoal(sessionId: String, ref: GoalRef): GoalRef

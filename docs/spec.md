@@ -193,8 +193,8 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - **Queue editing is text-only.** Queued text items can be edited into a
   single text content block; non-text queued items disable the edit action,
   matching the Web client.
-- **Goal editing is deferred.** The MVP wires `goal.create`, pause, resume,
-  complete, and clear (Section 13); `goal.edit` remains out of scope.
+- **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
+  verb; phase and blocked reason never change on edit, matching the host API.
 - **Directory browsing is deferred.** Workspace paths are entered as text;
   `host.pickDirectory`/`host.listDirectory`/Android SAF and manual workspace
   ordering remain out of scope.
@@ -215,7 +215,7 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 ## 13. Goal Flow
 
 - Domain carries `GoalRef`, `GoalProjection`, `GoalPhase`.
-- Adapter wires `goal.create/pause/resume/complete/clear`.
+- Adapter wires `goal.create/pause/resume/edit/complete/clear`.
 - Goal state is read from `session/projection` frames with key `goal`; it is never guessed client-side.
 - Goal UI is parent/session scoped exactly like Subagents.
 

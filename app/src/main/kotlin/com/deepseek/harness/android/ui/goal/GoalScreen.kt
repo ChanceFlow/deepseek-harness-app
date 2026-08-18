@@ -47,6 +47,7 @@ fun GoalScreen(
 ) {
     var objective by remember { mutableStateOf("") }
     var maxRoundsText by remember { mutableStateOf("") }
+    var editingObjective by remember(uiState.goal?.goal?.id) { mutableStateOf<String?>(null) }
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Text("Goal", style = MaterialTheme.typography.titleLarge)
         uiState.errorMessage?.let {
@@ -112,30 +113,59 @@ fun GoalScreen(
             }
         } else {
             val snapshot = goal.goal
-            Text(snapshot.objective, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "${snapshot.phase} · revision ${snapshot.revision} · rounds ${goal.roundsStarted}/${snapshot.maxGoalRounds}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                when (snapshot.phase) {
-                    GoalPhase.ACTIVE -> {
-                        Button(onClick = { onAction(GoalAction.Pause) }) { Text("Pause") }
+            val editing = editingObjective
+            if (editing == null) {
+                Text(snapshot.objective, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "${snapshot.phase} · revision ${snapshot.revision} · rounds ${goal.roundsStarted}/${snapshot.maxGoalRounds}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    when (snapshot.phase) {
+                        GoalPhase.ACTIVE -> {
+                            Button(onClick = { onAction(GoalAction.Pause) }) { Text("Pause") }
+                            OutlinedButton(
+                                onClick = { onAction(GoalAction.Complete) },
+                                modifier = Modifier.padding(start = 8.dp),
+                            ) { Text("Complete") }
+                        }
+                        GoalPhase.PAUSED, GoalPhase.BLOCKED -> {
+                            Button(onClick = { onAction(GoalAction.Resume) }) { Text("Resume") }
+                            OutlinedButton(
+                                onClick = { onAction(GoalAction.Complete) },
+                                modifier = Modifier.padding(start = 8.dp),
+                            ) { Text("Complete") }
+                        }
+                        GoalPhase.COMPLETE -> {
+                            Button(onClick = { onAction(GoalAction.Clear) }) { Text("Clear") }
+                        }
+                    }
+                    if (snapshot.phase != GoalPhase.COMPLETE) {
                         OutlinedButton(
-                            onClick = { onAction(GoalAction.Complete) },
+                            onClick = { editingObjective = snapshot.objective },
                             modifier = Modifier.padding(start = 8.dp),
-                        ) { Text("Complete") }
+                        ) { Text("Edit") }
                     }
-                    GoalPhase.PAUSED, GoalPhase.BLOCKED -> {
-                        Button(onClick = { onAction(GoalAction.Resume) }) { Text("Resume") }
-                        OutlinedButton(
-                            onClick = { onAction(GoalAction.Complete) },
-                            modifier = Modifier.padding(start = 8.dp),
-                        ) { Text("Complete") }
-                    }
-                    GoalPhase.COMPLETE -> {
-                        Button(onClick = { onAction(GoalAction.Clear) }) { Text("Clear") }
-                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = editing,
+                    onValueChange = { editingObjective = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Goal objective") },
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            onAction(GoalAction.Edit(editing))
+                            editingObjective = null
+                        },
+                        enabled = editing.isNotBlank(),
+                    ) { Text("Save") }
+                    OutlinedButton(
+                        onClick = { editingObjective = null },
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) { Text("Cancel") }
                 }
             }
         }

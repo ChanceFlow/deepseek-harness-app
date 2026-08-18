@@ -62,6 +62,7 @@ class GoalViewModel @Inject constructor(
         when (action) {
             is GoalAction.SelectSession -> selectSession(action.sessionId)
             is GoalAction.Create -> create(action.objective, action.maxRounds)
+            is GoalAction.Edit -> edit(action.objective)
             GoalAction.Pause -> mutateGoal { current -> chatRepository.pauseGoal(actionSession(), current) }
             GoalAction.Resume -> mutateGoal { current -> chatRepository.resumeGoal(actionSession(), current) }
             GoalAction.Complete -> mutateGoal { current -> chatRepository.completeGoal(actionSession(), current) }
@@ -95,6 +96,26 @@ class GoalViewModel @Inject constructor(
             isLoading.value = true
             try {
                 runCatchingForUi { chatRepository.createGoal(sessionId, objective.trim(), maxRounds) }
+            } finally {
+                isLoading.value = false
+            }
+        }
+    }
+
+    private fun edit(objective: String) {
+        if (objective.isBlank()) return
+        val sessionId = selectedSessionId.value ?: return
+        val current = goal.value?.goal ?: return
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                runCatchingForUi {
+                    chatRepository.editGoal(
+                        sessionId = sessionId,
+                        ref = GoalRef(id = current.id, revision = current.revision),
+                        objective = objective.trim(),
+                    )
+                }
             } finally {
                 isLoading.value = false
             }

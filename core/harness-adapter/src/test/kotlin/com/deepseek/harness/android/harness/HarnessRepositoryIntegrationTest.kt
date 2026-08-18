@@ -1,5 +1,6 @@
 package com.deepseek.harness.android.harness
 
+import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -181,6 +182,29 @@ class HarnessRepositoryIntegrationTest {
         assertEquals("question-1", firstAnswer["id"]?.toString()?.trim('"'))
         assertEquals(0, firstAnswer["selected"]?.jsonArray?.size)
     }
+
+    @Test
+    fun `goal edit sends objective with cas ref`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val edited = repository.editGoal(
+            sessionId = "session-1",
+            ref = GoalRef(id = "goal-1", revision = 1),
+            objective = "ship it v2",
+        )
+
+        assertEquals("goal-1", edited.id)
+        assertEquals(2L, edited.revision)
+        val payload = rpc.payloads("goal.edit").single()
+        assertEquals("session-1", payload["sessionId"]?.toString()?.trim('"'))
+        assertEquals("ship it v2", payload["objective"]?.toString()?.trim('"'))
+        val ref = payload["ref"]?.jsonObject ?: error("missing goal ref")
+        assertEquals("goal-1", ref["id"]?.toString()?.trim('"'))
+        assertEquals(1L, ref["revision"]?.toString()?.toLong())
+    }
 }
 private fun harnessRepository(
     rpc: DshRpcClient,
@@ -244,6 +268,15 @@ private class HarnessFakeRpc(
             "session.history" -> buildJsonObject {
                 put("events", buildJsonArray {})
                 put("hasMore", false)
+            }
+            "goal.edit" -> buildJsonObject {
+                put(
+                    "ref",
+                    buildJsonObject {
+                        put("id", "goal-1")
+                        put("revision", 2)
+                    },
+                )
             }
             else -> buildJsonObject {}
         }

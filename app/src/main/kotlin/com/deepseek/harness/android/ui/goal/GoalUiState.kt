@@ -16,6 +16,7 @@ data class GoalUiState(
 sealed interface GoalAction {
     data class SelectSession(val sessionId: String) : GoalAction
     data class Create(val objective: String, val maxRounds: Long?) : GoalAction
+    data class Edit(val objective: String) : GoalAction
     data object Pause : GoalAction
     data object Resume : GoalAction
     data object Complete : GoalAction
