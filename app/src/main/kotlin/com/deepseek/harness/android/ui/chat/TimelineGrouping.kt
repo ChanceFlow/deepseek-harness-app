@@ -1,5 +1,6 @@
 package com.deepseek.harness.android.ui.chat
 
+import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.TimelineItem
 
 /**
@@ -36,4 +37,21 @@ internal fun groupTimelineByTurn(items: List<TimelineItem>): List<TimelineTurnGr
     }
     flush()
     return groups
+}
+
+/**
+ * Request-header preview: the first user message of a group, folded to one
+ * line and truncated — the trajectory outline's prompt echo.
+ */
+internal fun promptPreview(items: List<TimelineItem>, maxChars: Int = 60): String? {
+    val text = items
+        .filterIsInstance<TimelineItem.Message>()
+        .firstOrNull { it.value.role == MessageRole.USER }
+        ?.value
+        ?.text
+        ?.lineSequence()
+        ?.firstOrNull { it.isNotBlank() }
+        ?.trim()
+        ?: return null
+    return if (text.length <= maxChars) text else text.take(maxChars - 1).trimEnd() + "…"
 }

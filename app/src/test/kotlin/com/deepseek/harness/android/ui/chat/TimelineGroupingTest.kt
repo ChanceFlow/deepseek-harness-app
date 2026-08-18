@@ -5,7 +5,6 @@ import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.TimelineItem
 import org.junit.Assert.assertEquals
 import org.junit.Test
-
 class TimelineGroupingTest {
 
     private fun message(id: String): TimelineItem.Message =
@@ -57,4 +56,36 @@ class TimelineGroupingTest {
         assertEquals(2L, groups[2].turn)
         assertEquals(0, groups[2].items.size)
     }
+
+    @Test
+    fun `prompt preview echoes the first user message folded to one line`() {
+        val preview = promptPreview(
+            listOf(
+                messageWith(id = "u1", role = MessageRole.ASSISTANT, text = "prior answer"),
+                messageWith(id = "u2", role = MessageRole.USER, text = "first line\nsecond line"),
+                messageWith(id = "u3", role = MessageRole.USER, text = "later prompt"),
+            ),
+        )
+
+        assertEquals("first line", preview)
+    }
+
+    @Test
+    fun `prompt preview truncates long prompts and returns null without user rows`() {
+        val long = promptPreview(
+            listOf(messageWith(id = "u1", role = MessageRole.USER, text = "x".repeat(100))),
+        )
+        val none = promptPreview(
+            listOf(messageWith(id = "a1", role = MessageRole.ASSISTANT, text = "answer")),
+        )
+
+        assertEquals(60, long?.length)
+        assertEquals("…", long?.takeLast(1))
+        assertEquals(null, none)
+    }
+
+    private fun messageWith(id: String, role: MessageRole, text: String): TimelineItem.Message =
+        TimelineItem.Message(
+            ChatMessage(id = id, sessionId = "s1", role = role, text = text),
+        )
 }

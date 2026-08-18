@@ -182,12 +182,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   projections are read, but identity always remains `sessionId`.
 - **Turn grouping is a collapsible outline.** Logged `turn/start` events
   fold into `TimelineItem.TurnBoundary`; the chat timeline offers a flat view
-  (divider rows) and an outline view whose group headers ("Turn N · X
-  messages · Y tools" plus a per-tool status-count summary line, e.g.
-  "bash 3✓ 1✗") collapse their rows on tap with an expand-all reset.
-  Grouping is a pure UI-layer function over the folded timeline
-  (`groupTimelineByTurn`, JVM-tested). Request-header grouping, compaction,
-  and session-end markers stay deferred.
+  (divider rows) and an outline view whose group headers show the counts, a
+  request-header echo (the first user prompt folded to one line and
+  truncated — `promptPreview`), and a per-tool status-count summary
+  (e.g. "bash 3✓ 1✗"); headers collapse their rows on tap with an
+  expand-all reset. Grouping and preview are pure UI-layer functions over
+  the folded timeline (`groupTimelineByTurn`/`promptPreview`, JVM-tested).
+  Compaction and session-end markers stay deferred.
 - **Settings namespaces patch one top-level key at a time.** For writable
   hosts (`describe.writable`), each namespace row opens an editor with two
   modes: key patch (`settings.update {ns, patch, expectedRevision}`) and

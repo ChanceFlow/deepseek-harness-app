@@ -1348,6 +1348,14 @@ private fun TurnGroupHeader(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(if (collapsed) "▸ $label" else "▾ $label")
+            promptPreview(items)?.let { prompt ->
+                Text(
+                    text = "“$prompt”",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+            }
             if (toolSummary.isNotEmpty()) {
                 Text(
                     text = toolSummary,
