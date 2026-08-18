@@ -164,9 +164,13 @@ rename/fork, queue steer/remove, approvals, and questions.
 ## 9. Testing Strategy
 
 - `core:network`: envelope round-trip tests.
-- `core:harness-adapter`: timeline reducer tests for chunk/message/tool/approval folding.
+- `core:harness-adapter`: timeline reducer tests for chunk/message/tool/approval folding;
+  connection-generation tests with a fake transport and injected dispatcher;
+  hermetic HarnessRepository fake-host integration tests for host workspace frames
+  and mux session-event delivery.
 - `app`: ViewModel tests with a fake `ChatRepository`.
-- Integration with a real `dsh web` is manual or CI opt-in until a hermetic backend fixture exists.
+- Integration with a real `dsh web` is opt-in: set `DSH_E2E_URL` and run
+  `LocalDshE2eTest`; it is skipped otherwise.
 
 ## 10. Known Limitations and Deferred Work
 
@@ -183,7 +187,16 @@ rename/fork, queue steer/remove, approvals, and questions.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select, optionless text, and custom
-  text answers are supported; rich rendering and plan-review intents are not.
+  text answers are supported; rich rendering, plan-review intents, and per
+  question skip are not.
+- **Queue editing is deferred.** The MVP exposes steer and remove against the
+  authoritative `session/queue` snapshot; `edit` content-block replacement is
+  out of scope.
+- **Goal editing is deferred.** The MVP wires `goal.create`, pause, resume,
+  complete, and clear (Section 13); `goal.edit` remains out of scope.
+- **Directory browsing is deferred.** Workspace paths are entered as text;
+  `host.pickDirectory`/`host.listDirectory`/Android SAF and manual workspace
+  ordering remain out of scope.
 
 ## 11. Subagent Ownership
 

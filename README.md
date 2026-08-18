@@ -78,9 +78,10 @@ The MVP client is wired end-to-end against a running `dsh web` host:
 
 - `:core:network` — JSON-RPC envelopes over OkHttp plus the two downlink-only
   WebSocket streams (`/api/events.mux`, `/api/events.host`).
-- `:core:harness-adapter` — connection generations with exponential backoff,
-  reconnect resync, buffered frame replay, history/timeline folding, and the
-  complete unary method set used by the MVP.
+- `:core:harness-adapter` — connection generations with exponential backoff
+  (injectable dispatcher and retry-policy seams), reconnect resync, buffered
+  frame replay, history/timeline folding, local host-frame workspace updates,
+  and the complete unary method set used by the MVP.
 - `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
   and Goals. Chat supports session search/create/rename/archive/fork, queue
   steer and remove (including Queue/Steer composer delivery), approvals,
@@ -88,5 +89,12 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   page-at-a-time older-history loading.
 
 Still deferred, matching [docs/spec.md](docs/spec.md): settings/credentials,
-attachment uploads, markdown and trajectory/plan rendering, and manual
-workspace ordering.
+attachment uploads, markdown and trajectory/plan rendering, directory browsing
+and manual workspace ordering, queue item editing, question skip, and
+`goal.edit`.
+
+Verification: the normal JVM suite (`app` ViewModel, envelope,
+TimelineReducer, ConnectionManager fake transport, Hermetic
+HarnessRepository fake-host integration) passes with zero failures. The
+opt-in `LocalDshE2eTest` also passes against a real local `dsh web` when run
+with `DSH_E2E_URL=http://127.0.0.1:3080`.

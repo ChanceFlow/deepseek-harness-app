@@ -12,6 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -113,6 +114,11 @@ class DshConnectionManager @Inject constructor(
                 connectLoop()
             }
         }
+    }
+
+    /** Stops the retry loop and closes every current generation/stream. */
+    fun stop() {
+        scope.cancel()
     }
 
     /**

@@ -25,9 +25,9 @@ class OkHttpDshEventSocket(
     ): Flow<ServerRequest> = callbackFlow {
         val httpUrl = baseUrl.resolve(path)
             ?: throw DshTransportException("cannot resolve $path against $baseUrl")
-        val webSocketUrl = httpUrl.newBuilder()
-            .scheme(if (httpUrl.scheme == "https") "wss" else "ws")
-            .build()
+        // OkHttp's WebSocket layer accepts the regular http/https URL and
+        // performs the WS upgrade itself; HttpUrl rejects the ws:// scheme.
+        val webSocketUrl = httpUrl
 
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {

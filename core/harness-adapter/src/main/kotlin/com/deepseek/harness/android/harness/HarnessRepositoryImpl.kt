@@ -68,8 +68,8 @@ import com.deepseek.harness.android.network.ServerRequest
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -129,9 +129,10 @@ class HarnessRepositoryImpl @Inject constructor(
     private val rpcClient: DshRpcClient,
     private val connectionManager: DshConnectionManager,
     private val json: Json,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : ChatRepository {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private val connectionGeneration = MutableStateFlow(0L)
     private val sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     private val workspaces = MutableStateFlow<List<WorkspaceSummary>>(emptyList())
