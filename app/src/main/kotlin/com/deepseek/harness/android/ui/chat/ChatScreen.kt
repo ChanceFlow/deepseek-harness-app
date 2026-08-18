@@ -392,12 +392,38 @@ private fun ChatPanel(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(uiState.timeline, key = { timelineKey(it) }) { item ->
-                TimelineRow(item = item, onAction = onAction, loadAttachment = loadAttachment)
+        var outline by remember(uiState.selectedSessionId) { mutableStateOf(false) }
+        var collapsedTurns by remember(uiState.selectedSessionId) { mutableStateOf(setOf<Long>()) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { outline = !outline }) {
+                Text(if (outline) "Outline: on" else "Outline: off")
+            }
+            if (outline && collapsedTurns.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { collapsedTurns = emptySet() },
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("Expand all") }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+
+        if (outline) {
+            OutlineTimeline(
+                timeline = uiState.timeline,
+                collapsedTurns = collapsedTurns,
+                onToggle = { turn -> collapsedTurns = collapsedTurns.toMutableSet().apply { if (!add(turn)) remove(turn) } },
+                onAction = onAction,
+                loadAttachment = loadAttachment,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(uiState.timeline, key = { timelineKey(it) }) { item ->
+                    TimelineRow(item = item, onAction = onAction, loadAttachment = loadAttachment)
+                }
             }
         }
 
@@ -1195,6 +1221,60 @@ private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.Queue -> "queue"
     is TimelineItem.Jobs -> "jobs"
     is TimelineItem.Error -> "error:${item.id}"
+}
+
+/** Ledger-style outline: turn-group headers collapse their rows on tap. */
+@Composable
+private fun OutlineTimeline(
+    timeline: List<TimelineItem>,
+    collapsedTurns: Set<Long>,
+    onToggle: (Long) -> Unit,
+    onAction: (ChatAction) -> Unit,
+    loadAttachment: AttachmentLoader,
+    modifier: Modifier = Modifier,
+) {
+    val groups = remember(timeline) { groupTimelineByTurn(timeline) }
+    LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        groups.forEachIndexed { groupIndex, group ->
+            val turn = group.turn
+            val collapsed = turn != null && turn in collapsedTurns
+            item(key = "group-${turn ?: groupIndex}") {
+                TurnGroupHeader(
+                    turn = turn,
+                    items = group.items,
+                    collapsed = collapsed,
+                    onToggle = onToggle,
+                )
+            }
+            if (!collapsed) {
+                items(group.items, key = { timelineKey(it) }) { item ->
+                    TimelineRow(item = item, onAction = onAction, loadAttachment = loadAttachment)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TurnGroupHeader(
+    turn: Long?,
+    items: List<TimelineItem>,
+    collapsed: Boolean,
+    onToggle: (Long) -> Unit,
+) {
+    val messages = items.count { it is TimelineItem.Message }
+    val tools = items.count { it is TimelineItem.ToolCall }
+    val label = when {
+        turn == null -> "Before first turn · $messages messages"
+        else -> "Turn $turn · $messages messages · $tools tools"
+    }
+    OutlinedButton(
+        onClick = { turn?.let(onToggle) },
+        enabled = turn != null,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(if (collapsed) "▸ $label" else "▾ $label")
+    }
 }
 
 /** Ledger-style turn divider, the first slice of the Web trajectory grouping. */
