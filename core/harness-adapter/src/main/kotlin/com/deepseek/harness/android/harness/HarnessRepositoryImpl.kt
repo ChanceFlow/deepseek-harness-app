@@ -3,6 +3,8 @@ package com.deepseek.harness.android.harness
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.DirectoryEntry
+import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalPhase
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
@@ -33,6 +35,9 @@ import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.harness.dto.SessionCancelValue
 import com.deepseek.harness.android.harness.dto.SessionCreateValue
 import com.deepseek.harness.android.harness.dto.SessionHistoryValue
+import com.deepseek.harness.android.harness.dto.DirectoryCreateValue
+import com.deepseek.harness.android.harness.dto.DirectoryEntryWire
+import com.deepseek.harness.android.harness.dto.DirectoryListingValue
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
 import com.deepseek.harness.android.harness.dto.GoalSnapshotWire
 import com.deepseek.harness.android.harness.dto.GoalBlockReasonWire
@@ -108,6 +113,8 @@ private const val WORKSPACE_CREATE = "workspace.create"
 private const val WORKSPACE_RENAME = "workspace.rename"
 private const val WORKSPACE_DELETE = "workspace.delete"
 private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
+private const val HOST_LIST_DIRECTORY = "host.listDirectory"
+private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
 private const val HISTORY_PAGE_MESSAGES = 50
 private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
@@ -173,6 +180,26 @@ class HarnessRepositoryImpl @Inject constructor(
         val created = json.decodeFromJsonElement<SessionCreateValue>(value)
         sessions.value = loadSessions()
         return SessionSummary(id = created.sessionId, blank = true)
+    }
+
+    override suspend fun listDirectory(path: String?): DirectoryListing {
+        val payload = buildJsonObject {
+            path?.let { put("path", it) }
+        }
+        val value = rpcClient.call(HOST_LIST_DIRECTORY, HOST_LIST_DIRECTORY, payload).valueOrThrow()
+        return json.decodeFromJsonElement<DirectoryListingValue>(value).toDomain()
+    }
+
+    override suspend fun createDirectory(parentPath: String, name: String): String {
+        val value = rpcClient.call(
+            HOST_CREATE_DIRECTORY,
+            HOST_CREATE_DIRECTORY,
+            buildJsonObject {
+                put("path", parentPath)
+                put("name", name)
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<DirectoryCreateValue>(value).path
     }
 
     override suspend fun openSession(sessionId: String) {
@@ -928,6 +955,20 @@ class HarnessRepositoryImpl @Inject constructor(
     private fun JsonObject.historyEventSeq(): Long =
         get("seq")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
 
+
+    private fun DirectoryListingValue.toDomain(): DirectoryListing = DirectoryListing(
+        path = path,
+        home = home,
+        crumbs = crumbs.map { it.toDomain() },
+        entries = entries.map { it.toDomain() },
+        truncated = truncated,
+    )
+
+    private fun DirectoryEntryWire.toDomain(): DirectoryEntry = DirectoryEntry(
+        name = name,
+        path = path,
+        hidden = hidden,
+    )
 
     private fun WorkspaceWire.toDomain(): WorkspaceSummary = WorkspaceSummary(
         workspaceId = workspaceId,

@@ -205,6 +205,37 @@ class HarnessRepositoryIntegrationTest {
         assertEquals("goal-1", ref["id"]?.toString()?.trim('"'))
         assertEquals(1L, ref["revision"]?.toString()?.toLong())
     }
+
+    @Test
+    fun `directory listing maps host wire shape`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val listing = repository.listDirectory("/tmp/chosen")
+
+        assertEquals("/tmp/chosen", listing.path)
+        assertEquals("/home/user", listing.home)
+        assertEquals("src", listing.entries.single().name)
+        assertEquals(false, listing.entries.single().hidden)
+        assertEquals("/tmp/chosen", rpc.payloads("host.listDirectory").single()["path"]?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun `directory creation sends host payload`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val created = repository.createDirectory("/tmp/chosen", "new-folder")
+
+        assertEquals("/tmp/chosen/new-folder", created)
+        val payload = rpc.payloads("host.createDirectory").single()
+        assertEquals("/tmp/chosen", payload["path"]?.toString()?.trim('"'))
+        assertEquals("new-folder", payload["name"]?.toString()?.trim('"'))
+    }
 }
 private fun harnessRepository(
     rpc: DshRpcClient,
@@ -269,6 +300,22 @@ private class HarnessFakeRpc(
                 put("events", buildJsonArray {})
                 put("hasMore", false)
             }
+            "host.listDirectory" -> buildJsonObject {
+                put("path", "/tmp/chosen")
+                put("home", "/home/user")
+                put(
+                    "crumbs",
+                    buildJsonArray { add(directoryEntryJson("chosen", "/tmp/chosen", false)) },
+                )
+                put(
+                    "entries",
+                    buildJsonArray { add(directoryEntryJson("src", "/tmp/chosen/src", false)) },
+                )
+                put("truncated", false)
+            }
+            "host.createDirectory" -> buildJsonObject {
+                put("path", "/tmp/chosen/new-folder")
+            }
             "goal.edit" -> buildJsonObject {
                 put(
                     "ref",
@@ -325,6 +372,16 @@ private class ScriptedHarnessSocket(
         awaitCancellation()
     }
 }
+private fun directoryEntryJson(
+    name: String,
+    path: String,
+    hidden: Boolean,
+): JsonObject = buildJsonObject {
+    put("name", name)
+    put("path", path)
+    put("hidden", hidden)
+}
+
 private fun workspaceJson(
     id: String,
     path: String,

@@ -233,3 +233,27 @@ internal data class GoalProjectionWire(
 internal data class GoalRefValue(
     val ref: GoalRefWire,
 )
+
+
+// Host in-app directory browser shapes.
+
+@Serializable
+internal data class DirectoryEntryWire(
+    val name: String,
+    val path: String,
+    val hidden: Boolean,
+)
+
+@Serializable
+internal data class DirectoryListingValue(
+    val path: String,
+    val home: String,
+    val crumbs: List<DirectoryEntryWire> = emptyList(),
+    val entries: List<DirectoryEntryWire> = emptyList(),
+    val truncated: Boolean,
+)
+
+@Serializable
+internal data class DirectoryCreateValue(
+    val path: String,
+)

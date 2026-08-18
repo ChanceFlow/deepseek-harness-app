@@ -2,6 +2,7 @@ package com.deepseek.harness.android.domain.repository
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ModelSelection
@@ -35,6 +36,14 @@ interface ChatRepository {
     suspend fun refreshSessions()
 
     suspend fun createSession(request: com.deepseek.harness.android.domain.model.CreateSessionRequest): SessionSummary
+
+    /** List one host-directory level; absent path lists the host home. */
+    suspend fun listDirectory(path: String? = null): DirectoryListing =
+        unsupported("listDirectory")
+
+    /** Create one child directory inside [parentPath]. */
+    suspend fun createDirectory(parentPath: String, name: String): String =
+        unsupported("createDirectory")
 
     suspend fun openSession(sessionId: String)
 

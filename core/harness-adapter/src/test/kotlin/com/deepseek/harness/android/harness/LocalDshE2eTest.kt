@@ -70,6 +70,8 @@ class LocalDshE2eTest {
             repository.refreshSessions()
             repository.refreshWorkspaces()
 
+            val directory = repository.listDirectory(null)
+            assertTrue(directory.home.isNotBlank())
             val sessions = repository.observeSessions().first()
             val workspaces = repository.observeWorkspaces().first()
             sessions.firstOrNull()?.let { session ->

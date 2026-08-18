@@ -2,6 +2,7 @@ package com.deepseek.harness.android.ui.workspace
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -20,17 +21,29 @@ class WorkspaceViewModel @Inject constructor(
 
     private val isLoading = MutableStateFlow(false)
     private val errorMessage = MutableStateFlow<String?>(null)
+    private val directoryListing = MutableStateFlow<DirectoryListing?>(null)
+    private val directoryBrowserOpen = MutableStateFlow(false)
+    private val directoryLoading = MutableStateFlow(false)
 
     val uiState: StateFlow<WorkspaceUiState> = combine(
-        chatRepository.observeWorkspaces(),
-        isLoading,
-        errorMessage,
-    ) { workspaces, loading, error ->
-        WorkspaceUiState(
-            workspaces = workspaces,
-            isLoading = loading,
-            errorMessage = error,
-        )
+        combine(
+            chatRepository.observeWorkspaces(),
+            isLoading,
+            errorMessage,
+            directoryListing,
+            directoryBrowserOpen,
+        ) { workspaces, loading, error, listing, open ->
+            WorkspaceUiState(
+                workspaces = workspaces,
+                isLoading = loading,
+                errorMessage = error,
+                directoryListing = listing,
+                directoryBrowserOpen = open,
+            )
+        },
+        directoryLoading,
+    ) { base, loading ->
+        base.copy(directoryLoading = loading)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
@@ -48,6 +61,49 @@ class WorkspaceViewModel @Inject constructor(
             is WorkspaceAction.Delete -> delete(action.workspaceId)
             WorkspaceAction.Refresh -> refresh()
             WorkspaceAction.DismissError -> errorMessage.value = null
+            WorkspaceAction.OpenDirectoryBrowser -> openDirectoryBrowser()
+            WorkspaceAction.CloseDirectoryBrowser -> closeDirectoryBrowser()
+            is WorkspaceAction.NavigateDirectory -> navigateDirectory(action.path)
+            is WorkspaceAction.CreateDirectory -> createDirectory(action.parentPath, action.name)
+        }
+    }
+
+    private fun openDirectoryBrowser() {
+        directoryListing.value = null
+        directoryBrowserOpen.value = true
+        loadDirectory(null)
+    }
+
+    private fun closeDirectoryBrowser() {
+        directoryBrowserOpen.value = false
+        directoryListing.value = null
+    }
+
+    private fun navigateDirectory(path: String?) {
+        if (path.isNullOrBlank()) return
+        loadDirectory(path)
+    }
+
+    private fun createDirectory(parentPath: String, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            runCatchingForUi {
+                chatRepository.createDirectory(parentPath, name.trim())
+            }
+            loadDirectory(parentPath)
+        }
+    }
+
+    private fun loadDirectory(path: String?) {
+        viewModelScope.launch {
+            directoryLoading.value = true
+            try {
+                runCatchingForUi { chatRepository.listDirectory(path) }?.let {
+                    directoryListing.value = it
+                }
+            } finally {
+                directoryLoading.value = false
+            }
         }
     }
 
