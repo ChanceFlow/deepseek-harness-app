@@ -12,6 +12,7 @@ import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
+import com.deepseek.harness.android.domain.model.SettingPathOp
 import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -72,6 +73,22 @@ interface ChatRepository {
         expectedRevision: Long? = null,
     ): SettingsNamespace =
         unsupported("updateSetting")
+
+    /** Replace the whole user-layer section of one namespace. */
+    suspend fun replaceSetting(
+        ns: String,
+        sectionJson: String,
+        expectedRevision: Long? = null,
+    ): SettingsNamespace =
+        unsupported("replaceSetting")
+
+    /** Apply path-addressed set/unset ops to one namespace. */
+    suspend fun mutateSetting(
+        ns: String,
+        ops: List<SettingPathOp>,
+        expectedRevision: Long? = null,
+    ): SettingsNamespace =
+        unsupported("mutateSetting")
 
     /**
      * Read-only probe of credential references. Like settings describe, the

@@ -34,7 +34,7 @@ data class SettingsSnapshot(
 )
 
 /**
- * Read-only state of one credential reference: whether the host holds a
+ * One credential-reference state: whether the host holds a
  * value, where it comes from, and whether this client could store one.
  */
 data class CredentialStatus(
@@ -43,3 +43,16 @@ data class CredentialStatus(
     val source: String?,
     val writable: Boolean,
 )
+
+/** One path-addressed settings mutation; [op] is "set" or "unset". */
+data class SettingPathOp(
+    val op: String,
+    val path: List<String>,
+    val jsonValue: String? = null,
+) {
+    init {
+        require(op == "set" || op == "unset") { "op must be set or unset" }
+        require(path.isNotEmpty()) { "path must be non-empty" }
+        require(op == "unset" || jsonValue != null) { "set op requires a value" }
+    }
+}

@@ -16,6 +16,7 @@ import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
+import com.deepseek.harness.android.domain.model.SettingPathOp
 import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
@@ -138,6 +139,8 @@ private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
 private const val SETTINGS_DESCRIBE = "settings.describe"
 private const val SETTINGS_UPDATE = "settings.update"
+private const val SETTINGS_REPLACE = "settings.replace"
+private const val SETTINGS_MUTATE = "settings.mutate"
 private const val CREDENTIALS_DESCRIBE = "credentials.describe"
 private const val CREDENTIALS_SET = "credentials.set"
 private const val CREDENTIALS_UNSET = "credentials.unset"
@@ -303,6 +306,55 @@ class HarnessRepositoryImpl @Inject constructor(
             buildJsonObject {
                 put("ns", ns)
                 put("patch", buildJsonObject { put(key, json.parseToJsonElement(jsonValue)) })
+                expectedRevision?.let { put("expectedRevision", it) }
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SettingsNamespaceWire>(value).toDomain()
+    }
+
+    override suspend fun replaceSetting(
+        ns: String,
+        sectionJson: String,
+        expectedRevision: Long?,
+    ): SettingsNamespace {
+        val section = json.parseToJsonElement(sectionJson) as? JsonObject
+            ?: throw IllegalArgumentException("settings.replace section must be a JSON object")
+        val value = rpcClient.call(
+            SETTINGS_REPLACE,
+            SETTINGS_REPLACE,
+            buildJsonObject {
+                put("ns", ns)
+                put("section", section)
+                expectedRevision?.let { put("expectedRevision", it) }
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SettingsNamespaceWire>(value).toDomain()
+    }
+
+    override suspend fun mutateSetting(
+        ns: String,
+        ops: List<SettingPathOp>,
+        expectedRevision: Long?,
+    ): SettingsNamespace {
+        val value = rpcClient.call(
+            SETTINGS_MUTATE,
+            SETTINGS_MUTATE,
+            buildJsonObject {
+                put("ns", ns)
+                put(
+                    "ops",
+                    buildJsonArray {
+                        ops.forEach { op ->
+                            add(
+                                buildJsonObject {
+                                    put("op", op.op)
+                                    put("path", buildJsonArray { op.path.forEach { add(it) } })
+                                    op.jsonValue?.let { put("value", json.parseToJsonElement(it)) }
+                                },
+                            )
+                        }
+                    },
+                )
                 expectedRevision?.let { put("expectedRevision", it) }
             },
         ).valueOrThrow()

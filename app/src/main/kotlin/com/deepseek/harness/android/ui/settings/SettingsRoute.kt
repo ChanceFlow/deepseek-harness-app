@@ -160,23 +160,44 @@ private fun NamespaceRow(
         }
     }
     if (editing) {
+        var replaceMode by remember(namespace.ns) { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { editing = false },
             title = { Text("Patch ${namespace.ns}") },
             text = {
                 Column {
-                    OutlinedTextField(
-                        value = key,
-                        onValueChange = { key = it },
-                        singleLine = true,
-                        label = { Text("Top-level key") },
-                    )
-                    OutlinedTextField(
-                        value = jsonValue,
-                        onValueChange = { jsonValue = it },
-                        label = { Text("JSON value") },
-                        placeholder = { Text("true / 42 / \"text\" / {…}") },
-                    )
+                    Row {
+                        OutlinedButton(onClick = { replaceMode = false }) {
+                            Text(if (!replaceMode) "✓ Key patch" else "Key patch")
+                        }
+                        OutlinedButton(
+                            onClick = { replaceMode = true },
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) {
+                            Text(if (replaceMode) "✓ Replace section" else "Replace section")
+                        }
+                    }
+                    if (replaceMode) {
+                        OutlinedTextField(
+                            value = jsonValue,
+                            onValueChange = { jsonValue = it },
+                            label = { Text("Whole user-layer JSON object") },
+                            placeholder = { Text("{ \"key\": value }") },
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = key,
+                            onValueChange = { key = it },
+                            singleLine = true,
+                            label = { Text("Top-level key") },
+                        )
+                        OutlinedTextField(
+                            value = jsonValue,
+                            onValueChange = { jsonValue = it },
+                            label = { Text("JSON value") },
+                            placeholder = { Text("true / 42 / \"text\" / {…}") },
+                        )
+                    }
                     Text(
                         text = "CAS revision ${namespace.revision}; host validates against the schema",
                         style = MaterialTheme.typography.bodySmall,
@@ -187,17 +208,31 @@ private fun NamespaceRow(
             confirmButton = {
                 Button(
                     onClick = {
-                        onAction(
-                            SettingsAction.UpdateSetting(
-                                ns = namespace.ns,
-                                key = key,
-                                jsonValue = jsonValue,
-                                expectedRevision = namespace.revision,
-                            ),
-                        )
+                        if (replaceMode) {
+                            onAction(
+                                SettingsAction.ReplaceSetting(
+                                    ns = namespace.ns,
+                                    sectionJson = jsonValue,
+                                    expectedRevision = namespace.revision,
+                                ),
+                            )
+                        } else {
+                            onAction(
+                                SettingsAction.UpdateSetting(
+                                    ns = namespace.ns,
+                                    key = key,
+                                    jsonValue = jsonValue,
+                                    expectedRevision = namespace.revision,
+                                ),
+                            )
+                        }
                         editing = false
                     },
-                    enabled = key.isNotBlank() && jsonValue.isNotBlank(),
+                    enabled = if (replaceMode) {
+                        jsonValue.isNotBlank()
+                    } else {
+                        key.isNotBlank() && jsonValue.isNotBlank()
+                    },
                 ) { Text("Save") }
             },
             dismissButton = {

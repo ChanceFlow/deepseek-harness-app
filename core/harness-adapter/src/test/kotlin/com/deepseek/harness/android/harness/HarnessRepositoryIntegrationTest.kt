@@ -10,6 +10,7 @@ import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SettingsApplies
+import com.deepseek.harness.android.domain.model.SettingPathOp
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.network.DshEventSocket
@@ -464,6 +465,59 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `setting replace sends whole section object`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.replaceSetting(
+            ns = "shell",
+            sectionJson = """{"bash":{"enabled":false}}""",
+            expectedRevision = 2L,
+        )
+
+        val payload = rpc.payloads("settings.replace").single()
+        assertEquals("shell", payload["ns"]?.jsonPrimitive?.content)
+        assertEquals(2L, payload["expectedRevision"]?.jsonPrimitive?.long)
+        val section = payload["section"]?.jsonObject ?: error("missing section")
+        assertEquals(false, section["bash"]?.jsonObject?.get("enabled")?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `setting mutate serializes set and unset path ops`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.mutateSetting(
+            ns = "llm-deepseek",
+            ops = listOf(
+                SettingPathOp(op = "set", path = listOf("providers", "x"), jsonValue = "5"),
+                SettingPathOp(op = "unset", path = listOf("retry")),
+            ),
+            expectedRevision = null,
+        )
+
+        val payload = rpc.payloads("settings.mutate").single()
+        assertEquals("llm-deepseek", payload["ns"]?.jsonPrimitive?.content)
+        assertEquals(null, payload["expectedRevision"])
+        val ops = payload["ops"]?.jsonArray ?: error("missing ops")
+        assertEquals(2, ops.size)
+        val set = ops[0].jsonObject
+        assertEquals("set", set["op"]?.jsonPrimitive?.content)
+        assertEquals(
+            listOf("providers", "x"),
+            set["path"]?.jsonArray?.map { it.jsonPrimitive.content },
+        )
+        assertEquals(5L, set["value"]?.jsonPrimitive?.long)
+        val unset = ops[1].jsonObject
+        assertEquals("unset", unset["op"]?.jsonPrimitive?.content)
+        assertEquals(null, unset["value"])
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -782,7 +836,7 @@ private class HarnessFakeRpc(
                     },
                 )
             }
-            "settings.update" -> buildJsonObject {
+            "settings.update", "settings.replace", "settings.mutate" -> buildJsonObject {
                 put("ns", "llm-deepseek")
                 put("value", buildJsonObject { })
                 put("user", buildJsonObject { put("touched", true) })

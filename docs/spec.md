@@ -189,13 +189,16 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   (`groupTimelineByTurn`, JVM-tested). Request-header grouping, compaction,
   and session-end markers stay deferred.
 - **Settings namespaces patch one top-level key at a time.** For writable
-  hosts (`describe.writable`), each namespace row opens a key + raw-JSON
-  editor that sends `settings.update {ns, patch: {key: value},
-  expectedRevision}` — the revision from the last describe acts as the CAS
+  hosts (`describe.writable`), each namespace row opens an editor with two
+  modes: key patch (`settings.update {ns, patch, expectedRevision}`) and
+  whole-section replace (`settings.replace {ns, section, expectedRevision}`,
+  object-only JSON). The revision from the last describe acts as the CAS
   guard, the host validates against the namespace schema, and the response
-  view re-describes the page. Schema-driven forms (the Web's schema-form
-  engine), full-namespace `settings.replace`/`mutate`, and secret-slot
-  writes stay deferred. `credentials.set`/`unset` store and clear writable
+  view re-describes the page. `settings.mutate` (path-addressed set/unset
+  ops) is wire-complete at the adapter (`SettingPathOp`); no dedicated UI —
+  the two editor modes cover the same surface. Schema-driven forms (the
+  Web's schema-form engine), secret-slot writes, and `settings.openDocument`
+  stay deferred. `credentials.set`/`unset` store and clear writable
   credential refs; the whole plane stays loopback-gated.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.

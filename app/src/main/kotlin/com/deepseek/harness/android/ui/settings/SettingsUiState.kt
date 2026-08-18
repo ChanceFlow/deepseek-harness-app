@@ -25,4 +25,10 @@ sealed interface SettingsAction {
         val jsonValue: String,
         val expectedRevision: Long?,
     ) : SettingsAction
+
+    data class ReplaceSetting(
+        val ns: String,
+        val sectionJson: String,
+        val expectedRevision: Long?,
+    ) : SettingsAction
 }

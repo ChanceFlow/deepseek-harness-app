@@ -62,6 +62,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsAction.SetCredential -> writeCredential(action.ref, action.value)
             is SettingsAction.UnsetCredential -> clearCredential(action.ref)
             is SettingsAction.UpdateSetting -> updateSetting(action)
+            is SettingsAction.ReplaceSetting -> replaceSetting(action)
         }
     }
 
@@ -76,6 +77,26 @@ class SettingsViewModel @Inject constructor(
                         ns = action.ns,
                         key = action.key.trim(),
                         jsonValue = action.jsonValue.trim(),
+                        expectedRevision = action.expectedRevision,
+                    )
+                }
+                if (updated != null) refresh()
+            } finally {
+                isLoading.value = false
+            }
+        }
+    }
+
+    /** Whole-section replacement of one namespace's user layer. */
+    private fun replaceSetting(action: SettingsAction.ReplaceSetting) {
+        if (action.sectionJson.isBlank()) return
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                val updated = runCatchingForUi {
+                    chatRepository.replaceSetting(
+                        ns = action.ns,
+                        sectionJson = action.sectionJson.trim(),
                         expectedRevision = action.expectedRevision,
                     )
                 }
