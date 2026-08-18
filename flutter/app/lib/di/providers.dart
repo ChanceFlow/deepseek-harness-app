@@ -11,9 +11,16 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/http_dsh_rpc_client.dart';
 import 'package:network/web_socket_dsh_event_socket.dart';
 
+// Re-exported so tests can override the seams without importing the
+// network package directly (import gate keeps that to this file).
+export 'package:network/dsh_event_socket.dart';
+export 'package:network/dsh_rpc_client.dart';
+export 'package:network/rpc_envelope.dart';
+
 import '../config.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
+import '../ui/workspace/workspace_controller.dart';
 
 /// Raw transport seams, overridable in tests.
 final dshRpcClientProvider = Provider<DshRpcClient>(
@@ -55,3 +62,10 @@ final chatControllerProvider = Provider<ChatController>((ref) {
 final chatUiStateProvider = StreamProvider<ChatUiState>(
   (ref) => ref.watch(chatControllerProvider).uiState,
 );
+
+/// Workspace screen controller (UDF).
+final workspaceControllerProvider = Provider<WorkspaceController>((ref) {
+  final controller = WorkspaceController(ref.watch(chatRepositoryProvider));
+  ref.onDispose(controller.dispose);
+  return controller;
+});

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'ui/root/app_root.dart';
+import 'ui/theme/theme.dart';
 
 void main() {
-  runApp(const DshApp());
+  runApp(const ProviderScope(child: DshApp()));
 }
 
 class DshApp extends StatelessWidget {
@@ -11,10 +15,9 @@ class DshApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'DeepSeek Harness',
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF4F6DF5), useMaterial3: true),
-      home: const Scaffold(
-        body: Center(child: Text('Flutter rewrite in progress')),
-      ),
+      theme: DshTheme.light(),
+      darkTheme: DshTheme.dark(),
+      home: const AppRoot(),
     );
   }
 }
