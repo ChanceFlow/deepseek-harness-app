@@ -17,4 +17,6 @@ data class SettingsUiState(
 sealed interface SettingsAction {
     data object Refresh : SettingsAction
     data object DismissError : SettingsAction
+    data class SetCredential(val ref: String, val value: String) : SettingsAction
+    data class UnsetCredential(val ref: String) : SettingsAction
 }

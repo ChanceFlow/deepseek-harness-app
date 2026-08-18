@@ -410,6 +410,34 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `credential set sends ref and value`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.setCredential("DEEPSEEK_API_KEY", "sk-typed")
+
+        val payload = rpc.payloads("credentials.set").single()
+        assertEquals("DEEPSEEK_API_KEY", payload["ref"]?.jsonPrimitive?.content)
+        assertEquals("sk-typed", payload["value"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `credential unset sends ref only`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.unsetCredential("DEEPSEEK_API_KEY")
+
+        val payload = rpc.payloads("credentials.unset").single()
+        assertEquals("DEEPSEEK_API_KEY", payload["ref"]?.jsonPrimitive?.content)
+        assertEquals(1, payload.size)
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()

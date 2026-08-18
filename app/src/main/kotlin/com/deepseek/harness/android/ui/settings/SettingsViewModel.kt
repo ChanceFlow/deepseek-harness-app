@@ -59,6 +59,34 @@ class SettingsViewModel @Inject constructor(
         when (action) {
             SettingsAction.Refresh -> refresh()
             SettingsAction.DismissError -> errorMessage.value = null
+            is SettingsAction.SetCredential -> writeCredential(action.ref, action.value)
+            is SettingsAction.UnsetCredential -> clearCredential(action.ref)
+        }
+    }
+
+    /** Writes are loopback-gated; both paths re-describe after a success. */
+    private fun writeCredential(ref: String, value: String) {
+        if (value.isEmpty()) return
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                val written = runCatchingForUi { chatRepository.setCredential(ref, value) }
+                if (written != null) refresh()
+            } finally {
+                isLoading.value = false
+            }
+        }
+    }
+
+    private fun clearCredential(ref: String) {
+        viewModelScope.launch {
+            isLoading.value = true
+            try {
+                val cleared = runCatchingForUi { chatRepository.unsetCredential(ref) }
+                if (cleared != null) refresh()
+            } finally {
+                isLoading.value = false
+            }
         }
     }
 

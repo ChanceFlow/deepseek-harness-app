@@ -66,6 +66,16 @@ interface ChatRepository {
     suspend fun describeCredentials(refs: List<String>): List<CredentialStatus> =
         unsupported("describeCredentials")
 
+    /** Store one credential value; loopback-trusted connections only. */
+    suspend fun setCredential(ref: String, value: String) {
+        unsupported("setCredential")
+    }
+
+    /** Clear one stored credential; loopback-trusted connections only. */
+    suspend fun unsetCredential(ref: String) {
+        unsupported("unsetCredential")
+    }
+
     suspend fun openSession(sessionId: String)
 
     fun observeTimeline(sessionId: String): Flow<List<TimelineItem>>

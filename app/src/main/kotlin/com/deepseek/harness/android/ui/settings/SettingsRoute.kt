@@ -9,13 +9,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,7 +52,7 @@ fun SettingsScreen(
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Settings (read-only)",
+                text = "Settings",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f),
             )
@@ -59,7 +65,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                text = "settings.describe is loopback-only on the host; connect via adb reverse",
+                text = "settings/credentials are loopback-only on the host; connect via adb reverse",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -72,6 +78,7 @@ fun SettingsScreen(
                 snapshot = described,
                 credentials = uiState.credentials,
                 credentialError = uiState.credentialError,
+                onAction = onAction,
             )
         }
     }
@@ -82,6 +89,7 @@ private fun SnapshotBody(
     snapshot: SettingsSnapshot,
     credentials: List<CredentialStatus>,
     credentialError: String?,
+    onAction: (SettingsAction) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row {
@@ -113,7 +121,7 @@ private fun SnapshotBody(
                     )
                 }
                 items(credentials, key = { it.ref }) { credential ->
-                    CredentialRow(credential)
+                    CredentialRow(credential, onAction)
                 }
             }
         }
@@ -144,7 +152,12 @@ private fun NamespaceRow(namespace: SettingsNamespace) {
 }
 
 @Composable
-private fun CredentialRow(credential: CredentialStatus) {
+private fun CredentialRow(
+    credential: CredentialStatus,
+    onAction: (SettingsAction) -> Unit,
+) {
+    var editing by remember(credential.ref) { mutableStateOf(false) }
+    var value by remember(credential.ref) { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(text = credential.ref, style = MaterialTheme.typography.titleSmall)
         Text(
@@ -154,6 +167,48 @@ private fun CredentialRow(credential: CredentialStatus) {
                 if (credential.writable) "writable" else "read-only",
             ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
+        )
+        if (credential.writable) {
+            Row {
+                OutlinedButton(onClick = { editing = true }) {
+                    Text(if (credential.configured) "Replace" else "Set value")
+                }
+                if (credential.configured) {
+                    OutlinedButton(
+                        onClick = { onAction(SettingsAction.UnsetCredential(credential.ref)) },
+                        modifier = Modifier.padding(start = 8.dp),
+                    ) { Text("Unset") }
+                }
+            }
+        }
+    }
+    if (editing) {
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Store ${credential.ref}") },
+            text = {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    singleLine = true,
+                    placeholder = { Text("secret value") },
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (value.isNotBlank()) {
+                            onAction(SettingsAction.SetCredential(credential.ref, value.trim()))
+                        }
+                        editing = false
+                        value = ""
+                    },
+                    enabled = value.isNotBlank(),
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { editing = false }) { Text("Cancel") }
+            },
         )
     }
 }

@@ -138,6 +138,8 @@ private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
 private const val SETTINGS_DESCRIBE = "settings.describe"
 private const val CREDENTIALS_DESCRIBE = "credentials.describe"
+private const val CREDENTIALS_SET = "credentials.set"
+private const val CREDENTIALS_UNSET = "credentials.unset"
 private const val CREDENTIALS_MAX_REFS = 64
 private const val SKILL_LIST = "skill.list"
 private const val HISTORY_PAGE_MESSAGES = 50
@@ -266,6 +268,26 @@ class HarnessRepositoryImpl @Inject constructor(
                 )
             }
             .sortedBy { it.ref }
+    }
+
+    override suspend fun setCredential(ref: String, value: String) {
+        require(value.isNotEmpty()) { "credential value must be non-empty" }
+        rpcClient.call(
+            CREDENTIALS_SET,
+            CREDENTIALS_SET,
+            buildJsonObject {
+                put("ref", ref)
+                put("value", value)
+            },
+        ).valueOrThrow()
+    }
+
+    override suspend fun unsetCredential(ref: String) {
+        rpcClient.call(
+            CREDENTIALS_UNSET,
+            CREDENTIALS_UNSET,
+            buildJsonObject { put("ref", ref) },
+        ).valueOrThrow()
     }
 
     override suspend fun openSession(sessionId: String) {
