@@ -1,0 +1,822 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:domain/model/attachment.dart';
+import 'package:domain/model/chat_message.dart';
+import 'package:domain/model/plan.dart';
+import 'package:domain/model/prompt.dart';
+import 'package:domain/model/session.dart';
+import 'package:domain/model/settings.dart';
+import 'package:domain/model/goal.dart';
+import 'package:domain/model/timeline_item.dart';
+import 'package:domain/repository/chat_repository.dart'
+    show QuestionEvidence;
+import 'package:network/dsh_event_socket.dart';
+import 'package:network/dsh_rpc_client.dart';
+import 'package:network/rpc_envelope.dart';
+import 'package:test/test.dart';
+
+import 'package:harness_adapter/src/dsh_connection_manager.dart';
+import 'package:harness_adapter/src/harness_repository_impl.dart';
+import 'package:harness_adapter/src/rpc_map.dart';
+
+JsonMap _workspaceJson(
+  String id,
+  String path,
+  String title, [
+  List<String> sessionIds = const <String>[],
+]) =>
+    <String, Object?>{
+      'workspaceId': id,
+      'path': path,
+      'title': title,
+      'sessionIds': sessionIds,
+      'createdAt': '2026-01-01T00:00:00Z',
+      'updatedAt': '2026-01-01T00:00:00Z',
+    };
+
+JsonMap _directoryEntryJson(String name, String path, bool hidden) =>
+    <String, Object?>{'name': name, 'path': path, 'hidden': hidden};
+
+ServerRequest _hostFrame(String type, JsonMap payload) => ServerRequest(
+      rpcId: 'rpc-$type',
+      method: type,
+      payload: payload,
+    );
+
+ServerRequest _muxFrame(String type, String sessionId, JsonMap event) =>
+    ServerRequest(
+      rpcId: 'rpc-$type-$sessionId',
+      method: type,
+      payload: <String, Object?>{
+        'type': type,
+        'sessionId': sessionId,
+        'event': event,
+      },
+    );
+
+JsonMap _assistantMessageEvent() => <String, Object?>{
+      'type': 'assistant/message',
+      'seq': 7,
+      'time': 7,
+      'data': <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'assistant-1',
+          'role': 'assistant',
+          'content': <Object?>[
+            <String, Object?>{'type': 'text', 'text': 'hello from fake host'},
+          ],
+        },
+      },
+    };
+
+Future<HarnessRepositoryImpl> harnessRepository(
+  HarnessFakeRpc rpc,
+  ScriptedHarnessSocket socket,
+) async {
+  final manager = DshConnectionManager(rpc, socket, (_) => 10000);
+  final repository = HarnessRepositoryImpl(rpc, manager);
+  await pumpEventQueue();
+  return repository;
+}
+
+class HarnessFakeRpc implements DshRpcClient {
+  HarnessFakeRpc({
+    List<Object?> initialSessions = const <Object?>[],
+    List<Object?> initialWorkspaces = const <Object?>[],
+  })  : _initialSessions = initialSessions,
+        _initialWorkspaces = initialWorkspaces;
+
+  final List<Object?> _initialSessions;
+  final List<Object?> _initialWorkspaces;
+  final Map<String, int> _calls = <String, int>{};
+  final Map<String, List<JsonMap>> _payloadsByEndpoint = <String, List<JsonMap>>{};
+  final List<(String, RpcResult)> _receivedResponses = <(String, RpcResult)>[];
+
+  int callCountFor(String endpoint) => _calls[endpoint] ?? 0;
+
+  List<JsonMap> payloads(String endpoint) =>
+      List<JsonMap>.of(_payloadsByEndpoint[endpoint] ?? <JsonMap>[]);
+
+  List<(String, RpcResult)> receivedResponses() =>
+      List<(String, RpcResult)>.of(_receivedResponses);
+
+  @override
+  Future<RpcResult> call(String endpoint, String method, JsonMap payload) async {
+    _calls[endpoint] = callCountFor(endpoint) + 1;
+    _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
+    final value = _valueFor(endpoint);
+    return RpcResult(ok: true, value: value);
+  }
+
+  JsonMap _valueFor(String endpoint) {
+    switch (endpoint) {
+      case 'host.describe':
+        return <String, Object?>{
+          'version': 'fake-host',
+          'cwd': '/tmp/fake-host',
+          'attachedSessions': 0,
+        };
+      case 'session.list':
+        return <String, Object?>{'items': _initialSessions};
+      case 'workspace.list':
+        return <String, Object?>{
+          'items': _initialWorkspaces,
+          'archivedSessionIds': <Object?>[],
+        };
+      case 'workspace.insertBefore':
+        return <String, Object?>{
+          'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
+        };
+      case 'session.history':
+        return <String, Object?>{
+          'events': <Object?>[],
+          'hasMore': false,
+          'projections': <String, Object?>{
+            'values': <String, Object?>{
+              'plan': <String, Object?>{'active': false, 'pending': true},
+            },
+          },
+        };
+      case 'session.attachment':
+        return <String, Object?>{
+          'attachment': <String, Object?>{
+            'attachmentId': 'sha256:abc',
+            'mediaType': 'image/png',
+            'bytes': 2,
+            'width': 1,
+            'height': 1,
+            'name': 'shot.png',
+          },
+          'data': 'aGk=',
+        };
+      case 'workspace.insertSessionBefore':
+        return <String, Object?>{
+          'workspace':
+              _workspaceJson('ws-a', '/a', 'A', <String>['s2', 's3', 's1']),
+        };
+      case 'skill.list':
+        return <String, Object?>{
+          'skills': <Object?>[
+            <String, Object?>{
+              'name': 'generate-image',
+              'description': 'Generate images from text',
+              'whenToUse': 'user asks for pictures',
+              'modelInvocable': true,
+            },
+            <String, Object?>{
+              'name': 'firefly3-manager',
+              'description': 'Manage Firefly III ledgers',
+              'modelInvocable': false,
+            },
+          ],
+        };
+      case 'host.listDirectory':
+        return <String, Object?>{
+          'path': '/tmp/chosen',
+          'home': '/home/user',
+          'crumbs': <Object?>[
+            _directoryEntryJson('chosen', '/tmp/chosen', false),
+          ],
+          'entries': <Object?>[
+            _directoryEntryJson('src', '/tmp/chosen/src', false),
+          ],
+          'truncated': false,
+        };
+      case 'host.createDirectory':
+        return <String, Object?>{'path': '/tmp/chosen/new-folder'};
+      case 'settings.describe':
+        return <String, Object?>{
+          'writable': true,
+          'hasDocument': false,
+          'namespaces': <Object?>[
+            <String, Object?>{
+              'ns': 'llm-deepseek',
+              'schema': <String, Object?>{'type': 'object'},
+              'value': <String, Object?>{
+                'providers': <String, Object?>{
+                  'deepseek-official': <String, Object?>{
+                    'apiKeyEnv': 'DEEPSEEK_API_KEY',
+                  },
+                },
+              },
+              'base': <String, Object?>{},
+              'user': <String, Object?>{'touched': true},
+              'applies': 'live',
+              'secrets': <Object?>[
+                <String, Object?>{
+                  'path': <Object?>['providers'],
+                  'set': true,
+                },
+              ],
+              'revision': 3,
+            },
+            <String, Object?>{
+              'ns': 'shell',
+              'value': <String, Object?>{},
+              'applies': 'restart',
+              'secrets': <Object?>[],
+              'revision': 0,
+            },
+          ],
+        };
+      case 'credentials.describe':
+        return <String, Object?>{
+          'credentials': <String, Object?>{
+            'DEEPSEEK_API_KEY': <String, Object?>{
+              'configured': true,
+              'source': 'file',
+              'writable': true,
+            },
+            'MINIMAX_CN_API_KEY': <String, Object?>{
+              'configured': false,
+              'writable': false,
+            },
+          },
+        };
+      case 'settings.update':
+      case 'settings.replace':
+      case 'settings.mutate':
+        return <String, Object?>{
+          'ns': 'llm-deepseek',
+          'value': <String, Object?>{},
+          'user': <String, Object?>{'touched': true},
+          'applies': 'live',
+          'secrets': <Object?>[],
+          'revision': 3,
+        };
+      case 'goal.edit':
+        return <String, Object?>{
+          'ref': <String, Object?>{'id': 'goal-1', 'revision': 2},
+        };
+      default:
+        return <String, Object?>{};
+    }
+  }
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {
+    _receivedResponses.add((rpcId, result));
+  }
+}
+
+class ScriptedHarnessSocket implements DshEventSocket {
+  ScriptedHarnessSocket({
+    List<ServerRequest> muxFrames = const <ServerRequest>[],
+    List<ServerRequest> hostFrames = const <ServerRequest>[],
+  })  : _muxFrames = muxFrames,
+        _hostFrames = hostFrames;
+
+  final List<ServerRequest> _muxFrames;
+  final List<ServerRequest> _hostFrames;
+  final Completer<void> _muxRelease = Completer<void>();
+  final Completer<void> _hostRelease = Completer<void>();
+  final List<String> _paths = <String>[];
+
+  List<String> get connectedPaths => List<String>.of(_paths);
+
+  void releaseMuxFrames() {
+    if (!_muxRelease.isCompleted) _muxRelease.complete();
+  }
+
+  void releaseHostFrames() {
+    if (!_hostRelease.isCompleted) _hostRelease.complete();
+  }
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) async* {
+    _paths.add(path);
+    onOpen?.call();
+    if (path.endsWith('events.host')) {
+      await _hostRelease.future;
+      for (final frame in _hostFrames) {
+        yield frame;
+      }
+    } else {
+      await _muxRelease.future;
+      for (final frame in _muxFrames) {
+        yield frame;
+      }
+    }
+    // awaitCancellation: stay open until the subscriber cancels.
+    await Completer<void>().future;
+  }
+}
+
+void main() {
+  test('host workspace frames fold locally without extra workspace list calls',
+      () async {
+    final rpc = HarnessFakeRpc(
+      initialWorkspaces: <Object?>[
+        _workspaceJson('ws-a', '/a', 'A'),
+        _workspaceJson('ws-b', '/b', 'B'),
+      ],
+    );
+    final socket = ScriptedHarnessSocket(
+      hostFrames: <ServerRequest>[
+        _hostFrame('host/workspace-changed', <String, Object?>{
+          'type': 'host/workspace-changed',
+          'workspace': _workspaceJson('ws-a', '/a', 'A renamed', <String>['s1']),
+        }),
+        _hostFrame('host/workspace-order-changed', <String, Object?>{
+          'type': 'host/workspace-order-changed',
+          'workspaceIds': <Object?>['ws-b', 'ws-a'],
+        }),
+        _hostFrame('host/workspace-removed', <String, Object?>{
+          'type': 'host/workspace-removed',
+          'workspaceId': 'ws-b',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseHostFrames();
+    await pumpEventQueue();
+
+    final workspaces = await repository.observeWorkspaces().first;
+    expect(workspaces.map((workspace) => workspace.title), <String>['A renamed']);
+    expect(workspaces.map((workspace) => workspace.workspaceId), <String>['ws-a']);
+    expect(rpc.callCountFor('workspace.list'), 1);
+  });
+
+  test('mux session event reaches an opened session timeline', () async {
+    final rpc = HarnessFakeRpc(
+      initialSessions: <Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ],
+    );
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _muxFrame('session/event', 'session-1', _assistantMessageEvent()),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final timeline = await repository.observeTimeline('session-1').first;
+    expect(timeline, hasLength(1));
+    final message = timeline.single as TimelineMessage;
+    expect(message.value.role, MessageRole.assistant);
+    expect(message.value.text, 'hello from fake host');
+    expect(message.value.streaming, isFalse);
+  });
+
+  test('queue edit serializes text content block', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.updateQueue(QueueUpdateRequest(
+      sessionId: 'session-1',
+      itemId: 'queued-1',
+      kind: QueueUpdateKind.edit,
+      text: 'revised prompt',
+    ));
+
+    final payload = rpc.payloads('session.updateQueue').single;
+    final action = asJsonObject(payload['action']);
+    expect(action, isNotNull, reason: 'missing action');
+    final content = asJsonObject(asJsonArray(action!['content'])?.single);
+    expect(content, isNotNull, reason: 'missing content block');
+    expect(action['kind'], 'edit');
+    expect(content!['type'], 'text');
+    expect(content['text'], 'revised prompt');
+  });
+
+  test('skipped question response uses empty selected array', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.answerQuestions(
+      'rpc-question',
+      QuestionEvidence(
+        sessionId: 'session-1',
+        answers: <QuestionAnswer>[
+          const QuestionAnswer(questionId: 'question-1'),
+        ],
+      ),
+    );
+
+    final received = rpc.receivedResponses().single;
+    expect(received.$1, 'rpc-question');
+    final value = received.$2.value;
+    expect(value, isNotNull, reason: 'missing responded value');
+    final answer = asJsonObject(value!['answer']);
+    expect(answer, isNotNull, reason: 'missing answer');
+    final firstAnswer =
+        asJsonObject(asJsonArray(answer!['answers'])?.single);
+    expect(firstAnswer, isNotNull, reason: 'missing question answer');
+    expect(firstAnswer!['id'], 'question-1');
+    expect((firstAnswer['selected'] as List).length, 0);
+  });
+
+  test('goal edit sends objective with cas ref', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final edited = await repository.editGoal(
+      'session-1',
+      const GoalRef(id: 'goal-1', revision: 1),
+      'ship it v2',
+    );
+
+    expect(edited.id, 'goal-1');
+    expect(edited.revision, 2);
+    final payload = rpc.payloads('goal.edit').single;
+    expect(payload['sessionId'], 'session-1');
+    expect(payload['objective'], 'ship it v2');
+    final ref = asJsonObject(payload['ref']);
+    expect(ref, isNotNull, reason: 'missing goal ref');
+    expect(ref!['id'], 'goal-1');
+    expect(ref['revision'], 1);
+  });
+
+  test('directory listing maps host wire shape', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final listing = await repository.listDirectory('/tmp/chosen');
+
+    expect(listing.path, '/tmp/chosen');
+    expect(listing.home, '/home/user');
+    expect(listing.entries.single.name, 'src');
+    expect(listing.entries.single.hidden, isFalse);
+    expect(rpc.payloads('host.listDirectory').single['path'], '/tmp/chosen');
+  });
+
+  test('directory creation sends host payload', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final created = await repository.createDirectory('/tmp/chosen', 'new-folder');
+
+    expect(created, '/tmp/chosen/new-folder');
+    final payload = rpc.payloads('host.createDirectory').single;
+    expect(payload['path'], '/tmp/chosen');
+    expect(payload['name'], 'new-folder');
+  });
+
+  test('settings describe maps namespace wire shape', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final snapshot = await repository.describeSettings();
+
+    expect(snapshot.writable, isTrue);
+    expect(snapshot.hasDocument, isFalse);
+    final deepseek =
+        snapshot.namespaces.firstWhere((namespace) => namespace.ns == 'llm-deepseek');
+    expect(deepseek.applies, SettingsApplies.live);
+    expect(deepseek.revision, 3);
+    expect(deepseek.hasUserLayer, isTrue);
+    expect(deepseek.secretCount, 1);
+    final shell = snapshot.namespaces.firstWhere((namespace) => namespace.ns == 'shell');
+    expect(shell.applies, SettingsApplies.restart);
+    expect(shell.hasUserLayer, isFalse);
+    expect(snapshot.credentialRefs, <String>['DEEPSEEK_API_KEY']);
+    expect(rpc.payloads('settings.describe').single.length, 0);
+  });
+
+  test('credentials describe sends refs and maps views', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final described = await repository
+        .describeCredentials(<String>['MINIMAX_CN_API_KEY', 'DEEPSEEK_API_KEY']);
+
+    expect(described.map((status) => status.ref).toList(),
+        <String>['DEEPSEEK_API_KEY', 'MINIMAX_CN_API_KEY']);
+    final configured =
+        described.firstWhere((status) => status.ref == 'DEEPSEEK_API_KEY');
+    expect(configured.configured, isTrue);
+    expect(configured.source, 'file');
+    expect(configured.writable, isTrue);
+    final missing =
+        described.firstWhere((status) => status.ref == 'MINIMAX_CN_API_KEY');
+    expect(missing.configured, isFalse);
+    expect(missing.source, isNull);
+    expect(missing.writable, isFalse);
+    final refs =
+        asJsonArray(rpc.payloads('credentials.describe').single['refs']);
+    expect(refs?.cast<String>(), <String>['MINIMAX_CN_API_KEY', 'DEEPSEEK_API_KEY']);
+  });
+
+  test('credentials describe skips the wire for empty refs', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    expect(await repository.describeCredentials(<String>[]), isEmpty);
+    expect(rpc.payloads('credentials.describe'), isEmpty);
+  });
+
+  test('history projections seed plan state', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    expect(await repository.observePlan('session-1').first,
+        const PlanState(active: false, pending: true));
+  });
+
+  test('plan projection frame updates plan state live', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-plan-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'plan',
+            'value': <String, Object?>{'active': true, 'pending': false},
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    expect(await repository.observePlan('session-1').first,
+        const PlanState(active: true, pending: false));
+  });
+
+  test('skill list sends session scope and maps catalog', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final catalog = await repository.listSkills('session-1');
+
+    expect(rpc.payloads('skill.list').single['sessionId'], 'session-1');
+    expect(catalog, hasLength(2));
+    final first = catalog.first;
+    expect(first.name, 'generate-image');
+    expect(first.description, 'Generate images from text');
+    expect(first.whenToUse, 'user asks for pictures');
+    expect(first.modelInvocable, isTrue);
+    expect(catalog[1].whenToUse, isNull);
+  });
+
+  test('move workspace sends anchor and applies response order', () async {
+    final rpc = HarnessFakeRpc(
+      initialWorkspaces: <Object?>[
+        _workspaceJson('ws-a', '/a', 'A'),
+        _workspaceJson('ws-b', '/b', 'B'),
+        _workspaceJson('ws-c', '/c', 'C'),
+      ],
+    );
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+    await repository.refreshWorkspaces();
+
+    final orderedIds = await repository.moveWorkspace('ws-a', 'ws-c');
+
+    expect(orderedIds, <String>['ws-b', 'ws-a', 'ws-c']);
+    final payload = rpc.payloads('workspace.insertBefore').single;
+    expect(payload['workspaceId'], 'ws-a');
+    expect(payload['beforeWorkspaceId'], 'ws-c');
+    expect(
+      (await repository.observeWorkspaces().first)
+          .map((workspace) => workspace.workspaceId)
+          .toList(),
+      <String>['ws-b', 'ws-a', 'ws-c'],
+    );
+  });
+
+  test('move workspace without anchor omits the field', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.moveWorkspace('ws-a', null);
+
+    final payload = rpc.payloads('workspace.insertBefore').single;
+    expect(payload['workspaceId'], 'ws-a');
+    expect(payload.containsKey('beforeWorkspaceId'), isFalse);
+  });
+
+  test('credential set sends ref and value', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.setCredential('DEEPSEEK_API_KEY', 'sk-typed');
+
+    final payload = rpc.payloads('credentials.set').single;
+    expect(payload['ref'], 'DEEPSEEK_API_KEY');
+    expect(payload['value'], 'sk-typed');
+  });
+
+  test('credential unset sends ref only', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.unsetCredential('DEEPSEEK_API_KEY');
+
+    final payload = rpc.payloads('credentials.unset').single;
+    expect(payload['ref'], 'DEEPSEEK_API_KEY');
+    expect(payload.length, 1);
+  });
+
+  test('setting update sends patch with cas revision and maps view', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final updated = await repository.updateSetting(
+      'llm-deepseek',
+      'retry',
+      '{"attempts": 5}',
+      expectedRevision: 3,
+    );
+
+    final payload = rpc.payloads('settings.update').single;
+    expect(payload['ns'], 'llm-deepseek');
+    expect(payload['expectedRevision'], 3);
+    final patch = asJsonObject(payload['patch']);
+    expect(patch, isNotNull, reason: 'missing patch');
+    expect(asJsonObject(patch!['retry'])?['attempts'], 5);
+    // The response arm reuses the settings.describe namespace fixture.
+    expect(updated.ns, 'llm-deepseek');
+    expect(updated.revision, 3);
+    expect(updated.hasUserLayer, isTrue);
+  });
+
+  test('setting replace sends whole section object', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.replaceSetting(
+      'shell',
+      '{"bash":{"enabled":false}}',
+      expectedRevision: 2,
+    );
+
+    final payload = rpc.payloads('settings.replace').single;
+    expect(payload['ns'], 'shell');
+    expect(payload['expectedRevision'], 2);
+    final section = asJsonObject(payload['section']);
+    expect(section, isNotNull, reason: 'missing section');
+    expect(asJsonObject(section!['bash'])?['enabled'], isFalse);
+  });
+
+  test('setting mutate serializes set and unset path ops', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.mutateSetting(
+      'llm-deepseek',
+      <SettingPathOp>[
+        SettingPathOp(op: 'set', path: <String>['providers', 'x'], jsonValue: '5'),
+        SettingPathOp(op: 'unset', path: <String>['retry']),
+      ],
+    );
+
+    final payload = rpc.payloads('settings.mutate').single;
+    expect(payload['ns'], 'llm-deepseek');
+    expect(payload.containsKey('expectedRevision'), isFalse);
+    final ops = asJsonArray(payload['ops']);
+    expect(ops, isNotNull, reason: 'missing ops');
+    expect(ops!.length, 2);
+    final setOp = asJsonObject(ops[0])!;
+    expect(setOp['op'], 'set');
+    expect(setOp['path'], <String>['providers', 'x']);
+    expect(setOp['value'], 5);
+    final unsetOp = asJsonObject(ops[1])!;
+    expect(unsetOp['op'], 'unset');
+    expect(unsetOp.containsKey('value'), isFalse);
+  });
+
+  test('move session sends anchors and applies the updated workspace', () async {
+    final rpc = HarnessFakeRpc(
+      initialWorkspaces: <Object?>[
+        _workspaceJson('ws-a', '/a', 'A', <String>['s1', 's2', 's3']),
+      ],
+    );
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+    await repository.refreshWorkspaces();
+
+    final updated = await repository.moveSession('ws-a', 's1', 's3');
+
+    final payload = rpc.payloads('workspace.insertSessionBefore').single;
+    expect(payload['workspaceId'], 'ws-a');
+    expect(payload['sessionId'], 's1');
+    expect(payload['beforeSessionId'], 's3');
+    expect(updated.workspaceId, 'ws-a');
+    expect(
+      (await repository.observeWorkspaces().first)
+          .map((workspace) => workspace.workspaceId)
+          .toList(),
+      <String>['ws-a'],
+    );
+  });
+
+  test('prompt with images appends image content parts', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.sendMessage(SendMessageRequest(
+      sessionId: 'session-1',
+      text: 'see this',
+      images: <PendingImage>[
+        const PendingImage(
+          id: 'u1',
+          mediaType: 'image/png',
+          base64Data: 'aGk=',
+          name: 'shot.png',
+        ),
+      ],
+    ));
+
+    final payload = rpc.payloads('session.prompt').single;
+    final content = asJsonArray(payload['content']) ?? const <Object?>[];
+    expect(content, hasLength(2));
+    final textPart = asJsonObject(content[0])!;
+    expect(textPart['type'], 'text');
+    expect(textPart['text'], 'see this');
+    final image = asJsonObject(content[1])!;
+    expect(image['type'], 'image');
+    expect(image['mediaType'], 'image/png');
+    expect(image['data'], 'aGk=');
+    expect(image['name'], 'shot.png');
+  });
+
+  test('read attachment sends ids and decodes base64 payload', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final downloaded = await repository.readAttachment('session-1', 'sha256:abc');
+
+    final payload = rpc.payloads('session.attachment').single;
+    expect(payload['sessionId'], 'session-1');
+    expect(payload['attachmentId'], 'sha256:abc');
+    expect(downloaded.ref.attachmentId, 'sha256:abc');
+    expect(downloaded.ref.mediaType, 'image/png');
+    expect(downloaded.ref.bytes, 2);
+    expect(downloaded.data, Uint8List.fromList(<int>[0x68, 0x69]));
+  });
+
+  test('image limits projection flows from session list', () async {
+    final session = <String, Object?>{
+      'sessionId': 'session-1',
+      'projections': <String, Object?>{
+        'values': <String, Object?>{
+          'title': 'titled',
+          'imageLimits': <String, Object?>{
+            'maxImageBytes': 1048576,
+            'maxImagesPerMessage': 4,
+            'maxMessageImageBytes': 2097152,
+            'maxImagePixels': 1000000,
+            'mediaTypes': <Object?>['image/png', 'image/jpeg'],
+          },
+        },
+      },
+    };
+    final rpc = HarnessFakeRpc(initialSessions: <Object?>[session]);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.refreshSessions();
+
+    final limits = await repository.observeImageLimits().first;
+    expect(limits?.maxImageBytes, 1048576);
+    expect(limits?.maxImagesPerMessage, 4);
+    expect(limits?.maxMessageImageBytes, 2097152);
+    expect(limits?.maxImagePixels, 1000000);
+    expect(limits?.mediaTypes, <String>['image/png', 'image/jpeg']);
+  });
+}

@@ -741,7 +741,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   // -----------------------------------------------------------------------
 
   void _collectConnection() {
-    _subs.add(_connectionManager.state.listen((connection) {
+    _subs.add(_connectionManager.state.stream.listen((connection) {
       if (connection.phase == ConnectionPhase.connected &&
           connection.generation != _connectionGeneration.value) {
         _connectionGeneration.value = connection.generation;
