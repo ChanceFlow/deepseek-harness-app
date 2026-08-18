@@ -9,6 +9,7 @@ import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ImageLimits
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -146,6 +147,9 @@ interface ChatRepository {
     suspend fun sendSubagentPrompt(parentSessionId: String, childSessionId: String, text: String): String
 
     fun observeGoal(sessionId: String): Flow<GoalProjection?>
+
+    /** Plan collaboration state; null while the host composes no plan mode. */
+    fun observePlan(sessionId: String): Flow<PlanState?> = flowOf(null)
 
     suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long? = null): GoalRef
 

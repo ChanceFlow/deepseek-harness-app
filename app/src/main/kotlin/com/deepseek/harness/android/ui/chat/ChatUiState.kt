@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.PendingImage
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
@@ -28,6 +29,8 @@ data class ChatUiState(
     val pendingImages: List<PendingImage> = emptyList(),
     /** Host image admission limits; defaults until the projection arrives. */
     val imageLimits: ImageLimits = ImageLimits(),
+    /** Plan collaboration state of the selected session; null = not composed. */
+    val plan: PlanState? = null,
 )
 
 sealed interface ChatAction {

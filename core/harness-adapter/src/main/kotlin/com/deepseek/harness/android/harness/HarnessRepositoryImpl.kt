@@ -12,6 +12,7 @@ import com.deepseek.harness.android.domain.model.GoalPhase
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ImageLimits
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
@@ -48,6 +49,7 @@ import com.deepseek.harness.android.harness.dto.DirectoryListingValue
 import com.deepseek.harness.android.harness.dto.CredentialsDescribeValue
 import com.deepseek.harness.android.harness.dto.AttachmentRefWire
 import com.deepseek.harness.android.harness.dto.ImageLimitsWire
+import com.deepseek.harness.android.harness.dto.PlanProjectionWire
 import com.deepseek.harness.android.harness.dto.SessionAttachmentValue
 import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
 import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
@@ -166,6 +168,7 @@ class HarnessRepositoryImpl @Inject constructor(
     private val imageLimits = MutableStateFlow<ImageLimits?>(null)
     private val sessionStates = ConcurrentHashMap<String, SessionState>()
     private val goalProjections = ConcurrentHashMap<String, MutableStateFlow<GoalProjection?>>()
+    private val planProjections = ConcurrentHashMap<String, MutableStateFlow<PlanState?>>()
     private val resyncMutex = Mutex()
 
     init {
@@ -537,6 +540,9 @@ class HarnessRepositoryImpl @Inject constructor(
     override fun observeGoal(sessionId: String): Flow<GoalProjection?> =
         goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }
 
+    override fun observePlan(sessionId: String): Flow<PlanState?> =
+        planProjections.getOrPut(sessionId) { MutableStateFlow(null) }
+
     override suspend fun createGoal(sessionId: String, objective: String, maxGoalRounds: Long?): GoalRef {
         val value = rpcClient.call(
             GOAL_CREATE,
@@ -735,14 +741,22 @@ class HarnessRepositoryImpl @Inject constructor(
             "goal" -> {
                 val value = frame.payload["value"]
                 val projection = runCatching {
-                    if (value == null || value.jsonPrimitive?.contentOrNull == "null") null
-                    else json.decodeFromJsonElement<GoalProjectionWire>(value)
+                    if ((value as? JsonPrimitive)?.contentOrNull == "null") null
+                    else value?.let { json.decodeFromJsonElement<GoalProjectionWire>(it) }
                 }.getOrNull()
                 if (projection == null) {
                     goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value = null
                 } else {
                     goalProjections.getOrPut(sessionId) { MutableStateFlow(projection.toDomain()) }.value = projection.toDomain()
                 }
+            }
+            "plan" -> {
+                val value = frame.payload["value"]
+                val projection = runCatching {
+                    if ((value as? JsonPrimitive)?.contentOrNull == "null") null
+                    else value?.let { json.decodeFromJsonElement<PlanProjectionWire>(it).toDomain() }
+                }.getOrNull()
+                planProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value = projection
             }
         }
     }
@@ -919,6 +933,10 @@ class HarnessRepositoryImpl @Inject constructor(
             goalProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value =
                 parseGoalProjection(goalValue)
         }
+        history.projections?.values?.get("plan")?.let { planValue ->
+            planProjections.getOrPut(sessionId) { MutableStateFlow(null) }.value =
+                parsePlanProjection(planValue)
+        }
         return HistoryPage(
             events = history.events.map { it.event },
             hasMore = history.hasMore,
@@ -926,9 +944,22 @@ class HarnessRepositoryImpl @Inject constructor(
     }
 
     private fun parseGoalProjection(value: JsonElement?): GoalProjection? {
-        if (value == null || value.jsonPrimitive?.contentOrNull == "null") return null
+        if (value == null) return null
+        if ((value as? JsonPrimitive)?.contentOrNull == "null") return null
         return runCatching { json.decodeFromJsonElement<GoalProjectionWire>(value).toDomain() }.getOrNull()
     }
+
+    private fun parsePlanProjection(value: JsonElement?): PlanState? {
+        if (value == null) return null
+        if ((value as? JsonPrimitive)?.contentOrNull == "null") return null
+        return runCatching { json.decodeFromJsonElement<PlanProjectionWire>(value).toDomain() }
+            .getOrNull()
+    }
+
+    private fun PlanProjectionWire.toDomain(): PlanState = PlanState(
+        active = active,
+        pending = pending,
+    )
 
     private fun GoalRefWire.toDomain(): GoalRef = GoalRef(
         id = id,

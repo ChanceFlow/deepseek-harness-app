@@ -327,3 +327,10 @@ internal data class ImageLimitsWire(
     val maxImagePixels: Long,
     val mediaTypes: List<String> = emptyList(),
 )
+
+/** `plan` session projection: the logged plan-mode collaboration state. */
+@Serializable
+internal data class PlanProjectionWire(
+    val active: Boolean,
+    val pending: Boolean,
+)

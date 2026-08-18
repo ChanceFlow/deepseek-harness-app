@@ -4,6 +4,7 @@ import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.PendingImage
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
@@ -303,6 +304,53 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `history projections seed plan state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.openSession("session-1")
+        advanceUntilIdle()
+
+        assertEquals(PlanState(active = false, pending = true), repository.observePlan("session-1").first())
+    }
+
+    @Test
+    fun `plan projection frame updates plan state live`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val socket = ScriptedHarnessSocket(
+            muxFrames = listOf(
+                ServerRequest(
+                    type = "server-request",
+                    rpcId = "rpc-plan-1",
+                    method = "session/projection",
+                    payload = buildJsonObject {
+                        put("type", "session/projection")
+                        put("sessionId", "session-1")
+                        put("key", "plan")
+                        put(
+                            "value",
+                            buildJsonObject {
+                                put("active", true)
+                                put("pending", false)
+                            },
+                        )
+                    },
+                ),
+            ),
+        )
+        val repository = harnessRepository(rpc, socket, dispatcher)
+        advanceUntilIdle()
+
+        socket.releaseMuxFrames()
+        advanceUntilIdle()
+
+        assertEquals(PlanState(active = true, pending = false), repository.observePlan("session-1").first())
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -463,6 +511,23 @@ private class HarnessFakeRpc(
             "session.history" -> buildJsonObject {
                 put("events", buildJsonArray {})
                 put("hasMore", false)
+                put(
+                    "projections",
+                    buildJsonObject {
+                        put(
+                            "values",
+                            buildJsonObject {
+                                put(
+                                    "plan",
+                                    buildJsonObject {
+                                        put("active", false)
+                                        put("pending", true)
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
             }
             "session.attachment" -> buildJsonObject {
                 put(

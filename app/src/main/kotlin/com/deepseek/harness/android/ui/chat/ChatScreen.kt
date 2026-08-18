@@ -58,6 +58,7 @@ import com.deepseek.harness.android.domain.model.JobStatus
 import com.deepseek.harness.android.domain.model.JobView
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.PendingImage
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueuePlacement
@@ -312,7 +313,10 @@ private fun ChatPanel(
 
     Column(modifier = modifier.padding(12.dp)) {
         if (selectedSessionId != null) {
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 OutlinedButton(onClick = { showRenameDialog = true }) { Text("Rename") }
                 OutlinedButton(
                     onClick = { onAction(ChatAction.ForkSession(selectedSessionId)) },
@@ -323,6 +327,10 @@ private fun ChatPanel(
                     enabled = selectedSession?.blank != true,
                     modifier = Modifier.padding(start = 4.dp),
                 ) { Text("Archive") }
+                uiState.plan?.let { plan ->
+                    Spacer(modifier = Modifier.width(8.dp))
+                    PlanChip(plan)
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -417,6 +425,25 @@ private fun ChatPanel(
             }
         }
     }
+}
+
+/** Plan collaboration state; `/plan` in the composer toggles it. */
+@Composable
+private fun PlanChip(plan: PlanState) {
+    val label = when {
+        plan.pending -> "Plan: switching…"
+        plan.active -> "Plan: active"
+        else -> "Plan: off"
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (plan.active || plan.pending) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 @Composable

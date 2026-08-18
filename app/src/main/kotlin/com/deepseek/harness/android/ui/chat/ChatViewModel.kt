@@ -7,6 +7,7 @@ import com.deepseek.harness.android.domain.model.AttachmentRef
 import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.PendingImage
+import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
@@ -48,6 +49,7 @@ class ChatViewModel @Inject constructor(
     private val searchResults = MutableStateFlow<List<SessionSearchResult>>(emptyList())
     private val pendingImages = MutableStateFlow<List<PendingImage>>(emptyList())
     private val imageLimits = MutableStateFlow(ImageLimits())
+    private val plan = MutableStateFlow<PlanState?>(null)
 
     /** Decoded attachment bytes cache; scroll re-entry must not re-download. */
     private val attachmentBytes = LinkedHashMap<String, ByteArray>()
@@ -62,6 +64,7 @@ class ChatViewModel @Inject constructor(
         val isSending: Boolean,
         val pendingImages: List<PendingImage>,
         val imageLimits: ImageLimits,
+        val plan: PlanState?,
     ) {
         fun toUiState(
             error: String?,
@@ -85,6 +88,7 @@ class ChatViewModel @Inject constructor(
                 searchResults = search,
                 pendingImages = pendingImages,
                 imageLimits = imageLimits,
+                plan = plan,
             )
         }
     }
@@ -126,12 +130,14 @@ class ChatViewModel @Inject constructor(
                 isSending = sending,
                 pendingImages = images,
                 imageLimits = baseline.imageLimits,
+                plan = null,
             )
         },
+        plan,
         errorMessage,
         searchResults,
-    ) { core, error, search ->
-        core.toUiState(error, search)
+    ) { core, planState, error, search ->
+        core.copy(plan = planState).toUiState(error, search)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
@@ -142,6 +148,7 @@ class ChatViewModel @Inject constructor(
         refresh()
         observeSelectedTimeline()
         observeSelectedSessionRemoval()
+        observeSelectedPlan()
     }
 
     fun onAction(action: ChatAction) {
@@ -370,6 +377,21 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 .collect { timelineWindow.value = it }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeSelectedPlan() {
+        viewModelScope.launch {
+            selectedSessionId
+                .flatMapLatest { sessionId ->
+                    if (sessionId == null) {
+                        flowOf(null)
+                    } else {
+                        chatRepository.observePlan(sessionId)
+                    }
+                }
+                .collect { plan.value = it }
         }
     }
 
