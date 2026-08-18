@@ -2,9 +2,11 @@ package com.deepseek.harness.android.domain.repository
 
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.SettingsSnapshot
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
@@ -44,6 +46,20 @@ interface ChatRepository {
     /** Create one child directory inside [parentPath]. */
     suspend fun createDirectory(parentPath: String, name: String): String =
         unsupported("createDirectory")
+
+    /**
+     * Read-only settings overview. The host pins this verb to loopback
+     * connections; other sources receive a transport error.
+     */
+    suspend fun describeSettings(): SettingsSnapshot =
+        unsupported("describeSettings")
+
+    /**
+     * Read-only probe of credential references. Like settings describe, the
+     * host only serves it to loopback-trusted callers.
+     */
+    suspend fun describeCredentials(refs: List<String>): List<CredentialStatus> =
+        unsupported("describeCredentials")
 
     suspend fun openSession(sessionId: String)
 

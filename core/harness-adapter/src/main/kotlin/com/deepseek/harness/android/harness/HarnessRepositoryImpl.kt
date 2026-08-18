@@ -3,11 +3,15 @@ package com.deepseek.harness.android.harness
 import com.deepseek.harness.android.domain.model.ApprovalAnswer
 import com.deepseek.harness.android.domain.model.ConnectionPhase
 import com.deepseek.harness.android.domain.model.ConnectionState
+import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.DirectoryEntry
 import com.deepseek.harness.android.domain.model.DirectoryListing
 import com.deepseek.harness.android.domain.model.GoalPhase
 import com.deepseek.harness.android.domain.model.GoalProjection
 import com.deepseek.harness.android.domain.model.GoalRef
+import com.deepseek.harness.android.domain.model.SettingsApplies
+import com.deepseek.harness.android.domain.model.SettingsNamespace
+import com.deepseek.harness.android.domain.model.SettingsSnapshot
 import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelCatalogFailure
@@ -38,6 +42,9 @@ import com.deepseek.harness.android.harness.dto.SessionHistoryValue
 import com.deepseek.harness.android.harness.dto.DirectoryCreateValue
 import com.deepseek.harness.android.harness.dto.DirectoryEntryWire
 import com.deepseek.harness.android.harness.dto.DirectoryListingValue
+import com.deepseek.harness.android.harness.dto.CredentialsDescribeValue
+import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
+import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
 import com.deepseek.harness.android.harness.dto.GoalSnapshotWire
 import com.deepseek.harness.android.harness.dto.GoalBlockReasonWire
@@ -93,6 +100,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -115,6 +123,9 @@ private const val WORKSPACE_DELETE = "workspace.delete"
 private const val WORKSPACE_ARCHIVE_SESSION = "workspace.archiveSession"
 private const val HOST_LIST_DIRECTORY = "host.listDirectory"
 private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
+private const val SETTINGS_DESCRIBE = "settings.describe"
+private const val CREDENTIALS_DESCRIBE = "credentials.describe"
+private const val CREDENTIALS_MAX_REFS = 64
 private const val HISTORY_PAGE_MESSAGES = 50
 private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
@@ -200,6 +211,45 @@ class HarnessRepositoryImpl @Inject constructor(
             },
         ).valueOrThrow()
         return json.decodeFromJsonElement<DirectoryCreateValue>(value).path
+    }
+
+    override suspend fun describeSettings(): SettingsSnapshot {
+        val value = rpcClient.call(
+            SETTINGS_DESCRIBE,
+            SETTINGS_DESCRIBE,
+            buildJsonObject { },
+        ).valueOrThrow()
+        val described = json.decodeFromJsonElement<SettingsDescribeValue>(value)
+        return SettingsSnapshot(
+            writable = described.writable,
+            hasDocument = described.hasDocument,
+            namespaces = described.namespaces.map { it.toDomain() },
+            credentialRefs = described.namespaces.flatMap { it.credentialRefs() }
+                .distinct()
+                .take(CREDENTIALS_MAX_REFS),
+        )
+    }
+
+    override suspend fun describeCredentials(refs: List<String>): List<CredentialStatus> {
+        if (refs.isEmpty()) return emptyList()
+        val value = rpcClient.call(
+            CREDENTIALS_DESCRIBE,
+            CREDENTIALS_DESCRIBE,
+            buildJsonObject {
+                put("refs", buildJsonArray { refs.take(CREDENTIALS_MAX_REFS).forEach { add(it) } })
+            },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<CredentialsDescribeValue>(value)
+            .credentials
+            .map { (ref, view) ->
+                CredentialStatus(
+                    ref = ref,
+                    configured = view.configured,
+                    source = view.source,
+                    writable = view.writable,
+                )
+            }
+            .sortedBy { it.ref }
     }
 
     override suspend fun openSession(sessionId: String) {
@@ -969,6 +1019,41 @@ class HarnessRepositoryImpl @Inject constructor(
         path = path,
         hidden = hidden,
     )
+
+    private fun SettingsNamespaceWire.toDomain(): SettingsNamespace = SettingsNamespace(
+        ns = ns,
+        applies = when (applies) {
+            "live" -> SettingsApplies.LIVE
+            "restart" -> SettingsApplies.RESTART
+            else -> SettingsApplies.UNKNOWN
+        },
+        revision = revision,
+        hasUserLayer = user is JsonObject && user.isNotEmpty(),
+        secretCount = secrets.count { it.set },
+    )
+
+    /**
+     * Credential references the resolved namespace value names, mirroring the
+     * web models page: every profile records its reference as `apiKeyEnv`.
+     */
+    private fun SettingsNamespaceWire.credentialRefs(): List<String> {
+        val refs = mutableListOf<String>()
+        fun walk(element: JsonElement?) {
+            when (element) {
+                is JsonObject -> element.forEach { (key, child) ->
+                    if (key == "apiKeyEnv" && child is JsonPrimitive && child.isString) {
+                        child.contentOrNull?.takeIf { it.isNotEmpty() }?.let(refs::add)
+                    } else {
+                        walk(child)
+                    }
+                }
+                is kotlinx.serialization.json.JsonArray -> element.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(value)
+        return refs
+    }
 
     private fun WorkspaceWire.toDomain(): WorkspaceSummary = WorkspaceSummary(
         workspaceId = workspaceId,

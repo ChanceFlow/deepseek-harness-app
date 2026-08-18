@@ -83,15 +83,18 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   frame replay, history/timeline folding, local host-frame workspace updates,
   and the complete unary method set used by the MVP.
 - `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
-  and Goals. Chat supports session search/create/rename/archive/fork, queue
-  text edit/steer/remove (including Queue/Steer composer delivery),
+  Goals, and Settings. Chat supports session search/create/rename/archive/fork,
+  queue text edit/steer/remove (including Queue/Steer composer delivery),
   approvals, custom, multi-select, and skippable questions, live titles,
   goals (create/pause/resume/edit/complete/clear), background jobs, and
-page-at-a-time older-history loading.
+page-at-a-time older-history loading. Workspaces gain an in-app directory
+browser (`host.listDirectory`/`host.createDirectory`), and Settings renders a
+read-only overview (`settings.describe` + `credentials.describe`; the host
+serves both only to loopback connections).
 
-Still deferred, matching [docs/spec.md](docs/spec.md): settings/credentials,
-attachment uploads, markdown and trajectory/plan rendering, directory browsing,
-and manual workspace ordering.
+Still deferred, matching [docs/spec.md](docs/spec.md): settings/credential
+writes and plugin management, attachment uploads, markdown and
+trajectory/plan rendering, and manual workspace ordering.
 
 Verification: the normal JVM suite (`app` ViewModel, envelope,
 TimelineReducer, ConnectionManager fake transport, Hermetic

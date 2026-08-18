@@ -180,11 +180,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   will still display finalized blocks from `assistant/message`.
 - **Titles are display-only.** `session/projection` title frames and history
   projections are read, but identity always remains `sessionId`.
-- **No settings screen yet.** Workspaces and model selection are MVP screens;
-  credential and plugin settings remain out of scope.
-- **Settings remain deferred.** Credential, plugin, and general settings stay
-  out of scope for this MVP. Subagent history/prompt/interrupt is implemented
-  with parent-session scoping (Section 11).
+- **Settings are read-only.** `settings.describe` / `credentials.describe`
+  back a summary screen (namespaces with applies/revision/user-layer/secret
+  counts, plus credential configured/source/writable). Writes
+  (`settings.update`/`replace`/`mutate`, `credentials.set`/`unset`) and
+  plugin management stay deferred. The host pins both describe verbs to
+  loopback connections: remote sources (e.g. emulator `10.0.2.2` without
+  `adb reverse`) surface the transport error instead of the page.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select, optionless text, custom
@@ -195,9 +197,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   matching the Web client.
 - **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
   verb; phase and blocked reason never change on edit, matching the host API.
-- **Directory browsing is deferred.** Workspace paths are entered as text;
-  `host.pickDirectory`/`host.listDirectory`/Android SAF and manual workspace
-  ordering remain out of scope.
+- **Directory browsing is listing-only.** `host.listDirectory` /
+  `host.createDirectory` power an in-app folder picker (navigate, create
+  folder, select path back into the workspace field); manual workspace
+  reordering and desktop `host.pickDirectory` dialogs remain out of scope.
 
 ## 11. Subagent Ownership
 

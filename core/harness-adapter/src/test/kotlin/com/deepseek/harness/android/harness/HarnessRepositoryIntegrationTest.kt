@@ -1,10 +1,12 @@
 package com.deepseek.harness.android.harness
 
+import com.deepseek.harness.android.domain.model.CredentialStatus
 import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
+import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.network.DshEventSocket
@@ -24,6 +26,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -236,6 +239,65 @@ class HarnessRepositoryIntegrationTest {
         assertEquals("/tmp/chosen", payload["path"]?.toString()?.trim('"'))
         assertEquals("new-folder", payload["name"]?.toString()?.trim('"'))
     }
+
+    @Test
+    fun `settings describe maps namespace wire shape`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val snapshot = repository.describeSettings()
+
+        assertEquals(true, snapshot.writable)
+        assertEquals(false, snapshot.hasDocument)
+        val deepseek = snapshot.namespaces.first { it.ns == "llm-deepseek" }
+        assertEquals(SettingsApplies.LIVE, deepseek.applies)
+        assertEquals(3L, deepseek.revision)
+        assertEquals(true, deepseek.hasUserLayer)
+        assertEquals(1, deepseek.secretCount)
+        val shell = snapshot.namespaces.first { it.ns == "shell" }
+        assertEquals(SettingsApplies.RESTART, shell.applies)
+        assertEquals(false, shell.hasUserLayer)
+        assertEquals(listOf("DEEPSEEK_API_KEY"), snapshot.credentialRefs)
+        assertEquals(0, rpc.payloads("settings.describe").single().size)
+    }
+
+    @Test
+    fun `credentials describe sends refs and maps views`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val described = repository.describeCredentials(listOf("MINIMAX_CN_API_KEY", "DEEPSEEK_API_KEY"))
+
+        assertEquals(listOf("DEEPSEEK_API_KEY", "MINIMAX_CN_API_KEY"), described.map { it.ref })
+        val configured = described.first { it.ref == "DEEPSEEK_API_KEY" }
+        assertEquals(true, configured.configured)
+        assertEquals("file", configured.source)
+        assertEquals(true, configured.writable)
+        val missing = described.first { it.ref == "MINIMAX_CN_API_KEY" }
+        assertEquals(false, missing.configured)
+        assertEquals(null, missing.source)
+        assertEquals(false, missing.writable)
+        val refs = rpc.payloads("credentials.describe").single()["refs"]?.jsonArray
+        assertEquals(
+            listOf("MINIMAX_CN_API_KEY", "DEEPSEEK_API_KEY"),
+            refs?.map { (it as JsonPrimitive).content },
+        )
+    }
+
+    @Test
+    fun `credentials describe skips the wire for empty refs`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<CredentialStatus>(), repository.describeCredentials(emptyList()))
+        assertEquals(0, rpc.payloads("credentials.describe").size)
+    }
 }
 private fun harnessRepository(
     rpc: DshRpcClient,
@@ -315,6 +377,84 @@ private class HarnessFakeRpc(
             }
             "host.createDirectory" -> buildJsonObject {
                 put("path", "/tmp/chosen/new-folder")
+            }
+            "settings.describe" -> buildJsonObject {
+                put("writable", true)
+                put("hasDocument", false)
+                put(
+                    "namespaces",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("ns", "llm-deepseek")
+                                put(
+                                    "schema",
+                                    buildJsonObject { put("type", "object") },
+                                )
+                                put(
+                                    "value",
+                                    buildJsonObject {
+                                        put(
+                                            "providers",
+                                            buildJsonObject {
+                                                put(
+                                                    "deepseek-official",
+                                                    buildJsonObject { put("apiKeyEnv", "DEEPSEEK_API_KEY") },
+                                                )
+                                            },
+                                        )
+                                    },
+                                )
+                                put("base", buildJsonObject { })
+                                put("user", buildJsonObject { put("touched", true) })
+                                put("applies", "live")
+                                put(
+                                    "secrets",
+                                    buildJsonArray {
+                                        add(
+                                            buildJsonObject {
+                                                put("path", buildJsonArray { add("providers") })
+                                                put("set", true)
+                                            },
+                                        )
+                                    },
+                                )
+                                put("revision", 3)
+                            },
+                        )
+                        add(
+                            buildJsonObject {
+                                put("ns", "shell")
+                                put("value", buildJsonObject { })
+                                put("applies", "restart")
+                                put("secrets", buildJsonArray { })
+                                put("revision", 0)
+                            },
+                        )
+                    },
+                )
+            }
+            "credentials.describe" -> buildJsonObject {
+                put(
+                    "credentials",
+                    buildJsonObject {
+                        put(
+                            "DEEPSEEK_API_KEY",
+                            buildJsonObject {
+                                put("configured", true)
+                                put("source", "file")
+                                put("writable", true)
+                            },
+                        )
+                        put(
+                            "MINIMAX_CN_API_KEY",
+                            buildJsonObject {
+                                put("configured", false)
+                                put("writable", false)
+                            },
+                        )
+                    },
+                )
             }
             "goal.edit" -> buildJsonObject {
                 put(

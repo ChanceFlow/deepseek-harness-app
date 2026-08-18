@@ -72,6 +72,12 @@ class LocalDshE2eTest {
 
             val directory = repository.listDirectory(null)
             assertTrue(directory.home.isNotBlank())
+            // Loopback callers may read the settings plane; the snapshot only
+            // needs to decode, whatever namespaces this host declares.
+            val settings = repository.describeSettings()
+            assertTrue(settings.namespaces.all { it.ns.isNotBlank() })
+            val credentials = repository.describeCredentials(settings.credentialRefs)
+            assertTrue(credentials.all { it.ref.isNotBlank() })
             val sessions = repository.observeSessions().first()
             val workspaces = repository.observeWorkspaces().first()
             sessions.firstOrNull()?.let { session ->

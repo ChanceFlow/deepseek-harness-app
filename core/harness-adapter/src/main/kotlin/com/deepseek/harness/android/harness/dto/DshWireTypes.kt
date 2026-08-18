@@ -1,6 +1,7 @@
 package com.deepseek.harness.android.harness.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
@@ -256,4 +257,44 @@ internal data class DirectoryListingValue(
 @Serializable
 internal data class DirectoryCreateValue(
     val path: String,
+)
+
+// Read-only settings/credentials describe shapes. The `schema` field of a
+// namespace view stays undecoded: the Android client renders only summary
+// columns, and `ignoreUnknownKeys` tolerates its presence.
+
+@Serializable
+internal data class SettingsSecretWire(
+    val path: List<String> = emptyList(),
+    val set: Boolean = false,
+)
+
+@Serializable
+internal data class SettingsNamespaceWire(
+    val ns: String,
+    val value: JsonElement? = null,
+    val base: JsonElement? = null,
+    val user: JsonElement? = null,
+    val applies: String = "live",
+    val secrets: List<SettingsSecretWire> = emptyList(),
+    val revision: Long = 0L,
+)
+
+@Serializable
+internal data class SettingsDescribeValue(
+    val writable: Boolean,
+    val hasDocument: Boolean = false,
+    val namespaces: List<SettingsNamespaceWire> = emptyList(),
+)
+
+@Serializable
+internal data class CredentialViewWire(
+    val configured: Boolean,
+    val source: String? = null,
+    val writable: Boolean = false,
+)
+
+@Serializable
+internal data class CredentialsDescribeValue(
+    val credentials: Map<String, CredentialViewWire> = emptyMap(),
 )
