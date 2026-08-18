@@ -38,6 +38,14 @@ submodule URL, not a filesystem symlink.
 
 See [reference/README.md](reference/README.md) for details and the source-of-truth contract files.
 
+## Project skills
+
+This repository ships 29 project-scoped Agent Skills in [`.agents/skills/`](.agents/skills/),
+vendored from [GuillemRoca/agent-skills-android](https://github.com/GuillemRoca/agent-skills-android)
+(MIT). They are installed as plain skills (not a plugin). See
+[`.agents/skills/README.md`](.agents/skills/README.md) for the full list and
+how to refresh them.
+
 ## Development
 
 Build and test from the repository root:
