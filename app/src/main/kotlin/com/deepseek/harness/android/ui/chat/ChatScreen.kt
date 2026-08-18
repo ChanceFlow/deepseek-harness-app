@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -459,6 +460,7 @@ private fun TimelineRow(
 ) {
     when (item) {
         is TimelineItem.Message -> MessageRow(item.value, loadAttachment)
+        is TimelineItem.TurnBoundary -> TurnBoundaryRow(item.turn)
         is TimelineItem.ToolCall -> ToolCallRow(item)
         is TimelineItem.ApprovalRequest -> ApprovalRow(
             requestId = item.requestId,
@@ -1186,12 +1188,31 @@ private fun ModeChip(
 
 private fun timelineKey(item: TimelineItem): String = when (item) {
     is TimelineItem.Message -> "message:${item.value.id}:${item.value.streaming}"
+    is TimelineItem.TurnBoundary -> "turn:${item.turn}"
     is TimelineItem.ToolCall -> "tool:${item.id}:${item.status}"
     is TimelineItem.ApprovalRequest -> "approval:${item.requestId}"
     is TimelineItem.QuestionRequest -> "question:${item.requestId}"
     is TimelineItem.Queue -> "queue"
     is TimelineItem.Jobs -> "jobs"
     is TimelineItem.Error -> "error:${item.id}"
+}
+
+/** Ledger-style turn divider, the first slice of the Web trajectory grouping. */
+@Composable
+private fun TurnBoundaryRow(turn: Long) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f))
+        Text(
+            text = "Turn $turn",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f))
+    }
 }
 
 @Preview(showBackground = true, widthDp = 840)

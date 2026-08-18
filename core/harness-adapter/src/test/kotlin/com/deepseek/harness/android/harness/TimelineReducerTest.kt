@@ -349,6 +349,46 @@ class TimelineReducerTest {
         assertEquals("shot.png", image.name)
     }
 
+    @Test
+    fun `turn start events become boundaries and dedupe per turn`() {
+        val history = listOf(
+            event(
+                seq = 1L,
+                type = "turn/start",
+                data = buildJsonObject { put("turn", 1) },
+            ),
+            event(
+                seq = 2L,
+                type = "user/message",
+                data = buildJsonObject { put("id", "user-1"); put("content", buildJsonArray { add(textBlock("hi")) }) },
+            ),
+            event(
+                seq = 3L,
+                type = "turn/start",
+                data = buildJsonObject { put("turn", 1) },
+            ),
+            event(
+                seq = 4L,
+                type = "turn/start",
+                data = buildJsonObject { put("turn", 2) },
+            ),
+            event(
+                seq = 5L,
+                type = "user/message",
+                data = buildJsonObject { put("id", "user-2"); put("content", buildJsonArray { add(textBlock("again")) }) },
+            ),
+        )
+
+        val reducer = TimelineReducer("s1")
+        reducer.reset(history)
+
+        val snapshot = reducer.snapshot()
+        val turns = snapshot.filterIsInstance<TimelineItem.TurnBoundary>()
+        assertEquals(listOf(1L, 2L), turns.map { it.turn })
+        assertEquals(0, snapshot.indexOfFirst { it is TimelineItem.TurnBoundary && it.turn == 1L })
+        assertEquals(2, snapshot.indexOfFirst { it is TimelineItem.TurnBoundary && it.turn == 2L })
+    }
+
     private fun event(seq: Long, type: String, data: JsonObject): JsonObject =
         buildJsonObject {
             put("type", type)

@@ -95,7 +95,9 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   queue text edit/steer/remove (including Queue/Steer composer delivery),
   approvals, custom, multi-select, and skippable questions, live titles,
   goals (create/pause/resume/edit/complete/clear), background jobs, and
-page-at-a-time older-history loading. Message bodies render markdown
+page-at-a-time older-history loading, and ledger-style turn dividers from
+logged `turn/start` events (the first slice of the Web trajectory grouping).
+Message bodies render markdown
 (fenced code with language label and streaming-open fences, headings, nested
 bullet lists, block quotes, pipe tables, inline code, bold/italic, and
 clickable links) through a pure-Kotlin parser with theme-owned Compose

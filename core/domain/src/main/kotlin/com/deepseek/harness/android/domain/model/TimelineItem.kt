@@ -14,6 +14,9 @@ enum class ToolRunStatus {
 sealed interface TimelineItem {
     data class Message(val value: ChatMessage) : TimelineItem
 
+    /** Turn boundary from a logged `turn/start`; groups the transcript ledger-style. */
+    data class TurnBoundary(val turn: Long) : TimelineItem
+
     data class ToolCall(
         val id: String,
         val name: String,

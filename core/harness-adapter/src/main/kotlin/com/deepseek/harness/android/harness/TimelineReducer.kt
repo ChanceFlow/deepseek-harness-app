@@ -31,12 +31,14 @@ internal class TimelineReducer(
     private var lastSeq = -1L
     private var partialKey: String? = null
     private var partialIndex: Int = -1
+    private val seenTurns = mutableSetOf<Long>()
 
     fun reset(history: List<JsonObject>) {
         items.clear()
         lastSeq = -1L
         partialKey = null
         partialIndex = -1
+        seenTurns.clear()
         history.sortedBy { it.eventSeq() }.forEach(::ingestEvent)
     }
 
@@ -101,6 +103,7 @@ internal class TimelineReducer(
         lastSeq = seq
 
         when (event.type()) {
+            "turn/start" -> appendTurnStart(event)
             "user/message" -> appendUserMessage(event)
             "assistant/message" -> appendAssistantFinal(event)
             "assistant/chunk" -> appendAssistantDelta(event)
@@ -108,6 +111,13 @@ internal class TimelineReducer(
             "tool/result" -> appendToolResult(event)
             "turn/end" -> appendTurnEnd(event)
         }
+    }
+
+    private fun appendTurnStart(event: JsonObject) {
+        val turn = event.eventData().long("turn")
+        if (turn <= 0L || !seenTurns.add(turn)) return
+        finalizePartial()
+        items += TimelineItem.TurnBoundary(turn)
     }
 
     private fun appendUserMessage(event: JsonObject) {

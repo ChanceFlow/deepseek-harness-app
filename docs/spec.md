@@ -180,6 +180,11 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   will still display finalized blocks from `assistant/message`.
 - **Titles are display-only.** `session/projection` title frames and history
   projections are read, but identity always remains `sessionId`.
+- **Turn boundaries are ledger-style dividers.** Logged `turn/start` events
+  fold into `TimelineItem.TurnBoundary` (deduped per turn, cleared on reset);
+  chat and subagent timelines render a "Turn N" divider row. This is the
+  first slice of the Web trajectory grouping — collapsible per-turn outlines,
+  request-header grouping, and compaction/session-end markers stay deferred.
 - **Settings namespaces patch one top-level key at a time.** For writable
   hosts (`describe.writable`), each namespace row opens a key + raw-JSON
   editor that sends `settings.update {ns, patch: {key: value},
