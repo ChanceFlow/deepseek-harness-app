@@ -1319,17 +1319,44 @@ private fun TurnGroupHeader(
     onToggle: (Long) -> Unit,
 ) {
     val messages = items.count { it is TimelineItem.Message }
-    val tools = items.count { it is TimelineItem.ToolCall }
+    val tools = items.filterIsInstance<TimelineItem.ToolCall>()
     val label = when {
         turn == null -> "Before first turn · $messages messages"
-        else -> "Turn $turn · $messages messages · $tools tools"
+        else -> "Turn $turn · $messages messages · ${tools.size} tools"
     }
+    val toolSummary = tools
+        .groupBy({ it.name }, { it.status })
+        .toSortedMap()
+        .entries
+        .joinToString(separator = " · ") { (name, statuses) ->
+            val completed = statuses.count { it == ToolRunStatus.COMPLETED }
+            val failed = statuses.count { it == ToolRunStatus.FAILED }
+            val running = statuses.count { it == ToolRunStatus.RUNNING }
+            buildString {
+                append(name)
+                append(' ')
+                append(completed)
+                append('✓')
+                if (failed > 0) append(" $failed✗")
+                if (running > 0) append(" $running…")
+            }
+        }
     OutlinedButton(
         onClick = { turn?.let(onToggle) },
         enabled = turn != null,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(if (collapsed) "▸ $label" else "▾ $label")
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(if (collapsed) "▸ $label" else "▾ $label")
+            if (toolSummary.isNotEmpty()) {
+                Text(
+                    text = toolSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (collapsed) 2 else 1,
+                )
+            }
+        }
     }
 }
 

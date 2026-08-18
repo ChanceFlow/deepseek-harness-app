@@ -183,7 +183,8 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - **Turn grouping is a collapsible outline.** Logged `turn/start` events
   fold into `TimelineItem.TurnBoundary`; the chat timeline offers a flat view
   (divider rows) and an outline view whose group headers ("Turn N · X
-  messages · Y tools") collapse their rows on tap with an expand-all reset.
+  messages · Y tools" plus a per-tool status-count summary line, e.g.
+  "bash 3✓ 1✗") collapse their rows on tap with an expand-all reset.
   Grouping is a pure UI-layer function over the folded timeline
   (`groupTimelineByTurn`, JVM-tested). Request-header grouping, compaction,
   and session-end markers stay deferred.
@@ -229,6 +230,11 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   response carries the complete order and the adapter re-sorts the local list
   with it (the same path `host/workspace-order-changed` frames take, unknown
   ids keep relative order at the end). Drag-and-drop stays out of scope.
+- **Plugin management is not a wire capability.** The host api exposes no
+  plugin RPC (plugins compose host-side via cordis manifests and profiles);
+  nothing for an Android client to reproduce — the deferred line retires.
+  Skill authoring likewise stays host/filesystem-side; the client surface is
+  the `/` candidate source.
 - **Markdown rendering is a minimal pure-Kotlin slice.** Message bodies parse
   into blocks (fenced code with language label, headings 1-6, bullet lists
   nested to two rendered levels, block quotes, GFM pipe tables, paragraphs)
