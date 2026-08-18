@@ -197,6 +197,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   matching the Web client.
 - **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
   verb; phase and blocked reason never change on edit, matching the host API.
+- **Markdown rendering is a minimal pure-Kotlin slice.** Message bodies parse
+  into blocks (fenced code with language label, headings 1-6, bullet lists,
+  paragraphs) and inline runs (code, bold, italic, styled non-clickable
+  links); an unterminated fence renders as an open `code (streaming)` block so
+  streaming bodies stay readable. The parser is plain JVM-tested Kotlin in
+  `:app`; colors/fonts/shapes live in the Compose layer only. Tables, block
+  quotes, nested lists, and link clicks stay out of scope.
 - **Attachments are images-only and MVP-scoped.** Picked images (png/jpeg/
   webp/gif) ride `session.prompt` as inline base64 parts after the text part;
   the host `imageLimits` projection (via `session.list`/`session.history`

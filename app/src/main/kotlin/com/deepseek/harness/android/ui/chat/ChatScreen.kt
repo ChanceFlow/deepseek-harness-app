@@ -70,6 +70,7 @@ import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.ui.theme.DeepSeekHarnessAndroidTheme
+import com.deepseek.harness.android.ui.chat.markdown.MarkdownText
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -470,7 +471,7 @@ private fun MessageRow(
             )
         }
         if (message.text.isNotEmpty()) {
-            Text(text = message.text)
+            MarkdownText(text = message.text)
         }
         message.images.forEach { ref ->
             AttachmentImageRow(sessionId = message.sessionId, ref = ref, loadAttachment = loadAttachment)

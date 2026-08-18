@@ -95,7 +95,10 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   queue text edit/steer/remove (including Queue/Steer composer delivery),
   approvals, custom, multi-select, and skippable questions, live titles,
   goals (create/pause/resume/edit/complete/clear), background jobs, and
-page-at-a-time older-history loading. The composer attaches images (photo
+page-at-a-time older-history loading. Message bodies render markdown
+(fenced code with language label and streaming-open fences, headings, bullet
+lists, inline code, bold/italic, styled links) through a pure-Kotlin parser
+with theme-owned Compose styling. The composer attaches images (photo
 picker, host `imageLimits` projection gating type/size/count) that ride the
 prompt as inline parts, and timeline image blocks download lazily through
 `session.attachment`. Workspaces gain an in-app directory
@@ -104,8 +107,8 @@ read-only overview (`settings.describe` + `credentials.describe`; the host
 serves both only to loopback connections).
 
 Still deferred, matching [docs/spec.md](docs/spec.md): settings/credential
-writes and plugin management, markdown and
-trajectory/plan rendering, and manual workspace ordering.
+writes and plugin management, rich plan/trajectory rendering, manual
+workspace ordering, and markdown table/quote nesting beyond the basic set.
 
 Verification: the normal JVM suite (`app` ViewModel, envelope,
 TimelineReducer, ConnectionManager fake transport, Hermetic
