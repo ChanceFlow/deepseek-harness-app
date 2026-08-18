@@ -83,11 +83,10 @@ Future<HarnessRepositoryImpl> harnessRepository(
 }
 
 class HarnessFakeRpc implements DshRpcClient {
-  HarnessFakeRpc({
-    List<Object?> initialSessions = const <Object?>[],
-    List<Object?> initialWorkspaces = const <Object?>[],
-  })  : _initialSessions = initialSessions,
-        _initialWorkspaces = initialWorkspaces;
+  HarnessFakeRpc([
+    this._initialSessions = const <Object?>[],
+    this._initialWorkspaces = const <Object?>[],
+  ]);
 
   final List<Object?> _initialSessions;
   final List<Object?> _initialWorkspaces;
@@ -264,13 +263,12 @@ class HarnessFakeRpc implements DshRpcClient {
 
 class ScriptedHarnessSocket implements DshEventSocket {
   ScriptedHarnessSocket({
-    List<ServerRequest> muxFrames = const <ServerRequest>[],
-    List<ServerRequest> hostFrames = const <ServerRequest>[],
-  })  : _muxFrames = muxFrames,
-        _hostFrames = hostFrames;
+    this.muxFrames = const <ServerRequest>[],
+    this.hostFrames = const <ServerRequest>[],
+  });
 
-  final List<ServerRequest> _muxFrames;
-  final List<ServerRequest> _hostFrames;
+  final List<ServerRequest> muxFrames;
+  final List<ServerRequest> hostFrames;
   final Completer<void> _muxRelease = Completer<void>();
   final Completer<void> _hostRelease = Completer<void>();
   final List<String> _paths = <String>[];
@@ -291,12 +289,12 @@ class ScriptedHarnessSocket implements DshEventSocket {
     onOpen?.call();
     if (path.endsWith('events.host')) {
       await _hostRelease.future;
-      for (final frame in _hostFrames) {
+      for (final frame in hostFrames) {
         yield frame;
       }
     } else {
       await _muxRelease.future;
-      for (final frame in _muxFrames) {
+      for (final frame in muxFrames) {
         yield frame;
       }
     }
@@ -308,12 +306,10 @@ class ScriptedHarnessSocket implements DshEventSocket {
 void main() {
   test('host workspace frames fold locally without extra workspace list calls',
       () async {
-    final rpc = HarnessFakeRpc(
-      initialWorkspaces: <Object?>[
-        _workspaceJson('ws-a', '/a', 'A'),
-        _workspaceJson('ws-b', '/b', 'B'),
-      ],
-    );
+    final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
+      _workspaceJson('ws-a', '/a', 'A'),
+      _workspaceJson('ws-b', '/b', 'B'),
+    ]);
     final socket = ScriptedHarnessSocket(
       hostFrames: <ServerRequest>[
         _hostFrame('host/workspace-changed', <String, Object?>{
@@ -343,16 +339,14 @@ void main() {
   });
 
   test('mux session event reaches an opened session timeline', () async {
-    final rpc = HarnessFakeRpc(
-      initialSessions: <Object?>[
-        <String, Object?>{
-          'sessionId': 'session-1',
-          'updatedAt': 3,
-          'running': false,
-          'blank': false,
-        },
-      ],
-    );
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-1',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
     final socket = ScriptedHarnessSocket(
       muxFrames: <ServerRequest>[
         _muxFrame('session/event', 'session-1', _assistantMessageEvent()),
@@ -380,7 +374,7 @@ void main() {
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    await repository.updateQueue(QueueUpdateRequest(
+    await repository.updateQueue(const QueueUpdateRequest(
       sessionId: 'session-1',
       itemId: 'queued-1',
       kind: QueueUpdateKind.edit,
@@ -404,10 +398,10 @@ void main() {
 
     await repository.answerQuestions(
       'rpc-question',
-      QuestionEvidence(
+      const QuestionEvidence(
         sessionId: 'session-1',
         answers: <QuestionAnswer>[
-          const QuestionAnswer(questionId: 'question-1'),
+          QuestionAnswer(questionId: 'question-1'),
         ],
       ),
     );
@@ -586,13 +580,11 @@ void main() {
   });
 
   test('move workspace sends anchor and applies response order', () async {
-    final rpc = HarnessFakeRpc(
-      initialWorkspaces: <Object?>[
-        _workspaceJson('ws-a', '/a', 'A'),
-        _workspaceJson('ws-b', '/b', 'B'),
-        _workspaceJson('ws-c', '/c', 'C'),
-      ],
-    );
+    final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
+      _workspaceJson('ws-a', '/a', 'A'),
+      _workspaceJson('ws-b', '/b', 'B'),
+      _workspaceJson('ws-c', '/c', 'C'),
+    ]);
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
     await repository.refreshWorkspaces();
@@ -719,11 +711,9 @@ void main() {
   });
 
   test('move session sends anchors and applies the updated workspace', () async {
-    final rpc = HarnessFakeRpc(
-      initialWorkspaces: <Object?>[
-        _workspaceJson('ws-a', '/a', 'A', <String>['s1', 's2', 's3']),
-      ],
-    );
+    final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
+      _workspaceJson('ws-a', '/a', 'A', <String>['s1', 's2', 's3']),
+    ]);
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
     await repository.refreshWorkspaces();
@@ -748,11 +738,11 @@ void main() {
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    await repository.sendMessage(SendMessageRequest(
+    await repository.sendMessage(const SendMessageRequest(
       sessionId: 'session-1',
       text: 'see this',
       images: <PendingImage>[
-        const PendingImage(
+        PendingImage(
           id: 'u1',
           mediaType: 'image/png',
           base64Data: 'aGk=',
@@ -806,7 +796,7 @@ void main() {
         },
       },
     };
-    final rpc = HarnessFakeRpc(initialSessions: <Object?>[session]);
+    final rpc = HarnessFakeRpc(<Object?>[session]);
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 

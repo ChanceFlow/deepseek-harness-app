@@ -4,7 +4,7 @@ import 'package:domain/model/chat_message.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
-import 'package:harness_adapter/src/rpc_map.dart';
+
 import 'package:harness_adapter/src/timeline_reducer.dart';
 
 JsonMap event(int seq, String type, JsonMap data) => <String, Object?>{
