@@ -52,5 +52,9 @@ sealed interface ChatAction {
     data class RenameSession(val sessionId: String, val title: String) : ChatAction
     data class ArchiveSession(val sessionId: String) : ChatAction
     data class ForkSession(val sessionId: String) : ChatAction
-    data class UpdateQueue(val itemId: String, val kind: QueueUpdateKind) : ChatAction
+    data class UpdateQueue(
+        val itemId: String,
+        val kind: QueueUpdateKind,
+        val text: String? = null,
+    ) : ChatAction
 }

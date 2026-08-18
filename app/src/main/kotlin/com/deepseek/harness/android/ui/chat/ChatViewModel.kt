@@ -136,7 +136,7 @@ class ChatViewModel @Inject constructor(
             is ChatAction.ArchiveSession -> archiveSession(action.sessionId)
             is ChatAction.RenameSession -> renameSession(action.sessionId, action.title)
             is ChatAction.ForkSession -> forkSession(action.sessionId)
-            is ChatAction.UpdateQueue -> updateQueue(action.itemId, action.kind)
+            is ChatAction.UpdateQueue -> updateQueue(action.itemId, action.kind, action.text)
         }
     }
 
@@ -312,8 +312,9 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun updateQueue(itemId: String, kind: QueueUpdateKind) {
+    private fun updateQueue(itemId: String, kind: QueueUpdateKind, text: String?) {
         val sessionId = selectedSessionId.value ?: return
+        if (kind == QueueUpdateKind.EDIT && text.isNullOrBlank()) return
         viewModelScope.launch {
             runCatchingForUi {
                 chatRepository.updateQueue(
@@ -321,6 +322,7 @@ class ChatViewModel @Inject constructor(
                         sessionId = sessionId,
                         itemId = itemId,
                         kind = kind,
+                        text = text,
                     ),
                 )
             }

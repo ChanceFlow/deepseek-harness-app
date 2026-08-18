@@ -1,7 +1,11 @@
 package com.deepseek.harness.android.harness
 
 import com.deepseek.harness.android.domain.model.MessageRole
+import com.deepseek.harness.android.domain.model.QuestionAnswer
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
+import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.TimelineItem
+import com.deepseek.harness.android.domain.repository.QuestionEvidence
 import com.deepseek.harness.android.network.DshEventSocket
 import com.deepseek.harness.android.network.DshRpcClient
 import com.deepseek.harness.android.network.RpcResult
@@ -19,6 +23,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -118,6 +124,63 @@ class HarnessRepositoryIntegrationTest {
         assertEquals("hello from fake host", message.value.text)
         assertTrue(message.value.streaming.not())
     }
+
+    @Test
+    fun `queue edit serializes text content block`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.updateQueue(
+            QueueUpdateRequest(
+                sessionId = "session-1",
+                itemId = "queued-1",
+                kind = QueueUpdateKind.EDIT,
+                text = "revised prompt",
+            ),
+        )
+
+        val payload = rpc.payloads("session.updateQueue").single()
+        val action = payload["action"]?.jsonObject ?: error("missing action")
+        val content = action["content"]?.jsonArray?.single()?.jsonObject
+            ?: error("missing content block")
+        assertEquals("edit", action["kind"]?.toString()?.trim('"'))
+        assertEquals("text", content["type"]?.toString()?.trim('"'))
+        assertEquals("revised prompt", content["text"]?.toString()?.trim('"'))
+    }
+
+    @Test
+    fun `skipped question response uses empty selected array`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        repository.answerQuestions(
+            requestId = "rpc-question",
+            evidence = QuestionEvidence(
+                sessionId = "session-1",
+                answers = listOf(
+                    QuestionAnswer(
+                        questionId = "question-1",
+                        selectedOptions = emptyList(),
+                    ),
+                ),
+            ),
+        )
+
+        val received = rpc.receivedResponses().single()
+        assertEquals("rpc-question", received.first)
+        val value = received.second.value ?: error("missing responded value")
+        val answer = value["answer"]?.jsonObject ?: error("missing answer")
+        val firstAnswer = answer["answers"]?.jsonArray
+            ?.single()
+            ?.jsonObject
+            ?: error("missing question answer")
+        assertEquals("question-1", firstAnswer["id"]?.toString()?.trim('"'))
+        assertEquals(0, firstAnswer["selected"]?.jsonArray?.size)
+    }
 }
 private fun harnessRepository(
     rpc: DshRpcClient,
@@ -148,8 +211,15 @@ private class HarnessFakeRpc(
     private val initialWorkspaces: JsonArray = buildJsonArray {},
 ) : DshRpcClient {
     private val calls = mutableMapOf<String, Int>()
+    private val payloadsByEndpoint = mutableMapOf<String, MutableList<JsonObject>>()
+    private val receivedResponses = mutableListOf<Pair<String, RpcResult>>()
 
     fun callCountFor(endpoint: String): Int = calls[endpoint] ?: 0
+
+    fun payloads(endpoint: String): List<JsonObject> =
+        payloadsByEndpoint[endpoint].orEmpty().toList()
+
+    fun receivedResponses(): List<Pair<String, RpcResult>> = receivedResponses.toList()
 
     override suspend fun call(
         endpoint: String,
@@ -157,6 +227,7 @@ private class HarnessFakeRpc(
         payload: JsonObject,
     ): RpcResult {
         calls[endpoint] = callCountFor(endpoint) + 1
+        payloadsByEndpoint.getOrPut(endpoint) { mutableListOf() }.add(payload)
         val value = when (endpoint) {
             "host.describe" -> buildJsonObject {
                 put("version", "fake-host")
@@ -182,7 +253,9 @@ private class HarnessFakeRpc(
     override suspend fun respond(
         rpcId: String,
         result: RpcResult,
-    ) = Unit
+    ) {
+        receivedResponses += rpcId to result
+    }
 }
 
 private class ScriptedHarnessSocket(

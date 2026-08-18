@@ -318,7 +318,24 @@ class HarnessRepositoryImpl @Inject constructor(
 
     override suspend fun updateQueue(request: QueueUpdateRequest) {
         val action = buildJsonObject {
-            put("kind", if (request.kind == QueueUpdateKind.REMOVE) "remove" else "steer")
+            when (request.kind) {
+                QueueUpdateKind.REMOVE -> put("kind", "remove")
+                QueueUpdateKind.STEER -> put("kind", "steer")
+                QueueUpdateKind.EDIT -> {
+                    put("kind", "edit")
+                    put(
+                        "content",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "text")
+                                    put("text", request.text.orEmpty())
+                                },
+                            )
+                        },
+                    )
+                }
+            }
         }
         val result = rpcClient.call(
             SESSION_UPDATE_QUEUE,

@@ -9,6 +9,8 @@ import com.deepseek.harness.android.domain.model.ConnectionState
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.PromptMode
+import com.deepseek.harness.android.domain.model.QuestionAnswer
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
 import com.deepseek.harness.android.domain.model.SessionModels
 import com.deepseek.harness.android.domain.model.SessionSearchResult
@@ -35,6 +37,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -246,6 +249,78 @@ class ChatViewModelTest {
         assertEquals(blankSession.id, viewModel.uiState.value.selectedSessionId)
     }
 
+    @Test
+    fun `queue edit action delegates edited text`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(
+            ChatAction.UpdateQueue(
+                itemId = "queued-1",
+                kind = QueueUpdateKind.EDIT,
+                text = "revised prompt",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            QueueUpdateRequest(
+                sessionId = FakeChatRepository.initialSession.id,
+                itemId = "queued-1",
+                kind = QueueUpdateKind.EDIT,
+                text = "revised prompt",
+            ),
+            repository.queueUpdates.single(),
+        )
+    }
+
+    @Test
+    fun `blank queue edit is ignored`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(
+            ChatAction.UpdateQueue(
+                itemId = "queued-1",
+                kind = QueueUpdateKind.EDIT,
+                text = "   ",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(repository.queueUpdates.isEmpty())
+    }
+
+    @Test
+    fun `skipped question answer delegates empty selections`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        viewModel.onAction(
+            ChatAction.AnswerQuestion(
+                requestId = "rpc-question",
+                answers = listOf(
+                    QuestionAnswer(
+                        questionId = "question-1",
+                        selectedOptions = emptyList(),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val (requestId, evidence) = repository.questionAnswers.single()
+        assertEquals("rpc-question", requestId)
+        assertEquals("question-1", evidence.answers.single().questionId)
+        assertTrue(evidence.answers.single().selectedOptions.isEmpty())
+    }
+
     private class FakeChatRepository(
         private val timeline: MutableStateFlow<List<TimelineItem>> =
             MutableStateFlow(emptyList()),
@@ -263,6 +338,8 @@ class ChatViewModelTest {
         val olderHistorySessionIds = mutableListOf<String>()
         val archivedSessionIds = mutableListOf<String>()
         val renamedWorkspaces = mutableListOf<Pair<String, String>>()
+        val queueUpdates = mutableListOf<QueueUpdateRequest>()
+        val questionAnswers = mutableListOf<Pair<String, QuestionEvidence>>()
 
         override fun observeConnectionState(): Flow<ConnectionState> =
             MutableStateFlow(
@@ -316,7 +393,9 @@ class ChatViewModelTest {
         override suspend fun answerQuestions(
             requestId: String,
             evidence: QuestionEvidence,
-        ) = Unit
+        ) {
+            questionAnswers += requestId to evidence
+        }
 
         private val searchResults = mutableListOf<SessionSearchResult>()
 
@@ -357,7 +436,9 @@ class ChatViewModelTest {
         override suspend fun forkSession(sessionId: String, atSeq: Long?): SessionSummary =
             initialSession
 
-        override suspend fun updateQueue(request: QueueUpdateRequest) = Unit
+        override suspend fun updateQueue(request: QueueUpdateRequest) {
+            queueUpdates += request
+        }
 
         override suspend fun loadSubagents(parentSessionId: String): SubagentCatalog =
             SubagentCatalog()

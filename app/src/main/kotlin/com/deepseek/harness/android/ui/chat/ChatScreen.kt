@@ -41,6 +41,7 @@ import com.deepseek.harness.android.domain.model.MessageRole
 import com.deepseek.harness.android.domain.model.PromptMode
 import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueuePlacement
+import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.SessionQueueItem
 import com.deepseek.harness.android.domain.model.QuestionItem
 import com.deepseek.harness.android.domain.model.SessionSearchResult
@@ -483,6 +484,9 @@ private fun QueueRow(
     items: List<SessionQueueItem>,
     onAction: (ChatAction) -> Unit,
 ) {
+    var editingItemId by remember(items) { mutableStateOf<String?>(null) }
+    var editingText by remember(items) { mutableStateOf("") }
+
     items.forEach { item ->
         val prefix = when (item.placement) {
             QueuePlacement.QUEUED -> "Queued"
@@ -497,22 +501,31 @@ private fun QueueRow(
             Text(text = "$prefix: ${item.text}", style = MaterialTheme.typography.bodySmall)
             if (item.placement != QueuePlacement.CONTEXT) {
                 Row {
+                    if (item.placement == QueuePlacement.QUEUED && item.text.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                editingItemId = item.itemId
+                                editingText = item.text
+                            },
+                        ) { Text("Edit") }
+                    }
                     OutlinedButton(
                         onClick = {
                             onAction(
                                 ChatAction.UpdateQueue(
                                     itemId = item.itemId,
-                                    kind = com.deepseek.harness.android.domain.model.QueueUpdateKind.STEER,
+                                    kind = QueueUpdateKind.STEER,
                                 ),
                             )
                         },
+                        modifier = Modifier.padding(start = 4.dp),
                     ) { Text("Steer") }
                     OutlinedButton(
                         onClick = {
                             onAction(
                                 ChatAction.UpdateQueue(
                                     itemId = item.itemId,
-                                    kind = com.deepseek.harness.android.domain.model.QueueUpdateKind.REMOVE,
+                                    kind = QueueUpdateKind.REMOVE,
                                 ),
                             )
                         },
@@ -521,6 +534,41 @@ private fun QueueRow(
                 }
             }
         }
+    }
+
+    editingItemId?.let { targetId ->
+        AlertDialog(
+            onDismissRequest = { editingItemId = null },
+            title = { Text("Edit queued message") },
+            text = {
+                OutlinedTextField(
+                    value = editingText,
+                    onValueChange = { editingText = it },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editingText.isNotBlank()) {
+                            onAction(
+                                ChatAction.UpdateQueue(
+                                    itemId = targetId,
+                                    kind = QueueUpdateKind.EDIT,
+                                    text = editingText.trim(),
+                                ),
+                            )
+                        }
+                        editingItemId = null
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { editingItemId = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
@@ -564,7 +612,7 @@ private fun QuestionRow(
     }
     val answerEnabled = request.questions.isNotEmpty() && request.questions.all { question ->
         val draft = drafts[question.id] ?: QuestionDraft()
-        draft.selected.isNotEmpty() || draft.customText.isNotBlank()
+        draft.skipped || draft.selected.isNotEmpty() || draft.customText.isNotBlank()
     }
     Column(modifier = Modifier.fillMaxWidth()) {
         request.questions.forEach { question ->
@@ -580,18 +628,25 @@ private fun QuestionRow(
             onClick = {
                 val answers = request.questions.map { question ->
                     val draft = drafts[question.id] ?: QuestionDraft()
-                    val custom = draft.customText.trim()
-                    QuestionAnswer(
-                        questionId = question.id,
-                        selectedOptions = if (
-                            custom.isNotEmpty() && !question.multiSelect
-                        ) {
-                            emptyList()
-                        } else {
-                            draft.selected.toList()
-                        },
-                        customText = custom.ifBlank { null },
-                    )
+                    if (draft.skipped) {
+                        QuestionAnswer(
+                            questionId = question.id,
+                            selectedOptions = emptyList(),
+                        )
+                    } else {
+                        val custom = draft.customText.trim()
+                        QuestionAnswer(
+                            questionId = question.id,
+                            selectedOptions = if (
+                                custom.isNotEmpty() && !question.multiSelect
+                            ) {
+                                emptyList()
+                            } else {
+                                draft.selected.toList()
+                            },
+                            customText = custom.ifBlank { null },
+                        )
+                    }
                 }
                 onAction(ChatAction.AnswerQuestion(request.requestId, answers))
             },
@@ -605,6 +660,7 @@ private fun QuestionRow(
 private data class QuestionDraft(
     val selected: Set<String> = emptySet(),
     val customText: String = "",
+    val skipped: Boolean = false,
 )
 
 @Composable
@@ -618,64 +674,94 @@ private fun QuestionItemEditor(
         question.header?.let { Text(text = it, style = MaterialTheme.typography.labelLarge) }
         Text(text = question.question, style = MaterialTheme.typography.titleSmall)
         question.detail?.let { Text(text = it, style = MaterialTheme.typography.bodySmall) }
-        question.options.forEach { option ->
-            val isSelected = option in selected
-            if (isSelected) {
-                Button(
-                    onClick = {
-                        onDraftChange(
-                            QuestionDraft(
-                                selected = selectedWithout(selected, option, question.multiSelect),
-                                customText = draft.customText,
-                            ),
-                        )
-                    },
-                ) {
-                    Text(option)
-                }
-            } else {
-                OutlinedButton(
-                    onClick = {
-                        onDraftChange(
-                            QuestionDraft(
-                                selected = selectedWith(selected, option, question.multiSelect),
-                                customText = if (question.multiSelect) draft.customText else "",
-                            ),
-                        )
-                    },
-                ) {
-                    Column {
-                        Text(option)
-                        question.optionDescriptions[option]?.let { description ->
-                            Text(
-                                text = description,
-                                style = MaterialTheme.typography.bodySmall,
+        if (draft.skipped) {
+            Text(
+                text = "Skipped",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = {
+                    onDraftChange(
+                        QuestionDraft(
+                            selected = emptySet(),
+                            customText = "",
+                            skipped = false,
+                        ),
+                    )
+                },
+            ) { Text("Answer instead") }
+        } else {
+            question.options.forEach { option ->
+                val isSelected = option in selected
+                if (isSelected) {
+                    Button(
+                        onClick = {
+                            onDraftChange(
+                                QuestionDraft(
+                                    selected = selectedWithout(selected, option, question.multiSelect),
+                                    customText = draft.customText,
+                                ),
                             )
+                        },
+                    ) {
+                        Text(option)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            onDraftChange(
+                                QuestionDraft(
+                                    selected = selectedWith(selected, option, question.multiSelect),
+                                    customText = if (question.multiSelect) draft.customText else "",
+                                ),
+                            )
+                        },
+                    ) {
+                        Column {
+                            Text(option)
+                            question.optionDescriptions[option]?.let { description ->
+                                Text(
+                                    text = description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }
             }
+            OutlinedTextField(
+                value = draft.customText,
+                onValueChange = { text ->
+                    onDraftChange(
+                        QuestionDraft(
+                            selected = if (
+                                text.isNotBlank() && !question.multiSelect
+                            ) {
+                                emptySet()
+                            } else {
+                                draft.selected
+                            },
+                            customText = text,
+                        ),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Type your answer") },
+                singleLine = true,
+            )
+            OutlinedButton(
+                onClick = {
+                    onDraftChange(
+                        QuestionDraft(
+                            selected = emptySet(),
+                            customText = "",
+                            skipped = true,
+                        ),
+                    )
+                },
+            ) { Text("Skip") }
         }
-        OutlinedTextField(
-            value = draft.customText,
-            onValueChange = { text ->
-                onDraftChange(
-                    QuestionDraft(
-                        selected = if (
-                            text.isNotBlank() && !question.multiSelect
-                        ) {
-                            emptySet()
-                        } else {
-                            draft.selected
-                        },
-                        customText = text,
-                    ),
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Type your answer") },
-            singleLine = true,
-        )
     }
 }
 

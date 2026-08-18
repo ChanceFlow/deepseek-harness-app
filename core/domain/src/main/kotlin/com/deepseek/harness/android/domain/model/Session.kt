@@ -39,10 +39,12 @@ enum class QueuePlacement {
 enum class QueueUpdateKind {
     REMOVE,
     STEER,
+    EDIT,
 }
 
 data class QueueUpdateRequest(
     val sessionId: String,
     val itemId: String,
     val kind: QueueUpdateKind,
+    val text: String? = null,
 )

@@ -84,14 +84,13 @@ The MVP client is wired end-to-end against a running `dsh web` host:
   and the complete unary method set used by the MVP.
 - `:app` — stateless Compose screens for Chat, Workspaces, Models, Subagents,
   and Goals. Chat supports session search/create/rename/archive/fork, queue
-  steer and remove (including Queue/Steer composer delivery), approvals,
-  custom and multi-select questions, live titles, goals, background jobs, and
-  page-at-a-time older-history loading.
+  text edit/steer/remove (including Queue/Steer composer delivery),
+  approvals, custom, multi-select, and skippable questions, live titles,
+  goals, background jobs, and page-at-a-time older-history loading.
 
 Still deferred, matching [docs/spec.md](docs/spec.md): settings/credentials,
 attachment uploads, markdown and trajectory/plan rendering, directory browsing
-and manual workspace ordering, queue item editing, question skip, and
-`goal.edit`.
+and manual workspace ordering, and `goal.edit`.
 
 Verification: the normal JVM suite (`app` ViewModel, envelope,
 TimelineReducer, ConnectionManager fake transport, Hermetic

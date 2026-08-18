@@ -144,7 +144,8 @@ Text extraction handles `text` blocks and nested `tool-result` content.
 ``AppRoot` owns bottom navigation. `ChatScreen`, `WorkspaceScreen`, and
 `ModelsScreen` are all stateless screens; each route owns a Hilt ViewModel
 collecting `StateFlow` UI state. Chat additionally supports session search,
-rename/fork, queue steer/remove, approvals, and questions.
+rename/fork, queue text edit/steer/remove, approvals, and questions
+(multi-select, optionless text, custom text, and skip).
 
 - `ChatUiState` is `@Immutable`.
 - `ChatAction` is a `sealed interface`.
@@ -186,12 +187,12 @@ rename/fork, queue steer/remove, approvals, and questions.
   with parent-session scoping (Section 11).
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
-- **Question cards are MVP-only.** Multi-select, optionless text, and custom
-  text answers are supported; rich rendering, plan-review intents, and per
-  question skip are not.
-- **Queue editing is deferred.** The MVP exposes steer and remove against the
-  authoritative `session/queue` snapshot; `edit` content-block replacement is
-  out of scope.
+- **Question cards are MVP-only.** Multi-select, optionless text, custom
+  text, and per-question skip are supported; rich rendering and plan-review
+  intents are not.
+- **Queue editing is text-only.** Queued text items can be edited into a
+  single text content block; non-text queued items disable the edit action,
+  matching the Web client.
 - **Goal editing is deferred.** The MVP wires `goal.create`, pause, resume,
   complete, and clear (Section 13); `goal.edit` remains out of scope.
 - **Directory browsing is deferred.** Workspace paths are entered as text;
