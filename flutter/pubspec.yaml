@@ -1,0 +1,11 @@
+name: dsh_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - app
+  - packages/domain
+  - packages/network
+  - packages/harness_adapter
