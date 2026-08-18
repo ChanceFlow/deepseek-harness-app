@@ -197,6 +197,12 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   matching the Web client.
 - **Goal editing is objective-only.** The MVP exposes the Web GoalBar edit
   verb; phase and blocked reason never change on edit, matching the host API.
+- **Skills surface as the composer `/` source.** The session catalog comes
+  from `skill.list {sessionId}` (name/description/whenToUse/modelInvocable),
+  fetched once per session and cached like the Web client. While the draft is
+  a single slash token, candidates filter by prefix (max 6); picking lands
+  the literal `/name ` text — the host-side pre-step owns recognition. Skill
+  authoring/management stays deferred.
 - **Plan mode is projection-mirrored.** The `plan` session projection
   (`{active, pending}`, seeded from `session.history` projections and updated
   by `session/projection` frames) renders a chat-header state label;

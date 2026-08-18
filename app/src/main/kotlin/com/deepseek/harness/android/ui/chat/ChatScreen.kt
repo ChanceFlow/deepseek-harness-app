@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,6 +69,7 @@ import com.deepseek.harness.android.domain.model.SessionQueueItem
 import com.deepseek.harness.android.domain.model.QuestionItem
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.ToolRunStatus
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
@@ -405,6 +408,7 @@ private fun ChatPanel(
                 onModeChange = { promptMode = it },
                 pendingImages = uiState.pendingImages,
                 imageLimits = uiState.imageLimits,
+                skills = uiState.skills,
                 onAction = onAction,
                 onSend = {
                     onAction(
@@ -888,6 +892,7 @@ private fun ComposerBar(
     onModeChange: (PromptMode) -> Unit,
     pendingImages: List<PendingImage>,
     imageLimits: ImageLimits,
+    skills: List<SkillEntry>,
     onAction: (ChatAction) -> Unit,
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -969,6 +974,12 @@ private fun ComposerBar(
                 }
             }
         }
+        SlashSkillCandidates(
+            draft = draft,
+            skills = skills,
+            enabled = enabled,
+            onPick = { name -> draft = "/$name " },
+        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1006,6 +1017,55 @@ private fun ComposerBar(
                 enabled = enabled && !isSending && (draft.isNotBlank() || pendingImages.isNotEmpty()),
             ) {
                 Text(if (isSending) "Sending" else "Send")
+            }
+        }
+    }
+}
+
+/**
+ * `/` composer source: while the draft is a single slash token, offer the
+ * session's skill catalog filtered by prefix; picking lands the literal
+ * `/name ` text, matching the Web plain-text-reference decision.
+ */
+@Composable
+private fun SlashSkillCandidates(
+    draft: String,
+    skills: List<SkillEntry>,
+    enabled: Boolean,
+    onPick: (String) -> Unit,
+) {
+    if (!enabled || !draft.startsWith("/") || draft.contains(' ')) return
+    val query = draft.removePrefix("/").lowercase()
+    val candidates = skills.filter { skill ->
+        query.isEmpty() || skill.name.lowercase().startsWith(query)
+    }.take(6)
+    if (candidates.isEmpty()) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(4.dp)) {
+            candidates.forEach { skill ->
+                OutlinedButton(
+                    onClick = { onPick(skill.name) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "/${skill.name}",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = skill.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }

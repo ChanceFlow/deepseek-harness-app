@@ -351,6 +351,25 @@ class HarnessRepositoryIntegrationTest {
     }
 
     @Test
+    fun `skill list sends session scope and maps catalog`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val rpc = HarnessFakeRpc()
+        val repository = harnessRepository(rpc, ScriptedHarnessSocket(), dispatcher)
+        advanceUntilIdle()
+
+        val catalog = repository.listSkills("session-1")
+
+        assertEquals("session-1", rpc.payloads("skill.list").single()["sessionId"]?.jsonPrimitive?.content)
+        assertEquals(2, catalog.size)
+        val first = catalog.first()
+        assertEquals("generate-image", first.name)
+        assertEquals("Generate images from text", first.description)
+        assertEquals("user asks for pictures", first.whenToUse)
+        assertEquals(true, first.modelInvocable)
+        assertEquals(null, catalog[1].whenToUse)
+    }
+
+    @Test
     fun `prompt with images appends image content parts`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val rpc = HarnessFakeRpc()
@@ -542,6 +561,28 @@ private class HarnessFakeRpc(
                     },
                 )
                 put("data", "aGk=")
+            }
+            "skill.list" -> buildJsonObject {
+                put(
+                    "skills",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("name", "generate-image")
+                                put("description", "Generate images from text")
+                                put("whenToUse", "user asks for pictures")
+                                put("modelInvocable", true)
+                            },
+                        )
+                        add(
+                            buildJsonObject {
+                                put("name", "firefly3-manager")
+                                put("description", "Manage Firefly III ledgers")
+                                put("modelInvocable", false)
+                            },
+                        )
+                    },
+                )
             }
             "host.listDirectory" -> buildJsonObject {
                 put("path", "/tmp/chosen")

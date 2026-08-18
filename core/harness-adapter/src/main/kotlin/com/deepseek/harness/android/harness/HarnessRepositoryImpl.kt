@@ -16,6 +16,7 @@ import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsApplies
 import com.deepseek.harness.android.domain.model.SettingsNamespace
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.GoalSnapshot
 import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.ModelCatalogFailure
@@ -51,6 +52,7 @@ import com.deepseek.harness.android.harness.dto.AttachmentRefWire
 import com.deepseek.harness.android.harness.dto.ImageLimitsWire
 import com.deepseek.harness.android.harness.dto.PlanProjectionWire
 import com.deepseek.harness.android.harness.dto.SessionAttachmentValue
+import com.deepseek.harness.android.harness.dto.SkillListValue
 import com.deepseek.harness.android.harness.dto.SettingsDescribeValue
 import com.deepseek.harness.android.harness.dto.SettingsNamespaceWire
 import com.deepseek.harness.android.harness.dto.GoalProjectionWire
@@ -135,6 +137,7 @@ private const val HOST_CREATE_DIRECTORY = "host.createDirectory"
 private const val SETTINGS_DESCRIBE = "settings.describe"
 private const val CREDENTIALS_DESCRIBE = "credentials.describe"
 private const val CREDENTIALS_MAX_REFS = 64
+private const val SKILL_LIST = "skill.list"
 private const val HISTORY_PAGE_MESSAGES = 50
 private const val SUBAGENT_LIST = "subagent.list"
 private const val SUBAGENT_INTERRUPT = "subagent.interrupt"
@@ -353,6 +356,24 @@ class HarnessRepositoryImpl @Inject constructor(
     }
 
     override fun observeImageLimits(): Flow<ImageLimits?> = imageLimits.asStateFlow()
+
+    override suspend fun listSkills(sessionId: String): List<SkillEntry> {
+        val value = rpcClient.call(
+            SKILL_LIST,
+            SKILL_LIST,
+            buildJsonObject { put("sessionId", sessionId) },
+        ).valueOrThrow()
+        return json.decodeFromJsonElement<SkillListValue>(value)
+            .skills
+            .map { wire ->
+                SkillEntry(
+                    name = wire.name,
+                    description = wire.description,
+                    whenToUse = wire.whenToUse,
+                    modelInvocable = wire.modelInvocable,
+                )
+            }
+    }
 
     override suspend fun respondToApproval(answer: ApprovalAnswer) {
         val value = buildJsonObject {

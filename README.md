@@ -102,7 +102,9 @@ with theme-owned Compose styling. The composer attaches images (photo
 picker, host `imageLimits` projection gating type/size/count) that ride the
 prompt as inline parts, and timeline image blocks download lazily through
 `session.attachment`. The chat header mirrors the `plan` session projection
-(active/pending; `/plan` in the composer toggles it). Workspaces gain an
+(active/pending; `/plan` in the composer toggles it), and the composer offers
+the session's skill catalog as `/` slash candidates (one `skill.list` per
+session, cached; picking lands the literal `/name ` text). Workspaces gain an
 in-app directory browser (`host.listDirectory`/`host.createDirectory`), and
 Settings renders a read-only overview (`settings.describe` +
 `credentials.describe`; the host serves both only to loopback connections).

@@ -14,6 +14,7 @@ import com.deepseek.harness.android.domain.model.CreateSessionRequest
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.TimelineWindow
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.repository.ChatRepository
@@ -50,6 +51,10 @@ class ChatViewModel @Inject constructor(
     private val pendingImages = MutableStateFlow<List<PendingImage>>(emptyList())
     private val imageLimits = MutableStateFlow(ImageLimits())
     private val plan = MutableStateFlow<PlanState?>(null)
+    private val skills = MutableStateFlow<List<SkillEntry>>(emptyList())
+
+    /** One skill.list RPC per session, mirroring the Web catalog cache. */
+    private val skillsBySession = mutableMapOf<String, List<SkillEntry>>()
 
     /** Decoded attachment bytes cache; scroll re-entry must not re-download. */
     private val attachmentBytes = LinkedHashMap<String, ByteArray>()
@@ -65,6 +70,7 @@ class ChatViewModel @Inject constructor(
         val pendingImages: List<PendingImage>,
         val imageLimits: ImageLimits,
         val plan: PlanState?,
+        val skills: List<SkillEntry>,
     ) {
         fun toUiState(
             error: String?,
@@ -89,6 +95,7 @@ class ChatViewModel @Inject constructor(
                 pendingImages = pendingImages,
                 imageLimits = imageLimits,
                 plan = plan,
+                skills = skills,
             )
         }
     }
@@ -119,8 +126,7 @@ class ChatViewModel @Inject constructor(
             selectedSessionId,
             timelineWindow,
             isSending,
-            pendingImages,
-        ) { baseline, selected, window, sending, images ->
+        ) { baseline, selected, window, sending ->
             ChatUiCore(
                 connection = baseline.connection,
                 sessions = baseline.sessions,
@@ -128,16 +134,25 @@ class ChatViewModel @Inject constructor(
                 selectedSessionId = selected,
                 timelineWindow = window,
                 isSending = sending,
-                pendingImages = images,
+                pendingImages = emptyList(),
                 imageLimits = baseline.imageLimits,
                 plan = null,
+                skills = emptyList(),
             )
         },
-        plan,
-        errorMessage,
-        searchResults,
-    ) { core, planState, error, search ->
-        core.copy(plan = planState).toUiState(error, search)
+        pendingImages,
+        skills,
+    ) { core, images, skillCatalog ->
+        core.copy(pendingImages = images, skills = skillCatalog)
+    }.let { coreFlow ->
+        combine(
+            coreFlow,
+            plan,
+            errorMessage,
+            searchResults,
+        ) { core, planState, error, search ->
+            core.copy(plan = planState).toUiState(error, search)
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
@@ -177,8 +192,32 @@ class ChatViewModel @Inject constructor(
     private fun selectSession(sessionId: String) {
         selectedSessionId.value = sessionId
         timelineWindow.value = TimelineWindow()
+        loadSkills(sessionId)
         viewModelScope.launch {
             runCatchingForUi { chatRepository.openSession(sessionId) }
+        }
+    }
+
+    /**
+     * Skill catalog for the `/` composer source: one fetch per session,
+     * cached like the Web client. Failures stay silent — the composer just
+     * offers no candidates.
+     */
+    private fun loadSkills(sessionId: String) {
+        skillsBySession[sessionId]?.let {
+            skills.value = it
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val catalog = chatRepository.listSkills(sessionId)
+                skillsBySession[sessionId] = catalog
+                skills.value = catalog
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                skills.value = emptyList()
+            }
         }
     }
 

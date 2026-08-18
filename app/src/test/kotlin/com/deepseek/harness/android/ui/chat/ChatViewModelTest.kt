@@ -20,6 +20,7 @@ import com.deepseek.harness.android.domain.model.WorkspaceSummary
 import com.deepseek.harness.android.domain.model.HostDescription
 import com.deepseek.harness.android.domain.model.SendMessageRequest
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.SubagentEntry
 import com.deepseek.harness.android.domain.model.SubagentCatalog
 import com.deepseek.harness.android.domain.model.TimelineItem
@@ -85,6 +86,24 @@ class ChatViewModelTest {
 
         assertEquals(FakeChatRepository.initialSession.id, repository.openedSessionIds.single())
         assertEquals(1, viewModel.uiState.value.timeline.size)
+    }
+
+    @Test
+    fun `select session loads skill catalog once per session`() = runTest(dispatcher) {
+        val repository = FakeChatRepository()
+        val viewModel = ChatViewModel(repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.skills.size)
+
+        viewModel.onAction(ChatAction.SelectSession(FakeChatRepository.initialSession.id))
+        advanceUntilIdle()
+
+        assertEquals(1, repository.skillListCalls.size)
+        assertEquals(FakeChatRepository.initialSession.id, repository.skillListCalls.single())
     }
 
     @Test
@@ -443,6 +462,7 @@ class ChatViewModelTest {
         val workspaces = MutableStateFlow(baselineWorkspaces)
         val sentMessages = mutableListOf<SendMessageRequest>()
         val openedSessionIds = mutableListOf<String>()
+        val skillListCalls = mutableListOf<String>()
         val approvalAnswers = mutableListOf<ApprovalAnswer>()
         val createRequests = mutableListOf<CreateSessionRequest>()
         val olderHistorySessionIds = mutableListOf<String>()
@@ -475,6 +495,13 @@ class ChatViewModelTest {
             openedSessionIds += sessionId
             timeline.value = listOf(
                 TimelineItem.Error(id = "e1", message = "offline fixture"),
+            )
+        }
+
+        override suspend fun listSkills(sessionId: String): List<SkillEntry> {
+            skillListCalls += sessionId
+            return listOf(
+                SkillEntry(name = "generate-image", description = "Generate images"),
             )
         }
 

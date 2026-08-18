@@ -10,6 +10,7 @@ import com.deepseek.harness.android.domain.model.QuestionAnswer
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.SessionSearchResult
 import com.deepseek.harness.android.domain.model.SessionSummary
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.TimelineItem
 import com.deepseek.harness.android.domain.model.WorkspaceSummary
 
@@ -31,6 +32,8 @@ data class ChatUiState(
     val imageLimits: ImageLimits = ImageLimits(),
     /** Plan collaboration state of the selected session; null = not composed. */
     val plan: PlanState? = null,
+    /** Skill catalog of the selected session, backing the `/` composer source. */
+    val skills: List<SkillEntry> = emptyList(),
 )
 
 sealed interface ChatAction {

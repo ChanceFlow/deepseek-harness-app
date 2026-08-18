@@ -334,3 +334,16 @@ internal data class PlanProjectionWire(
     val active: Boolean,
     val pending: Boolean,
 )
+
+@Serializable
+internal data class SkillEntryWire(
+    val name: String,
+    val description: String,
+    val whenToUse: String? = null,
+    val modelInvocable: Boolean = false,
+)
+
+@Serializable
+internal data class SkillListValue(
+    val skills: List<SkillEntryWire> = emptyList(),
+)

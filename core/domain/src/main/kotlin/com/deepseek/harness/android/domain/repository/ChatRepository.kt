@@ -11,6 +11,7 @@ import com.deepseek.harness.android.domain.model.GoalRef
 import com.deepseek.harness.android.domain.model.ImageLimits
 import com.deepseek.harness.android.domain.model.PlanState
 import com.deepseek.harness.android.domain.model.SettingsSnapshot
+import com.deepseek.harness.android.domain.model.SkillEntry
 import com.deepseek.harness.android.domain.model.ModelSelection
 import com.deepseek.harness.android.domain.model.QueueUpdateKind
 import com.deepseek.harness.android.domain.model.QueueUpdateRequest
@@ -89,6 +90,10 @@ interface ChatRepository {
     /** Download one durable image; bytes are session-authorized. */
     suspend fun readAttachment(sessionId: String, attachmentId: String): AttachmentData =
         unsupported("readAttachment")
+
+    /** Session-scoped user-invocable skill catalog for the `/` composer source. */
+    suspend fun listSkills(sessionId: String): List<SkillEntry> =
+        unsupported("listSkills")
 
     /** Host image admission limits from the `imageLimits` session projection. */
     fun observeImageLimits(): Flow<ImageLimits?> = flowOf(null)
