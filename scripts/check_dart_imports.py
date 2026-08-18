@@ -46,18 +46,21 @@ def check() -> int:
                             f"{pkg} must not import {prefix} ({text.strip()})"
                         )
 
-    # app: harness_adapter allowed only under lib/di/
+    # app: harness_adapter/network allowed only under lib/di/
     app_base = FLUTTER_ROOT / "app"
     for dart_file in sorted(app_base.rglob("*.dart")):
         if not _in_source(dart_file):
             continue
         is_wiring = _is_di(dart_file)
         for line, text in _imports(dart_file):
-            if "package:harness_adapter/" in text and not is_wiring:
-                violations.append(
-                    f"{dart_file.relative_to(FLUTTER_ROOT)}:{line}: "
-                    f"app may import harness_adapter only in lib/di/** ({text.strip()})"
-                )
+            if is_wiring:
+                continue
+            for prefix in ("package:harness_adapter/", "package:network/"):
+                if prefix in text:
+                    violations.append(
+                        f"{dart_file.relative_to(FLUTTER_ROOT)}:{line}: "
+                        f"app may import {prefix} only in lib/di/** ({text.strip()})"
+                    )
 
     if violations:
         print("IMPORT GATE: violations found:")

@@ -74,6 +74,17 @@ final class CreateSessionRequest {
   final String? workspaceId;
   final String? cwd;
   final String? agentPreset;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CreateSessionRequest &&
+      other.sessionId == sessionId &&
+      other.workspaceId == workspaceId &&
+      other.cwd == cwd &&
+      other.agentPreset == agentPreset;
+
+  @override
+  int get hashCode => Object.hash(sessionId, workspaceId, cwd, agentPreset);
 }
 
 enum QueuePlacement { queued, steering, context }
@@ -92,4 +103,15 @@ final class QueueUpdateRequest {
   final String itemId;
   final QueueUpdateKind kind;
   final String? text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is QueueUpdateRequest &&
+      other.sessionId == sessionId &&
+      other.itemId == itemId &&
+      other.kind == kind &&
+      other.text == text;
+
+  @override
+  int get hashCode => Object.hash(sessionId, itemId, kind, text);
 }

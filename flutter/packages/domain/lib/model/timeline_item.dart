@@ -279,6 +279,17 @@ final class ApprovalAnswer {
   final String sessionId;
   final String approvalId;
   final bool allowed;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ApprovalAnswer &&
+      other.requestId == requestId &&
+      other.sessionId == sessionId &&
+      other.approvalId == approvalId &&
+      other.allowed == allowed;
+
+  @override
+  int get hashCode => Object.hash(requestId, sessionId, approvalId, allowed);
 }
 
 final class QuestionAnswer {
