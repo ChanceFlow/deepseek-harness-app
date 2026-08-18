@@ -121,7 +121,7 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Stream<ConnectionState> observeConnectionState() =>
-      _connectionManager.state;
+      _connectionManager.state.stream;
 
   @override
   Stream<List<SessionSummary>> observeSessions() => combineLatest2(

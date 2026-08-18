@@ -83,21 +83,28 @@ class DshConnectionManager {
   final List<StreamSubscription<void>> _activeSubs =
       <StreamSubscription<void>>[];
 
-  Stream<ConnectionState> get state => _state.stream;
-  Stream<HostDescription?> get hostDescription => _hostDescription.stream;
+  /// Current connection state; `.value` for synchronous reads (tests) and
+  /// `.stream` for collectors, mirroring Kotlin's StateFlow surface.
+  StateStream<ConnectionState> get state => _state;
+  StateStream<HostDescription?> get hostDescription => _hostDescription;
   Stream<ServerRequest> get muxFrames => _muxFrames.stream;
   Stream<ServerRequest> get hostFrames => _hostFrames.stream;
 
   void start() {
     if (_started) return;
     _started = true;
-    if (_state.value.phase != ConnectionPhase.disconnected) return;
-    _state.value = ConnectionState(
-      phase: ConnectionPhase.connecting,
-      hostDescription: _state.value.hostDescription,
-      generation: _state.value.generation,
-    );
-    unawaited(_connectLoop());
+    // Deferred like the Kotlin coroutine launch: the first state transition
+    // happens on the next event-loop turn, not synchronously in start().
+    scheduleMicrotask(() {
+      if (_stopped) return;
+      if (_state.value.phase != ConnectionPhase.disconnected) return;
+      _state.value = ConnectionState(
+        phase: ConnectionPhase.connecting,
+        hostDescription: _state.value.hostDescription,
+        generation: _state.value.generation,
+      );
+      unawaited(_connectLoop());
+    });
   }
 
   /// Stops the retry loop and closes every current generation/stream.
@@ -143,12 +150,14 @@ class DshConnectionManager {
     final muxOpened = Completer<void>();
     final hostOpened = Completer<void>();
     final failure = Completer<Object?>();
+    final generationSubs = <StreamSubscription<ServerRequest>>[];
 
     _pump(
       _eventsMuxPath,
       muxOpened,
       failure,
       _muxFrames,
+      generationSubs,
     );
     if (_stopped) return false;
     _pump(
@@ -156,10 +165,12 @@ class DshConnectionManager {
       hostOpened,
       failure,
       _hostFrames,
+      generationSubs,
     );
 
     try {
-      final result = await _rpcClient.call(_hostDescribe, _hostDescribe, <String, Object?>{});
+      final result =
+          await _rpcClient.call(_hostDescribe, _hostDescribe, <String, Object?>{});
       if (!result.ok) {
         throw DshBusinessException(
           code: result.error?.code ?? 'internal',
@@ -194,9 +205,16 @@ class DshConnectionManager {
       connected = true;
 
       if (!failure.isCompleted) await failure.future;
-    } catch (error) {
+    } catch (_) {
       if (_stopped) return connected;
       // Generation failed before readiness; the retry loop owns it.
+    } finally {
+      // Cancels this generation's downlinks (Kotlin: generationJob.cancel()
+      // in the finally block). Idempotent with the failure-driven cancel.
+      for (final sub in generationSubs) {
+        unawaited(sub.cancel());
+      }
+      _activeSubs.removeWhere(generationSubs.contains);
     }
     return connected;
   }
@@ -208,6 +226,7 @@ class DshConnectionManager {
     Completer<void> opened,
     Completer<Object?> failure,
     StreamController<ServerRequest> sink,
+    List<StreamSubscription<ServerRequest>> generationSubs,
   ) {
     final stream = _eventSocket.connect(path, onOpen: () {
       if (!opened.isCompleted) opened.complete();
@@ -222,10 +241,7 @@ class DshConnectionManager {
       },
       cancelOnError: true,
     );
+    generationSubs.add(sub);
     _activeSubs.add(sub);
-    failure.future.whenComplete(() {
-      _activeSubs.remove(sub);
-      unawaited(sub.cancel());
-    });
   }
 }
