@@ -25,6 +25,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
+import 'approval_panel.dart';
 import 'brand_wordmark.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
@@ -547,9 +548,19 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  /// Timeline without the queue rows (they ride the composer dock).
-  List<TimelineItem> get _timelineItems =>
-      widget.uiState.timeline.where((item) => item is! TimelineQueue).toList();
+  /// First unanswered approval; it takes over the composer seat.
+  TimelineApprovalRequest? get _pendingApproval {
+    for (final item in widget.uiState.timeline) {
+      if (item is TimelineApprovalRequest) return item;
+    }
+    return null;
+  }
+
+  /// Timeline without the queue rows (they ride the composer dock) and the
+  /// approval that took over the composer seat.
+  List<TimelineItem> get _timelineItems => widget.uiState.timeline
+      .where((item) => item is! TimelineQueue && item != _pendingApproval)
+      .toList();
 
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
     return uiState.timeline.isEmpty
@@ -693,7 +704,9 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
           const SizedBox(height: 4),
           Expanded(child: _timelineBody(uiState, selectedSession)),
-          if (uiState.timeline.whereType<TimelineQueue>().any(
+          if (_pendingApproval case final approval?)
+            ApprovalPanel(request: approval, onAction: widget.onAction)
+          else if (uiState.timeline.whereType<TimelineQueue>().any(
             (dock) => dock.items.isNotEmpty,
           ))
             QueueDock(
@@ -703,32 +716,33 @@ class _ChatPanelState extends State<ChatPanel> {
               ],
               onAction: widget.onAction,
             ),
-          Row(
-            children: [
-              Expanded(
-                child: ComposerBar(
-                  onStop: selectedSessionId == null
-                      ? null
-                      : () => widget.onAction(const CancelTurnAction()),
-                  enabled: selectedSessionId != null && !uiState.isSending,
-                  isSending: uiState.isSending,
-                  running: isSessionRunning,
-                  mode: _promptMode,
-                  onModeChange: (mode) => setState(() => _promptMode = mode),
-                  pendingImages: uiState.pendingImages,
-                  imageLimits: uiState.imageLimits,
-                  skills: uiState.skills,
-                  onAction: widget.onAction,
-                  onSend: (text) => widget.onAction(
-                    SendPrompt(
-                      text,
-                      mode: isSessionRunning ? _promptMode : PromptMode.queue,
+          if (_pendingApproval == null)
+            Row(
+              children: [
+                Expanded(
+                  child: ComposerBar(
+                    onStop: selectedSessionId == null
+                        ? null
+                        : () => widget.onAction(const CancelTurnAction()),
+                    enabled: selectedSessionId != null && !uiState.isSending,
+                    isSending: uiState.isSending,
+                    running: isSessionRunning,
+                    mode: _promptMode,
+                    onModeChange: (mode) => setState(() => _promptMode = mode),
+                    pendingImages: uiState.pendingImages,
+                    imageLimits: uiState.imageLimits,
+                    skills: uiState.skills,
+                    onAction: widget.onAction,
+                    onSend: (text) => widget.onAction(
+                      SendPrompt(
+                        text,
+                        mode: isSessionRunning ? _promptMode : PromptMode.queue,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -2151,7 +2165,12 @@ class OutlineTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     // Queue rides the composer dock, not the timeline body.
     final groups = groupTimelineByTurn(
-      timeline.where((item) => item is! TimelineQueue).toList(),
+      timeline
+          .where(
+            (item) =>
+                item is! TimelineQueue && item is! TimelineApprovalRequest,
+          )
+          .toList(),
     );
     final slivers = <Widget>[];
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {

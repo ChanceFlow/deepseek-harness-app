@@ -32,6 +32,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.tip,
     required this.buttonElevatedFill,
     required this.borderL2,
+    required this.warnPrimary,
+    required this.warnSecondary,
+    required this.warnTertiary,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -72,6 +75,11 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color buttonElevatedFill;
   final Color borderL2;
 
+  /// `--dsw-alias-state-warn-*` — the approval-takeover card accents.
+  final Color warnPrimary;
+  final Color warnSecondary;
+  final Color warnTertiary;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
         bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -95,6 +103,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         tip: DeepSuiteLight.specificTip,
         buttonElevatedFill: DeepSuiteLight.aliasButtonElevatedFill,
         borderL2: DeepSuiteLight.aliasBorderL2,
+        warnPrimary: DeepSuiteLight.aliasStateWarnPrimary,
+        warnSecondary: DeepSuiteLight.aliasStateWarnSecondary,
+        warnTertiary: DeepSuiteLight.aliasStateWarnTertiary,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -119,6 +130,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         tip: DeepSuiteDark.specificTip,
         buttonElevatedFill: DeepSuiteDark.aliasButtonElevatedFill,
         borderL2: DeepSuiteDark.aliasBorderL2,
+        warnPrimary: DeepSuiteDark.aliasStateWarnPrimary,
+        warnSecondary: DeepSuiteDark.aliasStateWarnSecondary,
+        warnTertiary: DeepSuiteDark.aliasStateWarnTertiary,
       );
 
   @override
@@ -143,6 +157,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? tip,
     Color? buttonElevatedFill,
     Color? borderL2,
+    Color? warnPrimary,
+    Color? warnSecondary,
+    Color? warnTertiary,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -166,6 +183,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       tip: tip ?? this.tip,
       buttonElevatedFill: buttonElevatedFill ?? this.buttonElevatedFill,
       borderL2: borderL2 ?? this.borderL2,
+      warnPrimary: warnPrimary ?? this.warnPrimary,
+      warnSecondary: warnSecondary ?? this.warnSecondary,
+      warnTertiary: warnTertiary ?? this.warnTertiary,
     );
   }
 
@@ -197,6 +217,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       buttonElevatedFill:
           Color.lerp(buttonElevatedFill, other.buttonElevatedFill, t)!,
       borderL2: Color.lerp(borderL2, other.borderL2, t)!,
+      warnPrimary: Color.lerp(warnPrimary, other.warnPrimary, t)!,
+      warnSecondary: Color.lerp(warnSecondary, other.warnSecondary, t)!,
+      warnTertiary: Color.lerp(warnTertiary, other.warnTertiary, t)!,
     );
   }
 }

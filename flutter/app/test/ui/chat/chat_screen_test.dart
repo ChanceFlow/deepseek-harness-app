@@ -71,7 +71,9 @@ void main() {
     final actions = <ChatAction>[];
     await _pump(
       tester,
-      _state(sessions: const [SessionSummary(id: 's1', title: 'Alpha')]),
+      _state(
+        sessions: const [SessionSummary(id: 's1', title: 'Alpha')],
+      ),
       actions,
     );
     expect(find.text('connected 1.2.3'), findsOneWidget);
@@ -87,8 +89,9 @@ void main() {
     expect(find.text('reconnecting'), findsOneWidget);
   });
 
-  testWidgets('session list shows title, running dot, blank fallback',
-      (tester) async {
+  testWidgets('session list shows title, running dot, blank fallback', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -111,13 +114,16 @@ void main() {
     expect(actions, contains(const SelectSession('s2')));
   });
 
-  testWidgets('new session dialog offers workspaces and default',
-      (tester) async {
+  testWidgets('new session dialog offers workspaces and default', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
         workspaces: const [
           WorkspaceSummary(
             workspaceId: 'w1',
@@ -132,13 +138,15 @@ void main() {
     await tester.tap(find.text('New session'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Choose a workspace or keep the default.'), findsOneWidget);
+    expect(
+      find.text('Choose a workspace or keep the default.'),
+      findsOneWidget,
+    );
     expect(find.text('proj — /tmp/proj'), findsOneWidget);
 
     await tester.tap(find.text('proj — /tmp/proj'));
     await tester.pumpAndSettle();
-    expect(
-        actions, contains(const CreateSessionInWorkspace('w1')));
+    expect(actions, contains(const CreateSessionInWorkspace('w1')));
 
     await tester.tap(find.text('New session'));
     await tester.pumpAndSettle();
@@ -152,8 +160,12 @@ void main() {
     await _pump(
       tester,
       _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
-        searchResults: const [SessionSearchResult(sessionId: 's9', snippet: '…snippet…')],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        searchResults: const [
+          SessionSearchResult(sessionId: 's9', snippet: '…snippet…'),
+        ],
       ),
       actions,
     );
@@ -175,30 +187,33 @@ void main() {
     expect(actions.last, const SearchSessions('hello'));
   });
 
-  testWidgets('timeline renders rows and dispatches approvals',
-      (tester) async {
+  testWidgets('timeline renders rows and dispatches approvals', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: const [
           TimelineTurnBoundary(1),
-          TimelineMessage(ChatMessage(
-            id: 'm1',
-            sessionId: 's1',
-            role: MessageRole.user,
-            text: 'do the thing',
-          )),
-          TimelineMessage(ChatMessage(
-            id: 'm2',
-            sessionId: 's1',
-            role: MessageRole.assistant,
-            text: '**working** on it',
-          )),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'do the thing',
+            ),
+          ),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm2',
+              sessionId: 's1',
+              role: MessageRole.assistant,
+              text: '**working** on it',
+            ),
+          ),
           TimelineToolCall(
             id: 'call-1',
             name: 'bash',
@@ -215,14 +230,16 @@ void main() {
           ),
           TimelineCompaction(id: 'c1', shadowedCount: 3),
           TimelineError(id: 'e1', message: 'boom'),
-          TimelineJobs(jobs: [
-            JobView(
-              id: 'j1',
-              kind: 'build',
-              label: 'assemble',
-              status: JobStatus.running,
-            ),
-          ]),
+          TimelineJobs(
+            jobs: [
+              JobView(
+                id: 'j1',
+                kind: 'build',
+                label: 'assemble',
+                status: JobStatus.running,
+              ),
+            ],
+          ),
         ],
       ),
       actions,
@@ -242,57 +259,113 @@ void main() {
     await tester.tap(find.text('bash'));
     await tester.pumpAndSettle();
     expect(find.text('ls -la'), findsOneWidget);
-    expect(find.text('Approve tool: bash'), findsOneWidget);
+    // Approval takes over the composer seat: web takeover card.
+    expect(find.text('Waiting for approval'), findsOneWidget);
+    expect(find.text('Would run a command'), findsOneWidget);
+    expect(
+      find.text('Tool bash requests privileged execution'),
+      findsOneWidget,
+    );
+    expect(find.text('Message DeepSeek Harness'), findsNothing);
     expect(find.text('▤ Compacted 3 messages'), findsOneWidget);
     expect(find.text('boom'), findsOneWidget);
     expect(find.text('Background jobs'), findsOneWidget);
     expect(find.text('build · assemble · running'), findsOneWidget);
 
-    await tester.tap(find.text('Allow'));
+    await tester.tap(find.text('Allow once'));
     await tester.pump();
     expect(
       actions,
-      contains(const RespondApproval(
-        requestId: 'rpc-1',
-        approvalId: 'a-1',
-        allowed: true,
-      )),
+      contains(
+        const RespondApproval(
+          requestId: 'rpc-1',
+          approvalId: 'a-1',
+          allowed: true,
+        ),
+      ),
     );
     await tester.tap(find.text('Reject'));
     await tester.pump();
     expect(
       actions,
-      contains(const RespondApproval(
-        requestId: 'rpc-1',
-        approvalId: 'a-1',
-        allowed: false,
-      )),
+      contains(
+        const RespondApproval(
+          requestId: 'rpc-1',
+          approvalId: 'a-1',
+          allowed: false,
+        ),
+      ),
     );
   });
 
-  testWidgets('queue rows dispatch steer/remove and edit dialog saves',
-      (tester) async {
+  testWidgets('approval without reason falls back to the escalation title', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: const [
-          TimelineQueue(items: [
-            SessionQueueItem(
-              itemId: 'q1',
-              placement: QueuePlacement.queued,
-              text: 'first',
-            ),
-            SessionQueueItem(
-              itemId: 'q2',
-              placement: QueuePlacement.context,
-              text: 'context only',
-            ),
-          ]),
+          TimelineApprovalRequest(
+            requestId: 'rpc-9',
+            sessionId: 's1',
+            approvalId: 'a-9',
+            toolName: 'edit',
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    expect(find.text('Approve tool: edit'), findsOneWidget);
+    expect(find.text('Waiting for approval'), findsOneWidget);
+    // Composer seat stays taken until answered.
+    expect(find.text('Send'), findsNothing);
+
+    await tester.tap(find.text('Reject'));
+    await tester.pump();
+    expect(
+      actions,
+      contains(
+        const RespondApproval(
+          requestId: 'rpc-9',
+          approvalId: 'a-9',
+          allowed: false,
+        ),
+      ),
+    );
+  });
+
+  testWidgets('queue rows dispatch steer/remove and edit dialog saves', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'q1',
+                placement: QueuePlacement.queued,
+                text: 'first',
+              ),
+              SessionQueueItem(
+                itemId: 'q2',
+                placement: QueuePlacement.context,
+                text: 'context only',
+              ),
+            ],
+          ),
         ],
       ),
       actions,
@@ -308,33 +381,29 @@ void main() {
     );
     expect(queueRowSteer, findsOneWidget);
 
-    await tester.tap(find.descendant(
-      of: find.byType(QueueRow),
-      matching: find.text('Remove'),
-    ));
+    await tester.tap(
+      find.descendant(of: find.byType(QueueRow), matching: find.text('Remove')),
+    );
     await tester.pump();
     expect(
       actions,
-      contains(const UpdateQueueAction(
-        itemId: 'q1',
-        kind: QueueUpdateKind.remove,
-      )),
+      contains(
+        const UpdateQueueAction(itemId: 'q1', kind: QueueUpdateKind.remove),
+      ),
     );
 
     await tester.tap(queueRowSteer);
     await tester.pump();
     expect(
       actions,
-      contains(const UpdateQueueAction(
-        itemId: 'q1',
-        kind: QueueUpdateKind.steer,
-      )),
+      contains(
+        const UpdateQueueAction(itemId: 'q1', kind: QueueUpdateKind.steer),
+      ),
     );
 
-    await tester.tap(find.descendant(
-      of: find.byType(QueueRow),
-      matching: find.text('Edit'),
-    ));
+    await tester.tap(
+      find.descendant(of: find.byType(QueueRow), matching: find.text('Edit')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Edit queued message'), findsOneWidget);
     await tester.enterText(
@@ -348,22 +417,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       actions,
-      contains(const UpdateQueueAction(
-        itemId: 'q1',
-        kind: QueueUpdateKind.edit,
-        text: 'revised',
-      )),
+      contains(
+        const UpdateQueueAction(
+          itemId: 'q1',
+          kind: QueueUpdateKind.edit,
+          text: 'revised',
+        ),
+      ),
     );
   });
 
-  testWidgets('question drafts collect options, custom text, skip',
-      (tester) async {
+  testWidgets('question drafts collect options, custom text, skip', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: const [
@@ -383,8 +455,7 @@ void main() {
     );
 
     // Nothing drafted yet: Answer stays disabled.
-    final answerButton =
-        find.widgetWithText(FilledButton, 'Answer').first;
+    final answerButton = find.widgetWithText(FilledButton, 'Answer').first;
     expect(tester.widget<FilledButton>(answerButton).onPressed, isNull);
 
     await tester.tap(find.text('yes'));
@@ -395,12 +466,14 @@ void main() {
     await tester.pump();
     expect(
       actions,
-      contains(const AnswerQuestionAction(
-        requestId: 'rpc-2',
-        answers: [
-          QuestionAnswer(questionId: 'q1', selectedOptions: ['yes']),
-        ],
-      )),
+      contains(
+        const AnswerQuestionAction(
+          requestId: 'rpc-2',
+          answers: [
+            QuestionAnswer(questionId: 'q1', selectedOptions: ['yes']),
+          ],
+        ),
+      ),
     );
 
     // Skip answers with empty selections.
@@ -411,12 +484,12 @@ void main() {
     await tester.pump();
     expect(
       actions,
-      contains(const AnswerQuestionAction(
-        requestId: 'rpc-2',
-        answers: [
-          QuestionAnswer(questionId: 'q1', selectedOptions: []),
-        ],
-      )),
+      contains(
+        const AnswerQuestionAction(
+          requestId: 'rpc-2',
+          answers: [QuestionAnswer(questionId: 'q1', selectedOptions: [])],
+        ),
+      ),
     );
     expect(find.text('Skipped'), findsOneWidget);
 
@@ -426,14 +499,15 @@ void main() {
     expect(find.text('Skipped'), findsNothing);
   });
 
-  testWidgets('composer sends queue by default and steer while running',
-      (tester) async {
+  testWidgets('composer sends queue by default and steer while running', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
       ),
@@ -451,26 +525,24 @@ void main() {
     await tester.tap(find.text('Send'));
     await tester.pump();
     expect(
-        actions, contains(const SendPrompt('hello world', mode: PromptMode.queue)));
+      actions,
+      contains(const SendPrompt('hello world', mode: PromptMode.queue)),
+    );
 
     // Idle session: Steer stays disabled even when picked.
     final steerChip = find.widgetWithText(OutlinedButton, 'Steer');
     expect(tester.widget<OutlinedButton>(steerChip).onPressed, isNull);
   });
 
-  testWidgets('running session enables steer mode and placeholder',
-      (tester) async {
+  testWidgets('running session enables steer mode and placeholder', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(
-            id: 's1',
-            title: 'Alpha',
-            running: true,
-            blank: false,
-          )
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
         ],
         selectedSessionId: 's1',
       ),
@@ -495,7 +567,9 @@ void main() {
     await tester.tap(find.text('Send'));
     await tester.pump();
     expect(
-        actions, contains(const SendPrompt('nudge', mode: PromptMode.steer)));
+      actions,
+      contains(const SendPrompt('nudge', mode: PromptMode.steer)),
+    );
 
     // Stop cancels the running turn.
     await tester.tap(find.text('Stop'));
@@ -503,22 +577,22 @@ void main() {
     expect(actions, contains(const CancelTurnAction()));
   });
 
-  testWidgets('pending images render chips with remove buttons',
-      (tester) async {
+  testWidgets('pending images render chips with remove buttons', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         pendingImages: const [
           PendingImage(
             id: 'file:///tmp/a.png',
             mediaType: 'image/png',
-            base64Data:
-              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            base64Data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
             name: 'a.png',
             byteSize: 12,
           ),
@@ -534,19 +608,22 @@ void main() {
     expect(actions, contains(const RemovePendingImage('file:///tmp/a.png')));
   });
 
-  testWidgets('slash skill candidates filter and land /name text',
-      (tester) async {
+  testWidgets('slash skill candidates filter and land /name text', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
       _state(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         skills: const [
           SkillEntry(
-              name: 'review', description: 'Review recent conversations'),
+            name: 'review',
+            description: 'Review recent conversations',
+          ),
           SkillEntry(name: 'rust', description: 'Rust toolchain hints'),
         ],
       ),
@@ -566,12 +643,15 @@ void main() {
 
     await tester.tap(find.text('/review'));
     await tester.pump();
-    expect(tester.widget<TextField>(composerField).controller?.text,
-        '/review ');
+    expect(
+      tester.widget<TextField>(composerField).controller?.text,
+      '/review ',
+    );
   });
 
-  testWidgets('outline groups turns, collapses, and expands all',
-      (tester) async {
+  testWidgets('outline groups turns, collapses, and expands all', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     Future<void> pump([bool withOutline = false]) async {
       // Outline toggle is local state; pump once, then toggle.
@@ -579,17 +659,19 @@ void main() {
         tester,
         _state(
           sessions: const [
-            SessionSummary(id: 's1', title: 'Alpha', blank: false)
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
           ],
           selectedSessionId: 's1',
           timeline: const [
             TimelineTurnBoundary(1),
-            TimelineMessage(ChatMessage(
-              id: 'm1',
-              sessionId: 's1',
-              role: MessageRole.user,
-              text: 'first prompt',
-            )),
+            TimelineMessage(
+              ChatMessage(
+                id: 'm1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'first prompt',
+              ),
+            ),
             TimelineToolCall(
               id: 'call-1',
               name: 'bash',
@@ -638,8 +720,9 @@ void main() {
     expect(find.text('Turn 1'), findsOneWidget);
   });
 
-  testWidgets('attachment placeholder shows metadata and retries',
-      (tester) async {
+  testWidgets('attachment placeholder shows metadata and retries', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(800, 1280);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -658,17 +741,19 @@ void main() {
         home: ChatScreen(
           uiState: _state(
             sessions: const [
-              SessionSummary(id: 's1', title: 'Alpha', blank: false)
+              SessionSummary(id: 's1', title: 'Alpha', blank: false),
             ],
             selectedSessionId: 's1',
             timeline: const [
-              TimelineMessage(ChatMessage(
-                id: 'm1',
-                sessionId: 's1',
-                role: MessageRole.user,
-                text: 'shot',
-                images: [ref],
-              )),
+              TimelineMessage(
+                ChatMessage(
+                  id: 'm1',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'shot',
+                  images: [ref],
+                ),
+              ),
             ],
           ),
           onAction: (_) {},
@@ -698,7 +783,7 @@ void main() {
           home: ChatScreen(
             uiState: ChatUiState(
               sessions: const [
-                SessionSummary(id: 's1', title: 'Alpha', blank: false)
+                SessionSummary(id: 's1', title: 'Alpha', blank: false),
               ],
               selectedSessionId: 's1',
               plan: PlanState(active: active, pending: pending),
