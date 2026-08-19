@@ -41,8 +41,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('no goal: create form gates on objective and session',
-      (tester) async {
+  testWidgets('no goal: create form gates on objective and session', (
+    tester,
+  ) async {
     final actions = <GoalAction>[];
     await _pump(
       tester,
@@ -75,14 +76,9 @@ void main() {
     expect(actions, contains(const SelectGoalSession('s1')));
   });
 
-  testWidgets('create dispatches with parsed max rounds',
-      (tester) async {
+  testWidgets('create dispatches with parsed max rounds', (tester) async {
     final actions = <GoalAction>[];
-    await _pump(
-      tester,
-      const GoalUiState(selectedSessionId: 's1'),
-      actions,
-    );
+    await _pump(tester, const GoalUiState(selectedSessionId: 's1'), actions);
 
     await tester.enterText(
       find.byWidgetPredicate(
@@ -101,12 +97,12 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Create'));
     await tester.pump();
-    expect(
-        actions, contains(const CreateGoalAction('Ship it', 12)));
+    expect(actions, contains(const CreateGoalAction('Ship it', 12)));
   });
 
-  testWidgets('active goal offers Pause/Complete/Edit; edit saves',
-      (tester) async {
+  testWidgets('active goal offers Pause/Complete/Edit; edit saves', (
+    tester,
+  ) async {
     final actions = <GoalAction>[];
     await _pump(
       tester,
@@ -115,10 +111,7 @@ void main() {
     );
 
     expect(find.text('Finish the Android MVP'), findsOneWidget);
-    expect(
-      find.text('ACTIVE · revision 3 · rounds 2/10'),
-      findsOneWidget,
-    );
+    expect(find.text('ACTIVE · revision 3 · rounds 2/10'), findsOneWidget);
 
     await tester.tap(find.text('Pause'));
     await tester.pump();
@@ -137,17 +130,16 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pump();
-    expect(
-        actions, contains(const EditGoalAction('Revised objective')));
+    expect(actions, contains(const EditGoalAction('Revised objective')));
   });
 
-  testWidgets('paused/blocked goals resume; complete goals clear',
-      (tester) async {
+  testWidgets('paused/blocked goals resume; complete goals clear', (
+    tester,
+  ) async {
     final actions = <GoalAction>[];
     await _pump(
       tester,
-      GoalUiState(
-          selectedSessionId: 's1', goal: _projection(GoalPhase.paused)),
+      GoalUiState(selectedSessionId: 's1', goal: _projection(GoalPhase.paused)),
       actions,
     );
     await tester.tap(find.text('Resume'));
@@ -157,7 +149,9 @@ void main() {
     await _pump(
       tester,
       GoalUiState(
-          selectedSessionId: 's1', goal: _projection(GoalPhase.blocked)),
+        selectedSessionId: 's1',
+        goal: _projection(GoalPhase.blocked),
+      ),
       actions,
     );
     await tester.tap(find.text('Resume'));
@@ -167,7 +161,9 @@ void main() {
     await _pump(
       tester,
       GoalUiState(
-          selectedSessionId: 's1', goal: _projection(GoalPhase.complete)),
+        selectedSessionId: 's1',
+        goal: _projection(GoalPhase.complete),
+      ),
       actions,
     );
     expect(find.text('Resume'), findsNothing);
@@ -177,22 +173,21 @@ void main() {
     expect(actions, contains(const ClearGoalAction()));
   });
 
-  testWidgets('refresh dispatches only with a selected session',
-      (tester) async {
+  testWidgets('refresh dispatches only with a selected session', (
+    tester,
+  ) async {
     final actions = <GoalAction>[];
     await _pump(tester, const GoalUiState(), actions);
     expect(
       tester
-          .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Refresh'))
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'Refresh'),
+          )
           .onPressed,
       isNull,
     );
 
-    await _pump(
-      tester,
-      const GoalUiState(selectedSessionId: 's1'),
-      actions,
-    );
+    await _pump(tester, const GoalUiState(selectedSessionId: 's1'), actions);
     await tester.tap(find.text('Refresh'));
     await tester.pump();
     expect(actions, contains(const RefreshGoalAction()));

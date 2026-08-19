@@ -94,6 +94,21 @@ final class MoveWorkspaceDownAction extends WorkspaceAction {
   int get hashCode => workspaceId.hashCode;
 }
 
+/// Start (or reuse) the workspace's blank session and open it — the web
+/// ProjectRowItem "+" action (`startSession(workspaceId)`).
+final class StartSessionInWorkspace extends WorkspaceAction {
+  const StartSessionInWorkspace(this.workspaceId);
+
+  final String workspaceId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is StartSessionInWorkspace && other.workspaceId == workspaceId;
+
+  @override
+  int get hashCode => Object.hash('start-session-in-workspace', workspaceId);
+}
+
 final class RefreshWorkspacesAction extends WorkspaceAction {
   const RefreshWorkspacesAction();
 

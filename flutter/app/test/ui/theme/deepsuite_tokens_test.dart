@@ -21,8 +21,7 @@ void main() {
     expect(DeepSuiteLight.aliasBgBase, DeepSuiteStatic.neutralBluish00);
     // The web brand is an ink style: near-black on light, near-white on
     // dark; the DeepSeek blue lives in the separate *NewColor accent.
-    expect(DeepSuiteLight.aliasBrandPrimary,
-        DeepSuiteStatic.neutralBluish1000);
+    expect(DeepSuiteLight.aliasBrandPrimary, DeepSuiteStatic.neutralBluish1000);
     expect(
       DeepSuiteLight.aliasBrandPrimaryNewColorprimaryNewColor,
       DeepSuiteStatic.deepseek500,
@@ -35,8 +34,7 @@ void main() {
     expect(DeepSuiteDark.aliasBgBase, DeepSuiteStatic.neutralBluish950);
     expect(DeepSuiteDark.aliasBgLayer1, DeepSuiteStatic.neutralBluish875);
     expect(DeepSuiteDark.aliasBgLayer2, DeepSuiteStatic.neutralBluish850);
-    expect(DeepSuiteDark.aliasBrandPrimary,
-        DeepSuiteStatic.neutralBluish50);
+    expect(DeepSuiteDark.aliasBrandPrimary, DeepSuiteStatic.neutralBluish50);
   });
 
   test('light and dark expose the same alias key set', () {
@@ -55,7 +53,8 @@ void main() {
     );
     expect(
       DeepSuiteLight.byName.containsKey(
-          '--dsw-specific-sidebar-nav-item-active'),
+        '--dsw-specific-sidebar-nav-item-active',
+      ),
       isTrue,
     );
   });

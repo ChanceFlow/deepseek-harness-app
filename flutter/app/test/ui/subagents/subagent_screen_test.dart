@@ -51,8 +51,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('renders parent picker and child rows with metadata',
-      (tester) async {
+  testWidgets('renders parent picker and child rows with metadata', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const SubagentUiState(
@@ -70,8 +71,7 @@ void main() {
     expect(find.text('Parent session'), findsNWidgets(2));
     expect(find.text('child child-12'), findsOneWidget);
     expect(
-      find.text(
-          'kind=child mode=continuable activity=running children=true'),
+      find.text('kind=child mode=continuable activity=running children=true'),
       findsOneWidget,
     );
     expect(find.text('label=Worker'), findsOneWidget);
@@ -81,8 +81,9 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Stop'), findsOneWidget);
   });
 
-  testWidgets('parent picker disables the selected parent and dispatches',
-      (tester) async {
+  testWidgets('parent picker disables the selected parent and dispatches', (
+    tester,
+  ) async {
     final actions = <SubagentAction>[];
     await _pump(
       tester,
@@ -103,45 +104,45 @@ void main() {
     expect(actions, contains(const SelectParent('p2')));
   });
 
-  testWidgets('open and stop dispatch child actions; unavailable parent warns',
-      (tester) async {
-    final actions = <SubagentAction>[];
-    await _pump(
-      tester,
-      const SubagentUiState(
-        selectedParentId: 'p1',
-        catalog: _catalog,
-      ),
-      actions,
-    );
+  testWidgets(
+    'open and stop dispatch child actions; unavailable parent warns',
+    (tester) async {
+      final actions = <SubagentAction>[];
+      await _pump(
+        tester,
+        const SubagentUiState(selectedParentId: 'p1', catalog: _catalog),
+        actions,
+      );
 
-    await tester.tap(find.text('Open'));
-    await tester.pump();
-    expect(
-        actions, contains(const OpenChild('child-12345678abcd')));
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      expect(actions, contains(const OpenChild('child-12345678abcd')));
 
-    await tester.tap(find.text('Stop'));
-    await tester.pump();
-    expect(actions,
-        contains(const InterruptSubagent('child-12345678abcd')));
+      await tester.tap(find.text('Stop'));
+      await tester.pump();
+      expect(actions, contains(const InterruptSubagent('child-12345678abcd')));
 
-    await _pump(
-      tester,
-      const SubagentUiState(
-        selectedParentId: 'p1',
-        catalog: SubagentCatalog(
-          parentSessionId: 'p1',
-          parentAvailable: false,
+      await _pump(
+        tester,
+        const SubagentUiState(
+          selectedParentId: 'p1',
+          catalog: SubagentCatalog(
+            parentSessionId: 'p1',
+            parentAvailable: false,
+          ),
         ),
-      ),
-      actions,
-    );
-    expect(find.text('Parent is not available for continuation.'),
-        findsOneWidget);
-  });
+        actions,
+      );
+      expect(
+        find.text('Parent is not available for continuation.'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('child timeline renders plain rows and composer sends',
-      (tester) async {
+  testWidgets('child timeline renders plain rows and composer sends', (
+    tester,
+  ) async {
     final actions = <SubagentAction>[];
     await _pump(
       tester,
@@ -150,12 +151,14 @@ void main() {
         selectedChildId: 'child-12345678abcd',
         catalog: _catalog,
         childTimeline: [
-          TimelineMessage(ChatMessage(
-            id: 'm1',
-            sessionId: 'child-12345678abcd',
-            role: MessageRole.assistant,
-            text: 'working on it',
-          )),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 'child-12345678abcd',
+              role: MessageRole.assistant,
+              text: 'working on it',
+            ),
+          ),
           TimelineTurnBoundary(2),
           TimelineError(id: 'e1', message: 'boom'),
         ],
@@ -177,7 +180,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Send'));
     await tester.pump();
-    expect(
-        actions, contains(const SendSubagentPrompt('keep going')));
+    expect(actions, contains(const SendSubagentPrompt('keep going')));
   });
 }

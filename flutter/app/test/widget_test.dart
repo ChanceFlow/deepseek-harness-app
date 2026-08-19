@@ -70,7 +70,9 @@ void main() {
     // seat is the models entry.
     expect(find.text('Session tools'), findsNothing);
     expect(find.byTooltip('Commands'), findsOneWidget);
-    expect(find.text('Model'), findsOneWidget);
+    // Mobile model seat: the compact circle button (tooltip carries the
+    // current model; the label lives in the sheet it opens).
+    expect(find.byTooltip('Model: Model'), findsOneWidget);
     // Session-scoped seats (subagents action, plan toggle) only render
     // with a selected session; this app-level fake has none.
     // Real icons, not the former first-letter placeholders.
@@ -94,9 +96,11 @@ void main() {
     await tester.tap(find.text('Workspaces').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Existing directory path'), findsOneWidget);
-    expect(find.text('Browse'), findsOneWidget);
-    expect(find.text('Create'), findsOneWidget);
+    // Web WorkspaceBrowser chrome: the section header pair (the nav label
+    // carries the same word).
+    expect(find.text('Workspaces'), findsWidgets);
+    expect(find.byTooltip('Search'), findsOneWidget);
+    expect(find.byTooltip('Add workspace'), findsOneWidget);
   });
 
   testWidgets('settings tab renders; plus opens the command sheet', (
@@ -107,8 +111,10 @@ void main() {
 
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
-    // Settings describe fails against the fake rpc → loopback hint shows.
-    expect(find.text('Refresh'), findsOneWidget);
+    // Settings describe fails against the fake rpc → loopback hint shows;
+    // the header keeps its circular refresh action (web panel chrome).
+    expect(find.byTooltip('Refresh'), findsOneWidget);
+    expect(find.textContaining('loopback-only'), findsOneWidget);
 
     // Back to chat: the + seat exists (disabled without a session —
     // the app-level fake serves none).

@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:domain/model/directory.dart';
+import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/repository/chat_repository.dart';
 
@@ -19,6 +20,13 @@ class WorkspaceController {
         _publish();
       }),
     );
+    // Session summaries never enter the UI state; they only feed the
+    // blank-session reuse rule behind StartSessionInWorkspace.
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        _sessions = sessions;
+      }),
+    );
   }
 
   final ChatRepository _repository;
@@ -27,6 +35,7 @@ class WorkspaceController {
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
+  List<SessionSummary> _sessions = const <SessionSummary>[];
   bool _isLoading = false;
   String? _errorMessage;
   DirectoryListing? _directoryListing;
@@ -70,6 +79,8 @@ class WorkspaceController {
         _move(action.workspaceId, up: true);
       case MoveWorkspaceDownAction():
         _move(action.workspaceId, up: false);
+      case StartSessionInWorkspace():
+        _startSessionInWorkspace(action.workspaceId);
       case RefreshWorkspacesAction():
         _refresh();
       case DismissWorkspaceError():
@@ -112,6 +123,45 @@ class WorkspaceController {
     unawaited(
       _runCatchingForUi(() => _repository.moveWorkspace(workspaceId, anchor)),
     );
+  }
+
+  /// Web WorkspaceBrowser `startSession(workspaceId)`: a workspace's blank
+  /// session is its provisional New Session row, so reuse it before
+  /// minting another; the resolved session is then opened (subscribed).
+  void _startSessionInWorkspace(String workspaceId) {
+    unawaited(() async {
+      final workspace = _workspaceById(workspaceId);
+      String? sessionId;
+      if (workspace != null) {
+        for (final session in _sessions) {
+          if (session.blank &&
+              session.cwd == workspace.path &&
+              workspace.sessionIds.contains(session.id)) {
+            sessionId = session.id;
+            break;
+          }
+        }
+      }
+      if (sessionId == null) {
+        final created = await _runCatchingForUi(
+          () => _repository.createSession(
+            CreateSessionRequest(workspaceId: workspaceId),
+          ),
+        );
+        sessionId = created?.id;
+      }
+      final resolved = sessionId;
+      if (resolved != null) {
+        await _runCatchingForUi(() => _repository.openSession(resolved));
+      }
+    }());
+  }
+
+  WorkspaceSummary? _workspaceById(String workspaceId) {
+    for (final workspace in _workspaces) {
+      if (workspace.workspaceId == workspaceId) return workspace;
+    }
+    return null;
   }
 
   void _openDirectoryBrowser() {

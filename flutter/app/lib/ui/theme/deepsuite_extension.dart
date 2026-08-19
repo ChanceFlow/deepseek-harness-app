@@ -37,6 +37,12 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.warnPrimary,
     required this.warnSecondary,
     required this.warnTertiary,
+    required this.warnLabel,
+    required this.interactiveBgHover,
+    required this.interactiveBgHoverSolid,
+    required this.borderInverted,
+    required this.buttonInfoFill,
+    required this.specificSelector,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -88,6 +94,22 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color warnSecondary;
   final Color warnTertiary;
 
+  /// `--dsw-alias-state-warn-label` — plan chip text on the tertiary fill.
+  final Color warnLabel;
+
+  /// `--dsw-alias-interactive-bg-hover(-solid)` — menu row / circle hover.
+  final Color interactiveBgHover;
+  final Color interactiveBgHoverSolid;
+
+  /// `--dsw-alias-border-inverted` — popover hairline (transparent in light).
+  final Color borderInverted;
+
+  /// `--dsw-alias-button-info-fill` — the composer primary circle.
+  final Color buttonInfoFill;
+
+  /// `--dsw-specific-selector` — the composer circle-button fill.
+  final Color specificSelector;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
     bgLayer1: DeepSuiteLight.aliasBgLayer1,
     bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -115,6 +137,12 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     warnPrimary: DeepSuiteLight.aliasStateWarnPrimary,
     warnSecondary: DeepSuiteLight.aliasStateWarnSecondary,
     warnTertiary: DeepSuiteLight.aliasStateWarnTertiary,
+    warnLabel: DeepSuiteLight.aliasStateWarnLabel,
+    interactiveBgHover: DeepSuiteLight.aliasInteractiveBgHover,
+    interactiveBgHoverSolid: DeepSuiteLight.aliasInteractiveBgHoverSolid,
+    borderInverted: DeepSuiteLight.aliasBorderInverted,
+    buttonInfoFill: DeepSuiteLight.aliasButtonInfoFill,
+    specificSelector: DeepSuiteLight.specificSelector,
   );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -144,6 +172,12 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     warnPrimary: DeepSuiteDark.aliasStateWarnPrimary,
     warnSecondary: DeepSuiteDark.aliasStateWarnSecondary,
     warnTertiary: DeepSuiteDark.aliasStateWarnTertiary,
+    warnLabel: DeepSuiteDark.aliasStateWarnLabel,
+    interactiveBgHover: DeepSuiteDark.aliasInteractiveBgHover,
+    interactiveBgHoverSolid: DeepSuiteDark.aliasInteractiveBgHoverSolid,
+    borderInverted: DeepSuiteDark.aliasBorderInverted,
+    buttonInfoFill: DeepSuiteDark.aliasButtonInfoFill,
+    specificSelector: DeepSuiteDark.specificSelector,
   );
 
   @override
@@ -173,6 +207,12 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? warnPrimary,
     Color? warnSecondary,
     Color? warnTertiary,
+    Color? warnLabel,
+    Color? interactiveBgHover,
+    Color? interactiveBgHoverSolid,
+    Color? borderInverted,
+    Color? buttonInfoFill,
+    Color? specificSelector,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -201,6 +241,13 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       warnPrimary: warnPrimary ?? this.warnPrimary,
       warnSecondary: warnSecondary ?? this.warnSecondary,
       warnTertiary: warnTertiary ?? this.warnTertiary,
+      warnLabel: warnLabel ?? this.warnLabel,
+      interactiveBgHover: interactiveBgHover ?? this.interactiveBgHover,
+      interactiveBgHoverSolid:
+          interactiveBgHoverSolid ?? this.interactiveBgHoverSolid,
+      borderInverted: borderInverted ?? this.borderInverted,
+      buttonInfoFill: buttonInfoFill ?? this.buttonInfoFill,
+      specificSelector: specificSelector ?? this.specificSelector,
     );
   }
 
@@ -253,6 +300,24 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       warnPrimary: Color.lerp(warnPrimary, other.warnPrimary, t)!,
       warnSecondary: Color.lerp(warnSecondary, other.warnSecondary, t)!,
       warnTertiary: Color.lerp(warnTertiary, other.warnTertiary, t)!,
+      warnLabel: Color.lerp(warnLabel, other.warnLabel, t)!,
+      interactiveBgHover: Color.lerp(
+        interactiveBgHover,
+        other.interactiveBgHover,
+        t,
+      )!,
+      interactiveBgHoverSolid: Color.lerp(
+        interactiveBgHoverSolid,
+        other.interactiveBgHoverSolid,
+        t,
+      )!,
+      borderInverted: Color.lerp(borderInverted, other.borderInverted, t)!,
+      buttonInfoFill: Color.lerp(buttonInfoFill, other.buttonInfoFill, t)!,
+      specificSelector: Color.lerp(
+        specificSelector,
+        other.specificSelector,
+        t,
+      )!,
     );
   }
 }
@@ -261,6 +326,13 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
 const List<BoxShadow> kDsShadowLv2 = [
   BoxShadow(offset: Offset(0, 4), blurRadius: 12, color: Color(0x05000000)),
   BoxShadow(offset: Offset(0, 2), blurRadius: 8, color: Color(0x0A000000)),
+];
+
+/// `--dsw-shadow-lv3` — popover/menu surface elevation.
+const List<BoxShadow> kDsShadowLv3 = [
+  BoxShadow(offset: Offset(0, 0), blurRadius: 1, color: Color(0x33000000)),
+  BoxShadow(offset: Offset(0, 0), blurRadius: 4, color: Color(0x05000000)),
+  BoxShadow(offset: Offset(0, 12), blurRadius: 32, color: Color(0x14000000)),
 ];
 
 /// Resolves the deepsuite extension from any context; falls back to the

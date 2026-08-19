@@ -25,6 +25,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
+import 'circle_button.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
@@ -47,7 +48,7 @@ import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import '../theme/deepsuite_extension.dart'
-    show DeepSuiteColors, dsOf, kDsShadowLv2;
+    show DeepSuiteColors, dsOf, kDsShadowLv2, kDsShadowLv3;
 import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
@@ -806,6 +807,34 @@ class ChatPanel extends StatefulWidget {
 class _ChatPanelState extends State<ChatPanel> {
   Set<int> _collapsedTurns = const <int>{};
 
+  /// Web ChatView follow contract: while the reader sits within
+  /// [kFollowThreshold] of the bottom the view is "pinned" and follows new
+  /// content; a new trailing user node force-scrolls regardless.
+  static const double kFollowThreshold = 24;
+
+  final ScrollController _timelineScroll = ScrollController();
+  bool _pinned = true;
+  int _followDepth = 0;
+  bool _needsInitialJump = false;
+  String? _lastFollowSignature;
+  String? _lastTrailingUserKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _timelineScroll.addListener(_onTimelineScroll);
+    // First mount lands at the bottom like the web's restore-or-bottom.
+    _needsInitialJump = true;
+    _scheduleFollow();
+  }
+
+  @override
+  void dispose() {
+    _timelineScroll.removeListener(_onTimelineScroll);
+    _timelineScroll.dispose();
+    super.dispose();
+  }
+
   @override
   void didUpdateWidget(covariant ChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -813,7 +842,115 @@ class _ChatPanelState extends State<ChatPanel> {
     if (oldWidget.uiState.selectedSessionId !=
         widget.uiState.selectedSessionId) {
       _collapsedTurns = const <int>{};
+      _pinned = true;
+      _lastFollowSignature = null;
+      _lastTrailingUserKey = null;
+      _needsInitialJump = true;
+      _scheduleFollow();
+      return;
     }
+    if (widget.outline) return;
+    // Own words must be visible: a new trailing user node force-scrolls
+    // (send lives in the composer, so arrival is detected here).
+    final trailingUser = _trailingUserKey;
+    final appendedUser =
+        trailingUser != null && trailingUser != _lastTrailingUserKey;
+    _lastTrailingUserKey = trailingUser;
+    // Follow new flow content while pinned; do NOT re-pin on every rebuild
+    // merely because the offset happens to sit at the bottom.
+    final signature = _followSignature();
+    final tipMoved = signature != _lastFollowSignature;
+    _lastFollowSignature = signature;
+    if (_needsInitialJump || appendedUser || (tipMoved && _pinned)) {
+      _scheduleFollow();
+    }
+  }
+
+  /// Content-growth signal over the displayed flow: row count, the tail
+  /// row's identity, and the streaming text length.
+  String? _followSignature() {
+    final items = _timelineItems;
+    if (items.isEmpty) return null;
+    final last = items.last;
+    final growth = last is TimelineMessage ? ':${last.value.text.length}' : '';
+    return '${items.length}:${timelineKey(last)}$growth';
+  }
+
+  /// The displayed tail is a user message (web `lastNode.kind === 'user'`).
+  String? get _trailingUserKey {
+    final items = _timelineItems;
+    if (items.isEmpty) return null;
+    final last = items.last;
+    return last is TimelineMessage && last.value.role == MessageRole.user
+        ? last.value.id
+        : null;
+  }
+
+  /// Reader-input attribution: our own driven scrolls never re-evaluate
+  /// pinning, so the follow glide cannot unpin itself mid-glide. A depth
+  /// (not a bool) survives overlapping glides during fast streaming —
+  /// each interrupted animation's cleanup leaves deeper ones armed.
+  void _onTimelineScroll() {
+    if (_followDepth > 0 || !_timelineScroll.hasClients) return;
+    final position = _timelineScroll.position;
+    if (!position.hasContentDimensions) return;
+    _pinned = position.maxScrollExtent - position.pixels <= kFollowThreshold;
+  }
+
+  void _scheduleFollow() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToBottom();
+    });
+  }
+
+  Future<void> _scrollToBottom() async {
+    if (!_timelineScroll.hasClients) return;
+    final position = _timelineScroll.position;
+    if (!position.hasContentDimensions) return;
+    var target = position.maxScrollExtent;
+    // Nothing to reveal yet (empty timeline): the initial jump stays armed
+    // so the first history frame still lands at the bottom without a long
+    // smooth glide from the top.
+    if (target <= 0) return;
+    final jump = _needsInitialJump;
+    _needsInitialJump = false;
+    // A jump (session switch, first mount) pins without ceremony; growth
+    // follows with a short ease so streaming glides instead of snapping.
+    _pinned = true;
+    _followDepth++;
+    try {
+      if (jump) {
+        _timelineScroll.jumpTo(target);
+        return;
+      }
+      // The lazy list's extent estimate moves as tail items materialize
+      // under the glide; re-issue while still short of (or past) the
+      // settled bottom (bounded so a pathological estimator cannot loop
+      // forever).
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if (!_timelineScroll.hasClients) return;
+        final live = _timelineScroll.position;
+        if (!live.hasContentDimensions) return;
+        target = live.maxScrollExtent;
+        if ((target - live.pixels).abs() <= kFollowThreshold) return;
+        await _timelineScroll.animateTo(
+          target,
+          duration: _followDuration(live.pixels, target),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    } finally {
+      _followDepth--;
+    }
+  }
+
+  /// Distance-scaled glide: fast enough to keep up with streaming frames,
+  /// short enough that each frame's re-issue never lags the tail.
+  Duration _followDuration(double from, double to) {
+    final distance = (to - from).abs();
+    final ms = (60 + distance * 0.25).clamp(90.0, 220.0);
+    return Duration(milliseconds: ms.round());
   }
 
   /// First unanswered approval; it takes over the composer seat.
@@ -856,6 +993,7 @@ class _ChatPanelState extends State<ChatPanel> {
             loadAttachment: widget.loadAttachment,
           )
         : ListView.separated(
+            controller: _timelineScroll,
             itemCount: _timelineItems.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -883,11 +1021,6 @@ class _ChatPanelState extends State<ChatPanel> {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          if (uiState.plan != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: PlanChip(plan: uiState.plan!),
-            ),
           if (uiState.errorMessage case final error?) ...[
             Text(
               error,
@@ -936,9 +1069,6 @@ class _ChatPanelState extends State<ChatPanel> {
                     isSending: uiState.isSending,
                     running: isSessionRunning,
                     plan: uiState.plan,
-                    onTogglePlan: selectedSessionId == null
-                        ? null
-                        : () => widget.onAction(const SendPrompt('/plan')),
                     models: widget.models,
                     onSelectModel: widget.onSelectModel,
                     onRefreshModels: widget.onRefreshModels,
@@ -961,26 +1091,82 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 }
 
-/// Plan collaboration state; `/plan` in the composer toggles it.
-class PlanChip extends StatelessWidget {
-  const PlanChip({super.key, required this.plan});
+/// Plan-mode status chip — port of the web `PlanModeControl` (figma
+/// warn-state pill). Renders only while the effective target is plan mode
+/// (`pending ? !active : active` — the folded host value, not client
+/// optimism) and exits by executing `/plan off`. Entering plan mode is done
+/// by typing `/plan` in the composer, never by this chip.
+class PlanChip extends StatefulWidget {
+  const PlanChip({
+    super.key,
+    required this.plan,
+    required this.onExit,
+    this.locked = false,
+  });
 
-  final PlanState plan;
+  final PlanState? plan;
+  final VoidCallback onExit;
+  final bool locked;
+
+  @override
+  State<PlanChip> createState() => _PlanChipState();
+}
+
+class _PlanChipState extends State<PlanChip> {
+  bool _hovering = false;
 
   @override
   Widget build(BuildContext context) {
-    final label = plan.pending
-        ? 'Plan: switching…'
-        : plan.active
-        ? 'Plan: active'
-        : 'Plan: off';
-    final highlight = plan.active || plan.pending;
-    return Text(
-      label,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: highlight
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.onSurfaceVariant,
+    final plan = widget.plan;
+    // Undefined (null: no frame yet) and off both render nothing.
+    if (plan == null) return const SizedBox.shrink();
+    final target = plan.pending ? !plan.active : plan.active;
+    if (!target) return const SizedBox.shrink();
+
+    final ds = dsOf(context);
+    // Web .chip:hover — the label deepens toward warn-primary.
+    final label = _hovering ? ds.warnPrimary : ds.warnLabel;
+    return MouseRegion(
+      cursor: widget.locked
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Opacity(
+        // Web .chip:disabled — the locked seat dims instead of vanishing.
+        opacity: widget.locked ? 0.6 : 1,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: widget.locked ? null : widget.onExit,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: ds.warnTertiary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DefaultTextStyle(
+                    style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      height: 20 / 13,
+                      color: label,
+                    ),
+                    // Design literal, not copy: the chip wordmark stays
+                    // 'Plan' in every locale.
+                    child: const Text('Plan'),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.close, size: 12, color: label),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2090,7 +2276,6 @@ class ComposerBar extends StatefulWidget {
     required this.onSend,
     this.onStop,
     this.plan,
-    this.onTogglePlan,
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
@@ -2108,9 +2293,9 @@ class ComposerBar extends StatefulWidget {
   final void Function(String text) onSend;
   final VoidCallback? onStop;
 
-  /// Plan collaboration state; the toggle sends `/plan` (web input.plan).
+  /// Plan collaboration state (web input.plan): while the target is plan
+  /// mode the placeholder swaps and the warn pill rides the tools row.
   final PlanState? plan;
-  final VoidCallback? onTogglePlan;
 
   /// Composer model seat (web conversation.input.model): the ModelSelect
   /// pill + selection dispatch.
@@ -2191,10 +2376,14 @@ class _ComposerBarState extends State<ComposerBar> {
             textInputAction: TextInputAction.send,
             onChanged: (_) => setState(() {}),
             onSubmitted: _send,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               isDense: true,
               border: InputBorder.none,
-              hintText: 'Message DeepSeek Harness',
+              // Web swaps the placeholder while the plan target is active
+              // (InputBar: planActive ? t('placeholder.plan') : ...).
+              hintText: _planTarget
+                  ? 'describe your task to generate plan'
+                  : 'Message DeepSeek Harness',
             ),
           ),
           if (widget.pendingImages.isNotEmpty)
@@ -2250,45 +2439,51 @@ class _ComposerBarState extends State<ComposerBar> {
                   setState(() {});
                 },
               ),
-              if (widget.onTogglePlan != null)
-                _PlanToggle(
-                  plan: widget.plan,
-                  enabled: widget.enabled,
-                  onToggle: widget.onTogglePlan!,
-                ),
+              const SizedBox(width: 12),
+              // Web conversation.input.plan seat: the warn pill renders only
+              // while the plan target is active and exits via `/plan off`.
+              PlanChip(
+                plan: widget.plan,
+                locked: !widget.enabled,
+                onExit: () => widget.onAction(const SendPrompt('/plan off')),
+              ),
               const Spacer(),
-              if (widget.onSelectModel != null)
+              // Web trailing group (gap 12): model seat, context ring,
+              // primary control.
+              if (widget.onSelectModel != null) ...[
                 ModelSelect(
                   models: widget.models,
                   locked: !widget.enabled,
                   onSelect: widget.onSelectModel!,
                   onRefresh: widget.onRefreshModels ?? () {},
                 ),
+                const SizedBox(width: 12),
+              ],
               ContextRing(
                 pressure: widget.contextPressure,
                 breakdown: widget.contextBreakdown,
               ),
-              const SizedBox(width: 8),
-              FilledButton(
+              const SizedBox(width: 12),
+              _PrimarySendButton(
                 // Web primary: Send, or Stop while the turn runs.
-                onPressed: widget.running
-                    ? widget.onStop
-                    : widget.enabled && !widget.isSending && _canSend()
-                    ? _send
-                    : null,
-                child: Text(
-                  widget.running
-                      ? 'Stop'
-                      : widget.isSending
-                      ? 'Sending'
-                      : 'Send',
-                ),
+                running: widget.running,
+                sending: widget.isSending,
+                enabled: widget.enabled && _canSend(),
+                onStop: widget.onStop,
+                onSend: _send,
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  /// Web `planActive`: the folded host value, not client optimism.
+  bool get _planTarget {
+    final plan = widget.plan;
+    if (plan == null) return false;
+    return plan.pending ? !plan.active : plan.active;
   }
 
   bool _canSend() =>
@@ -2440,10 +2635,11 @@ class PopupMenuEntryShim extends StatelessWidget {
   }
 }
 
-/// The composer's ➕ — web opens the command menu (PopupSelectView with
-/// search + rows). Mobile form: a bottom sheet listing the session's slash
-/// commands (skills) with a pinned Attach-images row (web relies on
-/// paste/drop, which mobile keyboards cannot do).
+/// The composer's ➕ — web form (InputBar `.add`): a 28px circle on the
+/// selector fill with a 14px plus glyph, opening the command menu. Mobile
+/// form of the web PopupSelectView: a menu-surface bottom sheet with a
+/// search field and command rows, plus a pinned Attach-images row (web
+/// relies on paste/drop, which mobile keyboards cannot do).
 class _PlusButton extends StatelessWidget {
   const _PlusButton({
     required this.enabled,
@@ -2459,10 +2655,16 @@ class _PlusButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    return DsCircleButton(
       tooltip: 'Commands',
-      onPressed: enabled ? () => _open(context) : null,
-      icon: const Icon(Icons.add),
+      enabled: enabled,
+      onTap: () => _open(context),
+      // Web .add: the glyph rides --dsw-alias-label-primary.
+      child: Icon(
+        Icons.add,
+        size: 14,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
     );
   }
 
@@ -2470,56 +2672,32 @@ class _PlusButton extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      // Menu-surface sheet (PopupSelectView .card): menu fill, 12px radius,
+      // lv3 elevation, 4px inner padding.
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: dsOf(sheetContext).menu,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: dsOf(sheetContext).borderInverted),
+            boxShadow: kDsShadowLv3,
+          ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 460),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.image_outlined),
-                  title: const Text('Attach images'),
-                  subtitle: const Text('Pick from gallery'),
-                  enabled: onPickImages != null,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onPickImages?.call();
-                  },
-                ),
-                const Divider(height: 8),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final skill in skills)
-                        ListTile(
-                          dense: true,
-                          leading: Text(
-                            '/${skill.name}',
-                            style: Theme.of(sheetContext).textTheme.labelMedium
-                                ?.copyWith(fontWeight: FontWeight.w500),
-                          ),
-                          title: Text(skill.name),
-                          subtitle: skill.description.isEmpty
-                              ? null
-                              : Text(
-                                  skill.description,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            onInsertCommand(skill.name);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+            constraints: const BoxConstraints(maxHeight: 440),
+            child: _CommandSheet(
+              canPickImages: onPickImages != null,
+              skills: skills,
+              onInsertCommand: (name) {
+                Navigator.of(sheetContext).pop();
+                onInsertCommand(name);
+              },
+              onPickImagesNow: () {
+                Navigator.of(sheetContext).pop();
+                onPickImages?.call();
+              },
             ),
           ),
         ),
@@ -2528,32 +2706,240 @@ class _PlusButton extends StatelessWidget {
   }
 }
 
-/// Plan-mode toggle chip (web conversation.input.plan seat): sends the
-/// `/plan` toggle command.
-class _PlanToggle extends StatelessWidget {
-  const _PlanToggle({
-    required this.plan,
-    required this.enabled,
-    required this.onToggle,
+/// Web PopupSelectView body: search input on top, filtered option rows
+/// below (13px label-primary + 12px label-tertiary detail, check mark on
+/// the active row), status line when empty.
+class _CommandSheet extends StatefulWidget {
+  const _CommandSheet({
+    required this.canPickImages,
+    required this.skills,
+    required this.onInsertCommand,
+    required this.onPickImagesNow,
   });
 
-  final PlanState? plan;
-  final bool enabled;
-  final VoidCallback onToggle;
+  final bool canPickImages;
+  final List<SkillEntry> skills;
+  final void Function(String name) onInsertCommand;
+  final VoidCallback onPickImagesNow;
+
+  @override
+  State<_CommandSheet> createState() => _CommandSheetState();
+}
+
+class _CommandSheetState extends State<_CommandSheet> {
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
-    final active = plan?.active ?? false;
-    final pending = plan?.pending ?? false;
-    return IconButton(
-      tooltip: active ? 'Plan mode: on' : 'Plan mode: off',
-      isSelected: active,
-      onPressed: enabled ? onToggle : null,
-      icon: Icon(
-        active ? Icons.flag : Icons.flag_outlined,
-        color: active || pending
-            ? Theme.of(context).colorScheme.secondary
-            : null,
+    final ds = dsOf(context);
+    final query = _search.trim().toLowerCase();
+    final rows = widget.skills
+        .where(
+          (skill) =>
+              query.isEmpty ||
+              skill.name.toLowerCase().contains(query) ||
+              skill.description.toLowerCase().contains(query),
+        )
+        .toList();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The web search box (PopupSelectView .search).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
+          child: TextField(
+            autofocus: true,
+            onChanged: (value) => setState(() => _search = value),
+            style: Theme.of(context).textTheme.bodyMedium,
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: 'Search commands',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ds.borderInverted),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ds.borderInverted),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: ds.accent),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 6,
+              ),
+            ),
+          ),
+        ),
+        // Mobile-only pinned row: image intake (web uses paste/drop).
+        _CommandRow(
+          label: 'Attach images',
+          detail: 'Pick from gallery',
+          enabled: widget.canPickImages,
+          onTap: widget.onPickImagesNow,
+        ),
+        Flexible(
+          child: rows.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  // PopupSelectView .status: the empty roster line.
+                  child: Text(
+                    'No matching commands',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: ds.labelTertiary),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: rows.length,
+                  itemBuilder: (context, index) {
+                    final skill = rows[index];
+                    return _CommandRow(
+                      label: '/${skill.name}',
+                      detail: skill.description.isEmpty
+                          ? null
+                          : skill.description,
+                      onTap: () => widget.onInsertCommand(skill.name),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One option row (PopupSelectView .row): 6x8 padding, 8px radius, hover
+/// fill, ellipsized label + trailing detail.
+class _CommandRow extends StatelessWidget {
+  const _CommandRow({
+    required this.label,
+    required this.onTap,
+    this.detail,
+    this.enabled = true,
+  });
+
+  final String label;
+  final String? detail;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 13,
+                    color: enabled
+                        ? Theme.of(context).colorScheme.onSurface
+                        : ds.labelTertiary,
+                  ),
+                ),
+              ),
+              if (detail case final text?) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontSize: 12, color: ds.labelTertiary),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Web primary control (InputBar `.primary`): a 34px circle on the
+/// button-info fill carrying a static-white glyph — the up arrow while
+/// idle, the stop square while the turn runs.
+class _PrimarySendButton extends StatelessWidget {
+  const _PrimarySendButton({
+    required this.running,
+    required this.sending,
+    required this.enabled,
+    this.onStop,
+    this.onSend,
+  });
+
+  final bool running;
+  final bool sending;
+  final bool enabled;
+  final VoidCallback? onStop;
+  final VoidCallback? onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final active = running
+        ? onStop != null
+        : enabled && !sending && onSend != null;
+    return Tooltip(
+      message: running
+          ? 'Stop'
+          : sending
+          ? 'Sending'
+          : 'Send',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: active ? (running ? onStop : onSend) : null,
+          child: Opacity(
+            opacity: active ? 1 : 0.4,
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: ds.buttonInfoFill,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: running
+                  // Web stop glyph: 10x10 rounded-3 square, static white.
+                  ? Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    )
+                  // Web send glyph: the 16px up-arrow path, static white.
+                  : const Icon(
+                      Icons.arrow_upward,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -56,147 +56,137 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('renders snapshot chips, namespaces, credentials',
-      (tester) async {
+  testWidgets('renders general facts, namespace cards, credential rows', (
+    tester,
+  ) async {
     await _pump(
       tester,
-      const SettingsUiState(
-        snapshot: _snapshot,
-        credentials: _credentials,
-      ),
+      const SettingsUiState(snapshot: _snapshot, credentials: _credentials),
       [],
     );
 
+    // Web panel header + the circular refresh action.
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('host writable'), findsOneWidget);
-    expect(find.text('settings document'), findsOneWidget);
+    expect(find.byTooltip('Refresh'), findsOneWidget);
+
+    // General section (web GeneralSection rows).
+    expect(find.text('Host writes'), findsOneWidget);
+    expect(find.text('Writable'), findsOneWidget);
+    expect(find.text('Settings document'), findsOneWidget);
+    expect(find.text('Present'), findsOneWidget);
+
+    // Namespace disclosure cards carry the host meta line.
     expect(find.text('llm-deepseek'), findsOneWidget);
     expect(
-      find.text(
-          'applies: live · revision: 3 · user layer · 1 secrets set'),
+      find.text('applies: live · revision: 3 · user layer · 1 secrets set'),
       findsOneWidget,
     );
     expect(find.text('shell'), findsOneWidget);
-    expect(
-      find.text('applies: restart · revision: 0'),
-      findsOneWidget,
-    );
+    expect(find.text('applies: restart · revision: 0'), findsOneWidget);
+
+    // Credentials section with the state badge (web SecretField).
     expect(find.text('Credentials'), findsOneWidget);
     expect(find.text('DEEPSEEK_API_KEY'), findsOneWidget);
-    expect(
-      find.text('configured · source: file · writable'),
-      findsOneWidget,
-    );
-    expect(find.text('Replace'), findsOneWidget);
-    expect(find.text('Unset'), findsOneWidget);
+    expect(find.text('configured · source: file · writable'), findsOneWidget);
+    expect(find.text('Configured'), findsOneWidget);
   });
 
-  testWidgets('error shows the loopback hint', (tester) async {
+  testWidgets('error shows the loopback hint and dismisses', (tester) async {
+    final actions = <SettingsAction>[];
     await _pump(
       tester,
       const SettingsUiState(errorMessage: 'describe failed'),
-      [],
-    );
-    expect(find.text('describe failed'), findsOneWidget);
-    expect(
-      find.textContaining('loopback-only'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('key patch dialog dispatches UpdateSettingAction',
-      (tester) async {
-    final actions = <SettingsAction>[];
-    await _pump(
-      tester,
-      const SettingsUiState(snapshot: _snapshot),
       actions,
     );
+    expect(find.text('describe failed'), findsOneWidget);
+    expect(find.textContaining('loopback-only'), findsOneWidget);
 
-    await tester.tap(find.text('Edit key').first);
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(actions, contains(const DismissSettingsError()));
+  });
+
+  testWidgets('key patch form dispatches UpdateSettingAction', (tester) async {
+    final actions = <SettingsAction>[];
+    await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
+
+    // Expanding the namespace card reveals the staged patch form.
+    await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Patch llm-deepseek'), findsOneWidget);
-    expect(find.text('✓ Key patch'), findsOneWidget);
+    expect(find.text('Patch key'), findsOneWidget);
+    expect(find.text('Replace section'), findsOneWidget);
     expect(find.textContaining('CAS revision 3'), findsOneWidget);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Top-level key'),
-      'model',
+    final keyField = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == null,
     );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'JSON value'),
-      '"glm-x"',
+    final valueField = find.byWidgetPredicate(
+      (w) =>
+          w is TextField &&
+          w.decoration?.hintText == 'true / 42 / "text" / {…}',
     );
+    await tester.enterText(keyField, 'model');
+    await tester.enterText(valueField, '"glm-x"');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(
       actions,
-      contains(const UpdateSettingAction(
-        ns: 'llm-deepseek',
-        key: 'model',
-        jsonValue: '"glm-x"',
-        expectedRevision: 3,
-      )),
+      contains(
+        const UpdateSettingAction(
+          ns: 'llm-deepseek',
+          key: 'model',
+          jsonValue: '"glm-x"',
+          expectedRevision: 3,
+        ),
+      ),
     );
   });
 
-  testWidgets('replace-section mode dispatches ReplaceSettingAction',
-      (tester) async {
+  testWidgets('replace-section mode dispatches ReplaceSettingAction', (
+    tester,
+  ) async {
     final actions = <SettingsAction>[];
-    await _pump(
-      tester,
-      const SettingsUiState(snapshot: _snapshot),
-      actions,
-    );
+    await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
-    await tester.tap(find.text('Edit key').first);
+    await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Replace section'));
     await tester.pump();
-    expect(find.text('✓ Replace section'), findsOneWidget);
+    expect(find.text('Patch key'), findsOneWidget);
 
-    await tester.enterText(
-      find.widgetWithText(
-        TextField,
-        'Whole user-layer JSON object',
-      ),
-      '{ "model": "glm-x" }',
+    final replaceField = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == '{ "key": value }',
     );
+    await tester.enterText(replaceField, '{ "model": "glm-x" }');
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(
       actions,
-      contains(const ReplaceSettingAction(
-        ns: 'llm-deepseek',
-        sectionJson: '{ "model": "glm-x" }',
-        expectedRevision: 3,
-      )),
+      contains(
+        const ReplaceSettingAction(
+          ns: 'llm-deepseek',
+          sectionJson: '{ "model": "glm-x" }',
+          expectedRevision: 3,
+        ),
+      ),
     );
   });
 
-  testWidgets('credential set/unset dispatch', (tester) async {
+  testWidgets('credential sheet set/unset dispatch', (tester) async {
     final actions = <SettingsAction>[];
     await _pump(
       tester,
-      const SettingsUiState(
-        snapshot: _snapshot,
-        credentials: _credentials,
-      ),
+      const SettingsUiState(snapshot: _snapshot, credentials: _credentials),
       actions,
     );
 
-    await tester.tap(find.text('Unset'));
-    await tester.pump();
-    expect(
-        actions, contains(const UnsetCredentialAction('DEEPSEEK_API_KEY')));
-
-    actions.clear();
-    await tester.tap(find.text('Replace'));
+    // Tapping the credential row opens the editor sheet.
+    await tester.tap(find.text('DEEPSEEK_API_KEY'));
     await tester.pumpAndSettle();
     expect(find.text('Store DEEPSEEK_API_KEY'), findsOneWidget);
 
@@ -209,13 +199,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       actions,
-      contains(
-          const SetCredentialAction('DEEPSEEK_API_KEY', 'sk-test')),
+      contains(const SetCredentialAction('DEEPSEEK_API_KEY', 'sk-test')),
     );
+
+    // The destructive unset rides the same sheet footer.
+    actions.clear();
+    await tester.tap(find.text('DEEPSEEK_API_KEY'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unset'));
+    await tester.pump();
+    expect(actions, contains(const UnsetCredentialAction('DEEPSEEK_API_KEY')));
   });
 
-  testWidgets('read-only snapshot hides edit affordances',
-      (tester) async {
+  testWidgets('read-only snapshot hides edit affordances', (tester) async {
     await _pump(
       tester,
       const SettingsUiState(
@@ -237,9 +233,13 @@ void main() {
       [],
     );
 
-    expect(find.text('host read-only'), findsOneWidget);
-    expect(find.text('no settings document'), findsOneWidget);
-    expect(find.text('Edit key'), findsNothing);
+    expect(find.text('Read-only'), findsOneWidget);
+    expect(find.text('None'), findsOneWidget);
+    // Expanding a read-only card shows the notice, not the patch form.
+    await tester.tap(find.text('shell'));
+    await tester.pumpAndSettle();
+    expect(find.text('Patch key'), findsNothing);
+    expect(find.textContaining('read-only'), findsOneWidget);
     expect(find.text('Credentials'), findsNothing);
   });
 }

@@ -282,7 +282,9 @@ void main() {
     expect(find.byTooltip('Archive session'), findsOneWidget);
     expect(find.byTooltip('Outline'), findsOneWidget);
     expect(find.byTooltip('Subagents'), findsOneWidget);
-    expect(find.byTooltip('Plan mode: off'), findsOneWidget);
+    // Web plan seat: the warn pill renders only while the plan target is
+    // active (null plan here → nothing).
+    expect(find.text('Plan'), findsNothing);
     // The old button soup is gone.
     expect(find.widgetWithText(OutlinedButton, 'Rename'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'Fork'), findsNothing);
@@ -430,7 +432,7 @@ void main() {
     expect(find.text('Approve tool: edit'), findsOneWidget);
     expect(find.text('Waiting for approval'), findsOneWidget);
     // Composer seat stays taken until answered.
-    expect(find.text('Send'), findsNothing);
+    expect(find.byTooltip('Send'), findsNothing);
 
     await tester.tap(find.text('Reject'));
     await tester.pump();
@@ -605,7 +607,7 @@ void main() {
     expect(find.text('Skipped'), findsNothing);
   });
 
-  testWidgets('idle composer sends queue; plan toggle rides the action row', (
+  testWidgets('idle composer sends queue; plan pill stays hidden while off', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -620,9 +622,11 @@ void main() {
       actions,
     );
 
-    // Web composer seats: attach, plan toggle, model, ring, primary Send.
+    // Web composer seats: attach circle, plan pill (off → hidden), model
+    // circle, ring, primary Send circle.
     expect(find.byTooltip('Commands'), findsOneWidget);
-    expect(find.byTooltip('Plan mode: off'), findsOneWidget);
+    expect(find.byTooltip('Model: Model'), findsOneWidget);
+    expect(find.text('Plan'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'Steer'), findsNothing);
     expect(find.text('Delivery'), findsNothing);
 
@@ -634,17 +638,12 @@ void main() {
         .first;
     await tester.enterText(composerField, 'hello world');
     await tester.pump();
-    await tester.tap(find.text('Send'));
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
     expect(
       actions,
       contains(const SendPrompt('hello world', mode: PromptMode.queue)),
     );
-
-    // Plan toggle sends the `/plan` command (web input.plan seat).
-    await tester.tap(find.byTooltip('Plan mode: off'));
-    await tester.pump();
-    expect(actions, contains(const SendPrompt('/plan')));
   });
 
   testWidgets('running session: primary becomes Stop; submit queues', (
@@ -663,10 +662,10 @@ void main() {
     );
 
     // Web primary semantics: while the turn runs the button IS Stop.
-    expect(find.text('Stop'), findsOneWidget);
-    expect(find.text('Send'), findsNothing);
+    expect(find.byTooltip('Stop'), findsOneWidget);
+    expect(find.byTooltip('Send'), findsNothing);
 
-    await tester.tap(find.text('Stop'));
+    await tester.tap(find.byTooltip('Stop'));
     await tester.pump();
     expect(actions, contains(const CancelTurnAction()));
 
@@ -805,13 +804,28 @@ void main() {
     await tester.tap(find.byTooltip('Commands'));
     await tester.pumpAndSettle();
 
-    // Pinned attach row + the slash command rows.
+    // Web PopupSelectView form: search field, pinned attach row, and the
+    // slash command rows (label carries the /name literal).
+    final searchField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText == 'Search commands',
+    );
+    expect(searchField, findsOneWidget);
     expect(find.text('Attach images'), findsOneWidget);
     expect(find.text('Pick from gallery'), findsOneWidget);
-    expect(find.text('review'), findsOneWidget);
-    expect(find.text('rust'), findsOneWidget);
+    expect(find.text('/review'), findsOneWidget);
+    expect(find.text('/rust'), findsOneWidget);
 
-    await tester.tap(find.text('review'));
+    // Typing filters the roster locally (web search input).
+    await tester.enterText(searchField, 'rust');
+    await tester.pump();
+    expect(find.text('/review'), findsNothing);
+    expect(find.text('/rust'), findsOneWidget);
+    await tester.enterText(searchField, '');
+    await tester.pump();
+
+    await tester.tap(find.text('/review'));
     await tester.pumpAndSettle();
     expect(find.text('Attach images'), findsNothing);
 
@@ -842,11 +856,10 @@ void main() {
       actions,
     );
 
-    // Trigger pill: model name + effort + chevron (web 313:14108).
-    expect(find.text('GLM X'), findsOneWidget);
-    expect(find.text('High'), findsOneWidget);
+    // Mobile trigger: a compact circle button (tooltip carries the model).
+    expect(find.byTooltip('Model: GLM X'), findsOneWidget);
 
-    await tester.tap(find.text('GLM X'));
+    await tester.tap(find.byTooltip('Model: GLM X'));
     await tester.pumpAndSettle();
 
     // Root pane: the Model / Effort row pair.
@@ -1069,36 +1082,148 @@ void main() {
     expect(loaded, hasLength(2));
   });
 
-  testWidgets('plan chip reflects active and pending states', (tester) async {
-    Future<void> pump(bool active, bool pending) async {
-      tester.view.physicalSize = const Size(800, 1280);
-      tester.view.devicePixelRatio = 1.0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ChatScreen(
-            uiState: ChatUiState(
-              sessions: const [
-                SessionSummary(id: 's1', title: 'Alpha', blank: false),
-              ],
-              selectedSessionId: 's1',
-              plan: PlanState(active: active, pending: pending),
+  testWidgets(
+    'plan pill renders only the active target and exits via /plan off',
+    (tester) async {
+      final actions = <ChatAction>[];
+      Future<void> pump(bool active, bool pending) async {
+        tester.view.physicalSize = const Size(800, 1280);
+        tester.view.devicePixelRatio = 1.0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatScreen(
+              uiState: ChatUiState(
+                sessions: const [
+                  SessionSummary(id: 's1', title: 'Alpha', blank: false),
+                ],
+                selectedSessionId: 's1',
+                plan: PlanState(active: active, pending: pending),
+              ),
+              onAction: actions.add,
             ),
-            onAction: (_) {},
           ),
-        ),
-      );
+        );
+      }
+
+      // Target on (settled active, or switching on): the warn pill shows.
+      await pump(true, false);
+      expect(find.text('Plan'), findsOneWidget);
+      // Exiting executes /plan off — never a `/plan` toggle.
+      await tester.tap(find.text('Plan'));
+      await tester.pump();
+      expect(actions, contains(const SendPrompt('/plan off')));
+      expect(actions.where((a) => a == const SendPrompt('/plan')), isEmpty);
+
+      await pump(false, true);
+      expect(find.text('Plan'), findsOneWidget);
+
+      // Target off (settled off, or switching off): nothing renders.
+      await pump(true, true);
+      expect(find.text('Plan'), findsNothing);
+      await pump(false, false);
+      expect(find.text('Plan'), findsNothing);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
+
+  testWidgets('timeline follows streaming output while pinned', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    String tail(int lines) => List<String>.generate(
+      lines,
+      (i) => 'stream line $i keeps growing',
+    ).join('\n');
+    ChatUiState stateFor(String assistantText, {bool withFollowUp = false}) =>
+        ChatUiState(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: [
+            const TimelineTurnBoundary(1),
+            const TimelineMessage(
+              ChatMessage(
+                id: 'm1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'go',
+              ),
+            ),
+            TimelineMessage(
+              ChatMessage(
+                id: 'm2',
+                sessionId: 's1',
+                role: MessageRole.assistant,
+                text: assistantText,
+                streaming: true,
+              ),
+            ),
+            if (withFollowUp)
+              const TimelineMessage(
+                ChatMessage(
+                  id: 'm3',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'follow-up',
+                ),
+              ),
+          ],
+        );
+    Widget host(ChatUiState ui) => MaterialApp(
+      home: ChatScreen(uiState: ui, onAction: (_) {}),
+    );
+
+    Finder timelineList() => find.descendant(
+      of: find.byType(ChatPanel),
+      matching: find.byType(ListView),
+    );
+    ScrollPosition position() => tester
+        .state<ScrollableState>(
+          find
+              .descendant(of: timelineList(), matching: find.byType(Scrollable))
+              .first,
+        )
+        .position;
+
+    // Initial mount lands at the bottom (web restore-or-bottom).
+    await tester.pumpWidget(host(stateFor(tail(60))));
+    await tester.pump();
+    expect(position().maxScrollExtent, greaterThan(0));
+    expect(position().pixels, position().maxScrollExtent);
+
+    // Streaming growth follows while pinned. The driven glide's ticker
+    // establishes its start at the first tick, so frames advance in two
+    // steps; the streaming sweep repeats forever (no pumpAndSettle).
+    Future<void> settle() async {
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 50));
     }
 
-    await pump(true, false);
-    expect(find.text('Plan: active'), findsOneWidget);
+    await tester.pumpWidget(host(stateFor(tail(120))));
+    await settle();
+    expect(position().pixels, position().maxScrollExtent);
 
-    await pump(false, true);
-    expect(find.text('Plan: switching…'), findsOneWidget);
+    // The reader leaves the bottom: pinning releases. The drag stays small
+    // so the lazy tail stays materialized and the extent estimate honest.
+    await tester.drag(timelineList(), const Offset(0, 150));
+    await settle();
+    expect(position().maxScrollExtent - position().pixels, greaterThan(24));
 
-    await pump(false, false);
-    expect(find.text('Plan: off'), findsOneWidget);
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
+    // Growth while unpinned does NOT follow (the reader keeps their place).
+    final readerOffset = position().pixels;
+    await tester.pumpWidget(host(stateFor(tail(121))));
+    await settle();
+    expect(position().pixels, readerOffset);
+
+    // A new trailing user message force-scrolls (own words must be visible).
+    await tester.pumpWidget(host(stateFor(tail(121), withFollowUp: true)));
+    await settle();
+    expect(position().pixels, position().maxScrollExtent);
   });
 
   group('compact drawer layout', () {
