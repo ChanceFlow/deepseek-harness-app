@@ -32,6 +32,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.tip,
     required this.buttonElevatedFill,
     required this.borderL2,
+    required this.labelPrimaryDimmed,
     required this.warnPrimary,
     required this.warnSecondary,
     required this.warnTertiary,
@@ -75,65 +76,69 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color buttonElevatedFill;
   final Color borderL2;
 
+  /// `--dsw-alias-label-primary-dimmed` — boundary notices (compaction).
+  final Color labelPrimaryDimmed;
+
   /// `--dsw-alias-state-warn-*` — the approval-takeover card accents.
   final Color warnPrimary;
   final Color warnSecondary;
   final Color warnTertiary;
 
   static DeepSuiteColors light() => const DeepSuiteColors(
-        bgLayer1: DeepSuiteLight.aliasBgLayer1,
-        bgLayer2: DeepSuiteLight.aliasBgLayer2,
-        bgLayer3: DeepSuiteLight.aliasBgLayer3,
-        sidebarFill: DeepSuiteLight.specificSidebarFill,
-        sidebarNavItemActive: DeepSuiteLight.specificSidebarNavItemActive,
-        sidebarNavItemActiveAccent:
-            DeepSuiteLight.specificSidebarNavItemActiveAccent,
-        sidebarNavItemHover: DeepSuiteLight.specificSidebarNavItemHover,
-        brandText: DeepSuiteLight.aliasBrandText,
-        accent:
-            DeepSuiteLight.aliasBrandPrimaryNewColorprimaryNewColor,
-        divider: DeepSuiteLight.aliasBorderL1,
-        labelSecondary: DeepSuiteLight.aliasLabelSecondary,
-        labelTertiary: DeepSuiteLight.aliasLabelTertiary,
-        labelCaption: DeepSuiteLight.aliasLabelCaption,
-        inputMajor: DeepSuiteLight.specificInputMajor,
-        borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
-        bubble: DeepSuiteLight.specificBubble,
-        bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
-        tip: DeepSuiteLight.specificTip,
-        buttonElevatedFill: DeepSuiteLight.aliasButtonElevatedFill,
-        borderL2: DeepSuiteLight.aliasBorderL2,
-        warnPrimary: DeepSuiteLight.aliasStateWarnPrimary,
-        warnSecondary: DeepSuiteLight.aliasStateWarnSecondary,
-        warnTertiary: DeepSuiteLight.aliasStateWarnTertiary,
-      );
+    bgLayer1: DeepSuiteLight.aliasBgLayer1,
+    bgLayer2: DeepSuiteLight.aliasBgLayer2,
+    bgLayer3: DeepSuiteLight.aliasBgLayer3,
+    sidebarFill: DeepSuiteLight.specificSidebarFill,
+    sidebarNavItemActive: DeepSuiteLight.specificSidebarNavItemActive,
+    sidebarNavItemActiveAccent:
+        DeepSuiteLight.specificSidebarNavItemActiveAccent,
+    sidebarNavItemHover: DeepSuiteLight.specificSidebarNavItemHover,
+    brandText: DeepSuiteLight.aliasBrandText,
+    accent: DeepSuiteLight.aliasBrandPrimaryNewColorprimaryNewColor,
+    divider: DeepSuiteLight.aliasBorderL1,
+    labelSecondary: DeepSuiteLight.aliasLabelSecondary,
+    labelTertiary: DeepSuiteLight.aliasLabelTertiary,
+    labelCaption: DeepSuiteLight.aliasLabelCaption,
+    inputMajor: DeepSuiteLight.specificInputMajor,
+    borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
+    bubble: DeepSuiteLight.specificBubble,
+    bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
+    tip: DeepSuiteLight.specificTip,
+    buttonElevatedFill: DeepSuiteLight.aliasButtonElevatedFill,
+    borderL2: DeepSuiteLight.aliasBorderL2,
+    labelPrimaryDimmed: DeepSuiteLight.aliasLabelPrimaryDimmed,
+    warnPrimary: DeepSuiteLight.aliasStateWarnPrimary,
+    warnSecondary: DeepSuiteLight.aliasStateWarnSecondary,
+    warnTertiary: DeepSuiteLight.aliasStateWarnTertiary,
+  );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
-        bgLayer1: DeepSuiteDark.aliasBgLayer1,
-        bgLayer2: DeepSuiteDark.aliasBgLayer2,
-        bgLayer3: DeepSuiteDark.aliasBgLayer3,
-        sidebarFill: DeepSuiteDark.specificSidebarFill,
-        sidebarNavItemActive: DeepSuiteDark.specificSidebarNavItemActive,
-        sidebarNavItemActiveAccent:
-            DeepSuiteDark.specificSidebarNavItemActiveAccent,
-        sidebarNavItemHover: DeepSuiteDark.specificSidebarNavItemHover,
-        brandText: DeepSuiteDark.aliasBrandText,
-        accent: DeepSuiteDark.aliasBrandPrimaryNewColorprimaryNewColor,
-        divider: DeepSuiteDark.aliasBorderL1,
-        labelSecondary: DeepSuiteDark.aliasLabelSecondary,
-        labelTertiary: DeepSuiteDark.aliasLabelTertiary,
-        labelCaption: DeepSuiteDark.aliasLabelCaption,
-        inputMajor: DeepSuiteDark.specificInputMajor,
-        borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
-        bubble: DeepSuiteDark.specificBubble,
-        bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
-        tip: DeepSuiteDark.specificTip,
-        buttonElevatedFill: DeepSuiteDark.aliasButtonElevatedFill,
-        borderL2: DeepSuiteDark.aliasBorderL2,
-        warnPrimary: DeepSuiteDark.aliasStateWarnPrimary,
-        warnSecondary: DeepSuiteDark.aliasStateWarnSecondary,
-        warnTertiary: DeepSuiteDark.aliasStateWarnTertiary,
-      );
+    bgLayer1: DeepSuiteDark.aliasBgLayer1,
+    bgLayer2: DeepSuiteDark.aliasBgLayer2,
+    bgLayer3: DeepSuiteDark.aliasBgLayer3,
+    sidebarFill: DeepSuiteDark.specificSidebarFill,
+    sidebarNavItemActive: DeepSuiteDark.specificSidebarNavItemActive,
+    sidebarNavItemActiveAccent:
+        DeepSuiteDark.specificSidebarNavItemActiveAccent,
+    sidebarNavItemHover: DeepSuiteDark.specificSidebarNavItemHover,
+    brandText: DeepSuiteDark.aliasBrandText,
+    accent: DeepSuiteDark.aliasBrandPrimaryNewColorprimaryNewColor,
+    divider: DeepSuiteDark.aliasBorderL1,
+    labelSecondary: DeepSuiteDark.aliasLabelSecondary,
+    labelTertiary: DeepSuiteDark.aliasLabelTertiary,
+    labelCaption: DeepSuiteDark.aliasLabelCaption,
+    inputMajor: DeepSuiteDark.specificInputMajor,
+    borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
+    bubble: DeepSuiteDark.specificBubble,
+    bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
+    tip: DeepSuiteDark.specificTip,
+    buttonElevatedFill: DeepSuiteDark.aliasButtonElevatedFill,
+    borderL2: DeepSuiteDark.aliasBorderL2,
+    labelPrimaryDimmed: DeepSuiteDark.aliasLabelPrimaryDimmed,
+    warnPrimary: DeepSuiteDark.aliasStateWarnPrimary,
+    warnSecondary: DeepSuiteDark.aliasStateWarnSecondary,
+    warnTertiary: DeepSuiteDark.aliasStateWarnTertiary,
+  );
 
   @override
   DeepSuiteColors copyWith({
@@ -157,6 +162,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? tip,
     Color? buttonElevatedFill,
     Color? borderL2,
+    Color? labelPrimaryDimmed,
     Color? warnPrimary,
     Color? warnSecondary,
     Color? warnTertiary,
@@ -183,6 +189,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       tip: tip ?? this.tip,
       buttonElevatedFill: buttonElevatedFill ?? this.buttonElevatedFill,
       borderL2: borderL2 ?? this.borderL2,
+      labelPrimaryDimmed: labelPrimaryDimmed ?? this.labelPrimaryDimmed,
       warnPrimary: warnPrimary ?? this.warnPrimary,
       warnSecondary: warnSecondary ?? this.warnSecondary,
       warnTertiary: warnTertiary ?? this.warnTertiary,
@@ -197,12 +204,21 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bgLayer2: Color.lerp(bgLayer2, other.bgLayer2, t)!,
       bgLayer3: Color.lerp(bgLayer3, other.bgLayer3, t)!,
       sidebarFill: Color.lerp(sidebarFill, other.sidebarFill, t)!,
-      sidebarNavItemActive:
-          Color.lerp(sidebarNavItemActive, other.sidebarNavItemActive, t)!,
+      sidebarNavItemActive: Color.lerp(
+        sidebarNavItemActive,
+        other.sidebarNavItemActive,
+        t,
+      )!,
       sidebarNavItemActiveAccent: Color.lerp(
-          sidebarNavItemActiveAccent, other.sidebarNavItemActiveAccent, t)!,
-      sidebarNavItemHover:
-          Color.lerp(sidebarNavItemHover, other.sidebarNavItemHover, t)!,
+        sidebarNavItemActiveAccent,
+        other.sidebarNavItemActiveAccent,
+        t,
+      )!,
+      sidebarNavItemHover: Color.lerp(
+        sidebarNavItemHover,
+        other.sidebarNavItemHover,
+        t,
+      )!,
       brandText: Color.lerp(brandText, other.brandText, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       divider: Color.lerp(divider, other.divider, t)!,
@@ -214,9 +230,17 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bubble: Color.lerp(bubble, other.bubble, t)!,
       bubbleHighlight: Color.lerp(bubbleHighlight, other.bubbleHighlight, t)!,
       tip: Color.lerp(tip, other.tip, t)!,
-      buttonElevatedFill:
-          Color.lerp(buttonElevatedFill, other.buttonElevatedFill, t)!,
+      buttonElevatedFill: Color.lerp(
+        buttonElevatedFill,
+        other.buttonElevatedFill,
+        t,
+      )!,
       borderL2: Color.lerp(borderL2, other.borderL2, t)!,
+      labelPrimaryDimmed: Color.lerp(
+        labelPrimaryDimmed,
+        other.labelPrimaryDimmed,
+        t,
+      )!,
       warnPrimary: Color.lerp(warnPrimary, other.warnPrimary, t)!,
       warnSecondary: Color.lerp(warnSecondary, other.warnSecondary, t)!,
       warnTertiary: Color.lerp(warnTertiary, other.warnTertiary, t)!,

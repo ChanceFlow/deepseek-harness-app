@@ -2317,7 +2317,9 @@ class TurnBoundaryRow extends StatelessWidget {
   }
 }
 
-/// Context-compaction marker: the summary replaced N older messages.
+/// Context-compaction marker — port of the web CompactionItem: one dim
+/// 24px row (leading context icon + title + count), a boundary notice
+/// rather than conversation content.
 class CompactionRow extends StatelessWidget {
   const CompactionRow({super.key, required this.shadowedCount});
 
@@ -2325,15 +2327,37 @@ class CompactionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: SizedBox(
-        width: double.infinity,
-        child: Text(
-          '▤ Compacted $shadowedCount messages',
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
+    final ds = dsOf(context);
+    return SizedBox(
+      height: 24,
+      child: Row(
+        children: [
+          Icon(Icons.layers_outlined, size: 14, color: ds.labelSecondary),
+          const SizedBox(width: 6),
+          Text(
+            'Context compacted',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: ds.labelPrimaryDimmed),
+          ),
+          Container(
+            width: 2,
+            height: 2,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: ds.labelCaption,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Flexible(
+            child: Text(
+              'Compacted $shadowedCount history items',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: ds.labelTertiary),
+            ),
+          ),
+        ],
       ),
     );
   }

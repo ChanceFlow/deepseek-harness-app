@@ -267,7 +267,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Message DeepSeek Harness'), findsNothing);
-    expect(find.text('▤ Compacted 3 messages'), findsOneWidget);
+    // Web compaction row: dim title + count fragment.
+    expect(find.text('Context compacted'), findsOneWidget);
+    expect(find.text('Compacted 3 history items'), findsOneWidget);
     expect(find.text('boom'), findsOneWidget);
     expect(find.text('Background jobs'), findsOneWidget);
     expect(find.text('build · assemble · running'), findsOneWidget);
