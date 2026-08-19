@@ -30,8 +30,7 @@ final class WebSocketDshEventSocket implements DshEventSocket {
         try {
           decoded = jsonDecode(text);
         } catch (error) {
-          throw DshTransportException(
-              'invalid server-request on $path', error);
+          throw DshTransportException('invalid server-request on $path', error);
         }
         yield ServerRequest.fromJson(decoded);
       }

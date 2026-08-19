@@ -1,6 +1,7 @@
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
@@ -331,6 +332,10 @@ class FakeChatRepository implements ChatRepository {
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
       AppStateStream<ContextBreakdown?>(null).stream;
+
+  @override
+  Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
+      AppStateStream<SessionWindowStats>(const SessionWindowStats()).stream;
 
   @override
   Future<List<String>> moveWorkspace(

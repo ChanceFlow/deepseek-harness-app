@@ -7,6 +7,7 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
@@ -30,6 +31,7 @@ final class ChatUiState {
     this.skills = const <SkillEntry>[],
     this.contextPressure,
     this.contextBreakdown,
+    this.sessionStats = const SessionWindowStats(),
   });
 
   final ConnectionState connection;
@@ -61,6 +63,9 @@ final class ChatUiState {
 
   /// Heuristic composition shown in the ring's panel.
   final ContextBreakdown? contextBreakdown;
+
+  /// Window stats for the composer stats line.
+  final SessionWindowStats sessionStats;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin

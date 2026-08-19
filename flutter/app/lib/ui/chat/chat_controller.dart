@@ -15,6 +15,7 @@ import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
@@ -56,6 +57,7 @@ class ChatController {
   List<SkillEntry> _skills = const <SkillEntry>[];
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
+  SessionWindowStats _sessionStats = const SessionWindowStats();
 
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
@@ -70,6 +72,7 @@ class ChatController {
   StreamSubscription<void>? _planSub;
   StreamSubscription<void>? _contextSub;
   StreamSubscription<void>? _breakdownSub;
+  StreamSubscription<void>? _statsSub;
 
   ChatUiState get state => _state.value;
   Stream<ChatUiState> get uiState => _state.stream;
@@ -82,6 +85,7 @@ class ChatController {
     unawaited(_planSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
+    unawaited(_statsSub?.cancel());
     _subs.clear();
   }
 
@@ -108,6 +112,7 @@ class ChatController {
       skills: _skills,
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
+      sessionStats: _sessionStats,
     );
   }
 
@@ -208,15 +213,18 @@ class ChatController {
     unawaited(_planSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
+    unawaited(_statsSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
       _contextPressure = null;
       _contextBreakdown = null;
+      _sessionStats = const SessionWindowStats();
       _timelineSub = null;
       _planSub = null;
       _contextSub = null;
       _breakdownSub = null;
+      _statsSub = null;
       return;
     }
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((

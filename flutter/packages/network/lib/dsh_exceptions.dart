@@ -9,8 +9,9 @@ class DshTransportException implements Exception {
   final Object? cause;
 
   @override
-  String toString() =>
-      cause == null ? 'DshTransportException: $message' : 'DshTransportException: $message ($cause)';
+  String toString() => cause == null
+      ? 'DshTransportException: $message'
+      : 'DshTransportException: $message ($cause)';
 }
 
 /// Business-level failure carried by an `ok == false` RPC result.

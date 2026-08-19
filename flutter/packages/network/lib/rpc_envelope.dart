@@ -34,11 +34,11 @@ final class ClientRequest {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'type': type,
-        'rpcId': rpcId,
-        'method': method,
-        'payload': payload,
-      };
+    'type': type,
+    'rpcId': rpcId,
+    'method': method,
+    'payload': payload,
+  };
 }
 
 final class ClientResponse {
@@ -62,10 +62,10 @@ final class ClientResponse {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'type': type,
-        'rpcId': rpcId,
-        'result': result.toJson(),
-      };
+    'type': type,
+    'rpcId': rpcId,
+    'result': result.toJson(),
+  };
 }
 
 final class ServerResponse {
@@ -89,10 +89,10 @@ final class ServerResponse {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'type': type,
-        'rpcId': rpcId,
-        'result': result.toJson(),
-      };
+    'type': type,
+    'rpcId': rpcId,
+    'result': result.toJson(),
+  };
 }
 
 final class ServerRequest {
@@ -119,11 +119,11 @@ final class ServerRequest {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'type': type,
-        'rpcId': rpcId,
-        'method': method,
-        'payload': payload,
-      };
+    'type': type,
+    'rpcId': rpcId,
+    'method': method,
+    'payload': payload,
+  };
 }
 
 final class RpcResult {
@@ -145,10 +145,10 @@ final class RpcResult {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'ok': ok,
-        if (value != null) 'value': value,
-        if (error != null) 'error': error!.toJson(),
-      };
+    'ok': ok,
+    if (value != null) 'value': value,
+    if (error != null) 'error': error!.toJson(),
+  };
 }
 
 final class RpcError {
@@ -169,10 +169,10 @@ final class RpcError {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'code': code,
-        'message': message,
-        if (details != null) 'details': details,
-      };
+    'code': code,
+    'message': message,
+    if (details != null) 'details': details,
+  };
 }
 
 final class RpcReceipt {
@@ -190,7 +190,7 @@ final class RpcReceipt {
   }
 
   JsonMap toJson() => <String, Object?>{
-        'accepted': accepted,
-        if (reason != null) 'reason': reason,
-      };
+    'accepted': accepted,
+    if (reason != null) 'reason': reason,
+  };
 }

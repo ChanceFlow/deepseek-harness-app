@@ -29,6 +29,7 @@ import 'markdown/markdown_text.dart';
 import 'approval_panel.dart';
 import 'brand_wordmark.dart';
 import 'context_ring.dart';
+import 'stats_line.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
@@ -706,6 +707,7 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
           const SizedBox(height: 4),
           Expanded(child: _timelineBody(uiState, selectedSession)),
+          StatsLine(stats: uiState.sessionStats),
           if (_pendingApproval case final approval?)
             ApprovalPanel(request: approval, onAction: widget.onAction)
           else if (uiState.timeline.whereType<TimelineQueue>().any(

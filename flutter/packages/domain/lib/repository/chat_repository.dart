@@ -9,6 +9,7 @@ import 'dart:async';
 import '../model/attachment.dart';
 import '../model/connection_state.dart';
 import '../model/context_pressure.dart';
+import '../model/session_window_stats.dart';
 import '../model/directory.dart';
 import '../model/goal.dart';
 import '../model/model_catalog.dart';
@@ -206,6 +207,11 @@ abstract class ChatRepository {
   /// empty until any component is priced.
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
       const Stream<ContextBreakdown?>.empty();
+
+  /// Window-scoped stats for the composer stats line (fallback semantics:
+  /// "what is on screen").
+  Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
+      const Stream<SessionWindowStats>.empty();
 
   Future<GoalRef> createGoal(
     String sessionId,

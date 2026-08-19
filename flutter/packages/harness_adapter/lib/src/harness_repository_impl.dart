@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -28,6 +29,7 @@ import 'package:network/rpc_envelope.dart';
 
 import 'dsh_connection_manager.dart';
 import 'context_pressure_fold.dart';
+import 'session_stats_fold.dart';
 import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
 import 'state_stream.dart';
@@ -567,6 +569,10 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
       _sessionStateFor(sessionId).contextBreakdown.stream;
+
+  @override
+  Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
+      _sessionStateFor(sessionId).sessionStats.stream;
 
   @override
   Future<GoalRef> createGoal(
@@ -1292,6 +1298,11 @@ final class _SessionState {
       StateStream<ContextPressure?>(null);
   final StateStream<ContextBreakdown?> contextBreakdown =
       StateStream<ContextBreakdown?>(null);
+  final StateStream<SessionWindowStats> sessionStats =
+      const SessionWindowStats() == const SessionWindowStats()
+      ? StateStream<SessionWindowStats>(const SessionWindowStats())
+      : StateStream<SessionWindowStats>(const SessionWindowStats());
+  final SessionStatsFold _statsFold = SessionStatsFold();
   final ContextPressureFold _contextFold = ContextPressureFold();
   final Mutex _mutex = Mutex();
   TimelineReducer _reducer = TimelineReducer('');
@@ -1313,15 +1324,18 @@ final class _SessionState {
       _reducer = TimelineReducer(sessionId);
       _reducer.reset(_history);
       _contextFold.reset(_history);
+      _statsFold.reset(_history);
       _framesAfterOpen = List.of(_pending);
       for (final frame in _pending) {
         _reducer.ingestFrame(frame);
         if (wireType(frame.payload) == 'session/event') {
           _contextFold.ingestEvent(frame.payload['event']);
+          _statsFold.ingestEvent(frame.payload['event']);
         }
       }
       contextPressure.value = _contextFold.value;
       contextBreakdown.value = _contextFold.breakdown;
+      sessionStats.value = _statsFold.value;
       _pending = <ServerRequest>[];
       _ready = true;
       _publish();
@@ -1344,8 +1358,10 @@ final class _SessionState {
       _reducer.ingestFrame(frame);
       if (wireType(frame.payload) == 'session/event') {
         _contextFold.ingestEvent(frame.payload['event']);
+        _statsFold.ingestEvent(frame.payload['event']);
         contextPressure.value = _contextFold.value;
         contextBreakdown.value = _contextFold.breakdown;
+        sessionStats.value = _statsFold.value;
       }
       _framesAfterOpen.add(frame);
       _publish();
@@ -1389,14 +1405,17 @@ final class _SessionState {
     _reducer = TimelineReducer(sessionId);
     _reducer.reset(_history);
     _contextFold.reset(_history);
+    _statsFold.reset(_history);
     for (final frame in _framesAfterOpen) {
       _reducer.ingestFrame(frame);
       if (wireType(frame.payload) == 'session/event') {
         _contextFold.ingestEvent(frame.payload['event']);
+        _statsFold.ingestEvent(frame.payload['event']);
       }
     }
     contextPressure.value = _contextFold.value;
     contextBreakdown.value = _contextFold.breakdown;
+    sessionStats.value = _statsFold.value;
   }
 
   void _publish() {

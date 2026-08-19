@@ -12,7 +12,7 @@ import 'rpc_envelope.dart';
 
 final class HttpDshRpcClient implements DshRpcClient {
   HttpDshRpcClient(this._baseUrl, {http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final Uri _baseUrl;
   final http.Client _httpClient;
@@ -23,7 +23,10 @@ final class HttpDshRpcClient implements DshRpcClient {
 
   @override
   Future<RpcResult> call(
-      String endpoint, String method, JsonMap payload) async {
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
     final rpcId = _uuidV4();
     final request = ClientRequest(
       rpcId: rpcId,
@@ -42,7 +45,9 @@ final class HttpDshRpcClient implements DshRpcClient {
       receipt = RpcReceipt.fromJson(jsonDecode(responseText));
     } catch (error) {
       throw DshTransportException(
-          'invalid server receipt for api/respond', error);
+        'invalid server receipt for api/respond',
+        error,
+      );
     }
     if (!receipt.accepted) {
       throw DshBusinessException(
@@ -79,12 +84,17 @@ final class HttpDshRpcClient implements DshRpcClient {
       url = _baseUrl.resolve(path);
     } catch (error) {
       throw DshTransportException(
-          'cannot resolve $path against $_baseUrl', error);
+        'cannot resolve $path against $_baseUrl',
+        error,
+      );
     }
     final http.Response response;
     try {
-      response = await _httpClient.post(url,
-          headers: _headers, body: jsonEncode(requestJson));
+      response = await _httpClient.post(
+        url,
+        headers: _headers,
+        body: jsonEncode(requestJson),
+      );
     } catch (error) {
       throw DshTransportException('transport failure for $path', error);
     }
@@ -94,7 +104,8 @@ final class HttpDshRpcClient implements DshRpcClient {
           ? responseText
           : responseText.substring(0, 300);
       throw DshTransportException(
-          'HTTP ${response.statusCode} for $path: $clipped');
+        'HTTP ${response.statusCode} for $path: $clipped',
+      );
     }
     return responseText;
   }
