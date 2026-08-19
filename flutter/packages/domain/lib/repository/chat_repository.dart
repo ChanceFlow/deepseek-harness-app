@@ -202,6 +202,11 @@ abstract class ChatRepository {
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
       const Stream<ContextPressure?>.empty();
 
+  /// Heuristic composition of the context (system / tools / conversation);
+  /// empty until any component is priced.
+  Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
+      const Stream<ContextBreakdown?>.empty();
+
   Future<GoalRef> createGoal(
     String sessionId,
     String objective, {

@@ -47,10 +47,7 @@ class ModelsScreen extends StatelessWidget {
             children: [
               Text('Models', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
-                Text(
-                  error,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
+                Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Text('Session', style: theme.textTheme.labelLarge),
               Expanded(
                 flex: 35,
@@ -62,8 +59,7 @@ class ModelsScreen extends StatelessWidget {
                         child: OutlinedButton(
                           onPressed: session.id == uiState.selectedSessionId
                               ? null
-                              : () => onAction(
-                                  SelectModelsSession(session.id)),
+                              : () => onAction(SelectModelsSession(session.id)),
                           child: Text(session.displayTitle),
                         ),
                       ),
@@ -76,8 +72,9 @@ class ModelsScreen extends StatelessWidget {
                 flex: 65,
                 child: ListView(
                   children: [
-                    for (final group in uiState.models?.groups ??
-                        const <ModelProviderGroup>[]) ...[
+                    for (final group
+                        in uiState.models?.groups ??
+                            const <ModelProviderGroup>[]) ...[
                       Text(group.name, style: theme.textTheme.titleSmall),
                       for (final model in group.models)
                         _ModelRow(
@@ -87,8 +84,9 @@ class ModelsScreen extends StatelessWidget {
                           onAction: onAction,
                         ),
                     ],
-                    for (final failure in uiState.models?.failures ??
-                        const <ModelCatalogFailure>[])
+                    for (final failure
+                        in uiState.models?.failures ??
+                            const <ModelCatalogFailure>[])
                       Text(
                         '${failure.name}: ${failure.message}',
                         style: TextStyle(color: theme.colorScheme.error),
@@ -131,25 +129,20 @@ class _ModelRow extends StatelessWidget {
       children: [
         if (isCurrent)
           FilledButton(
-            onPressed: () => onAction(
-              SelectModelAction(group.id, model.id, selectedEffort),
-            ),
+            onPressed: () =>
+                onAction(SelectModelAction(group.id, model.id, selectedEffort)),
             child: Text('${model.name} (current)'),
           )
         else
           OutlinedButton(
-            onPressed: () => onAction(
-              SelectModelAction(group.id, model.id, selectedEffort),
-            ),
+            onPressed: () =>
+                onAction(SelectModelAction(group.id, model.id, selectedEffort)),
             child: Text(model.name),
           ),
         if (model.description case final String description?)
           Padding(
             padding: const EdgeInsets.only(left: 8, top: 2),
-            child: Text(
-              description,
-              style: theme.textTheme.bodySmall,
-            ),
+            child: Text(description, style: theme.textTheme.bodySmall),
           ),
         if (isCurrent &&
             (model.reasoning?.efforts ?? const <ModelReasoningEffort>[])
@@ -159,8 +152,7 @@ class _ModelRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Reasoning effort',
-                    style: theme.textTheme.labelMedium),
+                Text('Reasoning effort', style: theme.textTheme.labelMedium),
                 for (final effort in model.reasoning!.efforts)
                   _effortChip(
                     context,
@@ -181,19 +173,18 @@ class _ModelRow extends StatelessWidget {
     required String? selectedEffortId,
     required String? defaultEffort,
   }) {
-    final effortSelected = selectedEffortId == effort.id ||
+    final effortSelected =
+        selectedEffortId == effort.id ||
         (selectedEffortId == null && defaultEffort == effort.id);
     return effortSelected
         ? FilledButton(
-            onPressed: () => onAction(
-              SelectModelAction(group.id, model.id, effort.id),
-            ),
+            onPressed: () =>
+                onAction(SelectModelAction(group.id, model.id, effort.id)),
             child: Text(effort.name),
           )
         : OutlinedButton(
-            onPressed: () => onAction(
-              SelectModelAction(group.id, model.id, effort.id),
-            ),
+            onPressed: () =>
+                onAction(SelectModelAction(group.id, model.id, effort.id)),
             child: Text(effort.name),
           );
   }

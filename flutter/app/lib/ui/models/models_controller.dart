@@ -12,15 +12,18 @@ import 'models_ui_state.dart';
 
 class ModelsController {
   ModelsController(this._repository) {
-    _subs.add(_repository.observeSessions().listen((sessions) {
-      _sessions = sessions;
-      _publish();
-    }));
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        _sessions = sessions;
+        _publish();
+      }),
+    );
   }
 
   final ChatRepository _repository;
-  final AppStateStream<ModelsUiState> _state =
-      AppStateStream<ModelsUiState>(const ModelsUiState());
+  final AppStateStream<ModelsUiState> _state = AppStateStream<ModelsUiState>(
+    const ModelsUiState(),
+  );
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<SessionSummary> _sessions = const <SessionSummary>[];
@@ -85,14 +88,16 @@ class ModelsController {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
     unawaited(() async {
-      final selection = await _runCatchingForUi(() => _repository.selectModel(
-            sessionId,
-            ModelSelection(
-              provider: provider,
-              model: model,
-              reasoningEffort: reasoningEffort,
-            ),
-          ));
+      final selection = await _runCatchingForUi(
+        () => _repository.selectModel(
+          sessionId,
+          ModelSelection(
+            provider: provider,
+            model: model,
+            reasoningEffort: reasoningEffort,
+          ),
+        ),
+      );
       if (selection != null) {
         _selected = selection;
         _publish();
@@ -104,8 +109,9 @@ class ModelsController {
     _isLoading = true;
     _publish();
     try {
-      final loaded =
-          await _runCatchingForUi(() => _repository.loadModels(sessionId));
+      final loaded = await _runCatchingForUi(
+        () => _repository.loadModels(sessionId),
+      );
       if (loaded != null) {
         _models = loaded;
         _selected = loaded.current;

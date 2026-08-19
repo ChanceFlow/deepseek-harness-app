@@ -46,6 +46,19 @@ void main() {
     expect(find.bySemanticsLabel('50% of context used'), findsOneWidget);
   });
 
+  testWidgets('tap opens the composition panel', (tester) async {
+    await tester.pumpWidget(
+      _host(const ContextPressure(pressureTokens: 15000, contextWindow: 30000)),
+    );
+    await tester.tap(find.byType(ContextRing));
+    await tester.pumpAndSettle();
+
+    expect(find.text('50% of context used'), findsOneWidget);
+    expect(find.text('System prompt'), findsOneWidget);
+    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Conversation'), findsOneWidget);
+  });
+
   test('occupancy clamps above capacity', () {
     const pressure = ContextPressure(
       pressureTokens: 40000,

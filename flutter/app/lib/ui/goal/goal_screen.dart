@@ -27,18 +27,14 @@ class GoalRoute extends ConsumerWidget {
 
 /// Kotlin enum toString renders the declaration name (uppercase).
 String goalPhaseLabel(GoalPhase phase) => switch (phase) {
-      GoalPhase.active => 'ACTIVE',
-      GoalPhase.paused => 'PAUSED',
-      GoalPhase.blocked => 'BLOCKED',
-      GoalPhase.complete => 'COMPLETE',
-    };
+  GoalPhase.active => 'ACTIVE',
+  GoalPhase.paused => 'PAUSED',
+  GoalPhase.blocked => 'BLOCKED',
+  GoalPhase.complete => 'COMPLETE',
+};
 
 class GoalScreen extends StatefulWidget {
-  const GoalScreen({
-    super.key,
-    required this.uiState,
-    required this.onAction,
-  });
+  const GoalScreen({super.key, required this.uiState, required this.onAction});
 
   final GoalUiState uiState;
   final void Function(GoalAction) onAction;
@@ -87,13 +83,11 @@ class _GoalScreenState extends State<GoalScreen> {
             children: [
               Text('Goal', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
-                Text(error,
-                    style: TextStyle(color: theme.colorScheme.error)),
+                Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Row(
                 children: [
                   Expanded(
-                    child: Text('Session',
-                        style: theme.textTheme.labelLarge),
+                    child: Text('Session', style: theme.textTheme.labelLarge),
                   ),
                   OutlinedButton(
                     onPressed: uiState.selectedSessionId != null
@@ -111,11 +105,11 @@ class _GoalScreenState extends State<GoalScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
-                          onPressed:
-                              session.id == uiState.selectedSessionId
-                                  ? null
-                                  : () => widget.onAction(
-                                      SelectGoalSession(session.id)),
+                          onPressed: session.id == uiState.selectedSessionId
+                              ? null
+                              : () => widget.onAction(
+                                  SelectGoalSession(session.id),
+                                ),
                           child: Text(session.displayTitle),
                         ),
                       ),
@@ -124,8 +118,7 @@ class _GoalScreenState extends State<GoalScreen> {
               ),
               const SizedBox(height: 12),
               if (goal == null) ...[
-                Text('No current goal',
-                    style: theme.textTheme.titleSmall),
+                Text('No current goal', style: theme.textTheme.titleSmall),
                 TextField(
                   controller: _objectiveController,
                   decoration: const InputDecoration(
@@ -144,12 +137,10 @@ class _GoalScreenState extends State<GoalScreen> {
                           isDense: true,
                         ),
                         onChanged: (text) {
-                          final filtered =
-                              text.replaceAll(RegExp(r'\D'), '');
+                          final filtered = text.replaceAll(RegExp(r'\D'), '');
                           _maxRoundsController.text = filtered;
                           _maxRoundsController.selection =
-                              TextSelection.collapsed(
-                                  offset: filtered.length);
+                              TextSelection.collapsed(offset: filtered.length);
                           setState(() {});
                         },
                       ),
@@ -157,20 +148,23 @@ class _GoalScreenState extends State<GoalScreen> {
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: FilledButton(
-                        onPressed: _objectiveController.text.trim().isNotEmpty &&
+                        onPressed:
+                            _objectiveController.text.trim().isNotEmpty &&
                                 uiState.selectedSessionId != null
-                            ? () => widget.onAction(CreateGoalAction(
+                            ? () => widget.onAction(
+                                CreateGoalAction(
                                   _objectiveController.text,
-                                  int.tryParse(
-                                      _maxRoundsController.text),
-                                ))
+                                  int.tryParse(_maxRoundsController.text),
+                                ),
+                              )
                             : null,
                         child: const Text('Create'),
                       ),
                     ),
                   ],
                 ),
-              ] else ..._goalBody(context, goal),
+              ] else
+                ..._goalBody(context, goal),
             ],
           ),
         ),
@@ -194,28 +188,23 @@ class _GoalScreenState extends State<GoalScreen> {
           children: [
             switch (snapshot.phase) {
               GoalPhase.active => FilledButton(
-                  onPressed: () =>
-                      widget.onAction(const PauseGoalAction()),
-                  child: const Text('Pause'),
-                ),
-              GoalPhase.paused ||
-              GoalPhase.blocked => FilledButton(
-                  onPressed: () =>
-                      widget.onAction(const ResumeGoalAction()),
-                  child: const Text('Resume'),
-                ),
+                onPressed: () => widget.onAction(const PauseGoalAction()),
+                child: const Text('Pause'),
+              ),
+              GoalPhase.paused || GoalPhase.blocked => FilledButton(
+                onPressed: () => widget.onAction(const ResumeGoalAction()),
+                child: const Text('Resume'),
+              ),
               GoalPhase.complete => FilledButton(
-                  onPressed: () =>
-                      widget.onAction(const ClearGoalAction()),
-                  child: const Text('Clear'),
-                ),
+                onPressed: () => widget.onAction(const ClearGoalAction()),
+                child: const Text('Clear'),
+              ),
             },
             if (snapshot.phase != GoalPhase.complete)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: OutlinedButton(
-                  onPressed: () =>
-                      widget.onAction(const CompleteGoalAction()),
+                  onPressed: () => widget.onAction(const CompleteGoalAction()),
                   child: const Text('Complete'),
                 ),
               ),
@@ -248,8 +237,7 @@ class _GoalScreenState extends State<GoalScreen> {
           FilledButton(
             onPressed: _editController.text.trim().isNotEmpty
                 ? () {
-                    widget
-                        .onAction(EditGoalAction(_editController.text));
+                    widget.onAction(EditGoalAction(_editController.text));
                     setState(() => _editingObjective = null);
                   }
                 : null,
@@ -258,8 +246,7 @@ class _GoalScreenState extends State<GoalScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: OutlinedButton(
-              onPressed: () =>
-                  setState(() => _editingObjective = null),
+              onPressed: () => setState(() => _editingObjective = null),
               child: const Text('Cancel'),
             ),
           ),

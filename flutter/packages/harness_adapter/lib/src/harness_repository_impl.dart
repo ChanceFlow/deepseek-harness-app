@@ -565,6 +565,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       _sessionStateFor(sessionId).contextPressure.stream;
 
   @override
+  Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
+      _sessionStateFor(sessionId).contextBreakdown.stream;
+
+  @override
   Future<GoalRef> createGoal(
     String sessionId,
     String objective, {
@@ -1286,6 +1290,8 @@ final class _SessionState {
   );
   final StateStream<ContextPressure?> contextPressure =
       StateStream<ContextPressure?>(null);
+  final StateStream<ContextBreakdown?> contextBreakdown =
+      StateStream<ContextBreakdown?>(null);
   final ContextPressureFold _contextFold = ContextPressureFold();
   final Mutex _mutex = Mutex();
   TimelineReducer _reducer = TimelineReducer('');
@@ -1314,9 +1320,8 @@ final class _SessionState {
           _contextFold.ingestEvent(frame.payload['event']);
         }
       }
-      _contextFold.value == null
-          ? contextPressure.value = null
-          : contextPressure.value = _contextFold.value;
+      contextPressure.value = _contextFold.value;
+      contextBreakdown.value = _contextFold.breakdown;
       _pending = <ServerRequest>[];
       _ready = true;
       _publish();
@@ -1340,6 +1345,7 @@ final class _SessionState {
       if (wireType(frame.payload) == 'session/event') {
         _contextFold.ingestEvent(frame.payload['event']);
         contextPressure.value = _contextFold.value;
+        contextBreakdown.value = _contextFold.breakdown;
       }
       _framesAfterOpen.add(frame);
       _publish();
@@ -1390,6 +1396,7 @@ final class _SessionState {
       }
     }
     contextPressure.value = _contextFold.value;
+    contextBreakdown.value = _contextFold.breakdown;
   }
 
   void _publish() {

@@ -329,6 +329,10 @@ class FakeChatRepository implements ChatRepository {
       AppStateStream<ContextPressure?>(null).stream;
 
   @override
+  Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
+      AppStateStream<ContextBreakdown?>(null).stream;
+
+  @override
   Future<List<String>> moveWorkspace(
     String workspaceId,
     String? beforeWorkspaceId,

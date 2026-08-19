@@ -33,3 +33,30 @@ final class ContextPressure {
   @override
   int get hashCode => Object.hash(pressureTokens, contextWindow);
 }
+
+/// Heuristic context composition (web `contextBreakdown` projection):
+/// system prompt + tool schemas from the newest request envelope,
+/// conversation priced with the shared fixed-density estimator.
+final class ContextBreakdown {
+  const ContextBreakdown({
+    this.systemTokens = 0,
+    this.toolsTokens = 0,
+    this.messageTokens = 0,
+  });
+
+  final int systemTokens;
+  final int toolsTokens;
+  final int messageTokens;
+
+  int get total => systemTokens + toolsTokens + messageTokens;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContextBreakdown &&
+      other.systemTokens == systemTokens &&
+      other.toolsTokens == toolsTokens &&
+      other.messageTokens == messageTokens;
+
+  @override
+  int get hashCode => Object.hash(systemTokens, toolsTokens, messageTokens);
+}

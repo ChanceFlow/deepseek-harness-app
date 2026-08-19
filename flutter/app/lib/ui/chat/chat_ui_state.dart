@@ -29,6 +29,7 @@ final class ChatUiState {
     this.plan,
     this.skills = const <SkillEntry>[],
     this.contextPressure,
+    this.contextBreakdown,
   });
 
   final ConnectionState connection;
@@ -57,6 +58,9 @@ final class ChatUiState {
 
   /// Context occupancy of the selected session (composer status ring).
   final ContextPressure? contextPressure;
+
+  /// Heuristic composition shown in the ring's panel.
+  final ContextBreakdown? contextBreakdown;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin

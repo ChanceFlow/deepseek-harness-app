@@ -13,10 +13,12 @@ import 'workspace_ui_state.dart';
 class WorkspaceController {
   WorkspaceController(this._repository) {
     _refresh();
-    _subs.add(_repository.observeWorkspaces().listen((workspaces) {
-      _workspaces = workspaces;
-      _publish();
-    }));
+    _subs.add(
+      _repository.observeWorkspaces().listen((workspaces) {
+        _workspaces = workspaces;
+        _publish();
+      }),
+    );
   }
 
   final ChatRepository _repository;
@@ -59,8 +61,11 @@ class WorkspaceController {
       case RenameWorkspaceAction():
         _rename(action.workspaceId, action.title);
       case DeleteWorkspaceAction():
-        unawaited(_runCatchingForUi(
-            () => _repository.deleteWorkspace(action.workspaceId)));
+        unawaited(
+          _runCatchingForUi(
+            () => _repository.deleteWorkspace(action.workspaceId),
+          ),
+        );
       case MoveWorkspaceUpAction():
         _move(action.workspaceId, up: true);
       case MoveWorkspaceDownAction():
@@ -100,10 +105,13 @@ class WorkspaceController {
       anchor = current[index - 1].workspaceId;
     } else {
       final target = index + 2;
-      anchor = target <= current.length - 1 ? current[target].workspaceId : null;
+      anchor = target <= current.length - 1
+          ? current[target].workspaceId
+          : null;
     }
     unawaited(
-        _runCatchingForUi(() => _repository.moveWorkspace(workspaceId, anchor)));
+      _runCatchingForUi(() => _repository.moveWorkspace(workspaceId, anchor)),
+    );
   }
 
   void _openDirectoryBrowser() {
@@ -128,7 +136,8 @@ class WorkspaceController {
     if (name.trim().isEmpty) return;
     unawaited(() async {
       await _runCatchingForUi(
-          () => _repository.createDirectory(parentPath, name.trim()));
+        () => _repository.createDirectory(parentPath, name.trim()),
+      );
       await _loadDirectory(parentPath);
     }());
   }
@@ -159,8 +168,7 @@ class WorkspaceController {
       _isLoading = true;
       _publish();
       try {
-        await _runCatchingForUi(
-            () => _repository.createWorkspace(path.trim()));
+        await _runCatchingForUi(() => _repository.createWorkspace(path.trim()));
       } finally {
         _isLoading = false;
         _publish();
@@ -175,7 +183,8 @@ class WorkspaceController {
       _publish();
       try {
         await _runCatchingForUi(
-            () => _repository.renameWorkspace(workspaceId, title.trim()));
+          () => _repository.renameWorkspace(workspaceId, title.trim()),
+        );
       } finally {
         _isLoading = false;
         _publish();

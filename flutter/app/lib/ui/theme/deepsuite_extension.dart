@@ -30,6 +30,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.bubble,
     required this.bubbleHighlight,
     required this.tip,
+    required this.menu,
     required this.buttonElevatedFill,
     required this.borderL2,
     required this.labelPrimaryDimmed,
@@ -71,6 +72,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   /// `--dsw-specific-tip` — the queue dock panel fill.
   final Color tip;
 
+  /// `--dsw-specific-menu` — popover/menu surface.
+  final Color menu;
+
   /// `--dsw-alias-button-elevated-fill` + `--dsw-alias-border-l2` — the
   /// sidebar New Session button pair.
   final Color buttonElevatedFill;
@@ -104,6 +108,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     bubble: DeepSuiteLight.specificBubble,
     bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
     tip: DeepSuiteLight.specificTip,
+    menu: DeepSuiteLight.specificMenu,
     buttonElevatedFill: DeepSuiteLight.aliasButtonElevatedFill,
     borderL2: DeepSuiteLight.aliasBorderL2,
     labelPrimaryDimmed: DeepSuiteLight.aliasLabelPrimaryDimmed,
@@ -132,6 +137,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     bubble: DeepSuiteDark.specificBubble,
     bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
     tip: DeepSuiteDark.specificTip,
+    menu: DeepSuiteDark.specificMenu,
     buttonElevatedFill: DeepSuiteDark.aliasButtonElevatedFill,
     borderL2: DeepSuiteDark.aliasBorderL2,
     labelPrimaryDimmed: DeepSuiteDark.aliasLabelPrimaryDimmed,
@@ -160,6 +166,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? bubble,
     Color? bubbleHighlight,
     Color? tip,
+    Color? menu,
     Color? buttonElevatedFill,
     Color? borderL2,
     Color? labelPrimaryDimmed,
@@ -187,6 +194,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bubble: bubble ?? this.bubble,
       bubbleHighlight: bubbleHighlight ?? this.bubbleHighlight,
       tip: tip ?? this.tip,
+      menu: menu ?? this.menu,
       buttonElevatedFill: buttonElevatedFill ?? this.buttonElevatedFill,
       borderL2: borderL2 ?? this.borderL2,
       labelPrimaryDimmed: labelPrimaryDimmed ?? this.labelPrimaryDimmed,
@@ -230,6 +238,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bubble: Color.lerp(bubble, other.bubble, t)!,
       bubbleHighlight: Color.lerp(bubbleHighlight, other.bubbleHighlight, t)!,
       tip: Color.lerp(tip, other.tip, t)!,
+      menu: Color.lerp(menu, other.menu, t)!,
       buttonElevatedFill: Color.lerp(
         buttonElevatedFill,
         other.buttonElevatedFill,

@@ -26,8 +26,9 @@ class DshTheme {
         : DeepSuiteLight.aliasBrandPrimary;
     // The web ink brand flips polarity per theme; Material needs explicit
     // on-color contrast (the CSS `*-invert` alias is not a contrast pair).
-    final onBrand =
-        isDark ? DeepSuiteStatic.neutralBluish1000 : DeepSuiteStatic.neutralBluish00;
+    final onBrand = isDark
+        ? DeepSuiteStatic.neutralBluish1000
+        : DeepSuiteStatic.neutralBluish00;
     final accent = isDark
         ? DeepSuiteDark.aliasBrandPrimaryNewColorprimaryNewColor
         : DeepSuiteLight.aliasBrandPrimaryNewColorprimaryNewColor;
@@ -42,8 +43,9 @@ class DshTheme {
       onSurface: isDark
           ? DeepSuiteDark.aliasLabelPrimary
           : DeepSuiteLight.aliasLabelPrimary,
-      surfaceContainerHighest:
-          isDark ? DeepSuiteDark.aliasBgLayer2 : DeepSuiteLight.aliasBgLayer2,
+      surfaceContainerHighest: isDark
+          ? DeepSuiteDark.aliasBgLayer2
+          : DeepSuiteLight.aliasBgLayer2,
       onSurfaceVariant: isDark
           ? DeepSuiteDark.aliasLabelSecondary
           : DeepSuiteLight.aliasLabelSecondary,
@@ -72,8 +74,7 @@ class DshTheme {
     return base.copyWith(
       textTheme: titles.copyWith(
         titleLarge: titles.titleLarge?.copyWith(fontWeight: FontWeight.w500),
-        titleMedium:
-            titles.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+        titleMedium: titles.titleMedium?.copyWith(fontWeight: FontWeight.w500),
         titleSmall: titles.titleSmall?.copyWith(fontWeight: FontWeight.w500),
       ),
     );

@@ -85,184 +85,290 @@ final class DeepSuiteStatic {
 /// Semantic `Light` aliases resolved to concrete colors.
 final class DeepSuiteLight {
   const DeepSuiteLight._();
+
   /// --dsw-alias-bg-base
   static const Color aliasBgBase = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-bg-layer-1
   static const Color aliasBgLayer1 = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-bg-layer-2
   static const Color aliasBgLayer2 = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-bg-layer-3
   static const Color aliasBgLayer3 = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-bg-mask-1
   static const Color aliasBgMask1 = Color(0x3d000000);
+
   /// --dsw-alias-bg-mask-2
   static const Color aliasBgMask2 = Color(0x1f000000);
+
   /// --dsw-alias-bg-mask-3
   static const Color aliasBgMask3 = Color(0x7a000000);
+
   /// --dsw-alias-bg-mask-drop
   static const Color aliasBgMaskDrop = Color(0xb2ffffff);
+
   /// --dsw-alias-bg-mask-photo
   static const Color aliasBgMaskPhoto = Color(0xe0000000);
+
   /// --dsw-alias-bg-module-platform
   static const Color aliasBgModulePlatform = Color(0xfff5f6f7);
+
   /// --dsw-alias-bg-multi-select
   static const Color aliasBgMultiSelect = Color(0xfff5f6f7);
+
   /// --dsw-alias-bg-overlay
   static const Color aliasBgOverlay = DeepSuiteStatic.neutralBluish150;
+
   /// --dsw-alias-bg-skeleton
   static const Color aliasBgSkeleton = Color(0x0a000000);
+
   /// --dsw-alias-border-inverted
   static const Color aliasBorderInverted = Color(0x00000000);
+
   /// --dsw-alias-border-inverted2
   static const Color aliasBorderInverted2 = Color(0x00000000);
+
   /// --dsw-alias-border-l1
   static const Color aliasBorderL1 = Color(0x0a000000);
+
   /// --dsw-alias-border-l2
   static const Color aliasBorderL2 = Color(0x1a000000);
+
   /// --dsw-alias-border-l2-darkmode-thin
   static const Color aliasBorderL2DarkmodeThin = Color(0x1a000000);
+
   /// --dsw-alias-border-l3
   static const Color aliasBorderL3 = Color(0x1f000000);
+
   /// --dsw-alias-border-l4
   static const Color aliasBorderL4 = Color(0x29000000);
+
   /// --dsw-alias-brand-primary
   static const Color aliasBrandPrimary = DeepSuiteStatic.neutralBluish1000;
+
   /// --dsw-alias-brand-primary-invert
-  static const Color aliasBrandPrimaryInvert = DeepSuiteStatic.neutralBluish1000;
+  static const Color aliasBrandPrimaryInvert =
+      DeepSuiteStatic.neutralBluish1000;
+
   /// --dsw-alias-brand-primary-new-colorprimary-new-color
-  static const Color aliasBrandPrimaryNewColorprimaryNewColor = Color(0xff4176e6);
+  static const Color aliasBrandPrimaryNewColorprimaryNewColor = Color(
+    0xff4176e6,
+  );
+
   /// --dsw-alias-brand-text
   static const Color aliasBrandText = DeepSuiteStatic.neutralBluish1000;
+
   /// --dsw-alias-button-contrast-fill
   static const Color aliasButtonContrastFill = DeepSuiteStatic.neutralBluish700;
+
   /// --dsw-alias-button-elevated-fill
   static const Color aliasButtonElevatedFill = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-button-floating-fill
   static const Color aliasButtonFloatingFill = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-button-floating-hover
   static const Color aliasButtonFloatingHover = DeepSuiteStatic.neutralBluish75;
+
   /// --dsw-alias-button-ghost-active-border
-  static const Color aliasButtonGhostActiveBorder = DeepSuiteStatic.neutralBluish500;
+  static const Color aliasButtonGhostActiveBorder =
+      DeepSuiteStatic.neutralBluish500;
+
   /// --dsw-alias-button-ghost-active-fill
-  static const Color aliasButtonGhostActiveFill = DeepSuiteStatic.neutralBluish100;
+  static const Color aliasButtonGhostActiveFill =
+      DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-button-ghost-active-hover
-  static const Color aliasButtonGhostActiveHover = DeepSuiteStatic.neutralBluish150;
+  static const Color aliasButtonGhostActiveHover =
+      DeepSuiteStatic.neutralBluish150;
+
   /// --dsw-alias-button-info-fill
   static const Color aliasButtonInfoFill = DeepSuiteStatic.deepseek500;
+
   /// --dsw-alias-button-info-hover
   static const Color aliasButtonInfoHover = DeepSuiteStatic.deepseek400;
+
   /// --dsw-alias-button-primary-dimmed
-  static const Color aliasButtonPrimaryDimmed = DeepSuiteStatic.neutralBluish100;
+  static const Color aliasButtonPrimaryDimmed =
+      DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-button-primary-fill
   static const Color aliasButtonPrimaryFill = Color(0xff0f1115);
+
   /// --dsw-alias-button-primary-hover
   static const Color aliasButtonPrimaryHover = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-button-tool-bar-fill
   static const Color aliasButtonToolBarFill = Color(0x80545557);
+
   /// --dsw-alias-button-tool-bar-fill-invisible
   static const Color aliasButtonToolBarFillInvisible = Color(0x5c1f1f1f);
+
   /// --dsw-alias-button-tool-bar-hover
   static const Color aliasButtonToolBarHover = Color(0x99545557);
+
   /// --dsw-alias-interactive-bg-active
   static const Color aliasInteractiveBgActive = Color(0x1a263148);
+
   /// --dsw-alias-interactive-bg-hover
   static const Color aliasInteractiveBgHover = Color(0x0f263148);
+
   /// --dsw-alias-interactive-bg-hover-accent
   static const Color aliasInteractiveBgHoverAccent = Color(0x24263148);
+
   /// --dsw-alias-interactive-bg-hover-danger
   static const Color aliasInteractiveBgHoverDanger = Color(0x0dec1313);
+
   /// --dsw-alias-interactive-bg-hover-solid
-  static const Color aliasInteractiveBgHoverSolid = DeepSuiteStatic.neutralBluish75;
+  static const Color aliasInteractiveBgHoverSolid =
+      DeepSuiteStatic.neutralBluish75;
+
   /// --dsw-alias-label-caption
   static const Color aliasLabelCaption = DeepSuiteStatic.neutralBluish400;
+
   /// --dsw-alias-label-dimmed
   static const Color aliasLabelDimmed = DeepSuiteStatic.neutralBluish200;
+
   /// --dsw-alias-label-primary
   static const Color aliasLabelPrimary = DeepSuiteStatic.neutralBluish1000;
+
   /// --dsw-alias-label-primary-bluish
   static const Color aliasLabelPrimaryBluish = DeepSuiteStatic.blue900;
+
   /// --dsw-alias-label-primary-dimmed
   static const Color aliasLabelPrimaryDimmed = DeepSuiteStatic.neutralBluish950;
+
   /// --dsw-alias-label-primary-foreground
-  static const Color aliasLabelPrimaryForeground = DeepSuiteStatic.neutralBluish00;
+  static const Color aliasLabelPrimaryForeground =
+      DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-label-primary-inverted
-  static const Color aliasLabelPrimaryInverted = DeepSuiteStatic.neutralBluish00;
+  static const Color aliasLabelPrimaryInverted =
+      DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-label-secondary
   static const Color aliasLabelSecondary = DeepSuiteStatic.neutralBluish700;
+
   /// --dsw-alias-label-tertiary
   static const Color aliasLabelTertiary = DeepSuiteStatic.neutralBluish600;
+
   /// --dsw-alias-markdown-citation
   static const Color aliasMarkdownCitation = DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-markdown-code-block
   static const Color aliasMarkdownCodeBlock = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-markdown-code-block-banner
-  static const Color aliasMarkdownCodeBlockBanner = DeepSuiteStatic.neutralBluish50;
+  static const Color aliasMarkdownCodeBlockBanner =
+      DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-markdown-code-segment-selected
-  static const Color aliasMarkdownCodeSegmentSelected = DeepSuiteStatic.neutralBluish00;
+  static const Color aliasMarkdownCodeSegmentSelected =
+      DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-alias-markdown-code-segment-unselected
-  static const Color aliasMarkdownCodeSegmentUnselected = DeepSuiteStatic.neutralBluish75;
+  static const Color aliasMarkdownCodeSegmentUnselected =
+      DeepSuiteStatic.neutralBluish75;
+
   /// --dsw-alias-markdown-inline-code
   static const Color aliasMarkdownInlineCode = DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-markdown-placeholder
   static const Color aliasMarkdownPlaceholder = Color(0xfff5f6f7);
+
   /// --dsw-alias-markdown-tag
   static const Color aliasMarkdownTag = DeepSuiteStatic.neutralBluish75;
+
   /// --dsw-alias-scrollbar-bg-l1
   static const Color aliasScrollbarBgL1 = DeepSuiteStatic.neutral200;
+
   /// --dsw-alias-scrollbar-bg-l2
   static const Color aliasScrollbarBgL2 = DeepSuiteStatic.neutral200;
+
   /// --dsw-alias-scrollbar-hover-l1
   static const Color aliasScrollbarHoverL1 = DeepSuiteStatic.neutral300;
+
   /// --dsw-alias-scrollbar-hover-l2
   static const Color aliasScrollbarHoverL2 = DeepSuiteStatic.neutral300;
+
   /// --dsw-alias-state-business-primary
   static const Color aliasStateBusinessPrimary = DeepSuiteStatic.deepseek500;
+
   /// --dsw-alias-state-business-tertiary
   static const Color aliasStateBusinessTertiary = DeepSuiteStatic.deepseek100;
+
   /// --dsw-alias-state-error-primary
   static const Color aliasStateErrorPrimary = DeepSuiteStatic.red600;
+
   /// --dsw-alias-state-error-secondary
   static const Color aliasStateErrorSecondary = DeepSuiteStatic.red400;
+
   /// --dsw-alias-state-success-primary
   static const Color aliasStateSuccessPrimary = DeepSuiteStatic.green500;
+
   /// --dsw-alias-state-success-secondary
   static const Color aliasStateSuccessSecondary = DeepSuiteStatic.green400;
+
   /// --dsw-alias-state-success-tertiary
   static const Color aliasStateSuccessTertiary = DeepSuiteStatic.green100;
+
   /// --dsw-alias-state-warn-label
   static const Color aliasStateWarnLabel = DeepSuiteStatic.amber600;
+
   /// --dsw-alias-state-warn-primary
   static const Color aliasStateWarnPrimary = DeepSuiteStatic.amber500;
+
   /// --dsw-alias-state-warn-secondary
   static const Color aliasStateWarnSecondary = DeepSuiteStatic.amber400;
+
   /// --dsw-alias-state-warn-tertiary
   static const Color aliasStateWarnTertiary = DeepSuiteStatic.amber100;
+
   /// --dsw-alias-toast-bg
   static const Color aliasToastBg = DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-tooltip-bg
   static const Color aliasTooltipBg = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-specific-bubble
   static const Color specificBubble = DeepSuiteStatic.deepseek50;
+
   /// --dsw-specific-bubble-highlight
   static const Color specificBubbleHighlight = DeepSuiteStatic.deepseek200;
+
   /// --dsw-specific-input-major
   static const Color specificInputMajor = DeepSuiteStatic.neutralBluish00;
+
   /// --dsw-specific-login-input
   static const Color specificLoginInput = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-specific-menu
   static const Color specificMenu = Color(0xffffffff);
+
   /// --dsw-specific-selector
   static const Color specificSelector = Color(0xfff5f6f7);
+
   /// --dsw-specific-sidebar-fill
   static const Color specificSidebarFill = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-specific-sidebar-nav-item-active
-  static const Color specificSidebarNavItemActive = DeepSuiteStatic.neutralBluish100;
+  static const Color specificSidebarNavItemActive =
+      DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-specific-sidebar-nav-item-active-accent
-  static const Color specificSidebarNavItemActiveAccent = DeepSuiteStatic.deepseek100;
+  static const Color specificSidebarNavItemActiveAccent =
+      DeepSuiteStatic.deepseek100;
+
   /// --dsw-specific-sidebar-nav-item-hover
-  static const Color specificSidebarNavItemHover = DeepSuiteStatic.neutralBluish75;
+  static const Color specificSidebarNavItemHover =
+      DeepSuiteStatic.neutralBluish75;
+
   /// --dsw-specific-tip
   static const Color specificTip = Color(0xfff5f6f7);
+
   /// Same tokens keyed by CSS name (parity tests, A2 consumers).
   static const Map<String, Color> byName = <String, Color>{
     "--dsw-alias-bg-base": aliasBgBase,
@@ -287,7 +393,8 @@ final class DeepSuiteLight {
     "--dsw-alias-border-l4": aliasBorderL4,
     "--dsw-alias-brand-primary": aliasBrandPrimary,
     "--dsw-alias-brand-primary-invert": aliasBrandPrimaryInvert,
-    "--dsw-alias-brand-primary-new-colorprimary-new-color": aliasBrandPrimaryNewColorprimaryNewColor,
+    "--dsw-alias-brand-primary-new-colorprimary-new-color":
+        aliasBrandPrimaryNewColorprimaryNewColor,
     "--dsw-alias-brand-text": aliasBrandText,
     "--dsw-alias-button-contrast-fill": aliasButtonContrastFill,
     "--dsw-alias-button-elevated-fill": aliasButtonElevatedFill,
@@ -302,7 +409,8 @@ final class DeepSuiteLight {
     "--dsw-alias-button-primary-fill": aliasButtonPrimaryFill,
     "--dsw-alias-button-primary-hover": aliasButtonPrimaryHover,
     "--dsw-alias-button-tool-bar-fill": aliasButtonToolBarFill,
-    "--dsw-alias-button-tool-bar-fill-invisible": aliasButtonToolBarFillInvisible,
+    "--dsw-alias-button-tool-bar-fill-invisible":
+        aliasButtonToolBarFillInvisible,
     "--dsw-alias-button-tool-bar-hover": aliasButtonToolBarHover,
     "--dsw-alias-interactive-bg-active": aliasInteractiveBgActive,
     "--dsw-alias-interactive-bg-hover": aliasInteractiveBgHover,
@@ -321,8 +429,10 @@ final class DeepSuiteLight {
     "--dsw-alias-markdown-citation": aliasMarkdownCitation,
     "--dsw-alias-markdown-code-block": aliasMarkdownCodeBlock,
     "--dsw-alias-markdown-code-block-banner": aliasMarkdownCodeBlockBanner,
-    "--dsw-alias-markdown-code-segment-selected": aliasMarkdownCodeSegmentSelected,
-    "--dsw-alias-markdown-code-segment-unselected": aliasMarkdownCodeSegmentUnselected,
+    "--dsw-alias-markdown-code-segment-selected":
+        aliasMarkdownCodeSegmentSelected,
+    "--dsw-alias-markdown-code-segment-unselected":
+        aliasMarkdownCodeSegmentUnselected,
     "--dsw-alias-markdown-inline-code": aliasMarkdownInlineCode,
     "--dsw-alias-markdown-placeholder": aliasMarkdownPlaceholder,
     "--dsw-alias-markdown-tag": aliasMarkdownTag,
@@ -351,7 +461,8 @@ final class DeepSuiteLight {
     "--dsw-specific-selector": specificSelector,
     "--dsw-specific-sidebar-fill": specificSidebarFill,
     "--dsw-specific-sidebar-nav-item-active": specificSidebarNavItemActive,
-    "--dsw-specific-sidebar-nav-item-active-accent": specificSidebarNavItemActiveAccent,
+    "--dsw-specific-sidebar-nav-item-active-accent":
+        specificSidebarNavItemActiveAccent,
     "--dsw-specific-sidebar-nav-item-hover": specificSidebarNavItemHover,
     "--dsw-specific-tip": specificTip,
   };
@@ -360,184 +471,290 @@ final class DeepSuiteLight {
 /// Semantic `Dark` aliases resolved to concrete colors.
 final class DeepSuiteDark {
   const DeepSuiteDark._();
+
   /// --dsw-alias-bg-base
   static const Color aliasBgBase = DeepSuiteStatic.neutralBluish950;
+
   /// --dsw-alias-bg-layer-1
   static const Color aliasBgLayer1 = DeepSuiteStatic.neutralBluish875;
+
   /// --dsw-alias-bg-layer-2
   static const Color aliasBgLayer2 = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-bg-layer-3
   static const Color aliasBgLayer3 = DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-bg-mask-1
   static const Color aliasBgMask1 = Color(0x80000000);
+
   /// --dsw-alias-bg-mask-2
   static const Color aliasBgMask2 = Color(0x33000000);
+
   /// --dsw-alias-bg-mask-3
   static const Color aliasBgMask3 = Color(0x7a000000);
+
   /// --dsw-alias-bg-mask-drop
   static const Color aliasBgMaskDrop = Color(0xb2272730);
+
   /// --dsw-alias-bg-mask-photo
   static const Color aliasBgMaskPhoto = Color(0xe0000000);
+
   /// --dsw-alias-bg-module-platform
   static const Color aliasBgModulePlatform = DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-bg-multi-select
   static const Color aliasBgMultiSelect = DeepSuiteStatic.neutral850;
+
   /// --dsw-alias-bg-overlay
   static const Color aliasBgOverlay = DeepSuiteStatic.neutralBluish700;
+
   /// --dsw-alias-bg-skeleton
   static const Color aliasBgSkeleton = Color(0x14ffffff);
+
   /// --dsw-alias-border-inverted
   static const Color aliasBorderInverted = Color(0x0fffffff);
+
   /// --dsw-alias-border-inverted2
   static const Color aliasBorderInverted2 = Color(0x14ffffff);
+
   /// --dsw-alias-border-l1
   static const Color aliasBorderL1 = Color(0x0fffffff);
+
   /// --dsw-alias-border-l2
   static const Color aliasBorderL2 = Color(0x1fffffff);
+
   /// --dsw-alias-border-l2-darkmode-thin
   static const Color aliasBorderL2DarkmodeThin = Color(0x0fffffff);
+
   /// --dsw-alias-border-l3
   static const Color aliasBorderL3 = Color(0x29ffffff);
+
   /// --dsw-alias-border-l4
   static const Color aliasBorderL4 = Color(0x33ffffff);
+
   /// --dsw-alias-brand-primary
   static const Color aliasBrandPrimary = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-brand-primary-invert
   static const Color aliasBrandPrimaryInvert = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-brand-primary-new-colorprimary-new-color
-  static const Color aliasBrandPrimaryNewColorprimaryNewColor = DeepSuiteStatic.deepseek450;
+  static const Color aliasBrandPrimaryNewColorprimaryNewColor =
+      DeepSuiteStatic.deepseek450;
+
   /// --dsw-alias-brand-text
   static const Color aliasBrandText = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-button-contrast-fill
   static const Color aliasButtonContrastFill = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-button-elevated-fill
   static const Color aliasButtonElevatedFill = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-button-floating-fill
   static const Color aliasButtonFloatingFill = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-button-floating-hover
-  static const Color aliasButtonFloatingHover = DeepSuiteStatic.neutralBluish800;
+  static const Color aliasButtonFloatingHover =
+      DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-button-ghost-active-border
-  static const Color aliasButtonGhostActiveBorder = DeepSuiteStatic.neutralBluish600;
+  static const Color aliasButtonGhostActiveBorder =
+      DeepSuiteStatic.neutralBluish600;
+
   /// --dsw-alias-button-ghost-active-fill
-  static const Color aliasButtonGhostActiveFill = DeepSuiteStatic.neutralBluish750;
+  static const Color aliasButtonGhostActiveFill =
+      DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-button-ghost-active-hover
-  static const Color aliasButtonGhostActiveHover = DeepSuiteStatic.neutralBluish700;
+  static const Color aliasButtonGhostActiveHover =
+      DeepSuiteStatic.neutralBluish700;
+
   /// --dsw-alias-button-info-fill
   static const Color aliasButtonInfoFill = DeepSuiteStatic.deepseek400;
+
   /// --dsw-alias-button-info-hover
   static const Color aliasButtonInfoHover = DeepSuiteStatic.deepseek500;
+
   /// --dsw-alias-button-primary-dimmed
-  static const Color aliasButtonPrimaryDimmed = DeepSuiteStatic.neutralBluish750;
+  static const Color aliasButtonPrimaryDimmed =
+      DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-button-primary-fill
   static const Color aliasButtonPrimaryFill = Color(0xfff9fafb);
+
   /// --dsw-alias-button-primary-hover
   static const Color aliasButtonPrimaryHover = DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-button-tool-bar-fill
   static const Color aliasButtonToolBarFill = Color(0x80545557);
+
   /// --dsw-alias-button-tool-bar-fill-invisible
   static const Color aliasButtonToolBarFillInvisible = Color(0x5c1f1f1f);
+
   /// --dsw-alias-button-tool-bar-hover
   static const Color aliasButtonToolBarHover = Color(0x99545557);
+
   /// --dsw-alias-interactive-bg-active
   static const Color aliasInteractiveBgActive = Color(0x24ffffff);
+
   /// --dsw-alias-interactive-bg-hover
   static const Color aliasInteractiveBgHover = Color(0x14ffffff);
+
   /// --dsw-alias-interactive-bg-hover-accent
   static const Color aliasInteractiveBgHoverAccent = Color(0x3dffffff);
+
   /// --dsw-alias-interactive-bg-hover-danger
   static const Color aliasInteractiveBgHoverDanger = Color(0x26f25a5a);
+
   /// --dsw-alias-interactive-bg-hover-solid
-  static const Color aliasInteractiveBgHoverSolid = DeepSuiteStatic.neutralBluish800;
+  static const Color aliasInteractiveBgHoverSolid =
+      DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-label-caption
   static const Color aliasLabelCaption = DeepSuiteStatic.neutralBluish600;
+
   /// --dsw-alias-label-dimmed
   static const Color aliasLabelDimmed = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-label-primary
   static const Color aliasLabelPrimary = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-label-primary-bluish
   static const Color aliasLabelPrimaryBluish = DeepSuiteStatic.neutralBluish50;
+
   /// --dsw-alias-label-primary-dimmed
   static const Color aliasLabelPrimaryDimmed = DeepSuiteStatic.neutralBluish100;
+
   /// --dsw-alias-label-primary-foreground
-  static const Color aliasLabelPrimaryForeground = DeepSuiteStatic.neutralBluish1000;
+  static const Color aliasLabelPrimaryForeground =
+      DeepSuiteStatic.neutralBluish1000;
+
   /// --dsw-alias-label-primary-inverted
-  static const Color aliasLabelPrimaryInverted = DeepSuiteStatic.neutralBluish800;
+  static const Color aliasLabelPrimaryInverted =
+      DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-label-secondary
   static const Color aliasLabelSecondary = DeepSuiteStatic.neutralBluish300;
+
   /// --dsw-alias-label-tertiary
   static const Color aliasLabelTertiary = DeepSuiteStatic.neutralBluish400;
+
   /// --dsw-alias-markdown-citation
   static const Color aliasMarkdownCitation = DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-markdown-code-block
   static const Color aliasMarkdownCodeBlock = DeepSuiteStatic.neutralBluish900;
+
   /// --dsw-alias-markdown-code-block-banner
-  static const Color aliasMarkdownCodeBlockBanner = DeepSuiteStatic.neutralBluish850;
+  static const Color aliasMarkdownCodeBlockBanner =
+      DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-markdown-code-segment-selected
-  static const Color aliasMarkdownCodeSegmentSelected = DeepSuiteStatic.neutralBluish800;
+  static const Color aliasMarkdownCodeSegmentSelected =
+      DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-alias-markdown-code-segment-unselected
-  static const Color aliasMarkdownCodeSegmentUnselected = DeepSuiteStatic.neutralBluish900;
+  static const Color aliasMarkdownCodeSegmentUnselected =
+      DeepSuiteStatic.neutralBluish900;
+
   /// --dsw-alias-markdown-inline-code
   static const Color aliasMarkdownInlineCode = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-markdown-placeholder
-  static const Color aliasMarkdownPlaceholder = DeepSuiteStatic.neutralBluish850;
+  static const Color aliasMarkdownPlaceholder =
+      DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-markdown-tag
   static const Color aliasMarkdownTag = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-alias-scrollbar-bg-l1
   static const Color aliasScrollbarBgL1 = DeepSuiteStatic.neutral700;
+
   /// --dsw-alias-scrollbar-bg-l2
   static const Color aliasScrollbarBgL2 = DeepSuiteStatic.neutral600;
+
   /// --dsw-alias-scrollbar-hover-l1
   static const Color aliasScrollbarHoverL1 = DeepSuiteStatic.neutral600;
+
   /// --dsw-alias-scrollbar-hover-l2
   static const Color aliasScrollbarHoverL2 = DeepSuiteStatic.neutral550;
+
   /// --dsw-alias-state-business-primary
   static const Color aliasStateBusinessPrimary = DeepSuiteStatic.deepseek400;
+
   /// --dsw-alias-state-business-tertiary
   static const Color aliasStateBusinessTertiary = DeepSuiteStatic.deepseek800;
+
   /// --dsw-alias-state-error-primary
   static const Color aliasStateErrorPrimary = DeepSuiteStatic.red400;
+
   /// --dsw-alias-state-error-secondary
   static const Color aliasStateErrorSecondary = DeepSuiteStatic.red400;
+
   /// --dsw-alias-state-success-primary
   static const Color aliasStateSuccessPrimary = DeepSuiteStatic.green500;
+
   /// --dsw-alias-state-success-secondary
   static const Color aliasStateSuccessSecondary = DeepSuiteStatic.green400;
+
   /// --dsw-alias-state-success-tertiary
   static const Color aliasStateSuccessTertiary = DeepSuiteStatic.green900;
+
   /// --dsw-alias-state-warn-label
   static const Color aliasStateWarnLabel = DeepSuiteStatic.amber600;
+
   /// --dsw-alias-state-warn-primary
   static const Color aliasStateWarnPrimary = DeepSuiteStatic.amber500;
+
   /// --dsw-alias-state-warn-secondary
   static const Color aliasStateWarnSecondary = DeepSuiteStatic.amber400;
+
   /// --dsw-alias-state-warn-tertiary
   static const Color aliasStateWarnTertiary = DeepSuiteStatic.amber900;
+
   /// --dsw-alias-toast-bg
   static const Color aliasToastBg = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-alias-tooltip-bg
   static const Color aliasTooltipBg = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-specific-bubble
   static const Color specificBubble = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-specific-bubble-highlight
   static const Color specificBubbleHighlight = DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-specific-input-major
   static const Color specificInputMajor = DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-specific-login-input
   static const Color specificLoginInput = DeepSuiteStatic.neutralBluish900;
+
   /// --dsw-specific-menu
   static const Color specificMenu = Color(0xff353638);
+
   /// --dsw-specific-selector
   static const Color specificSelector = DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-specific-sidebar-fill
   static const Color specificSidebarFill = DeepSuiteStatic.neutralBluish900;
+
   /// --dsw-specific-sidebar-nav-item-active
-  static const Color specificSidebarNavItemActive = DeepSuiteStatic.neutralBluish750;
+  static const Color specificSidebarNavItemActive =
+      DeepSuiteStatic.neutralBluish750;
+
   /// --dsw-specific-sidebar-nav-item-active-accent
-  static const Color specificSidebarNavItemActiveAccent = DeepSuiteStatic.neutralBluish800;
+  static const Color specificSidebarNavItemActiveAccent =
+      DeepSuiteStatic.neutralBluish800;
+
   /// --dsw-specific-sidebar-nav-item-hover
-  static const Color specificSidebarNavItemHover = DeepSuiteStatic.neutralBluish850;
+  static const Color specificSidebarNavItemHover =
+      DeepSuiteStatic.neutralBluish850;
+
   /// --dsw-specific-tip
   static const Color specificTip = DeepSuiteStatic.neutralBluish800;
+
   /// Same tokens keyed by CSS name (parity tests, A2 consumers).
   static const Map<String, Color> byName = <String, Color>{
     "--dsw-alias-bg-base": aliasBgBase,
@@ -562,7 +779,8 @@ final class DeepSuiteDark {
     "--dsw-alias-border-l4": aliasBorderL4,
     "--dsw-alias-brand-primary": aliasBrandPrimary,
     "--dsw-alias-brand-primary-invert": aliasBrandPrimaryInvert,
-    "--dsw-alias-brand-primary-new-colorprimary-new-color": aliasBrandPrimaryNewColorprimaryNewColor,
+    "--dsw-alias-brand-primary-new-colorprimary-new-color":
+        aliasBrandPrimaryNewColorprimaryNewColor,
     "--dsw-alias-brand-text": aliasBrandText,
     "--dsw-alias-button-contrast-fill": aliasButtonContrastFill,
     "--dsw-alias-button-elevated-fill": aliasButtonElevatedFill,
@@ -577,7 +795,8 @@ final class DeepSuiteDark {
     "--dsw-alias-button-primary-fill": aliasButtonPrimaryFill,
     "--dsw-alias-button-primary-hover": aliasButtonPrimaryHover,
     "--dsw-alias-button-tool-bar-fill": aliasButtonToolBarFill,
-    "--dsw-alias-button-tool-bar-fill-invisible": aliasButtonToolBarFillInvisible,
+    "--dsw-alias-button-tool-bar-fill-invisible":
+        aliasButtonToolBarFillInvisible,
     "--dsw-alias-button-tool-bar-hover": aliasButtonToolBarHover,
     "--dsw-alias-interactive-bg-active": aliasInteractiveBgActive,
     "--dsw-alias-interactive-bg-hover": aliasInteractiveBgHover,
@@ -596,8 +815,10 @@ final class DeepSuiteDark {
     "--dsw-alias-markdown-citation": aliasMarkdownCitation,
     "--dsw-alias-markdown-code-block": aliasMarkdownCodeBlock,
     "--dsw-alias-markdown-code-block-banner": aliasMarkdownCodeBlockBanner,
-    "--dsw-alias-markdown-code-segment-selected": aliasMarkdownCodeSegmentSelected,
-    "--dsw-alias-markdown-code-segment-unselected": aliasMarkdownCodeSegmentUnselected,
+    "--dsw-alias-markdown-code-segment-selected":
+        aliasMarkdownCodeSegmentSelected,
+    "--dsw-alias-markdown-code-segment-unselected":
+        aliasMarkdownCodeSegmentUnselected,
     "--dsw-alias-markdown-inline-code": aliasMarkdownInlineCode,
     "--dsw-alias-markdown-placeholder": aliasMarkdownPlaceholder,
     "--dsw-alias-markdown-tag": aliasMarkdownTag,
@@ -626,7 +847,8 @@ final class DeepSuiteDark {
     "--dsw-specific-selector": specificSelector,
     "--dsw-specific-sidebar-fill": specificSidebarFill,
     "--dsw-specific-sidebar-nav-item-active": specificSidebarNavItemActive,
-    "--dsw-specific-sidebar-nav-item-active-accent": specificSidebarNavItemActiveAccent,
+    "--dsw-specific-sidebar-nav-item-active-accent":
+        specificSidebarNavItemActiveAccent,
     "--dsw-specific-sidebar-nav-item-hover": specificSidebarNavItemHover,
     "--dsw-specific-tip": specificTip,
   };

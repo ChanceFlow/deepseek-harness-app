@@ -68,12 +68,14 @@ class SettingsController {
       _isLoading = true;
       _publish();
       try {
-        final updated = await _runCatchingForUi(() => _repository.updateSetting(
-              action.ns,
-              action.key.trim(),
-              action.jsonValue.trim(),
-              expectedRevision: action.expectedRevision,
-            ));
+        final updated = await _runCatchingForUi(
+          () => _repository.updateSetting(
+            action.ns,
+            action.key.trim(),
+            action.jsonValue.trim(),
+            expectedRevision: action.expectedRevision,
+          ),
+        );
         if (updated != null) await _refreshNow();
       } finally {
         _isLoading = false;
@@ -89,12 +91,13 @@ class SettingsController {
       _isLoading = true;
       _publish();
       try {
-        final updated = await _runCatchingForUi(() =>
-            _repository.replaceSetting(
-              action.ns,
-              action.sectionJson.trim(),
-              expectedRevision: action.expectedRevision,
-            ));
+        final updated = await _runCatchingForUi(
+          () => _repository.replaceSetting(
+            action.ns,
+            action.sectionJson.trim(),
+            expectedRevision: action.expectedRevision,
+          ),
+        );
         if (updated != null) await _refreshNow();
       } finally {
         _isLoading = false;
@@ -150,8 +153,7 @@ class SettingsController {
   Future<void> _refreshNow() async {
     _isLoading = true;
     _publish();
-    final described =
-        await _runCatchingForUi(_repository.describeSettings);
+    final described = await _runCatchingForUi(_repository.describeSettings);
     if (described != null) {
       _snapshot = described;
       await _loadCredentials(described.credentialRefs);

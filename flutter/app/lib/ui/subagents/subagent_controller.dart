@@ -13,10 +13,12 @@ import 'subagent_ui_state.dart';
 
 class SubagentController {
   SubagentController(this._repository) {
-    _subs.add(_repository.observeSessions().listen((sessions) {
-      _sessions = sessions;
-      _publish();
-    }));
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        _sessions = sessions;
+        _publish();
+      }),
+    );
   }
 
   final ChatRepository _repository;
@@ -94,7 +96,8 @@ class SubagentController {
     _publish();
     unawaited(() async {
       final result = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(parentId, childSessionId));
+        () => _repository.loadSubagentHistory(parentId, childSessionId),
+      );
       _childTimeline = result ?? const <TimelineItem>[];
       _publish();
     }());
@@ -110,9 +113,11 @@ class SubagentController {
       _publish();
       try {
         await _runCatchingForUi(
-            () => _repository.sendSubagentPrompt(parentId, childId, text.trim()));
+          () => _repository.sendSubagentPrompt(parentId, childId, text.trim()),
+        );
         final reloaded = await _runCatchingForUi(
-            () => _repository.loadSubagentHistory(parentId, childId));
+          () => _repository.loadSubagentHistory(parentId, childId),
+        );
         if (reloaded != null) {
           _childTimeline = reloaded;
         }
@@ -128,7 +133,8 @@ class SubagentController {
     if (parentId == null) return;
     unawaited(() async {
       await _runCatchingForUi(
-          () => _repository.interruptSubagent(parentId, childSessionId));
+        () => _repository.interruptSubagent(parentId, childSessionId),
+      );
       await _loadCatalog(parentId);
     }());
   }
@@ -143,8 +149,9 @@ class SubagentController {
     _isLoading = true;
     _publish();
     try {
-      final loaded =
-          await _runCatchingForUi(() => _repository.loadSubagents(parentId));
+      final loaded = await _runCatchingForUi(
+        () => _repository.loadSubagents(parentId),
+      );
       if (loaded != null) {
         _catalog = loaded;
       }

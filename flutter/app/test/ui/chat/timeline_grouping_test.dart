@@ -5,21 +5,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/chat/timeline_grouping.dart';
 
 TimelineMessage message(String id) => TimelineMessage(
-      ChatMessage(id: id, sessionId: 's1', role: MessageRole.user, text: id),
-    );
+  ChatMessage(id: id, sessionId: 's1', role: MessageRole.user, text: id),
+);
 
 TimelineMessage messageWith({
   required String id,
   required MessageRole role,
   required String text,
-}) =>
-    TimelineMessage(
-      ChatMessage(id: id, sessionId: 's1', role: role, text: text),
-    );
+}) => TimelineMessage(
+  ChatMessage(id: id, sessionId: 's1', role: role, text: text),
+);
 
 void main() {
   test('items before the first boundary form the null group', () {
-    final groups = groupTimelineByTurn(<TimelineItem>[message('a'), message('b')]);
+    final groups = groupTimelineByTurn(<TimelineItem>[
+      message('a'),
+      message('b'),
+    ]);
 
     expect(groups, hasLength(1));
     expect(groups.single.turn, isNull);
@@ -77,27 +79,33 @@ void main() {
   test('prompt preview echoes the first user message folded to one line', () {
     final preview = promptPreview(<TimelineItem>[
       messageWith(id: 'u1', role: MessageRole.assistant, text: 'prior answer'),
-      messageWith(id: 'u2', role: MessageRole.user, text: 'first line\nsecond line'),
+      messageWith(
+        id: 'u2',
+        role: MessageRole.user,
+        text: 'first line\nsecond line',
+      ),
       messageWith(id: 'u3', role: MessageRole.user, text: 'later prompt'),
     ]);
 
     expect(preview, 'first line');
   });
 
-  test('prompt preview truncates long prompts and returns null without user rows',
-      () {
-    final long = promptPreview(<TimelineItem>[
-      messageWith(id: 'u1', role: MessageRole.user, text: 'x' * 100),
-    ]);
-    final none = promptPreview(<TimelineItem>[
-      messageWith(id: 'a1', role: MessageRole.assistant, text: 'answer'),
-    ]);
+  test(
+    'prompt preview truncates long prompts and returns null without user rows',
+    () {
+      final long = promptPreview(<TimelineItem>[
+        messageWith(id: 'u1', role: MessageRole.user, text: 'x' * 100),
+      ]);
+      final none = promptPreview(<TimelineItem>[
+        messageWith(id: 'a1', role: MessageRole.assistant, text: 'answer'),
+      ]);
 
-    expect(long?.length, 60);
-    final longValue = long;
-    if (longValue != null) {
-      expect(longValue.substring(longValue.length - 1), '…');
-    }
-    expect(none, isNull);
-  });
+      expect(long?.length, 60);
+      final longValue = long;
+      if (longValue != null) {
+        expect(longValue.substring(longValue.length - 1), '…');
+      }
+      expect(none, isNull);
+    },
+  );
 }

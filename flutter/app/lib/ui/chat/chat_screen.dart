@@ -1819,6 +1819,7 @@ class ComposerBar extends StatefulWidget {
     required this.onSend,
     this.onStop,
     this.contextPressure,
+    this.contextBreakdown,
   });
 
   final bool enabled;
@@ -1833,6 +1834,8 @@ class ComposerBar extends StatefulWidget {
   final void Function(String text) onSend;
   final VoidCallback? onStop;
   final ContextPressure? contextPressure;
+
+  final ContextBreakdown? contextBreakdown;
 
   @override
   State<ComposerBar> createState() => _ComposerBarState();
@@ -1977,7 +1980,10 @@ class _ComposerBarState extends State<ComposerBar> {
                 enabled: widget.enabled && widget.running,
                 onClick: () => widget.onModeChange(PromptMode.steer),
               ),
-              ContextRing(pressure: widget.contextPressure),
+              ContextRing(
+                pressure: widget.contextPressure,
+                breakdown: widget.contextBreakdown,
+              ),
               IconButton(
                 onPressed: attachAllowed ? _pickImages : null,
                 icon: const Icon(Icons.add),

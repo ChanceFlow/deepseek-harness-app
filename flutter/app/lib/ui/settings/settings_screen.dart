@@ -51,8 +51,7 @@ class SettingsScreen extends StatelessWidget {
                     child: Text('Settings', style: theme.textTheme.titleLarge),
                   ),
                   OutlinedButton(
-                    onPressed: () =>
-                        onAction(const RefreshSettingsAction()),
+                    onPressed: () => onAction(const RefreshSettingsAction()),
                     child: const Text('Refresh'),
                   ),
                 ],
@@ -60,28 +59,31 @@ class SettingsScreen extends StatelessWidget {
               if (uiState.errorMessage case final error?) ...[
                 Text(
                   error,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
                 ),
                 Text(
                   'settings/credentials are loopback-only on the host; '
                   'connect via adb reverse',
                   style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
               switch (uiState.snapshot) {
-                null => uiState.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : const SizedBox.shrink(),
+                null =>
+                  uiState.isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : const SizedBox.shrink(),
                 final described => Expanded(
-                    child: SnapshotBody(
-                      snapshot: described,
-                      credentials: uiState.credentials,
-                      credentialError: uiState.credentialError,
-                      onAction: onAction,
-                    ),
+                  child: SnapshotBody(
+                    snapshot: described,
+                    credentials: uiState.credentials,
+                    credentialError: uiState.credentialError,
+                    onAction: onAction,
                   ),
+                ),
               },
             ],
           ),
@@ -116,13 +118,16 @@ class SnapshotBody extends StatelessWidget {
           children: [
             Chip(
               label: Text(
-                  snapshot.writable ? 'host writable' : 'host read-only'),
+                snapshot.writable ? 'host writable' : 'host read-only',
+              ),
               visualDensity: VisualDensity.compact,
             ),
             Chip(
-              label: Text(snapshot.hasDocument
-                  ? 'settings document'
-                  : 'no settings document'),
+              label: Text(
+                snapshot.hasDocument
+                    ? 'settings document'
+                    : 'no settings document',
+              ),
               visualDensity: VisualDensity.compact,
             ),
           ],
@@ -141,8 +146,10 @@ class SnapshotBody extends StatelessWidget {
               if (credentials.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 16, bottom: 4),
-                  child: Text('Credentials',
-                      style: theme.textTheme.titleMedium),
+                  child: Text(
+                    'Credentials',
+                    style: theme.textTheme.titleMedium,
+                  ),
                 ),
                 for (final credential in credentials)
                   CredentialRow(
@@ -157,8 +164,9 @@ class SnapshotBody extends StatelessWidget {
         if (credentialError case final String credError)
           Text(
             'credentials: $credError',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.error),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+            ),
           ),
       ],
     );
@@ -205,19 +213,17 @@ class _NamespaceRowState extends State<NamespaceRow> {
               Row(
                 children: [
                   OutlinedButton(
-                    onPressed: () =>
-                        setDialogState(() => _replaceMode = false),
-                    child: Text(
-                        !_replaceMode ? '✓ Key patch' : 'Key patch'),
+                    onPressed: () => setDialogState(() => _replaceMode = false),
+                    child: Text(!_replaceMode ? '✓ Key patch' : 'Key patch'),
                   ),
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: OutlinedButton(
                       onPressed: () =>
                           setDialogState(() => _replaceMode = true),
-                      child: Text(_replaceMode
-                          ? '✓ Replace section'
-                          : 'Replace section'),
+                      child: Text(
+                        _replaceMode ? '✓ Replace section' : 'Replace section',
+                      ),
                     ),
                   ),
                 ],
@@ -254,14 +260,9 @@ class _NamespaceRowState extends State<NamespaceRow> {
               Text(
                 'CAS revision ${widget.namespace.revision}; '
                 'host validates against the schema',
-                style: Theme.of(dialogContext)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(
-                      color: Theme.of(dialogContext)
-                          .colorScheme
-                          .onSurfaceVariant,
-                    ),
+                style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -273,27 +274,31 @@ class _NamespaceRowState extends State<NamespaceRow> {
             FilledButton(
               onPressed: _replaceMode
                   ? _valueController.text.trim().isNotEmpty
-                      ? () {
-                          widget.onAction(ReplaceSettingAction(
-                            ns: widget.namespace.ns,
-                            sectionJson: _valueController.text,
-                            expectedRevision: widget.namespace.revision,
-                          ));
-                          Navigator.of(dialogContext).pop();
-                        }
-                      : null
+                        ? () {
+                            widget.onAction(
+                              ReplaceSettingAction(
+                                ns: widget.namespace.ns,
+                                sectionJson: _valueController.text,
+                                expectedRevision: widget.namespace.revision,
+                              ),
+                            );
+                            Navigator.of(dialogContext).pop();
+                          }
+                        : null
                   : _keyController.text.trim().isNotEmpty &&
-                          _valueController.text.trim().isNotEmpty
-                      ? () {
-                          widget.onAction(UpdateSettingAction(
-                            ns: widget.namespace.ns,
-                            key: _keyController.text,
-                            jsonValue: _valueController.text,
-                            expectedRevision: widget.namespace.revision,
-                          ));
-                          Navigator.of(dialogContext).pop();
-                        }
-                      : null,
+                        _valueController.text.trim().isNotEmpty
+                  ? () {
+                      widget.onAction(
+                        UpdateSettingAction(
+                          ns: widget.namespace.ns,
+                          key: _keyController.text,
+                          jsonValue: _valueController.text,
+                          expectedRevision: widget.namespace.revision,
+                        ),
+                      );
+                      Navigator.of(dialogContext).pop();
+                    }
+                  : null,
               child: const Text('Save'),
             ),
           ],
@@ -377,10 +382,12 @@ class _CredentialRowState extends State<CredentialRow> {
             builder: (dialogContext, _) => FilledButton(
               onPressed: _valueController.text.trim().isNotEmpty
                   ? () {
-                      widget.onAction(SetCredentialAction(
-                        widget.credential.ref,
-                        _valueController.text.trim(),
-                      ));
+                      widget.onAction(
+                        SetCredentialAction(
+                          widget.credential.ref,
+                          _valueController.text.trim(),
+                        ),
+                      );
                       _valueController.clear();
                       Navigator.of(dialogContext).pop();
                     }
@@ -414,15 +421,15 @@ class _CredentialRowState extends State<CredentialRow> {
               children: [
                 OutlinedButton(
                   onPressed: _openEditor,
-                  child: Text(
-                      credential.configured ? 'Replace' : 'Set value'),
+                  child: Text(credential.configured ? 'Replace' : 'Set value'),
                 ),
                 if (credential.configured)
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: OutlinedButton(
                       onPressed: () => widget.onAction(
-                          UnsetCredentialAction(credential.ref)),
+                        UnsetCredentialAction(credential.ref),
+                      ),
                       child: const Text('Unset'),
                     ),
                   ),

@@ -55,6 +55,7 @@ class ChatController {
   PlanState? _plan;
   List<SkillEntry> _skills = const <SkillEntry>[];
   ContextPressure? _contextPressure;
+  ContextBreakdown? _contextBreakdown;
 
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
@@ -68,6 +69,7 @@ class ChatController {
   StreamSubscription<void>? _timelineSub;
   StreamSubscription<void>? _planSub;
   StreamSubscription<void>? _contextSub;
+  StreamSubscription<void>? _breakdownSub;
 
   ChatUiState get state => _state.value;
   Stream<ChatUiState> get uiState => _state.stream;
@@ -79,6 +81,7 @@ class ChatController {
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
     unawaited(_contextSub?.cancel());
+    unawaited(_breakdownSub?.cancel());
     _subs.clear();
   }
 
@@ -104,6 +107,7 @@ class ChatController {
       plan: _plan,
       skills: _skills,
       contextPressure: _contextPressure,
+      contextBreakdown: _contextBreakdown,
     );
   }
 
@@ -203,13 +207,16 @@ class ChatController {
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
     unawaited(_contextSub?.cancel());
+    unawaited(_breakdownSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
       _contextPressure = null;
+      _contextBreakdown = null;
       _timelineSub = null;
       _planSub = null;
       _contextSub = null;
+      _breakdownSub = null;
       return;
     }
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((

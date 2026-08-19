@@ -20,8 +20,7 @@ class SubagentRoute extends ConsumerWidget {
       initialData: controller.state,
       builder: (context, snapshot) {
         final uiState = snapshot.data ?? const SubagentUiState();
-        return SubagentScreen(
-            uiState: uiState, onAction: controller.onAction);
+        return SubagentScreen(uiState: uiState, onAction: controller.onAction);
       },
     );
   }
@@ -63,8 +62,7 @@ class _SubagentScreenState extends State<SubagentScreen> {
             children: [
               Text('Subagents', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
-                Text(error,
-                    style: TextStyle(color: theme.colorScheme.error)),
+                Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Text('Parent session', style: theme.textTheme.labelLarge),
               SizedBox(
                 height: 150,
@@ -76,8 +74,7 @@ class _SubagentScreenState extends State<SubagentScreen> {
                         child: OutlinedButton(
                           onPressed: session.id == uiState.selectedParentId
                               ? null
-                              : () =>
-                                  widget.onAction(SelectParent(session.id)),
+                              : () => widget.onAction(SelectParent(session.id)),
                           child: Text(session.displayTitle),
                         ),
                       ),
@@ -87,8 +84,10 @@ class _SubagentScreenState extends State<SubagentScreen> {
               const SizedBox(height: 12),
               Text('Children', style: theme.textTheme.labelLarge),
               if (!uiState.catalog.parentAvailable)
-                Text('Parent is not available for continuation.',
-                    style: theme.textTheme.bodySmall),
+                Text(
+                  'Parent is not available for continuation.',
+                  style: theme.textTheme.bodySmall,
+                ),
               Expanded(
                 flex: 70,
                 child: ListView(
@@ -98,8 +97,7 @@ class _SubagentScreenState extends State<SubagentScreen> {
                         key: ValueKey(entry.id),
                         entry: entry,
                         selected: entry.id == uiState.selectedChildId,
-                        onOpen: () =>
-                            widget.onAction(OpenChild(entry.id)),
+                        onOpen: () => widget.onAction(OpenChild(entry.id)),
                         onInterrupt: () =>
                             widget.onAction(InterruptSubagent(entry.id)),
                       ),
@@ -131,16 +129,18 @@ class _SubagentScreenState extends State<SubagentScreen> {
                       child: FilledButton(
                         onPressed:
                             _draftController.text.trim().isNotEmpty &&
-                                    !uiState.isSendingChild
-                                ? () {
-                                    widget.onAction(SendSubagentPrompt(
-                                        _draftController.text));
-                                    _draftController.clear();
-                                    setState(() {});
-                                  }
-                                : null,
+                                !uiState.isSendingChild
+                            ? () {
+                                widget.onAction(
+                                  SendSubagentPrompt(_draftController.text),
+                                );
+                                _draftController.clear();
+                                setState(() {});
+                              }
+                            : null,
                         child: Text(
-                            uiState.isSendingChild ? 'Sending' : 'Send'),
+                          uiState.isSendingChild ? 'Sending' : 'Send',
+                        ),
                       ),
                     ),
                   ],
@@ -229,53 +229,54 @@ class ChildTimeline extends StatelessWidget {
         for (final item in timeline)
           switch (item) {
             TimelineMessage(:final value) => SizedBox(
-                width: double.infinity,
-                child: Text('${value.role.name}: ${value.text}'),
-              ),
+              width: double.infinity,
+              child: Text('${value.role.name}: ${value.text}'),
+            ),
             TimelineTurnBoundary(:final turn) => SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Turn $turn',
-                  style: theme.textTheme.labelSmall?.merge(subdued),
-                ),
+              width: double.infinity,
+              child: Text(
+                'Turn $turn',
+                style: theme.textTheme.labelSmall?.merge(subdued),
               ),
+            ),
             TimelineCompaction(:final shadowedCount) => SizedBox(
-                width: double.infinity,
-                child: Text(
-                  '▤ Compacted $shadowedCount messages',
-                  style: theme.textTheme.labelSmall?.merge(subdued),
-                ),
+              width: double.infinity,
+              child: Text(
+                '▤ Compacted $shadowedCount messages',
+                style: theme.textTheme.labelSmall?.merge(subdued),
               ),
+            ),
             TimelineToolCall() => SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Tool ${item.name}: ${item.result ?? item.arguments ?? ''}',
-                ),
+              width: double.infinity,
+              child: Text(
+                'Tool ${item.name}: ${item.result ?? item.arguments ?? ''}',
               ),
+            ),
             TimelineApprovalRequest(:final toolName) => SizedBox(
-                width: double.infinity,
-                child: Text('Approval: $toolName'),
-              ),
+              width: double.infinity,
+              child: Text('Approval: $toolName'),
+            ),
             TimelineQuestionRequest(:final questions) => SizedBox(
-                width: double.infinity,
-                child: Text(
-                    'Question: ${questions.isEmpty ? '' : questions.first.question}'),
+              width: double.infinity,
+              child: Text(
+                'Question: ${questions.isEmpty ? '' : questions.first.question}',
               ),
+            ),
             TimelineQueue(:final items) => SizedBox(
-                width: double.infinity,
-                child: Text('Queue: ${items.length}'),
-              ),
+              width: double.infinity,
+              child: Text('Queue: ${items.length}'),
+            ),
             TimelineJobs(:final jobs) => SizedBox(
-                width: double.infinity,
-                child: Text('Jobs: ${jobs.length}'),
-              ),
+              width: double.infinity,
+              child: Text('Jobs: ${jobs.length}'),
+            ),
             TimelineError(:final message) => SizedBox(
-                width: double.infinity,
-                child: Text(
-                  message,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
+              width: double.infinity,
+              child: Text(
+                message,
+                style: TextStyle(color: theme.colorScheme.error),
               ),
+            ),
           },
       ],
     );

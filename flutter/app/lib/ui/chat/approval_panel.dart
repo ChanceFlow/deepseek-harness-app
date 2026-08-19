@@ -72,8 +72,9 @@ class ApprovalPanel extends StatelessWidget {
                 ),
                 Text(
                   'Tool ${request.toolName} requests privileged execution',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: ds.labelSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ds.labelSecondary,
+                  ),
                 ),
               ],
             ),
@@ -84,20 +85,24 @@ class ApprovalPanel extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 OutlinedButton(
-                  onPressed: () => onAction(RespondApproval(
-                    requestId: request.requestId,
-                    approvalId: request.approvalId,
-                    allowed: false,
-                  )),
+                  onPressed: () => onAction(
+                    RespondApproval(
+                      requestId: request.requestId,
+                      approvalId: request.approvalId,
+                      allowed: false,
+                    ),
+                  ),
                   child: const Text('Reject'),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () => onAction(RespondApproval(
-                    requestId: request.requestId,
-                    approvalId: request.approvalId,
-                    allowed: true,
-                  )),
+                  onPressed: () => onAction(
+                    RespondApproval(
+                      requestId: request.requestId,
+                      approvalId: request.approvalId,
+                      allowed: true,
+                    ),
+                  ),
                   child: const Text('Allow once'),
                 ),
               ],

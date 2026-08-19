@@ -38,19 +38,20 @@ ChatMessage _message({String? reasoning, bool streaming = false}) {
 }
 
 void main() {
-  testWidgets('collapsed row shows Think with the first-line summary',
-      (tester) async {
+  testWidgets('collapsed row shows Think with the first-line summary', (
+    tester,
+  ) async {
     await _pump(
       tester,
       ChatUiState(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: [
-          TimelineMessage(_message(
-            reasoning: 'consider the options\ncarefully weigh them',
-          )),
+          TimelineMessage(
+            _message(reasoning: 'consider the options\ncarefully weigh them'),
+          ),
         ],
       ),
       [],
@@ -61,19 +62,18 @@ void main() {
     expect(find.text('carefully weigh them'), findsNothing);
   });
 
-  testWidgets('tap expands the full body and collapses again',
-      (tester) async {
+  testWidgets('tap expands the full body and collapses again', (tester) async {
     await _pump(
       tester,
       ChatUiState(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: [
-          TimelineMessage(_message(
-            reasoning: 'consider the options\ncarefully weigh them',
-          )),
+          TimelineMessage(
+            _message(reasoning: 'consider the options\ncarefully weigh them'),
+          ),
         ],
       ),
       [],
@@ -81,31 +81,38 @@ void main() {
 
     await tester.tap(find.text('Think'));
     await tester.pumpAndSettle();
-    expect(find.text('consider the options\ncarefully weigh them'),
-        findsOneWidget);
+    expect(
+      find.text('consider the options\ncarefully weigh them'),
+      findsOneWidget,
+    );
     expect(find.text('consider the options'), findsNothing);
 
     await tester.tap(find.text('Think'));
     await tester.pumpAndSettle();
     expect(find.text('consider the options'), findsOneWidget);
-    expect(find.text('consider the options\ncarefully weigh them'),
-        findsNothing);
+    expect(
+      find.text('consider the options\ncarefully weigh them'),
+      findsNothing,
+    );
   });
 
-  testWidgets('streaming tail follows the latest line and marks running',
-      (tester) async {
+  testWidgets('streaming tail follows the latest line and marks running', (
+    tester,
+  ) async {
     await _pump(
       tester,
       ChatUiState(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: [
-          TimelineMessage(_message(
-            reasoning: 'first thought\nsecond thought\nstill going',
-            streaming: true,
-          )),
+          TimelineMessage(
+            _message(
+              reasoning: 'first thought\nsecond thought\nstill going',
+              streaming: true,
+            ),
+          ),
         ],
       ),
       [],
@@ -120,13 +127,14 @@ void main() {
     );
   });
 
-  testWidgets('messages without reasoning render no disclosure',
-      (tester) async {
+  testWidgets('messages without reasoning render no disclosure', (
+    tester,
+  ) async {
     await _pump(
       tester,
       ChatUiState(
         sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false)
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
         timeline: [TimelineMessage(_message())],

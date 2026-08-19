@@ -8,8 +8,8 @@ import 'dart:async';
 
 class AppStateStream<T> {
   AppStateStream(T initialValue)
-      : _value = initialValue,
-        _controller = StreamController<T>.broadcast();
+    : _value = initialValue,
+      _controller = StreamController<T>.broadcast();
 
   final StreamController<T> _controller;
   T _value;

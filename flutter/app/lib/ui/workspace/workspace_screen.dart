@@ -78,8 +78,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Workspaces',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text('Workspaces', style: Theme.of(context).textTheme.titleLarge),
               if (uiState.errorMessage case final String error)
                 Text(
                   error,
@@ -109,14 +108,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                     padding: const EdgeInsets.only(left: 8),
                     child: FilledButton(
                       onPressed:
-                          !uiState.isLoading && _pathController.text.trim().isNotEmpty
-                              ? () {
-                                  widget.onAction(
-                                      CreateWorkspaceAction(_pathController.text));
-                                  _pathController.clear();
-                                  setState(() {});
-                                }
-                              : null,
+                          !uiState.isLoading &&
+                              _pathController.text.trim().isNotEmpty
+                          ? () {
+                              widget.onAction(
+                                CreateWorkspaceAction(_pathController.text),
+                              );
+                              _pathController.clear();
+                              setState(() {});
+                            }
+                          : null,
                       child: const Text('Create'),
                     ),
                   ),
@@ -128,18 +129,22 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   itemCount: uiState.workspaces.length,
                   itemBuilder: (context, index) {
                     final workspace = uiState.workspaces[index];
-                    final position = uiState.workspaces.indexWhere((item) =>
-                        item.workspaceId == workspace.workspaceId);
+                    final position = uiState.workspaces.indexWhere(
+                      (item) => item.workspaceId == workspace.workspaceId,
+                    );
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(workspace.title,
-                              style:
-                                  Theme.of(context).textTheme.titleSmall),
-                          Text(workspace.path,
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            workspace.title,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          Text(
+                            workspace.path,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                           Text(
                             'sessions: ${workspace.sessionIds.length}',
                             style: Theme.of(context).textTheme.bodySmall,
@@ -154,8 +159,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                                 padding: const EdgeInsets.only(left: 8),
                                 child: OutlinedButton(
                                   onPressed: () => widget.onAction(
-                                      DeleteWorkspaceAction(
-                                          workspace.workspaceId)),
+                                    DeleteWorkspaceAction(
+                                      workspace.workspaceId,
+                                    ),
+                                  ),
                                   child: const Text('Delete workspace'),
                                 ),
                               ),
@@ -165,7 +172,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                                   onPressed: position > 0
                                       ? () => widget.onAction(
                                           MoveWorkspaceUpAction(
-                                              workspace.workspaceId))
+                                            workspace.workspaceId,
+                                          ),
+                                        )
                                       : null,
                                   child: const Text('Up'),
                                 ),
@@ -173,11 +182,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                               Padding(
                                 padding: const EdgeInsets.only(left: 8),
                                 child: OutlinedButton(
-                                  onPressed: position <
-                                          uiState.workspaces.length - 1
+                                  onPressed:
+                                      position < uiState.workspaces.length - 1
                                       ? () => widget.onAction(
                                           MoveWorkspaceDownAction(
-                                              workspace.workspaceId))
+                                            workspace.workspaceId,
+                                          ),
+                                        )
                                       : null,
                                   child: const Text('Down'),
                                 ),
@@ -199,9 +210,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       children: [
         body,
         if (browserOpen) ...[
-          const Positioned.fill(
-            child: ModalBarrier(dismissible: false),
-          ),
+          const Positioned.fill(child: ModalBarrier(dismissible: false)),
           Positioned.fill(
             child: Center(
               child: DirectoryBrowserDialog(
@@ -220,8 +229,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   setState(() {});
                   widget.onAction(const CloseDirectoryBrowser());
                 },
-                onClose: () =>
-                    widget.onAction(const CloseDirectoryBrowser()),
+                onClose: () => widget.onAction(const CloseDirectoryBrowser()),
               ),
             ),
           ),
@@ -306,21 +314,24 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
           constraints: const BoxConstraints(maxHeight: 420),
           child: listing == null
               ? widget.loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : const Text('Unable to load directory')
+                    ? const Center(child: CircularProgressIndicator())
+                    : const Text('Unable to load directory')
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(listing.path,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      listing.path,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 8),
                     Flexible(
                       child: ListView(
                         shrinkWrap: true,
                         children: [
-                          for (final entry in listing.entries
-                              .where((entry) => _showHidden || !entry.hidden))
+                          for (final entry in listing.entries.where(
+                            (entry) => _showHidden || !entry.hidden,
+                          ))
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton(
@@ -336,13 +347,14 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                       ),
                     ),
                     if (listing.truncated)
-                      Text('Directory listing truncated',
-                          style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        'Directory listing truncated',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     OutlinedButton(
                       onPressed: () =>
                           setState(() => _showHidden = !_showHidden),
-                      child: Text(
-                          _showHidden ? 'Hide hidden' : 'Show hidden'),
+                      child: Text(_showHidden ? 'Hide hidden' : 'Show hidden'),
                     ),
                     TextField(
                       controller: _folderNameController,
@@ -356,20 +368,22 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                             .replaceAll('\\', '');
                         _folderNameController.selection =
                             TextSelection.collapsed(
-                                offset: _folderNameController.text.length);
+                              offset: _folderNameController.text.length,
+                            );
                       }),
                     ),
                     FilledButton(
                       onPressed:
                           _folderNameController.text.trim().isNotEmpty &&
-                                  !widget.loading
-                              ? () {
-                                  widget.onCreateDirectory(
-                                      _folderNameController.text.trim());
-                                  _folderNameController.clear();
-                                  setState(() {});
-                                }
-                              : null,
+                              !widget.loading
+                          ? () {
+                              widget.onCreateDirectory(
+                                _folderNameController.text.trim(),
+                              );
+                              _folderNameController.clear();
+                              setState(() {});
+                            }
+                          : null,
                       child: const Text('Create folder'),
                     ),
                   ],
@@ -377,10 +391,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
         ),
       ),
       actions: [
-        OutlinedButton(
-          onPressed: widget.onClose,
-          child: const Text('Cancel'),
-        ),
+        OutlinedButton(onPressed: widget.onClose, child: const Text('Cancel')),
         FilledButton(
           onPressed: listing != null && !widget.loading
               ? () => widget.onSelect(listing.path)

@@ -7,40 +7,39 @@ void main() {
     final blocks = MarkdownParser.parse('just plain text');
 
     final paragraph = blocks.single as ParagraphBlock;
-    expect(paragraph.inlines, <MarkdownInline>[const TextInline('just plain text')]);
+    expect(paragraph.inlines, <MarkdownInline>[
+      const TextInline('just plain text'),
+    ]);
   });
 
   test('blank lines split paragraphs', () {
     final blocks = MarkdownParser.parse('first\n\nsecond');
 
     expect(blocks, hasLength(2));
-    expect(
-      (blocks[0] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('first')],
-    );
-    expect(
-      (blocks[1] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('second')],
-    );
+    expect((blocks[0] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('first'),
+    ]);
+    expect((blocks[1] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('second'),
+    ]);
   });
 
   test('fenced code block keeps language and body', () {
-    final blocks =
-        MarkdownParser.parse('before\n\n```kotlin\nval a = 1\nval b = 2\n```\nafter');
+    final blocks = MarkdownParser.parse(
+      'before\n\n```kotlin\nval a = 1\nval b = 2\n```\nafter',
+    );
 
     expect(blocks, hasLength(3));
     final code = blocks[1] as CodeBlock;
     expect(code.language, 'kotlin');
     expect(code.code, 'val a = 1\nval b = 2');
     expect(code.open, false);
-    expect(
-      (blocks[0] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('before')],
-    );
-    expect(
-      (blocks[2] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('after')],
-    );
+    expect((blocks[0] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('before'),
+    ]);
+    expect((blocks[2] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('after'),
+    ]);
   });
 
   test('unterminated fence renders open code block', () {
@@ -54,21 +53,19 @@ void main() {
 
   test('inline code bold italic and link parse', () {
     final inlines = MarkdownParser.parseInlines(
-        'run `gradlew test` with **full** *power* then see [docs](https://example.com)');
-
-    expect(
-      inlines,
-      <MarkdownInline>[
-        const TextInline('run '),
-        const CodeInline('gradlew test'),
-        const TextInline(' with '),
-        const BoldInline(<MarkdownInline>[TextInline('full')]),
-        const TextInline(' '),
-        const ItalicInline(<MarkdownInline>[TextInline('power')]),
-        const TextInline(' then see '),
-        const LinkInline(label: 'docs', url: 'https://example.com'),
-      ],
+      'run `gradlew test` with **full** *power* then see [docs](https://example.com)',
     );
+
+    expect(inlines, <MarkdownInline>[
+      const TextInline('run '),
+      const CodeInline('gradlew test'),
+      const TextInline(' with '),
+      const BoldInline(<MarkdownInline>[TextInline('full')]),
+      const TextInline(' '),
+      const ItalicInline(<MarkdownInline>[TextInline('power')]),
+      const TextInline(' then see '),
+      const LinkInline(label: 'docs', url: 'https://example.com'),
+    ]);
   });
 
   test('unmatched markers degrade to plain text', () {
@@ -82,15 +79,16 @@ void main() {
 
     final heading = blocks.single as HeadingBlock;
     expect(heading.level, 2);
-    expect(
-      heading.inlines,
-      <MarkdownInline>[const TextInline('Title with '), const CodeInline('code')],
-    );
+    expect(heading.inlines, <MarkdownInline>[
+      const TextInline('Title with '),
+      const CodeInline('code'),
+    ]);
   });
 
   test('consecutive bullets group into one list and inline emphasis holds', () {
-    final blocks =
-        MarkdownParser.parse('- first **bold** item\n- second item\n\nplain');
+    final blocks = MarkdownParser.parse(
+      '- first **bold** item\n- second item\n\nplain',
+    );
 
     final list = blocks[0] as BulletListBlock;
     expect(list.items, hasLength(2));
@@ -112,84 +110,80 @@ void main() {
         depth: 0,
       ),
     );
-    expect(
-      (blocks[1] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('plain')],
-    );
+    expect((blocks[1] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('plain'),
+    ]);
   });
 
   test('indented bullets nest up to two levels', () {
-    final blocks = MarkdownParser
-        .parse('- top\n  - nested\n    - deeper flattens\n      - beyond flattens');
+    final blocks = MarkdownParser.parse(
+      '- top\n  - nested\n    - deeper flattens\n      - beyond flattens',
+    );
 
     final list = blocks.single as BulletListBlock;
     expect(list.items.map((entry) => entry.depth), <int>[0, 1, 2, 2]);
-    expect((list.items[3].inlines.single as TextInline).text, 'beyond flattens');
+    expect(
+      (list.items[3].inlines.single as TextInline).text,
+      'beyond flattens',
+    );
   });
 
   test('quote lines fold into one block quote', () {
-    final blocks = MarkdownParser.parse('> quoted **strong**\n> second line\n\nafter');
+    final blocks = MarkdownParser.parse(
+      '> quoted **strong**\n> second line\n\nafter',
+    );
 
     final quote = blocks[0] as BlockQuoteBlock;
-    expect(
-      quote.inlines,
-      <MarkdownInline>[
-        const TextInline('quoted '),
-        const BoldInline(<MarkdownInline>[TextInline('strong')]),
-        const TextInline('\nsecond line'),
-      ],
-    );
-    expect(
-      (blocks[1] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('after')],
-    );
+    expect(quote.inlines, <MarkdownInline>[
+      const TextInline('quoted '),
+      const BoldInline(<MarkdownInline>[TextInline('strong')]),
+      const TextInline('\nsecond line'),
+    ]);
+    expect((blocks[1] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('after'),
+    ]);
   });
 
   test('nested bold keeps inner code span', () {
     final inlines = MarkdownParser.parseInlines('**outer `inner` outer**');
 
-    expect(
-      inlines,
-      <MarkdownInline>[
-        const BoldInline(<MarkdownInline>[
-          TextInline('outer '),
-          CodeInline('inner'),
-          TextInline(' outer'),
-        ]),
-      ],
-    );
+    expect(inlines, <MarkdownInline>[
+      const BoldInline(<MarkdownInline>[
+        TextInline('outer '),
+        CodeInline('inner'),
+        TextInline(' outer'),
+      ]),
+    ]);
   });
 
   test('bullet lines inside paragraphs are not emphasized', () {
     final inlines = MarkdownParser.parseInlines('2 * 3 = 6 and a_b_c stay');
 
-    expect(inlines, <MarkdownInline>[const TextInline('2 * 3 = 6 and a_b_c stay')]);
+    expect(inlines, <MarkdownInline>[
+      const TextInline('2 * 3 = 6 and a_b_c stay'),
+    ]);
   });
 
   test('pipe table parses header and body rows with inline runs', () {
     final blocks = MarkdownParser.parse(
-        'intro\n\n| Name | Notes |\n| --- | --- |\n| `code` | **bold** |\n| plain | b |\n\nafter');
+      'intro\n\n| Name | Notes |\n| --- | --- |\n| `code` | **bold** |\n| plain | b |\n\nafter',
+    );
 
     expect(blocks, hasLength(3));
     final table = blocks[1] as TableBlock;
-    expect(
-      table.header,
-      <List<MarkdownInline>>[
-        <MarkdownInline>[const TextInline('Name')],
-        <MarkdownInline>[const TextInline('Notes')],
-      ],
-    );
+    expect(table.header, <List<MarkdownInline>>[
+      <MarkdownInline>[const TextInline('Name')],
+      <MarkdownInline>[const TextInline('Notes')],
+    ]);
     expect(table.rows, hasLength(2));
     expect(table.rows[0][0], <MarkdownInline>[const CodeInline('code')]);
-    expect(
-      table.rows[0][1],
-      <MarkdownInline>[const BoldInline(<MarkdownInline>[TextInline('bold')])],
-    );
+    expect(table.rows[0][1], <MarkdownInline>[
+      const BoldInline(<MarkdownInline>[TextInline('bold')]),
+    ]);
     expect(table.rows[1][0], <MarkdownInline>[const TextInline('plain')]);
-    expect(
-      (blocks[2] as ParagraphBlock).inlines,
-      <MarkdownInline>[const TextInline('after')],
-    );
+    expect((blocks[2] as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('after'),
+    ]);
   });
 
   test('pipe row without delimiter line stays a paragraph', () {
@@ -205,6 +199,8 @@ void main() {
     final table = blocks.single as TableBlock;
     expect(table.rows, hasLength(1));
     expect(table.rows.single, hasLength(1));
-    expect(table.rows.single.single, <MarkdownInline>[const TextInline('only-one')]);
+    expect(table.rows.single.single, <MarkdownInline>[
+      const TextInline('only-one'),
+    ]);
   });
 }

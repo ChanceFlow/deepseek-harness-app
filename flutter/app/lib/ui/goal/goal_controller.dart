@@ -12,15 +12,18 @@ import 'goal_ui_state.dart';
 
 class GoalController {
   GoalController(this._repository) {
-    _subs.add(_repository.observeSessions().listen((sessions) {
-      _sessions = sessions;
-      _publish();
-    }));
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        _sessions = sessions;
+        _publish();
+      }),
+    );
   }
 
   final ChatRepository _repository;
-  final AppStateStream<GoalUiState> _state =
-      AppStateStream<GoalUiState>(const GoalUiState());
+  final AppStateStream<GoalUiState> _state = AppStateStream<GoalUiState>(
+    const GoalUiState(),
+  );
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<SessionSummary> _sessions = const <SessionSummary>[];
@@ -83,7 +86,8 @@ class GoalController {
         _mutateGoal((ref) => _repository.resumeGoal(_selectedSessionId!, ref));
       case CompleteGoalAction():
         _mutateGoal(
-            (ref) => _repository.completeGoal(_selectedSessionId!, ref));
+          (ref) => _repository.completeGoal(_selectedSessionId!, ref),
+        );
       case ClearGoalAction():
         _clear();
       case DismissGoalError():
@@ -110,11 +114,13 @@ class GoalController {
       _isLoading = true;
       _publish();
       try {
-        await _runCatchingForUi(() => _repository.createGoal(
-              sessionId,
-              objective.trim(),
-              maxGoalRounds: maxRounds,
-            ));
+        await _runCatchingForUi(
+          () => _repository.createGoal(
+            sessionId,
+            objective.trim(),
+            maxGoalRounds: maxRounds,
+          ),
+        );
       } finally {
         _isLoading = false;
         _publish();
@@ -132,11 +138,13 @@ class GoalController {
       _isLoading = true;
       _publish();
       try {
-        await _runCatchingForUi(() => _repository.editGoal(
-              sessionId,
-              GoalRef(id: current.id, revision: current.revision),
-              objective.trim(),
-            ));
+        await _runCatchingForUi(
+          () => _repository.editGoal(
+            sessionId,
+            GoalRef(id: current.id, revision: current.revision),
+            objective.trim(),
+          ),
+        );
       } finally {
         _isLoading = false;
         _publish();
@@ -149,8 +157,11 @@ class GoalController {
     if (sessionId == null) return;
     final current = _goal?.goal;
     if (current == null) return;
-    unawaited(_runCatchingForUi(
-        () => block(GoalRef(id: current.id, revision: current.revision))));
+    unawaited(
+      _runCatchingForUi(
+        () => block(GoalRef(id: current.id, revision: current.revision)),
+      ),
+    );
   }
 
   void _clear() {
@@ -158,10 +169,14 @@ class GoalController {
     if (sessionId == null) return;
     final current = _goal?.goal;
     if (current == null) return;
-    unawaited(_runCatchingForUi(() => _repository.clearGoal(
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.clearGoal(
           sessionId,
           GoalRef(id: current.id, revision: current.revision),
-        )));
+        ),
+      ),
+    );
   }
 
   void _refresh() {

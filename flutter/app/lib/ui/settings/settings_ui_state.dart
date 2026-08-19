@@ -53,9 +53,7 @@ final class SetCredentialAction extends SettingsAction {
 
   @override
   bool operator ==(Object other) =>
-      other is SetCredentialAction &&
-      other.ref == ref &&
-      other.value == value;
+      other is SetCredentialAction && other.ref == ref && other.value == value;
 
   @override
   int get hashCode => Object.hash(ref, value);

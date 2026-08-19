@@ -20,8 +20,7 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ink = color ??
-        Theme.of(context).colorScheme.onSurface;
+    final ink = color ?? Theme.of(context).colorScheme.onSurface;
     final inverted = Theme.of(context).colorScheme.surface;
     return Row(
       mainAxisSize: MainAxisSize.min,
