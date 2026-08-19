@@ -16,7 +16,9 @@ final class TimelineTurnGroup {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineTurnGroup && other.turn == turn && _listEquals(other.items, items);
+      other is TimelineTurnGroup &&
+      other.turn == turn &&
+      _listEquals(other.items, items);
 
   @override
   int get hashCode => Object.hash(turn, Object.hashAll(items));

@@ -25,6 +25,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
+import 'empty_hero.dart';
+import 'reasoning_row.dart';
 import 'timeline_grouping.dart';
 import '../theme/deepsuite_extension.dart' show dsOf;
 
@@ -537,7 +539,16 @@ class _ChatPanelState extends State<ChatPanel> {
           ),
           const SizedBox(height: 4),
           Expanded(
-            child: _outline
+            child: uiState.timeline.isEmpty
+                ? EmptyHero(
+                    workspaces: uiState.workspaces,
+                    currentWorkspaceLabel: _workspaceLabel(
+                      selectedSession?.cwd,
+                    ),
+                    onPickWorkspace: (workspaceId) =>
+                        widget.onAction(CreateSessionInWorkspace(workspaceId)),
+                  )
+                : _outline
                 ? OutlineTimeline(
                     timeline: uiState.timeline,
                     collapsedTurns: _collapsedTurns,
@@ -698,12 +709,7 @@ class MessageRow extends StatelessWidget {
         ),
         if (message.reasoning case final String reasoning
             when reasoning.isNotEmpty)
-          Text(
-            reasoning,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          ReasoningRow(text: reasoning, running: message.streaming),
         if (message.text.isNotEmpty) MarkdownText(text: message.text),
         for (final ref in message.images)
           AttachmentImageRow(
@@ -1979,4 +1985,13 @@ class _RenameSessionDialogState extends State<_RenameSessionDialog> {
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+/// Web `workspaceLabel`: basename of the cwd, raw path when separator-only.
+String? _workspaceLabel(String? cwd) {
+  if (cwd == null || cwd.isEmpty) return null;
+  final segments = cwd
+      .split(RegExp(r'[/\\]'))
+      .where((s) => s.trim().isNotEmpty);
+  return segments.isEmpty ? cwd : segments.last;
 }

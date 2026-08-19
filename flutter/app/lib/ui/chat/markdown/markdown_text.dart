@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/deepsuite_extension.dart' show DeepSuiteColors;
 import '../../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
+
 import 'package:url_launcher/url_launcher.dart';
 
 import 'markdown_parser.dart';
@@ -25,9 +26,7 @@ class MarkdownText extends StatelessWidget {
     final blocks = MarkdownParser.parse(text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final block in blocks) _block(context, block),
-      ],
+      children: [for (final block in blocks) _block(context, block)],
     );
   }
 
@@ -53,13 +52,14 @@ class MarkdownText extends StatelessWidget {
           children: [
             for (final entry in block.items)
               Padding(
-                padding:
-                    EdgeInsets.only(left: entry.depth * 16.0, bottom: 2),
+                padding: EdgeInsets.only(left: entry.depth * 16.0, bottom: 2),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(entry.depth == 0 ? '•  ' : '–  ',
-                        style: theme.textTheme.bodyMedium),
+                    Text(
+                      entry.depth == 0 ? '•  ' : '–  ',
+                      style: theme.textTheme.bodyMedium,
+                    ),
                     Expanded(
                       child: Text.rich(
                         _inlineSpan(context, entry.inlines),
@@ -87,8 +87,9 @@ class MarkdownText extends StatelessWidget {
             Expanded(
               child: Text.rich(
                 _inlineSpan(context, block.inlines),
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -124,9 +125,13 @@ class MarkdownText extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 2),
-                    child: Text.rich(_inlineSpan(context, cell),
-                        style: theme.textTheme.titleSmall),
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    child: Text.rich(
+                      _inlineSpan(context, cell),
+                      style: theme.textTheme.titleSmall,
+                    ),
                   ),
                 ),
             ],
@@ -139,13 +144,16 @@ class MarkdownText extends StatelessWidget {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
                       child: Text.rich(
                         _inlineSpan(
-                            context,
-                            columnIndex < row.length
-                                ? row[columnIndex]
-                                : const <MarkdownInline>[]),
+                          context,
+                          columnIndex < row.length
+                              ? row[columnIndex]
+                              : const <MarkdownInline>[],
+                        ),
                         style: theme.textTheme.bodySmall,
                       ),
                     ),
@@ -173,15 +181,17 @@ class MarkdownText extends StatelessWidget {
         children: [
           Text(
             label,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Text(
               block.code,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontFamily: kFontFamilyMonospace),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: kFontFamilyMonospace,
+              ),
             ),
           ),
         ],
@@ -199,41 +209,49 @@ class MarkdownText extends StatelessWidget {
           case TextInline():
             out.add(TextSpan(text: inline.text));
           case CodeInline():
-            out.add(TextSpan(
-              text: inline.code,
-              style: TextStyle(
-                fontFamily: kFontFamilyMonospace,
-                backgroundColor: ds(theme).bgLayer1,
+            out.add(
+              TextSpan(
+                text: inline.code,
+                style: TextStyle(
+                  fontFamily: kFontFamilyMonospace,
+                  backgroundColor: ds(theme).bgLayer1,
+                ),
               ),
-            ));
+            );
           case BoldInline():
             final nested = <InlineSpan>[];
             render(inline.inlines, nested);
-            out.add(TextSpan(
-              children: nested,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ));
+            out.add(
+              TextSpan(
+                children: nested,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            );
           case ItalicInline():
             final nested = <InlineSpan>[];
             render(inline.inlines, nested);
-            out.add(TextSpan(
-              children: nested,
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ));
+            out.add(
+              TextSpan(
+                children: nested,
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+            );
           case LinkInline():
             // Clickable span: the default handler opens the URI through the
             // platform; the styled span covers the label only.
-            out.add(TextSpan(
-              text: inline.label,
-              style: TextStyle(
-                color: theme.colorScheme.primary,
-                decoration: TextDecoration.underline,
+            out.add(
+              TextSpan(
+                text: inline.label,
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                ),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    launchUrl(Uri.parse(inline.url));
+                  },
               ),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () {
-                  launchUrl(Uri.parse(inline.url));
-                },
-            ));
+            );
         }
       }
     }

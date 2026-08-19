@@ -36,8 +36,9 @@ class ChatController {
   }
 
   final ChatRepository _repository;
-  final AppStateStream<ChatUiState> _state =
-      AppStateStream<ChatUiState>(const ChatUiState());
+  final AppStateStream<ChatUiState> _state = AppStateStream<ChatUiState>(
+    const ChatUiState(),
+  );
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   ConnectionState _connection = const ConnectionState();
@@ -102,22 +103,30 @@ class ChatController {
   }
 
   void _subscribeBaselines() {
-    _subs.add(_repository.observeConnectionState().listen((connection) {
-      _connection = connection;
-      _publish();
-    }));
-    _subs.add(_repository.observeSessions().listen((sessions) {
-      _sessions = sessions;
-      _publish();
-    }));
-    _subs.add(_repository.observeWorkspaces().listen((workspaces) {
-      _workspaces = workspaces;
-      _publish();
-    }));
-    _subs.add(_repository.observeImageLimits().listen((limits) {
-      _imageLimits = limits ?? const ImageLimits();
-      _publish();
-    }));
+    _subs.add(
+      _repository.observeConnectionState().listen((connection) {
+        _connection = connection;
+        _publish();
+      }),
+    );
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        _sessions = sessions;
+        _publish();
+      }),
+    );
+    _subs.add(
+      _repository.observeWorkspaces().listen((workspaces) {
+        _workspaces = workspaces;
+        _publish();
+      }),
+    );
+    _subs.add(
+      _repository.observeImageLimits().listen((limits) {
+        _imageLimits = limits ?? const ImageLimits();
+        _publish();
+      }),
+    );
   }
 
   void onAction(ChatAction action) {
@@ -146,12 +155,16 @@ class ChatController {
       case SearchSessions():
         _searchSessions(action.query);
       case ArchiveSession():
-        unawaited(_runCatchingForUi(
-            () => _repository.archiveSession(action.sessionId)));
+        unawaited(
+          _runCatchingForUi(() => _repository.archiveSession(action.sessionId)),
+        );
       case RenameSession():
         if (action.title.trim().isNotEmpty) {
-          unawaited(_runCatchingForUi(
-              () => _repository.renameSession(action.sessionId, action.title)));
+          unawaited(
+            _runCatchingForUi(
+              () => _repository.renameSession(action.sessionId, action.title),
+            ),
+          );
         }
       case ForkSession():
         _forkSession(action.sessionId);
@@ -191,8 +204,9 @@ class ChatController {
       _planSub = null;
       return;
     }
-    _timelineSub =
-        _repository.observeTimelineWindow(sessionId).listen((window) {
+    _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
+      window,
+    ) {
       _timelineWindow = window;
       _publish();
     });
@@ -243,16 +257,18 @@ class ChatController {
   }
 
   void _observeSelectedSessionRemoval() {
-    _subs.add(_repository.observeSessions().listen((sessions) {
-      final selected = _selectedSessionId;
-      if (selected == null) return;
-      if (!sessions.any((session) => session.id == selected)) {
-        _selectedSessionId = null;
-        _timelineWindow = const TimelineWindow();
-        _bindSelected(null);
-        _publish();
-      }
-    }));
+    _subs.add(
+      _repository.observeSessions().listen((sessions) {
+        final selected = _selectedSessionId;
+        if (selected == null) return;
+        if (!sessions.any((session) => session.id == selected)) {
+          _selectedSessionId = null;
+          _timelineWindow = const TimelineWindow();
+          _bindSelected(null);
+          _publish();
+        }
+      }),
+    );
   }
 
   void _sendPrompt(SendPrompt action) {
@@ -265,12 +281,14 @@ class ChatController {
       _publish();
       try {
         final sent = await _runCatchingForUi<bool>(() async {
-          await _repository.sendMessage(SendMessageRequest(
-            sessionId: sessionId,
-            text: action.text.trim(),
-            mode: action.mode,
-            images: images,
-          ));
+          await _repository.sendMessage(
+            SendMessageRequest(
+              sessionId: sessionId,
+              text: action.text.trim(),
+              mode: action.mode,
+              images: images,
+            ),
+          );
           return true;
         });
         // Keep drafts only on failure, mirroring the text composer.
@@ -293,10 +311,12 @@ class ChatController {
     for (final image in images) {
       if (!limits.mediaTypes.contains(image.mediaType)) {
         rejected.add(
-            '${image.name ?? image.id}: unsupported type ${image.mediaType}');
+          '${image.name ?? image.id}: unsupported type ${image.mediaType}',
+        );
       } else if (image.byteSize > limits.maxImageBytes) {
-        rejected
-            .add('${image.name ?? image.id}: exceeds ${limits.maxImageBytes} bytes');
+        rejected.add(
+          '${image.name ?? image.id}: exceeds ${limits.maxImageBytes} bytes',
+        );
       } else {
         admitted.add(image);
       }
@@ -322,12 +342,18 @@ class ChatController {
   /// per attachment id. Returns null on failure; the UI shows a
   /// placeholder.
   Future<Uint8List?> loadAttachmentBytes(
-      String sessionId, AttachmentRef ref) async {
-    final cached = await _locked(() async => _attachmentBytes[ref.attachmentId]);
+    String sessionId,
+    AttachmentRef ref,
+  ) async {
+    final cached = await _locked(
+      () async => _attachmentBytes[ref.attachmentId],
+    );
     if (cached != null) return cached;
     try {
-      final downloaded =
-          await _repository.readAttachment(sessionId, ref.attachmentId);
+      final downloaded = await _repository.readAttachment(
+        sessionId,
+        ref.attachmentId,
+      );
       await _locked(() async {
         if (_attachmentBytes.length >= _attachmentCacheLimit) {
           _attachmentBytes.remove(_attachmentBytes.keys.first);
@@ -360,9 +386,11 @@ class ChatController {
       if (workspaceId != null) {
         sessionId = _reusableBlankSessionId(workspaceId);
       }
-      sessionId ??= (await _runCatchingForUi(() => _repository.createSession(
-              CreateSessionRequest(workspaceId: workspaceId))))
-          ?.id;
+      sessionId ??= (await _runCatchingForUi(
+        () => _repository.createSession(
+          CreateSessionRequest(workspaceId: workspaceId),
+        ),
+      ))?.id;
       final resolved = sessionId;
       if (resolved == null) return;
       _selectedSessionId = resolved;
@@ -391,26 +419,31 @@ class ChatController {
   void _respondApproval(RespondApproval action) {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
-    unawaited(_runCatchingForUi(() => _repository.respondToApproval(
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.respondToApproval(
           ApprovalAnswer(
             requestId: action.requestId,
             sessionId: sessionId,
             approvalId: action.approvalId,
             allowed: action.allowed,
           ),
-        )));
+        ),
+      ),
+    );
   }
 
   void _answerQuestion(AnswerQuestionAction action) {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
-    unawaited(_runCatchingForUi(() => _repository.answerQuestions(
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.answerQuestions(
           action.requestId,
-          QuestionEvidence(
-            sessionId: sessionId,
-            answers: action.answers,
-          ),
-        )));
+          QuestionEvidence(sessionId: sessionId, answers: action.answers),
+        ),
+      ),
+    );
   }
 
   void _searchSessions(String query) {
@@ -421,7 +454,8 @@ class ChatController {
     }
     unawaited(() async {
       final results = await _runCatchingForUi(
-          () => _repository.searchSessions(query));
+        () => _repository.searchSessions(query),
+      );
       _searchResults = results ?? const <SessionSearchResult>[];
       _publish();
     }());
@@ -430,7 +464,8 @@ class ChatController {
   void _forkSession(String sessionId) {
     unawaited(() async {
       final forked = await _runCatchingForUi(
-          () => _repository.forkSession(sessionId));
+        () => _repository.forkSession(sessionId),
+      );
       if (forked == null) return;
       _selectedSessionId = forked.id;
       _timelineWindow = const TimelineWindow();
@@ -446,12 +481,18 @@ class ChatController {
     if (kind == QueueUpdateKind.edit && (text == null || text.trim().isEmpty)) {
       return;
     }
-    unawaited(_runCatchingForUi(() => _repository.updateQueue(QueueUpdateRequest(
-          sessionId: sessionId,
-          itemId: itemId,
-          kind: kind,
-          text: text,
-        ))));
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.updateQueue(
+          QueueUpdateRequest(
+            sessionId: sessionId,
+            itemId: itemId,
+            kind: kind,
+            text: text,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<T?> _runCatchingForUi<T>(Future<T> Function() block) async {

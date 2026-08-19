@@ -13,7 +13,11 @@ sealed class MarkdownBlock {
 }
 
 final class CodeBlock extends MarkdownBlock {
-  const CodeBlock({required this.language, required this.code, this.open = false});
+  const CodeBlock({
+    required this.language,
+    required this.code,
+    this.open = false,
+  });
 
   final String? language;
   final String code;
@@ -101,7 +105,9 @@ final class TableBlock extends MarkdownBlock {
 
   @override
   bool operator ==(Object other) =>
-      other is TableBlock && _deepEquals(other.header, header) && _deepDeepEquals(other.rows, rows);
+      other is TableBlock &&
+      _deepEquals(other.header, header) &&
+      _deepDeepEquals(other.rows, rows);
 
   @override
   int get hashCode => Object.hashAll(header.expand((cell) => cell));
@@ -228,7 +234,9 @@ abstract final class MarkdownParser {
         flushParagraph();
         flushBullets();
         final marker = fenceMatch.group(1)!;
-        final language = fenceMatch.group(2)!.isEmpty ? null : fenceMatch.group(2);
+        final language = fenceMatch.group(2)!.isEmpty
+            ? null
+            : fenceMatch.group(2);
         final code = StringBuffer();
         var closed = false;
         index++;
@@ -244,11 +252,9 @@ abstract final class MarkdownParser {
           code.write(candidate);
           index++;
         }
-        blocks.add(CodeBlock(
-          language: language,
-          code: code.toString(),
-          open: !closed,
-        ));
+        blocks.add(
+          CodeBlock(language: language, code: code.toString(), open: !closed),
+        );
         continue;
       }
 
@@ -295,10 +301,12 @@ abstract final class MarkdownParser {
       if (headingMatch != null) {
         flushParagraph();
         flushBullets();
-        blocks.add(HeadingBlock(
-          level: headingMatch.group(1)!.length,
-          inlines: parseInlines(headingMatch.group(2)!),
-        ));
+        blocks.add(
+          HeadingBlock(
+            level: headingMatch.group(1)!.length,
+            inlines: parseInlines(headingMatch.group(2)!),
+          ),
+        );
         index++;
         continue;
       }
@@ -307,11 +315,14 @@ abstract final class MarkdownParser {
       if (bulletMatch != null) {
         flushParagraph();
         final indent = ' '.allMatches(bulletMatch.group(1)!).length;
-        bullets.add(BulletEntry(
-          inlines: parseInlines(bulletMatch.group(2)!),
-          depth:
-              (indent ~/ 2) > maxBulletDepth ? maxBulletDepth : indent ~/ 2,
-        ));
+        bullets.add(
+          BulletEntry(
+            inlines: parseInlines(bulletMatch.group(2)!),
+            depth: (indent ~/ 2) > maxBulletDepth
+                ? maxBulletDepth
+                : indent ~/ 2,
+          ),
+        );
         index++;
         continue;
       }
@@ -361,8 +372,9 @@ abstract final class MarkdownParser {
         final close = _findSingleEmphasisClose(text, index + 1);
         if (close != -1) {
           flushPlain();
-          inlines
-              .add(ItalicInline(parseInlines(text.substring(index + 1, close))));
+          inlines.add(
+            ItalicInline(parseInlines(text.substring(index + 1, close))),
+          );
           index = close + 1;
         } else {
           plain.write(char);
@@ -375,10 +387,12 @@ abstract final class MarkdownParser {
           final urlEnd = text.indexOf(')', labelEnd + 2);
           if (urlEnd != -1) {
             flushPlain();
-            inlines.add(LinkInline(
-              label: text.substring(index + 1, labelEnd),
-              url: text.substring(labelEnd + 2, urlEnd),
-            ));
+            inlines.add(
+              LinkInline(
+                label: text.substring(index + 1, labelEnd),
+                url: text.substring(labelEnd + 2, urlEnd),
+              ),
+            );
             index = urlEnd + 1;
             matched = true;
           }
@@ -470,7 +484,9 @@ bool _deepEquals(List<List<MarkdownInline>> a, List<List<MarkdownInline>> b) {
 }
 
 bool _deepDeepEquals(
-    List<List<List<MarkdownInline>>> a, List<List<List<MarkdownInline>>> b) {
+  List<List<List<MarkdownInline>>> a,
+  List<List<List<MarkdownInline>>> b,
+) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (!_deepEquals(a[i], b[i])) return false;

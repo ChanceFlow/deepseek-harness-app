@@ -23,6 +23,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.accent,
     required this.divider,
     required this.labelSecondary,
+    required this.labelTertiary,
+    required this.labelCaption,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -44,6 +46,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
 
   final Color divider;
   final Color labelSecondary;
+  final Color labelTertiary;
+  final Color labelCaption;
 
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
@@ -59,6 +63,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
             DeepSuiteLight.aliasBrandPrimaryNewColorprimaryNewColor,
         divider: DeepSuiteLight.aliasBorderL1,
         labelSecondary: DeepSuiteLight.aliasLabelSecondary,
+        labelTertiary: DeepSuiteLight.aliasLabelTertiary,
+        labelCaption: DeepSuiteLight.aliasLabelCaption,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -74,6 +80,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         accent: DeepSuiteDark.aliasBrandPrimaryNewColorprimaryNewColor,
         divider: DeepSuiteDark.aliasBorderL1,
         labelSecondary: DeepSuiteDark.aliasLabelSecondary,
+        labelTertiary: DeepSuiteDark.aliasLabelTertiary,
+        labelCaption: DeepSuiteDark.aliasLabelCaption,
       );
 
   @override
@@ -89,6 +97,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? accent,
     Color? divider,
     Color? labelSecondary,
+    Color? labelTertiary,
+    Color? labelCaption,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -103,6 +113,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       accent: accent ?? this.accent,
       divider: divider ?? this.divider,
       labelSecondary: labelSecondary ?? this.labelSecondary,
+      labelTertiary: labelTertiary ?? this.labelTertiary,
+      labelCaption: labelCaption ?? this.labelCaption,
     );
   }
 
@@ -124,6 +136,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       accent: Color.lerp(accent, other.accent, t)!,
       divider: Color.lerp(divider, other.divider, t)!,
       labelSecondary: Color.lerp(labelSecondary, other.labelSecondary, t)!,
+      labelTertiary: Color.lerp(labelTertiary, other.labelTertiary, t)!,
+      labelCaption: Color.lerp(labelCaption, other.labelCaption, t)!,
     );
   }
 }
