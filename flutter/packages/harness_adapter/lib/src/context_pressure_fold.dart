@@ -104,30 +104,35 @@ class ContextPressureFold {
     }
   }
 
-  /// One raw session-log event (`type` keyed at the top level).
+  /// One raw session-log event — the wire envelope `{type, seq, time,
+  /// data: {...}}` (payloads live under `data`, matching the timeline
+  /// reducer's `_eventData` reads).
   void ingestEvent(Object? raw) {
     final event = asJsonObject(raw);
     if (event == null) return;
+    final data = asJsonObject(event['data']) ?? const <String, Object?>{};
     switch (wireType(event)) {
       case 'assistant/chunk':
-        final chunk = asJsonObject(event['chunk']);
+        final chunk = asJsonObject(data['chunk']);
         if (chunk == null || wireType(chunk) != 'usage') return;
         _applyUsage(asJsonObject(chunk['usage']));
       case 'assistant/message':
-        _applyUsage(asJsonObject(event['usage']));
-        _messageTokens += estimateContent(event['content']) + _roleOverhead;
+        _applyUsage(asJsonObject(data['usage']));
+        final message = asJsonObject(data['message']);
+        _messageTokens += estimateContent(message?['content']) +
+            _roleOverhead;
         _publishBreakdown();
       case 'user/message':
-        _messageTokens += estimateContent(event['content']) + _roleOverhead;
+        _messageTokens += estimateContent(data['content']) + _roleOverhead;
         _publishBreakdown();
       case 'request/context':
-        final window = wireLongOrNull(event, 'contextWindow');
+        final window = wireLongOrNull(data, 'contextWindow');
         if (window != null && window > 0) {
           _contextWindow = window;
           _publish();
         }
       case 'request/header':
-        final header = asJsonObject(event['header']);
+        final header = asJsonObject(data['header']);
         _systemTokens = _estimateSystem(header?['system']);
         _toolsTokens = _estimateTools(header?['tools']);
         _publishBreakdown();

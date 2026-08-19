@@ -12,6 +12,7 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/dsh_rpc_client.dart';
+import 'package:network/dsh_exceptions.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
@@ -98,6 +99,13 @@ class HarnessFakeRpc implements DshRpcClient {
   List<(String, RpcResult)> receivedResponses() =>
       List<(String, RpcResult)>.of(_receivedResponses);
 
+  /// One-shot scripted business failure for the next call to [endpoint].
+  void failNextCall(String endpoint, String code) {
+    _failures[endpoint] = code;
+  }
+
+  final Map<String, String> _failures = <String, String>{};
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -106,6 +114,12 @@ class HarnessFakeRpc implements DshRpcClient {
   ) async {
     _calls[endpoint] = callCountFor(endpoint) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
+    if (_failures.remove(endpoint) case final code?) {
+      return RpcResult(
+        ok: false,
+        error: RpcError(code: code, message: 'scripted failure: $code'),
+      );
+    }
     final value = _valueFor(endpoint);
     return RpcResult(ok: true, value: value);
   }
@@ -402,6 +416,43 @@ void main() {
     expect(action['kind'], 'edit');
     expect(content!['type'], 'text');
     expect(content['text'], 'revised prompt');
+  });
+
+  test('steer racing a closing turn is swallowed, other errors surface', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    // Web parity: steer-unavailable / queue-item-not-found are benign races
+    // (the queue projection refreshes the dock) — no exception escapes.
+    rpc.failNextCall('session.updateQueue', 'steer-unavailable');
+    await repository.updateQueue(
+      const QueueUpdateRequest(
+        sessionId: 'session-1',
+        itemId: 'queued-1',
+        kind: QueueUpdateKind.steer,
+      ),
+    );
+    rpc.failNextCall('session.updateQueue', 'queue-item-not-found');
+    await repository.updateQueue(
+      const QueueUpdateRequest(
+        sessionId: 'session-1',
+        itemId: 'queued-1',
+        kind: QueueUpdateKind.remove,
+      ),
+    );
+
+    rpc.failNextCall('session.updateQueue', 'agent-busy');
+    await expectLater(
+      repository.updateQueue(
+        const QueueUpdateRequest(
+          sessionId: 'session-1',
+          itemId: 'queued-1',
+          kind: QueueUpdateKind.steer,
+        ),
+      ),
+      throwsA(isA<DshBusinessException>()),
+    );
   });
 
   test('skipped question response uses empty selected array', () async {

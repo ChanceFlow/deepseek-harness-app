@@ -47,8 +47,10 @@ class ModelSelect extends StatelessWidget {
       tooltip: 'Model: $_modelLabel',
       enabled: !locked,
       onTap: () => _open(context),
+      // The settings-style glyph (the tune vocabulary the sheet header
+      // uses) — not a sparkle.
       child: Icon(
-        Icons.auto_awesome,
+        Icons.tune,
         size: 15,
         color: Theme.of(context).colorScheme.onSurface,
       ),

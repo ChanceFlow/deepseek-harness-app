@@ -175,11 +175,17 @@ void main() {
       ),
       actions,
     );
-    expect(find.text('Alpha ●'), findsOneWidget);
-    expect(find.text('Beta'), findsOneWidget);
+    // The grouped sidebar rows: the running dot is a state-dot widget (the
+    // title stands alone), so scope the row text to the session panel.
+    Finder panelText(String text) => find.descendant(
+      of: find.byType(SessionPanel),
+      matching: find.text(text),
+    );
+    expect(panelText('Alpha'), findsOneWidget);
+    expect(panelText('Beta'), findsOneWidget);
     // Blank row + the panel's own "New session" button.
     expect(find.text('New session'), findsNWidgets(2));
-    await tester.tap(find.text('Beta'));
+    await tester.tap(panelText('Beta'));
     await tester.pump();
     expect(actions, contains(const SelectSession('s2')));
   });
@@ -232,6 +238,7 @@ void main() {
       _state(
         sessions: const [
           SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          SessionSummary(id: 's9', title: 'Sigma', blank: false),
         ],
         searchResults: const [
           SessionSearchResult(sessionId: 's9', snippet: '…snippet…'),
@@ -239,11 +246,11 @@ void main() {
       ),
       actions,
     );
-    expect(find.text('Search: …snippet…'), findsOneWidget);
-    await tester.tap(find.text('Search: …snippet…'));
-    await tester.pump();
-    expect(actions, contains(const SelectSession('s9')));
 
+    // The header search toggle opens the capsule; typing dispatches the
+    // host content-search per keystroke (web WorkspaceBrowser).
+    await tester.tap(find.byTooltip('Search sessions'));
+    await tester.pumpAndSettle();
     final searchField = find
         .descendant(
           of: find.byType(SessionPanel),
@@ -252,9 +259,17 @@ void main() {
         .first;
     await tester.enterText(searchField, 'hello');
     await tester.pump();
-    await tester.tap(find.text('Go'));
-    await tester.pump();
     expect(actions.last, const SearchSessions('hello'));
+
+    // While the query is live the flat result list replaces the tree:
+    // title, workspace label, and the content snippet.
+    expect(find.text('Sigma'), findsOneWidget);
+    expect(find.text('…snippet…'), findsOneWidget);
+    expect(find.text('Alpha'), findsNothing);
+
+    await tester.tap(find.text('Sigma'));
+    await tester.pump();
+    expect(actions, contains(const SelectSession('s9')));
   });
 
   testWidgets('app bar shows session title, connection subtitle, actions', (
@@ -804,42 +819,46 @@ void main() {
     await tester.tap(find.byTooltip('Commands'));
     await tester.pumpAndSettle();
 
-    // Web PopupSelectView form: search field, pinned attach row, and the
-    // slash command rows (label carries the /name literal).
+    // Web slash-menu form: search field, the host command roster (real
+    // commands, not just skills), then skills, with the mobile-only
+    // attach row demoted to the tail.
     final searchField = find.byWidgetPredicate(
       (widget) =>
           widget is TextField &&
           widget.decoration?.hintText == 'Search commands',
     );
     expect(searchField, findsOneWidget);
-    expect(find.text('Attach images'), findsOneWidget);
-    expect(find.text('Pick from gallery'), findsOneWidget);
+    expect(find.text('/plan'), findsOneWidget);
+    expect(find.text('/goal'), findsOneWidget);
+    expect(find.text('/compact'), findsOneWidget);
+    expect(find.text('/permission'), findsOneWidget);
+    expect(find.text('/feedback'), findsOneWidget);
     expect(find.text('/review'), findsOneWidget);
     expect(find.text('/rust'), findsOneWidget);
+    expect(find.text('Attach images'), findsOneWidget);
+    expect(find.text('Pick from gallery'), findsOneWidget);
 
     // Typing filters the roster locally (web search input).
     await tester.enterText(searchField, 'rust');
     await tester.pump();
     expect(find.text('/review'), findsNothing);
+    expect(find.text('/plan'), findsNothing);
     expect(find.text('/rust'), findsOneWidget);
     await tester.enterText(searchField, '');
     await tester.pump();
 
-    await tester.tap(find.text('/review'));
+    // Picking a host command lands the literal text like a skill does.
+    await tester.tap(find.text('/plan'));
     await tester.pumpAndSettle();
     expect(find.text('Attach images'), findsNothing);
 
-    // The draft now carries the literal command text.
     final composerField = find
         .descendant(
           of: find.byType(ComposerBar),
           matching: find.byType(TextField),
         )
         .first;
-    expect(
-      tester.widget<TextField>(composerField).controller?.text,
-      '/review ',
-    );
+    expect(tester.widget<TextField>(composerField).controller?.text, '/plan ');
   });
 
   testWidgets('composer model seat shows the current model and menu', (
@@ -1259,13 +1278,13 @@ void main() {
       );
 
       // No stacked 160px strip: the panel content is offstage in the drawer.
-      expect(find.text('Search sessions'), findsNothing);
+      expect(find.byTooltip('Search sessions'), findsNothing);
       expect(find.text('DeepSeek Harness'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Open navigation menu'));
       await tester.pumpAndSettle();
       expect(find.text('New session'), findsOneWidget);
-      expect(find.text('Search sessions'), findsOneWidget);
+      expect(find.byTooltip('Search sessions'), findsOneWidget);
       expect(find.text('Alpha'), findsOneWidget);
     });
 
@@ -1291,7 +1310,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(actions, contains(const SelectSession('s2')));
-      expect(find.text('Search sessions'), findsNothing); // drawer closed
+      expect(find.byTooltip('Search sessions'), findsNothing); // drawer closed
     });
 
     testWidgets('rail collapse shrinks the pane, not the chat', (tester) async {
@@ -1309,14 +1328,22 @@ void main() {
 
       final chatFinder = find.byType(ChatPanel);
       final wideWidth = tester.getSize(chatFinder).width;
-      expect(find.text('Search sessions'), findsOneWidget);
+      expect(find.byTooltip('Search sessions'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Collapse sidebar'));
       await tester.pumpAndSettle();
 
       // The pane really gives its width back to the chat column.
       expect(tester.getSize(chatFinder).width, greaterThan(wideWidth + 200));
-      expect(find.text('Search sessions'), findsNothing);
+      // The rail keeps a search entry but no capsule field.
+      expect(find.byTooltip('Search sessions'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SessionPanel),
+          matching: find.byType(TextField),
+        ),
+        findsNothing,
+      );
       // Rail still offers session shortcuts.
       expect(find.byTooltip('Alpha'), findsOneWidget);
 
@@ -1339,7 +1366,7 @@ void main() {
         ),
         actions,
       );
-      expect(find.text('Search sessions'), findsOneWidget);
+      expect(find.byTooltip('Search sessions'), findsOneWidget);
       expect(find.byTooltip('Open navigation menu'), findsNothing);
     });
   });

@@ -84,9 +84,9 @@ void main() {
     expect(navIcon(Icons.folder_outlined), findsOneWidget);
     expect(navIcon(Icons.settings_outlined), findsOneWidget);
 
-    // Initial tab is chat: session panel surface.
+    // Initial tab is chat: session panel surface (search rides its toggle).
     expect(find.text('New session'), findsOneWidget);
-    expect(find.text('Search sessions'), findsOneWidget);
+    expect(find.byTooltip('Search sessions'), findsOneWidget);
   });
 
   testWidgets('workspaces tab lists its management surface', (tester) async {

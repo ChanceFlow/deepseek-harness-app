@@ -19,17 +19,18 @@ import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
-import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'circle_button.dart';
+import 'command_roster.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'model_select.dart';
+import 'session_panel.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,7 +41,6 @@ import 'approval_panel.dart';
 import '../goal/goal_screen.dart';
 import '../subagents/subagent_screen.dart';
 
-import 'brand_wordmark.dart';
 import 'context_ring.dart';
 import 'stats_line.dart';
 import 'empty_hero.dart';
@@ -48,8 +48,12 @@ import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import '../theme/deepsuite_extension.dart'
-    show DeepSuiteColors, dsOf, kDsShadowLv2, kDsShadowLv3;
+    show dsOf, kDsShadowLv2, kDsShadowLv3;
 import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
+
+// The sidebar widget lives in session_panel.dart; re-exported so existing
+// importers of this library keep resolving `SessionPanel` unchanged.
+export 'session_panel.dart';
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -323,353 +327,6 @@ class ConnectionBanner extends StatelessWidget {
               ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
-    );
-  }
-}
-
-class SessionPanel extends StatefulWidget {
-  const SessionPanel({
-    super.key,
-    this.inDrawer = false,
-    required this.sessions,
-    required this.workspaces,
-    required this.searchResults,
-    required this.selectedSessionId,
-    required this.onSelectSession,
-    required this.onCreateSession,
-    required this.onSearchSessions,
-    this.onRailChanged,
-  });
-
-  /// Drawer form: no rail toggle, full-height fill.
-  final bool inDrawer;
-
-  /// Notifies the host pane when the icon-rail state flips (wide panes).
-  final void Function(bool rail)? onRailChanged;
-
-  final List<SessionSummary> sessions;
-  final List<WorkspaceSummary> workspaces;
-  final List<SessionSearchResult> searchResults;
-  final String? selectedSessionId;
-  final void Function(String sessionId) onSelectSession;
-  final void Function(String? workspaceId) onCreateSession;
-  final void Function(String query) onSearchSessions;
-
-  @override
-  State<SessionPanel> createState() => _SessionPanelState();
-}
-
-class _SessionPanelState extends State<SessionPanel> {
-  final TextEditingController _queryController = TextEditingController();
-  bool _collapsedToRail = false;
-
-  @override
-  void dispose() {
-    _queryController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _showNewSessionDialog() {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => _NewSessionDialog(
-        workspaces: widget.workspaces,
-        onCreateSession: widget.onCreateSession,
-      ),
-    );
-  }
-
-  /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
-  /// toggle collapses to the icon rail.
-  Widget _buildBrandRow(BuildContext context, DeepSuiteColors ds) {
-    final rail = !widget.inDrawer && _collapsedToRail;
-    return SizedBox(
-      height: 60,
-      child: Row(
-        children: [
-          if (!rail)
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: () => widget.onCreateSession(null),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: BrandWordmark(height: 22),
-                  ),
-                ),
-              ),
-            ),
-          if (!rail) const SizedBox(width: 8),
-          if (!widget.inDrawer)
-            IconButton(
-              tooltip: rail ? 'Open sidebar' : 'Collapse sidebar',
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-              padding: EdgeInsets.zero,
-              onPressed: () {
-                setState(() => _collapsedToRail = !rail);
-                widget.onRailChanged?.call(_collapsedToRail);
-              },
-              icon: Icon(
-                rail ? Icons.menu : Icons.view_sidebar_outlined,
-                size: rail ? 22 : 16,
-                color: ds.labelSecondary,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label.
-  Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
-    final rail = !widget.inDrawer && _collapsedToRail;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(rail ? 0 : 2, 0, rail ? 0 : 2, 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(rail ? 18 : 12),
-        onTap: _showNewSessionDialog,
-        child: Container(
-          height: 38,
-          width: rail ? 38 : double.infinity,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: ds.borderL2),
-            borderRadius: BorderRadius.circular(rail ? 18 : 12),
-            color: ds.buttonElevatedFill,
-          ),
-          child: rail
-              ? Icon(
-                  Icons.chat_bubble_outline,
-                  size: 18,
-                  color: ds.labelSecondary,
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      size: 14,
-                      color: ds.labelSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'New session',
-                      style: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ds = dsOf(context);
-    final rail = !widget.inDrawer && _collapsedToRail;
-    return AnimatedContainer(
-      duration: kDsDuration,
-      curve: Curves.easeInOut,
-      width: rail ? 56 : null,
-      color: ds.sidebarFill,
-      child: Material(
-        color: Colors.transparent,
-        child: Padding(
-          padding: EdgeInsets.all(rail ? 4 : 8),
-          child: Column(
-            children: [
-              _buildBrandRow(context, ds),
-              _buildNewSessionButton(context, ds),
-              if (rail)
-                Expanded(
-                  child: ListView(
-                    children: [
-                      for (final session in widget.sessions)
-                        IconButton(
-                          tooltip: session.displayTitle,
-                          onPressed: () => widget.onSelectSession(session.id),
-                          icon: CircleAvatar(
-                            radius: 14,
-                            backgroundColor:
-                                session.id == widget.selectedSessionId
-                                ? ds.sidebarNavItemActive
-                                : ds.sidebarNavItemHover,
-                            child: Text(
-                              session.displayTitle.substring(0, 1),
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: ds.labelSecondary),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                )
-              else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _queryController,
-                        decoration: const InputDecoration(
-                          hintText: 'Search sessions',
-                          isDense: true,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                        onSubmitted: widget.onSearchSessions,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: FilledButton(
-                        onPressed: _queryController.text.trim().isEmpty
-                            ? null
-                            : () => widget.onSearchSessions(
-                                _queryController.text,
-                              ),
-                        child: const Text('Go'),
-                      ),
-                    ),
-                  ],
-                ),
-                for (final result in widget.searchResults)
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () => widget.onSelectSession(result.sessionId),
-                      child: Text(
-                        'Search: ${result.snippet}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: widget.sessions.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 6),
-                    itemBuilder: (context, index) {
-                      final session = widget.sessions[index];
-                      final selected = session.id == widget.selectedSessionId;
-                      final displayTitle = session.blank
-                          ? 'New session'
-                          : session.displayTitle;
-                      final status = !session.blank && session.running
-                          ? ' ●'
-                          : '';
-                      // Web sidebar nav-item: active fill + brand-accent edge.
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: selected ? ds.sidebarNavItemActive : null,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(6),
-                          onTap: selected
-                              ? null
-                              : () => widget.onSelectSession(session.id),
-                          child: IntrinsicHeight(
-                            child: Row(
-                              children: [
-                                if (selected)
-                                  VerticalDivider(
-                                    thickness: 3,
-                                    width: 3,
-                                    color: ds.sidebarNavItemActiveAccent,
-                                  ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 10,
-                                    ),
-                                    child: Text(
-                                      displayTitle + status,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NewSessionDialog extends StatelessWidget {
-  const _NewSessionDialog({
-    required this.workspaces,
-    required this.onCreateSession,
-  });
-
-  final List<WorkspaceSummary> workspaces;
-  final void Function(String? workspaceId) onCreateSession;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('New session'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (workspaces.isEmpty) ...[
-            const Text('No workspaces registered.'),
-            Text(
-              'Use the Workspaces tab to register a directory first, '
-              'or choose Default to create an unaccounted session.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ] else ...[
-            Text(
-              'Choose a workspace or keep the default.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            for (final workspace in workspaces)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () {
-                    onCreateSession(workspace.workspaceId);
-                    Navigator.of(context).pop();
-                  },
-                  child: Text(
-                    '${workspace.title} — ${workspace.path}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-          ],
-        ],
-      ),
-      actions: [
-        OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            onCreateSession(null);
-            Navigator.of(context).pop();
-          },
-          child: const Text('Default'),
-        ),
-      ],
     );
   }
 }
@@ -2636,10 +2293,11 @@ class PopupMenuEntryShim extends StatelessWidget {
 }
 
 /// The composer's ➕ — web form (InputBar `.add`): a 28px circle on the
-/// selector fill with a 14px plus glyph, opening the command menu. Mobile
-/// form of the web PopupSelectView: a menu-surface bottom sheet with a
-/// search field and command rows, plus a pinned Attach-images row (web
-/// relies on paste/drop, which mobile keyboards cannot do).
+/// selector fill with a 14px plus glyph. It opens the slash-command menu
+/// (web `toggleCommandMenu` seeds the '/' trigger with an empty query):
+/// a menu-surface bottom sheet listing the host command roster and the
+/// session's skills, with the mobile-only Attach-images row at the tail
+/// (web relies on paste/drop, which mobile keyboards cannot do).
 class _PlusButton extends StatelessWidget {
   const _PlusButton({
     required this.enabled,
@@ -2708,7 +2366,10 @@ class _PlusButton extends StatelessWidget {
 
 /// Web PopupSelectView body: search input on top, filtered option rows
 /// below (13px label-primary + 12px label-tertiary detail, check mark on
-/// the active row), status line when empty.
+/// the active row), status line when empty. The roster is the real
+/// command set — host slash commands first (web slash-menu sources),
+/// then the session's skills — with the mobile-only Attach-images row
+/// demoted to the tail (web relies on paste/drop).
 class _CommandSheet extends StatefulWidget {
   const _CommandSheet({
     required this.canPickImages,
@@ -2733,19 +2394,23 @@ class _CommandSheetState extends State<_CommandSheet> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final query = _search.trim().toLowerCase();
-    final rows = widget.skills
-        .where(
-          (skill) =>
-              query.isEmpty ||
-              skill.name.toLowerCase().contains(query) ||
-              skill.description.toLowerCase().contains(query),
-        )
+    bool matches(String label, String detail) =>
+        query.isEmpty ||
+        label.toLowerCase().contains(query) ||
+        detail.toLowerCase().contains(query);
+    final commands = kHostCommands
+        .where((command) => matches(command.name, command.description))
         .toList();
+    final skills = widget.skills
+        .where((skill) => matches(skill.name, skill.description))
+        .toList();
+    final showAttach = query.isEmpty || 'attach images'.contains(query);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // The web search box (PopupSelectView .search).
+        // The web search box (PopupSelectView .search): hairline border,
+        // no focus accent — focus never repaints it.
         Padding(
           padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
           child: TextField(
@@ -2765,7 +2430,7 @@ class _CommandSheetState extends State<_CommandSheet> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: ds.accent),
+                borderSide: BorderSide(color: ds.borderInverted),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 8,
@@ -2774,15 +2439,8 @@ class _CommandSheetState extends State<_CommandSheet> {
             ),
           ),
         ),
-        // Mobile-only pinned row: image intake (web uses paste/drop).
-        _CommandRow(
-          label: 'Attach images',
-          detail: 'Pick from gallery',
-          enabled: widget.canPickImages,
-          onTap: widget.onPickImagesNow,
-        ),
         Flexible(
-          child: rows.isEmpty
+          child: (commands.isEmpty && skills.isEmpty && !showAttach)
               ? Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -2795,19 +2453,33 @@ class _CommandSheetState extends State<_CommandSheet> {
                         ?.copyWith(color: ds.labelTertiary),
                   ),
                 )
-              : ListView.builder(
+              : ListView(
                   shrinkWrap: true,
-                  itemCount: rows.length,
-                  itemBuilder: (context, index) {
-                    final skill = rows[index];
-                    return _CommandRow(
-                      label: '/${skill.name}',
-                      detail: skill.description.isEmpty
-                          ? null
-                          : skill.description,
-                      onTap: () => widget.onInsertCommand(skill.name),
-                    );
-                  },
+                  children: [
+                    for (final command in commands)
+                      _CommandRow(
+                        label: '/${command.name}',
+                        detail: command.hint ?? command.description,
+                        onTap: () => widget.onInsertCommand(command.name),
+                      ),
+                    for (final skill in skills)
+                      _CommandRow(
+                        label: '/${skill.name}',
+                        detail: skill.description.isEmpty
+                            ? null
+                            : skill.description,
+                        onTap: () => widget.onInsertCommand(skill.name),
+                      ),
+                    // Mobile-only tail row: image intake (web uses
+                    // paste/drop) — demoted below the command roster.
+                    if (showAttach)
+                      _CommandRow(
+                        label: 'Attach images',
+                        detail: 'Pick from gallery',
+                        enabled: widget.canPickImages,
+                        onTap: widget.onPickImagesNow,
+                      ),
+                  ],
                 ),
         ),
       ],
@@ -2875,9 +2547,11 @@ class _CommandRow extends StatelessWidget {
   }
 }
 
-/// Web primary control (InputBar `.primary`): a 34px circle on the
-/// button-info fill carrying a static-white glyph — the up arrow while
-/// idle, the stop square while the turn runs.
+/// Primary control, commercial-app form: a 34px circle that stays NEUTRAL
+/// (selector fill, tertiary glyph) while the draft is empty — no idle
+/// blue — and takes the info fill with a static-white glyph only when
+/// actionable: the up arrow while sendable, the stop square while the
+/// turn runs.
 class _PrimarySendButton extends StatelessWidget {
   const _PrimarySendButton({
     required this.running,
@@ -2899,6 +2573,8 @@ class _PrimarySendButton extends StatelessWidget {
     final active = running
         ? onStop != null
         : enabled && !sending && onSend != null;
+    final fill = active ? ds.buttonInfoFill : ds.specificSelector;
+    final glyph = active ? Colors.white : ds.labelTertiary;
     return Tooltip(
       message: running
           ? 'Stop'
@@ -2911,33 +2587,23 @@ class _PrimarySendButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: active ? (running ? onStop : onSend) : null,
-          child: Opacity(
-            opacity: active ? 1 : 0.4,
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: ds.buttonInfoFill,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: running
-                  // Web stop glyph: 10x10 rounded-3 square, static white.
-                  ? Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    )
-                  // Web send glyph: the 16px up-arrow path, static white.
-                  : const Icon(
-                      Icons.arrow_upward,
-                      size: 16,
-                      color: Colors.white,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: running
+                // Stop glyph: 10x10 rounded-3 square.
+                ? Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: glyph,
+                      borderRadius: BorderRadius.circular(3),
                     ),
-            ),
+                  )
+                // Send glyph: the 16px up arrow.
+                : Icon(Icons.arrow_upward, size: 16, color: glyph),
           ),
         ),
       ),

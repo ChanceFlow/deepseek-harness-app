@@ -473,11 +473,22 @@ class HarnessRepositoryImpl implements ChatRepository {
           ],
         };
     }
-    await _call(_sessionUpdateQueue, _sessionUpdateQueue, {
-      'sessionId': request.sessionId,
-      'itemId': request.itemId,
-      'action': action,
-    }).valueOrThrow();
+    try {
+      await _call(_sessionUpdateQueue, _sessionUpdateQueue, {
+        'sessionId': request.sessionId,
+        'itemId': request.itemId,
+        'action': action,
+      }).valueOrThrow();
+    } on DshBusinessException catch (error) {
+      // Web parity (input hub): a turn closing mid-steer or a row already
+      // settled is a benign race — the queue projection refreshes the dock,
+      // so the failure never reaches the error surface.
+      if (error.code == 'steer-unavailable' ||
+          error.code == 'queue-item-not-found') {
+        return;
+      }
+      rethrow;
+    }
   }
 
   @override
