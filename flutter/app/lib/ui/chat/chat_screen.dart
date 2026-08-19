@@ -47,6 +47,7 @@ import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
+import 'tool_row_model.dart';
 import '../theme/deepsuite_extension.dart'
     show dsOf, kDsShadowLv2, kDsShadowLv3;
 import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
@@ -1154,29 +1155,15 @@ class _ToolCallRowState extends State<ToolCallRow>
     super.dispose();
   }
 
-  String get _summary {
-    final call = widget.call;
-    // An error row's collapsed summary IS the failure's first line.
-    if (call.isError || call.status == ToolRunStatus.failed) {
-      return _firstLine(call.result ?? call.arguments ?? '');
-    }
-    return _firstLine(call.result ?? call.arguments ?? '');
-  }
-
-  static String _firstLine(String text) {
-    final newline = text.indexOf('\n');
-    return newline == -1 ? text : text.substring(0, newline);
-  }
-
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
     final call = widget.call;
-    final running = call.status == ToolRunStatus.running;
-    final failed = call.status == ToolRunStatus.failed || call.isError;
-    final hasDetails =
-        (call.arguments ?? '').isNotEmpty || (call.result ?? '').isNotEmpty;
+    final model = deriveToolRowModel(call);
+    final running = model.state == ToolRowState.running;
+    final failed = model.state == ToolRowState.error;
+    final hasDetails = model.body != null || model.output != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1202,7 +1189,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                     children: [
                       _leading(context, failed),
                       const SizedBox(width: 6),
-                      Text(call.name, style: theme.textTheme.bodyMedium),
+                      Text(model.title, style: theme.textTheme.bodyMedium),
                       Container(
                         width: 2,
                         height: 2,
@@ -1214,11 +1201,17 @@ class _ToolCallRowState extends State<ToolCallRow>
                       ),
                       Expanded(
                         child: Text(
-                          _summary,
+                          // Web ToolRow: the summary is args-derived; the
+                          // settled result text never reaches this slot.
+                          failed && model.errorSummary != null
+                              ? model.errorSummary!
+                              : model.summary,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: ds.labelTertiary,
+                            color: failed
+                                ? theme.colorScheme.error
+                                : ds.labelTertiary,
                           ),
                         ),
                       ),
@@ -1249,16 +1242,16 @@ class _ToolCallRowState extends State<ToolCallRow>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (call.arguments case final String arguments)
+                if (model.body case final body?)
                   Text(
-                    arguments,
+                    body,
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontFamily: kFontFamilyMonospace,
                     ),
                   ),
-                if (call.result case final String result)
+                if (model.output case final output?)
                   Text(
-                    result,
+                    output,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: failed ? theme.colorScheme.error : null,
                       fontFamily: kFontFamilyMonospace,
