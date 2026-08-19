@@ -1363,6 +1363,19 @@ class GoalBarStrip extends StatelessWidget {
                 color: ds.labelSecondary,
               ),
             ),
+            // Web GoalBar ships the trash action beside pause/resume —
+            // deleting works from any phase (`/goal clear` semantics).
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 14,
+              tooltip: 'Clear goal',
+              onPressed: () => onAction(const ClearGoal()),
+              icon: Icon(
+                Icons.delete_outline,
+                size: 14,
+                color: ds.labelSecondary,
+              ),
+            ),
             if (onOpen != null)
               IconButton(
                 visualDensity: VisualDensity.compact,

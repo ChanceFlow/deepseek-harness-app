@@ -346,6 +346,18 @@ final class ToggleGoalPause extends ChatAction {
   int get hashCode => 'toggle-goal-pause'.hashCode;
 }
 
+/// GoalBar clear (composer dock strip): deletes the goal from any phase
+/// (web GoalBar ships the trash action beside pause/resume).
+final class ClearGoal extends ChatAction {
+  const ClearGoal();
+
+  @override
+  bool operator ==(Object other) => other is ClearGoal;
+
+  @override
+  int get hashCode => 'clear-goal-chat'.hashCode;
+}
+
 /// Picker/read failures surface in the shared error strip.
 final class ImagePickError extends ChatAction {
   const ImagePickError(this.message);

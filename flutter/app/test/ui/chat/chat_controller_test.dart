@@ -820,6 +820,60 @@ void main() {
     expect(repository.sentTexts, ['hello']);
   });
 
+  test('/goal control words execute as host commands, never create', () async {
+    final repository = _GoalRecordingRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    // clear/pause/resume/edit are the command's own grammar (web
+    // parseGoalCommand) — they fall through to the prompt channel.
+    for (final text in [
+      '/goal clear',
+      '/goal pause',
+      '/goal resume',
+      '/goal edit fix bugs first',
+    ]) {
+      controller.onAction(SendPrompt(text));
+      await pumpEventQueue();
+    }
+    expect(repository.createdGoals, isEmpty);
+    expect(repository.sentTexts, [
+      '/goal clear',
+      '/goal pause',
+      '/goal resume',
+      '/goal edit fix bugs first',
+    ]);
+  });
+
+  test('ClearGoal deletes the goal from any phase', () async {
+    final repository = _GoalRecordingRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    repository.goal.value = const GoalProjection(
+      goal: GoalSnapshot(
+        id: 'g1',
+        revision: 3,
+        objective: 'Ship it',
+        phase: GoalPhase.active,
+        maxGoalRounds: 10,
+      ),
+      roundsStarted: 1,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    await pumpEventQueue();
+
+    controller.onAction(const ClearGoal());
+    await pumpEventQueue();
+    expect(repository.clearedRefs, [isNotNull]);
+  });
+
   test(
     'ToggleGoalPause pauses an active goal and resumes a held one',
     () async {
@@ -926,6 +980,7 @@ class _GoalRecordingRepository extends FakeChatRepository {
   final sentTexts = <String>[];
   final pausedRefs = <GoalRef>[];
   final resumedRefs = <GoalRef>[];
+  final clearedRefs = <GoalRef?>[];
   final AppStateStream<GoalProjection?> goal = AppStateStream<GoalProjection?>(
     null,
   );
@@ -953,6 +1008,11 @@ class _GoalRecordingRepository extends FakeChatRepository {
   Future<GoalRef> resumeGoal(String sessionId, GoalRef ref) async {
     resumedRefs.add(ref);
     return ref;
+  }
+
+  @override
+  Future<void> clearGoal(String sessionId, GoalRef ref) async {
+    clearedRefs.add(ref);
   }
 
   @override

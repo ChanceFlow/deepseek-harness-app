@@ -749,6 +749,13 @@ void main() {
     await tester.tap(find.byTooltip('Pause goal'));
     await tester.pump();
     expect(actions, contains(const ToggleGoalPause()));
+
+    // Web GoalBar ships the trash action beside pause/resume: clearing
+    // works from any phase.
+    expect(find.byTooltip('Clear goal'), findsOneWidget);
+    await tester.tap(find.byTooltip('Clear goal'));
+    await tester.pump();
+    expect(actions, contains(const ClearGoal()));
   });
 
   testWidgets('jobs pill opens the ordered sheet with durations', (

@@ -240,6 +240,8 @@ class ChatController {
         _selectModel(action.selection);
       case ToggleGoalPause():
         _toggleGoalPause();
+      case ClearGoal():
+        _clearGoal();
       case ImagePickError():
         _errorMessage = action.message;
         _publish();
@@ -368,14 +370,24 @@ class ChatController {
     final images = _pendingImages;
     if (action.text.trim().isEmpty && images.isEmpty) return;
     // Web GoalCommandInput parity: `/goal <objective>` creates the goal
-    // instead of riding the prompt.
+    // instead of riding the prompt. Control words (clear/pause/resume,
+    // edit) are the host command's own grammar — they fall through and
+    // execute as ordinary slash commands.
     final command = RegExp(
-      r'^/goal\s+(.+)$',
+      r'^/goal(?:\s+(.+))?$',
       caseSensitive: false,
     ).firstMatch(action.text.trim());
     if (command != null) {
-      final objective = command.group(1)!.trim();
-      if (objective.isNotEmpty) {
+      final objective = command.group(1)?.trim() ?? '';
+      final control = objective.toLowerCase();
+      final isControlWord =
+          objective.isEmpty ||
+          control == 'clear' ||
+          control == 'pause' ||
+          control == 'resume' ||
+          control == 'show' ||
+          control.startsWith('edit');
+      if (objective.isNotEmpty && !isControlWord) {
         unawaited(
           _runCatchingForUi(() => _repository.createGoal(sessionId, objective)),
         );
@@ -547,6 +559,17 @@ class ChatController {
             : _repository.resumeGoal(sessionId, ref),
       ),
     );
+  }
+
+  /// GoalBar strip action: delete the goal from any phase (web GoalBar
+  /// clear — `/goal clear` semantics).
+  void _clearGoal() {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    final goal = _goal?.goal;
+    if (goal == null) return;
+    final ref = GoalRef(id: goal.id, revision: goal.revision);
+    unawaited(_runCatchingForUi(() => _repository.clearGoal(sessionId, ref)));
   }
 
   void _cancelTurn() {

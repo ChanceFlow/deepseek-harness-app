@@ -219,6 +219,16 @@ class _GoalScreenState extends State<GoalScreen> {
                   child: const Text('Edit'),
                 ),
               ),
+            // Deleting works from any phase (web GoalBar trash /
+            // `/goal clear` semantics) — not only off a completed goal.
+            if (snapshot.phase != GoalPhase.complete)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: OutlinedButton(
+                  onPressed: () => widget.onAction(const ClearGoalAction()),
+                  child: const Text('Clear'),
+                ),
+              ),
           ],
         ),
       ];
