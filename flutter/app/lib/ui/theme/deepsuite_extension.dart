@@ -25,6 +25,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.labelSecondary,
     required this.labelTertiary,
     required this.labelCaption,
+    required this.inputMajor,
+    required this.borderThin,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -49,6 +51,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color labelTertiary;
   final Color labelCaption;
 
+  /// Composer card surface + its one-notch-weaker stroke.
+  final Color inputMajor;
+  final Color borderThin;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
         bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -65,6 +71,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         labelSecondary: DeepSuiteLight.aliasLabelSecondary,
         labelTertiary: DeepSuiteLight.aliasLabelTertiary,
         labelCaption: DeepSuiteLight.aliasLabelCaption,
+        inputMajor: DeepSuiteLight.specificInputMajor,
+        borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -82,6 +90,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         labelSecondary: DeepSuiteDark.aliasLabelSecondary,
         labelTertiary: DeepSuiteDark.aliasLabelTertiary,
         labelCaption: DeepSuiteDark.aliasLabelCaption,
+        inputMajor: DeepSuiteDark.specificInputMajor,
+        borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
       );
 
   @override
@@ -99,6 +109,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? labelSecondary,
     Color? labelTertiary,
     Color? labelCaption,
+    Color? inputMajor,
+    Color? borderThin,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -115,6 +127,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: labelSecondary ?? this.labelSecondary,
       labelTertiary: labelTertiary ?? this.labelTertiary,
       labelCaption: labelCaption ?? this.labelCaption,
+      inputMajor: inputMajor ?? this.inputMajor,
+      borderThin: borderThin ?? this.borderThin,
     );
   }
 
@@ -138,9 +152,17 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: Color.lerp(labelSecondary, other.labelSecondary, t)!,
       labelTertiary: Color.lerp(labelTertiary, other.labelTertiary, t)!,
       labelCaption: Color.lerp(labelCaption, other.labelCaption, t)!,
+      inputMajor: Color.lerp(inputMajor, other.inputMajor, t)!,
+      borderThin: Color.lerp(borderThin, other.borderThin, t)!,
     );
   }
 }
+
+/// `--dsw-shadow-lv2` (gradient-shadow-text.css): two soft layers.
+const List<BoxShadow> kDsShadowLv2 = [
+  BoxShadow(offset: Offset(0, 4), blurRadius: 12, color: Color(0x05000000)),
+  BoxShadow(offset: Offset(0, 2), blurRadius: 8, color: Color(0x0A000000)),
+];
 
 /// Resolves the deepsuite extension from any context; falls back to the
 /// light tokens when the host MaterialApp skipped `DshTheme` (tests).

@@ -28,7 +28,7 @@ import 'markdown/markdown_text.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'timeline_grouping.dart';
-import '../theme/deepsuite_extension.dart' show dsOf;
+import '../theme/deepsuite_extension.dart' show dsOf, kDsShadowLv2;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -578,6 +578,9 @@ class _ChatPanelState extends State<ChatPanel> {
             children: [
               Expanded(
                 child: ComposerBar(
+                  onStop: selectedSessionId == null
+                      ? null
+                      : () => widget.onAction(const CancelTurnAction()),
                   enabled: selectedSessionId != null && !uiState.isSending,
                   isSending: uiState.isSending,
                   running: isSessionRunning,
@@ -593,15 +596,6 @@ class _ChatPanelState extends State<ChatPanel> {
                       mode: isSessionRunning ? _promptMode : PromptMode.queue,
                     ),
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: FilledButton(
-                  onPressed: selectedSessionId == null
-                      ? null
-                      : () => widget.onAction(const CancelTurnAction()),
-                  child: const Text('Stop'),
                 ),
               ),
             ],
@@ -1443,6 +1437,7 @@ class ComposerBar extends StatefulWidget {
     required this.skills,
     required this.onAction,
     required this.onSend,
+    this.onStop,
   });
 
   final bool enabled;
@@ -1455,6 +1450,7 @@ class ComposerBar extends StatefulWidget {
   final List<SkillEntry> skills;
   final void Function(ChatAction) onAction;
   final void Function(String text) onSend;
+  final VoidCallback? onStop;
 
   @override
   State<ComposerBar> createState() => _ComposerBarState();
@@ -1506,107 +1502,125 @@ class _ComposerBarState extends State<ComposerBar> {
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
-    return Column(
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(
-                'Delivery',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ),
-            ModeChip(
-              label: 'Queue',
-              selected: effectiveMode == PromptMode.queue,
-              enabled: widget.enabled,
-              onClick: () => widget.onModeChange(PromptMode.queue),
-            ),
-            ModeChip(
-              label: 'Steer',
-              selected: effectiveMode == PromptMode.steer,
-              enabled: widget.enabled && widget.running,
-              onClick: () => widget.onModeChange(PromptMode.steer),
-            ),
-          ],
-        ),
-        if (widget.pendingImages.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  for (final image in widget.pendingImages)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          PendingImageThumbnail(image: image),
-                          Text(
-                            image.name ?? image.id.split('/').last,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () =>
-                                widget.onAction(RemovePendingImage(image.id)),
-                            icon: const Icon(Icons.close, size: 16),
-                            tooltip: 'Remove ${image.name ?? "attachment"}',
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+    // figma Input 75:8208 — floating capsule card: textarea on top, action
+    // row below, primary actions bottom-right.
+    final ds = dsOf(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
+      decoration: BoxDecoration(
+        color: ds.inputMajor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ds.borderThin),
+        boxShadow: kDsShadowLv2,
+      ),
+      child: Column(
+        children: [
+          TextField(
+            controller: _draftController,
+            enabled: widget.enabled,
+            minLines: 1,
+            maxLines: 5,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: _send,
+            decoration: InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              hintText: effectiveMode == PromptMode.steer
+                  ? 'Steer the running turn'
+                  : 'Message DeepSeek Harness',
             ),
           ),
-        SlashSkillCandidates(
-          draft: _draftController.text,
-          skills: widget.skills,
-          enabled: widget.enabled,
-          onPick: (name) {
-            _draftController.text = '/$name ';
-            setState(() {});
-          },
-        ),
-        Row(
-          children: [
-            IconButton(
-              onPressed: attachAllowed ? _pickImages : null,
-              icon: const Icon(Icons.add),
-              tooltip: 'Attach images',
-            ),
-            Expanded(
-              child: TextField(
-                controller: _draftController,
-                enabled: widget.enabled,
-                onChanged: (_) => setState(() {}),
-                onSubmitted: _send,
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: effectiveMode == PromptMode.steer
-                      ? 'Steer the running turn'
-                      : 'Message DeepSeek Harness',
+          if (widget.pendingImages.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final image in widget.pendingImages)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            PendingImageThumbnail(image: image),
+                            Text(
+                              image.name ?? image.id.split('/').last,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () =>
+                                  widget.onAction(RemovePendingImage(image.id)),
+                              icon: const Icon(Icons.close, size: 16),
+                              tooltip: 'Remove ${image.name ?? "attachment"}',
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: FilledButton(
-                onPressed: widget.enabled && !widget.isSending && _canSend()
-                    ? _send
-                    : null,
-                child: Text(widget.isSending ? 'Sending' : 'Send'),
+          SlashSkillCandidates(
+            draft: _draftController.text,
+            skills: widget.skills,
+            enabled: widget.enabled,
+            onPick: (name) {
+              _draftController.text = '/$name ';
+              setState(() {});
+            },
+          ),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  'Delivery',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+              ModeChip(
+                label: 'Queue',
+                selected: effectiveMode == PromptMode.queue,
+                enabled: widget.enabled,
+                onClick: () => widget.onModeChange(PromptMode.queue),
+              ),
+              ModeChip(
+                label: 'Steer',
+                selected: effectiveMode == PromptMode.steer,
+                enabled: widget.enabled && widget.running,
+                onClick: () => widget.onModeChange(PromptMode.steer),
+              ),
+              IconButton(
+                onPressed: attachAllowed ? _pickImages : null,
+                icon: const Icon(Icons.add),
+                tooltip: 'Attach images',
+              ),
+              if (widget.onStop != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: FilledButton(
+                    onPressed: widget.enabled ? widget.onStop : null,
+                    child: const Text('Stop'),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: FilledButton(
+                  onPressed: widget.enabled && !widget.isSending && _canSend()
+                      ? _send
+                      : null,
+                  child: Text(widget.isSending ? 'Sending' : 'Send'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

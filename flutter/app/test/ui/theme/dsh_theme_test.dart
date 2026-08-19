@@ -35,10 +35,8 @@ void main() {
   });
 
   test('DeepSeek-blue accent rides the secondary role per theme', () {
-    expect(DshTheme.light().colorScheme.secondary,
-        DeepSuiteStatic.deepseek500);
-    expect(DshTheme.dark().colorScheme.secondary,
-        DeepSuiteStatic.deepseek450);
+    expect(DshTheme.light().colorScheme.secondary, DeepSuiteStatic.deepseek500);
+    expect(DshTheme.dark().colorScheme.secondary, DeepSuiteStatic.deepseek450);
   });
 
   test('DeepSuiteColors extension is attached to both themes', () {
@@ -48,7 +46,10 @@ void main() {
     expect(dark, isNotNull);
     expect(light!.sidebarFill, DeepSuiteLight.specificSidebarFill);
     expect(dark!.sidebarFill, DeepSuiteDark.specificSidebarFill);
-    expect(light.sidebarNavItemActive, isNot(equals(dark.sidebarNavItemActive)));
+    expect(
+      light.sidebarNavItemActive,
+      isNot(equals(dark.sidebarNavItemActive)),
+    );
     expect(light.accent, DeepSuiteStatic.deepseek500);
     expect(dark.accent, DeepSuiteStatic.deepseek450);
     expect(light.bgLayer1, isNot(equals(dark.bgLayer1)));
@@ -60,6 +61,16 @@ void main() {
       expect(theme.textTheme.titleMedium?.fontWeight, FontWeight.w500);
       expect(theme.textTheme.titleSmall?.fontWeight, FontWeight.w500);
     }
+  });
+
+  test('composer card tokens ride the extension', () {
+    final light = DshTheme.light().extension<DeepSuiteColors>()!;
+    final dark = DshTheme.dark().extension<DeepSuiteColors>()!;
+    expect(light.inputMajor, DeepSuiteLight.specificInputMajor);
+    expect(dark.inputMajor, DeepSuiteDark.specificInputMajor);
+    expect(light.borderThin, DeepSuiteLight.aliasBorderL2DarkmodeThin);
+    expect(dark.borderThin, DeepSuiteDark.aliasBorderL2DarkmodeThin);
+    expect(kDsShadowLv2, hasLength(2));
   });
 
   test('extension lerp reaches the other theme at t=1', () {
