@@ -1,11 +1,10 @@
 # DeepSeek Harness Android Client Spec
 
-Status: MVP closed on the legacy Kotlin stack; Flutter rewrite in progress
-(see [ADR-0001](adr-0001-flutter-rewrite.md) and [ROADMAP.md](../ROADMAP.md)).
+Status: Flutter rewrite shipped (route A, [ADR-0001](adr-0001-flutter-rewrite.md);
+migration log in [ROADMAP.md](../ROADMAP.md)).
 Target: Flutter client for an already running dsh web backend.
 Related code: `flutter/app/`, `flutter/packages/domain/`,
-`flutter/packages/network/`, `flutter/packages/harness_adapter/`
-(legacy: `app/`, `core/domain/`, `core/network/`, `core/harness-adapter/`).
+`flutter/packages/network/`, `flutter/packages/harness_adapter/`.
 
 ## 1. Goal
 
@@ -22,20 +21,9 @@ anti-corruption layer.
 
 ## 3. Architecture
 
-```text
-app                     Compose UI, ViewModel, Hilt DI
-  -> core:domain        neutral models + repository contract
-  -> core:harness-adapter   anti-corruption layer, dsh translation
-  -> core:network       OkHttp RPC + WebSocket transport
-```
-
-Dependency rules:
-
-- `app` may import `core:domain` and (for DI) the implementation modules.
-- `app` must never import dsh types such as `SessionEvent`, `MuxFrame`, `HostFrame`.
-- `core:domain` has no Android UI and no dsh types.
-- `core:harness-adapter` is the only module allowed to know dsh method names and event shapes.
-- `core:network` knows transport envelopes, HTTP paths, and WebSocket mechanics only.
+Module boundaries and dependency rules are owned by
+[README §Module boundaries](../README.md#module-boundaries) and enforced by
+`scripts/check_dart_imports.py`. The wire contract below is this spec's subject.
 
 ## 4. Wire Contract
 

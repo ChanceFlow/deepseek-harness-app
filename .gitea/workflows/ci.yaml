@@ -1,0 +1,33 @@
+# CI for deepseek-harness-android — runs the exhaustive gate aggregate.
+#
+# Requirements for the runner:
+#   - network access (fetches Flutter 3.47 via subosito/flutter-action and
+#     the reference submodule from this Gitea instance)
+#   - a runner image with Docker/act compatibility for `uses:` actions.
+# Air-gapped runners: replace the flutter step with a prebaked image that
+# has Flutter 3.47 stable and python3, then keep the `verify_all` step.
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with reference submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Flutter 3.47 stable
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.0
+          channel: stable
+          cache: true
+
+      - name: Aggregate gates (analyze, tests, imports, tokens, docs)
+        run: python3 scripts/verify_all.py all

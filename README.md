@@ -92,21 +92,19 @@ source-of-truth contract files.
 
 ## Project skills
 
-This repository ships project-scoped Agent Skills in [`.agents/skills/`](.agents/skills/),
-vendored from [GuillemRoca/agent-skills-android](https://github.com/GuillemRoca/agent-skills-android)
-(MIT). See [`.agents/skills/README.md`](.agents/skills/README.md) for the
-full list and how to refresh them.
+This repository ships project-scoped Agent Skills in [`.agents/skills/`](.agents/skills/):
+the official Flutter/Dart skills vendored from
+[flutter/agent-plugins](https://github.com/flutter/agent-plugins) (BSD-3-Clause),
+plus repo-specific `dsh-*` workflow skills. See
+[`.agents/skills/README.md`](.agents/skills/README.md) for the full list and
+how to refresh them.
 
 ## Development
 
-```sh
-export PATH="$HOME/tools/flutter-3.47.0/bin:$PATH"
-cd flutter
-flutter analyze
-flutter test
-python3 ../scripts/check_dart_imports.py
-flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
-```
+The canonical command list — analyze, tests, the import gate, the design-token
+drift gate, and the aggregate verification gate — lives in
+[AGENTS.md §Commands](AGENTS.md#commands). Flutter 3.47 stable is expected on
+PATH (`export PATH="$HOME/tools/flutter-3.47.0/bin:$PATH"`).
 
 Run on a device/emulator (`cd flutter/app` for `flutter run` commands):
 
@@ -141,13 +139,10 @@ JDK 17 is required for the Android Gradle plugin.
 
 ## Verification status
 
-- `flutter analyze` — zero issues across the workspace.
-- `flutter test` — 121 passed + 1 opt-in e2e skip (domain 2, network 1,
-  adapter 38 + e2e, app 80: parser/grouping/controller + per-screen widget
-  tests).
-- Import gate (`scripts/check_dart_imports.py`) — CLEAN.
-- Real-host e2e (`LocalDshE2eTest` @ `127.0.0.1:3080`) — PASS.
-- `flutter build apk --debug` — PASS (~168 MB debug APK).
+`python3 scripts/verify_all.py` is the aggregate gate: `flutter analyze`,
+the full test suite (real-host e2e self-skips without `DSH_E2E_URL`), the
+import gate, the design-token drift gate, and the documentation gates.
+CI runs it on every push; its output is the live verification status.
 
 Deferred beyond parity, matching [docs/spec.md](docs/spec.md):
 schema-driven settings forms, secret-slot writes, session-drag ordering,
