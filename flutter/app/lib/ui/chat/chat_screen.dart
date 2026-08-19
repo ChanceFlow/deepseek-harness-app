@@ -37,8 +37,7 @@ import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import '../theme/deepsuite_extension.dart'
     show DeepSuiteColors, dsOf, kDsShadowLv2;
-import '../theme/deepsuite_tokens.dart' show kDsDuration;
-import '../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
+import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -68,7 +67,7 @@ class ChatRoute extends ConsumerWidget {
   }
 }
 
-class ChatScreen extends StatelessWidget {
+class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     required this.uiState,
@@ -85,22 +84,35 @@ class ChatScreen extends StatelessWidget {
   }
 
   @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  bool _rail = false;
+
+  @override
   Widget build(BuildContext context) {
+    final uiState = widget.uiState;
+    final onAction = widget.onAction;
     return LayoutBuilder(
       builder: (context, constraints) {
         final useTwoPanes = constraints.maxWidth >= 720;
-        return Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                ConnectionBanner(uiState: uiState),
-                if (useTwoPanes)
+        if (useTwoPanes) {
+          return Scaffold(
+            body: SafeArea(
+              child: Column(
+                children: [
+                  ConnectionBanner(uiState: uiState),
                   Expanded(
                     child: Row(
                       children: [
-                        SizedBox(
-                          width: 320,
+                        AnimatedContainer(
+                          duration: kDsDuration,
+                          curve: Curves.easeInOut,
+                          width: _rail ? 56 : 320,
                           child: SessionPanel(
+                            onRailChanged: (rail) =>
+                                setState(() => _rail = rail),
                             sessions: uiState.sessions,
                             workspaces: uiState.workspaces,
                             searchResults: uiState.searchResults,
@@ -117,41 +129,51 @@ class ChatScreen extends StatelessWidget {
                           child: ChatPanel(
                             uiState: uiState,
                             onAction: onAction,
-                            loadAttachment: loadAttachment,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          height: 160,
-                          child: SessionPanel(
-                            sessions: uiState.sessions,
-                            workspaces: uiState.workspaces,
-                            searchResults: uiState.searchResults,
-                            selectedSessionId: uiState.selectedSessionId,
-                            onSelectSession: (id) =>
-                                onAction(SelectSession(id)),
-                            onCreateSession: (workspaceId) =>
-                                onAction(CreateSessionInWorkspace(workspaceId)),
-                            onSearchSessions: (query) =>
-                                onAction(SearchSessions(query)),
-                          ),
-                        ),
-                        Expanded(
-                          child: ChatPanel(
-                            uiState: uiState,
-                            onAction: onAction,
-                            loadAttachment: loadAttachment,
+                            loadAttachment: widget.loadAttachment,
                           ),
                         ),
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
+          );
+        }
+        // Compact: the session panel lives in a drawer (web's narrow
+        // viewport overlay-sidebar semantics), not a stacked strip.
+        return Scaffold(
+          appBar: AppBar(title: const Text('DeepSeek Harness')),
+          drawer: Drawer(
+            width: 320,
+            child: SafeArea(
+              child: SessionPanel(
+                inDrawer: true,
+                sessions: uiState.sessions,
+                workspaces: uiState.workspaces,
+                searchResults: uiState.searchResults,
+                selectedSessionId: uiState.selectedSessionId,
+                onSelectSession: (id) {
+                  onAction(SelectSession(id));
+                  Navigator.of(context).pop();
+                },
+                onCreateSession: (workspaceId) =>
+                    onAction(CreateSessionInWorkspace(workspaceId)),
+                onSearchSessions: (query) => onAction(SearchSessions(query)),
+              ),
+            ),
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                ConnectionBanner(uiState: uiState),
+                Expanded(
+                  child: ChatPanel(
+                    uiState: uiState,
+                    onAction: onAction,
+                    loadAttachment: widget.loadAttachment,
+                  ),
+                ),
               ],
             ),
           ),
@@ -193,6 +215,7 @@ class ConnectionBanner extends StatelessWidget {
 class SessionPanel extends StatefulWidget {
   const SessionPanel({
     super.key,
+    this.inDrawer = false,
     required this.sessions,
     required this.workspaces,
     required this.searchResults,
@@ -200,7 +223,14 @@ class SessionPanel extends StatefulWidget {
     required this.onSelectSession,
     required this.onCreateSession,
     required this.onSearchSessions,
+    this.onRailChanged,
   });
+
+  /// Drawer form: no rail toggle, full-height fill.
+  final bool inDrawer;
+
+  /// Notifies the host pane when the icon-rail state flips (wide panes).
+  final void Function(bool rail)? onRailChanged;
 
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
@@ -237,7 +267,7 @@ class _SessionPanelState extends State<SessionPanel> {
   /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
   /// toggle collapses to the icon rail.
   Widget _buildBrandRow(BuildContext context, DeepSuiteColors ds) {
-    final rail = _collapsedToRail;
+    final rail = !widget.inDrawer && _collapsedToRail;
     return SizedBox(
       height: 60,
       child: Row(
@@ -257,15 +287,21 @@ class _SessionPanelState extends State<SessionPanel> {
               ),
             ),
           if (!rail) const SizedBox(width: 8),
-          IconButton(
-            tooltip: rail ? 'Open sidebar' : 'Collapse sidebar',
-            onPressed: () => setState(() => _collapsedToRail = !rail),
-            icon: Icon(
-              rail ? Icons.menu : Icons.view_sidebar_outlined,
-              size: rail ? 22 : 16,
-              color: ds.labelSecondary,
+          if (!widget.inDrawer)
+            IconButton(
+              tooltip: rail ? 'Open sidebar' : 'Collapse sidebar',
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+              onPressed: () {
+                setState(() => _collapsedToRail = !rail);
+                widget.onRailChanged?.call(_collapsedToRail);
+              },
+              icon: Icon(
+                rail ? Icons.menu : Icons.view_sidebar_outlined,
+                size: rail ? 22 : 16,
+                color: ds.labelSecondary,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -273,7 +309,7 @@ class _SessionPanelState extends State<SessionPanel> {
 
   /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label.
   Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
-    final rail = _collapsedToRail;
+    final rail = !widget.inDrawer && _collapsedToRail;
     return Padding(
       padding: EdgeInsets.fromLTRB(rail ? 0 : 2, 0, rail ? 0 : 2, 8),
       child: InkWell(
@@ -318,14 +354,14 @@ class _SessionPanelState extends State<SessionPanel> {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
-    final rail = _collapsedToRail;
+    final rail = !widget.inDrawer && _collapsedToRail;
     return AnimatedContainer(
       duration: kDsDuration,
       curve: Curves.easeInOut,
       width: rail ? 56 : null,
       color: ds.sidebarFill,
       child: Padding(
-        padding: EdgeInsets.all(rail ? 8 : 8),
+        padding: EdgeInsets.all(rail ? 4 : 8),
         child: Column(
           children: [
             _buildBrandRow(context, ds),
