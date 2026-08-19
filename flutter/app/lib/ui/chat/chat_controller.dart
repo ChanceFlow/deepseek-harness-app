@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
@@ -87,6 +88,17 @@ class ChatController {
   StreamSubscription<void>? _goalSub;
 
   ChatUiState get state => _state.value;
+
+  /// Background jobs ride the timeline's TimelineJobs items (web keeps them
+  /// in a session store; our reducer already folds them there).
+  List<JobView> _timelineJobs() {
+    final items = <JobView>[];
+    for (final item in _timelineWindow.items) {
+      if (item is TimelineJobs) items.addAll(item.jobs);
+    }
+    return List<JobView>.unmodifiable(items);
+  }
+
   Stream<ChatUiState> get uiState => _state.stream;
 
   void dispose() {
@@ -128,6 +140,7 @@ class ChatController {
       sessionStats: _sessionStats,
       goal: _goal,
       models: _models,
+      jobs: _timelineJobs(),
     );
   }
 

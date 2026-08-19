@@ -82,6 +82,7 @@ const _catalog = SessionModels(
 
 ChatUiState _state({
   ConnectionPhase phase = ConnectionPhase.connected,
+  List<JobView> jobs = const <JobView>[],
   String version = '1.2.3',
   List<SessionSummary> sessions = const <SessionSummary>[],
   List<WorkspaceSummary> workspaces = const <WorkspaceSummary>[],
@@ -103,6 +104,7 @@ ChatUiState _state({
     timeline: timeline,
     searchResults: searchResults,
     selectedSessionId: selectedSessionId,
+    jobs: jobs,
     pendingImages: pendingImages,
     skills: skills,
     isSending: isSending,
@@ -299,6 +301,14 @@ void main() {
           SessionSummary(id: 's1', title: 'Alpha', blank: false),
         ],
         selectedSessionId: 's1',
+        jobs: const [
+          JobView(
+            id: 'j1',
+            kind: 'build',
+            label: 'assemble',
+            status: JobStatus.running,
+          ),
+        ],
         timeline: const [
           TimelineTurnBoundary(1),
           TimelineMessage(
@@ -333,16 +343,6 @@ void main() {
           ),
           TimelineCompaction(id: 'c1', shadowedCount: 3),
           TimelineError(id: 'e1', message: 'boom'),
-          TimelineJobs(
-            jobs: [
-              JobView(
-                id: 'j1',
-                kind: 'build',
-                label: 'assemble',
-                status: JobStatus.running,
-              ),
-            ],
-          ),
         ],
       ),
       actions,
@@ -374,8 +374,9 @@ void main() {
     expect(find.text('Context compacted'), findsOneWidget);
     expect(find.text('Compacted 3 history items'), findsOneWidget);
     expect(find.text('boom'), findsOneWidget);
-    expect(find.text('Background jobs'), findsOneWidget);
-    expect(find.text('build · assemble · running'), findsOneWidget);
+    // Jobs live in the session-header pill now, not the timeline.
+    expect(find.text('Background jobs'), findsNothing);
+    expect(find.text('1 background job running'), findsOneWidget);
 
     await tester.tap(find.text('Allow once'));
     await tester.pump();
@@ -734,6 +735,54 @@ void main() {
     await tester.tap(find.byTooltip('Pause goal'));
     await tester.pump();
     expect(actions, contains(const ToggleGoalPause()));
+  });
+
+  testWidgets('jobs pill opens the ordered sheet with durations', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        jobs: [
+          JobView(
+            id: 'j1',
+            kind: 'build',
+            label: 'assemble',
+            status: JobStatus.completed,
+            startedAt: now - 90000,
+            finishedAt: now - 30000,
+          ),
+          JobView(
+            id: 'j2',
+            kind: 'watch',
+            label: 'logs',
+            status: JobStatus.running,
+            startedAt: now - 150000,
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // Live count leads the pill label.
+    expect(find.text('1 background job running'), findsOneWidget);
+
+    await tester.tap(find.text('1 background job running'));
+    await tester.pumpAndSettle();
+
+    // Sheet header + both rows; the live row sorts first.
+    expect(find.text('Background jobs'), findsOneWidget);
+    expect(find.text('watch'), findsOneWidget);
+    expect(find.text('build'), findsOneWidget);
+    // Settled duration: 90s → 30s = 1m 0s; detail falls back to status word.
+    expect(find.text('1m 0s'), findsOneWidget);
+    expect(find.text('completed'), findsOneWidget);
   });
 
   testWidgets('plus opens the command sheet and inserts the command', (

@@ -3,6 +3,7 @@ library;
 
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/attachment.dart';
@@ -36,6 +37,7 @@ final class ChatUiState {
     this.sessionStats = const SessionWindowStats(),
     this.goal,
     this.models,
+    this.jobs = const <JobView>[],
   });
 
   final ConnectionState connection;
@@ -76,6 +78,9 @@ final class ChatUiState {
 
   /// Model directory of the selected session (composer model seat).
   final SessionModels? models;
+
+  /// Background jobs of the selected session (header action).
+  final List<JobView> jobs;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin

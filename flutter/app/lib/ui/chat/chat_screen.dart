@@ -18,7 +18,6 @@ import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
-import 'package:domain/model/jobs.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +26,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
+import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'model_select.dart';
 
@@ -740,6 +740,7 @@ class ChatHeaderActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        JobListAction(jobs: uiState.jobs),
         IconButton(
           tooltip: 'Outline',
           isSelected: outline,
@@ -826,7 +827,12 @@ class _ChatPanelState extends State<ChatPanel> {
   /// Timeline without the queue rows (they ride the composer dock) and the
   /// approval that took over the composer seat.
   List<TimelineItem> get _timelineItems => widget.uiState.timeline
-      .where((item) => item is! TimelineQueue && item != _pendingApproval)
+      .where(
+        (item) =>
+            item is! TimelineQueue &&
+            item is! TimelineJobs &&
+            item != _pendingApproval,
+      )
       .toList();
 
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
@@ -1016,7 +1022,7 @@ class TimelineRow extends StatelessWidget {
         onAction: onAction,
       ),
       TimelineQueue(:final items) => QueueRow(items: items, onAction: onAction),
-      TimelineJobs(:final jobs) => JobsRow(jobs: jobs),
+      TimelineJobs() => const SizedBox.shrink(),
       TimelineError(:final message) => SizedBox(
         width: double.infinity,
         child: Text(
@@ -1442,42 +1448,6 @@ String toolRunStatusLabel(ToolRunStatus status) => switch (status) {
   ToolRunStatus.failed => 'failed',
 };
 
-class JobsRow extends StatelessWidget {
-  const JobsRow({super.key, required this.jobs});
-
-  final List<JobView> jobs;
-
-  @override
-  Widget build(BuildContext context) {
-    final bodySmall = Theme.of(context).textTheme.bodySmall;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Background jobs',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          for (final job in jobs) ...[
-            Text(
-              '${job.kind} · ${job.label} · ${job.status.name}',
-              style: bodySmall,
-            ),
-            if (job.detail case final String detail)
-              Text(detail, style: bodySmall),
-            if (job.finishedAt != null)
-              Text('finished @ ${job.finishedAt}', style: bodySmall),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// GoalBar strip — port of the web ui-goal dock entry: visible for
-/// active/paused/blocked goals, silent otherwise (loading/none/complete
-/// render nothing).
 class GoalBarStrip extends StatelessWidget {
   const GoalBarStrip({
     super.key,
