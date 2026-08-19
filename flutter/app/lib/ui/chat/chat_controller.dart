@@ -11,6 +11,7 @@ import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/goal.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -57,6 +58,7 @@ class ChatController {
   List<SkillEntry> _skills = const <SkillEntry>[];
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
+  GoalProjection? _goal;
   SessionWindowStats _sessionStats = const SessionWindowStats();
 
   /// One skill.list RPC per session, mirroring the Web catalog cache.
@@ -73,6 +75,7 @@ class ChatController {
   StreamSubscription<void>? _contextSub;
   StreamSubscription<void>? _breakdownSub;
   StreamSubscription<void>? _statsSub;
+  StreamSubscription<void>? _goalSub;
 
   ChatUiState get state => _state.value;
   Stream<ChatUiState> get uiState => _state.stream;
@@ -86,6 +89,7 @@ class ChatController {
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
+    unawaited(_goalSub?.cancel());
     _subs.clear();
   }
 
@@ -113,6 +117,7 @@ class ChatController {
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
       sessionStats: _sessionStats,
+      goal: _goal,
     );
   }
 
@@ -191,6 +196,8 @@ class ChatController {
             .where((image) => image.id != action.id)
             .toList();
         _publish();
+      case ToggleGoalPause():
+        _toggleGoalPause();
       case ImagePickError():
         _errorMessage = action.message;
         _publish();
@@ -214,17 +221,20 @@ class ChatController {
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
+    unawaited(_goalSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
       _contextPressure = null;
       _contextBreakdown = null;
       _sessionStats = const SessionWindowStats();
+      _goal = null;
       _timelineSub = null;
       _planSub = null;
       _contextSub = null;
       _breakdownSub = null;
       _statsSub = null;
+      _goalSub = null;
       return;
     }
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
@@ -241,6 +251,14 @@ class ChatController {
       pressure,
     ) {
       _contextPressure = pressure;
+      _publish();
+    });
+    _statsSub = _repository.observeSessionStats(sessionId).listen((stats) {
+      _sessionStats = stats;
+      _publish();
+    });
+    _goalSub = _repository.observeGoal(sessionId).listen((goal) {
+      _goal = goal;
       _publish();
     });
   }
@@ -305,6 +323,21 @@ class ChatController {
     if (sessionId == null) return;
     final images = _pendingImages;
     if (action.text.trim().isEmpty && images.isEmpty) return;
+    // Web GoalCommandInput parity: `/goal <objective>` creates the goal
+    // instead of riding the prompt.
+    final command = RegExp(
+      r'^/goal\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(action.text.trim());
+    if (command != null) {
+      final objective = command.group(1)!.trim();
+      if (objective.isNotEmpty) {
+        unawaited(
+          _runCatchingForUi(() => _repository.createGoal(sessionId, objective)),
+        );
+        return;
+      }
+    }
     unawaited(() async {
       _isSending = true;
       _publish();
@@ -399,6 +432,22 @@ class ChatController {
     final run = _attachmentLock.then((_) => action());
     _attachmentLock = run.then((_) {}, onError: (_) {});
     return run;
+  }
+
+  /// GoalBar strip action: pause an active goal, resume a held one.
+  void _toggleGoalPause() {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    final goal = _goal?.goal;
+    if (goal == null) return;
+    final ref = GoalRef(id: goal.id, revision: goal.revision);
+    unawaited(
+      _runCatchingForUi(
+        () => goal.phase == GoalPhase.active
+            ? _repository.pauseGoal(sessionId, ref)
+            : _repository.resumeGoal(sessionId, ref),
+      ),
+    );
   }
 
   void _cancelTurn() {

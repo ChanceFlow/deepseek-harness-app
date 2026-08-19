@@ -799,4 +799,112 @@ void main() {
     expect(answered.$2.answers.single.questionId, 'question-1');
     expect(answered.$2.answers.single.selectedOptions, isEmpty);
   });
+
+  test('/goal command creates the goal instead of sending a prompt', () async {
+    final repository = _GoalRecordingRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/goal Ship the MVP'));
+    await pumpEventQueue();
+
+    expect(repository.createdGoals, [('s1', 'Ship the MVP')]);
+    expect(repository.sentTexts, isEmpty);
+
+    // Plain prompts still ride the message channel.
+    controller.onAction(const SendPrompt('hello'));
+    await pumpEventQueue();
+    expect(repository.sentTexts, ['hello']);
+  });
+
+  test(
+    'ToggleGoalPause pauses an active goal and resumes a held one',
+    () async {
+      final repository = _GoalRecordingRepository();
+      final controller = ChatController(repository);
+      await pumpEventQueue();
+      controller.onAction(const SelectSession('s1'));
+      await pumpEventQueue();
+
+      repository.goal.value = const GoalProjection(
+        goal: GoalSnapshot(
+          id: 'g1',
+          revision: 3,
+          objective: 'Ship it',
+          phase: GoalPhase.active,
+          maxGoalRounds: 10,
+        ),
+        roundsStarted: 1,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      await pumpEventQueue();
+
+      controller.onAction(const ToggleGoalPause());
+      await pumpEventQueue();
+      expect(repository.pausedRefs, isNotEmpty);
+
+      repository.goal.value = const GoalProjection(
+        goal: GoalSnapshot(
+          id: 'g1',
+          revision: 4,
+          objective: 'Ship it',
+          phase: GoalPhase.paused,
+          maxGoalRounds: 10,
+        ),
+        roundsStarted: 1,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      await pumpEventQueue();
+
+      controller.onAction(const ToggleGoalPause());
+      await pumpEventQueue();
+      expect(repository.resumedRefs, isNotEmpty);
+    },
+  );
+}
+
+/// Records goal mutations for the command-interception tests.
+class _GoalRecordingRepository extends FakeChatRepository {
+  final createdGoals = <(String, String)>[];
+  final sentTexts = <String>[];
+  final pausedRefs = <GoalRef>[];
+  final resumedRefs = <GoalRef>[];
+  final AppStateStream<GoalProjection?> goal = AppStateStream<GoalProjection?>(
+    null,
+  );
+
+  @override
+  Stream<GoalProjection?> observeGoal(String sessionId) => goal.stream;
+
+  @override
+  Future<GoalRef> createGoal(
+    String sessionId,
+    String objective, {
+    int? maxGoalRounds,
+  }) async {
+    createdGoals.add((sessionId, objective));
+    return const GoalRef(id: 'g1', revision: 1);
+  }
+
+  @override
+  Future<GoalRef> pauseGoal(String sessionId, GoalRef ref) async {
+    pausedRefs.add(ref);
+    return ref;
+  }
+
+  @override
+  Future<GoalRef> resumeGoal(String sessionId, GoalRef ref) async {
+    resumedRefs.add(ref);
+    return ref;
+  }
+
+  @override
+  Future<void> sendMessage(SendMessageRequest request) async {
+    sentTexts.add(request.text);
+  }
 }

@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/goal.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -163,6 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
           onAction: onAction,
           outline: _outline,
           onToggleOutline: () => setState(() => _outline = !_outline),
+          onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
         ),
       ],
       bottom: PreferredSize(
@@ -206,16 +208,6 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: SessionPanel(
                             onRailChanged: (rail) =>
                                 setState(() => _rail = rail),
-                            onOpenModels: () => _openSessionTool(
-                              (_) => const ProviderScope(child: ModelsRoute()),
-                            ),
-                            onOpenGoals: () => _openSessionTool(
-                              (_) => const ProviderScope(child: GoalRoute()),
-                            ),
-                            onOpenSubagents: () => _openSessionTool(
-                              (_) =>
-                                  const ProviderScope(child: SubagentRoute()),
-                            ),
                             sessions: uiState.sessions,
                             workspaces: uiState.workspaces,
                             searchResults: uiState.searchResults,
@@ -234,6 +226,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
                             outline: _outline,
+                            onOpenModel: () =>
+                                _openSessionTool((_) => const ModelsRoute()),
+                            onOpenGoal: () =>
+                                _openSessionTool((_) => const GoalRoute()),
                           ),
                         ),
                       ],
@@ -253,24 +249,6 @@ class _ChatScreenState extends State<ChatScreen> {
             child: SafeArea(
               child: SessionPanel(
                 inDrawer: true,
-                onOpenModels: () {
-                  Navigator.of(context).pop();
-                  _openSessionTool(
-                    (_) => const ProviderScope(child: ModelsRoute()),
-                  );
-                },
-                onOpenGoals: () {
-                  Navigator.of(context).pop();
-                  _openSessionTool(
-                    (_) => const ProviderScope(child: GoalRoute()),
-                  );
-                },
-                onOpenSubagents: () {
-                  Navigator.of(context).pop();
-                  _openSessionTool(
-                    (_) => const ProviderScope(child: SubagentRoute()),
-                  );
-                },
                 sessions: uiState.sessions,
                 workspaces: uiState.workspaces,
                 searchResults: uiState.searchResults,
@@ -295,6 +273,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
                     outline: _outline,
+                    onOpenModel: () =>
+                        _openSessionTool((_) => const ModelsRoute()),
+                    onOpenGoal: () =>
+                        _openSessionTool((_) => const GoalRoute()),
                   ),
                 ),
               ],
@@ -347,9 +329,6 @@ class SessionPanel extends StatefulWidget {
     required this.onCreateSession,
     required this.onSearchSessions,
     this.onRailChanged,
-    this.onOpenModels,
-    this.onOpenGoals,
-    this.onOpenSubagents,
   });
 
   /// Drawer form: no rail toggle, full-height fill.
@@ -357,11 +336,6 @@ class SessionPanel extends StatefulWidget {
 
   /// Notifies the host pane when the icon-rail state flips (wide panes).
   final void Function(bool rail)? onRailChanged;
-
-  /// Session-tools region entries (web: context-embedded tools).
-  final VoidCallback? onOpenModels;
-  final VoidCallback? onOpenGoals;
-  final VoidCallback? onOpenSubagents;
 
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
@@ -618,61 +592,10 @@ class _SessionPanelState extends State<SessionPanel> {
                   ),
                 ),
               ],
-              _buildToolsRegion(context, ds),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  /// Session tools at the panel foot (web embeds these into the
-  /// conversation context; on mobile they push their screens).
-  Widget _buildToolsRegion(BuildContext context, DeepSuiteColors ds) {
-    final rail = !widget.inDrawer && _collapsedToRail;
-    final entries = <(IconData, String, VoidCallback?)>[
-      (Icons.tune, 'Models', widget.onOpenModels),
-      (Icons.flag_outlined, 'Goals', widget.onOpenGoals),
-      (Icons.account_tree_outlined, 'Subagents', widget.onOpenSubagents),
-    ];
-    final available = entries.where((entry) => entry.$3 != null).toList();
-    if (available.isEmpty) return const SizedBox.shrink();
-    if (rail) {
-      return Column(
-        children: [
-          const Divider(height: 12),
-          for (final (icon, label, onTap) in available)
-            IconButton(
-              tooltip: label,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-              padding: EdgeInsets.zero,
-              onPressed: onTap,
-              icon: Icon(icon, size: 18, color: ds.labelSecondary),
-            ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(height: 12),
-        Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: Text(
-            'Session tools',
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: ds.labelSecondary),
-          ),
-        ),
-        for (final (icon, label, onTap) in available)
-          ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(icon, size: 18, color: ds.labelSecondary),
-            title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-            onTap: onTap,
-          ),
-      ],
     );
   }
 }
@@ -749,12 +672,17 @@ class ChatHeaderActions extends StatelessWidget {
     required this.onAction,
     required this.onToggleOutline,
     required this.outline,
+    this.onOpenSubagents,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final VoidCallback onToggleOutline;
   final bool outline;
+
+  /// Web SubagentCatalogAction seat: opens the subagent catalog for this
+  /// session.
+  final VoidCallback? onOpenSubagents;
 
   Future<void> _rename(BuildContext context, String sessionId) {
     return showDialog<void>(
@@ -810,6 +738,12 @@ class ChatHeaderActions extends StatelessWidget {
           icon: const Icon(Icons.view_list_outlined),
           selectedIcon: const Icon(Icons.view_list),
         ),
+        if (onOpenSubagents != null)
+          IconButton(
+            tooltip: 'Subagents',
+            onPressed: onOpenSubagents,
+            icon: const Icon(Icons.account_tree_outlined),
+          ),
         IconButton(
           tooltip: 'Rename session',
           onPressed: () => _rename(context, sessionId),
@@ -839,19 +773,22 @@ class ChatPanel extends StatefulWidget {
     required this.onAction,
     required this.loadAttachment,
     this.outline = false,
+    this.onOpenModel,
+    this.onOpenGoal,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
   final bool outline;
+  final VoidCallback? onOpenModel;
+  final VoidCallback? onOpenGoal;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
 }
 
 class _ChatPanelState extends State<ChatPanel> {
-  PromptMode _promptMode = PromptMode.queue;
   Set<int> _collapsedTurns = const <int>{};
 
   @override
@@ -860,7 +797,6 @@ class _ChatPanelState extends State<ChatPanel> {
     // Compose remembered these with selectedSessionId as the key.
     if (oldWidget.uiState.selectedSessionId !=
         widget.uiState.selectedSessionId) {
-      _promptMode = PromptMode.queue;
       _collapsedTurns = const <int>{};
     }
   }
@@ -950,6 +886,11 @@ class _ChatPanelState extends State<ChatPanel> {
               ),
             ),
           Expanded(child: _timelineBody(uiState, selectedSession)),
+          GoalBarStrip(
+            goal: uiState.goal,
+            onAction: widget.onAction,
+            onOpen: widget.onOpenGoal,
+          ),
           StatsLine(stats: uiState.sessionStats),
           if (_pendingApproval case final approval?)
             ApprovalPanel(request: approval, onAction: widget.onAction)
@@ -974,17 +915,19 @@ class _ChatPanelState extends State<ChatPanel> {
                     enabled: selectedSessionId != null && !uiState.isSending,
                     isSending: uiState.isSending,
                     running: isSessionRunning,
-                    mode: _promptMode,
-                    onModeChange: (mode) => setState(() => _promptMode = mode),
+                    plan: uiState.plan,
+                    onTogglePlan: selectedSessionId == null
+                        ? null
+                        : () => widget.onAction(const SendPrompt('/plan')),
+                    onOpenModel: widget.onOpenModel,
                     pendingImages: uiState.pendingImages,
                     imageLimits: uiState.imageLimits,
                     skills: uiState.skills,
                     onAction: widget.onAction,
+                    // Web: Enter while running queues; steering rides the
+                    // queue dock's per-item action.
                     onSend: (text) => widget.onAction(
-                      SendPrompt(
-                        text,
-                        mode: isSessionRunning ? _promptMode : PromptMode.queue,
-                      ),
+                      SendPrompt(text, mode: PromptMode.queue),
                     ),
                   ),
                 ),
@@ -1511,6 +1454,96 @@ class JobsRow extends StatelessWidget {
               Text('finished @ ${job.finishedAt}', style: bodySmall),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// GoalBar strip — port of the web ui-goal dock entry: visible for
+/// active/paused/blocked goals, silent otherwise (loading/none/complete
+/// render nothing).
+class GoalBarStrip extends StatelessWidget {
+  const GoalBarStrip({
+    super.key,
+    required this.goal,
+    required this.onAction,
+    this.onOpen,
+  });
+
+  final GoalProjection? goal;
+  final void Function(ChatAction) onAction;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final projection = goal;
+    if (projection == null) return const SizedBox.shrink();
+    final snapshot = projection.goal;
+    if (snapshot.phase == GoalPhase.complete) return const SizedBox.shrink();
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final phaseLabel = switch (snapshot.phase) {
+      GoalPhase.active => 'Active',
+      GoalPhase.paused => 'Paused',
+      GoalPhase.blocked => 'Blocked',
+      GoalPhase.complete => '',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: ds.tip,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          border: Border(
+            top: BorderSide(color: ds.divider),
+            left: BorderSide(color: ds.divider),
+            right: BorderSide(color: ds.divider),
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              phaseLabel,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: snapshot.phase == GoalPhase.active
+                    ? theme.colorScheme.secondary
+                    : ds.labelSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                snapshot.objective,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 14,
+              tooltip: snapshot.phase == GoalPhase.active
+                  ? 'Pause goal'
+                  : 'Resume goal',
+              onPressed: () => onAction(const ToggleGoalPause()),
+              icon: Icon(
+                snapshot.phase == GoalPhase.active
+                    ? Icons.pause_outlined
+                    : Icons.play_arrow_outlined,
+                color: ds.labelSecondary,
+              ),
+            ),
+            if (onOpen != null)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: 'Open goal',
+                onPressed: onOpen,
+                icon: Icon(Icons.chevron_right, color: ds.labelSecondary),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -2064,14 +2097,15 @@ class ComposerBar extends StatefulWidget {
     required this.enabled,
     required this.isSending,
     required this.running,
-    required this.mode,
-    required this.onModeChange,
     required this.pendingImages,
     required this.imageLimits,
     required this.skills,
     required this.onAction,
     required this.onSend,
     this.onStop,
+    this.plan,
+    this.onTogglePlan,
+    this.onOpenModel,
     this.contextPressure,
     this.contextBreakdown,
   });
@@ -2079,14 +2113,20 @@ class ComposerBar extends StatefulWidget {
   final bool enabled;
   final bool isSending;
   final bool running;
-  final PromptMode mode;
-  final void Function(PromptMode) onModeChange;
   final List<PendingImage> pendingImages;
   final ImageLimits imageLimits;
   final List<SkillEntry> skills;
   final void Function(ChatAction) onAction;
   final void Function(String text) onSend;
   final VoidCallback? onStop;
+
+  /// Plan collaboration state; the toggle sends `/plan` (web input.plan).
+  final PlanState? plan;
+  final VoidCallback? onTogglePlan;
+
+  /// Composer model seat (web conversation.input.model): opens the models
+  /// surface for this session.
+  final VoidCallback? onOpenModel;
   final ContextPressure? contextPressure;
 
   final ContextBreakdown? contextBreakdown;
@@ -2137,7 +2177,6 @@ class _ComposerBarState extends State<ComposerBar> {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveMode = widget.running ? widget.mode : PromptMode.queue;
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
@@ -2159,14 +2198,13 @@ class _ComposerBarState extends State<ComposerBar> {
             enabled: widget.enabled,
             minLines: 1,
             maxLines: 5,
+            textInputAction: TextInputAction.send,
             onChanged: (_) => setState(() {}),
             onSubmitted: _send,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               isDense: true,
               border: InputBorder.none,
-              hintText: effectiveMode == PromptMode.steer
-                  ? 'Steer the running turn'
-                  : 'Message DeepSeek Harness',
+              hintText: 'Message DeepSeek Harness',
             ),
           ),
           if (widget.pendingImages.isNotEmpty)
@@ -2211,79 +2249,47 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 460;
-              final leading = compact
-                  ? <Widget>[]
-                  : <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Text(
-                          'Delivery',
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                      ),
-                      ModeChip(
-                        label: 'Queue',
-                        selected: effectiveMode == PromptMode.queue,
-                        enabled: widget.enabled,
-                        onClick: () => widget.onModeChange(PromptMode.queue),
-                      ),
-                      ModeChip(
-                        label: 'Steer',
-                        selected: effectiveMode == PromptMode.steer,
-                        enabled: widget.enabled && widget.running,
-                        onClick: () => widget.onModeChange(PromptMode.steer),
-                      ),
-                    ];
-              return Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ...leading,
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (compact)
-                        PopupMenuEntryShim(
-                          running: widget.running,
-                          enabled: widget.enabled,
-                          effectiveMode: effectiveMode,
-                          onModeChange: widget.onModeChange,
-                        ),
-                      ContextRing(
-                        pressure: widget.contextPressure,
-                        breakdown: widget.contextBreakdown,
-                      ),
-                      IconButton(
-                        onPressed: attachAllowed ? _pickImages : null,
-                        icon: const Icon(Icons.add),
-                        tooltip: 'Attach images',
-                      ),
-                      if (widget.onStop != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: FilledButton(
-                            onPressed: widget.enabled ? widget.onStop : null,
-                            child: const Text('Stop'),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: FilledButton(
-                          onPressed:
-                              widget.enabled && !widget.isSending && _canSend()
-                              ? _send
-                              : null,
-                          child: Text(widget.isSending ? 'Sending' : 'Send'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
+          Row(
+            children: [
+              IconButton(
+                onPressed: attachAllowed ? _pickImages : null,
+                icon: const Icon(Icons.add),
+                tooltip: 'Attach images',
+              ),
+              if (widget.onTogglePlan != null)
+                _PlanToggle(
+                  plan: widget.plan,
+                  enabled: widget.enabled,
+                  onToggle: widget.onTogglePlan!,
+                ),
+              const Spacer(),
+              if (widget.onOpenModel != null)
+                IconButton(
+                  onPressed: widget.onOpenModel,
+                  icon: const Icon(Icons.tune),
+                  tooltip: 'Model',
+                ),
+              ContextRing(
+                pressure: widget.contextPressure,
+                breakdown: widget.contextBreakdown,
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                // Web primary: Send, or Stop while the turn runs.
+                onPressed: widget.running
+                    ? widget.onStop
+                    : widget.enabled && !widget.isSending && _canSend()
+                    ? _send
+                    : null,
+                child: Text(
+                  widget.running
+                      ? 'Stop'
+                      : widget.isSending
+                      ? 'Sending'
+                      : 'Send',
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2434,6 +2440,37 @@ class PopupMenuEntryShim extends StatelessWidget {
             const Icon(Icons.arrow_drop_down, size: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Plan-mode toggle chip (web conversation.input.plan seat): sends the
+/// `/plan` toggle command.
+class _PlanToggle extends StatelessWidget {
+  const _PlanToggle({
+    required this.plan,
+    required this.enabled,
+    required this.onToggle,
+  });
+
+  final PlanState? plan;
+  final bool enabled;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = plan?.active ?? false;
+    final pending = plan?.pending ?? false;
+    return IconButton(
+      tooltip: active ? 'Plan mode: on' : 'Plan mode: off',
+      isSelected: active,
+      onPressed: enabled ? onToggle : null,
+      icon: Icon(
+        active ? Icons.flag : Icons.flag_outlined,
+        color: active || pending
+            ? Theme.of(context).colorScheme.secondary
+            : null,
       ),
     );
   }

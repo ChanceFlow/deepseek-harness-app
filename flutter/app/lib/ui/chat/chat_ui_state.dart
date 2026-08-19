@@ -2,6 +2,7 @@
 library;
 
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/goal.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/plan.dart';
@@ -32,6 +33,7 @@ final class ChatUiState {
     this.contextPressure,
     this.contextBreakdown,
     this.sessionStats = const SessionWindowStats(),
+    this.goal,
   });
 
   final ConnectionState connection;
@@ -66,6 +68,9 @@ final class ChatUiState {
 
   /// Window stats for the composer stats line.
   final SessionWindowStats sessionStats;
+
+  /// Goal projection of the selected session (composer dock strip).
+  final GoalProjection? goal;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin
@@ -304,6 +309,17 @@ final class RemovePendingImage extends ChatAction {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+/// GoalBar pause/resume toggle (composer dock strip).
+final class ToggleGoalPause extends ChatAction {
+  const ToggleGoalPause();
+
+  @override
+  bool operator ==(Object other) => other is ToggleGoalPause;
+
+  @override
+  int get hashCode => 'toggle-goal-pause'.hashCode;
 }
 
 /// Picker/read failures surface in the shared error strip.

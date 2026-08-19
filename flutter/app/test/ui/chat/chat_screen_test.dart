@@ -6,6 +6,7 @@ library;
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -16,8 +17,37 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'dart:async';
+
+import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class _FakeRpc implements DshRpcClient {
+  @override
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
+    return RpcResult(ok: true, value: <String, Object?>{});
+  }
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {}
+}
+
+class _NeverSocket implements DshEventSocket {
+  final StreamController<ServerRequest> _frames =
+      StreamController<ServerRequest>.broadcast();
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    onOpen?.call();
+    return _frames.stream;
+  }
+}
 
 ChatUiState _state({
   ConnectionPhase phase = ConnectionPhase.connected,
@@ -61,8 +91,14 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    MaterialApp(
-      home: ChatScreen(uiState: uiState, onAction: actions.add),
+    ProviderScope(
+      overrides: [
+        dshRpcClientProvider.overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider.overrideWithValue(_NeverSocket()),
+      ],
+      child: MaterialApp(
+        home: ChatScreen(uiState: uiState, onAction: actions.add),
+      ),
     ),
   );
 }
@@ -212,6 +248,8 @@ void main() {
     expect(find.byTooltip('Fork session'), findsOneWidget);
     expect(find.byTooltip('Archive session'), findsOneWidget);
     expect(find.byTooltip('Outline'), findsOneWidget);
+    expect(find.byTooltip('Subagents'), findsOneWidget);
+    expect(find.byTooltip('Plan mode: off'), findsOneWidget);
     // The old button soup is gone.
     expect(find.widgetWithText(OutlinedButton, 'Rename'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, 'Fork'), findsNothing);
@@ -535,7 +573,7 @@ void main() {
     expect(find.text('Skipped'), findsNothing);
   });
 
-  testWidgets('composer sends queue by default and steer while running', (
+  testWidgets('idle composer sends queue; plan toggle rides the action row', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -548,8 +586,14 @@ void main() {
         selectedSessionId: 's1',
       ),
       actions,
-      width: 1100,
     );
+
+    // Web composer seats: attach, plan toggle, model, ring, primary Send.
+    expect(find.byTooltip('Attach images'), findsOneWidget);
+    expect(find.byTooltip('Plan mode: off'), findsOneWidget);
+    expect(find.byTooltip('Model'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Steer'), findsNothing);
+    expect(find.text('Delivery'), findsNothing);
 
     final composerField = find
         .descendant(
@@ -566,18 +610,15 @@ void main() {
       contains(const SendPrompt('hello world', mode: PromptMode.queue)),
     );
 
-    // Idle session: Steer stays disabled even when picked.
-    final steerChip = find.widgetWithText(OutlinedButton, 'Steer');
-    expect(tester.widget<OutlinedButton>(steerChip).onPressed, isNull);
+    // Plan toggle sends the `/plan` command (web input.plan seat).
+    await tester.tap(find.byTooltip('Plan mode: off'));
+    await tester.pump();
+    expect(actions, contains(const SendPrompt('/plan')));
   });
 
-  testWidgets('running session enables steer mode and placeholder', (
+  testWidgets('running session: primary becomes Stop; submit queues', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1100, 1280);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -588,74 +629,105 @@ void main() {
         selectedSessionId: 's1',
       ),
       actions,
-      width: 1100,
     );
 
-    expect(find.text('Queue'), findsOneWidget);
-    expect(find.text('Message DeepSeek Harness'), findsOneWidget);
+    // Web primary semantics: while the turn runs the button IS Stop.
+    expect(find.text('Stop'), findsOneWidget);
+    expect(find.text('Send'), findsNothing);
 
-    await tester.tap(find.text('Steer'));
-    await tester.pump();
-    expect(find.text('Steer the running turn'), findsOneWidget);
-
-    final composerField = find
-        .descendant(
-          of: find.byType(ComposerBar),
-          matching: find.byType(TextField),
-        )
-        .first;
-    await tester.enterText(composerField, 'nudge');
-    await tester.pump();
-    await tester.tap(find.text('Send'));
-    await tester.pump();
-    expect(
-      actions,
-      contains(const SendPrompt('nudge', mode: PromptMode.steer)),
-    );
-
-    // Stop cancels the running turn.
     await tester.tap(find.text('Stop'));
     await tester.pump();
     expect(actions, contains(const CancelTurnAction()));
-  });
 
-  testWidgets('compact composer folds delivery into a popup', (tester) async {
-    final actions = <ChatAction>[];
-    await _pump(
-      tester,
-      _state(
-        sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
-        ],
-        selectedSessionId: 's1',
-      ),
-      actions,
-    );
-
-    // Narrow pane: no inline chips, the popup carries the current mode.
-    expect(find.widgetWithText(OutlinedButton, 'Steer'), findsNothing);
-    expect(find.byTooltip('Delivery'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Delivery'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Steer').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Steer the running turn'), findsOneWidget);
-
+    // Enter/IME submit while running still queues the draft (web Enter).
     final composerField = find
         .descendant(
           of: find.byType(ComposerBar),
           matching: find.byType(TextField),
         )
         .first;
-    await tester.enterText(composerField, 'nudge');
-    await tester.pump();
-    await tester.tap(find.text('Send'));
+    await tester.enterText(composerField, 'queued while running');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump();
     expect(
       actions,
-      contains(const SendPrompt('nudge', mode: PromptMode.steer)),
+      contains(
+        const SendPrompt('queued while running', mode: PromptMode.queue),
+      ),
     );
+  });
+
+  testWidgets('goal strip renders phases and dispatches pause/open', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    // No goal → no strip.
+    expect(find.text('Active'), findsNothing);
+
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        goal: GoalProjection(
+          goal: GoalSnapshot(
+            id: 'g1',
+            revision: 3,
+            objective: 'Ship the MVP',
+            phase: GoalPhase.active,
+            maxGoalRounds: 10,
+          ),
+          roundsStarted: 2,
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      ),
+      actions,
+    );
+
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Ship the MVP'), findsOneWidget);
+    expect(find.byTooltip('Pause goal'), findsOneWidget);
+    expect(find.byTooltip('Open goal'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Pause goal'));
+    await tester.pump();
+    expect(actions, contains(const ToggleGoalPause()));
+  });
+
+  testWidgets('composer model seat pushes the models page', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    await tester.tap(find.byTooltip('Model'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Providers'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
+
+    // Pop so the pushed scope disposes its controller/manager cleanly.
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('pending images render chips with remove buttons', (
