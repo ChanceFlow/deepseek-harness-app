@@ -71,6 +71,10 @@ void main() {
     expect(light.borderThin, DeepSuiteLight.aliasBorderL2DarkmodeThin);
     expect(dark.borderThin, DeepSuiteDark.aliasBorderL2DarkmodeThin);
     expect(kDsShadowLv2, hasLength(2));
+    expect(light.tip, DeepSuiteLight.specificTip);
+    expect(dark.tip, DeepSuiteDark.specificTip);
+    expect(light.bubble, DeepSuiteLight.specificBubble);
+    expect(dark.bubble, DeepSuiteDark.specificBubble);
   });
 
   test('extension lerp reaches the other theme at t=1', () {

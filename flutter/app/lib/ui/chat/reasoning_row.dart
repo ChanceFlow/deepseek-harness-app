@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../theme/deepsuite_extension.dart';
+import 'sweep_highlight.dart';
 
 class ReasoningRow extends StatefulWidget {
   const ReasoningRow({super.key, required this.text, required this.running});
@@ -76,7 +77,7 @@ class _ReasoningRowState extends State<ReasoningRow>
             borderRadius: BorderRadius.circular(4),
             onTap: () => setState(() => _expanded = !_expanded),
             child: ClipRect(
-              child: _SweepHighlight(
+              child: SweepHighlight(
                 controller: widget.running && !reduced ? _sweep : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -144,47 +145,6 @@ class _ReasoningRowState extends State<ReasoningRow>
             ),
         ],
       ),
-    );
-  }
-}
-
-/// The web `dsh-reasoning-row-sweep`: a soft highlight sweeping across the
-/// row while reasoning streams (disabled under reduced motion).
-class _SweepHighlight extends StatelessWidget {
-  const _SweepHighlight({required this.controller, required this.child});
-
-  final AnimationController? controller;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = this.controller;
-    if (controller == null) return child;
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            final t = controller.value;
-            final center = bounds.width * (t * 1.3 - 0.15);
-            return const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Color(0x00000000), Color(0x33888888), Color(0x00000000)],
-              stops: [0.0, 0.55, 1.0],
-            ).createShader(
-              Rect.fromCenter(
-                center: Offset(center, bounds.height / 2),
-                width: bounds.width * 0.6,
-                height: bounds.height,
-              ),
-            );
-          },
-          child: child,
-        );
-      },
-      child: child,
     );
   }
 }

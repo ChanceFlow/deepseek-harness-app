@@ -233,7 +233,14 @@ void main() {
     // flat markdown.
     expect(find.text('do the thing'), findsOneWidget);
     expect(find.text('working on it', findRichText: true), findsOneWidget);
-    expect(find.text('bash done'), findsOneWidget);
+    // Web tool row: single line — title + result-first-line summary; the
+    // arguments live behind the expand affordance.
+    expect(find.text('bash'), findsOneWidget);
+    expect(find.text('README.md'), findsOneWidget);
+    expect(find.text('ls -la'), findsNothing);
+
+    await tester.tap(find.text('bash'));
+    await tester.pumpAndSettle();
     expect(find.text('ls -la'), findsOneWidget);
     expect(find.text('Approve tool: bash'), findsOneWidget);
     expect(find.text('▤ Compacted 3 messages'), findsOneWidget);

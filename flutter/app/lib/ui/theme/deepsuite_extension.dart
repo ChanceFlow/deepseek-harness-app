@@ -29,6 +29,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.borderThin,
     required this.bubble,
     required this.bubbleHighlight,
+    required this.tip,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -61,6 +62,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color bubble;
   final Color bubbleHighlight;
 
+  /// `--dsw-specific-tip` — the queue dock panel fill.
+  final Color tip;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
         bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -81,6 +85,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
         bubble: DeepSuiteLight.specificBubble,
         bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
+        tip: DeepSuiteLight.specificTip,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -102,6 +107,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
         bubble: DeepSuiteDark.specificBubble,
         bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
+        tip: DeepSuiteDark.specificTip,
       );
 
   @override
@@ -123,6 +129,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? borderThin,
     Color? bubble,
     Color? bubbleHighlight,
+    Color? tip,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -143,6 +150,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       borderThin: borderThin ?? this.borderThin,
       bubble: bubble ?? this.bubble,
       bubbleHighlight: bubbleHighlight ?? this.bubbleHighlight,
+      tip: tip ?? this.tip,
     );
   }
 
@@ -170,6 +178,7 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       borderThin: Color.lerp(borderThin, other.borderThin, t)!,
       bubble: Color.lerp(bubble, other.bubble, t)!,
       bubbleHighlight: Color.lerp(bubbleHighlight, other.bubbleHighlight, t)!,
+      tip: Color.lerp(tip, other.tip, t)!,
     );
   }
 }

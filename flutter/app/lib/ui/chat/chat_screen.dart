@@ -27,8 +27,10 @@ import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
+import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import '../theme/deepsuite_extension.dart' show dsOf, kDsShadowLv2;
+import '../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -432,6 +434,45 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
+  /// Timeline without the queue rows (they ride the composer dock).
+  List<TimelineItem> get _timelineItems =>
+      widget.uiState.timeline.where((item) => item is! TimelineQueue).toList();
+
+  Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
+    return uiState.timeline.isEmpty
+        ? EmptyHero(
+            workspaces: uiState.workspaces,
+            currentWorkspaceLabel: _workspaceLabel(session?.cwd),
+            onPickWorkspace: (workspaceId) =>
+                widget.onAction(CreateSessionInWorkspace(workspaceId)),
+          )
+        : _outline
+        ? OutlineTimeline(
+            timeline: uiState.timeline,
+            collapsedTurns: _collapsedTurns,
+            onToggle: (turn) => setState(() {
+              final next = Set<int>.of(_collapsedTurns);
+              if (!next.add(turn)) next.remove(turn);
+              _collapsedTurns = next;
+            }),
+            onAction: widget.onAction,
+            loadAttachment: widget.loadAttachment,
+          )
+        : ListView.separated(
+            itemCount: _timelineItems.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final item = _timelineItems[index];
+              return TimelineRow(
+                key: ValueKey(timelineKey(item)),
+                item: item,
+                onAction: widget.onAction,
+                loadAttachment: widget.loadAttachment,
+              );
+            },
+          );
+  }
+
   Future<void> _showRenameDialog(String sessionId) {
     return showDialog<void>(
       context: context,
@@ -538,42 +579,17 @@ class _ChatPanelState extends State<ChatPanel> {
             ],
           ),
           const SizedBox(height: 4),
-          Expanded(
-            child: uiState.timeline.isEmpty
-                ? EmptyHero(
-                    workspaces: uiState.workspaces,
-                    currentWorkspaceLabel: _workspaceLabel(
-                      selectedSession?.cwd,
-                    ),
-                    onPickWorkspace: (workspaceId) =>
-                        widget.onAction(CreateSessionInWorkspace(workspaceId)),
-                  )
-                : _outline
-                ? OutlineTimeline(
-                    timeline: uiState.timeline,
-                    collapsedTurns: _collapsedTurns,
-                    onToggle: (turn) => setState(() {
-                      final next = Set<int>.of(_collapsedTurns);
-                      if (!next.add(turn)) next.remove(turn);
-                      _collapsedTurns = next;
-                    }),
-                    onAction: widget.onAction,
-                    loadAttachment: widget.loadAttachment,
-                  )
-                : ListView.separated(
-                    itemCount: uiState.timeline.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final item = uiState.timeline[index];
-                      return TimelineRow(
-                        key: ValueKey(timelineKey(item)),
-                        item: item,
-                        onAction: widget.onAction,
-                        loadAttachment: widget.loadAttachment,
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _timelineBody(uiState, selectedSession)),
+          if (uiState.timeline.whereType<TimelineQueue>().any(
+            (dock) => dock.items.isNotEmpty,
+          ))
+            QueueDock(
+              items: [
+                for (final dock in uiState.timeline.whereType<TimelineQueue>())
+                  ...dock.items,
+              ],
+              onAction: widget.onAction,
+            ),
           Row(
             children: [
               Expanded(
@@ -894,25 +910,183 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   }
 }
 
-class ToolCallRow extends StatelessWidget {
+/// Tool summary row — port of the web ToolRow (figma 122:9479): one 24px
+/// line [leading state slot] gap6 [title] dot [summary FILL truncate]; the
+/// details (arguments + result) expand below on tap. Running rows carry the
+/// shared sweep glare.
+class ToolCallRow extends StatefulWidget {
   const ToolCallRow({super.key, required this.call});
 
   final TimelineToolCall call;
 
   @override
+  State<ToolCallRow> createState() => _ToolCallRowState();
+}
+
+class _ToolCallRowState extends State<ToolCallRow>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant ToolCallRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final running = widget.call.status == ToolRunStatus.running;
+    if (running && oldWidget.call.status != ToolRunStatus.running) {
+      _sweep.repeat();
+    }
+    if (!running && oldWidget.call.status == ToolRunStatus.running) {
+      _sweep.stop(canceled: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  String get _summary {
+    final call = widget.call;
+    // An error row's collapsed summary IS the failure's first line.
+    if (call.isError || call.status == ToolRunStatus.failed) {
+      return _firstLine(call.result ?? call.arguments ?? '');
+    }
+    return _firstLine(call.result ?? call.arguments ?? '');
+  }
+
+  static String _firstLine(String text) {
+    final newline = text.indexOf('\n');
+    return newline == -1 ? text : text.substring(0, newline);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final call = widget.call;
+    final running = call.status == ToolRunStatus.running;
+    final failed = call.status == ToolRunStatus.failed || call.isError;
+    final hasDetails =
+        (call.arguments ?? '').isNotEmpty || (call.result ?? '').isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${call.name} ${toolRunStatusLabel(call.status)}',
-          style: Theme.of(context).textTheme.labelLarge,
+        Semantics(
+          label: running
+              ? 'Running'
+              : failed
+              ? 'Failed'
+              : null,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: hasDetails
+                ? () => setState(() => _expanded = !_expanded)
+                : null,
+            child: ClipRect(
+              child: SweepHighlight(
+                controller: running && !MediaQuery.disableAnimationsOf(context)
+                    ? _sweep
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      _leading(context, failed),
+                      const SizedBox(width: 6),
+                      Text(call.name, style: theme.textTheme.bodyMedium),
+                      Container(
+                        width: 2,
+                        height: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: ds.labelCaption,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: ds.labelTertiary,
+                          ),
+                        ),
+                      ),
+                      if (hasDetails)
+                        Icon(
+                          _expanded
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 14,
+                          color: ds.labelSecondary,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
-        if (call.arguments case final String arguments)
-          Text(arguments, style: Theme.of(context).textTheme.bodySmall),
-        if (call.result case final String result)
-          Text(result, style: Theme.of(context).textTheme.bodySmall),
+        if (_expanded && hasDetails)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 2, left: 22),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: ds.bgLayer1,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (call.arguments case final String arguments)
+                  Text(
+                    arguments,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: kFontFamilyMonospace,
+                    ),
+                  ),
+                if (call.result case final String result)
+                  Text(
+                    result,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: failed ? theme.colorScheme.error : null,
+                      fontFamily: kFontFamilyMonospace,
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
+    );
+  }
+
+  Widget _leading(BuildContext context, bool failed) {
+    if (failed) {
+      return Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.error,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+    return Icon(
+      Icons.terminal_outlined,
+      size: 14,
+      color: dsOf(context).labelSecondary,
     );
   }
 }
@@ -951,6 +1125,38 @@ class JobsRow extends StatelessWidget {
               Text('finished @ ${job.finishedAt}', style: bodySmall),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Queue dock — port of the web QueueDock (FileContainerText 1:791): a
+/// panel attached above the composer card, r12 top corners, tip fill,
+/// l1 border (the composer card's own edge closes the bottom).
+class QueueDock extends StatelessWidget {
+  const QueueDock({super.key, required this.items, required this.onAction});
+
+  final List<SessionQueueItem> items;
+  final void Function(ChatAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final ds = dsOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: ds.tip,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          border: Border(
+            top: BorderSide(color: ds.divider),
+            left: BorderSide(color: ds.divider),
+            right: BorderSide(color: ds.divider),
+          ),
+        ),
+        child: QueueRow(items: items, onAction: onAction),
       ),
     );
   }
@@ -1830,7 +2036,10 @@ class OutlineTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groups = groupTimelineByTurn(timeline);
+    // Queue rides the composer dock, not the timeline body.
+    final groups = groupTimelineByTurn(
+      timeline.where((item) => item is! TimelineQueue).toList(),
+    );
     final slivers = <Widget>[];
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
       final group = groups[groupIndex];
