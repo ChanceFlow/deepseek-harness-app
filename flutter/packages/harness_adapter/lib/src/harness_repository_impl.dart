@@ -1027,6 +1027,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     updatedAtEpochMs: wire.updatedAt,
     cwd: wire.cwd,
     agentPreset: wire.agentPreset,
+    origin: wire.origin,
   );
 
   /// `imageLimits` is a host-config projection; one value serves all
@@ -1227,6 +1228,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     updatedAtEpochMs: session.updatedAtEpochMs,
     cwd: session.cwd,
     agentPreset: session.agentPreset,
+    origin: session.origin,
   );
 
   _SessionState _sessionStateFor(String sessionId) =>

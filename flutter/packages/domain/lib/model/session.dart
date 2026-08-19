@@ -11,6 +11,7 @@ final class SessionSummary {
     this.updatedAtEpochMs = 0,
     this.cwd,
     this.agentPreset,
+    this.origin,
   });
 
   final String id;
@@ -21,6 +22,10 @@ final class SessionSummary {
   final int updatedAtEpochMs;
   final String? cwd;
   final String? agentPreset;
+
+  /// Coarse durable origin used by navigation surfaces; `subagent` marks a
+  /// subagent child (absent for root sessions).
+  final String? origin;
 
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.
@@ -47,7 +52,8 @@ final class SessionSummary {
       other.workspaceId == workspaceId &&
       other.updatedAtEpochMs == updatedAtEpochMs &&
       other.cwd == cwd &&
-      other.agentPreset == agentPreset;
+      other.agentPreset == agentPreset &&
+      other.origin == origin;
 
   @override
   int get hashCode => Object.hash(
@@ -59,6 +65,7 @@ final class SessionSummary {
     updatedAtEpochMs,
     cwd,
     agentPreset,
+    origin,
   );
 }
 

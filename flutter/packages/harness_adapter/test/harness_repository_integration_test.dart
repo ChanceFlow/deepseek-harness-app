@@ -902,4 +902,37 @@ void main() {
     expect(limits?.maxImagePixels, 1000000);
     expect(limits?.mediaTypes, <String>['image/png', 'image/jpeg']);
   });
+
+  test('session list maps subagent origin and root absence', () async {
+    // Wire: SessionSummary.origin is the optional coarse origin
+    // (`origin?: 'subagent'`) — reference/deepseek-harness/
+    // packages/host/apiproxy/src/api/sessions.ts.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-child',
+        'updatedAt': 4,
+        'running': false,
+        'blank': false,
+        'origin': 'subagent',
+      },
+      <String, Object?>{
+        'sessionId': 'session-root',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.refreshSessions();
+
+    final sessions = await repository.observeSessions().first;
+    final child = sessions.firstWhere(
+      (session) => session.id == 'session-child',
+    );
+    expect(child.origin, 'subagent');
+    final root = sessions.firstWhere((session) => session.id == 'session-root');
+    expect(root.origin, isNull);
+  });
 }

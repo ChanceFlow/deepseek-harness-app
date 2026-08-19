@@ -23,6 +23,11 @@ const String _ungroupedKey = '';
 /// local overflow control.
 const int _collapsedSessionLimit = 5;
 
+/// Web tree.ts `sessionVisible`: the coarse wire origin marking a subagent
+/// child — such sessions browse through their parent's subagent catalog,
+/// never as independent sidebar rows.
+const String _subagentOrigin = 'subagent';
+
 class SessionPanel extends StatefulWidget {
   const SessionPanel({
     super.key,
@@ -148,6 +153,15 @@ class _SessionPanelState extends State<SessionPanel> {
   bool _isGroupExpanded(String key, String? currentGroupKey) =>
       _groupOverrides[key] ?? key == currentGroupKey;
 
+  /// Web tree.ts `sessionVisible`: ordinary sessions are visible; among
+  /// blank sessions, only the current one is visible. Subagent children
+  /// use their parent header catalog. Archived sessions never reach this
+  /// panel — the adapter's `observeSessions` drops ids in the workspace
+  /// registry's archived set — so this port does not re-filter them.
+  bool _sessionVisible(SessionSummary session) =>
+      session.origin != _subagentOrigin &&
+      (!session.blank || session.id == widget.selectedSessionId);
+
   /// Web tree.ts `deriveGroups`: one group per workspace in registry order
   /// plus the trailing Ungrouped bucket for sessions outside every
   /// workspace; members sort newest-first.
@@ -155,20 +169,21 @@ class _SessionPanelState extends State<SessionPanel> {
     final knownWorkspaceIds = <String>{
       for (final workspace in widget.workspaces) workspace.workspaceId,
     };
+    final visible = widget.sessions.where(_sessionVisible);
     final groups = <_SessionGroupData>[
       for (final workspace in widget.workspaces)
         _SessionGroupData(
           key: workspace.workspaceId,
           label: workspace.title,
           sessions: _sortedByRecency(
-            widget.sessions.where(
+            visible.where(
               (session) => session.workspaceId == workspace.workspaceId,
             ),
           ),
         ),
     ];
     final ungrouped = _sortedByRecency(
-      widget.sessions.where(
+      visible.where(
         (session) =>
             session.workspaceId == null ||
             !knownWorkspaceIds.contains(session.workspaceId),
@@ -292,7 +307,8 @@ class _SessionPanelState extends State<SessionPanel> {
 
   /// Rail form: the wide pane's controls as bare icon seats in the same
   /// top-down order — new session, then search (which expands the pane and
-  /// lands in the box) — above the icon-per-session list.
+  /// lands in the box) — above the icon-per-session list. Rail avatars
+  /// follow the same tree.ts `sessionVisible` rule as the grouped tree.
   List<Widget> _buildRailChildren(BuildContext context, DeepSuiteColors ds) {
     return [
       IconButton(
@@ -319,7 +335,7 @@ class _SessionPanelState extends State<SessionPanel> {
         child: ListView(
           padding: const EdgeInsets.only(top: 4, bottom: 16),
           children: [
-            for (final session in widget.sessions)
+            for (final session in widget.sessions.where(_sessionVisible))
               IconButton(
                 tooltip: session.displayTitle,
                 onPressed: () => widget.onSelectSession(session.id),
@@ -442,8 +458,14 @@ class _SessionPanelState extends State<SessionPanel> {
   /// landed stay hidden until the list catches up (web drops them the
   /// same way).
   Widget _buildSearchResults(BuildContext context, DeepSuiteColors ds) {
+    // Web tree.ts `deriveSearchResults`: content matches render only for
+    // visible non-blank summaries — subagent children never surface, and
+    // blank placeholders never match a query (not even the current one).
     final sessionsById = <String, SessionSummary>{
-      for (final session in widget.sessions) session.id: session,
+      for (final session in widget.sessions.where(
+        (session) => !session.blank && _sessionVisible(session),
+      ))
+        session.id: session,
     };
     final rows = <Widget>[
       for (final result in widget.searchResults)

@@ -1,22 +1,40 @@
 /// Context-occupancy vocabulary for the composer status ring.
 ///
-/// Mirrors the web `ContextPressureProjection`: two independent last-wins
-/// records — the provider-reported prompt pressure of the newest request
-/// and the newest advertised route capacity. Not an atomic observation;
-/// a user-facing reference only.
+/// Mirrors the web `ContextPressureProjection`
+/// (reference/deepseek-harness/packages/llm/token-meter/src/
+/// usage-projection.ts): two independent last-wins records — the
+/// provider-reported prompt pressure of the newest request and the newest
+/// advertised route capacity — plus the sample carried forward over the
+/// surface's signed movement since it was taken. Not an atomic
+/// observation; a user-facing reference only.
 library;
 
 final class ContextPressure {
-  const ContextPressure({this.pressureTokens, this.contextWindow});
+  const ContextPressure({
+    this.pressureTokens,
+    this.projectedTokens,
+    this.contextWindow,
+  });
 
   /// Prompt size of the most recent request: uncached input plus cache
   /// reads and writes. Null until a provider reports usage.
   final int? pressureTokens;
 
+  /// The pressure sample carried forward over the surface's signed
+  /// movement since it was taken:
+  /// `max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens)`
+  /// (the `usage-projection.ts` view rule). Occupancy prefers this over
+  /// [pressureTokens] so it answers for the next request rather than the
+  /// last one; null until a usage sample exists.
+  final int? projectedTokens;
+
   /// Newest recorded route capacity; null when no adapter advertised one.
   final int? contextWindow;
 
-  /// Ring occupancy ratio in 0..1; null until both records exist.
+  /// Occupancy ratio of the bare pressure sample in 0..1; null until both
+  /// records exist. Display occupancy prefers [projectedTokens] (web
+  /// ui-conversation StatsLine.tsx `contextOccupancy`:
+  /// `projectedTokens ?? pressureTokens`).
   double? get occupancy {
     final pressure = pressureTokens;
     final window = contextWindow;
@@ -28,10 +46,12 @@ final class ContextPressure {
   bool operator ==(Object other) =>
       other is ContextPressure &&
       other.pressureTokens == pressureTokens &&
+      other.projectedTokens == projectedTokens &&
       other.contextWindow == contextWindow;
 
   @override
-  int get hashCode => Object.hash(pressureTokens, contextWindow);
+  int get hashCode =>
+      Object.hash(pressureTokens, projectedTokens, contextWindow);
 }
 
 /// Heuristic context composition (web `contextBreakdown` projection):

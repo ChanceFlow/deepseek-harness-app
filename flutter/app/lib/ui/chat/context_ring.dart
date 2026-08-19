@@ -1,7 +1,11 @@
 /// Composer context-occupancy ring — port of the web ContextMeter
-/// (14px ring, 2px stroke): renders nothing until a provider reported
-/// both pressure and route capacity. Tap opens the composition panel
-/// (system / tools / conversation legend, web panel chrome).
+/// (14px ring, 2px stroke): renders nothing until a used value and the
+/// route capacity both exist. Occupancy prefers the projected sample
+/// (web ui-conversation StatsLine.tsx `contextOccupancy`:
+/// `projectedTokens ?? pressureTokens`), so the ring moves while a turn
+/// streams instead of holding still at the last usage sample. Tap opens
+/// the composition panel (system / tools / conversation legend, web panel
+/// chrome).
 library;
 
 import 'dart:math' as math;
@@ -22,8 +26,12 @@ class ContextRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final occupancy = pressure?.occupancy;
-    if (occupancy == null) return const SizedBox.shrink();
+    final used = pressure?.projectedTokens ?? pressure?.pressureTokens;
+    final window = pressure?.contextWindow;
+    if (used == null || window == null || window <= 0) {
+      return const SizedBox.shrink();
+    }
+    final occupancy = (used / window).clamp(0.0, 1.0).toDouble();
     final percent = (occupancy * 100).round();
     return Semantics(
       label: '$percent% of context used',

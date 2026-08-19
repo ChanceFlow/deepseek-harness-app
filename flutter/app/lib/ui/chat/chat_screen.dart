@@ -732,6 +732,8 @@ class _ChatPanelState extends State<ChatPanel> {
                     pendingImages: uiState.pendingImages,
                     imageLimits: uiState.imageLimits,
                     skills: uiState.skills,
+                    contextPressure: uiState.contextPressure,
+                    contextBreakdown: uiState.contextBreakdown,
                     onAction: widget.onAction,
                     // Web: Enter while running queues; steering rides the
                     // queue dock's per-item action.

@@ -6,6 +6,7 @@ library;
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/skills.dart';
@@ -159,36 +160,65 @@ void main() {
     expect(find.text('reconnecting'), findsOneWidget);
   });
 
-  testWidgets('session list shows title, running dot, blank fallback', (
-    tester,
-  ) async {
-    final actions = <ChatAction>[];
-    await _pump(
-      tester,
-      _state(
-        sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
-          SessionSummary(id: 's2', title: 'Beta', blank: false),
-          SessionSummary(id: 's3', blank: true),
-        ],
-        selectedSessionId: 's1',
-      ),
-      actions,
-    );
-    // The grouped sidebar rows: the running dot is a state-dot widget (the
-    // title stands alone), so scope the row text to the session panel.
-    Finder panelText(String text) => find.descendant(
-      of: find.byType(SessionPanel),
-      matching: find.text(text),
-    );
-    expect(panelText('Alpha'), findsOneWidget);
-    expect(panelText('Beta'), findsOneWidget);
-    // Blank row + the panel's own "New session" button.
-    expect(find.text('New session'), findsNWidgets(2));
-    await tester.tap(panelText('Beta'));
-    await tester.pump();
-    expect(actions, contains(const SelectSession('s2')));
-  });
+  testWidgets(
+    'session list shows titles, hides subagents and unselected blanks',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              running: true,
+              blank: false,
+            ),
+            SessionSummary(id: 's2', title: 'Beta', blank: false),
+            // Web tree.ts sessionVisible: the subagent child (s4) browses
+            // through its parent's catalog; among blank sessions only the
+            // selected one (s5) shows.
+            SessionSummary(id: 's3', blank: true),
+            SessionSummary(
+              id: 's4',
+              title: 'Child',
+              blank: false,
+              origin: 'subagent',
+            ),
+            SessionSummary(id: 's5', blank: true),
+          ],
+          selectedSessionId: 's5',
+        ),
+        actions,
+      );
+      // The grouped sidebar rows: the running dot is a state-dot widget (the
+      // title stands alone), so scope the row text to the session panel.
+      Finder panelText(String text) => find.descendant(
+        of: find.byType(SessionPanel),
+        matching: find.text(text),
+      );
+      expect(panelText('Alpha'), findsOneWidget);
+      expect(panelText('Beta'), findsOneWidget);
+      // The subagent child never becomes a top-level row.
+      expect(panelText('Child'), findsNothing);
+      // The selected blank row (s5) + the panel's "New session" button; the
+      // unselected blank (s3) stays hidden.
+      expect(find.text('New session'), findsNWidgets(2));
+      await tester.tap(panelText('Beta'));
+      await tester.pump();
+      expect(actions, contains(const SelectSession('s2')));
+
+      // Rail form: avatars follow the same rule — root sessions and the
+      // selected blank keep their seat; the subagent child and the
+      // unselected blank never get one.
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Alpha'), findsOneWidget);
+      expect(find.byTooltip('s5'), findsOneWidget);
+      expect(find.byTooltip('Child'), findsNothing);
+      expect(find.byTooltip('s3'), findsNothing);
+    },
+  );
 
   testWidgets('new session dialog offers workspaces and default', (
     tester,
@@ -708,6 +738,31 @@ void main() {
       actions,
       contains(const SendPrompt('hello world', mode: PromptMode.queue)),
     );
+  });
+
+  testWidgets('context ring prefers the projected sample for occupancy', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        contextPressure: ContextPressure(
+          pressureTokens: 5000,
+          projectedTokens: 9000,
+          contextWindow: 30000,
+        ),
+      ),
+      actions,
+    );
+
+    // Web StatsLine contextOccupancy: the numerator is projectedTokens —
+    // the sample carried forward over the surface's movement since — so
+    // the ring reads 30% (9000/30000), not the stale sample's 17%.
+    expect(find.bySemanticsLabel('30% of context used'), findsOneWidget);
+    expect(find.bySemanticsLabel('17% of context used'), findsNothing);
   });
 
   testWidgets('running session: primary becomes Stop; submit queues', (
