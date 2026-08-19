@@ -201,7 +201,11 @@ def main() -> int:
     lines.append("];")
     lines.append("")
     lines.append(
-        "// Motion + font tokens from ui-theme/src/styles/base.css.\n"
+        "// Font tokens from ui-theme/src/styles/base.css: the code stack\n"
+        "// (SF Mono/JetBrains Mono/Fira Code/...) has no Flutter-side asset;\n"
+        "// the platform monospace default is the accepted equivalent.\n"
+        "const String kFontFamilyMonospace = 'monospace';\n"
+        "// Motion tokens from ui-theme/src/styles/base.css.\n"
         "const Duration kDsDurationFast = Duration(milliseconds: 100);\n"
         "const Duration kDsDuration = Duration(milliseconds: 200);\n"
         "const Duration kDsDurationSlow = Duration(milliseconds: 300);\n"

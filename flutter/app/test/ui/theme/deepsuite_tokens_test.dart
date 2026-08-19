@@ -65,4 +65,8 @@ void main() {
     expect(kDsDuration, const Duration(milliseconds: 200));
     expect(kDsDurationSlow, const Duration(milliseconds: 300));
   });
+
+  test('code font resolves to the platform monospace stack', () {
+    expect(kFontFamilyMonospace, 'monospace');
+  });
 }

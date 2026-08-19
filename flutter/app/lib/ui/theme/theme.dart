@@ -56,7 +56,9 @@ class DshTheme {
       onError: DeepSuiteStatic.neutralBluish00,
     );
 
-    return ThemeData(
+    // Figma weight 510 renders as 500 in the web UI; apply the same
+    // emphasis to the three title roles.
+    final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
@@ -65,6 +67,15 @@ class DshTheme {
       extensions: <ThemeExtension<dynamic>>[
         isDark ? DeepSuiteColors.dark() : DeepSuiteColors.light(),
       ],
+    );
+    final titles = base.textTheme;
+    return base.copyWith(
+      textTheme: titles.copyWith(
+        titleLarge: titles.titleLarge?.copyWith(fontWeight: FontWeight.w500),
+        titleMedium:
+            titles.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+        titleSmall: titles.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+      ),
     );
   }
 }

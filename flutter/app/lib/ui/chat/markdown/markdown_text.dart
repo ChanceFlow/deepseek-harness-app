@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/deepsuite_extension.dart' show DeepSuiteColors;
+import '../../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'markdown_parser.dart';
@@ -180,7 +181,7 @@ class MarkdownText extends StatelessWidget {
             child: Text(
               block.code,
               style: theme.textTheme.bodySmall
-                  ?.copyWith(fontFamily: fontFamilyMonospace),
+                  ?.copyWith(fontFamily: kFontFamilyMonospace),
             ),
           ),
         ],
@@ -201,7 +202,7 @@ class MarkdownText extends StatelessWidget {
             out.add(TextSpan(
               text: inline.code,
               style: TextStyle(
-                fontFamily: fontFamilyMonospace,
+                fontFamily: kFontFamilyMonospace,
                 backgroundColor: ds(theme).bgLayer1,
               ),
             ));
@@ -241,6 +242,3 @@ class MarkdownText extends StatelessWidget {
     return TextSpan(children: spans);
   }
 }
-
-/// Compose's `FontFamily.Monospace` equivalent.
-const String fontFamilyMonospace = 'monospace';

@@ -54,6 +54,14 @@ void main() {
     expect(light.bgLayer1, isNot(equals(dark.bgLayer1)));
   });
 
+  test('title roles carry the Figma-510-equivalent weight', () {
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      expect(theme.textTheme.titleLarge?.fontWeight, FontWeight.w500);
+      expect(theme.textTheme.titleMedium?.fontWeight, FontWeight.w500);
+      expect(theme.textTheme.titleSmall?.fontWeight, FontWeight.w500);
+    }
+  });
+
   test('extension lerp reaches the other theme at t=1', () {
     final light = DshTheme.light().extension<DeepSuiteColors>()!;
     final dark = DshTheme.dark().extension<DeepSuiteColors>()!;

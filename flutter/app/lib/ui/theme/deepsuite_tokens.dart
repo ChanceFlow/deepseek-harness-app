@@ -725,7 +725,11 @@ const List<String> kDeepSuiteAliasKeys = [
   "--dsw-specific-tip",
 ];
 
-// Motion + font tokens from ui-theme/src/styles/base.css.
+// Font tokens from ui-theme/src/styles/base.css: the code stack
+// (SF Mono/JetBrains Mono/Fira Code/...) has no Flutter-side asset;
+// the platform monospace default is the accepted equivalent.
+const String kFontFamilyMonospace = "monospace";
+// Motion tokens from ui-theme/src/styles/base.css.
 const Duration kDsDurationFast = Duration(milliseconds: 100);
 const Duration kDsDuration = Duration(milliseconds: 200);
 const Duration kDsDurationSlow = Duration(milliseconds: 300);
