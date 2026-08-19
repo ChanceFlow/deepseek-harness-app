@@ -127,3 +127,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     );
   }
 }
+
+/// Resolves the deepsuite extension from any context; falls back to the
+/// light tokens when the host MaterialApp skipped `DshTheme` (tests).
+DeepSuiteColors dsOf(BuildContext context) =>
+    Theme.of(context).extension<DeepSuiteColors>() ?? DeepSuiteColors.light();

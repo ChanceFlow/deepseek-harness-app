@@ -4,9 +4,15 @@ library;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import '../../theme/deepsuite_extension.dart' show DeepSuiteColors;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'markdown_parser.dart';
+
+/// deepsuite layer tokens for this surface.
+DeepSuiteColors ds(ThemeData theme) =>
+    theme.extension<DeepSuiteColors>() ?? DeepSuiteColors.light();
 
 class MarkdownText extends StatelessWidget {
   const MarkdownText({super.key, required this.text});
@@ -105,7 +111,7 @@ class MarkdownText extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: ds(theme).bgLayer1,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
@@ -158,7 +164,7 @@ class MarkdownText extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: ds(theme).bgLayer1,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
@@ -196,7 +202,7 @@ class MarkdownText extends StatelessWidget {
               text: inline.code,
               style: TextStyle(
                 fontFamily: fontFamilyMonospace,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                backgroundColor: ds(theme).bgLayer1,
               ),
             ));
           case BoldInline():

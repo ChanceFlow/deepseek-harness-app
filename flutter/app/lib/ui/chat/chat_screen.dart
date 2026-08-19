@@ -26,10 +26,13 @@ import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
 import 'timeline_grouping.dart';
+import '../theme/deepsuite_extension.dart' show dsOf;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
-    String sessionId, AttachmentRef ref);
+  String sessionId,
+  AttachmentRef ref,
+);
 
 class ChatRoute extends ConsumerWidget {
   const ChatRoute({super.key});
@@ -37,18 +40,18 @@ class ChatRoute extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(chatControllerProvider);
-    return ref.watch(chatUiStateProvider).when(
+    return ref
+        .watch(chatUiStateProvider)
+        .when(
           data: (uiState) => ChatScreen(
             uiState: uiState,
             onAction: controller.onAction,
             loadAttachment: controller.loadAttachmentBytes,
           ),
-          error: (error, _) => Scaffold(
-            body: Center(child: Text(error.toString())),
-          ),
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
+          error: (error, _) =>
+              Scaffold(body: Center(child: Text(error.toString()))),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
         );
   }
 }
@@ -71,74 +74,78 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, constraints) {
-      final useTwoPanes = constraints.maxWidth >= 720;
-      return Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              ConnectionBanner(uiState: uiState),
-              if (useTwoPanes)
-                Expanded(
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 320,
-                        child: SessionPanel(
-                          sessions: uiState.sessions,
-                          workspaces: uiState.workspaces,
-                          searchResults: uiState.searchResults,
-                          selectedSessionId: uiState.selectedSessionId,
-                          onSelectSession: (id) => onAction(SelectSession(id)),
-                          onCreateSession: (workspaceId) =>
-                              onAction(CreateSessionInWorkspace(workspaceId)),
-                          onSearchSessions: (query) =>
-                              onAction(SearchSessions(query)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoPanes = constraints.maxWidth >= 720;
+        return Scaffold(
+          body: SafeArea(
+            child: Column(
+              children: [
+                ConnectionBanner(uiState: uiState),
+                if (useTwoPanes)
+                  Expanded(
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: SessionPanel(
+                            sessions: uiState.sessions,
+                            workspaces: uiState.workspaces,
+                            searchResults: uiState.searchResults,
+                            selectedSessionId: uiState.selectedSessionId,
+                            onSelectSession: (id) =>
+                                onAction(SelectSession(id)),
+                            onCreateSession: (workspaceId) =>
+                                onAction(CreateSessionInWorkspace(workspaceId)),
+                            onSearchSessions: (query) =>
+                                onAction(SearchSessions(query)),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: ChatPanel(
-                          uiState: uiState,
-                          onAction: onAction,
-                          loadAttachment: loadAttachment,
+                        Expanded(
+                          child: ChatPanel(
+                            uiState: uiState,
+                            onAction: onAction,
+                            loadAttachment: loadAttachment,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 160,
+                          child: SessionPanel(
+                            sessions: uiState.sessions,
+                            workspaces: uiState.workspaces,
+                            searchResults: uiState.searchResults,
+                            selectedSessionId: uiState.selectedSessionId,
+                            onSelectSession: (id) =>
+                                onAction(SelectSession(id)),
+                            onCreateSession: (workspaceId) =>
+                                onAction(CreateSessionInWorkspace(workspaceId)),
+                            onSearchSessions: (query) =>
+                                onAction(SearchSessions(query)),
+                          ),
+                        ),
+                        Expanded(
+                          child: ChatPanel(
+                            uiState: uiState,
+                            onAction: onAction,
+                            loadAttachment: loadAttachment,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                )
-              else
-                Expanded(
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 160,
-                        child: SessionPanel(
-                          sessions: uiState.sessions,
-                          workspaces: uiState.workspaces,
-                          searchResults: uiState.searchResults,
-                          selectedSessionId: uiState.selectedSessionId,
-                          onSelectSession: (id) => onAction(SelectSession(id)),
-                          onCreateSession: (workspaceId) =>
-                              onAction(CreateSessionInWorkspace(workspaceId)),
-                          onSearchSessions: (query) =>
-                              onAction(SearchSessions(query)),
-                        ),
-                      ),
-                      Expanded(
-                        child: ChatPanel(
-                          uiState: uiState,
-                          onAction: onAction,
-                          loadAttachment: loadAttachment,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -163,9 +170,8 @@ class ConnectionBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         child: Text(
           text,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.labelMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -217,83 +223,111 @@ class _SessionPanelState extends State<SessionPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _showNewSessionDialog,
-              child: const Text('New session'),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _queryController,
-                  decoration: const InputDecoration(
-                    hintText: 'Search sessions',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: widget.onSearchSessions,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: FilledButton(
-                  onPressed: _queryController.text.trim().isEmpty
-                      ? null
-                      : () => widget.onSearchSessions(_queryController.text),
-                  child: const Text('Go'),
-                ),
-              ),
-            ],
-          ),
-          for (final result in widget.searchResults)
+    final ds = dsOf(context);
+    return ColoredBox(
+      color: ds.sidebarFill,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => widget.onSelectSession(result.sessionId),
-                child: Text(
-                  'Search: ${result.snippet}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              child: FilledButton.tonal(
+                onPressed: _showNewSessionDialog,
+                child: const Text('New session'),
               ),
             ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.separated(
-              itemCount: widget.sessions.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                final session = widget.sessions[index];
-                final selected = session.id == widget.selectedSessionId;
-                final displayTitle = session.blank
-                    ? 'New session'
-                    : session.displayTitle;
-                final status =
-                    !session.blank && session.running ? ' ●' : '';
-                return SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: selected
-                        ? null
-                        : () => widget.onSelectSession(session.id),
-                    child: Text(
-                      displayTitle + status,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _queryController,
+                    decoration: const InputDecoration(
+                      hintText: 'Search sessions',
+                      isDense: true,
                     ),
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: widget.onSearchSessions,
                   ),
-                );
-              },
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: FilledButton(
+                    onPressed: _queryController.text.trim().isEmpty
+                        ? null
+                        : () => widget.onSearchSessions(_queryController.text),
+                    child: const Text('Go'),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            for (final result in widget.searchResults)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => widget.onSelectSession(result.sessionId),
+                  child: Text(
+                    'Search: ${result.snippet}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.separated(
+                itemCount: widget.sessions.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 6),
+                itemBuilder: (context, index) {
+                  final session = widget.sessions[index];
+                  final selected = session.id == widget.selectedSessionId;
+                  final displayTitle = session.blank
+                      ? 'New session'
+                      : session.displayTitle;
+                  final status = !session.blank && session.running ? ' ●' : '';
+                  // Web sidebar nav-item: active fill + brand-accent edge.
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: selected ? ds.sidebarNavItemActive : null,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: selected
+                          ? null
+                          : () => widget.onSelectSession(session.id),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          children: [
+                            if (selected)
+                              VerticalDivider(
+                                thickness: 3,
+                                width: 3,
+                                color: ds.sidebarNavItemActiveAccent,
+                              ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 10,
+                                ),
+                                child: Text(
+                                  displayTitle + status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -542,12 +576,12 @@ class _ChatPanelState extends State<ChatPanel> {
                   imageLimits: uiState.imageLimits,
                   skills: uiState.skills,
                   onAction: widget.onAction,
-                  onSend: (text) => widget.onAction(SendPrompt(
-                    text,
-                    mode: isSessionRunning
-                        ? _promptMode
-                        : PromptMode.queue,
-                  )),
+                  onSend: (text) => widget.onAction(
+                    SendPrompt(
+                      text,
+                      mode: isSessionRunning ? _promptMode : PromptMode.queue,
+                    ),
+                  ),
                 ),
               ),
               Padding(
@@ -578,16 +612,16 @@ class PlanChip extends StatelessWidget {
     final label = plan.pending
         ? 'Plan: switching…'
         : plan.active
-            ? 'Plan: active'
-            : 'Plan: off';
+        ? 'Plan: active'
+        : 'Plan: off';
     final highlight = plan.active || plan.pending;
     return Text(
       label,
       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: highlight
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+        color: highlight
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
     );
   }
 }
@@ -608,39 +642,44 @@ class TimelineRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (item) {
       TimelineMessage(:final value) => MessageRow(
-          message: value,
-          loadAttachment: loadAttachment,
-        ),
+        message: value,
+        loadAttachment: loadAttachment,
+      ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
-      TimelineCompaction(:final shadowedCount) =>
-        CompactionRow(shadowedCount: shadowedCount),
+      TimelineCompaction(:final shadowedCount) => CompactionRow(
+        shadowedCount: shadowedCount,
+      ),
       TimelineToolCall() => ToolCallRow(call: item as TimelineToolCall),
       TimelineApprovalRequest() => ApprovalRow(
-          requestId: (item as TimelineApprovalRequest).requestId,
-          approvalId: (item as TimelineApprovalRequest).approvalId,
-          toolName: (item as TimelineApprovalRequest).toolName,
-          reason: (item as TimelineApprovalRequest).reason,
-          onAction: onAction,
-        ),
+        requestId: (item as TimelineApprovalRequest).requestId,
+        approvalId: (item as TimelineApprovalRequest).approvalId,
+        toolName: (item as TimelineApprovalRequest).toolName,
+        reason: (item as TimelineApprovalRequest).reason,
+        onAction: onAction,
+      ),
       TimelineQuestionRequest() => QuestionRow(
-          request: item as TimelineQuestionRequest,
-          onAction: onAction,
-        ),
+        request: item as TimelineQuestionRequest,
+        onAction: onAction,
+      ),
       TimelineQueue(:final items) => QueueRow(items: items, onAction: onAction),
       TimelineJobs(:final jobs) => JobsRow(jobs: jobs),
       TimelineError(:final message) => SizedBox(
-          width: double.infinity,
-          child: Text(
-            message,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+        width: double.infinity,
+        child: Text(
+          message,
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
+      ),
     };
   }
 }
 
 class MessageRow extends StatelessWidget {
-  const MessageRow({super.key, required this.message, required this.loadAttachment});
+  const MessageRow({
+    super.key,
+    required this.message,
+    required this.loadAttachment,
+  });
 
   final ChatMessage message;
   final AttachmentLoader loadAttachment;
@@ -653,14 +692,17 @@ class MessageRow extends StatelessWidget {
       children: [
         Text(
           message.role == MessageRole.user ? 'You' : 'Assistant',
-          style: theme.textTheme.labelMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
-        if (message.reasoning case final String reasoning when reasoning.isNotEmpty)
+        if (message.reasoning case final String reasoning
+            when reasoning.isNotEmpty)
           Text(
             reasoning,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         if (message.text.isNotEmpty) MarkdownText(text: message.text),
         for (final ref in message.images)
@@ -791,8 +833,8 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
             'image ${ref.width}×${ref.height} (${ref.bytes} bytes)'
             '$nameSuffix',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         OutlinedButton(
@@ -831,10 +873,10 @@ class ToolCallRow extends StatelessWidget {
 }
 
 String toolRunStatusLabel(ToolRunStatus status) => switch (status) {
-      ToolRunStatus.running => 'running...',
-      ToolRunStatus.completed => 'done',
-      ToolRunStatus.failed => 'failed',
-    };
+  ToolRunStatus.running => 'running...',
+  ToolRunStatus.completed => 'done',
+  ToolRunStatus.failed => 'failed',
+};
 
 class JobsRow extends StatelessWidget {
   const JobsRow({super.key, required this.jobs});
@@ -849,11 +891,15 @@ class JobsRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Background jobs',
-              style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            'Background jobs',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
           for (final job in jobs) ...[
-            Text('${job.kind} · ${job.label} · ${job.status.name}',
-                style: bodySmall),
+            Text(
+              '${job.kind} · ${job.label} · ${job.status.name}',
+              style: bodySmall,
+            ),
             if (job.detail case final String detail)
               Text(detail, style: bodySmall),
             if (job.finishedAt != null)
@@ -877,11 +923,13 @@ class QueueRow extends StatelessWidget {
       builder: (context) => QueueEditDialog(
         itemId: item.itemId,
         initialText: item.text,
-        onSave: (edited) => onAction(UpdateQueueAction(
-          itemId: item.itemId,
-          kind: QueueUpdateKind.edit,
-          text: edited,
-        )),
+        onSave: (edited) => onAction(
+          UpdateQueueAction(
+            itemId: item.itemId,
+            kind: QueueUpdateKind.edit,
+            text: edited,
+          ),
+        ),
       ),
     );
   }
@@ -913,20 +961,24 @@ class QueueRow extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
                         child: OutlinedButton(
-                          onPressed: () => onAction(UpdateQueueAction(
-                            itemId: item.itemId,
-                            kind: QueueUpdateKind.steer,
-                          )),
+                          onPressed: () => onAction(
+                            UpdateQueueAction(
+                              itemId: item.itemId,
+                              kind: QueueUpdateKind.steer,
+                            ),
+                          ),
                           child: const Text('Steer'),
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
                         child: OutlinedButton(
-                          onPressed: () => onAction(UpdateQueueAction(
-                            itemId: item.itemId,
-                            kind: QueueUpdateKind.remove,
-                          )),
+                          onPressed: () => onAction(
+                            UpdateQueueAction(
+                              itemId: item.itemId,
+                              kind: QueueUpdateKind.remove,
+                            ),
+                          ),
                           child: const Text('Remove'),
                         ),
                       ),
@@ -941,10 +993,10 @@ class QueueRow extends StatelessWidget {
 }
 
 String queuePlacementLabel(QueuePlacement placement) => switch (placement) {
-      QueuePlacement.queued => 'Queued',
-      QueuePlacement.steering => 'Steering',
-      QueuePlacement.context => 'Context',
-    };
+  QueuePlacement.queued => 'Queued',
+  QueuePlacement.steering => 'Steering',
+  QueuePlacement.context => 'Context',
+};
 
 /// Queue text edit: blank text never dispatches (Save no-ops), matching
 /// the Web composer's non-empty constraint for queue edits.
@@ -965,8 +1017,9 @@ class QueueEditDialog extends StatefulWidget {
 }
 
 class _QueueEditDialogState extends State<QueueEditDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialText);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
 
   @override
   void dispose() {
@@ -1031,21 +1084,25 @@ class ApprovalRow extends StatelessWidget {
         Row(
           children: [
             FilledButton(
-              onPressed: () => onAction(RespondApproval(
-                requestId: requestId,
-                approvalId: approvalId,
-                allowed: true,
-              )),
+              onPressed: () => onAction(
+                RespondApproval(
+                  requestId: requestId,
+                  approvalId: approvalId,
+                  allowed: true,
+                ),
+              ),
               child: const Text('Allow'),
             ),
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: OutlinedButton(
-                onPressed: () => onAction(RespondApproval(
-                  requestId: requestId,
-                  approvalId: approvalId,
-                  allowed: false,
-                )),
+                onPressed: () => onAction(
+                  RespondApproval(
+                    requestId: requestId,
+                    approvalId: approvalId,
+                    allowed: false,
+                  ),
+                ),
                 child: const Text('Reject'),
               ),
             ),
@@ -1081,7 +1138,8 @@ class _QuestionRowState extends State<QuestionRow> {
   @override
   Widget build(BuildContext context) {
     final request = widget.request;
-    final answerEnabled = request.questions.isNotEmpty &&
+    final answerEnabled =
+        request.questions.isNotEmpty &&
         request.questions.every((question) {
           final draft = _drafts[question.id] ?? const QuestionDraft();
           return draft.skipped ||
@@ -1105,10 +1163,12 @@ class _QuestionRowState extends State<QuestionRow> {
                     for (final question in request.questions)
                       _answerFor(question, _drafts[question.id]),
                   ];
-                  widget.onAction(AnswerQuestionAction(
-                    requestId: request.requestId,
-                    answers: answers,
-                  ));
+                  widget.onAction(
+                    AnswerQuestionAction(
+                      requestId: request.requestId,
+                      answers: answers,
+                    ),
+                  );
                 }
               : null,
           child: const Text('Answer'),
@@ -1126,8 +1186,9 @@ class _QuestionRowState extends State<QuestionRow> {
     final useCustomOnly = custom.isNotEmpty && !question.multiSelect;
     return QuestionAnswer(
       questionId: question.id,
-      selectedOptions:
-          useCustomOnly ? const <String>[] : draft.selected.toList(),
+      selectedOptions: useCustomOnly
+          ? const <String>[]
+          : draft.selected.toList(),
       customText: custom.isEmpty ? null : custom,
     );
   }
@@ -1158,8 +1219,9 @@ class PlanReviewEditor extends StatelessWidget {
       children: [
         Text(
           question.header ?? 'Plan review',
-          style: theme.textTheme.labelLarge
-              ?.copyWith(color: theme.colorScheme.primary),
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
         ),
         Text(question.question, style: theme.textTheme.titleSmall),
         if (question.detail case final String plan)
@@ -1168,7 +1230,7 @@ class PlanReviewEditor extends StatelessWidget {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
+                color: dsOf(context).bgLayer1,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Padding(
@@ -1184,16 +1246,14 @@ class PlanReviewEditor extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 8),
                 child: option == (approve ?? _firstOption())
                     ? FilledButton(
-                        onPressed: () => onDraftChange(
-                            draft.copyWith(selected: {option})),
-                        child: Text(
-                            chosen == option ? '✓ $option' : option),
+                        onPressed: () =>
+                            onDraftChange(draft.copyWith(selected: {option})),
+                        child: Text(chosen == option ? '✓ $option' : option),
                       )
                     : OutlinedButton(
-                        onPressed: () => onDraftChange(
-                            draft.copyWith(selected: {option})),
-                        child: Text(
-                            chosen == option ? '✓ $option' : option),
+                        onPressed: () =>
+                            onDraftChange(draft.copyWith(selected: {option})),
+                        child: Text(chosen == option ? '✓ $option' : option),
                       ),
               ),
           ],
@@ -1208,7 +1268,7 @@ class PlanReviewEditor extends StatelessWidget {
   List<String> _orderedOptions(String? approve) {
     final approveOption =
         question.options.where((option) => option == approve).firstOrNull ??
-            _firstOption();
+        _firstOption();
     return [
       if (approveOption != null) approveOption,
       ...question.options.where((option) => option != approveOption),
@@ -1269,36 +1329,48 @@ class QuestionItemEditor extends StatelessWidget {
         if (draft.skipped) ...[
           Text(
             'Skipped',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           OutlinedButton(
-            onPressed: () => onDraftChange(const QuestionDraft(
-              selected: <String>{},
-              customText: '',
-              skipped: false,
-            )),
+            onPressed: () => onDraftChange(
+              const QuestionDraft(
+                selected: <String>{},
+                customText: '',
+                skipped: false,
+              ),
+            ),
             child: const Text('Answer instead'),
           ),
         ] else ...[
           for (final option in question.options)
             if (draft.selected.contains(option))
               FilledButton(
-                onPressed: () => onDraftChange(QuestionDraft(
-                  selected:
-                      _selectedWithout(draft.selected, option, question.multiSelect),
-                  customText: draft.customText,
-                )),
+                onPressed: () => onDraftChange(
+                  QuestionDraft(
+                    selected: _selectedWithout(
+                      draft.selected,
+                      option,
+                      question.multiSelect,
+                    ),
+                    customText: draft.customText,
+                  ),
+                ),
                 child: Text(option),
               )
             else
               OutlinedButton(
-                onPressed: () => onDraftChange(QuestionDraft(
-                  selected:
-                      _selectedWith(draft.selected, option, question.multiSelect),
-                  customText:
-                      question.multiSelect ? draft.customText : '',
-                )),
+                onPressed: () => onDraftChange(
+                  QuestionDraft(
+                    selected: _selectedWith(
+                      draft.selected,
+                      option,
+                      question.multiSelect,
+                    ),
+                    customText: question.multiSelect ? draft.customText : '',
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1314,25 +1386,30 @@ class QuestionItemEditor extends StatelessWidget {
             child: TextField(
               controller: TextEditingController(text: draft.customText)
                 ..selection = TextSelection.collapsed(
-                    offset: draft.customText.length),
+                  offset: draft.customText.length,
+                ),
               decoration: const InputDecoration(
                 hintText: 'Type your answer',
                 isDense: true,
               ),
-              onChanged: (text) => onDraftChange(QuestionDraft(
-                selected: text.trim().isNotEmpty && !question.multiSelect
-                    ? const <String>{}
-                    : draft.selected,
-                customText: text,
-              )),
+              onChanged: (text) => onDraftChange(
+                QuestionDraft(
+                  selected: text.trim().isNotEmpty && !question.multiSelect
+                      ? const <String>{}
+                      : draft.selected,
+                  customText: text,
+                ),
+              ),
             ),
           ),
           OutlinedButton(
-            onPressed: () => onDraftChange(const QuestionDraft(
-              selected: <String>{},
-              customText: '',
-              skipped: true,
-            )),
+            onPressed: () => onDraftChange(
+              const QuestionDraft(
+                selected: <String>{},
+                customText: '',
+                skipped: true,
+              ),
+            ),
             child: const Text('Skip'),
           ),
         ],
@@ -1400,13 +1477,15 @@ class _ComposerBarState extends State<ComposerBar> {
           continue;
         }
         final bytes = await file.readAsBytes();
-        loaded.add(PendingImage(
-          id: file.path,
-          mediaType: mediaType,
-          base64Data: base64Encode(bytes),
-          name: name,
-          byteSize: bytes.length,
-        ));
+        loaded.add(
+          PendingImage(
+            id: file.path,
+            mediaType: mediaType,
+            base64Data: base64Encode(bytes),
+            name: name,
+            byteSize: bytes.length,
+          ),
+        );
       } catch (error) {
         failure = error.toString();
       }
@@ -1418,7 +1497,8 @@ class _ComposerBarState extends State<ComposerBar> {
   @override
   Widget build(BuildContext context) {
     final effectiveMode = widget.running ? widget.mode : PromptMode.queue;
-    final attachAllowed = widget.enabled &&
+    final attachAllowed =
+        widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
     return Column(
       children: [
@@ -1467,11 +1547,10 @@ class _ComposerBarState extends State<ComposerBar> {
                           ),
                           IconButton(
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => widget
-                                .onAction(RemovePendingImage(image.id)),
+                            onPressed: () =>
+                                widget.onAction(RemovePendingImage(image.id)),
                             icon: const Icon(Icons.close, size: 16),
-                            tooltip:
-                                'Remove ${image.name ?? "attachment"}',
+                            tooltip: 'Remove ${image.name ?? "attachment"}',
                           ),
                         ],
                       ),
@@ -1513,10 +1592,9 @@ class _ComposerBarState extends State<ComposerBar> {
             Padding(
               padding: const EdgeInsets.only(left: 8),
               child: FilledButton(
-                onPressed:
-                    widget.enabled && !widget.isSending && _canSend()
-                        ? _send
-                        : null,
+                onPressed: widget.enabled && !widget.isSending && _canSend()
+                    ? _send
+                    : null,
                 child: Text(widget.isSending ? 'Sending' : 'Send'),
               ),
             ),
@@ -1561,8 +1639,10 @@ class SlashSkillCandidates extends StatelessWidget {
     }
     final query = draft.substring(1).toLowerCase();
     final candidates = skills
-        .where((skill) =>
-            query.isEmpty || skill.name.toLowerCase().startsWith(query))
+        .where(
+          (skill) =>
+              query.isEmpty || skill.name.toLowerCase().startsWith(query),
+        )
         .take(6)
         .toList();
     if (candidates.isEmpty) return const SizedBox.shrink();
@@ -1572,7 +1652,7 @@ class SlashSkillCandidates extends StatelessWidget {
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
+          color: dsOf(context).bgLayer1,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Padding(
@@ -1587,12 +1667,15 @@ class SlashSkillCandidates extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('/${skill.name}',
-                            style: theme.textTheme.titleSmall),
+                        Text(
+                          '/${skill.name}',
+                          style: theme.textTheme.titleSmall,
+                        ),
                         Text(
                           skill.description,
                           style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1642,10 +1725,7 @@ class ModeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final button = selected
-        ? FilledButton(
-            onPressed: enabled ? onClick : null,
-            child: Text(label),
-          )
+        ? FilledButton(onPressed: enabled ? onClick : null, child: Text(label))
         : OutlinedButton(
             onPressed: enabled ? onClick : null,
             child: Text(label),
@@ -1655,17 +1735,16 @@ class ModeChip extends StatelessWidget {
 }
 
 String timelineKey(TimelineItem item) => switch (item) {
-      TimelineMessage(:final value) =>
-        'message:${value.id}:${value.streaming}',
-      TimelineTurnBoundary(:final turn) => 'turn:$turn',
-      TimelineCompaction(:final id) => 'compaction:$id',
-      TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
-      TimelineApprovalRequest(:final requestId) => 'approval:$requestId',
-      TimelineQuestionRequest(:final requestId) => 'question:$requestId',
-      TimelineQueue() => 'queue',
-      TimelineJobs() => 'jobs',
-      TimelineError(:final id) => 'error:$id',
-    };
+  TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
+  TimelineTurnBoundary(:final turn) => 'turn:$turn',
+  TimelineCompaction(:final id) => 'compaction:$id',
+  TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
+  TimelineApprovalRequest(:final requestId) => 'approval:$requestId',
+  TimelineQuestionRequest(:final requestId) => 'question:$requestId',
+  TimelineQueue() => 'queue',
+  TimelineJobs() => 'jobs',
+  TimelineError(:final id) => 'error:$id',
+};
 
 /// Ledger-style outline: turn-group headers collapse their rows on tap.
 class OutlineTimeline extends StatelessWidget {
@@ -1692,13 +1771,15 @@ class OutlineTimeline extends StatelessWidget {
       final group = groups[groupIndex];
       final turn = group.turn;
       final collapsed = turn != null && collapsedTurns.contains(turn);
-      slivers.add(TurnGroupHeader(
-        key: ValueKey('group-${turn ?? groupIndex}'),
-        turn: turn,
-        items: group.items,
-        collapsed: collapsed,
-        onToggle: onToggle,
-      ));
+      slivers.add(
+        TurnGroupHeader(
+          key: ValueKey('group-${turn ?? groupIndex}'),
+          turn: turn,
+          items: group.items,
+          collapsed: collapsed,
+          onToggle: onToggle,
+        ),
+      );
       if (!collapsed) {
         slivers.addAll([
           for (final item in group.items)
@@ -1736,8 +1817,7 @@ class TurnGroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final messages =
-        items.whereType<TimelineMessage>().length;
+    final messages = items.whereType<TimelineMessage>().length;
     final tools = items.whereType<TimelineToolCall>().toList();
     final label = turn == null
         ? 'Before first turn · $messages messages'
@@ -1748,19 +1828,24 @@ class TurnGroupHeader extends StatelessWidget {
       statusByName.putIfAbsent(tool.name, () => []).add(tool.status);
     }
     final names = statusByName.keys.toList()..sort();
-    final toolSummary = names.map((name) {
-      final statuses = statusByName[name]!;
-      final completed =
-          statuses.where((status) => status == ToolRunStatus.completed).length;
-      final failed =
-          statuses.where((status) => status == ToolRunStatus.failed).length;
-      final running =
-          statuses.where((status) => status == ToolRunStatus.running).length;
-      final buffer = StringBuffer('$name $completed✓');
-      if (failed > 0) buffer.write(' $failed✗');
-      if (running > 0) buffer.write(' $running…');
-      return buffer.toString();
-    }).join(' · ');
+    final toolSummary = names
+        .map((name) {
+          final statuses = statusByName[name]!;
+          final completed = statuses
+              .where((status) => status == ToolRunStatus.completed)
+              .length;
+          final failed = statuses
+              .where((status) => status == ToolRunStatus.failed)
+              .length;
+          final running = statuses
+              .where((status) => status == ToolRunStatus.running)
+              .length;
+          final buffer = StringBuffer('$name $completed✓');
+          if (failed > 0) buffer.write(' $failed✗');
+          if (running > 0) buffer.write(' $running…');
+          return buffer.toString();
+        })
+        .join(' · ');
 
     final resolvedTurn = turn;
     return SizedBox(
@@ -1774,16 +1859,18 @@ class TurnGroupHeader extends StatelessWidget {
             if (promptPreview(items) case final String prompt)
               Text(
                 '“$prompt”',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.primary),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             if (toolSummary.isNotEmpty)
               Text(
                 toolSummary,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 maxLines: collapsed ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1813,8 +1900,8 @@ class TurnBoundaryRow extends StatelessWidget {
             child: Text(
               'Turn $turn',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const Expanded(child: Divider(height: 1)),
@@ -1838,9 +1925,8 @@ class CompactionRow extends StatelessWidget {
         width: double.infinity,
         child: Text(
           '▤ Compacted $shadowedCount messages',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
