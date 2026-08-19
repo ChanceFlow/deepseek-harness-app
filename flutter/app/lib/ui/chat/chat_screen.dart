@@ -12,6 +12,7 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -27,6 +28,7 @@ import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
 import 'message_icon_actions.dart';
+import 'model_select.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -35,7 +37,6 @@ import '../models/models_controller.dart';
 import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
 import '../goal/goal_screen.dart';
-import '../models/models_screen.dart';
 import '../subagents/subagent_screen.dart';
 
 import 'brand_wordmark.dart';
@@ -83,11 +84,15 @@ class ChatScreen extends StatefulWidget {
     required this.uiState,
     required this.onAction,
     this.loadAttachment = _noAttachment,
+    this.onRefreshModels,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Composer model seat refresh (re-pulls the session directory).
+  final VoidCallback? onRefreshModels;
 
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
@@ -226,10 +231,12 @@ class _ChatScreenState extends State<ChatScreen> {
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
                             outline: _outline,
-                            onOpenModel: () =>
-                                _openSessionTool((_) => const ModelsRoute()),
                             onOpenGoal: () =>
                                 _openSessionTool((_) => const GoalRoute()),
+                            models: uiState.models,
+                            onSelectModel: (selection) =>
+                                onAction(SelectModelSeat(selection)),
+                            onRefreshModels: widget.onRefreshModels,
                           ),
                         ),
                       ],
@@ -273,10 +280,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
                     outline: _outline,
-                    onOpenModel: () =>
-                        _openSessionTool((_) => const ModelsRoute()),
                     onOpenGoal: () =>
                         _openSessionTool((_) => const GoalRoute()),
+                    models: uiState.models,
+                    onSelectModel: (selection) =>
+                        onAction(SelectModelSeat(selection)),
+                    onRefreshModels: widget.onRefreshModels,
                   ),
                 ),
               ],
@@ -773,16 +782,21 @@ class ChatPanel extends StatefulWidget {
     required this.onAction,
     required this.loadAttachment,
     this.outline = false,
-    this.onOpenModel,
     this.onOpenGoal,
+    this.models,
+    this.onSelectModel,
+    this.onRefreshModels,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
   final bool outline;
-  final VoidCallback? onOpenModel;
   final VoidCallback? onOpenGoal;
+  final SessionModels? models;
+  final void Function(ModelSelection selection)? onSelectModel;
+  final VoidCallback? onRefreshModels;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -919,7 +933,9 @@ class _ChatPanelState extends State<ChatPanel> {
                     onTogglePlan: selectedSessionId == null
                         ? null
                         : () => widget.onAction(const SendPrompt('/plan')),
-                    onOpenModel: widget.onOpenModel,
+                    models: widget.models,
+                    onSelectModel: widget.onSelectModel,
+                    onRefreshModels: widget.onRefreshModels,
                     pendingImages: uiState.pendingImages,
                     imageLimits: uiState.imageLimits,
                     skills: uiState.skills,
@@ -2105,7 +2121,9 @@ class ComposerBar extends StatefulWidget {
     this.onStop,
     this.plan,
     this.onTogglePlan,
-    this.onOpenModel,
+    this.models,
+    this.onSelectModel,
+    this.onRefreshModels,
     this.contextPressure,
     this.contextBreakdown,
   });
@@ -2124,9 +2142,11 @@ class ComposerBar extends StatefulWidget {
   final PlanState? plan;
   final VoidCallback? onTogglePlan;
 
-  /// Composer model seat (web conversation.input.model): opens the models
-  /// surface for this session.
-  final VoidCallback? onOpenModel;
+  /// Composer model seat (web conversation.input.model): the ModelSelect
+  /// pill + selection dispatch.
+  final SessionModels? models;
+  final void Function(ModelSelection selection)? onSelectModel;
+  final VoidCallback? onRefreshModels;
   final ContextPressure? contextPressure;
 
   final ContextBreakdown? contextBreakdown;
@@ -2251,10 +2271,14 @@ class _ComposerBarState extends State<ComposerBar> {
           ),
           Row(
             children: [
-              IconButton(
-                onPressed: attachAllowed ? _pickImages : null,
-                icon: const Icon(Icons.add),
-                tooltip: 'Attach images',
+              _PlusButton(
+                enabled: widget.enabled,
+                onPickImages: attachAllowed ? _pickImages : null,
+                skills: widget.skills,
+                onInsertCommand: (name) {
+                  _draftController.text = '/$name ';
+                  setState(() {});
+                },
               ),
               if (widget.onTogglePlan != null)
                 _PlanToggle(
@@ -2263,11 +2287,12 @@ class _ComposerBarState extends State<ComposerBar> {
                   onToggle: widget.onTogglePlan!,
                 ),
               const Spacer(),
-              if (widget.onOpenModel != null)
-                IconButton(
-                  onPressed: widget.onOpenModel,
-                  icon: const Icon(Icons.tune),
-                  tooltip: 'Model',
+              if (widget.onSelectModel != null)
+                ModelSelect(
+                  models: widget.models,
+                  locked: !widget.enabled,
+                  onSelect: widget.onSelectModel!,
+                  onRefresh: widget.onRefreshModels ?? () {},
                 ),
               ContextRing(
                 pressure: widget.contextPressure,
@@ -2439,6 +2464,94 @@ class PopupMenuEntryShim extends StatelessWidget {
             Text(label, style: Theme.of(context).textTheme.labelMedium),
             const Icon(Icons.arrow_drop_down, size: 16),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The composer's ➕ — web opens the command menu (PopupSelectView with
+/// search + rows). Mobile form: a bottom sheet listing the session's slash
+/// commands (skills) with a pinned Attach-images row (web relies on
+/// paste/drop, which mobile keyboards cannot do).
+class _PlusButton extends StatelessWidget {
+  const _PlusButton({
+    required this.enabled,
+    required this.onPickImages,
+    required this.skills,
+    required this.onInsertCommand,
+  });
+
+  final bool enabled;
+  final VoidCallback? onPickImages;
+  final List<SkillEntry> skills;
+  final void Function(String name) onInsertCommand;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Commands',
+      onPressed: enabled ? () => _open(context) : null,
+      icon: const Icon(Icons.add),
+    );
+  }
+
+  Future<void> _open(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.image_outlined),
+                  title: const Text('Attach images'),
+                  subtitle: const Text('Pick from gallery'),
+                  enabled: onPickImages != null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onPickImages?.call();
+                  },
+                ),
+                const Divider(height: 8),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final skill in skills)
+                        ListTile(
+                          dense: true,
+                          leading: Text(
+                            '/${skill.name}',
+                            style: Theme.of(sheetContext).textTheme.labelMedium
+                                ?.copyWith(fontWeight: FontWeight.w500),
+                          ),
+                          title: Text(skill.name),
+                          subtitle: skill.description.isEmpty
+                              ? null
+                              : Text(
+                                  skill.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            onInsertCommand(skill.name);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -69,7 +69,8 @@ void main() {
     // No session-tools region in the sidebar anymore; the composer's model
     // seat is the models entry.
     expect(find.text('Session tools'), findsNothing);
-    expect(find.byTooltip('Model'), findsOneWidget);
+    expect(find.byTooltip('Commands'), findsOneWidget);
+    expect(find.text('Model'), findsOneWidget);
     // Session-scoped seats (subagents action, plan toggle) only render
     // with a selected session; this app-level fake has none.
     // Real icons, not the former first-letter placeholders.
@@ -98,7 +99,7 @@ void main() {
     expect(find.text('Create'), findsOneWidget);
   });
 
-  testWidgets('settings tab renders; composer model seat pushes models', (
+  testWidgets('settings tab renders; plus opens the command sheet', (
     tester,
   ) async {
     await _pumpApp(tester);
@@ -109,15 +110,10 @@ void main() {
     // Settings describe fails against the fake rpc → loopback hint shows.
     expect(find.text('Refresh'), findsOneWidget);
 
-    // Back to chat: the composer's model seat is the models entry.
+    // Back to chat: the + seat exists (disabled without a session —
+    // the app-level fake serves none).
     await tester.tap(find.text('Chat').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Model'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Providers'), findsOneWidget);
-    expect(find.byTooltip('Back'), findsOneWidget);
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pumpAndSettle();
+    expect(find.byTooltip('Commands'), findsOneWidget);
   });
 }

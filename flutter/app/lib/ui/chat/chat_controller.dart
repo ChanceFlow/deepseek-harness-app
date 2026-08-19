@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -59,6 +60,7 @@ class ChatController {
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
   List<SkillEntry> _skills = const <SkillEntry>[];
+  SessionModels? _models;
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
   GoalProjection? _goal;
@@ -67,6 +69,10 @@ class ChatController {
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
       <String, List<SkillEntry>>{};
+
+  /// One session.models load per session (composer model seat); the seat
+  /// refreshes on open like the web ModelSelect.
+  final Map<String, SessionModels> _modelsBySession = <String, SessionModels>{};
 
   /// Decoded attachment bytes cache; scroll re-entry must not re-download.
   final LinkedHashMap<String, Uint8List> _attachmentBytes =
@@ -121,6 +127,7 @@ class ChatController {
       contextBreakdown: _contextBreakdown,
       sessionStats: _sessionStats,
       goal: _goal,
+      models: _models,
     );
   }
 
@@ -216,6 +223,8 @@ class ChatController {
             .where((image) => image.id != action.id)
             .toList();
         _publish();
+      case SelectModelSeat():
+        _selectModel(action.selection);
       case ToggleGoalPause():
         _toggleGoalPause();
       case ImagePickError():
@@ -229,6 +238,7 @@ class ChatController {
     _timelineWindow = const TimelineWindow();
     _bindSelected(sessionId);
     _loadSkills(sessionId);
+    _loadModels(sessionId);
     _publish();
     unawaited(_runCatchingForUi(() => _repository.openSession(sessionId)));
   }
@@ -249,6 +259,7 @@ class ChatController {
       _contextBreakdown = null;
       _sessionStats = const SessionWindowStats();
       _goal = null;
+      _models = null;
       _timelineSub = null;
       _planSub = null;
       _contextSub = null;
@@ -452,6 +463,61 @@ class ChatController {
     final run = _attachmentLock.then((_) => action());
     _attachmentLock = run.then((_) {}, onError: (_) {});
     return run;
+  }
+
+  /// Composer model seat: load the session's model directory (web reloads
+  /// on every open; we cache per session and refresh on demand).
+  void _loadModels(String sessionId) {
+    final cached = _modelsBySession[sessionId];
+    if (cached != null) {
+      _models = cached;
+      _publish();
+      return;
+    }
+    refreshModels();
+  }
+
+  /// Re-pull the selected session's model directory (seat open).
+  void refreshModels() {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    unawaited(() async {
+      final models = await _runCatchingForUi(
+        () => _repository.loadModels(sessionId),
+      );
+      if (models != null) {
+        _modelsBySession[sessionId] = models;
+        if (_selectedSessionId == sessionId) {
+          _models = models;
+          _publish();
+        }
+      }
+    }());
+  }
+
+  void _selectModel(ModelSelection selection) {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    unawaited(() async {
+      final updated = await _runCatchingForUi(
+        () => _repository.selectModel(sessionId, selection),
+      );
+      if (updated != null) {
+        // Patch the cached directory's current selection in place.
+        final models = _models;
+        if (models != null) {
+          final patched = SessionModels(
+            current: updated,
+            routable: models.routable,
+            groups: models.groups,
+            failures: models.failures,
+          );
+          _modelsBySession[sessionId] = patched;
+          _models = patched;
+          _publish();
+        }
+      }
+    }());
   }
 
   /// GoalBar strip action: pause an active goal, resume a held one.

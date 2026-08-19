@@ -7,11 +7,12 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/skills.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
-import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
@@ -48,6 +49,36 @@ class _NeverSocket implements DshEventSocket {
     return _frames.stream;
   }
 }
+
+const _catalog = SessionModels(
+  current: ModelSelection(
+    provider: 'deepseek',
+    model: 'glm-x',
+    reasoningEffort: 'high',
+  ),
+  routable: true,
+  groups: [
+    ModelProviderGroup(
+      id: 'deepseek',
+      name: 'DeepSeek',
+      models: [
+        ModelCatalogModel(
+          id: 'glm-x',
+          name: 'GLM X',
+          description: 'Fast reasoning model',
+          reasoning: ModelReasoning(
+            efforts: [
+              ModelReasoningEffort(id: 'low', name: 'Low'),
+              ModelReasoningEffort(id: 'high', name: 'High'),
+            ],
+            defaultEffort: 'high',
+          ),
+        ),
+        ModelCatalogModel(id: 'glm-air', name: 'GLM Air'),
+      ],
+    ),
+  ],
+);
 
 ChatUiState _state({
   ConnectionPhase phase = ConnectionPhase.connected,
@@ -589,9 +620,8 @@ void main() {
     );
 
     // Web composer seats: attach, plan toggle, model, ring, primary Send.
-    expect(find.byTooltip('Attach images'), findsOneWidget);
+    expect(find.byTooltip('Commands'), findsOneWidget);
     expect(find.byTooltip('Plan mode: off'), findsOneWidget);
-    expect(find.byTooltip('Model'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, 'Steer'), findsNothing);
     expect(find.text('Delivery'), findsNothing);
 
@@ -706,28 +736,91 @@ void main() {
     expect(actions, contains(const ToggleGoalPause()));
   });
 
-  testWidgets('composer model seat pushes the models page', (tester) async {
+  testWidgets('plus opens the command sheet and inserts the command', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
-      _state(
-        sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false),
-        ],
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
         selectedSessionId: 's1',
+        skills: [
+          SkillEntry(name: 'review', description: 'Review conversations'),
+          SkillEntry(name: 'rust', description: 'Rust toolchain hints'),
+        ],
       ),
       actions,
     );
 
-    await tester.tap(find.byTooltip('Model'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Providers'), findsOneWidget);
-    expect(find.byTooltip('Back'), findsOneWidget);
-
-    // Pop so the pushed scope disposes its controller/manager cleanly.
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Commands'));
     await tester.pumpAndSettle();
+
+    // Pinned attach row + the slash command rows.
+    expect(find.text('Attach images'), findsOneWidget);
+    expect(find.text('Pick from gallery'), findsOneWidget);
+    expect(find.text('review'), findsOneWidget);
+    expect(find.text('rust'), findsOneWidget);
+
+    await tester.tap(find.text('review'));
+    await tester.pumpAndSettle();
+    expect(find.text('Attach images'), findsNothing);
+
+    // The draft now carries the literal command text.
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    expect(
+      tester.widget<TextField>(composerField).controller?.text,
+      '/review ',
+    );
+  });
+
+  testWidgets('composer model seat shows the current model and menu', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        models: _catalog,
+      ),
+      actions,
+    );
+
+    // Trigger pill: model name + effort + chevron (web 313:14108).
+    expect(find.text('GLM X'), findsOneWidget);
+    expect(find.text('High'), findsOneWidget);
+
+    await tester.tap(find.text('GLM X'));
+    await tester.pumpAndSettle();
+
+    // Root pane: the Model / Effort row pair.
+    expect(find.text('Model'), findsWidgets);
+    expect(find.text('Effort'), findsOneWidget);
+
+    // Drill into the model list and pick the other model.
+    await tester.tap(find.text('Model').last);
+    await tester.pumpAndSettle();
+    expect(find.text('DeepSeek'), findsWidgets);
+
+    await tester.tap(find.text('GLM Air'));
+    await tester.pumpAndSettle();
+    expect(
+      actions,
+      contains(
+        const SelectModelSeat(
+          ModelSelection(provider: 'deepseek', model: 'glm-air'),
+        ),
+      ),
+    );
+    // Sheet closes on selection.
+    expect(find.text('GLM Air'), findsNothing);
   });
 
   testWidgets('pending images render chips with remove buttons', (
