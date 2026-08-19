@@ -273,6 +273,7 @@ void main() {
     final history = <JsonMap>[
       event(1, 'user/message', <String, Object?>{
         'id': 'user-1',
+        'source': <String, Object?>{'kind': 'user'},
         'content': <Object?>[
           textBlock('look at this'),
           <String, Object?>{
@@ -309,12 +310,14 @@ void main() {
       event(1, 'turn/start', <String, Object?>{'turn': 1}),
       event(2, 'user/message', <String, Object?>{
         'id': 'user-1',
+        'source': <String, Object?>{'kind': 'user'},
         'content': <Object?>[textBlock('hi')],
       }),
       event(3, 'turn/start', <String, Object?>{'turn': 1}),
       event(4, 'turn/start', <String, Object?>{'turn': 2}),
       event(5, 'user/message', <String, Object?>{
         'id': 'user-2',
+        'source': <String, Object?>{'kind': 'user'},
         'content': <Object?>[textBlock('again')],
       }),
     ];
@@ -352,5 +355,109 @@ void main() {
 
     final marker = reducer.snapshot().single as TimelineCompaction;
     expect(marker.shadowedCount, 4);
+  });
+
+  // Fixtures transcribed from the reference classifier
+  // (ui-conversation conversation-nodes/message.ts: `source.kind !==
+  // 'user'` → context node) and the provenance projection
+  // (client/runtime sessions/context-provenance.ts).
+  test('non-user sources fold into context injections, not user bubbles', () {
+    final history = <JsonMap>[
+      event(1, 'user/message', <String, Object?>{
+        'id': 'u1',
+        'source': <String, Object?>{'kind': 'user'},
+        'content': <Object?>[textBlock('real prompt')],
+      }),
+      event(2, 'user/message', <String, Object?>{
+        'id': 'ctx-1',
+        'source': <String, Object?>{
+          'kind': 'goal',
+          'form': 'snapshot',
+          'sections': <Object?>[
+            <String, Object?>{'name': 'objective', 'text': 'Ship it'},
+          ],
+        },
+        'content': <Object?>[textBlock('goal objective: Ship it')],
+      }),
+      event(3, 'user/message', <String, Object?>{
+        'id': 'ctx-2',
+        'source': <String, Object?>{
+          'kind': 'plugin',
+          'plugin': 'compact',
+          'form': 'notice',
+          'summary': 'compacted 12 events',
+        },
+        'content': <Object?>[textBlock('summary text')],
+      }),
+      event(4, 'user/message', <String, Object?>{
+        'id': 'ctx-3',
+        'source': <String, Object?>{
+          'kind': 'skill-invocation',
+          'name': 'review',
+        },
+        'content': <Object?>[textBlock('skill body')],
+      }),
+      event(5, 'user/message', <String, Object?>{
+        'id': 'ctx-4',
+        'source': <String, Object?>{
+          'kind': 'agent-instructions',
+          'changes': <Object?>[
+            <String, Object?>{'path': 'AGENTS.md'},
+            <String, Object?>{'path': 'docs/AGENTS.md'},
+          ],
+        },
+        'content': <Object?>[textBlock('instructions')],
+      }),
+      event(6, 'user/message', <String, Object?>{
+        'id': 'ctx-5',
+        'source': <String, Object?>{
+          'kind': 'session-reference',
+          'references': <Object?>[
+            <String, Object?>{'label': 'Yesterday debugging'},
+          ],
+        },
+        'content': <Object?>[textBlock('recalled material')],
+      }),
+      event(7, 'user/message', <String, Object?>{
+        'id': 'ctx-6',
+        'source': <String, Object?>{'kind': 'goal'},
+        'content': <Object?>[textBlock('opaque')],
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final snapshot = reducer.snapshot();
+    final messages = snapshot.whereType<TimelineMessage>().toList();
+    expect(messages, hasLength(1));
+    expect(messages.single.value.role, MessageRole.user);
+    expect(messages.single.value.text, 'real prompt');
+
+    final injections = snapshot.whereType<TimelineContextInjection>().toList();
+    expect(injections, hasLength(6));
+
+    // Unknown producer identifies itself by its own durable kind.
+    final goal = injections[0];
+    expect(goal.id, 'ctx-1');
+    expect(goal.producerLabel, 'goal');
+    expect(goal.isRecall, isFalse);
+    expect(goal.text, contains('Ship it'));
+
+    // A plugin names its id; a notice form carries the one-line account.
+    final compact = injections[1];
+    expect(compact.producerLabel, 'compact');
+    expect(compact.summary, 'compacted 12 events');
+
+    // A skill invocation names the skill.
+    expect(injections[2].producerLabel, 'review');
+
+    // Workspace instructions name the reconciled files.
+    expect(injections[3].producerLabel, 'AGENTS.md, docs/AGENTS.md');
+
+    // Cross-session references are recalls labeled by session title.
+    final recall = injections[4];
+    expect(recall.isRecall, isTrue);
+    expect(recall.producerLabel, 'Yesterday debugging');
   });
 }

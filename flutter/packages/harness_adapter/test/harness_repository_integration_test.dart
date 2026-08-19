@@ -418,42 +418,45 @@ void main() {
     expect(content['text'], 'revised prompt');
   });
 
-  test('steer racing a closing turn is swallowed, other errors surface', () async {
-    final rpc = HarnessFakeRpc();
-    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
-    await pumpEventQueue();
+  test(
+    'steer racing a closing turn is swallowed, other errors surface',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
 
-    // Web parity: steer-unavailable / queue-item-not-found are benign races
-    // (the queue projection refreshes the dock) — no exception escapes.
-    rpc.failNextCall('session.updateQueue', 'steer-unavailable');
-    await repository.updateQueue(
-      const QueueUpdateRequest(
-        sessionId: 'session-1',
-        itemId: 'queued-1',
-        kind: QueueUpdateKind.steer,
-      ),
-    );
-    rpc.failNextCall('session.updateQueue', 'queue-item-not-found');
-    await repository.updateQueue(
-      const QueueUpdateRequest(
-        sessionId: 'session-1',
-        itemId: 'queued-1',
-        kind: QueueUpdateKind.remove,
-      ),
-    );
-
-    rpc.failNextCall('session.updateQueue', 'agent-busy');
-    await expectLater(
-      repository.updateQueue(
+      // Web parity: steer-unavailable / queue-item-not-found are benign races
+      // (the queue projection refreshes the dock) — no exception escapes.
+      rpc.failNextCall('session.updateQueue', 'steer-unavailable');
+      await repository.updateQueue(
         const QueueUpdateRequest(
           sessionId: 'session-1',
           itemId: 'queued-1',
           kind: QueueUpdateKind.steer,
         ),
-      ),
-      throwsA(isA<DshBusinessException>()),
-    );
-  });
+      );
+      rpc.failNextCall('session.updateQueue', 'queue-item-not-found');
+      await repository.updateQueue(
+        const QueueUpdateRequest(
+          sessionId: 'session-1',
+          itemId: 'queued-1',
+          kind: QueueUpdateKind.remove,
+        ),
+      );
+
+      rpc.failNextCall('session.updateQueue', 'agent-busy');
+      await expectLater(
+        repository.updateQueue(
+          const QueueUpdateRequest(
+            sessionId: 'session-1',
+            itemId: 'queued-1',
+            kind: QueueUpdateKind.steer,
+          ),
+        ),
+        throwsA(isA<DshBusinessException>()),
+      );
+    },
+  );
 
   test('skipped question response uses empty selected array', () async {
     final rpc = HarnessFakeRpc();

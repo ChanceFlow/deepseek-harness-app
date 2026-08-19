@@ -119,8 +119,7 @@ class ContextPressureFold {
       case 'assistant/message':
         _applyUsage(asJsonObject(data['usage']));
         final message = asJsonObject(data['message']);
-        _messageTokens += estimateContent(message?['content']) +
-            _roleOverhead;
+        _messageTokens += estimateContent(message?['content']) + _roleOverhead;
         _publishBreakdown();
       case 'user/message':
         _messageTokens += estimateContent(data['content']) + _roleOverhead;

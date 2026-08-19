@@ -6,8 +6,12 @@ library;
 import 'package:test/test.dart';
 import 'package:harness_adapter/harness_adapter.dart';
 
-JsonMap _event(String type, JsonMap data) =>
-    <String, Object?>{'type': type, 'seq': 1, 'time': 1, 'data': data};
+JsonMap _event(String type, JsonMap data) => <String, Object?>{
+  'type': type,
+  'seq': 1,
+  'time': 1,
+  'data': data,
+};
 
 void main() {
   test('idle until any record exists', () {
@@ -65,10 +69,7 @@ void main() {
       _event('assistant/message', <String, Object?>{
         'turn': 1,
         'step': 1,
-        'message': <String, Object?>{
-          'id': 'm1',
-          'content': <Object?>[],
-        },
+        'message': <String, Object?>{'id': 'm1', 'content': <Object?>[]},
         'usage': {'inputTokens': 900, 'cacheWriteTokens': 100},
       }),
     );

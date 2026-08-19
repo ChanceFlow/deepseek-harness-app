@@ -852,6 +852,9 @@ class TimelineRow extends StatelessWidget {
       TimelineCompaction(:final shadowedCount) => CompactionRow(
         shadowedCount: shadowedCount,
       ),
+      TimelineContextInjection() => ContextInjectionRow(
+        injection: item as TimelineContextInjection,
+      ),
       TimelineToolCall() => ToolCallRow(call: item as TimelineToolCall),
       TimelineApprovalRequest() => ApprovalRow(
         requestId: (item as TimelineApprovalRequest).requestId,
@@ -2654,6 +2657,7 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
   TimelineTurnBoundary(:final turn) => 'turn:$turn',
   TimelineCompaction(:final id) => 'compaction:$id',
+  TimelineContextInjection(:final id) => 'context:$id',
   TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
   TimelineApprovalRequest(:final requestId) => 'approval:$requestId',
   TimelineQuestionRequest(:final requestId) => 'question:$requestId',
@@ -2877,6 +2881,103 @@ class CompactionRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Logged non-user context (web ContextInjectionRow): a disclosure row in
+/// the Tool-call chrome — the header names the role this context plays
+/// ("Context injection", or "Recall" for cross-session material) beside
+/// the durable producer the source identifies; the expanded body carries
+/// the injected content.
+class ContextInjectionRow extends StatefulWidget {
+  const ContextInjectionRow({super.key, required this.injection});
+
+  final TimelineContextInjection injection;
+
+  @override
+  State<ContextInjectionRow> createState() => _ContextInjectionRowState();
+}
+
+class _ContextInjectionRowState extends State<ContextInjectionRow> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final injection = widget.injection;
+    final hasBody = injection.text.trim().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: hasBody ? () => setState(() => _expanded = !_expanded) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                Icon(Icons.travel_explore, size: 14, color: ds.labelSecondary),
+                const SizedBox(width: 6),
+                Text(
+                  injection.isRecall ? 'Recall' : 'Context injection',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: ds.labelPrimaryDimmed,
+                  ),
+                ),
+                if (injection.producerLabel case final label?) ...[
+                  Container(
+                    width: 2,
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: ds.labelCaption,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ds.labelSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+                if (injection.summary case final summary?) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      summary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ds.labelTertiary,
+                      ),
+                    ),
+                  ),
+                ],
+                if (hasBody)
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 14,
+                    color: ds.labelSecondary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded && hasBody)
+          Padding(
+            padding: const EdgeInsets.only(left: 20, top: 2, bottom: 4),
+            child: MarkdownText(text: injection.text),
+          ),
+      ],
     );
   }
 }

@@ -309,6 +309,55 @@ void main() {
     expect(actions, contains(const ForkSession('s1')));
   });
 
+  testWidgets(
+    'context injections render as disclosure rows, not user bubbles',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineContextInjection(
+              id: 'ctx-1',
+              text: 'goal objective: Ship the MVP',
+              producerLabel: 'goal',
+            ),
+            TimelineContextInjection(
+              id: 'ctx-2',
+              text: 'recalled material',
+              producerLabel: 'Yesterday debugging',
+              isRecall: true,
+            ),
+            TimelineContextInjection(
+              id: 'ctx-3',
+              text: 'summary body',
+              producerLabel: 'compact',
+              summary: 'compacted 12 events',
+            ),
+          ],
+        ),
+        actions,
+      );
+
+      // Web ContextInjectionRow: the header names the role beside the
+      // durable producer; the body stays collapsed until tapped.
+      expect(find.text('Context injection'), findsNWidgets(2));
+      expect(find.text('Recall'), findsOneWidget);
+      expect(find.text('goal'), findsOneWidget);
+      expect(find.text('Yesterday debugging'), findsOneWidget);
+      expect(find.text('compacted 12 events'), findsOneWidget);
+      expect(find.text('goal objective: Ship the MVP'), findsNothing);
+
+      await tester.tap(find.text('Context injection').first);
+      await tester.pumpAndSettle();
+      expect(find.text('goal objective: Ship the MVP'), findsOneWidget);
+    },
+  );
+
   testWidgets('timeline renders rows and dispatches approvals', (tester) async {
     final actions = <ChatAction>[];
     await _pump(

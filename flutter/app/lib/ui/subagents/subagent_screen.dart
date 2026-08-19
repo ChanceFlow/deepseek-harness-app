@@ -246,6 +246,13 @@ class ChildTimeline extends StatelessWidget {
                 style: theme.textTheme.labelSmall?.merge(subdued),
               ),
             ),
+            TimelineContextInjection(:final producerLabel) => SizedBox(
+              width: double.infinity,
+              child: Text(
+                '◇ Context injection${producerLabel == null ? '' : ' · $producerLabel'}',
+                style: theme.textTheme.labelSmall?.merge(subdued),
+              ),
+            ),
             TimelineToolCall() => SizedBox(
               width: double.infinity,
               child: Text(

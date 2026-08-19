@@ -61,6 +61,55 @@ final class TimelineCompaction extends TimelineItem {
   int get hashCode => Object.hash('compaction', id, shadowedCount);
 }
 
+/// Non-user context injected into model history (web ContextMessageNode):
+/// a `user/message` whose durable source kind is not `user` — goal
+/// snapshots, skill invocations, workspace instructions, plugin catalogs,
+/// cross-session recalls.
+final class TimelineContextInjection extends TimelineItem {
+  const TimelineContextInjection({
+    required this.id,
+    required this.text,
+    this.producerLabel,
+    this.isRecall = false,
+    this.summary,
+  });
+
+  final String id;
+
+  /// Collected text of the injected content blocks.
+  final String text;
+
+  /// Producer name projected from the durable source (instruction paths,
+  /// plugin id, skill name, or the bare source kind); null when the
+  /// source carries no readable kind.
+  final String? producerLabel;
+
+  /// Cross-session recall (source kind `session-reference`).
+  final bool isRecall;
+
+  /// One-line account for `notice`-form context; null otherwise.
+  final String? summary;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TimelineContextInjection &&
+      other.id == id &&
+      other.text == text &&
+      other.producerLabel == producerLabel &&
+      other.isRecall == isRecall &&
+      other.summary == summary;
+
+  @override
+  int get hashCode => Object.hash(
+    'context-injection',
+    id,
+    text,
+    producerLabel,
+    isRecall,
+    summary,
+  );
+}
+
 final class TimelineToolCall extends TimelineItem {
   const TimelineToolCall({
     required this.id,

@@ -157,6 +157,16 @@ class TimelineReducer {
     _finalizePartial();
     final data = _eventData(event);
     final messageId = wireString(data, 'id') ?? 'user:$_lastSeq';
+    // Web message.ts classifier: a `user/message` whose durable source
+    // kind is not `user` is injected context (goal snapshots, skill
+    // invocations, workspace instructions, plugin catalogs, recalls),
+    // never a user bubble.
+    final source = asJsonObject(data['source']);
+    final kind = wireString(source ?? const <String, Object?>{}, 'kind');
+    if (kind != 'user') {
+      _items.add(_contextInjection(messageId, data, source, kind));
+      return;
+    }
     _items.add(
       TimelineMessage(
         ChatMessage(
@@ -169,6 +179,59 @@ class TimelineReducer {
         ),
       ),
     );
+  }
+
+  /// Web context-provenance projection: the transcript role and the
+  /// producer name read from the durable source alone.
+  TimelineContextInjection _contextInjection(
+    String id,
+    JsonMap data,
+    JsonMap? source,
+    String? kind,
+  ) {
+    final label = switch (kind) {
+      // Cross-session snapshots name the sessions they were read from.
+      'session-reference' =>
+        _joinedNames(source, 'references', 'label') ?? kind,
+      // Workspace instructions name the files they were reconciled from.
+      'agent-instructions' => _joinedNames(source, 'changes', 'path') ?? kind,
+      'plugin' =>
+        (source == null ? null : wireString(source, 'plugin')) ?? kind,
+      // A user-explicit skill invocation names the skill it injected.
+      'skill-invocation' =>
+        (source == null ? null : wireString(source, 'name')) ?? kind,
+      // Documented default: an unknown producer identifies itself by its
+      // own durable kind; a source with no readable kind has no label.
+      final readable? => readable,
+      null => null,
+    };
+    // A notice-form context carries a one-line account shown without
+    // expanding the row.
+    final summary = source != null && wireString(source, 'form') == 'notice'
+        ? wireString(source, 'summary')
+        : null;
+    return TimelineContextInjection(
+      id: id,
+      text: _extractText(data),
+      producerLabel: label,
+      isRecall: kind == 'session-reference',
+      summary: summary,
+    );
+  }
+
+  /// Distinct non-empty `field` values of an array-valued source member,
+  /// joined as one label; null when the list is empty (web `collect`).
+  String? _joinedNames(JsonMap? source, String member, String field) {
+    if (source == null) return null;
+    final list = asJsonArray(source[member]);
+    if (list == null) return null;
+    final names = <String>[];
+    for (final entry in list) {
+      final record = asJsonObject(entry);
+      final value = record == null ? null : wireString(record, field);
+      if (value != null && !names.contains(value)) names.add(value);
+    }
+    return names.isEmpty ? null : names.join(', ');
   }
 
   void _appendAssistantFinal(JsonMap event) {
