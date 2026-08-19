@@ -1,59 +1,69 @@
-# Project Skills (Android)
+# Project Skills (Flutter / Dart)
 
-Project-scoped Agent Skills for this repository. Loaded automatically by pi
-from `.agents/skills/` when working inside this repo.
+Project-scoped Agent Skills for this repository. Loaded automatically by the
+harness from `.agents/skills/` (the standard agents-spec location) when working
+inside this repo.
 
 ## Source
 
-These 29 skills are vendored from
-[GuillemRoca/agent-skills-android](https://github.com/GuillemRoca/agent-skills-android)
-(MIT License, Copyright (c) 2026 Guillem Roca). Only the `skills/*` SKILL.md
-directories were installed — the upstream plugin packaging (`.claude-plugin/`)
-was intentionally **not** installed so these ship as plain skills.
+These 22 skills are installed from
+[flutter/agent-plugins](https://github.com/flutter/agent-plugins)
+(BSD-3-Clause, Copyright 2026 The Flutter Authors) — the official Flutter team
+agent plugin repository.
 
-See `LICENSE` in this directory for the upstream license terms.
+Installed with the agents-spec **universal** method (not the Claude Code /
+Codex / Cursor plugin systems):
+
+```sh
+npx skills@1.5.17 add flutter/agent-plugins --skill '*' --agent universal --yes --copy
+```
+
+`--agent universal` installs plain skills into the standard `.agents/skills/`
+folder; `--copy` keeps real files (tracked in git) instead of symlinks into a
+local cache. `skills-lock.json` at the repo root records sources and hashes.
+
+Only the `skills/*` directories were installed. The rest of the upstream
+repository was intentionally **not** installed:
+
+| Upstream path | What it is | Why not installed |
+|---|---|---|
+| `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/` | Agent-specific plugin packaging | We don't use Claude Code, Codex, or Cursor |
+| `.mcp.json` | Dart MCP server config (`dart mcp-server`) | Skills work standalone; wire the MCP server into the harness separately if its tools are needed |
+| `rules/hot_reload.md` | Hot-reload rule (glob-triggered) | Rules are not part of the `.agents/skills` skills spec |
+| `tool/`, `resources/`, `pubspec.yaml` | Upstream lint/generator tooling | Repository-internal, not meant for installation |
 
 ## Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `android-accessibility` | TalkBack, content descriptions, touch targets, semantics |
-| `android-architecture` | MVVM/MVI, Clean Architecture, Hilt DI, module structure |
-| `android-background-work` | WorkManager, foreground service types, exact alarms, Doze |
-| `android-data-persistence` | Room, DataStore, offline-first, Paging3, repository pattern |
-| `android-device-testing` | Espresso, UI Automator, Compose tests, screenshots, ADB, emulators |
-| `android-e2e-verification` | Maestro flows: acceptance criteria as executable e2e checks |
-| `android-ui-engineering` | Jetpack Compose, Material 3, Navigation, state hoisting |
-| `api-and-interface-design` | Retrofit interfaces, sealed types, contract-first design |
-| `ci-cd-and-automation` | CI pipelines, fastlane, Gradle automation |
-| `code-review-and-quality` | Five-axis code review |
-| `code-simplification` | Simplify code without changing behavior |
-| `context-engineering` | Set up project context for AI-assisted development |
-| `debugging-and-error-recovery` | Systematic debugging with Logcat, profilers, LeakCanary |
-| `deprecation-and-migration` | Safe deprecation and migration strategies |
-| `documentation-and-adrs` | Architecture Decision Records and documentation |
-| `doubt-driven-development` | Adversarial self-review for hard-to-reverse decisions |
-| `git-workflow-and-versioning` | Branching, PRs, release versioning |
-| `idea-refine` | Sharpen vague ideas into focused, actionable directions |
-| `incremental-implementation` | Build in small, verifiable increments |
-| `interview-me` | Iterative questioning that turns vague requests into requirements |
-| `observability-and-instrumentation` | Logging, tracing, metrics on Android |
-| `performance-optimization` | Android Vitals, Macrobenchmark, APK size, recomposition |
-| `planning-and-task-breakdown` | Break work into vertical slices with acceptance criteria |
-| `security-and-hardening` | Secure storage, network security, app hardening |
-| `shipping-and-launch` | Pre-launch checklist and rollout |
-| `source-driven-development` | Every framework decision backed by official docs |
-| `spec-driven-development` | Write structured specs before coding |
-| `test-driven-development` | Red-Green-Refactor with JUnit5 + MockK |
-| `using-agent-skills` | Meta-skill: how agents should operate in this project |
+| `dart-add-unit-test` | Unit tests with `package:test` |
+| `dart-build-cli-app` | CLI entrypoints, exit codes, cross-platform scripts |
+| `dart-collect-coverage` | Coverage collection and LCOV reports |
+| `dart-fix-runtime-errors` | Stack-trace driven fix + hot-reload verification |
+| `dart-generate-test-mocks` | Mockito mocks via `build_runner` |
+| `dart-migrate-to-checks-package` | Migrate `package:matcher` to `package:checks` |
+| `dart-resolve-package-conflicts` | Fix `pub get` version conflicts |
+| `dart-run-static-analysis` | `dart analyze` + `dart fix --apply` |
+| `dart-setup-ffi-assets` | Native assets build hooks for C/C++ |
+| `dart-use-ffigen` | Generate FFI bindings with `package:ffigen` |
+| `dart-use-pattern-matching` | Switch expressions and pattern matching |
+| `dart-use-primary-constructors` | Primary constructor syntax |
+| `flutter-add-integration-test` | `integration_test` flows from MCP actions |
+| `flutter-add-widget-preview` | Interactive widget previews (`previews.dart`) |
+| `flutter-add-widget-test` | Component tests with `WidgetTester` |
+| `flutter-apply-architecture-best-practices` | Layered architecture (UI / Logic / Data) |
+| `flutter-build-responsive-layout` | Adaptive layouts across form factors |
+| `flutter-fix-layout-issues` | Fix overflow / unbounded-constraint errors |
+| `flutter-implement-json-serialization` | `fromJson` / `toJson` models |
+| `flutter-setup-declarative-routing` | `MaterialApp.router` + `go_router` |
+| `flutter-setup-localization` | `flutter_localizations`, `intl`, `l10n.yaml` |
+| `flutter-use-http-package` | REST calls with the `http` package |
 
 ## Updating
 
-To refresh from upstream:
-
 ```sh
-cd /tmp
-git clone --depth 1 https://github.com/GuillemRoca/agent-skills-android.git
-cp -r agent-skills-android/skills/* .agents/skills/
-cp agent-skills-android/LICENSE .agents/skills/LICENSE
+npx skills@1.5.17 update
 ```
+
+This reads `skills-lock.json` at the repo root and refreshes the skills in
+place.
