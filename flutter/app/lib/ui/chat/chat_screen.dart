@@ -26,6 +26,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
+import 'message_icon_actions.dart';
 import 'approval_panel.dart';
 import 'brand_wordmark.dart';
 import 'context_ring.dart';
@@ -885,6 +886,12 @@ class MessageRow extends StatelessWidget {
               width: 12,
               height: 12,
               child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (message.text.isNotEmpty)
+            MessageIconActions(
+              text: message.text,
+              timeEpochMs: message.createdAtEpochMs,
+              clockAtStart: true,
             ),
         ],
       );
@@ -908,6 +915,12 @@ class MessageRow extends StatelessWidget {
             width: 12,
             height: 12,
             child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else if (message.text.isNotEmpty)
+          MessageIconActions(
+            text: message.text,
+            timeEpochMs: message.createdAtEpochMs,
+            clockAtStart: false,
           ),
       ],
     );
