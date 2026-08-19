@@ -51,15 +51,15 @@ final class SessionSummary {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        title,
-        running,
-        blank,
-        workspaceId,
-        updatedAtEpochMs,
-        cwd,
-        agentPreset,
-      );
+    id,
+    title,
+    running,
+    blank,
+    workspaceId,
+    updatedAtEpochMs,
+    cwd,
+    agentPreset,
+  );
 }
 
 final class CreateSessionRequest {

@@ -50,12 +50,12 @@ final class DirectoryListing {
 
   @override
   int get hashCode => Object.hash(
-        path,
-        home,
-        Object.hashAll(crumbs),
-        Object.hashAll(entries),
-        truncated,
-      );
+    path,
+    home,
+    Object.hashAll(crumbs),
+    Object.hashAll(entries),
+    truncated,
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

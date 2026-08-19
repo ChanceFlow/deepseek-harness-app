@@ -10,8 +10,8 @@ import 'dart:async';
 
 class StateStream<T> {
   StateStream(T initialValue)
-      : _value = initialValue,
-        _controller = StreamController<T>.broadcast();
+    : _value = initialValue,
+      _controller = StreamController<T>.broadcast();
 
   final StreamController<T> _controller;
   T _value;
@@ -105,8 +105,10 @@ List<T> stableSortedBy<T, K extends Comparable<K>>(
   K Function(T) keyOf,
 ) {
   final indexed = List<(int, T)>.generate(
-      input.length, (i) => (i, input[i]),
-      growable: false);
+    input.length,
+    (i) => (i, input[i]),
+    growable: false,
+  );
   indexed.sort((a, b) {
     final byKey = keyOf(a.$2).compareTo(keyOf(b.$2));
     return byKey != 0 ? byKey : a.$1.compareTo(b.$1);

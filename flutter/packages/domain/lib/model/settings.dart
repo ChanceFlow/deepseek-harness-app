@@ -63,11 +63,11 @@ final class SettingsSnapshot {
 
   @override
   int get hashCode => Object.hash(
-        writable,
-        hasDocument,
-        Object.hashAll(namespaces),
-        Object.hashAll(credentialRefs),
-      );
+    writable,
+    hasDocument,
+    Object.hashAll(namespaces),
+    Object.hashAll(credentialRefs),
+  );
 }
 
 /// One credential-reference state: whether the host holds a value, where it
@@ -101,11 +101,7 @@ final class CredentialStatus {
 final class SettingPathOp {
   /// Throws [ArgumentError] when the op/path/value combination is invalid,
   /// mirroring the Kotlin `init` block contract checks.
-  SettingPathOp({
-    required this.op,
-    required this.path,
-    this.jsonValue,
-  }) {
+  SettingPathOp({required this.op, required this.path, this.jsonValue}) {
     if (op != 'set' && op != 'unset') {
       throw ArgumentError('op must be set or unset');
     }

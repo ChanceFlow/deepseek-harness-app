@@ -30,20 +30,17 @@ final class WorkspaceSummary {
 
   @override
   int get hashCode => Object.hash(
-        workspaceId,
-        path,
-        title,
-        Object.hashAll(sessionIds),
-        createdAt,
-        updatedAt,
-      );
+    workspaceId,
+    path,
+    title,
+    Object.hashAll(sessionIds),
+    createdAt,
+    updatedAt,
+  );
 }
 
 final class SessionSearchResult {
-  const SessionSearchResult({
-    required this.sessionId,
-    required this.snippet,
-  });
+  const SessionSearchResult({required this.sessionId, required this.snippet});
 
   final String sessionId;
   final String snippet;

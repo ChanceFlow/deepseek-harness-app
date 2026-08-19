@@ -58,11 +58,8 @@ final class SubagentCatalog {
       other.parentAvailable == parentAvailable;
 
   @override
-  int get hashCode => Object.hash(
-        parentSessionId,
-        Object.hashAll(entries),
-        parentAvailable,
-      );
+  int get hashCode =>
+      Object.hash(parentSessionId, Object.hashAll(entries), parentAvailable);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

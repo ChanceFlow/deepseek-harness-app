@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -27,6 +28,7 @@ import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
 import 'approval_panel.dart';
 import 'brand_wordmark.dart';
+import 'context_ring.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
@@ -1816,6 +1818,7 @@ class ComposerBar extends StatefulWidget {
     required this.onAction,
     required this.onSend,
     this.onStop,
+    this.contextPressure,
   });
 
   final bool enabled;
@@ -1829,6 +1832,7 @@ class ComposerBar extends StatefulWidget {
   final void Function(ChatAction) onAction;
   final void Function(String text) onSend;
   final VoidCallback? onStop;
+  final ContextPressure? contextPressure;
 
   @override
   State<ComposerBar> createState() => _ComposerBarState();
@@ -1973,6 +1977,7 @@ class _ComposerBarState extends State<ComposerBar> {
                 enabled: widget.enabled && widget.running,
                 onClick: () => widget.onModeChange(PromptMode.steer),
               ),
+              ContextRing(pressure: widget.contextPressure),
               IconButton(
                 onPressed: attachAllowed ? _pickImages : null,
                 icon: const Icon(Icons.add),

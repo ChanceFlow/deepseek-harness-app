@@ -2,6 +2,7 @@
 library;
 
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -27,6 +28,7 @@ final class ChatUiState {
     this.imageLimits = const ImageLimits(),
     this.plan,
     this.skills = const <SkillEntry>[],
+    this.contextPressure,
   });
 
   final ConnectionState connection;
@@ -52,6 +54,9 @@ final class ChatUiState {
   /// Skill catalog of the selected session, backing the `/` composer
   /// source.
   final List<SkillEntry> skills;
+
+  /// Context occupancy of the selected session (composer status ring).
+  final ContextPressure? contextPressure;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin

@@ -45,15 +45,15 @@ final class ChatMessage {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        sessionId,
-        role,
-        text,
-        reasoning,
-        streaming,
-        createdAtEpochMs,
-        Object.hashAll(images),
-      );
+    id,
+    sessionId,
+    role,
+    text,
+    reasoning,
+    streaming,
+    createdAtEpochMs,
+    Object.hashAll(images),
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

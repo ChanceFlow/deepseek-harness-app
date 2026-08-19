@@ -26,6 +26,5 @@ final class SkillEntry {
       other.modelInvocable == modelInvocable;
 
   @override
-  int get hashCode =>
-      Object.hash(name, description, whenToUse, modelInvocable);
+  int get hashCode => Object.hash(name, description, whenToUse, modelInvocable);
 }

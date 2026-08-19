@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -26,6 +27,7 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
 import 'dsh_connection_manager.dart';
+import 'context_pressure_fold.dart';
 import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
 import 'state_stream.dart';
@@ -82,10 +84,7 @@ final class _HistoryPage {
 }
 
 class HarnessRepositoryImpl implements ChatRepository {
-  HarnessRepositoryImpl(
-    this._rpcClient,
-    this._connectionManager,
-  ) {
+  HarnessRepositoryImpl(this._rpcClient, this._connectionManager) {
     _connectionManager.start();
     _collectConnection();
     _collectMuxFrames();
@@ -100,9 +99,12 @@ class HarnessRepositoryImpl implements ChatRepository {
       StateStream<List<SessionSummary>>(<SessionSummary>[]);
   final StateStream<List<WorkspaceSummary>> _workspaces =
       StateStream<List<WorkspaceSummary>>(<WorkspaceSummary>[]);
-  final StateStream<Set<String>> _archivedSessionIds =
-      StateStream<Set<String>>(<String>{});
-  final StateStream<ImageLimits?> _imageLimits = StateStream<ImageLimits?>(null);
+  final StateStream<Set<String>> _archivedSessionIds = StateStream<Set<String>>(
+    <String>{},
+  );
+  final StateStream<ImageLimits?> _imageLimits = StateStream<ImageLimits?>(
+    null,
+  );
   final Map<String, _SessionState> _sessionStates = <String, _SessionState>{};
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
@@ -125,12 +127,12 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Stream<List<SessionSummary>> observeSessions() => combineLatest2(
-        _sessions.stream,
-        _archivedSessionIds.stream,
-        (current, archived) => archived.isEmpty
-            ? current
-            : current.where((item) => !archived.contains(item.id)).toList(),
-      );
+    _sessions.stream,
+    _archivedSessionIds.stream,
+    (current, archived) => archived.isEmpty
+        ? current
+        : current.where((item) => !archived.contains(item.id)).toList(),
+  );
 
   @override
   Future<void> refreshSessions() async {
@@ -146,8 +148,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       if (request.cwd != null) 'cwd': request.cwd,
       if (request.agentPreset != null) 'agentPreset': request.agentPreset,
     };
-    final value =
-        await _call(_sessionCreate, _sessionCreate, payload).valueOrThrow();
+    final value = await _call(
+      _sessionCreate,
+      _sessionCreate,
+      payload,
+    ).valueOrThrow();
     final created = wireString(value, 'sessionId');
     if (created == null) {
       throw const FormatException('session.create missing sessionId');
@@ -158,11 +163,12 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<DirectoryListing> listDirectory(String? path) async {
-    final payload = <String, Object?>{
-      if (path != null) 'path': path,
-    };
-    final value = await _call(_hostListDirectory, _hostListDirectory, payload)
-        .valueOrThrow();
+    final payload = <String, Object?>{if (path != null) 'path': path};
+    final value = await _call(
+      _hostListDirectory,
+      _hostListDirectory,
+      payload,
+    ).valueOrThrow();
     return _toDomainDirectoryListing(DirectoryListingValueWire.fromJson(value));
   }
 
@@ -181,9 +187,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SettingsSnapshot> describeSettings() async {
-    final value =
-        await _call(_settingsDescribe, _settingsDescribe, <String, Object?>{})
-            .valueOrThrow();
+    final value = await _call(
+      _settingsDescribe,
+      _settingsDescribe,
+      <String, Object?>{},
+    ).valueOrThrow();
     final described = SettingsDescribeValueWire.fromJson(value);
     return SettingsSnapshot(
       writable: described.writable,
@@ -198,8 +206,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<List<CredentialStatus>> describeCredentials(
-      List<String> refs) async {
+  Future<List<CredentialStatus>> describeCredentials(List<String> refs) async {
     if (refs.isEmpty) return const <CredentialStatus>[];
     final value = await _call(_credentialsDescribe, _credentialsDescribe, {
       'refs': refs.take(_credentialsMaxRefs).toList(),
@@ -234,9 +241,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   }) async {
     final value = await _call(_settingsUpdate, _settingsUpdate, {
       'ns': ns,
-      'patch': {
-        key: _parseJsonValue(jsonValue),
-      },
+      'patch': {key: _parseJsonValue(jsonValue)},
       if (expectedRevision != null) 'expectedRevision': expectedRevision,
     }).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
@@ -269,11 +274,13 @@ class HarnessRepositoryImpl implements ChatRepository {
     final value = await _call(_settingsMutate, _settingsMutate, {
       'ns': ns,
       'ops': ops
-          .map((op) => <String, Object?>{
-                'op': op.op,
-                'path': op.path,
-                if (op.jsonValue != null) 'value': _parseJsonValue(op.jsonValue!),
-              })
+          .map(
+            (op) => <String, Object?>{
+              'op': op.op,
+              'path': op.path,
+              if (op.jsonValue != null) 'value': _parseJsonValue(op.jsonValue!),
+            },
+          )
           .toList(),
       if (expectedRevision != null) 'expectedRevision': expectedRevision,
     }).valueOrThrow();
@@ -285,7 +292,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     final state = _sessionStateFor(sessionId);
     try {
       await state.ensureLoaded(
-          (beforeSeq) => _loadHistory(sessionId, beforeSeq));
+        (beforeSeq) => _loadHistory(sessionId, beforeSeq),
+      );
     } catch (_) {
       // A failed first load stays pending; the next generation retries it.
     }
@@ -296,8 +304,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       _sessionStateFor(sessionId).timeline.stream;
 
   @override
-  Stream<Set<String>> observeArchivedSessionIds() =>
-      _archivedSessionIds.stream;
+  Stream<Set<String>> observeArchivedSessionIds() => _archivedSessionIds.stream;
 
   @override
   Stream<TimelineWindow> observeTimelineWindow(String sessionId) =>
@@ -313,10 +320,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
     final content = <Object?>[
-      <String, Object?>{
-        'type': 'text',
-        'text': request.text,
-      },
+      <String, Object?>{'type': 'text', 'text': request.text},
       for (final image in request.images)
         <String, Object?>{
           'type': 'image',
@@ -347,7 +351,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<AttachmentData> readAttachment(
-      String sessionId, String attachmentId) async {
+    String sessionId,
+    String attachmentId,
+  ) async {
     final value = await _call(_sessionAttachment, _sessionAttachment, {
       'sessionId': sessionId,
       'attachmentId': attachmentId,
@@ -375,12 +381,14 @@ class HarnessRepositoryImpl implements ChatRepository {
       'sessionId': sessionId,
     }).valueOrThrow();
     return decodeSkillListValue(value)
-        .map((wire) => SkillEntry(
-              name: wire.name,
-              description: wire.description,
-              whenToUse: wire.whenToUse,
-              modelInvocable: wire.modelInvocable,
-            ))
+        .map(
+          (wire) => SkillEntry(
+            name: wire.name,
+            description: wire.description,
+            whenToUse: wire.whenToUse,
+            modelInvocable: wire.modelInvocable,
+          ),
+        )
         .toList();
   }
 
@@ -399,23 +407,24 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> answerQuestions(
-      String requestId, QuestionEvidence evidence) async {
+    String requestId,
+    QuestionEvidence evidence,
+  ) async {
     final value = <String, Object?>{
       'sessionId': evidence.sessionId,
       'answer': {
         'answers': evidence.answers
-            .map((answer) => <String, Object?>{
-                  'id': answer.questionId,
-                  'selected': answer.selectedOptions,
-                  if (answer.customText != null) 'custom': answer.customText,
-                })
+            .map(
+              (answer) => <String, Object?>{
+                'id': answer.questionId,
+                'selected': answer.selectedOptions,
+                if (answer.customText != null) 'custom': answer.customText,
+              },
+            )
             .toList(),
       },
     };
-    await _rpcClient.respond(
-      requestId,
-      RpcResult(ok: true, value: value),
-    );
+    await _rpcClient.respond(requestId, RpcResult(ok: true, value: value));
   }
 
   @override
@@ -458,10 +467,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         action = <String, Object?>{
           'kind': 'edit',
           'content': <Object?>[
-            <String, Object?>{
-              'type': 'text',
-              'text': request.text ?? '',
-            },
+            <String, Object?>{'type': 'text', 'text': request.text ?? ''},
           ],
         };
     }
@@ -481,15 +487,17 @@ class HarnessRepositoryImpl implements ChatRepository {
     return SubagentCatalog(
       parentSessionId: parentSessionId,
       entries: wire.entries
-          .map((entry) => SubagentEntry(
-                id: entry.id,
-                kind: entry.kind,
-                mode: entry.mode,
-                activity: entry.activity,
-                hasChildren: entry.hasChildren,
-                label: entry.label,
-                reason: entry.reason,
-              ))
+          .map(
+            (entry) => SubagentEntry(
+              id: entry.id,
+              kind: entry.kind,
+              mode: entry.mode,
+              activity: entry.activity,
+              hasChildren: entry.hasChildren,
+              label: entry.label,
+              reason: entry.reason,
+            ),
+          )
           .toList(),
       parentAvailable: wire.parentAvailable,
     );
@@ -497,7 +505,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> interruptSubagent(
-      String parentSessionId, String childSessionId) async {
+    String parentSessionId,
+    String childSessionId,
+  ) async {
     await _call(_subagentInterrupt, _subagentInterrupt, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
@@ -507,7 +517,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<List<TimelineItem>> loadSubagentHistory(
-      String parentSessionId, String childSessionId) async {
+    String parentSessionId,
+    String childSessionId,
+  ) async {
     final value = await _call(_subagentHistory, _subagentHistory, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
@@ -521,7 +533,10 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<String> sendSubagentPrompt(
-      String parentSessionId, String childSessionId, String text) async {
+    String parentSessionId,
+    String childSessionId,
+    String text,
+  ) async {
     final value = await _call(_subagentPrompt, _subagentPrompt, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
@@ -546,8 +561,15 @@ class HarnessRepositoryImpl implements ChatRepository {
       _planProjectionStateFor(sessionId).stream;
 
   @override
-  Future<GoalRef> createGoal(String sessionId, String objective,
-      {int? maxGoalRounds}) async {
+  Stream<ContextPressure?> observeContextPressure(String sessionId) =>
+      _sessionStateFor(sessionId).contextPressure.stream;
+
+  @override
+  Future<GoalRef> createGoal(
+    String sessionId,
+    String objective, {
+    int? maxGoalRounds,
+  }) async {
     final value = await _call(_goalCreate, _goalCreate, {
       'sessionId': sessionId,
       'objective': objective,
@@ -575,8 +597,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> clearGoal(String sessionId, GoalRef ref) async {
-    await _call(_goalClear, _goalClear, _goalPayload(sessionId, ref))
-        .valueOrThrow();
+    await _call(
+      _goalClear,
+      _goalClear,
+      _goalPayload(sessionId, ref),
+    ).valueOrThrow();
     _goalProjections[sessionId]?.value = null;
   }
 
@@ -586,20 +611,20 @@ class HarnessRepositoryImpl implements ChatRepository {
     GoalRef ref, [
     String? objective,
   ]) async {
-    final value = await _call(endpoint, endpoint, _goalPayload(sessionId, ref, objective))
-        .valueOrThrow();
+    final value = await _call(
+      endpoint,
+      endpoint,
+      _goalPayload(sessionId, ref, objective),
+    ).valueOrThrow();
     final decoded = decodeGoalRefValue(value);
     return GoalRef(id: decoded.id, revision: decoded.revision);
   }
 
   JsonMap _goalPayload(String sessionId, GoalRef ref, [String? objective]) => {
-        'sessionId': sessionId,
-        'ref': <String, Object?>{
-          'id': ref.id,
-          'revision': ref.revision,
-        },
-        if (objective != null) 'objective': objective,
-      };
+    'sessionId': sessionId,
+    'ref': <String, Object?>{'id': ref.id, 'revision': ref.revision},
+    if (objective != null) 'objective': objective,
+  };
 
   @override
   Stream<List<WorkspaceSummary>> observeWorkspaces() => _workspaces.stream;
@@ -610,8 +635,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<WorkspaceListValueWire> _loadWorkspaceListing() async {
-    final result = await _call(_workspaceList, _workspaceList, <String, Object?>{})
-        .valueOrThrow();
+    final result = await _call(
+      _workspaceList,
+      _workspaceList,
+      <String, Object?>{},
+    ).valueOrThrow();
     return WorkspaceListValueWire.fromJson(result);
   }
 
@@ -625,30 +653,32 @@ class HarnessRepositoryImpl implements ChatRepository {
     final result = await _call(_workspaceCreate, _workspaceCreate, {
       'path': path,
     }).valueOrThrow();
-    final created =
-        _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
+    final created = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     _applyWorkspaceListing(await _loadWorkspaceListing());
     return created;
   }
 
   @override
   Future<WorkspaceSummary> renameWorkspace(
-      String workspaceId, String title) async {
+    String workspaceId,
+    String title,
+  ) async {
     final result = await _call(_workspaceRename, _workspaceRename, {
       'workspaceId': workspaceId,
       'title': title,
     }).valueOrThrow();
-    final renamed =
-        _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
+    final renamed = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     _applyWorkspaceListing(await _loadWorkspaceListing());
     return renamed;
   }
 
   @override
   Future<void> archiveSession(String sessionId) async {
-    final result = await _call(_workspaceArchiveSession, _workspaceArchiveSession, {
-      'sessionId': sessionId,
-    }).valueOrThrow();
+    final result = await _call(
+      _workspaceArchiveSession,
+      _workspaceArchiveSession,
+      {'sessionId': sessionId},
+    ).valueOrThrow();
     _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
   }
 
@@ -662,7 +692,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<List<String>> moveWorkspace(
-      String workspaceId, String? beforeWorkspaceId) async {
+    String workspaceId,
+    String? beforeWorkspaceId,
+  ) async {
     final value = await _call(_workspaceInsertBefore, _workspaceInsertBefore, {
       'workspaceId': workspaceId,
       if (beforeWorkspaceId != null) 'beforeWorkspaceId': beforeWorkspaceId,
@@ -678,12 +710,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     String? beforeSessionId,
   ) async {
-    final value =
-        await _call(_workspaceInsertSessionBefore, _workspaceInsertSessionBefore, {
-      'workspaceId': workspaceId,
-      'sessionId': sessionId,
-      if (beforeSessionId != null) 'beforeSessionId': beforeSessionId,
-    }).valueOrThrow();
+    final value = await _call(
+      _workspaceInsertSessionBefore,
+      _workspaceInsertSessionBefore,
+      {
+        'workspaceId': workspaceId,
+        'sessionId': sessionId,
+        if (beforeSessionId != null) 'beforeSessionId': beforeSessionId,
+      },
+    ).valueOrThrow();
     final updated = _toDomainWorkspace(_workspaceFromJson(value, 'workspace'));
     _workspaces.value = _workspaces.value
         .map((item) => item.workspaceId == workspaceId ? updated : item)
@@ -701,7 +736,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<ModelSelection> selectModel(
-      String sessionId, ModelSelection selection) async {
+    String sessionId,
+    ModelSelection selection,
+  ) async {
     final result = await _call(_sessionSelectModel, _sessionSelectModel, {
       'sessionId': sessionId,
       'provider': selection.provider,
@@ -729,10 +766,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     return (asJsonArray(result['items']) ?? const <Object?>[])
         .map(asJsonObject)
         .whereType<JsonMap>()
-        .map((item) => SessionSearchResult(
-              sessionId: wireString(item, 'sessionId') ?? '',
-              snippet: wireString(item, 'snippet') ?? '',
-            ))
+        .map(
+          (item) => SessionSearchResult(
+            sessionId: wireString(item, 'sessionId') ?? '',
+            snippet: wireString(item, 'snippet') ?? '',
+          ),
+        )
         .toList();
   }
 
@@ -741,28 +780,32 @@ class HarnessRepositoryImpl implements ChatRepository {
   // -----------------------------------------------------------------------
 
   void _collectConnection() {
-    _subs.add(_connectionManager.state.stream.listen((connection) {
-      if (connection.phase == ConnectionPhase.connected &&
-          connection.generation != _connectionGeneration.value) {
-        _connectionGeneration.value = connection.generation;
-        unawaited(_resync(connection));
-      }
-    }));
+    _subs.add(
+      _connectionManager.state.stream.listen((connection) {
+        if (connection.phase == ConnectionPhase.connected &&
+            connection.generation != _connectionGeneration.value) {
+          _connectionGeneration.value = connection.generation;
+          unawaited(_resync(connection));
+        }
+      }),
+    );
   }
 
   void _collectMuxFrames() {
-    _subs.add(_connectionManager.muxFrames.listen((frame) {
-      final type = wireString(frame.payload, 'type');
-      if (type == 'session/projection') {
-        _handleProjection(frame);
-        return;
-      }
-      final sessionId = _frameSessionId(frame);
-      if (sessionId == null) return;
-      final state = _sessionStates[sessionId];
-      if (state == null) return;
-      unawaited(state.handleFrame(frame));
-    }));
+    _subs.add(
+      _connectionManager.muxFrames.listen((frame) {
+        final type = wireString(frame.payload, 'type');
+        if (type == 'session/projection') {
+          _handleProjection(frame);
+          return;
+        }
+        final sessionId = _frameSessionId(frame);
+        if (sessionId == null) return;
+        final state = _sessionStates[sessionId];
+        if (state == null) return;
+        unawaited(state.handleFrame(frame));
+      }),
+    );
   }
 
   void _handleProjection(ServerRequest frame) {
@@ -773,13 +816,19 @@ class HarnessRepositoryImpl implements ChatRepository {
         final title = wireString(frame.payload, 'value');
         if (title != null && title != 'null') {
           _sessions.value = _sessions.value
-              .map((item) =>
-                  item.id == sessionId ? _copySession(item, title: title) : item)
+              .map(
+                (item) => item.id == sessionId
+                    ? _copySession(item, title: title)
+                    : item,
+              )
               .toList();
         } else {
           _sessions.value = _sessions.value
-              .map((item) =>
-                  item.id == sessionId ? _copySession(item, title: null) : item)
+              .map(
+                (item) => item.id == sessionId
+                    ? _copySession(item, title: null)
+                    : item,
+              )
               .toList();
         }
       case 'goal':
@@ -808,36 +857,42 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   void _collectHostFrames() {
-    _subs.add(_connectionManager.hostFrames.listen((frame) {
-      final type = wireString(frame.payload, 'type');
-      if (type == null) return;
-      final sessionId = wireString(frame.payload, 'sessionId');
-      switch (type) {
-        case 'host/session-status':
-          if (sessionId == null) return;
-          final running = frame.payload['running'] == 'true' ||
-              frame.payload['running'] == true;
-          _sessions.value = _sessions.value.map((item) {
-            if (item.id != sessionId) return item;
-            // Web parity: a blank session never runs; the first running:true
-            // is the cross-client flip that clears the placeholder locally.
-            return _copySession(item,
-                running: running, blank: item.blank && !running);
-          }).toList();
-        case 'host/session-added':
-        case 'host/session-removed':
-          unawaited(refreshSessions().catchError((_) {}));
-        case 'host/workspace-changed':
-          _applyWorkspaceChanged(frame);
-        case 'host/workspace-removed':
-          _applyWorkspaceRemoved(frame);
-        case 'host/workspace-order-changed':
-          _applyWorkspaceOrderFrame(frame);
-        case 'host/archived-sessions-changed':
-          final archived = _stringSet(frame.payload['archivedSessionIds']);
-          _archivedSessionIds.value = archived;
-      }
-    }));
+    _subs.add(
+      _connectionManager.hostFrames.listen((frame) {
+        final type = wireString(frame.payload, 'type');
+        if (type == null) return;
+        final sessionId = wireString(frame.payload, 'sessionId');
+        switch (type) {
+          case 'host/session-status':
+            if (sessionId == null) return;
+            final running =
+                frame.payload['running'] == 'true' ||
+                frame.payload['running'] == true;
+            _sessions.value = _sessions.value.map((item) {
+              if (item.id != sessionId) return item;
+              // Web parity: a blank session never runs; the first running:true
+              // is the cross-client flip that clears the placeholder locally.
+              return _copySession(
+                item,
+                running: running,
+                blank: item.blank && !running,
+              );
+            }).toList();
+          case 'host/session-added':
+          case 'host/session-removed':
+            unawaited(refreshSessions().catchError((_) {}));
+          case 'host/workspace-changed':
+            _applyWorkspaceChanged(frame);
+          case 'host/workspace-removed':
+            _applyWorkspaceRemoved(frame);
+          case 'host/workspace-order-changed':
+            _applyWorkspaceOrderFrame(frame);
+          case 'host/archived-sessions-changed':
+            final archived = _stringSet(frame.payload['archivedSessionIds']);
+            _archivedSessionIds.value = archived;
+        }
+      }),
+    );
   }
 
   /// Full-snapshot increment carried by `host/workspace-changed`: upsert one
@@ -845,13 +900,17 @@ class HarnessRepositoryImpl implements ChatRepository {
   void _applyWorkspaceChanged(ServerRequest frame) {
     final element = frame.payload['workspace'];
     if (element == null) return;
-    final wire = _tryDecode(() =>
-        WorkspaceWire.fromJson(asJsonObject(element) ?? const <String, Object?>{}));
+    final wire = _tryDecode(
+      () => WorkspaceWire.fromJson(
+        asJsonObject(element) ?? const <String, Object?>{},
+      ),
+    );
     if (wire == null) return;
     final workspace = _toDomainWorkspace(wire);
     final current = _workspaces.value;
-    final index =
-        current.indexWhere((item) => item.workspaceId == workspace.workspaceId);
+    final index = current.indexWhere(
+      (item) => item.workspaceId == workspace.workspaceId,
+    );
     if (index < 0) {
       _workspaces.value = List.of(current)..add(workspace);
     } else {
@@ -902,7 +961,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final state in _sessionStates.values) {
         try {
           await state.ensureLoaded(
-              (beforeSeq) => _loadHistory(state.sessionId, beforeSeq));
+            (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
+          );
         } catch (_) {
           // Pending state retries on the next generation.
         }
@@ -914,14 +974,16 @@ class HarnessRepositoryImpl implements ChatRepository {
   // Wire helpers
   // -----------------------------------------------------------------------
 
-  Future<RpcResult> _call(
-      String endpoint, String method, JsonMap payload) {
+  Future<RpcResult> _call(String endpoint, String method, JsonMap payload) {
     return _rpcClient.call(endpoint, method, payload);
   }
 
   Future<List<SessionSummary>> _loadSessions() async {
-    final value = await _call(_sessionList, _sessionList, <String, Object?>{})
-        .valueOrThrow();
+    final value = await _call(
+      _sessionList,
+      _sessionList,
+      <String, Object?>{},
+    ).valueOrThrow();
     final listing = decodeSessionListValue(value);
     for (final session in listing) {
       final parsed = _imageLimitsFromProjections(session);
@@ -934,26 +996,31 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   SessionSummary _toDomainSession(SessionWire wire) => SessionSummary(
-        id: wire.sessionId,
-        title: wireString(wire.projectionValues ?? const <String, Object?>{}, 'title'),
-        running: wire.running,
-        blank: wire.blank,
-        updatedAtEpochMs: wire.updatedAt,
-        cwd: wire.cwd,
-        agentPreset: wire.agentPreset,
-      );
+    id: wire.sessionId,
+    title: wireString(
+      wire.projectionValues ?? const <String, Object?>{},
+      'title',
+    ),
+    running: wire.running,
+    blank: wire.blank,
+    updatedAtEpochMs: wire.updatedAt,
+    cwd: wire.cwd,
+    agentPreset: wire.agentPreset,
+  );
 
   /// `imageLimits` is a host-config projection; one value serves all
   /// sessions.
   ImageLimits? _imageLimitsFromProjections(SessionWire wire) {
     final value = wire.projectionValues?['imageLimits'];
     if (value == null) return null;
-    return _tryDecode(() =>
-        decodeImageLimitsWire(asJsonObject(value) ?? const <String, Object?>{}));
+    return _tryDecode(
+      () => decodeImageLimitsWire(
+        asJsonObject(value) ?? const <String, Object?>{},
+      ),
+    );
   }
 
-  Future<_HistoryPage> _loadHistory(String sessionId,
-      [int? beforeSeq]) async {
+  Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
     final value = await _call(_sessionHistory, _sessionHistory, {
       'sessionId': sessionId,
       if (beforeSeq != null) 'beforeSeq': beforeSeq,
@@ -962,11 +1029,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     final history = SessionHistoryValueWire.fromJson(value);
     final goalValue = history.projectionValues?['goal'];
     if (goalValue != null) {
-      _goalProjectionStateFor(sessionId).value = _parseGoalProjection(goalValue);
+      _goalProjectionStateFor(sessionId).value = _parseGoalProjection(
+        goalValue,
+      );
     }
     final planValue = history.projectionValues?['plan'];
     if (planValue != null) {
-      _planProjectionStateFor(sessionId).value = _parsePlanProjection(planValue);
+      _planProjectionStateFor(sessionId).value = _parsePlanProjection(
+        planValue,
+      );
     }
     return _HistoryPage(events: history.events, hasMore: history.hasMore);
   }
@@ -1015,12 +1086,22 @@ class HarnessRepositoryImpl implements ChatRepository {
         path: wire.path,
         home: wire.home,
         crumbs: wire.crumbs
-            .map((entry) =>
-                DirectoryEntry(name: entry.name, path: entry.path, hidden: entry.hidden))
+            .map(
+              (entry) => DirectoryEntry(
+                name: entry.name,
+                path: entry.path,
+                hidden: entry.hidden,
+              ),
+            )
             .toList(),
         entries: wire.entries
-            .map((entry) =>
-                DirectoryEntry(name: entry.name, path: entry.path, hidden: entry.hidden))
+            .map(
+              (entry) => DirectoryEntry(
+                name: entry.name,
+                path: entry.path,
+                hidden: entry.hidden,
+              ),
+            )
             .toList(),
         truncated: wire.truncated,
       );
@@ -1036,16 +1117,17 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   WorkspaceWire _workspaceFromJson(JsonMap value, String key) =>
       WorkspaceWire.fromJson(
-          asJsonObject(value[key]) ?? const <String, Object?>{});
+        asJsonObject(value[key]) ?? const <String, Object?>{},
+      );
 
   WorkspaceSummary _toDomainWorkspace(WorkspaceWire wire) => WorkspaceSummary(
-        workspaceId: wire.workspaceId,
-        path: wire.path,
-        title: wire.title,
-        sessionIds: wire.sessionIds,
-        createdAt: wire.createdAt,
-        updatedAt: wire.updatedAt,
-      );
+    workspaceId: wire.workspaceId,
+    path: wire.path,
+    title: wire.title,
+    sessionIds: wire.sessionIds,
+    createdAt: wire.createdAt,
+    updatedAt: wire.updatedAt,
+  );
 
   SessionModels _toDomainSessionModels(SessionModelsValueWire wire) =>
       SessionModels(
@@ -1056,33 +1138,44 @@ class HarnessRepositoryImpl implements ChatRepository {
         ),
         routable: wire.routable,
         groups: wire.groups
-            .map((group) => ModelProviderGroup(
-                  id: group.id,
-                  name: group.name,
-                  models: group.models
-                      .map((model) => ModelCatalogModel(
-                            id: model.id,
-                            name: model.name,
-                            description: model.description,
-                            reasoning: model.reasoning == null
-                                ? null
-                                : ModelReasoning(
-                                    efforts: model.reasoning!.efforts
-                                        .map((effort) => ModelReasoningEffort(
-                                              id: effort.id,
-                                              name: effort.name,
-                                              description: effort.description,
-                                            ))
-                                        .toList(),
-                                    defaultEffort: model.reasoning!.defaultEffort,
-                                  ),
-                          ))
-                      .toList(),
-                ))
+            .map(
+              (group) => ModelProviderGroup(
+                id: group.id,
+                name: group.name,
+                models: group.models
+                    .map(
+                      (model) => ModelCatalogModel(
+                        id: model.id,
+                        name: model.name,
+                        description: model.description,
+                        reasoning: model.reasoning == null
+                            ? null
+                            : ModelReasoning(
+                                efforts: model.reasoning!.efforts
+                                    .map(
+                                      (effort) => ModelReasoningEffort(
+                                        id: effort.id,
+                                        name: effort.name,
+                                        description: effort.description,
+                                      ),
+                                    )
+                                    .toList(),
+                                defaultEffort: model.reasoning!.defaultEffort,
+                              ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            )
             .toList(),
         failures: wire.failures
-            .map((failure) => ModelCatalogFailure(
-                id: failure.id, name: failure.name, message: failure.message))
+            .map(
+              (failure) => ModelCatalogFailure(
+                id: failure.id,
+                name: failure.name,
+                message: failure.message,
+              ),
+            )
             .toList(),
       );
 
@@ -1091,8 +1184,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   void _markSessionNoLongerBlank(String sessionId) {
     _sessions.value = _sessions.value
-        .map((session) =>
-            session.id == sessionId ? _copySession(session, blank: false) : session)
+        .map(
+          (session) => session.id == sessionId
+              ? _copySession(session, blank: false)
+              : session,
+        )
         .toList();
   }
 
@@ -1101,28 +1197,31 @@ class HarnessRepositoryImpl implements ChatRepository {
     String? title,
     bool? running,
     bool? blank,
-  }) =>
-      SessionSummary(
-        id: session.id,
-        title: title ?? session.title,
-        running: running ?? session.running,
-        blank: blank ?? session.blank,
-        workspaceId: session.workspaceId,
-        updatedAtEpochMs: session.updatedAtEpochMs,
-        cwd: session.cwd,
-        agentPreset: session.agentPreset,
-      );
+  }) => SessionSummary(
+    id: session.id,
+    title: title ?? session.title,
+    running: running ?? session.running,
+    blank: blank ?? session.blank,
+    workspaceId: session.workspaceId,
+    updatedAtEpochMs: session.updatedAtEpochMs,
+    cwd: session.cwd,
+    agentPreset: session.agentPreset,
+  );
 
-  _SessionState _sessionStateFor(String sessionId) => _sessionStates
-      .putIfAbsent(sessionId, () => _SessionState(sessionId));
+  _SessionState _sessionStateFor(String sessionId) =>
+      _sessionStates.putIfAbsent(sessionId, () => _SessionState(sessionId));
 
   StateStream<GoalProjection?> _goalProjectionStateFor(String sessionId) =>
       _goalProjections.putIfAbsent(
-          sessionId, () => StateStream<GoalProjection?>(null));
+        sessionId,
+        () => StateStream<GoalProjection?>(null),
+      );
 
   StateStream<PlanState?> _planProjectionStateFor(String sessionId) =>
       _planProjections.putIfAbsent(
-          sessionId, () => StateStream<PlanState?>(null));
+        sessionId,
+        () => StateStream<PlanState?>(null),
+      );
 
   Object _parseJsonValue(String text) {
     final Object? decoded = jsonDecode(text);
@@ -1158,7 +1257,9 @@ extension on Future<RpcResult> {
       final value = result.value;
       if (value == null) {
         throw DshBusinessException(
-            code: 'bad-response', message: 'missing result value');
+          code: 'bad-response',
+          message: 'missing result value',
+        );
       }
       return value;
     }
@@ -1180,8 +1281,12 @@ final class _SessionState {
   final String sessionId;
   final StateStream<List<TimelineItem>> timeline =
       StateStream<List<TimelineItem>>(<TimelineItem>[]);
-  final StateStream<TimelineWindow> window =
-      StateStream<TimelineWindow>(const TimelineWindow());
+  final StateStream<TimelineWindow> window = StateStream<TimelineWindow>(
+    const TimelineWindow(),
+  );
+  final StateStream<ContextPressure?> contextPressure =
+      StateStream<ContextPressure?>(null);
+  final ContextPressureFold _contextFold = ContextPressureFold();
   final Mutex _mutex = Mutex();
   TimelineReducer _reducer = TimelineReducer('');
   bool _ready = false;
@@ -1192,7 +1297,8 @@ final class _SessionState {
   List<ServerRequest> _framesAfterOpen = <ServerRequest>[];
 
   Future<void> ensureLoaded(
-      Future<_HistoryPage> Function(int? beforeSeq) loader) {
+    Future<_HistoryPage> Function(int? beforeSeq) loader,
+  ) {
     return _mutex.synchronized(() async {
       if (_ready) return;
       final page = await loader(null);
@@ -1200,10 +1306,17 @@ final class _SessionState {
       _hasMoreOlder = page.hasMore;
       _reducer = TimelineReducer(sessionId);
       _reducer.reset(_history);
+      _contextFold.reset(_history);
       _framesAfterOpen = List.of(_pending);
       for (final frame in _pending) {
         _reducer.ingestFrame(frame);
+        if (wireType(frame.payload) == 'session/event') {
+          _contextFold.ingestEvent(frame.payload['event']);
+        }
       }
+      _contextFold.value == null
+          ? contextPressure.value = null
+          : contextPressure.value = _contextFold.value;
       _pending = <ServerRequest>[];
       _ready = true;
       _publish();
@@ -1224,13 +1337,16 @@ final class _SessionState {
         return;
       }
       _reducer.ingestFrame(frame);
+      if (wireType(frame.payload) == 'session/event') {
+        _contextFold.ingestEvent(frame.payload['event']);
+        contextPressure.value = _contextFold.value;
+      }
       _framesAfterOpen.add(frame);
       _publish();
     });
   }
 
-  Future<bool> loadOlder(
-      Future<_HistoryPage> Function(int beforeSeq) loader) {
+  Future<bool> loadOlder(Future<_HistoryPage> Function(int beforeSeq) loader) {
     return _mutex.synchronized(() async {
       if (!_ready || !_hasMoreOlder || _loadingOlder) return false;
       if (_history.isEmpty) return false;
@@ -1243,7 +1359,10 @@ final class _SessionState {
           _hasMoreOlder = page.hasMore;
           return true;
         }
-        final older = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
+        final older = stableSortedBy(
+          page.events,
+          (event) => wireLong(event, 'seq'),
+        );
         final tailSeq = wireLong(older.last, 'seq');
         if (tailSeq + 1 != baseSeq) {
           _hasMoreOlder = false;
@@ -1263,9 +1382,14 @@ final class _SessionState {
   void _rebuild() {
     _reducer = TimelineReducer(sessionId);
     _reducer.reset(_history);
+    _contextFold.reset(_history);
     for (final frame in _framesAfterOpen) {
       _reducer.ingestFrame(frame);
+      if (wireType(frame.payload) == 'session/event') {
+        _contextFold.ingestEvent(frame.payload['event']);
+      }
     }
+    contextPressure.value = _contextFold.value;
   }
 
   void _publish() {

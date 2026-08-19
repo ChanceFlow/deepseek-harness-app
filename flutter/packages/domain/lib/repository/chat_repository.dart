@@ -8,6 +8,7 @@ import 'dart:async';
 
 import '../model/attachment.dart';
 import '../model/connection_state.dart';
+import '../model/context_pressure.dart';
 import '../model/directory.dart';
 import '../model/goal.dart';
 import '../model/model_catalog.dart';
@@ -22,8 +23,8 @@ import '../model/timeline_window.dart';
 import '../model/workspace.dart';
 
 Never _unsupported(String operation) => throw UnsupportedError(
-      '$operation is not supported by this repository double',
-    );
+  '$operation is not supported by this repository double',
+);
 
 abstract class ChatRepository {
   Stream<ConnectionState> observeConnectionState();
@@ -55,24 +56,21 @@ abstract class ChatRepository {
     String key,
     String jsonValue, {
     int? expectedRevision,
-  }) =>
-      _unsupported('updateSetting');
+  }) => _unsupported('updateSetting');
 
   /// Replace the whole user-layer section of one namespace.
   Future<SettingsNamespace> replaceSetting(
     String ns,
     String sectionJson, {
     int? expectedRevision,
-  }) =>
-      _unsupported('replaceSetting');
+  }) => _unsupported('replaceSetting');
 
   /// Apply path-addressed set/unset ops to one namespace.
   Future<SettingsNamespace> mutateSetting(
     String ns,
     List<SettingPathOp> ops, {
     int? expectedRevision,
-  }) =>
-      _unsupported('mutateSetting');
+  }) => _unsupported('mutateSetting');
 
   /// Read-only probe of credential references. Like settings describe, the
   /// host only serves it to loopback-trusted callers.
@@ -84,8 +82,7 @@ abstract class ChatRepository {
       _unsupported('setCredential');
 
   /// Clear one stored credential; loopback-trusted connections only.
-  Future<void> unsetCredential(String ref) =>
-      _unsupported('unsetCredential');
+  Future<void> unsetCredential(String ref) => _unsupported('unsetCredential');
 
   Future<void> openSession(String sessionId);
 
@@ -107,8 +104,10 @@ abstract class ChatRepository {
   Future<void> sendMessage(SendMessageRequest request);
 
   /// Download one durable image; bytes are session-authorized.
-  Future<AttachmentData> readAttachment(String sessionId, String attachmentId) =>
-      _unsupported('readAttachment');
+  Future<AttachmentData> readAttachment(
+    String sessionId,
+    String attachmentId,
+  ) => _unsupported('readAttachment');
 
   /// Session-scoped user-invocable skill catalog for the `/` composer
   /// source.
@@ -151,8 +150,9 @@ abstract class ChatRepository {
   /// Move one workspace in the durable display order; a null anchor appends
   /// to the end. Returns the complete order after the move.
   Future<List<String>> moveWorkspace(
-          String workspaceId, String? beforeWorkspaceId) =>
-      _unsupported('moveWorkspace');
+    String workspaceId,
+    String? beforeWorkspaceId,
+  ) => _unsupported('moveWorkspace');
 
   /// Move one session inside its workspace's durable order; a null anchor
   /// appends to the end. Returns the owning workspace summary.
@@ -160,13 +160,14 @@ abstract class ChatRepository {
     String workspaceId,
     String sessionId,
     String? beforeSessionId,
-  ) =>
-      _unsupported('moveSession');
+  ) => _unsupported('moveSession');
 
   Future<SessionModels> loadModels(String sessionId);
 
   Future<ModelSelection> selectModel(
-      String sessionId, ModelSelection selection);
+    String sessionId,
+    ModelSelection selection,
+  );
 
   Future<List<SessionSearchResult>> searchSessions(String query);
 
@@ -178,22 +179,34 @@ abstract class ChatRepository {
 
   Future<SubagentCatalog> loadSubagents(String parentSessionId);
 
-  Future<void> interruptSubagent(
-      String parentSessionId, String childSessionId);
+  Future<void> interruptSubagent(String parentSessionId, String childSessionId);
 
   Future<List<TimelineItem>> loadSubagentHistory(
-      String parentSessionId, String childSessionId);
+    String parentSessionId,
+    String childSessionId,
+  );
 
   Future<String> sendSubagentPrompt(
-      String parentSessionId, String childSessionId, String text);
+    String parentSessionId,
+    String childSessionId,
+    String text,
+  );
 
   Stream<GoalProjection?> observeGoal(String sessionId);
 
   /// Plan collaboration state; null while the host composes no plan mode.
   Stream<PlanState?> observePlan(String sessionId) => Stream.value(null);
 
-  Future<GoalRef> createGoal(String sessionId, String objective,
-      {int? maxGoalRounds});
+  /// Context-occupancy projection for the selected session (pressure +
+  /// route capacity); empty until usage records exist.
+  Stream<ContextPressure?> observeContextPressure(String sessionId) =>
+      const Stream<ContextPressure?>.empty();
+
+  Future<GoalRef> createGoal(
+    String sessionId,
+    String objective, {
+    int? maxGoalRounds,
+  });
 
   /// Replaces the current goal's objective without changing its phase.
   /// Test doubles may use the default unsupported implementation unless
@@ -211,10 +224,7 @@ abstract class ChatRepository {
 }
 
 final class QuestionEvidence {
-  const QuestionEvidence({
-    required this.sessionId,
-    required this.answers,
-  });
+  const QuestionEvidence({required this.sessionId, required this.answers});
 
   final String sessionId;
   final List<QuestionAnswer> answers;

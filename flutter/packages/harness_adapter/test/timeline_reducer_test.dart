@@ -4,50 +4,41 @@ import 'package:domain/model/chat_message.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
-
 import 'package:harness_adapter/src/timeline_reducer.dart';
 
 JsonMap event(int seq, String type, JsonMap data) => <String, Object?>{
-      'type': type,
-      'seq': seq,
-      'time': 1,
-      'data': data,
-    };
+  'type': type,
+  'seq': seq,
+  'time': 1,
+  'data': data,
+};
 
 JsonMap textBlock(String text) => <String, Object?>{
-      'type': 'text',
-      'text': text,
-    };
+  'type': 'text',
+  'text': text,
+};
 
 void main() {
   test('history finalizes live assistant text from chunks', () {
     final history = <JsonMap>[
-      event(
-        1,
-        'assistant/chunk',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'chunk': <String, Object?>{
-            'type': 'text-delta',
-            'index': 0,
-            'text': 'hello',
-          },
+      event(1, 'assistant/chunk', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'chunk': <String, Object?>{
+          'type': 'text-delta',
+          'index': 0,
+          'text': 'hello',
         },
-      ),
-      event(
-        2,
-        'assistant/message',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'message': <String, Object?>{
-            'id': 'assistant-1',
-            'role': 'assistant',
-            'content': <Object?>[textBlock('hello')],
-          },
+      }),
+      event(2, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'assistant-1',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('hello')],
         },
-      ),
+      }),
     ];
 
     final reducer = TimelineReducer('s1');
@@ -64,34 +55,26 @@ void main() {
 
   test('tool call pairs with result', () {
     final history = <JsonMap>[
-      event(
-        1,
-        'tool/call',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'callId': 'call-1',
-          'name': 'bash',
-          'arguments': '{}',
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'call-1',
+        'name': 'bash',
+        'arguments': '{}',
+      }),
+      event(2, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'call-1',
+              'content': <Object?>[textBlock('ok')],
+            },
+          ],
         },
-      ),
-      event(
-        2,
-        'tool/result',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'message': <String, Object?>{
-            'content': <Object?>[
-              <String, Object?>{
-                'type': 'tool-result',
-                'toolCallId': 'call-1',
-                'content': <Object?>[textBlock('ok')],
-              },
-            ],
-          },
-        },
-      ),
+      }),
     ];
 
     final reducer = TimelineReducer('s1');
@@ -106,35 +89,27 @@ void main() {
 
   test('tool result block isError marks the paired call failed', () {
     final history = <JsonMap>[
-      event(
-        1,
-        'tool/call',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'callId': 'call-failed',
-          'name': 'bash',
-          'arguments': '{}',
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'call-failed',
+        'name': 'bash',
+        'arguments': '{}',
+      }),
+      event(2, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'call-failed',
+              'content': <Object?>[textBlock('boom')],
+              'isError': true,
+            },
+          ],
         },
-      ),
-      event(
-        2,
-        'tool/result',
-        <String, Object?>{
-          'turn': 1,
-          'step': 1,
-          'message': <String, Object?>{
-            'content': <Object?>[
-              <String, Object?>{
-                'type': 'tool-result',
-                'toolCallId': 'call-failed',
-                'content': <Object?>[textBlock('boom')],
-                'isError': true,
-              },
-            ],
-          },
-        },
-      ),
+      }),
     ];
 
     final reducer = TimelineReducer('s1');
@@ -210,8 +185,10 @@ void main() {
 
     final question =
         (reducer.snapshot().single as TimelineQuestionRequest).questions.single;
-    expect(question.intent,
-        const QuestionIntent(kind: 'plan-review', approve: 'Approve plan'));
+    expect(
+      question.intent,
+      const QuestionIntent(kind: 'plan-review', approve: 'Approve plan'),
+    );
     expect(question.detail, '# The plan');
   });
 
@@ -231,10 +208,7 @@ void main() {
             'detail': 'This command writes files',
             'multiSelect': true,
             'options': <Object?>[
-              <String, Object?>{
-                'label': 'yes',
-                'description': 'Continue now',
-              },
+              <String, Object?>{'label': 'yes', 'description': 'Continue now'},
               <String, Object?>{'label': 'no'},
             ],
           },
@@ -297,27 +271,23 @@ void main() {
 
   test('user message image blocks fold into attachment refs', () {
     final history = <JsonMap>[
-      event(
-        1,
-        'user/message',
-        <String, Object?>{
-          'id': 'user-1',
-          'content': <Object?>[
-            textBlock('look at this'),
-            <String, Object?>{
-              'type': 'image',
-              'attachment': <String, Object?>{
-                'attachmentId': 'sha256:abc',
-                'mediaType': 'image/png',
-                'bytes': 2048,
-                'width': 640,
-                'height': 480,
-                'name': 'shot.png',
-              },
+      event(1, 'user/message', <String, Object?>{
+        'id': 'user-1',
+        'content': <Object?>[
+          textBlock('look at this'),
+          <String, Object?>{
+            'type': 'image',
+            'attachment': <String, Object?>{
+              'attachmentId': 'sha256:abc',
+              'mediaType': 'image/png',
+              'bytes': 2048,
+              'width': 640,
+              'height': 480,
+              'name': 'shot.png',
             },
-          ],
-        },
-      ),
+          },
+        ],
+      }),
     ];
 
     final reducer = TimelineReducer('s1');
@@ -337,55 +307,44 @@ void main() {
   test('turn start events become boundaries and dedupe per turn', () {
     final history = <JsonMap>[
       event(1, 'turn/start', <String, Object?>{'turn': 1}),
-      event(
-        2,
-        'user/message',
-        <String, Object?>{
-          'id': 'user-1',
-          'content': <Object?>[textBlock('hi')],
-        },
-      ),
+      event(2, 'user/message', <String, Object?>{
+        'id': 'user-1',
+        'content': <Object?>[textBlock('hi')],
+      }),
       event(3, 'turn/start', <String, Object?>{'turn': 1}),
       event(4, 'turn/start', <String, Object?>{'turn': 2}),
-      event(
-        5,
-        'user/message',
-        <String, Object?>{
-          'id': 'user-2',
-          'content': <Object?>[textBlock('again')],
-        },
-      ),
+      event(5, 'user/message', <String, Object?>{
+        'id': 'user-2',
+        'content': <Object?>[textBlock('again')],
+      }),
     ];
 
     final reducer = TimelineReducer('s1');
     reducer.reset(history);
 
     final snapshot = reducer.snapshot();
-    final turns =
-        snapshot.whereType<TimelineTurnBoundary>().toList();
+    final turns = snapshot.whereType<TimelineTurnBoundary>().toList();
     expect(turns.map((turn) => turn.turn), <int>[1, 2]);
     expect(
-      snapshot.indexWhere((item) =>
-          item is TimelineTurnBoundary && item.turn == 1),
+      snapshot.indexWhere(
+        (item) => item is TimelineTurnBoundary && item.turn == 1,
+      ),
       0,
     );
     expect(
-      snapshot.indexWhere((item) =>
-          item is TimelineTurnBoundary && item.turn == 2),
+      snapshot.indexWhere(
+        (item) => item is TimelineTurnBoundary && item.turn == 2,
+      ),
       2,
     );
   });
 
   test('compaction summary folds into a shadowed-count marker', () {
     final history = <JsonMap>[
-      event(
-        1,
-        'compaction/summary',
-        <String, Object?>{
-          'compactionId': 'c-1',
-          'shadowedSeqs': <Object?>[1, 2, 3, 4],
-        },
-      ),
+      event(1, 'compaction/summary', <String, Object?>{
+        'compactionId': 'c-1',
+        'shadowedSeqs': <Object?>[1, 2, 3, 4],
+      }),
     ];
 
     final reducer = TimelineReducer('s1');

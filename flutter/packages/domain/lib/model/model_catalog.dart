@@ -61,8 +61,7 @@ final class ModelReasoning {
       other.defaultEffort == defaultEffort;
 
   @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(efforts), defaultEffort);
+  int get hashCode => Object.hash(Object.hashAll(efforts), defaultEffort);
 }
 
 final class ModelCatalogModel {
@@ -157,11 +156,11 @@ final class SessionModels {
 
   @override
   int get hashCode => Object.hash(
-        current,
-        routable,
-        Object.hashAll(groups),
-        Object.hashAll(failures),
-      );
+    current,
+    routable,
+    Object.hashAll(groups),
+    Object.hashAll(failures),
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

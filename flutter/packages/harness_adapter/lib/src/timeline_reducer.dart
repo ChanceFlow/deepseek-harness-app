@@ -64,7 +64,8 @@ class TimelineReducer {
         _removeByKey('approval:${wireString(frame, 'approvalId')}');
       case 'question/requested':
         final questionArray = asJsonArray(frame['questions']);
-        final questions = questionArray
+        final questions =
+            questionArray
                 ?.map((entry) => asJsonObject(entry))
                 .whereType<JsonMap>()
                 .map(_toQuestionItem)
@@ -82,24 +83,32 @@ class TimelineReducer {
         _removeByKey('question:${wireString(frame, 'questionRpcId')}');
       case 'session/queue':
         final queueArray = asJsonArray(frame['items']);
-        final queueItems = queueArray
+        final queueItems =
+            queueArray
                 ?.map((entry) => asJsonObject(entry))
                 .whereType<JsonMap>()
                 .map(_toQueueItem)
                 .whereType<SessionQueueItem>()
                 .toList() ??
             <SessionQueueItem>[];
-        _upsertByKey(key: 'queue', item: TimelineQueue(items: queueItems));
+        _upsertByKey(
+          key: 'queue',
+          item: TimelineQueue(items: queueItems),
+        );
       case 'session/jobs':
         final jobsArray = asJsonArray(frame['jobs']);
-        final jobs = jobsArray
+        final jobs =
+            jobsArray
                 ?.map((entry) => asJsonObject(entry))
                 .whereType<JsonMap>()
                 .map(_toJobView)
                 .whereType<JobView>()
                 .toList() ??
             <JobView>[];
-        _upsertByKey(key: 'jobs', item: TimelineJobs(jobs: jobs));
+        _upsertByKey(
+          key: 'jobs',
+          item: TimelineJobs(jobs: jobs),
+        );
     }
   }
 
@@ -137,25 +146,29 @@ class TimelineReducer {
 
   /// A summary shadows its range; the marker keeps only the count.
   void _appendCompaction(JsonMap event) {
-    final shadowed = asJsonArray(_eventData(event)['shadowedSeqs'])?.length ?? 0;
-    _items.add(TimelineCompaction(
-      id: 'compaction:$_lastSeq',
-      shadowedCount: shadowed,
-    ));
+    final shadowed =
+        asJsonArray(_eventData(event)['shadowedSeqs'])?.length ?? 0;
+    _items.add(
+      TimelineCompaction(id: 'compaction:$_lastSeq', shadowedCount: shadowed),
+    );
   }
 
   void _appendUserMessage(JsonMap event) {
     _finalizePartial();
     final data = _eventData(event);
     final messageId = wireString(data, 'id') ?? 'user:$_lastSeq';
-    _items.add(TimelineMessage(ChatMessage(
-      id: messageId,
-      sessionId: sessionId,
-      role: MessageRole.user,
-      text: _extractText(data),
-      createdAtEpochMs: wireLong(event, 'time'),
-      images: _extractImages(data),
-    )));
+    _items.add(
+      TimelineMessage(
+        ChatMessage(
+          id: messageId,
+          sessionId: sessionId,
+          role: MessageRole.user,
+          text: _extractText(data),
+          createdAtEpochMs: wireLong(event, 'time'),
+          images: _extractImages(data),
+        ),
+      ),
+    );
   }
 
   void _appendAssistantFinal(JsonMap event) {
@@ -164,15 +177,17 @@ class TimelineReducer {
     final step = wireLong(data, 'step');
     final message = asJsonObject(data['message']);
     if (message == null) return;
-    final finalItem = TimelineMessage(ChatMessage(
-      id: wireString(message, 'id') ?? 'assistant:$_lastSeq',
-      sessionId: sessionId,
-      role: MessageRole.assistant,
-      text: _extractText(message),
-      reasoning: _extractReasoning(message),
-      createdAtEpochMs: wireLong(event, 'time'),
-      images: _extractImages(message),
-    ));
+    final finalItem = TimelineMessage(
+      ChatMessage(
+        id: wireString(message, 'id') ?? 'assistant:$_lastSeq',
+        sessionId: sessionId,
+        role: MessageRole.assistant,
+        text: _extractText(message),
+        reasoning: _extractReasoning(message),
+        createdAtEpochMs: wireLong(event, 'time'),
+        images: _extractImages(message),
+      ),
+    );
 
     if (_partialKey == _turnStepKey(turn, step)) {
       _items[_partialIndex] = finalItem;
@@ -214,16 +229,18 @@ class TimelineReducer {
         break;
     }
 
-    _items[_partialIndex] = TimelineMessage(ChatMessage(
-      id: value.id,
-      sessionId: value.sessionId,
-      role: value.role,
-      text: text,
-      reasoning: reasoning,
-      streaming: true,
-      createdAtEpochMs: value.createdAtEpochMs,
-      images: value.images,
-    ));
+    _items[_partialIndex] = TimelineMessage(
+      ChatMessage(
+        id: value.id,
+        sessionId: value.sessionId,
+        role: value.role,
+        text: text,
+        reasoning: reasoning,
+        streaming: true,
+        createdAtEpochMs: value.createdAtEpochMs,
+        images: value.images,
+      ),
+    );
   }
 
   void _ensurePartial(int turn, int step, JsonMap event) {
@@ -232,14 +249,18 @@ class TimelineReducer {
     _finalizePartial();
     _partialKey = key;
     _partialIndex = _items.length;
-    _items.add(TimelineMessage(ChatMessage(
-      id: 'partial-$sessionId-$turn-$step',
-      sessionId: sessionId,
-      role: MessageRole.assistant,
-      text: '',
-      streaming: true,
-      createdAtEpochMs: wireLong(event, 'time'),
-    )));
+    _items.add(
+      TimelineMessage(
+        ChatMessage(
+          id: 'partial-$sessionId-$turn-$step',
+          sessionId: sessionId,
+          role: MessageRole.assistant,
+          text: '',
+          streaming: true,
+          createdAtEpochMs: wireLong(event, 'time'),
+        ),
+      ),
+    );
   }
 
   void _finalizePartial() {
@@ -247,16 +268,18 @@ class TimelineReducer {
       final current = _items[_partialIndex];
       if (current is TimelineMessage && current.value.streaming) {
         final value = current.value;
-        _items[_partialIndex] = TimelineMessage(ChatMessage(
-          id: value.id,
-          sessionId: value.sessionId,
-          role: value.role,
-          text: value.text,
-          reasoning: value.reasoning,
-          streaming: false,
-          createdAtEpochMs: value.createdAtEpochMs,
-          images: value.images,
-        ));
+        _items[_partialIndex] = TimelineMessage(
+          ChatMessage(
+            id: value.id,
+            sessionId: value.sessionId,
+            role: value.role,
+            text: value.text,
+            reasoning: value.reasoning,
+            streaming: false,
+            createdAtEpochMs: value.createdAtEpochMs,
+            images: value.images,
+          ),
+        );
       }
     }
     _clearPartial();
@@ -270,29 +293,32 @@ class TimelineReducer {
   void _appendToolCall(JsonMap event) {
     final data = _eventData(event);
     final callId = wireString(data, 'callId') ?? 'tool:$_lastSeq';
-    _items.add(TimelineToolCall(
-      id: callId,
-      name: wireString(data, 'name') ?? 'unknown',
-      arguments: wireString(data, 'arguments'),
-      status: ToolRunStatus.running,
-    ));
+    _items.add(
+      TimelineToolCall(
+        id: callId,
+        name: wireString(data, 'name') ?? 'unknown',
+        arguments: wireString(data, 'arguments'),
+        status: ToolRunStatus.running,
+      ),
+    );
   }
 
   void _appendToolResult(JsonMap event) {
     final data = _eventData(event);
     final toolMessage = asJsonObject(data['message']);
     if (toolMessage == null) return;
-    final resultBlock =
-        asJsonObject(asJsonArray(toolMessage['content'])?.firstOrNull);
-    final callId = (resultBlock != null
-            ? wireString(resultBlock, 'toolCallId')
-            : null) ??
+    final resultBlock = asJsonObject(
+      asJsonArray(toolMessage['content'])?.firstOrNull,
+    );
+    final callId =
+        (resultBlock != null ? wireString(resultBlock, 'toolCallId') : null) ??
         wireString(data, 'callId') ??
         'tool-result:$_lastSeq';
     final resultText = _extractText(toolMessage);
     // dsh writes tool failures in either the `tool/result` event's optional
     // `error` field or the ToolResultBlock's `isError` flag.
-    final isError = wireBool(toolMessage, 'isError') ||
+    final isError =
+        wireBool(toolMessage, 'isError') ||
         (resultBlock != null && wireBool(resultBlock, 'isError')) ||
         data['error'] != null;
 
@@ -343,11 +369,9 @@ class TimelineReducer {
         message = null;
     }
     if (message != null) {
-      _items.add(TimelineError(
-        id: 'turn-end:$_lastSeq',
-        message: message,
-        code: kind,
-      ));
+      _items.add(
+        TimelineError(id: 'turn-end:$_lastSeq', message: message, code: kind),
+      );
     }
   }
 
@@ -415,7 +439,8 @@ class TimelineReducer {
     final id = wireString(obj, 'id');
     if (id == null) return null;
     final optionArray = asJsonArray(obj['options']);
-    final options = optionArray
+    final options =
+        optionArray
             ?.map((option) => asJsonObject(option))
             .whereType<JsonMap>()
             .map((optionObj) => wireString(optionObj, 'label'))
@@ -447,7 +472,10 @@ class TimelineReducer {
         if (intent == null) return null;
         final kind = wireString(intent, 'kind');
         if (kind == null) return null;
-        return QuestionIntent(kind: kind, approve: wireString(intent, 'approve'));
+        return QuestionIntent(
+          kind: kind,
+          approve: wireString(intent, 'approve'),
+        );
       }(),
     );
   }
@@ -503,14 +531,16 @@ class TimelineReducer {
       if (attachment == null) continue;
       final id = wireString(attachment, 'attachmentId');
       if (id == null) continue;
-      refs.add(AttachmentRef(
-        attachmentId: id,
-        mediaType: wireString(attachment, 'mediaType') ?? '',
-        bytes: wireLong(attachment, 'bytes'),
-        width: wireLong(attachment, 'width'),
-        height: wireLong(attachment, 'height'),
-        name: wireString(attachment, 'name'),
-      ));
+      refs.add(
+        AttachmentRef(
+          attachmentId: id,
+          mediaType: wireString(attachment, 'mediaType') ?? '',
+          bytes: wireLong(attachment, 'bytes'),
+          width: wireLong(attachment, 'width'),
+          height: wireLong(attachment, 'height'),
+          name: wireString(attachment, 'name'),
+        ),
+      );
     }
     return refs;
   }

@@ -31,8 +31,7 @@ final class PendingImage {
       other.byteSize == byteSize;
 
   @override
-  int get hashCode =>
-      Object.hash(id, mediaType, base64Data, name, byteSize);
+  int get hashCode => Object.hash(id, mediaType, base64Data, name, byteSize);
 }
 
 /// Durable image reference found inside a message's content blocks.
@@ -132,12 +131,12 @@ final class ImageLimits {
 
   @override
   int get hashCode => Object.hash(
-        maxImageBytes,
-        maxImagesPerMessage,
-        maxMessageImageBytes,
-        maxImagePixels,
-        Object.hashAll(mediaTypes),
-      );
+    maxImageBytes,
+    maxImagesPerMessage,
+    maxMessageImageBytes,
+    maxImagePixels,
+    Object.hashAll(mediaTypes),
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

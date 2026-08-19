@@ -52,24 +52,23 @@ int _exponentialCap(int times, int baseMillis, int maxMillis) {
   var value = baseMillis < 1 ? 1 : baseMillis;
   if (value > maxMillis) value = maxMillis;
   for (var i = 0; i < times; i++) {
-    value = value > maxMillis ~/ 2 ? maxMillis : (value * 2 > maxMillis ? maxMillis : value * 2);
+    value = value > maxMillis ~/ 2
+        ? maxMillis
+        : (value * 2 > maxMillis ? maxMillis : value * 2);
   }
   return value;
 }
 
 class DshConnectionManager {
-  DshConnectionManager(
-    this._rpcClient,
-    this._eventSocket,
-    this._backoffDelay,
-  );
+  DshConnectionManager(this._rpcClient, this._eventSocket, this._backoffDelay);
 
   final DshRpcClient _rpcClient;
   final DshEventSocket _eventSocket;
   final DshBackoffDelay _backoffDelay;
 
-  final StateStream<ConnectionState> _state =
-      StateStream<ConnectionState>(const ConnectionState());
+  final StateStream<ConnectionState> _state = StateStream<ConnectionState>(
+    const ConnectionState(),
+  );
   final StateStream<HostDescription?> _hostDescription =
       StateStream<HostDescription?>(null);
   final StreamController<ServerRequest> _muxFrames =
@@ -138,7 +137,9 @@ class DshConnectionManager {
       // A generation that reached CONNECTED was healthy until stream loss;
       // its loss starts a fresh backoff sequence.
       if (connected) attempt = 0;
-      await Future<void>.delayed(Duration(milliseconds: _backoffDelay(attempt)));
+      await Future<void>.delayed(
+        Duration(milliseconds: _backoffDelay(attempt)),
+      );
       attempt += 1;
     }
   }
@@ -152,25 +153,16 @@ class DshConnectionManager {
     final failure = Completer<Object?>();
     final generationSubs = <StreamSubscription<ServerRequest>>[];
 
-    _pump(
-      _eventsMuxPath,
-      muxOpened,
-      failure,
-      _muxFrames,
-      generationSubs,
-    );
+    _pump(_eventsMuxPath, muxOpened, failure, _muxFrames, generationSubs);
     if (_stopped) return false;
-    _pump(
-      _eventsHostPath,
-      hostOpened,
-      failure,
-      _hostFrames,
-      generationSubs,
-    );
+    _pump(_eventsHostPath, hostOpened, failure, _hostFrames, generationSubs);
 
     try {
-      final result =
-          await _rpcClient.call(_hostDescribe, _hostDescribe, <String, Object?>{});
+      final result = await _rpcClient.call(
+        _hostDescribe,
+        _hostDescribe,
+        <String, Object?>{},
+      );
       if (!result.ok) {
         throw DshBusinessException(
           code: result.error?.code ?? 'internal',
@@ -180,7 +172,9 @@ class DshConnectionManager {
       final value = result.value;
       if (value == null) {
         throw DshBusinessException(
-            code: 'bad-response', message: 'host.describe missing value');
+          code: 'bad-response',
+          message: 'host.describe missing value',
+        );
       }
       final description = HostDescription(
         version: wireString(value, 'version') ?? '',
@@ -228,9 +222,12 @@ class DshConnectionManager {
     StreamController<ServerRequest> sink,
     List<StreamSubscription<ServerRequest>> generationSubs,
   ) {
-    final stream = _eventSocket.connect(path, onOpen: () {
-      if (!opened.isCompleted) opened.complete();
-    });
+    final stream = _eventSocket.connect(
+      path,
+      onOpen: () {
+        if (!opened.isCompleted) opened.complete();
+      },
+    );
     final sub = stream.listen(
       sink.add,
       onError: (Object error) {

@@ -1,5 +1,6 @@
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
@@ -23,14 +24,14 @@ class FakeChatRepository implements ChatRepository {
   FakeChatRepository({
     List<TimelineItem> initialTimeline = const <TimelineItem>[],
     List<SessionSummary> initialSessions = const <SessionSummary>[
-      initialSession
+      initialSession,
     ],
     List<WorkspaceSummary> initialWorkspaces = const <WorkspaceSummary>[],
-  })  : timeline = AppStateStream<List<TimelineItem>>(initialTimeline),
-        sessions = AppStateStream<List<SessionSummary>>(initialSessions),
-        workspaces = AppStateStream<List<WorkspaceSummary>>(initialWorkspaces),
-        baselineSessions = initialSessions,
-        baselineWorkspaces = initialWorkspaces;
+  }) : timeline = AppStateStream<List<TimelineItem>>(initialTimeline),
+       sessions = AppStateStream<List<SessionSummary>>(initialSessions),
+       workspaces = AppStateStream<List<WorkspaceSummary>>(initialWorkspaces),
+       baselineSessions = initialSessions,
+       baselineWorkspaces = initialWorkspaces;
 
   static const SessionSummary initialSession = SessionSummary(
     id: 'session-1',
@@ -58,7 +59,8 @@ class FakeChatRepository implements ChatRepository {
       <(String, QuestionEvidence)>[];
 
   @override
-  Stream<ConnectionState> observeConnectionState() => AppStateStream<ConnectionState>(
+  Stream<ConnectionState> observeConnectionState() =>
+      AppStateStream<ConnectionState>(
         const ConnectionState(
           phase: ConnectionPhase.connected,
           hostDescription: HostDescription(version: 'test', cwd: '/tmp'),
@@ -124,7 +126,10 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
-  Future<void> answerQuestions(String requestId, QuestionEvidence evidence) async {
+  Future<void> answerQuestions(
+    String requestId,
+    QuestionEvidence evidence,
+  ) async {
     questionAnswers.add((requestId, evidence));
   }
 
@@ -138,13 +143,24 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Future<WorkspaceSummary> createWorkspace(String path) async {
-    return WorkspaceSummary(workspaceId: 'workspace-1', path: path, title: path);
+    return WorkspaceSummary(
+      workspaceId: 'workspace-1',
+      path: path,
+      title: path,
+    );
   }
 
   @override
-  Future<WorkspaceSummary> renameWorkspace(String workspaceId, String title) async {
+  Future<WorkspaceSummary> renameWorkspace(
+    String workspaceId,
+    String title,
+  ) async {
     renamedWorkspaces.add((workspaceId, title));
-    return WorkspaceSummary(workspaceId: workspaceId, path: title, title: title);
+    return WorkspaceSummary(
+      workspaceId: workspaceId,
+      path: title,
+      title: title,
+    );
   }
 
   @override
@@ -160,8 +176,9 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Future<ModelSelection> selectModel(
-          String sessionId, ModelSelection selection) async =>
-      selection;
+    String sessionId,
+    ModelSelection selection,
+  ) async => selection;
 
   @override
   Future<List<SessionSearchResult>> searchSessions(String query) async =>
@@ -186,31 +203,40 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Future<void> interruptSubagent(
-      String parentSessionId, String childSessionId) async {}
+    String parentSessionId,
+    String childSessionId,
+  ) async {}
 
   @override
   Future<List<TimelineItem>> loadSubagentHistory(
-          String parentSessionId, String childSessionId) async =>
-      const <TimelineItem>[];
+    String parentSessionId,
+    String childSessionId,
+  ) async => const <TimelineItem>[];
 
   @override
   Future<String> sendSubagentPrompt(
-          String parentSessionId, String childSessionId, String text) async =>
-      'msg-1';
+    String parentSessionId,
+    String childSessionId,
+    String text,
+  ) async => 'msg-1';
 
   @override
   Stream<GoalProjection?> observeGoal(String sessionId) =>
       AppStateStream<GoalProjection?>(null).stream;
 
   @override
-  Future<GoalRef> createGoal(String sessionId, String objective,
-          {int? maxGoalRounds}) async =>
-      const GoalRef(id: 'g1', revision: 1);
+  Future<GoalRef> createGoal(
+    String sessionId,
+    String objective, {
+    int? maxGoalRounds,
+  }) async => const GoalRef(id: 'g1', revision: 1);
 
   @override
   Future<GoalRef> editGoal(
-          String sessionId, GoalRef ref, String objective) async =>
-      ref;
+    String sessionId,
+    GoalRef ref,
+    String objective,
+  ) async => ref;
 
   @override
   Future<GoalRef> pauseGoal(String sessionId, GoalRef ref) async => ref;
@@ -241,19 +267,29 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Future<SettingsNamespace> updateSetting(
-          String ns, String key, String jsonValue, {int? expectedRevision}) async {
+    String ns,
+    String key,
+    String jsonValue, {
+    int? expectedRevision,
+  }) async {
     throw UnsupportedError('updateSetting');
   }
 
   @override
   Future<SettingsNamespace> replaceSetting(
-      String ns, String sectionJson, {int? expectedRevision}) async {
+    String ns,
+    String sectionJson, {
+    int? expectedRevision,
+  }) async {
     throw UnsupportedError('replaceSetting');
   }
 
   @override
   Future<SettingsNamespace> mutateSetting(
-      String ns, List<SettingPathOp> ops, {int? expectedRevision}) async {
+    String ns,
+    List<SettingPathOp> ops, {
+    int? expectedRevision,
+  }) async {
     throw UnsupportedError('mutateSetting');
   }
 
@@ -274,7 +310,9 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Future<AttachmentData> readAttachment(
-      String sessionId, String attachmentId) async {
+    String sessionId,
+    String attachmentId,
+  ) async {
     throw UnsupportedError('readAttachment');
   }
 
@@ -287,8 +325,14 @@ class FakeChatRepository implements ChatRepository {
       AppStateStream<PlanState?>(null).stream;
 
   @override
+  Stream<ContextPressure?> observeContextPressure(String sessionId) =>
+      AppStateStream<ContextPressure?>(null).stream;
+
+  @override
   Future<List<String>> moveWorkspace(
-      String workspaceId, String? beforeWorkspaceId) async {
+    String workspaceId,
+    String? beforeWorkspaceId,
+  ) async {
     throw UnsupportedError('moveWorkspace');
   }
 
@@ -320,10 +364,9 @@ void main() {
     ChatController(repository);
     await pumpEventQueue();
 
-    expect(
-      await repository.observeSessions().first,
-      <SessionSummary>[FakeChatRepository.initialSession],
-    );
+    expect(await repository.observeSessions().first, <SessionSummary>[
+      FakeChatRepository.initialSession,
+    ]);
   });
 
   test('select session loads timeline', () async {
@@ -333,12 +376,12 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     await pumpEventQueue();
 
-    expect(repository.openedSessionIds,
-        <String>[FakeChatRepository.initialSession.id]);
+    expect(repository.openedSessionIds, <String>[
+      FakeChatRepository.initialSession.id,
+    ]);
     expect(controller.state.timeline, hasLength(1));
   });
 
@@ -349,18 +392,18 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     await pumpEventQueue();
     expect(controller.state.skills, hasLength(1));
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     await pumpEventQueue();
 
     expect(repository.skillListCalls, hasLength(1));
-    expect(repository.skillListCalls.single,
-        FakeChatRepository.initialSession.id);
+    expect(
+      repository.skillListCalls.single,
+      FakeChatRepository.initialSession.id,
+    );
   });
 
   test('send prompt delegates to repository', () async {
@@ -370,51 +413,48 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(const SendPrompt('hello'));
     await pumpEventQueue();
 
-    expect(
-      repository.sentMessages,
-      <SendMessageRequest>[
-        SendMessageRequest(
-          sessionId: FakeChatRepository.initialSession.id,
-          text: 'hello',
-        ),
-      ],
-    );
+    expect(repository.sentMessages, <SendMessageRequest>[
+      SendMessageRequest(
+        sessionId: FakeChatRepository.initialSession.id,
+        text: 'hello',
+      ),
+    ]);
   });
 
-  test('send prompt includes pending images and clears them on success',
-      () async {
-    final repository = FakeChatRepository(
-      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
-    );
-    final controller = ChatController(repository);
-    await pumpEventQueue();
+  test(
+    'send prompt includes pending images and clears them on success',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    const image = PendingImage(
-      id: 'content://media/1',
-      mediaType: 'image/png',
-      base64Data: 'aGk=',
-      name: 'shot.png',
-      byteSize: 2,
-    );
-    controller.onAction(const ImagesLoaded(<PendingImage>[image]));
-    await pumpEventQueue();
-    expect(controller.state.pendingImages, hasLength(1));
+      controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+      const image = PendingImage(
+        id: 'content://media/1',
+        mediaType: 'image/png',
+        base64Data: 'aGk=',
+        name: 'shot.png',
+        byteSize: 2,
+      );
+      controller.onAction(const ImagesLoaded(<PendingImage>[image]));
+      await pumpEventQueue();
+      expect(controller.state.pendingImages, hasLength(1));
 
-    controller.onAction(const SendPrompt('see this'));
-    await pumpEventQueue();
+      controller.onAction(const SendPrompt('see this'));
+      await pumpEventQueue();
 
-    final sent = repository.sentMessages.single;
-    expect(sent.text, 'see this');
-    expect(sent.images, <PendingImage>[image]);
-    expect(controller.state.pendingImages, isEmpty);
-  });
+      final sent = repository.sentMessages.single;
+      expect(sent.text, 'see this');
+      expect(sent.images, <PendingImage>[image]);
+      expect(controller.state.pendingImages, isEmpty);
+    },
+  );
 
   test('send prompt with only images still sends', () async {
     final repository = FakeChatRepository(
@@ -423,11 +463,17 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(const ImagesLoaded(<PendingImage>[
-      PendingImage(id: 'u1', mediaType: 'image/jpeg', base64Data: 'aGk=', byteSize: 2),
-    ]));
+      const ImagesLoaded(<PendingImage>[
+        PendingImage(
+          id: 'u1',
+          mediaType: 'image/jpeg',
+          base64Data: 'aGk=',
+          byteSize: 2,
+        ),
+      ]),
+    );
     await pumpEventQueue();
     controller.onAction(const SendPrompt(''));
     await pumpEventQueue();
@@ -442,9 +488,16 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(const ImagesLoaded(<PendingImage>[
-      PendingImage(id: 'u1', mediaType: 'image/bmp', base64Data: 'aGk=', byteSize: 2),
-    ]));
+    controller.onAction(
+      const ImagesLoaded(<PendingImage>[
+        PendingImage(
+          id: 'u1',
+          mediaType: 'image/bmp',
+          base64Data: 'aGk=',
+          byteSize: 2,
+        ),
+      ]),
+    );
     await pumpEventQueue();
 
     expect(controller.state.pendingImages, isEmpty);
@@ -461,13 +514,19 @@ void main() {
     final batch = List<PendingImage>.generate(
       25,
       (index) => PendingImage(
-          id: 'u$index', mediaType: 'image/png', base64Data: 'aGk=', byteSize: 2),
+        id: 'u$index',
+        mediaType: 'image/png',
+        base64Data: 'aGk=',
+        byteSize: 2,
+      ),
     );
     controller.onAction(ImagesLoaded(batch));
     await pumpEventQueue();
 
-    expect(controller.state.pendingImages.length,
-        ImageLimits.defaultMaxImagesPerMessage);
+    expect(
+      controller.state.pendingImages.length,
+      ImageLimits.defaultMaxImagesPerMessage,
+    );
     expect(controller.state.errorMessage ?? '', contains('more image'));
   });
 
@@ -478,16 +537,30 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(const ImagesLoaded(<PendingImage>[
-      PendingImage(id: 'u1', mediaType: 'image/png', base64Data: 'aGk=', byteSize: 2),
-      PendingImage(id: 'u2', mediaType: 'image/png', base64Data: 'aGk=', byteSize: 2),
-    ]));
+    controller.onAction(
+      const ImagesLoaded(<PendingImage>[
+        PendingImage(
+          id: 'u1',
+          mediaType: 'image/png',
+          base64Data: 'aGk=',
+          byteSize: 2,
+        ),
+        PendingImage(
+          id: 'u2',
+          mediaType: 'image/png',
+          base64Data: 'aGk=',
+          byteSize: 2,
+        ),
+      ]),
+    );
     await pumpEventQueue();
     controller.onAction(const RemovePendingImage('u1'));
     await pumpEventQueue();
 
-    expect(controller.state.pendingImages.map((image) => image.id).toList(),
-        <String>['u2']);
+    expect(
+      controller.state.pendingImages.map((image) => image.id).toList(),
+      <String>['u2'],
+    );
   });
 
   test('send prompt honours steer delivery mode', () async {
@@ -497,8 +570,7 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(const SendPrompt('take over', mode: PromptMode.steer));
     await pumpEventQueue();
 
@@ -512,21 +584,26 @@ void main() {
     );
   });
 
-  test('workspace scoped new session passes workspace request through', () async {
-    final repository = FakeChatRepository(
-      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
-    );
-    final controller = ChatController(repository);
-    await pumpEventQueue();
+  test(
+    'workspace scoped new session passes workspace request through',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
 
-    controller.onAction(const CreateSessionInWorkspace('workspace-1'));
-    await pumpEventQueue();
+      controller.onAction(const CreateSessionInWorkspace('workspace-1'));
+      await pumpEventQueue();
 
-    expect(repository.createRequests,
-        <CreateSessionRequest>[const CreateSessionRequest(workspaceId: 'workspace-1')]);
-    expect(repository.openedSessionIds,
-        <String>[FakeChatRepository.initialSession.id]);
-  });
+      expect(repository.createRequests, <CreateSessionRequest>[
+        const CreateSessionRequest(workspaceId: 'workspace-1'),
+      ]);
+      expect(repository.openedSessionIds, <String>[
+        FakeChatRepository.initialSession.id,
+      ]);
+    },
+  );
 
   test('load older history delegates to repository', () async {
     final repository = FakeChatRepository(
@@ -535,13 +612,13 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(const LoadOlderHistoryAction());
     await pumpEventQueue();
 
-    expect(repository.olderHistorySessionIds,
-        <String>[FakeChatRepository.initialSession.id]);
+    expect(repository.olderHistorySessionIds, <String>[
+      FakeChatRepository.initialSession.id,
+    ]);
   });
 
   test('archive session delegates to repository', () async {
@@ -551,14 +628,13 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(
-        ArchiveSession(FakeChatRepository.initialSession.id));
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(ArchiveSession(FakeChatRepository.initialSession.id));
     await pumpEventQueue();
 
-    expect(repository.archivedSessionIds,
-        <String>[FakeChatRepository.initialSession.id]);
+    expect(repository.archivedSessionIds, <String>[
+      FakeChatRepository.initialSession.id,
+    ]);
   });
 
   test('approval action delegates', () async {
@@ -568,13 +644,14 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(const RespondApproval(
-      requestId: 'rpc-1',
-      approvalId: 'approval-1',
-      allowed: true,
-    ));
+      const RespondApproval(
+        requestId: 'rpc-1',
+        approvalId: 'approval-1',
+        allowed: true,
+      ),
+    );
     await pumpEventQueue();
 
     expect(
@@ -603,14 +680,18 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
-    expect(controller.state.sessions.map((session) => session.id).toList(),
-        <String>[FakeChatRepository.initialSession.id]);
+    expect(
+      controller.state.sessions.map((session) => session.id).toList(),
+      <String>[FakeChatRepository.initialSession.id],
+    );
 
     controller.onAction(SelectSession(blankSession.id));
     await pumpEventQueue();
 
-    expect(controller.state.sessions.map((session) => session.id).toList(),
-        <String>[FakeChatRepository.initialSession.id, blankSession.id]);
+    expect(
+      controller.state.sessions.map((session) => session.id).toList(),
+      <String>[FakeChatRepository.initialSession.id, blankSession.id],
+    );
   });
 
   test('workspace create reuses the workspace blank session', () async {
@@ -647,13 +728,14 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(const UpdateQueueAction(
-      itemId: 'queued-1',
-      kind: QueueUpdateKind.edit,
-      text: 'revised prompt',
-    ));
+      const UpdateQueueAction(
+        itemId: 'queued-1',
+        kind: QueueUpdateKind.edit,
+        text: 'revised prompt',
+      ),
+    );
     await pumpEventQueue();
 
     expect(
@@ -674,13 +756,14 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(const UpdateQueueAction(
-      itemId: 'queued-1',
-      kind: QueueUpdateKind.edit,
-      text: '   ',
-    ));
+      const UpdateQueueAction(
+        itemId: 'queued-1',
+        kind: QueueUpdateKind.edit,
+        text: '   ',
+      ),
+    );
     await pumpEventQueue();
 
     expect(repository.queueUpdates, isEmpty);
@@ -693,14 +776,13 @@ void main() {
     final controller = ChatController(repository);
     await pumpEventQueue();
 
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
     controller.onAction(
-        SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(const AnswerQuestionAction(
-      requestId: 'rpc-question',
-      answers: <QuestionAnswer>[
-        QuestionAnswer(questionId: 'question-1'),
-      ],
-    ));
+      const AnswerQuestionAction(
+        requestId: 'rpc-question',
+        answers: <QuestionAnswer>[QuestionAnswer(questionId: 'question-1')],
+      ),
+    );
     await pumpEventQueue();
 
     final answered = repository.questionAnswers.single;

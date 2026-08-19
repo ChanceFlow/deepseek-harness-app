@@ -14,17 +14,12 @@ void main() {
   });
 
   test('display title falls back to workspace basename then id', () {
-    const byPath = SessionSummary(
-      id: 'session-1',
-      cwd: '/home/user/checkout',
-    );
+    const byPath = SessionSummary(id: 'session-1', cwd: '/home/user/checkout');
     const withTrailingSeparator = SessionSummary(
       id: 'session-2',
       cwd: 'C:\\work\\checkout\\',
     );
-    const withoutAncestors = SessionSummary(
-      id: 'session-3',
-    );
+    const withoutAncestors = SessionSummary(id: 'session-3');
 
     expect(byPath.displayTitle, 'checkout');
     expect(withTrailingSeparator.displayTitle, 'checkout');

@@ -16,7 +16,8 @@ import 'wire_json.dart';
 // ---------------------------------------------------------------------------
 
 Never _missing(JsonMap json, String key) => throw FormatException(
-    'required field "$key" missing or mistyped in ${json.keys.toList()}');
+  'required field "$key" missing or mistyped in ${json.keys.toList()}',
+);
 
 String _reqString(JsonMap json, String key) {
   final value = wireString(json, key);
@@ -59,15 +60,15 @@ JsonMap _reqObject(JsonMap json, String key) {
 
 final class SessionWire {
   SessionWire.fromJson(JsonMap json)
-      : sessionId = _reqString(json, 'sessionId'),
-        updatedAt = wireLong(json, 'updatedAt'),
-        running = wireBool(json, 'running'),
-        blank = json.containsKey('blank') ? wireBool(json, 'blank') : true,
-        parentSessionId = wireString(json, 'parentSessionId'),
-        origin = wireString(json, 'origin'),
-        cwd = wireString(json, 'cwd'),
-        agentPreset = wireString(json, 'agentPreset'),
-        projections = asJsonObject(json['projections']);
+    : sessionId = _reqString(json, 'sessionId'),
+      updatedAt = wireLong(json, 'updatedAt'),
+      running = wireBool(json, 'running'),
+      blank = json.containsKey('blank') ? wireBool(json, 'blank') : true,
+      parentSessionId = wireString(json, 'parentSessionId'),
+      origin = wireString(json, 'origin'),
+      cwd = wireString(json, 'cwd'),
+      agentPreset = wireString(json, 'agentPreset'),
+      projections = asJsonObject(json['projections']);
 
   final String sessionId;
   final int updatedAt;
@@ -96,12 +97,12 @@ List<SessionWire> decodeSessionListValue(JsonMap value) =>
 
 final class WorkspaceWire {
   WorkspaceWire.fromJson(JsonMap json)
-      : workspaceId = _reqString(json, 'workspaceId'),
-        path = _reqString(json, 'path'),
-        title = _reqString(json, 'title'),
-        sessionIds = _stringList(json['sessionIds']),
-        createdAt = wireString(json, 'createdAt') ?? '',
-        updatedAt = wireString(json, 'updatedAt') ?? '';
+    : workspaceId = _reqString(json, 'workspaceId'),
+      path = _reqString(json, 'path'),
+      title = _reqString(json, 'title'),
+      sessionIds = _stringList(json['sessionIds']),
+      createdAt = wireString(json, 'createdAt') ?? '',
+      updatedAt = wireString(json, 'updatedAt') ?? '';
 
   final String workspaceId;
   final String path;
@@ -113,12 +114,12 @@ final class WorkspaceWire {
 
 final class WorkspaceListValueWire {
   WorkspaceListValueWire.fromJson(JsonMap json)
-      : items = (asJsonArray(json['items']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(WorkspaceWire.fromJson)
-            .toList(),
-        archivedSessionIds = _stringList(json['archivedSessionIds']);
+    : items = (asJsonArray(json['items']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(WorkspaceWire.fromJson)
+          .toList(),
+      archivedSessionIds = _stringList(json['archivedSessionIds']);
 
   final List<WorkspaceWire> items;
   final List<String> archivedSessionIds;
@@ -130,9 +131,9 @@ final class WorkspaceListValueWire {
 
 final class ModelSelectionWire {
   ModelSelectionWire.fromJson(JsonMap json)
-      : provider = _reqString(json, 'provider'),
-        model = _reqString(json, 'model'),
-        reasoningEffort = wireString(json, 'reasoningEffort');
+    : provider = _reqString(json, 'provider'),
+      model = _reqString(json, 'model'),
+      reasoningEffort = wireString(json, 'reasoningEffort');
 
   final String provider;
   final String model;
@@ -141,9 +142,9 @@ final class ModelSelectionWire {
 
 final class ModelReasoningEffortWire {
   ModelReasoningEffortWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        name = _reqString(json, 'name'),
-        description = wireString(json, 'description');
+    : id = _reqString(json, 'id'),
+      name = _reqString(json, 'name'),
+      description = wireString(json, 'description');
 
   final String id;
   final String name;
@@ -152,12 +153,12 @@ final class ModelReasoningEffortWire {
 
 final class ModelReasoningWire {
   ModelReasoningWire.fromJson(JsonMap json)
-      : efforts = (asJsonArray(json['efforts']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(ModelReasoningEffortWire.fromJson)
-            .toList(),
-        defaultEffort = wireString(json, 'defaultEffort');
+    : efforts = (asJsonArray(json['efforts']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(ModelReasoningEffortWire.fromJson)
+          .toList(),
+      defaultEffort = wireString(json, 'defaultEffort');
 
   final List<ModelReasoningEffortWire> efforts;
   final String? defaultEffort;
@@ -165,10 +166,10 @@ final class ModelReasoningWire {
 
 final class ModelCatalogModelWire {
   ModelCatalogModelWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        name = _reqString(json, 'name'),
-        description = wireString(json, 'description'),
-        reasoning = _nullable(json['reasoning'], ModelReasoningWire.fromJson);
+    : id = _reqString(json, 'id'),
+      name = _reqString(json, 'name'),
+      description = wireString(json, 'description'),
+      reasoning = _nullable(json['reasoning'], ModelReasoningWire.fromJson);
 
   final String id;
   final String name;
@@ -178,13 +179,13 @@ final class ModelCatalogModelWire {
 
 final class ModelProviderGroupWire {
   ModelProviderGroupWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        name = _reqString(json, 'name'),
-        models = (asJsonArray(json['models']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(ModelCatalogModelWire.fromJson)
-            .toList();
+    : id = _reqString(json, 'id'),
+      name = _reqString(json, 'name'),
+      models = (asJsonArray(json['models']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(ModelCatalogModelWire.fromJson)
+          .toList();
 
   final String id;
   final String name;
@@ -193,9 +194,9 @@ final class ModelProviderGroupWire {
 
 final class ModelCatalogFailureWire {
   ModelCatalogFailureWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        name = _reqString(json, 'name'),
-        message = _reqString(json, 'message');
+    : id = _reqString(json, 'id'),
+      name = _reqString(json, 'name'),
+      message = _reqString(json, 'message');
 
   final String id;
   final String name;
@@ -204,19 +205,18 @@ final class ModelCatalogFailureWire {
 
 final class SessionModelsValueWire {
   SessionModelsValueWire.fromJson(JsonMap json)
-      : current =
-            ModelSelectionWire.fromJson(_reqObject(json, 'current')),
-        routable = wireBool(json, 'routable'),
-        groups = (asJsonArray(json['groups']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(ModelProviderGroupWire.fromJson)
-            .toList(),
-        failures = (asJsonArray(json['failures']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(ModelCatalogFailureWire.fromJson)
-            .toList();
+    : current = ModelSelectionWire.fromJson(_reqObject(json, 'current')),
+      routable = wireBool(json, 'routable'),
+      groups = (asJsonArray(json['groups']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(ModelProviderGroupWire.fromJson)
+          .toList(),
+      failures = (asJsonArray(json['failures']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(ModelCatalogFailureWire.fromJson)
+          .toList();
 
   final ModelSelectionWire current;
   final bool routable;
@@ -230,13 +230,13 @@ final class SessionModelsValueWire {
 
 final class SubagentEntryWire {
   SubagentEntryWire.fromJson(JsonMap json)
-      : kind = wireString(json, 'kind') ?? 'child',
-        id = _reqString(json, 'id'),
-        mode = wireString(json, 'mode'),
-        activity = wireString(json, 'activity'),
-        hasChildren = wireBool(json, 'hasChildren'),
-        label = wireString(json, 'label'),
-        reason = wireString(json, 'reason');
+    : kind = wireString(json, 'kind') ?? 'child',
+      id = _reqString(json, 'id'),
+      mode = wireString(json, 'mode'),
+      activity = wireString(json, 'activity'),
+      hasChildren = wireBool(json, 'hasChildren'),
+      label = wireString(json, 'label'),
+      reason = wireString(json, 'reason');
 
   final String kind;
   final String id;
@@ -249,12 +249,12 @@ final class SubagentEntryWire {
 
 final class SubagentListValueWire {
   SubagentListValueWire.fromJson(JsonMap json)
-      : entries = (asJsonArray(json['entries']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(SubagentEntryWire.fromJson)
-            .toList(),
-        parentAvailable = wireBool(json, 'parentAvailable');
+    : entries = (asJsonArray(json['entries']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(SubagentEntryWire.fromJson)
+          .toList(),
+      parentAvailable = wireBool(json, 'parentAvailable');
 
   final List<SubagentEntryWire> entries;
   final bool parentAvailable;
@@ -266,8 +266,8 @@ final class SubagentListValueWire {
 
 final class GoalRefWire {
   GoalRefWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        revision = _reqLong(json, 'revision');
+    : id = _reqString(json, 'id'),
+      revision = _reqLong(json, 'revision');
 
   final String id;
   final int revision;
@@ -275,14 +275,15 @@ final class GoalRefWire {
 
 final class GoalSnapshotWire {
   GoalSnapshotWire.fromJson(JsonMap json)
-      : id = _reqString(json, 'id'),
-        revision = _reqLong(json, 'revision'),
-        objective = _reqString(json, 'objective'),
-        phase = _reqString(json, 'phase'),
-        blockedReasonMessage = wireString(
-            asJsonObject(json['blockedReason']) ?? const <String, Object?>{},
-            'message'),
-        maxGoalRounds = _reqLong(json, 'maxGoalRounds');
+    : id = _reqString(json, 'id'),
+      revision = _reqLong(json, 'revision'),
+      objective = _reqString(json, 'objective'),
+      phase = _reqString(json, 'phase'),
+      blockedReasonMessage = wireString(
+        asJsonObject(json['blockedReason']) ?? const <String, Object?>{},
+        'message',
+      ),
+      maxGoalRounds = _reqLong(json, 'maxGoalRounds');
 
   final String id;
   final int revision;
@@ -297,11 +298,10 @@ final class GoalSnapshotWire {
 
 final class GoalProjectionWire {
   GoalProjectionWire.fromJson(JsonMap json)
-      : goal =
-            GoalSnapshotWire.fromJson(_reqObject(json, 'goal')),
-        roundsStarted = wireLong(json, 'roundsStarted'),
-        createdAt = wireLong(json, 'createdAt'),
-        updatedAt = wireLong(json, 'updatedAt');
+    : goal = GoalSnapshotWire.fromJson(_reqObject(json, 'goal')),
+      roundsStarted = wireLong(json, 'roundsStarted'),
+      createdAt = wireLong(json, 'createdAt'),
+      updatedAt = wireLong(json, 'updatedAt');
 
   final GoalSnapshotWire goal;
   final int roundsStarted;
@@ -318,11 +318,11 @@ GoalRefWire decodeGoalRefValue(JsonMap value) =>
 
 final class SessionHistoryValueWire {
   SessionHistoryValueWire.fromJson(JsonMap json)
-      : events = (asJsonArray(json['events']) ?? const <Object?>[])
+    : events = (asJsonArray(json['events']) ?? const <Object?>[])
           .map(_reqEvent)
           .toList(),
-        hasMore = wireBool(json, 'hasMore'),
-        projections = asJsonObject(json['projections']);
+      hasMore = wireBool(json, 'hasMore'),
+      projections = asJsonObject(json['projections']);
 
   final List<JsonMap> events;
   final bool hasMore;
@@ -346,9 +346,9 @@ final class SessionHistoryValueWire {
 
 final class DirectoryEntryWire {
   DirectoryEntryWire.fromJson(JsonMap json)
-      : name = _reqString(json, 'name'),
-        path = _reqString(json, 'path'),
-        hidden = _reqBool(json, 'hidden');
+    : name = _reqString(json, 'name'),
+      path = _reqString(json, 'path'),
+      hidden = _reqBool(json, 'hidden');
 
   final String name;
   final String path;
@@ -357,11 +357,11 @@ final class DirectoryEntryWire {
 
 final class DirectoryListingValueWire {
   DirectoryListingValueWire.fromJson(JsonMap json)
-      : path = _reqString(json, 'path'),
-        home = _reqString(json, 'home'),
-        crumbs = _entries(json['crumbs']),
-        entries = _entries(json['entries']),
-        truncated = _reqBool(json, 'truncated');
+    : path = _reqString(json, 'path'),
+      home = _reqString(json, 'home'),
+      crumbs = _entries(json['crumbs']),
+      entries = _entries(json['entries']),
+      truncated = _reqBool(json, 'truncated');
 
   final String path;
   final String home;
@@ -383,15 +383,15 @@ final class DirectoryListingValueWire {
 
 final class SettingsNamespaceWire {
   SettingsNamespaceWire.fromJson(JsonMap json)
-      : ns = _reqString(json, 'ns'),
-        value = json['value'],
-        user = json['user'],
-        applies = wireString(json, 'applies') ?? 'live',
-        secrets = (asJsonArray(json['secrets']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .toList(),
-        revision = wireLong(json, 'revision');
+    : ns = _reqString(json, 'ns'),
+      value = json['value'],
+      user = json['user'],
+      applies = wireString(json, 'applies') ?? 'live',
+      secrets = (asJsonArray(json['secrets']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .toList(),
+      revision = wireLong(json, 'revision');
 
   final String ns;
   final Object? value;
@@ -435,13 +435,13 @@ final class SettingsNamespaceWire {
 
 final class SettingsDescribeValueWire {
   SettingsDescribeValueWire.fromJson(JsonMap json)
-      : writable = _reqBool(json, 'writable'),
-        hasDocument = wireBool(json, 'hasDocument'),
-        namespaces = (asJsonArray(json['namespaces']) ?? const <Object?>[])
-            .map(asJsonObject)
-            .whereType<JsonMap>()
-            .map(SettingsNamespaceWire.fromJson)
-            .toList();
+    : writable = _reqBool(json, 'writable'),
+      hasDocument = wireBool(json, 'hasDocument'),
+      namespaces = (asJsonArray(json['namespaces']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(SettingsNamespaceWire.fromJson)
+          .toList();
 
   final bool writable;
   final bool hasDocument;
@@ -460,18 +460,22 @@ List<CredentialStatus> decodeCredentialsDescribeValue(JsonMap value) {
   final credentials =
       asJsonObject(value['credentials']) ?? const <String, Object?>{};
   final statuses = credentials.entries
-      .map((entry) => decodeCredentialView(
-          entry.key, asJsonObject(entry.value) ?? const <String, Object?>{}))
+      .map(
+        (entry) => decodeCredentialView(
+          entry.key,
+          asJsonObject(entry.value) ?? const <String, Object?>{},
+        ),
+      )
       .toList();
   statuses.sort((a, b) => a.ref.compareTo(b.ref));
   return statuses;
 }
 
 SettingsApplies decodeApplies(String applies) => switch (applies) {
-      'live' => SettingsApplies.live,
-      'restart' => SettingsApplies.restart,
-      _ => SettingsApplies.unknown,
-    };
+  'live' => SettingsApplies.live,
+  'restart' => SettingsApplies.restart,
+  _ => SettingsApplies.unknown,
+};
 
 // ---------------------------------------------------------------------------
 // Attachments / skills / plan
@@ -479,12 +483,12 @@ SettingsApplies decodeApplies(String applies) => switch (applies) {
 
 final class AttachmentRefWire {
   AttachmentRefWire.fromJson(JsonMap json)
-      : attachmentId = _reqString(json, 'attachmentId'),
-        mediaType = _reqString(json, 'mediaType'),
-        bytes = wireLong(json, 'bytes'),
-        width = wireLong(json, 'width'),
-        height = wireLong(json, 'height'),
-        name = wireString(json, 'name');
+    : attachmentId = _reqString(json, 'attachmentId'),
+      mediaType = _reqString(json, 'mediaType'),
+      bytes = wireLong(json, 'bytes'),
+      width = wireLong(json, 'width'),
+      height = wireLong(json, 'height'),
+      name = wireString(json, 'name');
 
   final String attachmentId;
   final String mediaType;
@@ -496,9 +500,8 @@ final class AttachmentRefWire {
 
 final class SessionAttachmentValueWire {
   SessionAttachmentValueWire.fromJson(JsonMap json)
-      : attachment =
-            AttachmentRefWire.fromJson(_reqObject(json, 'attachment')),
-        data = _reqString(json, 'data');
+    : attachment = AttachmentRefWire.fromJson(_reqObject(json, 'attachment')),
+      data = _reqString(json, 'data');
 
   final AttachmentRefWire attachment;
 
@@ -523,18 +526,15 @@ typedef PlanProjectionWire = ({bool active, bool pending});
 PlanProjectionWire? decodePlanProjection(Object? value) {
   final json = asJsonObject(value);
   if (json == null) return null;
-  return (
-    active: _reqBool(json, 'active'),
-    pending: _reqBool(json, 'pending'),
-  );
+  return (active: _reqBool(json, 'active'), pending: _reqBool(json, 'pending'));
 }
 
 final class SkillEntryWire {
   SkillEntryWire.fromJson(JsonMap json)
-      : name = _reqString(json, 'name'),
-        description = _reqString(json, 'description'),
-        whenToUse = wireString(json, 'whenToUse'),
-        modelInvocable = wireBool(json, 'modelInvocable');
+    : name = _reqString(json, 'name'),
+      description = _reqString(json, 'description'),
+      whenToUse = wireString(json, 'whenToUse'),
+      modelInvocable = wireBool(json, 'modelInvocable');
 
   final String name;
   final String description;

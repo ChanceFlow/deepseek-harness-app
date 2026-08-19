@@ -71,6 +71,5 @@ final class GoalProjection {
       other.updatedAt == updatedAt;
 
   @override
-  int get hashCode =>
-      Object.hash(goal, roundsStarted, createdAt, updatedAt);
+  int get hashCode => Object.hash(goal, roundsStarted, createdAt, updatedAt);
 }

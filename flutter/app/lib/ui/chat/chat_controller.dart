@@ -11,6 +11,7 @@ import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -53,6 +54,7 @@ class ChatController {
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
   List<SkillEntry> _skills = const <SkillEntry>[];
+  ContextPressure? _contextPressure;
 
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
@@ -65,6 +67,7 @@ class ChatController {
 
   StreamSubscription<void>? _timelineSub;
   StreamSubscription<void>? _planSub;
+  StreamSubscription<void>? _contextSub;
 
   ChatUiState get state => _state.value;
   Stream<ChatUiState> get uiState => _state.stream;
@@ -75,6 +78,7 @@ class ChatController {
     }
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
+    unawaited(_contextSub?.cancel());
     _subs.clear();
   }
 
@@ -99,6 +103,7 @@ class ChatController {
       imageLimits: _imageLimits,
       plan: _plan,
       skills: _skills,
+      contextPressure: _contextPressure,
     );
   }
 
@@ -197,11 +202,14 @@ class ChatController {
   void _bindSelected(String? sessionId) {
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
+    unawaited(_contextSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
+      _contextPressure = null;
       _timelineSub = null;
       _planSub = null;
+      _contextSub = null;
       return;
     }
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
@@ -212,6 +220,12 @@ class ChatController {
     });
     _planSub = _repository.observePlan(sessionId).listen((plan) {
       _plan = plan;
+      _publish();
+    });
+    _contextSub = _repository.observeContextPressure(sessionId).listen((
+      pressure,
+    ) {
+      _contextPressure = pressure;
       _publish();
     });
   }

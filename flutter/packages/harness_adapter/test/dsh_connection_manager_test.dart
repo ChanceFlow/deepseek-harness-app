@@ -41,7 +41,11 @@ class FakeDshRpcClient implements DshRpcClient {
   int callCount = 0;
 
   @override
-  Future<RpcResult> call(String endpoint, String method, JsonMap payload) async {
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
     callCount += 1;
     if (failFirstCall && callCount == 1) {
       return RpcResult(
@@ -68,11 +72,7 @@ void main() {
     fakeAsync((async) {
       final socket = ClosableTestSocket();
       final rpc = FakeDshRpcClient(failFirstCall: false);
-      final manager = DshConnectionManager(
-        rpc,
-        socket,
-        (_) => 1000,
-      );
+      final manager = DshConnectionManager(rpc, socket, (_) => 1000);
 
       manager.start();
       expect(manager.state.value.phase, ConnectionPhase.disconnected);
@@ -95,14 +95,10 @@ void main() {
       final socket = ClosableTestSocket();
       final rpc = FakeDshRpcClient(failFirstCall: true);
       final backoffAttempts = <int>[];
-      final manager = DshConnectionManager(
-        rpc,
-        socket,
-        (attempt) {
-          backoffAttempts.add(attempt);
-          return backoffAttempts.length == 1 ? 0 : 5000;
-        },
-      );
+      final manager = DshConnectionManager(rpc, socket, (attempt) {
+        backoffAttempts.add(attempt);
+        return backoffAttempts.length == 1 ? 0 : 5000;
+      });
 
       manager.start();
       async.flushMicrotasks();
@@ -130,11 +126,7 @@ void main() {
     fakeAsync((async) {
       final socket = ClosableTestSocket(autoOpen: false);
       final rpc = FakeDshRpcClient(failFirstCall: false);
-      final manager = DshConnectionManager(
-        rpc,
-        socket,
-        (_) => 5000,
-      );
+      final manager = DshConnectionManager(rpc, socket, (_) => 5000);
       manager.start();
       async.flushMicrotasks();
       async.elapse(const Duration(milliseconds: 3001));
@@ -156,15 +148,18 @@ void main() {
       (max) => max ~/ 2,
     ]) {
       int delay(int attempt) => exponentialDshBackoffDelay(
-            attempt,
-            baseMillis: 10,
-            maxMillis: 80,
-            random: injectedRandom,
-          );
+        attempt,
+        baseMillis: 10,
+        maxMillis: 80,
+        random: injectedRandom,
+      );
       for (var i = 0; i < 20; i++) {
         final value = delay(10000);
-        expect(value, inInclusiveRange(40, 80),
-            reason: 'expected capped delay, got $value');
+        expect(
+          value,
+          inInclusiveRange(40, 80),
+          reason: 'expected capped delay, got $value',
+        );
       }
     }
   });

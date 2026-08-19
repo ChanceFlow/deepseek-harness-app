@@ -89,15 +89,8 @@ final class TimelineToolCall extends TimelineItem {
       other.status == status;
 
   @override
-  int get hashCode => Object.hash(
-        'tool',
-        id,
-        name,
-        arguments,
-        result,
-        isError,
-        status,
-      );
+  int get hashCode =>
+      Object.hash('tool', id, name, arguments, result, isError, status);
 }
 
 final class TimelineApprovalRequest extends TimelineItem {
@@ -129,14 +122,14 @@ final class TimelineApprovalRequest extends TimelineItem {
 
   @override
   int get hashCode => Object.hash(
-        'approval',
-        requestId,
-        sessionId,
-        approvalId,
-        toolName,
-        callId,
-        reason,
-      );
+    'approval',
+    requestId,
+    sessionId,
+    approvalId,
+    toolName,
+    callId,
+    reason,
+  );
 }
 
 final class TimelineQuestionRequest extends TimelineItem {
@@ -240,16 +233,16 @@ final class QuestionItem {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        question,
-        Object.hashAll(options),
-        multiSelect,
-        detail,
-        header,
-        Object.hashAll(optionDescriptions.keys),
-        Object.hashAll(optionDescriptions.values),
-        intent,
-      );
+    id,
+    question,
+    Object.hashAll(options),
+    multiSelect,
+    detail,
+    header,
+    Object.hashAll(optionDescriptions.keys),
+    Object.hashAll(optionDescriptions.values),
+    intent,
+  );
 }
 
 /// Wire presentation intent carried on one question.

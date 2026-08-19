@@ -47,10 +47,17 @@ void main() {
       // Loopback callers may read the settings plane; the snapshot only
       // needs to decode, whatever namespaces this host declares.
       final settings = await repository.describeSettings();
-      expect(settings.namespaces.every((ns) => ns.ns.trim().isNotEmpty), isTrue);
-      final credentials =
-          await repository.describeCredentials(settings.credentialRefs);
-      expect(credentials.every((status) => status.ref.trim().isNotEmpty), isTrue);
+      expect(
+        settings.namespaces.every((ns) => ns.ns.trim().isNotEmpty),
+        isTrue,
+      );
+      final credentials = await repository.describeCredentials(
+        settings.credentialRefs,
+      );
+      expect(
+        credentials.every((status) => status.ref.trim().isNotEmpty),
+        isTrue,
+      );
       final sessions = await repository.observeSessions().first;
       final workspaces = await repository.observeWorkspaces().first;
       final firstSession = sessions.isEmpty ? null : sessions.first;
@@ -58,8 +65,10 @@ void main() {
         await repository.openSession(firstSession.id);
         await repository.observeTimelineWindow(firstSession.id).first;
       }
-      expect(workspaces.isEmpty ? true : workspaces.first.path.trim().isNotEmpty,
-          isTrue);
+      expect(
+        workspaces.isEmpty ? true : workspaces.first.path.trim().isNotEmpty,
+        isTrue,
+      );
     } finally {
       manager.stop();
     }
