@@ -89,6 +89,55 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   bool _rail = false;
+  bool _outline = false;
+
+  PreferredSizeWidget _chatAppBar(
+    BuildContext context,
+    ChatUiState uiState,
+    void Function(ChatAction) onAction, {
+    required bool compact,
+  }) {
+    final sessionId = uiState.selectedSessionId;
+    final session = uiState.sessions
+        .where((item) => item.id == sessionId)
+        .firstOrNull;
+    final title = session?.displayTitle ?? 'DeepSeek Harness';
+    final connection = uiState.connection;
+    final hostVersion = connection.hostDescription?.version ?? '';
+    final subtitle = switch (connection.phase) {
+      ConnectionPhase.connected =>
+        hostVersion.isEmpty ? 'connected' : 'connected $hostVersion',
+      ConnectionPhase.connecting => 'connecting',
+      ConnectionPhase.reconnecting => 'reconnecting',
+      ConnectionPhase.disconnected => 'disconnected',
+    };
+    return AppBar(
+      title: Text(title),
+      actions: [
+        ChatHeaderActions(
+          uiState: uiState,
+          onAction: onAction,
+          outline: _outline,
+          onToggleOutline: () => setState(() => _outline = !_outline),
+        ),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(16),
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              subtitle,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,10 +148,10 @@ class _ChatScreenState extends State<ChatScreen> {
         final useTwoPanes = constraints.maxWidth >= 720;
         if (useTwoPanes) {
           return Scaffold(
+            appBar: _chatAppBar(context, uiState, onAction, compact: false),
             body: SafeArea(
               child: Column(
                 children: [
-                  ConnectionBanner(uiState: uiState),
                   Expanded(
                     child: Row(
                       children: [
@@ -130,6 +179,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             uiState: uiState,
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
+                            outline: _outline,
                           ),
                         ),
                       ],
@@ -172,6 +222,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     uiState: uiState,
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
+                    outline: _outline,
                   ),
                 ),
               ],
@@ -555,17 +606,110 @@ class _NewSessionDialog extends StatelessWidget {
   }
 }
 
+/// Icon actions for the chat header (web header-action form).
+class ChatHeaderActions extends StatelessWidget {
+  const ChatHeaderActions({
+    super.key,
+    required this.uiState,
+    required this.onAction,
+    required this.onToggleOutline,
+    required this.outline,
+  });
+
+  final ChatUiState uiState;
+  final void Function(ChatAction) onAction;
+  final VoidCallback onToggleOutline;
+  final bool outline;
+
+  Future<void> _rename(BuildContext context, String sessionId) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _RenameSessionDialog(
+        onSave: (title) => onAction(RenameSession(sessionId, title)),
+      ),
+    );
+  }
+
+  Future<void> _archive(BuildContext context, String sessionId) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Archive session'),
+        content: const Text(
+          'The session log and its workspace seat are kept; '
+          'this row is hidden from all grouping surfaces.',
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              onAction(ArchiveSession(sessionId));
+              Navigator.of(context).pop();
+            },
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionId = uiState.selectedSessionId;
+    if (sessionId == null) {
+      return const SizedBox.shrink();
+    }
+    final selectedSession = uiState.sessions
+        .where((session) => session.id == sessionId)
+        .firstOrNull;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Outline',
+          isSelected: outline,
+          onPressed: onToggleOutline,
+          icon: const Icon(Icons.view_list_outlined),
+          selectedIcon: const Icon(Icons.view_list),
+        ),
+        IconButton(
+          tooltip: 'Rename session',
+          onPressed: () => _rename(context, sessionId),
+          icon: const Icon(Icons.edit_outlined),
+        ),
+        IconButton(
+          tooltip: 'Fork session',
+          onPressed: () => onAction(ForkSession(sessionId)),
+          icon: const Icon(Icons.call_split_outlined),
+        ),
+        IconButton(
+          tooltip: 'Archive session',
+          onPressed: selectedSession?.blank == true
+              ? null
+              : () => _archive(context, sessionId),
+          icon: const Icon(Icons.archive_outlined),
+        ),
+      ],
+    );
+  }
+}
+
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
     super.key,
     required this.uiState,
     required this.onAction,
     required this.loadAttachment,
+    this.outline = false,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+  final bool outline;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -573,7 +717,6 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   PromptMode _promptMode = PromptMode.queue;
-  bool _outline = false;
   Set<int> _collapsedTurns = const <int>{};
 
   @override
@@ -583,7 +726,6 @@ class _ChatPanelState extends State<ChatPanel> {
     if (oldWidget.uiState.selectedSessionId !=
         widget.uiState.selectedSessionId) {
       _promptMode = PromptMode.queue;
-      _outline = false;
       _collapsedTurns = const <int>{};
     }
   }
@@ -610,7 +752,7 @@ class _ChatPanelState extends State<ChatPanel> {
             onPickWorkspace: (workspaceId) =>
                 widget.onAction(CreateSessionInWorkspace(workspaceId)),
           )
-        : _outline
+        : widget.outline
         ? OutlineTimeline(
             timeline: uiState.timeline,
             collapsedTurns: _collapsedTurns,
@@ -637,41 +779,6 @@ class _ChatPanelState extends State<ChatPanel> {
           );
   }
 
-  Future<void> _showRenameDialog(String sessionId) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => _RenameSessionDialog(
-        onSave: (title) => widget.onAction(RenameSession(sessionId, title)),
-      ),
-    );
-  }
-
-  Future<void> _showArchiveDialog(String sessionId) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Archive session'),
-        content: const Text(
-          'The session log and its workspace seat are kept; '
-          'this row is hidden from all grouping surfaces.',
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              widget.onAction(ArchiveSession(sessionId));
-              Navigator.of(context).pop();
-            },
-            child: const Text('Archive'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
@@ -685,39 +792,11 @@ class _ChatPanelState extends State<ChatPanel> {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          if (selectedSessionId != null) ...[
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _showRenameDialog(selectedSessionId),
-                  child: const Text('Rename'),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        widget.onAction(ForkSession(selectedSessionId)),
-                    child: const Text('Fork'),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: OutlinedButton(
-                    onPressed: selectedSession?.blank == true
-                        ? null
-                        : () => _showArchiveDialog(selectedSessionId),
-                    child: const Text('Archive'),
-                  ),
-                ),
-                if (uiState.plan != null) ...[
-                  const SizedBox(width: 8),
-                  PlanChip(plan: uiState.plan!),
-                ],
-              ],
+          if (uiState.plan != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: PlanChip(plan: uiState.plan!),
             ),
-            const SizedBox(height: 8),
-          ],
           if (uiState.errorMessage case final error?) ...[
             Text(
               error,
@@ -725,24 +804,16 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
             const SizedBox(height: 8),
           ],
-          Row(
-            children: [
-              OutlinedButton(
-                onPressed: () => setState(() => _outline = !_outline),
-                child: Text(_outline ? 'Outline: on' : 'Outline: off'),
-              ),
-              if (_outline && _collapsedTurns.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        setState(() => _collapsedTurns = const <int>{}),
-                    child: const Text('Expand all'),
-                  ),
-                ),
-            ],
-          ),
           const SizedBox(height: 4),
+          if (widget.outline && _collapsedTurns.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () =>
+                    setState(() => _collapsedTurns = const <int>{}),
+                child: const Text('Expand all'),
+              ),
+            ),
           Expanded(child: _timelineBody(uiState, selectedSession)),
           StatsLine(stats: uiState.sessionStats),
           if (_pendingApproval case final approval?)

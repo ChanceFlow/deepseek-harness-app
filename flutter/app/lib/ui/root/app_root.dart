@@ -14,16 +14,17 @@ import '../subagents/subagent_screen.dart';
 import '../workspace/workspace_screen.dart';
 
 enum AppDestination {
-  chat('Chat'),
-  workspaces('Workspaces'),
-  models('Models'),
-  subagents('Subagents'),
-  goals('Goals'),
-  settings('Settings');
+  chat('Chat', Icons.chat_bubble_outline),
+  workspaces('Workspaces', Icons.folder_outlined),
+  models('Models', Icons.tune),
+  subagents('Subagents', Icons.account_tree_outlined),
+  goals('Goals', Icons.flag_outlined),
+  settings('Settings', Icons.settings_outlined);
 
-  const AppDestination(this.label);
+  const AppDestination(this.label, this.icon);
 
   final String label;
+  final IconData icon;
 }
 
 class AppRoot extends StatefulWidget {
@@ -54,7 +55,7 @@ class _AppRootState extends State<AppRoot> {
         destinations: [
           for (final destination in AppDestination.values)
             NavigationDestination(
-              icon: Text(destination.label.substring(0, 1)),
+              icon: Icon(destination.icon),
               label: destination.label,
             ),
         ],

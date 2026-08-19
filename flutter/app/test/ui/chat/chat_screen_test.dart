@@ -187,6 +187,39 @@ void main() {
     expect(actions.last, const SearchSessions('hello'));
   });
 
+  testWidgets('app bar shows session title, connection subtitle, actions', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Alpha')),
+      findsOneWidget,
+    );
+    expect(find.text('connected 1.2.3'), findsOneWidget);
+    expect(find.byTooltip('Rename session'), findsOneWidget);
+    expect(find.byTooltip('Fork session'), findsOneWidget);
+    expect(find.byTooltip('Archive session'), findsOneWidget);
+    expect(find.byTooltip('Outline'), findsOneWidget);
+    // The old button soup is gone.
+    expect(find.widgetWithText(OutlinedButton, 'Rename'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Fork'), findsNothing);
+
+    await tester.tap(find.byTooltip('Fork session'));
+    await tester.pump();
+    expect(actions, contains(const ForkSession('s1')));
+  });
+
   testWidgets('timeline renders rows and dispatches approvals', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
@@ -694,7 +727,7 @@ void main() {
         actions,
       );
       if (withOutline) {
-        await tester.tap(find.text('Outline: off'));
+        await tester.tap(find.byTooltip('Outline'));
         await tester.pumpAndSettle();
       }
     }
@@ -717,7 +750,7 @@ void main() {
     expect(find.text('first prompt', findRichText: true), findsOneWidget);
 
     // Outline off returns the plain ledger.
-    await tester.tap(find.text('Outline: on'));
+    await tester.tap(find.byTooltip('Outline'));
     await tester.pumpAndSettle();
     expect(find.text('Turn 1'), findsOneWidget);
   });

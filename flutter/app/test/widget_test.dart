@@ -4,6 +4,8 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart' show Icons, NavigationBar;
+import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/main.dart';
@@ -11,7 +13,10 @@ import 'package:app/main.dart';
 class _FakeRpc implements DshRpcClient {
   @override
   Future<RpcResult> call(
-      String endpoint, String method, JsonMap payload) async {
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 
@@ -43,8 +48,9 @@ Future<void> _pumpApp(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('six destinations render and chat is the initial tab',
-      (tester) async {
+  testWidgets('six destinations render and chat is the initial tab', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     await tester.pump();
 
@@ -58,14 +64,24 @@ void main() {
     ]) {
       expect(find.text(label), findsWidgets);
     }
+    // Real icons, not the former first-letter placeholders.
+    Finder navIcon(IconData icon) => find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.byIcon(icon),
+    );
+    expect(navIcon(Icons.chat_bubble_outline), findsOneWidget);
+    expect(navIcon(Icons.folder_outlined), findsOneWidget);
+    expect(navIcon(Icons.tune), findsOneWidget);
+    expect(navIcon(Icons.account_tree_outlined), findsOneWidget);
+    expect(navIcon(Icons.flag_outlined), findsOneWidget);
+    expect(navIcon(Icons.settings_outlined), findsOneWidget);
 
     // Initial tab is chat: session panel surface.
     expect(find.text('New session'), findsOneWidget);
     expect(find.text('Search sessions'), findsOneWidget);
   });
 
-  testWidgets('workspaces tab lists its management surface',
-      (tester) async {
+  testWidgets('workspaces tab lists its management surface', (tester) async {
     await _pumpApp(tester);
     await tester.pump();
 
@@ -77,8 +93,9 @@ void main() {
     expect(find.text('Create'), findsOneWidget);
   });
 
-  testWidgets('models and settings tabs render their live surfaces',
-      (tester) async {
+  testWidgets('models and settings tabs render their live surfaces', (
+    tester,
+  ) async {
     await _pumpApp(tester);
     await tester.pump();
 
