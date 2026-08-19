@@ -1224,7 +1224,6 @@ class HarnessRepositoryImpl implements ChatRepository {
     title: title ?? session.title,
     running: running ?? session.running,
     blank: blank ?? session.blank,
-    workspaceId: session.workspaceId,
     updatedAtEpochMs: session.updatedAtEpochMs,
     cwd: session.cwd,
     agentPreset: session.agentPreset,

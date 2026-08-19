@@ -132,9 +132,10 @@ class _SessionPanelState extends State<SessionPanel> {
     }
   });
 
-  /// Web tree.ts current-group derivation: the selected session's
-  /// workspace key, or the Ungrouped key when it belongs to none (null
-  /// when nothing is selected or the summary has not landed yet).
+  /// Web tree.ts current-group derivation: the workspace whose account
+  /// holds the selected session, or the Ungrouped key when no account
+  /// names it (null when nothing is selected or the summary has not
+  /// landed yet).
   String? _currentGroupKey() {
     final selectedSessionId = widget.selectedSessionId;
     if (selectedSessionId == null) return null;
@@ -142,10 +143,10 @@ class _SessionPanelState extends State<SessionPanel> {
         .where((session) => session.id == selectedSessionId)
         .firstOrNull;
     if (session == null) return null;
-    final workspaceId = session.workspaceId;
-    if (workspaceId != null &&
-        widget.workspaces.any((w) => w.workspaceId == workspaceId)) {
-      return workspaceId;
+    for (final workspace in widget.workspaces) {
+      if (workspace.sessionIds.contains(selectedSessionId)) {
+        return workspace.workspaceId;
+      }
     }
     return _ungroupedKey;
   }
@@ -162,31 +163,49 @@ class _SessionPanelState extends State<SessionPanel> {
       session.origin != _subagentOrigin &&
       (!session.blank || session.id == widget.selectedSessionId);
 
-  /// Web tree.ts `deriveGroups`: one group per workspace in registry order
-  /// plus the trailing Ungrouped bucket for sessions outside every
-  /// workspace; members sort newest-first.
+  /// The workspace account holding one session, if any (web membership is
+  /// the Workspace's `sessionIds` — the wire session summary carries no
+  /// workspace field).
+  WorkspaceSummary? _workspaceOf(SessionSummary session) {
+    for (final workspace in widget.workspaces) {
+      if (workspace.sessionIds.contains(session.id)) return workspace;
+    }
+    return null;
+  }
+
+  /// Web tree.ts `groupByWorkspace`: one group per workspace entity in
+  /// stable host order, members resolved from `sessionIds` in their
+  /// stored order; sessions outside every account trail in the
+  /// browser-local Ungrouped bucket by recency.
   List<_SessionGroupData> _deriveSessionGroups() {
-    final knownWorkspaceIds = <String>{
-      for (final workspace in widget.workspaces) workspace.workspaceId,
+    final sessionsById = <String, SessionSummary>{
+      for (final session in widget.sessions) session.id: session,
     };
-    final visible = widget.sessions.where(_sessionVisible);
-    final groups = <_SessionGroupData>[
-      for (final workspace in widget.workspaces)
+    final accounted = <String>{};
+    final groups = <_SessionGroupData>[];
+    for (final workspace in widget.workspaces) {
+      final members = <SessionSummary>[];
+      for (final id in workspace.sessionIds) {
+        final summary = sessionsById[id];
+        // The account may lead the list pull; the row appears when the
+        // summary lands (web rule).
+        if (summary == null) continue;
+        accounted.add(id);
+        if (!_sessionVisible(summary)) continue;
+        members.add(summary);
+      }
+      groups.add(
         _SessionGroupData(
           key: workspace.workspaceId,
           label: workspace.title,
-          sessions: _sortedByRecency(
-            visible.where(
-              (session) => session.workspaceId == workspace.workspaceId,
-            ),
-          ),
+          sessions: members,
         ),
-    ];
+      );
+    }
     final ungrouped = _sortedByRecency(
-      visible.where(
+      widget.sessions.where(
         (session) =>
-            session.workspaceId == null ||
-            !knownWorkspaceIds.contains(session.workspaceId),
+            !accounted.contains(session.id) && _sessionVisible(session),
       ),
     );
     if (ungrouped.isNotEmpty) {
@@ -201,15 +220,11 @@ class _SessionPanelState extends State<SessionPanel> {
     return groups;
   }
 
-  /// Web tree.ts `labelOf`: the workspace title when known, else the cwd
-  /// basename (search-result context rows).
+  /// Web tree.ts `labelOf`: the workspace title when an account holds the
+  /// session, else the cwd basename (search-result context rows).
   String _workspaceLabel(SessionSummary session) {
-    final workspaceId = session.workspaceId;
-    if (workspaceId != null) {
-      for (final workspace in widget.workspaces) {
-        if (workspace.workspaceId == workspaceId) return workspace.title;
-      }
-    }
+    final workspace = _workspaceOf(session);
+    if (workspace != null) return workspace.title;
     return _cwdBasename(session.cwd);
   }
 

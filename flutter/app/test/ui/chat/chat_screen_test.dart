@@ -220,6 +220,72 @@ void main() {
     },
   );
 
+  testWidgets('sessions group under workspaces by account membership', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          SessionSummary(id: 's2', title: 'Beta', blank: false),
+          SessionSummary(id: 's9', title: 'Loose', blank: false),
+        ],
+        workspaces: const [
+          // Web groupByWorkspace: membership is the Workspace's sessionIds
+          // (the wire session summary carries no workspace field); members
+          // render in the account's stored order.
+          WorkspaceSummary(
+            workspaceId: 'w1',
+            path: '/tmp/proj',
+            title: 'proj',
+            sessionIds: ['s2', 's1'],
+          ),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    Finder panelText(String text) => find.descendant(
+      of: find.byType(SessionPanel),
+      matching: find.text(text),
+    );
+    // The selected session's account auto-expands: both members show
+    // under the workspace header. The Ungrouped bucket stays folded until
+    // tapped (only the current group auto-expands).
+    expect(panelText('proj'), findsOneWidget);
+    expect(panelText('Alpha'), findsOneWidget);
+    expect(panelText('Beta'), findsOneWidget);
+    expect(panelText('Ungrouped'), findsOneWidget);
+    expect(panelText('Loose'), findsNothing);
+    await tester.tap(panelText('Ungrouped'));
+    await tester.pumpAndSettle();
+    // The session no account names trails in the Ungrouped bucket.
+    expect(panelText('Loose'), findsOneWidget);
+    // A no-account group header only renders when it has visible members.
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        workspaces: const [
+          WorkspaceSummary(
+            workspaceId: 'w1',
+            path: '/tmp/proj',
+            title: 'proj',
+            sessionIds: ['s1'],
+          ),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+    expect(panelText('Ungrouped'), findsNothing);
+  });
+
   testWidgets('new session dialog offers workspaces and default', (
     tester,
   ) async {

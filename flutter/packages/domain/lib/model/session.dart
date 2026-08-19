@@ -7,7 +7,6 @@ final class SessionSummary {
     this.title,
     this.running = false,
     this.blank = true,
-    this.workspaceId,
     this.updatedAtEpochMs = 0,
     this.cwd,
     this.agentPreset,
@@ -18,7 +17,6 @@ final class SessionSummary {
   final String? title;
   final bool running;
   final bool blank;
-  final String? workspaceId;
   final int updatedAtEpochMs;
   final String? cwd;
   final String? agentPreset;
@@ -49,7 +47,6 @@ final class SessionSummary {
       other.title == title &&
       other.running == running &&
       other.blank == blank &&
-      other.workspaceId == workspaceId &&
       other.updatedAtEpochMs == updatedAtEpochMs &&
       other.cwd == cwd &&
       other.agentPreset == agentPreset &&
@@ -61,7 +58,6 @@ final class SessionSummary {
     title,
     running,
     blank,
-    workspaceId,
     updatedAtEpochMs,
     cwd,
     agentPreset,
