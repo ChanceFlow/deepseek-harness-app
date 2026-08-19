@@ -16,6 +16,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -47,6 +48,7 @@ import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
+import 'todo_panel.dart';
 import 'tool_row_model.dart';
 import '../theme/deepsuite_extension.dart'
     show dsOf, kDsShadowLv2, kDsShadowLv3;
@@ -697,6 +699,9 @@ class _ChatPanelState extends State<ChatPanel> {
               ),
             ),
           Expanded(child: _timelineBody(uiState, selectedSession)),
+          // Web input-dock order 0: the plan strip before the goal and
+          // queue entries.
+          TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
           GoalBarStrip(
             goal: uiState.goal,
             onAction: widget.onAction,
@@ -1187,7 +1192,15 @@ class _ToolCallRowState extends State<ToolCallRow>
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
                     children: [
-                      _leading(context, failed),
+                      // A product row may carry its own glyph (the todo
+                      // checklist); otherwise the shared variant chrome.
+                      model.leading != null
+                          ? Icon(
+                              model.leading,
+                              size: 14,
+                              color: ds.labelSecondary,
+                            )
+                          : _leading(context, failed),
                       const SizedBox(width: 6),
                       Text(model.title, style: theme.textTheme.bodyMedium),
                       Container(
@@ -1215,6 +1228,17 @@ class _ToolCallRowState extends State<ToolCallRow>
                           ),
                         ),
                       ),
+                      // The todo parallel-active count rides a
+                      // non-shrinking suffix beside the truncatable text.
+                      if (model.summarySuffix case final suffix?) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          suffix,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: ds.labelSecondary,
+                          ),
+                        ),
+                      ],
                       if (hasDetails)
                         Icon(
                           _expanded

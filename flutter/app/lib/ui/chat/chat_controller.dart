@@ -14,6 +14,7 @@ import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -60,6 +61,7 @@ class ChatController {
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
+  List<TodoItem>? _todos;
   List<SkillEntry> _skills = const <SkillEntry>[];
   SessionModels? _models;
   ContextPressure? _contextPressure;
@@ -82,6 +84,7 @@ class ChatController {
 
   StreamSubscription<void>? _timelineSub;
   StreamSubscription<void>? _planSub;
+  StreamSubscription<void>? _todosSub;
   StreamSubscription<void>? _contextSub;
   StreamSubscription<void>? _breakdownSub;
   StreamSubscription<void>? _statsSub;
@@ -107,6 +110,7 @@ class ChatController {
     }
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
+    unawaited(_todosSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
@@ -134,6 +138,7 @@ class ChatController {
       pendingImages: _pendingImages,
       imageLimits: _imageLimits,
       plan: _plan,
+      todos: _todos,
       skills: _skills,
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
@@ -263,6 +268,7 @@ class ChatController {
   void _bindSelected(String? sessionId) {
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
+    unawaited(_todosSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
@@ -277,6 +283,7 @@ class ChatController {
       _models = null;
       _timelineSub = null;
       _planSub = null;
+      _todosSub = null;
       _contextSub = null;
       _breakdownSub = null;
       _statsSub = null;
@@ -291,6 +298,10 @@ class ChatController {
     });
     _planSub = _repository.observePlan(sessionId).listen((plan) {
       _plan = plan;
+      _publish();
+    });
+    _todosSub = _repository.observeTodos(sessionId).listen((todos) {
+      _todos = todos;
       _publish();
     });
     _contextSub = _repository.observeContextPressure(sessionId).listen((

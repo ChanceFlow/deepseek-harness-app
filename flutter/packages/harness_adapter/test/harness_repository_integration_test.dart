@@ -7,6 +7,7 @@ import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
@@ -644,6 +645,49 @@ void main() {
       await repository.observePlan('session-1').first,
       const PlanState(active: true, pending: false),
     );
+  });
+
+  // Wire shape: the `todos` projection value is the whole TodoItem list or
+  // null (dsh-tool-todo projection schema).
+  test('todos projection frames update the standing list live', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-todos-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'todos',
+            'value': <Object?>[
+              <String, Object?>{
+                'content': 'ship the fix',
+                'status': 'in_progress',
+              },
+              <String, Object?>{
+                'content': 'write tests',
+                'status': 'completed',
+              },
+            ],
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    // Seeded null before any frame.
+    expect(await repository.observeTodos('session-1').first, isNull);
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final emitted = await repository.observeTodos('session-1').first;
+    expect(emitted, hasLength(2));
+    expect(emitted!.first.content, 'ship the fix');
+    expect(emitted.first.status, TodoStatus.inProgress);
+    expect(emitted.last.status, TodoStatus.completed);
   });
 
   test('skill list sends session scope and maps catalog', () async {

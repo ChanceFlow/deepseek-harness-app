@@ -8,6 +8,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
@@ -31,6 +32,7 @@ final class ChatUiState {
     this.pendingImages = const <PendingImage>[],
     this.imageLimits = const ImageLimits(),
     this.plan,
+    this.todos,
     this.skills = const <SkillEntry>[],
     this.contextPressure,
     this.contextBreakdown,
@@ -59,6 +61,10 @@ final class ChatUiState {
 
   /// Plan collaboration state of the selected session; null = not composed.
   final PlanState? plan;
+
+  /// Standing todo list (the `todos` projection): the latest whole
+  /// `todo/write` list, cleared at the next `turn/start`.
+  final List<TodoItem>? todos;
 
   /// Skill catalog of the selected session, backing the `/` composer
   /// source.

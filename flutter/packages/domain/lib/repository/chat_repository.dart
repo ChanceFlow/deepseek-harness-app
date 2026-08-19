@@ -21,6 +21,7 @@ import '../model/skills.dart';
 import '../model/subagent.dart';
 import '../model/timeline_item.dart';
 import '../model/timeline_window.dart';
+import '../model/todo.dart';
 import '../model/workspace.dart';
 
 Never _unsupported(String operation) => throw UnsupportedError(
@@ -197,6 +198,12 @@ abstract class ChatRepository {
 
   /// Plan collaboration state; null while the host composes no plan mode.
   Stream<PlanState?> observePlan(String sessionId) => Stream.value(null);
+
+  /// Standing todo list (the `todos` projection: the latest whole
+  /// `todo/write` list, cleared at the next `turn/start`); empty stream
+  /// while the host composes no todo unit.
+  Stream<List<TodoItem>?> observeTodos(String sessionId) =>
+      const Stream<List<TodoItem>?>.empty();
 
   /// Context-occupancy projection for the selected session (pressure +
   /// route capacity); empty until usage records exist.

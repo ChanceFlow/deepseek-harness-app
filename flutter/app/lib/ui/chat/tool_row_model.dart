@@ -8,6 +8,7 @@ library;
 import 'dart:convert';
 
 import 'package:domain/model/timeline_item.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
 
 /// Row variants selected by the generic atomic renderer (web
 /// `ToolRowVariant`).
@@ -157,6 +158,8 @@ final class ToolRowModel {
     this.body,
     this.output,
     this.errorSummary,
+    this.leading,
+    this.summarySuffix,
   });
 
   final ToolRowVariant variant;
@@ -179,11 +182,39 @@ final class ToolRowModel {
   /// First line of the result text on an error row; null otherwise.
   final String? errorSummary;
 
+  /// Row-specific leading glyph (the todo checklist); null = the shared
+  /// variant chrome.
+  final IconData? leading;
+
+  /// Non-shrinking summary suffix (the todo parallel-active count) riding
+  /// beside the truncatable text.
+  final String? summarySuffix;
+
   final ToolRowState state;
 }
 
 /// Row state semantic (web `ToolRowState`).
 enum ToolRowState { running, ok, error }
+
+/// todo_write plan summary — port of `plan-summary.ts`: counts plus the
+/// first `in_progress` content and the parallel-active remainder.
+({int done, int total, String? activeContent, int activeExtra}) _planSummary(
+  List<Map<String, Object?>> todos,
+) {
+  final active = todos
+      .where((item) => item['status'] == 'in_progress')
+      .toList();
+  final first = active.isEmpty ? null : active.first['content'];
+  final String? named = first is String && first.trim().isNotEmpty
+      ? first
+      : null;
+  return (
+    done: todos.where((item) => item['status'] == 'completed').length,
+    total: todos.length,
+    activeContent: named,
+    activeExtra: named == null ? 0 : active.length - 1,
+  );
+}
 
 /// Derive the full row model from one timeline tool call (web
 /// `toolRowModel`).
@@ -195,12 +226,33 @@ ToolRowModel deriveToolRowModel(TimelineToolCall call) {
   // Others keeps the static "Tool call" title (figma literal); the real
   // tool name rides the mutable summary slot unless the tool owns a
   // specific title.
-  final summary =
+  var summary =
       variant == ToolRowVariant.others &&
           call.name.isNotEmpty &&
           toolTitle == null
       ? '${call.name} · $base'
       : base;
+  var title = toolTitle ?? kVariantTitles[variant]!;
+  String? summarySuffix;
+  IconData? leading;
+  // todo_write carries a product row (web todo-row.tsx): the checklist
+  // glyph, a dedicated title, and the plan summary from the args.
+  if (call.name == 'todo_write') {
+    title = 'Update to-do list';
+    leading = Icons.checklist;
+    final parsed = _parseArgs(argsRaw);
+    final todosRaw = parsed is Map<String, Object?> ? parsed['todos'] : null;
+    if (todosRaw is List &&
+        todosRaw.every((item) => item is Map<String, Object?>)) {
+      final todos = todosRaw.cast<Map<String, Object?>>();
+      final plan = _planSummary(todos);
+      final head = '${plan.done}/${plan.total} completed';
+      summary = plan.activeContent == null
+          ? head
+          : '$head · ${plan.activeContent}';
+      summarySuffix = plan.activeExtra > 0 ? '+${plan.activeExtra}' : null;
+    }
+  }
   final output = call.status == ToolRunStatus.running
       ? null
       : (call.result == null || call.result!.isEmpty ? null : call.result);
@@ -214,12 +266,14 @@ ToolRowModel deriveToolRowModel(TimelineToolCall call) {
       : null;
   return ToolRowModel(
     variant: variant,
-    title: toolTitle ?? kVariantTitles[variant]!,
+    title: title,
     summary: summary,
     filePath: _deriveFilePath(variant, argsRaw),
     body: _deriveBody(variant, argsRaw),
     output: output,
     errorSummary: errorSummary,
+    leading: leading,
+    summarySuffix: summarySuffix,
     state: state,
   );
 }

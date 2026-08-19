@@ -5,6 +5,7 @@ import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/prompt.dart';
@@ -320,6 +321,10 @@ class FakeChatRepository implements ChatRepository {
   @override
   Stream<ImageLimits?> observeImageLimits() =>
       AppStateStream<ImageLimits?>(const ImageLimits()).stream;
+
+  @override
+  @override
+  Stream<List<TodoItem>?> observeTodos(String sessionId) => Stream.value(null);
 
   @override
   Stream<PlanState?> observePlan(String sessionId) =>

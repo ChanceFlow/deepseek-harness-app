@@ -13,6 +13,7 @@ import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/settings.dart';
@@ -112,6 +113,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
       <String, StateStream<PlanState?>>{};
+  final Map<String, StateStream<List<TodoItem>?>> _todoProjections =
+      <String, StateStream<List<TodoItem>?>>{};
   final Mutex _resyncMutex = Mutex();
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
@@ -574,6 +577,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       _planProjectionStateFor(sessionId).stream;
 
   @override
+  Stream<List<TodoItem>?> observeTodos(String sessionId) =>
+      _todoProjectionStateFor(sessionId).stream;
+
+  @override
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
       _sessionStateFor(sessionId).contextPressure.stream;
 
@@ -874,7 +881,37 @@ class HarnessRepositoryImpl implements ChatRepository {
           });
         }
         _planProjectionStateFor(sessionId).value = projection;
+      case 'todos':
+        _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
+          frame.payload['value'],
+        );
     }
+  }
+
+  /// Wire `todos` projection payload: the whole list, or null before the
+  /// first write / after a later turn begins.
+  List<TodoItem>? _parseTodosProjection(Object? value) {
+    if (value == null || value == 'null') return null;
+    return _tryDecode(() {
+      final list = asJsonArray(value);
+      if (list == null) throw const FormatException('todos: not an array');
+      return <TodoItem>[
+        for (final raw in list)
+          () {
+            final obj = asJsonObject(raw);
+            if (obj == null) throw const FormatException('todos: bad item');
+            final content = wireString(obj, 'content');
+            final status = wireString(obj, 'status');
+            if (content == null || status == null) {
+              throw const FormatException('todos: missing content/status');
+            }
+            return TodoItem(
+              content: content,
+              status: todoStatusFromWire(status),
+            );
+          }(),
+      ];
+    });
   }
 
   void _collectHostFrames() {
@@ -1061,6 +1098,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         planValue,
       );
     }
+    final todosValue = history.projectionValues?['todos'];
+    if (todosValue != null) {
+      _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
+        todosValue,
+      );
+    }
     return _HistoryPage(events: history.events, hasMore: history.hasMore);
   }
 
@@ -1243,6 +1286,12 @@ class HarnessRepositoryImpl implements ChatRepository {
       _planProjections.putIfAbsent(
         sessionId,
         () => StateStream<PlanState?>(null),
+      );
+
+  StateStream<List<TodoItem>?> _todoProjectionStateFor(String sessionId) =>
+      _todoProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<List<TodoItem>?>(null),
       );
 
   Object _parseJsonValue(String text) {

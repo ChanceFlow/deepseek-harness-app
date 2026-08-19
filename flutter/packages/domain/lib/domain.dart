@@ -16,5 +16,6 @@ export 'model/skills.dart';
 export 'model/subagent.dart';
 export 'model/timeline_item.dart';
 export 'model/timeline_window.dart';
+export 'model/todo.dart';
 export 'model/workspace.dart';
 export 'repository/chat_repository.dart';
