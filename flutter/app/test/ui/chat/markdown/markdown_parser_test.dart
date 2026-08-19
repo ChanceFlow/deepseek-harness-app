@@ -203,4 +203,62 @@ void main() {
       const TextInline('only-one'),
     ]);
   });
+
+  test('bare http(s) URLs autolink at word boundaries', () {
+    final blocks = MarkdownParser.parse(
+      'See https://example.com/docs for details.',
+    );
+    final paragraph = blocks.single as ParagraphBlock;
+    final link = paragraph.inlines.whereType<LinkInline>().single;
+    expect(link.url, 'https://example.com/docs');
+    expect(link.label, 'https://example.com/docs');
+
+    // www. prefix normalizes to https.
+    final www = MarkdownParser.parse('go to www.example.com now');
+    final wwwLink = (www.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(wwwLink.url, 'https://www.example.com');
+    expect(wwwLink.label, 'www.example.com');
+  });
+
+  test('trailing punctuation stays out of the autolink', () {
+    final blocks = MarkdownParser.parse(
+      'docs at https://example.com/a, then https://example.com/b.',
+    );
+    final links = (blocks.single as ParagraphBlock).inlines
+        .whereType<LinkInline>();
+    expect(links.map((l) => l.url).toList(), [
+      'https://example.com/a',
+      'https://example.com/b',
+    ]);
+  });
+
+  test('balanced parens stay in, unbalanced close trims out', () {
+    final keep = MarkdownParser.parse('ref (https://example.com/(a)) end');
+    final keepLink = (keep.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(keepLink.url, 'https://example.com/(a)');
+
+    final trim = MarkdownParser.parse('ref (https://example.com/a) end');
+    final trimLink = (trim.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(trimLink.url, 'https://example.com/a');
+  });
+
+  test('mid-word scheme text does not autolink', () {
+    final blocks = MarkdownParser.parse('foohttps://example.com bar');
+    final inlines = (blocks.single as ParagraphBlock).inlines;
+    expect(inlines.whereType<LinkInline>(), isEmpty);
+  });
+
+  test('bare scheme alone is not a link', () {
+    final blocks = MarkdownParser.parse('visit www. sometime');
+    expect(
+      (blocks.single as ParagraphBlock).inlines.whereType<LinkInline>(),
+      isEmpty,
+    );
+  });
 }

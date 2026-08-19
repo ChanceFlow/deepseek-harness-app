@@ -336,6 +336,54 @@ abstract final class MarkdownParser {
     return blocks;
   }
 
+  /// Bare-URL autolink length starting at [index] (GFM: http(s):// and
+  /// www. prefixes at a word boundary); 0 when none matches.
+  static int _autolinkLength(String text, int index) {
+    const schemes = ['http://', 'https://', 'www.'];
+    var scheme = '';
+    for (final candidate in schemes) {
+      if (text.startsWith(candidate, index)) {
+        scheme = candidate;
+        break;
+      }
+    }
+    if (scheme.isEmpty) return 0;
+    // Word boundary: start of text or a non-word predecessor.
+    if (index > 0) {
+      final previous = text[index - 1];
+      final boundary =
+          previous == ' ' ||
+          previous == '\n' ||
+          previous == '\t' ||
+          "'([{<\"'".contains(previous);
+      if (!boundary) return 0;
+    }
+    // Take until whitespace, then trim trailing punctuation (keeping
+    // balanced parentheses inside the URL).
+    var end = index;
+    while (end < text.length && !' \t\n'.contains(text[end])) {
+      end++;
+    }
+    while (end > index + scheme.length) {
+      final last = text[end - 1];
+      if ("'.,;:!?'".contains(last)) {
+        end--;
+      } else if (last == ')') {
+        final body = text.substring(index, end);
+        if ('('.allMatches(body).length < ')'.allMatches(body).length) {
+          end--;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    // A scheme alone (e.g. "www.") is not a link.
+    if (end <= index + scheme.length) return 0;
+    return end - index;
+  }
+
   /// Parse inline emphasis/code/link runs inside one paragraph line group.
   static List<MarkdownInline> parseInlines(String text) {
     final inlines = <MarkdownInline>[];
@@ -380,6 +428,17 @@ abstract final class MarkdownParser {
           plain.write(char);
           index++;
         }
+      } else if (_autolinkLength(text, index) case final urlLength
+          when urlLength > 0) {
+        flushPlain();
+        final raw = text.substring(index, index + urlLength);
+        inlines.add(
+          LinkInline(
+            label: raw,
+            url: raw.startsWith('www.') ? 'https://$raw' : raw,
+          ),
+        );
+        index += urlLength;
       } else if (char == '[') {
         final labelEnd = text.indexOf('](', index + 1);
         var matched = false;

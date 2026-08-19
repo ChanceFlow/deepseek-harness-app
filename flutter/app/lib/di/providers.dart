@@ -2,6 +2,7 @@
 /// adapter (import-gate exemption, mirroring the legacy `app/di`).
 library;
 
+import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:domain/repository/chat_repository.dart';
@@ -18,6 +19,7 @@ export 'package:network/dsh_rpc_client.dart';
 export 'package:network/rpc_envelope.dart';
 
 import '../config.dart';
+import '../notifications/turn_complete_notifier.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
 import '../ui/goal/goal_controller.dart';
@@ -55,9 +57,24 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   );
 });
 
+/// Turn-complete system notifications (single instance).
+final turnCompleteNotifierProvider = Provider<TurnCompleteNotifier>((ref) {
+  return TurnCompleteNotifier();
+});
+
 /// Chat screen controller (UDF).
 final chatControllerProvider = Provider<ChatController>((ref) {
-  final controller = ChatController(ref.watch(chatRepositoryProvider));
+  final notifier = ref.watch(turnCompleteNotifierProvider);
+  final controller = ChatController(
+    ref.watch(chatRepositoryProvider),
+    onTurnComplete: (sessionTitle) {
+      // Only when backgrounded: a foregrounded user is already watching.
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+        notifier.showTurnComplete(sessionTitle);
+      }
+    },
+  );
   ref.onDispose(controller.dispose);
   return controller;
 });
