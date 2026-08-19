@@ -229,9 +229,9 @@ void main() {
     );
 
     expect(find.text('Turn 1'), findsOneWidget);
-    expect(find.text('You'), findsOneWidget);
-    expect(find.text('do the thing', findRichText: true), findsOneWidget);
-    expect(find.text('Assistant'), findsOneWidget);
+    // User text rides a plain bubble (no speaker label); assistant renders
+    // flat markdown.
+    expect(find.text('do the thing'), findsOneWidget);
     expect(find.text('working on it', findRichText: true), findsOneWidget);
     expect(find.text('bash done'), findsOneWidget);
     expect(find.text('ls -la'), findsOneWidget);
@@ -617,12 +617,13 @@ void main() {
     await tester.tap(find.text('▾ Turn 1 · 1 messages · 3 tools'));
     await tester.pumpAndSettle();
     expect(find.text('▸ Turn 1 · 1 messages · 3 tools'), findsOneWidget);
-    expect(find.text('You'), findsNothing);
+    // The header echo stays; the collapsed body rows disappear.
+    expect(find.text('first prompt', findRichText: true), findsNothing);
 
     // Expand all restores them.
     await tester.tap(find.text('Expand all'));
     await tester.pumpAndSettle();
-    expect(find.text('You'), findsOneWidget);
+    expect(find.text('first prompt', findRichText: true), findsOneWidget);
 
     // Outline off returns the plain ledger.
     await tester.tap(find.text('Outline: on'));

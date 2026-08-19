@@ -692,15 +692,60 @@ class MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final ds = dsOf(context);
+    if (message.role == MessageRole.user) {
+      // figma User_Bubble 659:38813 — right-aligned r22 bubble, 82% cap.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 525),
+              child: FractionallySizedBox(
+                widthFactor: 0.82,
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ds.bubble,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: message.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : Text(
+                          message.text,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            height: 24 / 16,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+          for (final ref in message.images)
+            AttachmentImageRow(
+              sessionId: message.sessionId,
+              ref: ref,
+              loadAttachment: loadAttachment,
+            ),
+          if (message.streaming)
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      );
+    }
+    // Assistant: flat markdown column (Think row + body + media).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          message.role == MessageRole.user ? 'You' : 'Assistant',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
         if (message.reasoning case final String reasoning
             when reasoning.isNotEmpty)
           ReasoningRow(text: reasoning, running: message.streaming),

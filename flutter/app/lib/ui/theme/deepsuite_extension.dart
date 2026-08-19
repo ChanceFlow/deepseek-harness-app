@@ -27,6 +27,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.labelCaption,
     required this.inputMajor,
     required this.borderThin,
+    required this.bubble,
+    required this.bubbleHighlight,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -55,6 +57,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color inputMajor;
   final Color borderThin;
 
+  /// User-message bubble fill and its highlight variant.
+  final Color bubble;
+  final Color bubbleHighlight;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
         bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -73,6 +79,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         labelCaption: DeepSuiteLight.aliasLabelCaption,
         inputMajor: DeepSuiteLight.specificInputMajor,
         borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
+        bubble: DeepSuiteLight.specificBubble,
+        bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -92,6 +100,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         labelCaption: DeepSuiteDark.aliasLabelCaption,
         inputMajor: DeepSuiteDark.specificInputMajor,
         borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
+        bubble: DeepSuiteDark.specificBubble,
+        bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
       );
 
   @override
@@ -111,6 +121,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? labelCaption,
     Color? inputMajor,
     Color? borderThin,
+    Color? bubble,
+    Color? bubbleHighlight,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -129,6 +141,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelCaption: labelCaption ?? this.labelCaption,
       inputMajor: inputMajor ?? this.inputMajor,
       borderThin: borderThin ?? this.borderThin,
+      bubble: bubble ?? this.bubble,
+      bubbleHighlight: bubbleHighlight ?? this.bubbleHighlight,
     );
   }
 
@@ -154,6 +168,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelCaption: Color.lerp(labelCaption, other.labelCaption, t)!,
       inputMajor: Color.lerp(inputMajor, other.inputMajor, t)!,
       borderThin: Color.lerp(borderThin, other.borderThin, t)!,
+      bubble: Color.lerp(bubble, other.bubble, t)!,
+      bubbleHighlight: Color.lerp(bubbleHighlight, other.bubbleHighlight, t)!,
     );
   }
 }
