@@ -75,13 +75,13 @@ class _GoalScreenState extends State<GoalScreen> {
     final theme = Theme.of(context);
     final goal = uiState.goal;
     return Scaffold(
+      appBar: AppBar(title: const Text('Goal')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Goal', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
                 Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Row(

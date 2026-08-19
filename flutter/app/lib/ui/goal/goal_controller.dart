@@ -11,7 +11,8 @@ import '../state_stream.dart';
 import 'goal_ui_state.dart';
 
 class GoalController {
-  GoalController(this._repository) {
+  GoalController(this._repository, {String? initialSessionId})
+    : _selectedSessionId = initialSessionId {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;

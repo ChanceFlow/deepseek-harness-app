@@ -68,8 +68,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('renders groups, current model, and provider failures',
-      (tester) async {
+  testWidgets('renders groups, current model, and provider failures', (
+    tester,
+  ) async {
     await _pump(
       tester,
       ModelsUiState(
@@ -99,8 +100,9 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'Low'), findsOneWidget);
   });
 
-  testWidgets('selecting a session dispatches and disables the current row',
-      (tester) async {
+  testWidgets('selecting a session dispatches and disables the current row', (
+    tester,
+  ) async {
     final actions = <ModelsAction>[];
     await _pump(
       tester,
@@ -121,8 +123,9 @@ void main() {
     expect(actions, contains(const SelectModelsSession('s2')));
   });
 
-  testWidgets('model and effort taps dispatch SelectModelAction',
-      (tester) async {
+  testWidgets('model and effort taps dispatch SelectModelAction', (
+    tester,
+  ) async {
     final actions = <ModelsAction>[];
     await _pump(
       tester,
@@ -145,6 +148,30 @@ void main() {
     expect(
       actions,
       contains(const SelectModelAction('deepseek', 'glm-x', 'low')),
+    );
+  });
+
+  testWidgets('pushing with a current session preselects it', (tester) async {
+    final actions = <ModelsAction>[];
+    // The wide two-pane surface with a selected session: the sidebar tools
+    // region preloads that session into the models controller.
+    await _pump(
+      tester,
+      const ModelsUiState(
+        sessions: [
+          SessionSummary(id: 's1', title: 'Current one', blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+    expect(find.text('Current one'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(OutlinedButton),
+        matching: find.text('Current one'),
+      ),
+      findsOneWidget,
     );
   });
 

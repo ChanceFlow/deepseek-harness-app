@@ -11,7 +11,8 @@ import '../state_stream.dart';
 import 'models_ui_state.dart';
 
 class ModelsController {
-  ModelsController(this._repository) {
+  ModelsController(this._repository, {String? initialSessionId})
+    : _selectedSessionId = initialSessionId {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;

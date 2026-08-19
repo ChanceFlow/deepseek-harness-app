@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/material.dart' show Icons, NavigationBar;
+import 'package:flutter/material.dart' show Icons, NavigationBar, Size;
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/di/providers.dart';
@@ -48,22 +48,26 @@ Future<void> _pumpApp(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('six destinations render and chat is the initial tab', (
+  testWidgets('three place destinations render and chat is the initial tab', (
     tester,
   ) async {
     await _pumpApp(tester);
     await tester.pump();
 
-    for (final label in [
-      'Chat',
-      'Workspaces',
-      'Models',
-      'Subagents',
-      'Goals',
-      'Settings',
-    ]) {
+    // Places only: session-scoped tools no longer ride the bottom bar.
+    for (final label in ['Chat', 'Workspaces', 'Settings']) {
       expect(find.text(label), findsWidgets);
     }
+    // No tool destinations on the bar (they live in the sidebar region).
+    Finder navLabel(String label) => find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.text(label),
+    );
+    expect(navLabel('Models'), findsNothing);
+    expect(navLabel('Subagents'), findsNothing);
+    expect(navLabel('Goals'), findsNothing);
+    // The wide sidebar hosts the session-tools region instead.
+    expect(find.text('Session tools'), findsOneWidget);
     // Real icons, not the former first-letter placeholders.
     Finder navIcon(IconData icon) => find.descendant(
       of: find.byType(NavigationBar),
@@ -71,9 +75,6 @@ void main() {
     );
     expect(navIcon(Icons.chat_bubble_outline), findsOneWidget);
     expect(navIcon(Icons.folder_outlined), findsOneWidget);
-    expect(navIcon(Icons.tune), findsOneWidget);
-    expect(navIcon(Icons.account_tree_outlined), findsOneWidget);
-    expect(navIcon(Icons.flag_outlined), findsOneWidget);
     expect(navIcon(Icons.settings_outlined), findsOneWidget);
 
     // Initial tab is chat: session panel surface.
@@ -93,22 +94,31 @@ void main() {
     expect(find.text('Create'), findsOneWidget);
   });
 
-  testWidgets('models and settings tabs render their live surfaces', (
+  testWidgets('settings tab renders; session tools live in the chat drawer', (
     tester,
   ) async {
     await _pumpApp(tester);
     await tester.pump();
 
-    await tester.tap(find.text('Models').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Models'), findsNWidgets(2)); // title + nav label
-    expect(find.text('Session'), findsOneWidget);
-    expect(find.text('Providers'), findsOneWidget);
-
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
     // Settings describe fails against the fake rpc → loopback hint shows.
-    expect(find.text('Settings'), findsNWidgets(2)); // title + nav label
     expect(find.text('Refresh'), findsOneWidget);
+
+    // Back to chat on a phone-scale surface: the tools live in the drawer.
+    tester.view.physicalSize = const Size(600, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    await tester.tap(find.text('Chat').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    expect(find.text('Session tools'), findsOneWidget);
+
+    // Pushing a tool page shows its surface with a back affordance.
+    await tester.tap(find.text('Models'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Providers'), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
   });
 }

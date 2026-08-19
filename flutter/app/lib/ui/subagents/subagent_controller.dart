@@ -12,7 +12,8 @@ import '../state_stream.dart';
 import 'subagent_ui_state.dart';
 
 class SubagentController {
-  SubagentController(this._repository) {
+  SubagentController(this._repository, {String? initialSessionId})
+    : _selectedParentId = initialSessionId {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;

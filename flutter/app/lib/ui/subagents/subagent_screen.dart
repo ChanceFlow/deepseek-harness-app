@@ -54,13 +54,13 @@ class _SubagentScreenState extends State<SubagentScreen> {
     final uiState = widget.uiState;
     final theme = Theme.of(context);
     return Scaffold(
+      appBar: AppBar(title: const Text('Subagents')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Subagents', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
                 Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Text('Parent session', style: theme.textTheme.labelLarge),

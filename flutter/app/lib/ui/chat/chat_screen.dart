@@ -20,14 +20,23 @@ import 'package:domain/model/jobs.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
 import 'message_icon_actions.dart';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../goal/goal_controller.dart';
+import '../models/models_controller.dart';
+import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
+import '../goal/goal_screen.dart';
+import '../models/models_screen.dart';
+import '../subagents/subagent_screen.dart';
+
 import 'brand_wordmark.dart';
 import 'context_ring.dart';
 import 'stats_line.dart';
@@ -90,6 +99,41 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   bool _rail = false;
   bool _outline = false;
+
+  /// Session-scoped tool pages (web embeds them into conversation context;
+  /// mobile pushes them as full routes with the current session preloaded).
+  void _openSessionTool(Widget Function(String? sessionId) page) {
+    final sessionId = widget.uiState.selectedSessionId;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => sessionId == null
+            ? page(null)
+            : ProviderScope(
+                overrides: [
+                  modelsControllerProvider.overrideWith(
+                    (ref) => ModelsController(
+                      ref.watch(chatRepositoryProvider),
+                      initialSessionId: sessionId,
+                    ),
+                  ),
+                  goalControllerProvider.overrideWith(
+                    (ref) => GoalController(
+                      ref.watch(chatRepositoryProvider),
+                      initialSessionId: sessionId,
+                    ),
+                  ),
+                  subagentControllerProvider.overrideWith(
+                    (ref) => SubagentController(
+                      ref.watch(chatRepositoryProvider),
+                      initialSessionId: sessionId,
+                    ),
+                  ),
+                ],
+                child: page(sessionId),
+              ),
+      ),
+    );
+  }
 
   PreferredSizeWidget _chatAppBar(
     BuildContext context,
@@ -162,6 +206,16 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: SessionPanel(
                             onRailChanged: (rail) =>
                                 setState(() => _rail = rail),
+                            onOpenModels: () => _openSessionTool(
+                              (_) => const ProviderScope(child: ModelsRoute()),
+                            ),
+                            onOpenGoals: () => _openSessionTool(
+                              (_) => const ProviderScope(child: GoalRoute()),
+                            ),
+                            onOpenSubagents: () => _openSessionTool(
+                              (_) =>
+                                  const ProviderScope(child: SubagentRoute()),
+                            ),
                             sessions: uiState.sessions,
                             workspaces: uiState.workspaces,
                             searchResults: uiState.searchResults,
@@ -199,6 +253,24 @@ class _ChatScreenState extends State<ChatScreen> {
             child: SafeArea(
               child: SessionPanel(
                 inDrawer: true,
+                onOpenModels: () {
+                  Navigator.of(context).pop();
+                  _openSessionTool(
+                    (_) => const ProviderScope(child: ModelsRoute()),
+                  );
+                },
+                onOpenGoals: () {
+                  Navigator.of(context).pop();
+                  _openSessionTool(
+                    (_) => const ProviderScope(child: GoalRoute()),
+                  );
+                },
+                onOpenSubagents: () {
+                  Navigator.of(context).pop();
+                  _openSessionTool(
+                    (_) => const ProviderScope(child: SubagentRoute()),
+                  );
+                },
                 sessions: uiState.sessions,
                 workspaces: uiState.workspaces,
                 searchResults: uiState.searchResults,
@@ -275,6 +347,9 @@ class SessionPanel extends StatefulWidget {
     required this.onCreateSession,
     required this.onSearchSessions,
     this.onRailChanged,
+    this.onOpenModels,
+    this.onOpenGoals,
+    this.onOpenSubagents,
   });
 
   /// Drawer form: no rail toggle, full-height fill.
@@ -282,6 +357,11 @@ class SessionPanel extends StatefulWidget {
 
   /// Notifies the host pane when the icon-rail state flips (wide panes).
   final void Function(bool rail)? onRailChanged;
+
+  /// Session-tools region entries (web: context-embedded tools).
+  final VoidCallback? onOpenModels;
+  final VoidCallback? onOpenGoals;
+  final VoidCallback? onOpenSubagents;
 
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
@@ -411,133 +491,188 @@ class _SessionPanelState extends State<SessionPanel> {
       curve: Curves.easeInOut,
       width: rail ? 56 : null,
       color: ds.sidebarFill,
-      child: Padding(
-        padding: EdgeInsets.all(rail ? 4 : 8),
-        child: Column(
-          children: [
-            _buildBrandRow(context, ds),
-            _buildNewSessionButton(context, ds),
-            if (rail)
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (final session in widget.sessions)
-                      IconButton(
-                        tooltip: session.displayTitle,
-                        onPressed: () => widget.onSelectSession(session.id),
-                        icon: CircleAvatar(
-                          radius: 14,
-                          backgroundColor:
-                              session.id == widget.selectedSessionId
-                              ? ds.sidebarNavItemActive
-                              : ds.sidebarNavItemHover,
-                          child: Text(
-                            session.displayTitle.substring(0, 1),
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: ds.labelSecondary),
+      child: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: EdgeInsets.all(rail ? 4 : 8),
+          child: Column(
+            children: [
+              _buildBrandRow(context, ds),
+              _buildNewSessionButton(context, ds),
+              if (rail)
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final session in widget.sessions)
+                        IconButton(
+                          tooltip: session.displayTitle,
+                          onPressed: () => widget.onSelectSession(session.id),
+                          icon: CircleAvatar(
+                            radius: 14,
+                            backgroundColor:
+                                session.id == widget.selectedSessionId
+                                ? ds.sidebarNavItemActive
+                                : ds.sidebarNavItemHover,
+                            child: Text(
+                              session.displayTitle.substring(0, 1),
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: ds.labelSecondary),
+                            ),
                           ),
                         ),
+                    ],
+                  ),
+                )
+              else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _queryController,
+                        decoration: const InputDecoration(
+                          hintText: 'Search sessions',
+                          isDense: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: widget.onSearchSessions,
                       ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: FilledButton(
+                        onPressed: _queryController.text.trim().isEmpty
+                            ? null
+                            : () => widget.onSearchSessions(
+                                _queryController.text,
+                              ),
+                        child: const Text('Go'),
+                      ),
+                    ),
                   ],
                 ),
-              )
-            else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _queryController,
-                      decoration: const InputDecoration(
-                        hintText: 'Search sessions',
-                        isDense: true,
+                for (final result in widget.searchResults)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => widget.onSelectSession(result.sessionId),
+                      child: Text(
+                        'Search: ${result.snippet}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: widget.onSearchSessions,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: FilledButton(
-                      onPressed: _queryController.text.trim().isEmpty
-                          ? null
-                          : () =>
-                                widget.onSearchSessions(_queryController.text),
-                      child: const Text('Go'),
-                    ),
-                  ),
-                ],
-              ),
-              for (final result in widget.searchResults)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => widget.onSelectSession(result.sessionId),
-                    child: Text(
-                      'Search: ${result.snippet}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: widget.sessions.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 6),
-                  itemBuilder: (context, index) {
-                    final session = widget.sessions[index];
-                    final selected = session.id == widget.selectedSessionId;
-                    final displayTitle = session.blank
-                        ? 'New session'
-                        : session.displayTitle;
-                    final status = !session.blank && session.running
-                        ? ' ●'
-                        : '';
-                    // Web sidebar nav-item: active fill + brand-accent edge.
-                    return DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: selected ? ds.sidebarNavItemActive : null,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(6),
-                        onTap: selected
-                            ? null
-                            : () => widget.onSelectSession(session.id),
-                        child: IntrinsicHeight(
-                          child: Row(
-                            children: [
-                              if (selected)
-                                VerticalDivider(
-                                  thickness: 3,
-                                  width: 3,
-                                  color: ds.sidebarNavItemActiveAccent,
-                                ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 10,
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: widget.sessions.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 6),
+                    itemBuilder: (context, index) {
+                      final session = widget.sessions[index];
+                      final selected = session.id == widget.selectedSessionId;
+                      final displayTitle = session.blank
+                          ? 'New session'
+                          : session.displayTitle;
+                      final status = !session.blank && session.running
+                          ? ' ●'
+                          : '';
+                      // Web sidebar nav-item: active fill + brand-accent edge.
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: selected ? ds.sidebarNavItemActive : null,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: selected
+                              ? null
+                              : () => widget.onSelectSession(session.id),
+                          child: IntrinsicHeight(
+                            child: Row(
+                              children: [
+                                if (selected)
+                                  VerticalDivider(
+                                    thickness: 3,
+                                    width: 3,
+                                    color: ds.sidebarNavItemActiveAccent,
                                   ),
-                                  child: Text(
-                                    displayTitle + status,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 10,
+                                    ),
+                                    child: Text(
+                                      displayTitle + status,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
+              ],
+              _buildToolsRegion(context, ds),
             ],
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// Session tools at the panel foot (web embeds these into the
+  /// conversation context; on mobile they push their screens).
+  Widget _buildToolsRegion(BuildContext context, DeepSuiteColors ds) {
+    final rail = !widget.inDrawer && _collapsedToRail;
+    final entries = <(IconData, String, VoidCallback?)>[
+      (Icons.tune, 'Models', widget.onOpenModels),
+      (Icons.flag_outlined, 'Goals', widget.onOpenGoals),
+      (Icons.account_tree_outlined, 'Subagents', widget.onOpenSubagents),
+    ];
+    final available = entries.where((entry) => entry.$3 != null).toList();
+    if (available.isEmpty) return const SizedBox.shrink();
+    if (rail) {
+      return Column(
+        children: [
+          const Divider(height: 12),
+          for (final (icon, label, onTap) in available)
+            IconButton(
+              tooltip: label,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              padding: EdgeInsets.zero,
+              onPressed: onTap,
+              icon: Icon(icon, size: 18, color: ds.labelSecondary),
+            ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 12),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: Text(
+            'Session tools',
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: ds.labelSecondary),
+          ),
+        ),
+        for (final (icon, label, onTap) in available)
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(icon, size: 18, color: ds.labelSecondary),
+            title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            onTap: onTap,
+          ),
+      ],
     );
   }
 }

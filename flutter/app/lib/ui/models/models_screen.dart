@@ -39,13 +39,13 @@ class ModelsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      appBar: AppBar(title: const Text('Models')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Models', style: theme.textTheme.titleLarge),
               if (uiState.errorMessage case final error?)
                 Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Text('Session', style: theme.textTheme.labelLarge),
