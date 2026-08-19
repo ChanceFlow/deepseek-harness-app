@@ -52,10 +52,11 @@ ChatUiState _state({
 Future<void> _pump(
   WidgetTester tester,
   ChatUiState uiState,
-  List<ChatAction> actions,
-) {
+  List<ChatAction> actions, {
+  double width = 800,
+}) {
   // Phone-scale logical surface so both panes and rows lay out naturally.
-  tester.view.physicalSize = const Size(800, 1280);
+  tester.view.physicalSize = Size(width, 1280);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -547,6 +548,7 @@ void main() {
         selectedSessionId: 's1',
       ),
       actions,
+      width: 1100,
     );
 
     final composerField = find
@@ -572,6 +574,10 @@ void main() {
   testWidgets('running session enables steer mode and placeholder', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1100, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -582,6 +588,7 @@ void main() {
         selectedSessionId: 's1',
       ),
       actions,
+      width: 1100,
     );
 
     expect(find.text('Queue'), findsOneWidget);
@@ -610,6 +617,45 @@ void main() {
     await tester.tap(find.text('Stop'));
     await tester.pump();
     expect(actions, contains(const CancelTurnAction()));
+  });
+
+  testWidgets('compact composer folds delivery into a popup', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    // Narrow pane: no inline chips, the popup carries the current mode.
+    expect(find.widgetWithText(OutlinedButton, 'Steer'), findsNothing);
+    expect(find.byTooltip('Delivery'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Delivery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Steer').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Steer the running turn'), findsOneWidget);
+
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    await tester.enterText(composerField, 'nudge');
+    await tester.pump();
+    await tester.tap(find.text('Send'));
+    await tester.pump();
+    expect(
+      actions,
+      contains(const SendPrompt('nudge', mode: PromptMode.steer)),
+    );
   });
 
   testWidgets('pending images render chips with remove buttons', (

@@ -1394,21 +1394,18 @@ class QueueDock extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
     final ds = dsOf(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        decoration: BoxDecoration(
-          color: ds.tip,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-          border: Border(
-            top: BorderSide(color: ds.divider),
-            left: BorderSide(color: ds.divider),
-            right: BorderSide(color: ds.divider),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: ds.tip,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        border: Border(
+          top: BorderSide(color: ds.divider),
+          left: BorderSide(color: ds.divider),
+          right: BorderSide(color: ds.divider),
         ),
-        child: QueueRow(items: items, onAction: onAction),
       ),
+      child: QueueRow(items: items, onAction: onAction),
     );
   }
 }
@@ -2079,56 +2076,79 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  'Delivery',
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ),
-              ModeChip(
-                label: 'Queue',
-                selected: effectiveMode == PromptMode.queue,
-                enabled: widget.enabled,
-                onClick: () => widget.onModeChange(PromptMode.queue),
-              ),
-              ModeChip(
-                label: 'Steer',
-                selected: effectiveMode == PromptMode.steer,
-                enabled: widget.enabled && widget.running,
-                onClick: () => widget.onModeChange(PromptMode.steer),
-              ),
-              ContextRing(
-                pressure: widget.contextPressure,
-                breakdown: widget.contextBreakdown,
-              ),
-              IconButton(
-                onPressed: attachAllowed ? _pickImages : null,
-                icon: const Icon(Icons.add),
-                tooltip: 'Attach images',
-              ),
-              if (widget.onStop != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: FilledButton(
-                    onPressed: widget.enabled ? widget.onStop : null,
-                    child: const Text('Stop'),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 460;
+              final leading = compact
+                  ? <Widget>[]
+                  : <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          'Delivery',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
+                      ModeChip(
+                        label: 'Queue',
+                        selected: effectiveMode == PromptMode.queue,
+                        enabled: widget.enabled,
+                        onClick: () => widget.onModeChange(PromptMode.queue),
+                      ),
+                      ModeChip(
+                        label: 'Steer',
+                        selected: effectiveMode == PromptMode.steer,
+                        enabled: widget.enabled && widget.running,
+                        onClick: () => widget.onModeChange(PromptMode.steer),
+                      ),
+                    ];
+              return Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ...leading,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (compact)
+                        PopupMenuEntryShim(
+                          running: widget.running,
+                          enabled: widget.enabled,
+                          effectiveMode: effectiveMode,
+                          onModeChange: widget.onModeChange,
+                        ),
+                      ContextRing(
+                        pressure: widget.contextPressure,
+                        breakdown: widget.contextBreakdown,
+                      ),
+                      IconButton(
+                        onPressed: attachAllowed ? _pickImages : null,
+                        icon: const Icon(Icons.add),
+                        tooltip: 'Attach images',
+                      ),
+                      if (widget.onStop != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: FilledButton(
+                            onPressed: widget.enabled ? widget.onStop : null,
+                            child: const Text('Stop'),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: FilledButton(
+                          onPressed:
+                              widget.enabled && !widget.isSending && _canSend()
+                              ? _send
+                              : null,
+                          child: Text(widget.isSending ? 'Sending' : 'Send'),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: FilledButton(
-                  onPressed: widget.enabled && !widget.isSending && _canSend()
-                      ? _send
-                      : null,
-                  child: Text(widget.isSending ? 'Sending' : 'Send'),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -2236,6 +2256,51 @@ String? guessImageMediaType(String path) {
       return 'image/gif';
     default:
       return null;
+  }
+}
+
+/// Compact delivery-mode picker for narrow composer rows.
+class PopupMenuEntryShim extends StatelessWidget {
+  const PopupMenuEntryShim({
+    super.key,
+    required this.running,
+    required this.enabled,
+    required this.effectiveMode,
+    required this.onModeChange,
+  });
+
+  final bool running;
+  final bool enabled;
+  final PromptMode effectiveMode;
+  final void Function(PromptMode) onModeChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = effectiveMode == PromptMode.steer ? 'Steer' : 'Queue';
+    return PopupMenuButton<PromptMode>(
+      tooltip: 'Delivery',
+      enabled: enabled,
+      initialValue: effectiveMode,
+      onSelected: onModeChange,
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: PromptMode.queue, child: Text('Queue')),
+        PopupMenuItem(
+          value: PromptMode.steer,
+          enabled: running,
+          child: const Text('Steer'),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const Icon(Icons.arrow_drop_down, size: 16),
+          ],
+        ),
+      ),
+    );
   }
 }
 
