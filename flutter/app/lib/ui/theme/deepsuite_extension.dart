@@ -30,6 +30,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.bubble,
     required this.bubbleHighlight,
     required this.tip,
+    required this.buttonElevatedFill,
+    required this.borderL2,
   });
 
   /// Elevated surfaces: cards, code blocks, candidate panels.
@@ -65,6 +67,11 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   /// `--dsw-specific-tip` — the queue dock panel fill.
   final Color tip;
 
+  /// `--dsw-alias-button-elevated-fill` + `--dsw-alias-border-l2` — the
+  /// sidebar New Session button pair.
+  final Color buttonElevatedFill;
+  final Color borderL2;
+
   static DeepSuiteColors light() => const DeepSuiteColors(
         bgLayer1: DeepSuiteLight.aliasBgLayer1,
         bgLayer2: DeepSuiteLight.aliasBgLayer2,
@@ -86,6 +93,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         bubble: DeepSuiteLight.specificBubble,
         bubbleHighlight: DeepSuiteLight.specificBubbleHighlight,
         tip: DeepSuiteLight.specificTip,
+        buttonElevatedFill: DeepSuiteLight.aliasButtonElevatedFill,
+        borderL2: DeepSuiteLight.aliasBorderL2,
       );
 
   static DeepSuiteColors dark() => const DeepSuiteColors(
@@ -108,6 +117,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
         bubble: DeepSuiteDark.specificBubble,
         bubbleHighlight: DeepSuiteDark.specificBubbleHighlight,
         tip: DeepSuiteDark.specificTip,
+        buttonElevatedFill: DeepSuiteDark.aliasButtonElevatedFill,
+        borderL2: DeepSuiteDark.aliasBorderL2,
       );
 
   @override
@@ -130,6 +141,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? bubble,
     Color? bubbleHighlight,
     Color? tip,
+    Color? buttonElevatedFill,
+    Color? borderL2,
   }) {
     return DeepSuiteColors(
       bgLayer1: bgLayer1 ?? this.bgLayer1,
@@ -151,6 +164,8 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bubble: bubble ?? this.bubble,
       bubbleHighlight: bubbleHighlight ?? this.bubbleHighlight,
       tip: tip ?? this.tip,
+      buttonElevatedFill: buttonElevatedFill ?? this.buttonElevatedFill,
+      borderL2: borderL2 ?? this.borderL2,
     );
   }
 
@@ -179,6 +194,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       bubble: Color.lerp(bubble, other.bubble, t)!,
       bubbleHighlight: Color.lerp(bubbleHighlight, other.bubbleHighlight, t)!,
       tip: Color.lerp(tip, other.tip, t)!,
+      buttonElevatedFill:
+          Color.lerp(buttonElevatedFill, other.buttonElevatedFill, t)!,
+      borderL2: Color.lerp(borderL2, other.borderL2, t)!,
     );
   }
 }

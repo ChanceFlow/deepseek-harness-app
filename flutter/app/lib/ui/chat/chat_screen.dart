@@ -25,11 +25,14 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import 'chat_ui_state.dart';
 import 'markdown/markdown_text.dart';
+import 'brand_wordmark.dart';
 import 'empty_hero.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
-import '../theme/deepsuite_extension.dart' show dsOf, kDsShadowLv2;
+import '../theme/deepsuite_extension.dart'
+    show DeepSuiteColors, dsOf, kDsShadowLv2;
+import '../theme/deepsuite_tokens.dart' show kDsDuration;
 import '../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
@@ -208,6 +211,7 @@ class SessionPanel extends StatefulWidget {
 
 class _SessionPanelState extends State<SessionPanel> {
   final TextEditingController _queryController = TextEditingController();
+  bool _collapsedToRail = false;
 
   @override
   void dispose() {
@@ -225,111 +229,220 @@ class _SessionPanelState extends State<SessionPanel> {
     );
   }
 
+  /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
+  /// toggle collapses to the icon rail.
+  Widget _buildBrandRow(BuildContext context, DeepSuiteColors ds) {
+    final rail = _collapsedToRail;
+    return SizedBox(
+      height: 60,
+      child: Row(
+        children: [
+          if (!rail)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => widget.onCreateSession(null),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: BrandWordmark(height: 22),
+                  ),
+                ),
+              ),
+            ),
+          if (!rail) const SizedBox(width: 8),
+          IconButton(
+            tooltip: rail ? 'Open sidebar' : 'Collapse sidebar',
+            onPressed: () => setState(() => _collapsedToRail = !rail),
+            icon: Icon(
+              rail ? Icons.menu : Icons.view_sidebar_outlined,
+              size: rail ? 22 : 16,
+              color: ds.labelSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label.
+  Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
+    final rail = _collapsedToRail;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(rail ? 0 : 2, 0, rail ? 0 : 2, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(rail ? 18 : 12),
+        onTap: _showNewSessionDialog,
+        child: Container(
+          height: 38,
+          width: rail ? 38 : double.infinity,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: ds.borderL2),
+            borderRadius: BorderRadius.circular(rail ? 18 : 12),
+            color: ds.buttonElevatedFill,
+          ),
+          child: rail
+              ? Icon(
+                  Icons.chat_bubble_outline,
+                  size: 18,
+                  color: ds.labelSecondary,
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 14,
+                      color: ds.labelSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'New session',
+                      style: Theme.of(context).textTheme.labelMedium
+                          ?.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
-    return ColoredBox(
+    final rail = _collapsedToRail;
+    return AnimatedContainer(
+      duration: kDsDuration,
+      curve: Curves.easeInOut,
+      width: rail ? 56 : null,
       color: ds.sidebarFill,
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: EdgeInsets.all(rail ? 8 : 8),
         child: Column(
           children: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.tonal(
-                onPressed: _showNewSessionDialog,
-                child: const Text('New session'),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _queryController,
-                    decoration: const InputDecoration(
-                      hintText: 'Search sessions',
-                      isDense: true,
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: widget.onSearchSessions,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: FilledButton(
-                    onPressed: _queryController.text.trim().isEmpty
-                        ? null
-                        : () => widget.onSearchSessions(_queryController.text),
-                    child: const Text('Go'),
-                  ),
-                ),
-              ],
-            ),
-            for (final result in widget.searchResults)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => widget.onSelectSession(result.sessionId),
-                  child: Text(
-                    'Search: ${result.snippet}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                itemCount: widget.sessions.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 6),
-                itemBuilder: (context, index) {
-                  final session = widget.sessions[index];
-                  final selected = session.id == widget.selectedSessionId;
-                  final displayTitle = session.blank
-                      ? 'New session'
-                      : session.displayTitle;
-                  final status = !session.blank && session.running ? ' ●' : '';
-                  // Web sidebar nav-item: active fill + brand-accent edge.
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: selected ? ds.sidebarNavItemActive : null,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: selected
-                          ? null
-                          : () => widget.onSelectSession(session.id),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            if (selected)
-                              VerticalDivider(
-                                thickness: 3,
-                                width: 3,
-                                color: ds.sidebarNavItemActiveAccent,
-                              ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 10,
-                                ),
-                                child: Text(
-                                  displayTitle + status,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
+            _buildBrandRow(context, ds),
+            _buildNewSessionButton(context, ds),
+            if (rail)
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final session in widget.sessions)
+                      IconButton(
+                        tooltip: session.displayTitle,
+                        onPressed: () => widget.onSelectSession(session.id),
+                        icon: CircleAvatar(
+                          radius: 14,
+                          backgroundColor:
+                              session.id == widget.selectedSessionId
+                              ? ds.sidebarNavItemActive
+                              : ds.sidebarNavItemHover,
+                          child: Text(
+                            session.displayTitle.substring(0, 1),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: ds.labelSecondary),
+                          ),
                         ),
                       ),
+                  ],
+                ),
+              )
+            else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _queryController,
+                      decoration: const InputDecoration(
+                        hintText: 'Search sessions',
+                        isDense: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: widget.onSearchSessions,
                     ),
-                  );
-                },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: FilledButton(
+                      onPressed: _queryController.text.trim().isEmpty
+                          ? null
+                          : () =>
+                                widget.onSearchSessions(_queryController.text),
+                      child: const Text('Go'),
+                    ),
+                  ),
+                ],
               ),
-            ),
+              for (final result in widget.searchResults)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => widget.onSelectSession(result.sessionId),
+                    child: Text(
+                      'Search: ${result.snippet}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: widget.sessions.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final session = widget.sessions[index];
+                    final selected = session.id == widget.selectedSessionId;
+                    final displayTitle = session.blank
+                        ? 'New session'
+                        : session.displayTitle;
+                    final status = !session.blank && session.running
+                        ? ' ●'
+                        : '';
+                    // Web sidebar nav-item: active fill + brand-accent edge.
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: selected ? ds.sidebarNavItemActive : null,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: selected
+                            ? null
+                            : () => widget.onSelectSession(session.id),
+                        child: IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              if (selected)
+                                VerticalDivider(
+                                  thickness: 3,
+                                  width: 3,
+                                  color: ds.sidebarNavItemActiveAccent,
+                                ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 10,
+                                  ),
+                                  child: Text(
+                                    displayTitle + status,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/empty_hero.dart';
 import 'package:app/ui/chat/fish_logo.dart';
 
 Future<void> _pump(
@@ -29,8 +30,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('empty timeline shows the fish headline and preview badge',
-      (tester) async {
+  testWidgets('empty timeline shows the fish headline and preview badge', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ChatUiState(
@@ -42,12 +44,19 @@ void main() {
 
     expect(find.text('Into the Unknown'), findsOneWidget);
     expect(find.text('Preview'), findsOneWidget);
-    expect(find.byType(FishLogo), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(EmptyHero),
+        matching: find.byType(FishLogo),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Choose workspace'), findsOneWidget);
   });
 
-  testWidgets('workspace chip lists workspaces and dispatches create',
-      (tester) async {
+  testWidgets('workspace chip lists workspaces and dispatches create', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -75,13 +84,19 @@ void main() {
     expect(actions, contains(const CreateSessionInWorkspace('w1')));
   });
 
-  testWidgets('cwd-backed label replaces the placeholder chip text',
-      (tester) async {
+  testWidgets('cwd-backed label replaces the placeholder chip text', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ChatUiState(
         sessions: [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false, cwd: '/tmp/proj'),
+          SessionSummary(
+            id: 's1',
+            title: 'Alpha',
+            blank: false,
+            cwd: '/tmp/proj',
+          ),
         ],
         selectedSessionId: 's1',
       ),
@@ -98,18 +113,26 @@ void main() {
         sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
         selectedSessionId: 's1',
         timeline: [
-          TimelineMessage(ChatMessage(
-            id: 'm1',
-            sessionId: 's1',
-            role: MessageRole.user,
-            text: 'hello',
-          )),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'hello',
+            ),
+          ),
         ],
       ),
       [],
     );
     expect(find.text('Into the Unknown'), findsNothing);
-    expect(find.byType(FishLogo), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(EmptyHero),
+        matching: find.byType(FishLogo),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('fish path parser yields a bounded non-empty path', (
@@ -118,12 +141,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: Center(
-            child: FishLogo(
-              size: 34,
-              color: Colors.blue,
-            ),
-          ),
+          body: Center(child: FishLogo(size: 34, color: Colors.blue)),
         ),
       ),
     );
