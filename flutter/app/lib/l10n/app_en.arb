@@ -550,7 +550,6 @@
   "planPlaceholder": "describe your task to generate plan",
   "messagePlaceholder": "Message the agent",
   "removeImage": "Remove {name}",
-  "newLine": "New line",
   "delivery": "Delivery",
   "commandsTooltip": "Commands",
   "searchCommandsHint": "Search commands",
