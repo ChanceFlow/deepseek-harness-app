@@ -1,10 +1,8 @@
 {
-  "@@locale": "en",
   "appTitle": "DeepSeek Harness",
   "@appTitle": {
     "description": "Application title used in the OS task switcher and window title."
   },
-
   "cancel": "Cancel",
   "@cancel": {
     "description": "Generic cancel action."
@@ -50,10 +48,6 @@
     "description": "Generic open action."
   },
   "defaultBadge": "Default",
-  "@default": {
-    "description": "Default value or option badge."
-  },
-
   "destinationChat": "Chat",
   "@destinationChat": {
     "description": "Bottom navigation label for the chat surface."
@@ -66,7 +60,6 @@
   "@destinationSettings": {
     "description": "Bottom navigation label for host configuration."
   },
-
   "goalTitle": "Goal",
   "@goalTitle": {
     "description": "Goal screen app bar title."
@@ -128,23 +121,7 @@
     "description": "Goal phase label, complete."
   },
   "goalStatusLine": "{phase} · revision {revision} · rounds {started}/{max}",
-  "@goalStatusLine": {
-    "description": "Goal metadata line under the objective.",
-    "placeholders": {
-      "phase": {"type": "String"},
-      "revision": {"type": "int"},
-      "started": {"type": "int"},
-      "max": {"type": "int"}
-    }
-  },
-
   "contextUsedPercent": "{percent}% of context used",
-  "@contextUsedPercent": {
-    "description": "Context occupancy reading and its accessibility label.",
-    "placeholders": {
-      "percent": {"type": "int"}
-    }
-  },
   "systemPromptLabel": "System prompt",
   "@systemPromptLabel": {
     "description": "Context composition legend, system prompt row."
@@ -158,14 +135,6 @@
     "description": "Context composition legend, conversation row."
   },
   "contextTokens": "~{used} / {window}",
-  "@contextTokens": {
-    "description": "Compact token figures for the context composition.",
-    "placeholders": {
-      "used": {"type": "String"},
-      "window": {"type": "String"}
-    }
-  },
-
   "heroHeadline": "Into the Unknown",
   "@heroHeadline": {
     "description": "Empty-chat hero headline."
@@ -178,67 +147,28 @@
   "@heroChooseWorkspace": {
     "description": "Workspace chip label and tooltip on the empty hero."
   },
-
   "modelsTitle": "Models",
   "@modelsTitle": {
     "description": "Models screen app bar title."
   },
   "modelCurrent": "{name} (current)",
-  "@modelCurrent": {
-    "description": "Model row button label for the active model.",
-    "placeholders": {
-      "name": {"type": "String"}
-    }
-  },
   "reasoningEffortLabel": "Reasoning effort",
   "@reasoningEffortLabel": {
     "description": "Section label for reasoning effort chips."
   },
-
   "todosLabel": "To-dos",
   "@todosLabel": {
     "description": "Plan-strip header label."
   },
   "todoCountDone": "{count} completed",
-  "@todoCountDone": {
-    "description": "Completed to-do count segment.",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "todoCountActive": "{count} active",
-  "@todoCountActive": {
-    "description": "In-progress to-do count segment.",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "todoCountPending": "{count} pending",
-  "@todoCountPending": {
-    "description": "Pending to-do count segment.",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
-
   "backgroundJobsTitle": "Background jobs",
   "@backgroundJobsTitle": {
     "description": "Background-jobs sheet title."
   },
   "jobCountRunning": "{count, plural, =1{1 background job running} other{{count} background jobs running}}",
-  "@jobCountRunning": {
-    "description": "Header pill while jobs are still live.",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "jobCount": "{count, plural, =1{1 background job} other{{count} background jobs}}",
-  "@jobCount": {
-    "description": "Header pill when all jobs are settled.",
-    "placeholders": {
-      "count": {"type": "int"}
-    }
-  },
   "jobStatusRunning": "running",
   "@jobStatusRunning": {
     "description": "Job status label, running."
@@ -260,29 +190,8 @@
     "description": "Job status label, failed."
   },
   "jobDurationHoursMinutes": "{hours}h {minutes}m",
-  "@jobDurationHoursMinutes": {
-    "description": "Compact elapsed duration, hours and minutes.",
-    "placeholders": {
-      "hours": {"type": "int"},
-      "minutes": {"type": "int"}
-    }
-  },
   "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
-  "@jobDurationMinutesSeconds": {
-    "description": "Compact elapsed duration, minutes and seconds.",
-    "placeholders": {
-      "minutes": {"type": "int"},
-      "seconds": {"type": "int"}
-    }
-  },
   "jobDurationSeconds": "{seconds}s",
-  "@jobDurationSeconds": {
-    "description": "Compact elapsed duration, seconds only.",
-    "placeholders": {
-      "seconds": {"type": "int"}
-    }
-  },
-
   "copyTooltip": "Copy",
   "@copyTooltip": {
     "description": "Copy-message icon tooltip."
@@ -291,25 +200,12 @@
   "@copiedTooltip": {
     "description": "Copy-message icon tooltip after a successful copy."
   },
-
   "waitingForApproval": "Waiting for approval",
   "@waitingForApproval": {
     "description": "Approval panel header strip."
   },
   "approveToolFallback": "Approve tool: {tool}",
-  "@approveToolFallback": {
-    "description": "Approval justification fallback naming the tool.",
-    "placeholders": {
-      "tool": {"type": "String"}
-    }
-  },
   "toolRequestsPrivileged": "Tool {tool} requests privileged execution",
-  "@toolRequestsPrivileged": {
-    "description": "Approval panel secondary line.",
-    "placeholders": {
-      "tool": {"type": "String"}
-    }
-  },
   "reject": "Reject",
   "@reject": {
     "description": "Reject an approval request."
@@ -318,7 +214,6 @@
   "@allowOnce": {
     "description": "Allow a privileged execution a single time."
   },
-
   "agentPresetLabel": "Agent preset",
   "@agentPresetLabel": {
     "description": "Label for the agent-preset seat and sheet title."
@@ -327,18 +222,11 @@
   "@agentPresetTooltip": {
     "description": "Tooltip explaining the preset seat."
   },
-
   "accessModeLabel": "Access mode",
   "@accessModeLabel": {
     "description": "Access-mode sheet title."
   },
   "accessModeTooltip": "Access mode: {label}",
-  "@accessModeTooltip": {
-    "description": "Access chip tooltip naming the current mode.",
-    "placeholders": {
-      "label": {"type": "String"}
-    }
-  },
   "fullAccessOption": "Full access",
   "@fullAccessOption": {
     "description": "Product label for the danger-full-access permission value."
@@ -359,7 +247,6 @@
   "@enableFullAccess": {
     "description": "Confirm button in the risk-confirmation dialog."
   },
-
   "modelLabel": "Model",
   "@modelLabel": {
     "description": "Model seat label and sheet menu row."
@@ -372,7 +259,6 @@
   "@providerDefault": {
     "description": "Effort option meaning the provider's default effort."
   },
-
   "presetStandardName": "Standard mode",
   "@presetStandardName": {
     "description": "Built-in agent preset display name."
@@ -405,7 +291,6 @@
   "@presetCordisDescription": {
     "description": "Built-in agent preset display description."
   },
-
   "toolSearchTitle": "Search",
   "@toolSearchTitle": {
     "description": "Tool row title for search variants."
@@ -459,69 +344,119 @@
     "description": "Tool row title for the todo_write tool."
   },
   "toolTodoPlanCompleted": "{done}/{total} completed",
-  "@toolTodoPlanCompleted": {
-    "description": "Todo plan summary segment.",
-    "placeholders": {
-      "done": {"type": "int"},
-      "total": {"type": "int"}
-    }
-  },
-
   "statsTurnsSteps": "{turns} turns · {steps} steps",
-  "@statsTurnsSteps": {
-    "description": "Composer stats: turn and step counts.",
-    "placeholders": {
-      "turns": {"type": "int"},
-      "steps": {"type": "int"}
-    }
-  },
   "statsLlmDuration": "LLM {duration}",
-  "@statsLlmDuration": {
-    "description": "Composer stats: LLM processing duration.",
-    "placeholders": {
-      "duration": {"type": "String"}
-    }
-  },
   "statsToolDuration": "Tool call {duration}",
-  "@statsToolDuration": {
-    "description": "Composer stats: tool-call duration.",
-    "placeholders": {
-      "duration": {"type": "String"}
-    }
-  },
   "statsTtftAvg": "TTFT avg {duration}",
-  "@statsTtftAvg": {
-    "description": "Composer stats: average time to first token.",
-    "placeholders": {
-      "duration": {"type": "String"}
-    }
-  },
   "statsTokensPerSecond": "{rate} tok/s",
-  "@statsTokensPerSecond": {
-    "description": "Composer stats: decode throughput.",
-    "placeholders": {
-      "rate": {"type": "String"}
-    }
-  },
   "statsCacheHit": "Cache hit {percent}%",
-  "@statsCacheHit": {
-    "description": "Composer stats: cache hit percentage.",
-    "placeholders": {
-      "percent": {"type": "int"}
-    }
-  },
   "statsInputTokens": "Input {tokens} tok",
-  "@statsInputTokens": {
-    "description": "Composer stats: billed input token count.",
-    "placeholders": {
-      "tokens": {"type": "String"}
-    }
-  },
   "statsOutputTokens": "Output {tokens} tok",
-  "@statsOutputTokens": {
-    "description": "Composer stats: output token count.",
-    "placeholders": {
-      "tokens": {"type": "String"}
-    }
-  }
+  "credentialStateUnavailable": "Credential state unavailable: {error}",
+  "storeCredentialTitle": "Store {ref}",
+  "namespaceMetaApplies": "applies: {name}",
+  "namespaceMetaRevision": "revision: {revision}",
+  "credentialMetaSource": "source: {source}",
+  "casRevisionLine": "CAS revision {revision}; host validates against the schema",
+  "newSessionInWorkspace": "New session in {title}",
+  "workspaceActionsFor": "Workspace actions for {title}",
+  "workspaceNameExists": "A workspace named \"{name}\" already exists.",
+  "deleteWorkspaceConfirm": "Delete workspace \"{name}\"? Its sessions stay; the connector is removed.",
+  "newFolderIn": "New folder in \"{parent}\"",
+  "secretsSetCount": "{count, plural, =1{1 secret set} other{{count} secrets set}}",
+  "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
+  "settingsNavBackends": "Backends",
+  "settingsNavGeneral": "General",
+  "settingsNavModels": "Models",
+  "settingsNavPlugins": "Plugins",
+  "settingsNavAgentPresets": "Agent presets",
+  "settingsNavCredentials": "Credentials",
+  "settingsLoopbackHint": "settings/credentials are loopback-only on the host; connect via adb reverse",
+  "backendsIntro": "Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.",
+  "addBackend": "Add backend",
+  "editBackend": "Edit backend",
+  "removeActiveBackendFirst": "Switch away before removing the active backend.",
+  "cannotRemoveLastBackend": "The last backend cannot be removed.",
+  "backendStatusActive": "Active",
+  "backendStatusStandby": "Standby",
+  "hostSettingsUnavailable": "Host settings unavailable",
+  "hostSettingsUnavailableBody": "The active backend did not answer. Repoint or switch it from the Backends page.",
+  "hostWritesLabel": "Host writes",
+  "hostWritesDescription": "Whether the host accepts settings and credential writes.",
+  "writableValue": "Writable",
+  "readOnlyValue": "Read-only",
+  "settingsDocumentLabel": "Settings document",
+  "settingsDocumentDescription": "Whether a user settings document backs the namespaces.",
+  "presentValue": "Present",
+  "noneValue": "None",
+  "generalIntro": "New-session defaults and the host settings plane.",
+  "busyPreferenceLabel": "Enter behavior while busy",
+  "busyPreferenceDescription": "Applies only while an agent is running.",
+  "busyBehaviorQueue": "Queue",
+  "busyBehaviorSteer": "Steer",
+  "agentPresetPreferenceLabel": "Agent preset",
+  "agentPresetPreferenceDescription": "Applies to sessions you start from now on. Running sessions keep the preset they began with.",
+  "agentPresetsIntro": "A preset is the plugin composition one session''s agent runs — its tools, prompt, and capabilities.",
+  "presetGroupBuiltIn": "Built-in",
+  "presetGroupCustom": "Custom",
+  "presetsFooter": "Presets are authored on the host: copy, edit, and delete them from the desktop settings.",
+  "noDescription": "No description.",
+  "presetBrokenBadge": "Failed to load",
+  "presetInUseBadge": "In use",
+  "pluginsIntro": "Configure and inspect the plugins installed in this deployment.",
+  "noPluginSettings": "This deployment exposes no plugin settings.",
+  "modelsIntro": "Enter your API keys to use models from the following providers.",
+  "settingsReadOnlyNotice": "The settings document is read-only in this deployment.",
+  "modelsFooter": "Custom providers are managed on the host: this client covers the DeepSeek API key only.",
+  "apiKeyConfigured": "API key configured",
+  "apiKeyMissing": "API key missing",
+  "credentialsIntro": "Secret references named by the host namespaces.",
+  "noCredentialsReferenced": "No credentials referenced.",
+  "patchKey": "Patch key",
+  "replaceSection": "Replace section",
+  "topLevelKey": "Top-level key",
+  "wholeUserLayerJson": "Whole user-layer JSON object",
+  "jsonValue": "JSON value",
+  "jsonKeyValueExampleHint": "'{' \"key\": value '}'",
+  "jsonValueExampleHint": "true / 42 / \"text\" / '{'…'}'",
+  "discard": "Discard",
+  "stateConfigured": "Configured",
+  "stateNotSet": "Not set",
+  "credentialReadOnlyHint": "Read-only on this connection; the stored value cannot be changed from this client.",
+  "unset": "Unset",
+  "secretValueLabel": "Secret value",
+  "secretValueHint": "secret value",
+  "secretValueHintLine": "Stored on the host; the value never rides a response.",
+  "backendLabel": "Label",
+  "backendLabelHint": "Laptop host, build box, …",
+  "backendBaseUrlLabel": "Base URL",
+  "backendBaseUrlHint": "http://10.0.2.2:3080",
+  "baseUrlDerivationHint": "RPC and event paths derive from this base.",
+  "baseUrlValidHint": "http or https with a host, e.g. http://10.0.2.2:3080",
+  "remove": "Remove",
+  "add": "Add",
+  "userLayerLabel": "user layer",
+  "credentialMetaConfigured": "configured",
+  "credentialMetaNotConfigured": "not configured",
+  "credentialMetaWritable": "writable",
+  "credentialMetaReadOnly": "read-only",
+  "workspacesNavTitle": "Workspaces",
+  "searchWorkspacesHint": "Search workspaces...",
+  "noMatchingWorkspaces": "No matches",
+  "noWorkspacesYet": "No workspaces yet",
+  "moveUp": "Move up",
+  "moveDown": "Move down",
+  "deleteWorkspace": "Delete workspace",
+  "renameWorkspace": "Rename workspace",
+  "renameWorkspaceTitle": "Rename workspace",
+  "newFolder": "New folder",
+  "untitledFolderHint": "Untitled folder",
+  "homeCrumb": "Home",
+  "selectWorkspaceDirectoryTitle": "Select Workspace Directory",
+  "editPathTooltip": "Edit path",
+  "unableToLoadDirectory": "Unable to load directory",
+  "noFolders": "No folders",
+  "tooManyFoldersHint": "Too many folders to list; only the beginning is shown.",
+  "showHiddenFiles": "Show hidden files",
+  "pathLabel": "Path"
 }

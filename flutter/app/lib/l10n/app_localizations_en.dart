@@ -103,12 +103,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goalPhaseComplete => 'COMPLETE';
 
   @override
-  String goalStatusLine(String phase, int revision, int started, int max) {
+  String goalStatusLine(
+    Object max,
+    Object phase,
+    Object revision,
+    Object started,
+  ) {
     return '$phase · revision $revision · rounds $started/$max';
   }
 
   @override
-  String contextUsedPercent(int percent) {
+  String contextUsedPercent(Object percent) {
     return '$percent% of context used';
   }
 
@@ -122,7 +127,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationLabel => 'Conversation';
 
   @override
-  String contextTokens(String used, String window) {
+  String contextTokens(Object used, Object window) {
     return '~$used / $window';
   }
 
@@ -139,7 +144,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsTitle => 'Models';
 
   @override
-  String modelCurrent(String name) {
+  String modelCurrent(Object name) {
     return '$name (current)';
   }
 
@@ -150,17 +155,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get todosLabel => 'To-dos';
 
   @override
-  String todoCountDone(int count) {
+  String todoCountDone(Object count) {
     return '$count completed';
   }
 
   @override
-  String todoCountActive(int count) {
+  String todoCountActive(Object count) {
     return '$count active';
   }
 
   @override
-  String todoCountPending(int count) {
+  String todoCountPending(Object count) {
     return '$count pending';
   }
 
@@ -168,7 +173,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backgroundJobsTitle => 'Background jobs';
 
   @override
-  String jobCountRunning(int count) {
+  String jobCountRunning(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -179,7 +184,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String jobCount(int count) {
+  String jobCount(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -205,17 +210,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobStatusFailed => 'failed';
 
   @override
-  String jobDurationHoursMinutes(int hours, int minutes) {
+  String jobDurationHoursMinutes(Object hours, Object minutes) {
     return '${hours}h ${minutes}m';
   }
 
   @override
-  String jobDurationMinutesSeconds(int minutes, int seconds) {
+  String jobDurationMinutesSeconds(Object minutes, Object seconds) {
     return '${minutes}m ${seconds}s';
   }
 
   @override
-  String jobDurationSeconds(int seconds) {
+  String jobDurationSeconds(Object seconds) {
     return '${seconds}s';
   }
 
@@ -229,12 +234,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get waitingForApproval => 'Waiting for approval';
 
   @override
-  String approveToolFallback(String tool) {
+  String approveToolFallback(Object tool) {
     return 'Approve tool: $tool';
   }
 
   @override
-  String toolRequestsPrivileged(String tool) {
+  String toolRequestsPrivileged(Object tool) {
     return 'Tool $tool requests privileged execution';
   }
 
@@ -255,7 +260,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accessModeLabel => 'Access mode';
 
   @override
-  String accessModeTooltip(String label) {
+  String accessModeTooltip(Object label) {
     return 'Access mode: $label';
   }
 
@@ -352,47 +357,427 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolUpdateTodoTitle => 'Update to-do list';
 
   @override
-  String toolTodoPlanCompleted(int done, int total) {
+  String toolTodoPlanCompleted(Object done, Object total) {
     return '$done/$total completed';
   }
 
   @override
-  String statsTurnsSteps(int turns, int steps) {
+  String statsTurnsSteps(Object steps, Object turns) {
     return '$turns turns · $steps steps';
   }
 
   @override
-  String statsLlmDuration(String duration) {
+  String statsLlmDuration(Object duration) {
     return 'LLM $duration';
   }
 
   @override
-  String statsToolDuration(String duration) {
+  String statsToolDuration(Object duration) {
     return 'Tool call $duration';
   }
 
   @override
-  String statsTtftAvg(String duration) {
+  String statsTtftAvg(Object duration) {
     return 'TTFT avg $duration';
   }
 
   @override
-  String statsTokensPerSecond(String rate) {
+  String statsTokensPerSecond(Object rate) {
     return '$rate tok/s';
   }
 
   @override
-  String statsCacheHit(int percent) {
+  String statsCacheHit(Object percent) {
     return 'Cache hit $percent%';
   }
 
   @override
-  String statsInputTokens(String tokens) {
+  String statsInputTokens(Object tokens) {
     return 'Input $tokens tok';
   }
 
   @override
-  String statsOutputTokens(String tokens) {
+  String statsOutputTokens(Object tokens) {
     return 'Output $tokens tok';
   }
+
+  @override
+  String credentialStateUnavailable(Object error) {
+    return 'Credential state unavailable: $error';
+  }
+
+  @override
+  String storeCredentialTitle(Object ref) {
+    return 'Store $ref';
+  }
+
+  @override
+  String namespaceMetaApplies(Object name) {
+    return 'applies: $name';
+  }
+
+  @override
+  String namespaceMetaRevision(Object revision) {
+    return 'revision: $revision';
+  }
+
+  @override
+  String credentialMetaSource(Object source) {
+    return 'source: $source';
+  }
+
+  @override
+  String casRevisionLine(Object revision) {
+    return 'CAS revision $revision; host validates against the schema';
+  }
+
+  @override
+  String newSessionInWorkspace(Object title) {
+    return 'New session in $title';
+  }
+
+  @override
+  String workspaceActionsFor(Object title) {
+    return 'Workspace actions for $title';
+  }
+
+  @override
+  String workspaceNameExists(Object name) {
+    return 'A workspace named \"$name\" already exists.';
+  }
+
+  @override
+  String deleteWorkspaceConfirm(Object name) {
+    return 'Delete workspace \"$name\"? Its sessions stay; the connector is removed.';
+  }
+
+  @override
+  String newFolderIn(Object parent) {
+    return 'New folder in \"$parent\"';
+  }
+
+  @override
+  String secretsSetCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count secrets set',
+      one: '1 secret set',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String workspaceSessionCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessions',
+      one: '1 session',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsNavBackends => 'Backends';
+
+  @override
+  String get settingsNavGeneral => 'General';
+
+  @override
+  String get settingsNavModels => 'Models';
+
+  @override
+  String get settingsNavPlugins => 'Plugins';
+
+  @override
+  String get settingsNavAgentPresets => 'Agent presets';
+
+  @override
+  String get settingsNavCredentials => 'Credentials';
+
+  @override
+  String get settingsLoopbackHint =>
+      'settings/credentials are loopback-only on the host; connect via adb reverse';
+
+  @override
+  String get backendsIntro =>
+      'Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.';
+
+  @override
+  String get addBackend => 'Add backend';
+
+  @override
+  String get editBackend => 'Edit backend';
+
+  @override
+  String get removeActiveBackendFirst =>
+      'Switch away before removing the active backend.';
+
+  @override
+  String get cannotRemoveLastBackend => 'The last backend cannot be removed.';
+
+  @override
+  String get backendStatusActive => 'Active';
+
+  @override
+  String get backendStatusStandby => 'Standby';
+
+  @override
+  String get hostSettingsUnavailable => 'Host settings unavailable';
+
+  @override
+  String get hostSettingsUnavailableBody =>
+      'The active backend did not answer. Repoint or switch it from the Backends page.';
+
+  @override
+  String get hostWritesLabel => 'Host writes';
+
+  @override
+  String get hostWritesDescription =>
+      'Whether the host accepts settings and credential writes.';
+
+  @override
+  String get writableValue => 'Writable';
+
+  @override
+  String get readOnlyValue => 'Read-only';
+
+  @override
+  String get settingsDocumentLabel => 'Settings document';
+
+  @override
+  String get settingsDocumentDescription =>
+      'Whether a user settings document backs the namespaces.';
+
+  @override
+  String get presentValue => 'Present';
+
+  @override
+  String get noneValue => 'None';
+
+  @override
+  String get generalIntro =>
+      'New-session defaults and the host settings plane.';
+
+  @override
+  String get busyPreferenceLabel => 'Enter behavior while busy';
+
+  @override
+  String get busyPreferenceDescription =>
+      'Applies only while an agent is running.';
+
+  @override
+  String get busyBehaviorQueue => 'Queue';
+
+  @override
+  String get busyBehaviorSteer => 'Steer';
+
+  @override
+  String get agentPresetPreferenceLabel => 'Agent preset';
+
+  @override
+  String get agentPresetPreferenceDescription =>
+      'Applies to sessions you start from now on. Running sessions keep the preset they began with.';
+
+  @override
+  String get agentPresetsIntro =>
+      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities.';
+
+  @override
+  String get presetGroupBuiltIn => 'Built-in';
+
+  @override
+  String get presetGroupCustom => 'Custom';
+
+  @override
+  String get presetsFooter =>
+      'Presets are authored on the host: copy, edit, and delete them from the desktop settings.';
+
+  @override
+  String get noDescription => 'No description.';
+
+  @override
+  String get presetBrokenBadge => 'Failed to load';
+
+  @override
+  String get presetInUseBadge => 'In use';
+
+  @override
+  String get pluginsIntro =>
+      'Configure and inspect the plugins installed in this deployment.';
+
+  @override
+  String get noPluginSettings => 'This deployment exposes no plugin settings.';
+
+  @override
+  String get modelsIntro =>
+      'Enter your API keys to use models from the following providers.';
+
+  @override
+  String get settingsReadOnlyNotice =>
+      'The settings document is read-only in this deployment.';
+
+  @override
+  String get modelsFooter =>
+      'Custom providers are managed on the host: this client covers the DeepSeek API key only.';
+
+  @override
+  String get apiKeyConfigured => 'API key configured';
+
+  @override
+  String get apiKeyMissing => 'API key missing';
+
+  @override
+  String get credentialsIntro =>
+      'Secret references named by the host namespaces.';
+
+  @override
+  String get noCredentialsReferenced => 'No credentials referenced.';
+
+  @override
+  String get patchKey => 'Patch key';
+
+  @override
+  String get replaceSection => 'Replace section';
+
+  @override
+  String get topLevelKey => 'Top-level key';
+
+  @override
+  String get wholeUserLayerJson => 'Whole user-layer JSON object';
+
+  @override
+  String get jsonValue => 'JSON value';
+
+  @override
+  String get jsonKeyValueExampleHint => '{ \"key\": value }';
+
+  @override
+  String get jsonValueExampleHint => 'true / 42 / \"text\" / {…}';
+
+  @override
+  String get discard => 'Discard';
+
+  @override
+  String get stateConfigured => 'Configured';
+
+  @override
+  String get stateNotSet => 'Not set';
+
+  @override
+  String get credentialReadOnlyHint =>
+      'Read-only on this connection; the stored value cannot be changed from this client.';
+
+  @override
+  String get unset => 'Unset';
+
+  @override
+  String get secretValueLabel => 'Secret value';
+
+  @override
+  String get secretValueHint => 'secret value';
+
+  @override
+  String get secretValueHintLine =>
+      'Stored on the host; the value never rides a response.';
+
+  @override
+  String get backendLabel => 'Label';
+
+  @override
+  String get backendLabelHint => 'Laptop host, build box, …';
+
+  @override
+  String get backendBaseUrlLabel => 'Base URL';
+
+  @override
+  String get backendBaseUrlHint => 'http://10.0.2.2:3080';
+
+  @override
+  String get baseUrlDerivationHint =>
+      'RPC and event paths derive from this base.';
+
+  @override
+  String get baseUrlValidHint =>
+      'http or https with a host, e.g. http://10.0.2.2:3080';
+
+  @override
+  String get remove => 'Remove';
+
+  @override
+  String get add => 'Add';
+
+  @override
+  String get userLayerLabel => 'user layer';
+
+  @override
+  String get credentialMetaConfigured => 'configured';
+
+  @override
+  String get credentialMetaNotConfigured => 'not configured';
+
+  @override
+  String get credentialMetaWritable => 'writable';
+
+  @override
+  String get credentialMetaReadOnly => 'read-only';
+
+  @override
+  String get workspacesNavTitle => 'Workspaces';
+
+  @override
+  String get searchWorkspacesHint => 'Search workspaces...';
+
+  @override
+  String get noMatchingWorkspaces => 'No matches';
+
+  @override
+  String get noWorkspacesYet => 'No workspaces yet';
+
+  @override
+  String get moveUp => 'Move up';
+
+  @override
+  String get moveDown => 'Move down';
+
+  @override
+  String get deleteWorkspace => 'Delete workspace';
+
+  @override
+  String get renameWorkspace => 'Rename workspace';
+
+  @override
+  String get renameWorkspaceTitle => 'Rename workspace';
+
+  @override
+  String get newFolder => 'New folder';
+
+  @override
+  String get untitledFolderHint => 'Untitled folder';
+
+  @override
+  String get homeCrumb => 'Home';
+
+  @override
+  String get selectWorkspaceDirectoryTitle => 'Select Workspace Directory';
+
+  @override
+  String get editPathTooltip => 'Edit path';
+
+  @override
+  String get unableToLoadDirectory => 'Unable to load directory';
+
+  @override
+  String get noFolders => 'No folders';
+
+  @override
+  String get tooManyFoldersHint =>
+      'Too many folders to list; only the beginning is shown.';
+
+  @override
+  String get showHiddenFiles => 'Show hidden files';
+
+  @override
+  String get pathLabel => 'Path';
 }
