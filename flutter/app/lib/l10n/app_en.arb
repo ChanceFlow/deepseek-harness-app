@@ -361,7 +361,7 @@
   "newSessionInWorkspace": "New session in {title}",
   "workspaceActionsFor": "Workspace actions for {title}",
   "workspaceNameExists": "A workspace named \"{name}\" already exists.",
-  "deleteWorkspaceConfirm": "Delete workspace \"{name}\"? Its sessions stay; the connector is removed.",
+  "deleteWorkspaceConfirm": "This removes \"{name}\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.",
   "newFolderIn": "New folder in \"{parent}\"",
   "secretsSetCount": "{count, plural, =1{1 secret set} other{{count} secrets set}}",
   "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
@@ -565,5 +565,492 @@
   "chatGoalPhasePaused": "Paused",
   "chatGoalPhaseBlocked": "Blocked",
   "queue": "Queue",
-  "thinkLabel": "Think"
+  "thinkLabel": "Think",
+  "commandPlanDescription": "Enter or leave plan mode",
+  "commandGoalDescription": "set or view the goal for a long-running task",
+  "commandCompactDescription": "Compact older conversation history",
+  "commandPermissionDescription": "Switch the permission preset (sandbox mode + approval policy)",
+  "commandFeedbackDescription": "record feedback about this session",
+  "@deleteWorkspaceConfirm": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "ungroupedLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "@goalStatusLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "phase": {
+        "type": "String"
+      },
+      "revision": {
+        "type": "int"
+      },
+      "started": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextUsedPercent": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextTokens": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "@modelCurrent": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@todoCountDone": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@todoCountActive": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@todoCountPending": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobCountRunning": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationHoursMinutes": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationMinutesSeconds": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationSeconds": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@approveToolFallback": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@toolRequestsPrivileged": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@accessModeTooltip": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@toolTodoPlanCompleted": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsTurnsSteps": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "turns": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsLlmDuration": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsToolDuration": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsTtftAvg": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsTokensPerSecond": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsCacheHit": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsInputTokens": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsOutputTokens": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "@credentialStateUnavailable": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@storeCredentialTitle": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "ref": {
+        "type": "String"
+      }
+    }
+  },
+  "@namespaceMetaApplies": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@namespaceMetaRevision": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "revision": {
+        "type": "int"
+      }
+    }
+  },
+  "@credentialMetaSource": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "@casRevisionLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "revision": {
+        "type": "int"
+      }
+    }
+  },
+  "@newSessionInWorkspace": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "@workspaceActionsFor": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "@workspaceNameExists": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@newFolderIn": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "parent": {
+        "type": "String"
+      }
+    }
+  },
+  "@secretsSetCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@workspaceSessionCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeMinutes": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeHours": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeDays": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeMonths": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeYears": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "years": {
+        "type": "int"
+      }
+    }
+  },
+  "@sessionCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@showAll": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@appBarConnectedWithVersion": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectionBannerConnected": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@imagePlaceholderSuffix": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@imageLoadingPlaceholder": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      },
+      "suffix": {
+        "type": "String"
+      },
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "@queuedMessagesCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@approveTool": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@removeImage": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@unknownImageType": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@beforeFirstTurnHeader": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@turnHeader": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "toolCount": {
+        "type": "int"
+      },
+      "turn": {
+        "type": "int"
+      }
+    }
+  },
+  "@compactedHistoryCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

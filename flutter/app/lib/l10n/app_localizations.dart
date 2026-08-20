@@ -284,22 +284,17 @@ abstract class AppLocalizations {
   /// **'COMPLETE'**
   String get goalPhaseComplete;
 
-  /// No description provided for @goalStatusLine.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{phase} · revision {revision} · rounds {started}/{max}'**
-  String goalStatusLine(
-    Object max,
-    Object phase,
-    Object revision,
-    Object started,
-  );
+  String goalStatusLine(int max, String phase, int revision, int started);
 
-  /// No description provided for @contextUsedPercent.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{percent}% of context used'**
-  String contextUsedPercent(Object percent);
+  String contextUsedPercent(int percent);
 
   /// Context composition legend, system prompt row.
   ///
@@ -319,11 +314,11 @@ abstract class AppLocalizations {
   /// **'Conversation'**
   String get conversationLabel;
 
-  /// No description provided for @contextTokens.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'~{used} / {window}'**
-  String contextTokens(Object used, Object window);
+  String contextTokens(String used, String window);
 
   /// Empty-chat hero headline.
   ///
@@ -349,11 +344,11 @@ abstract class AppLocalizations {
   /// **'Models'**
   String get modelsTitle;
 
-  /// No description provided for @modelCurrent.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{name} (current)'**
-  String modelCurrent(Object name);
+  String modelCurrent(String name);
 
   /// Section label for reasoning effort chips.
   ///
@@ -367,23 +362,23 @@ abstract class AppLocalizations {
   /// **'To-dos'**
   String get todosLabel;
 
-  /// No description provided for @todoCountDone.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count} completed'**
-  String todoCountDone(Object count);
+  String todoCountDone(int count);
 
-  /// No description provided for @todoCountActive.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count} active'**
-  String todoCountActive(Object count);
+  String todoCountActive(int count);
 
-  /// No description provided for @todoCountPending.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count} pending'**
-  String todoCountPending(Object count);
+  String todoCountPending(int count);
 
   /// Background-jobs sheet title.
   ///
@@ -391,17 +386,17 @@ abstract class AppLocalizations {
   /// **'Background jobs'**
   String get backgroundJobsTitle;
 
-  /// No description provided for @jobCountRunning.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 background job running} other{{count} background jobs running}}'**
-  String jobCountRunning(num count);
+  String jobCountRunning(int count);
 
-  /// No description provided for @jobCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 background job} other{{count} background jobs}}'**
-  String jobCount(num count);
+  String jobCount(int count);
 
   /// Job status label, running.
   ///
@@ -433,23 +428,23 @@ abstract class AppLocalizations {
   /// **'failed'**
   String get jobStatusFailed;
 
-  /// No description provided for @jobDurationHoursMinutes.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{hours}h {minutes}m'**
-  String jobDurationHoursMinutes(Object hours, Object minutes);
+  String jobDurationHoursMinutes(int hours, int minutes);
 
-  /// No description provided for @jobDurationMinutesSeconds.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{minutes}m {seconds}s'**
-  String jobDurationMinutesSeconds(Object minutes, Object seconds);
+  String jobDurationMinutesSeconds(int minutes, int seconds);
 
-  /// No description provided for @jobDurationSeconds.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{seconds}s'**
-  String jobDurationSeconds(Object seconds);
+  String jobDurationSeconds(int seconds);
 
   /// Copy-message icon tooltip.
   ///
@@ -469,17 +464,17 @@ abstract class AppLocalizations {
   /// **'Waiting for approval'**
   String get waitingForApproval;
 
-  /// No description provided for @approveToolFallback.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Approve tool: {tool}'**
-  String approveToolFallback(Object tool);
+  String approveToolFallback(String tool);
 
-  /// No description provided for @toolRequestsPrivileged.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Tool {tool} requests privileged execution'**
-  String toolRequestsPrivileged(Object tool);
+  String toolRequestsPrivileged(String tool);
 
   /// Reject an approval request.
   ///
@@ -511,11 +506,11 @@ abstract class AppLocalizations {
   /// **'Access mode'**
   String get accessModeLabel;
 
-  /// No description provided for @accessModeTooltip.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Access mode: {label}'**
-  String accessModeTooltip(Object label);
+  String accessModeTooltip(String label);
 
   /// Product label for the danger-full-access permission value.
   ///
@@ -691,137 +686,137 @@ abstract class AppLocalizations {
   /// **'Update to-do list'**
   String get toolUpdateTodoTitle;
 
-  /// No description provided for @toolTodoPlanCompleted.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{done}/{total} completed'**
-  String toolTodoPlanCompleted(Object done, Object total);
+  String toolTodoPlanCompleted(int done, int total);
 
-  /// No description provided for @statsTurnsSteps.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{turns} turns · {steps} steps'**
-  String statsTurnsSteps(Object steps, Object turns);
+  String statsTurnsSteps(int steps, int turns);
 
-  /// No description provided for @statsLlmDuration.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'LLM {duration}'**
-  String statsLlmDuration(Object duration);
+  String statsLlmDuration(String duration);
 
-  /// No description provided for @statsToolDuration.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Tool call {duration}'**
-  String statsToolDuration(Object duration);
+  String statsToolDuration(String duration);
 
-  /// No description provided for @statsTtftAvg.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'TTFT avg {duration}'**
-  String statsTtftAvg(Object duration);
+  String statsTtftAvg(String duration);
 
-  /// No description provided for @statsTokensPerSecond.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{rate} tok/s'**
-  String statsTokensPerSecond(Object rate);
+  String statsTokensPerSecond(String rate);
 
-  /// No description provided for @statsCacheHit.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Cache hit {percent}%'**
-  String statsCacheHit(Object percent);
+  String statsCacheHit(int percent);
 
-  /// No description provided for @statsInputTokens.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Input {tokens} tok'**
-  String statsInputTokens(Object tokens);
+  String statsInputTokens(int tokens);
 
-  /// No description provided for @statsOutputTokens.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Output {tokens} tok'**
-  String statsOutputTokens(Object tokens);
+  String statsOutputTokens(int tokens);
 
-  /// No description provided for @credentialStateUnavailable.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Credential state unavailable: {error}'**
-  String credentialStateUnavailable(Object error);
+  String credentialStateUnavailable(String error);
 
-  /// No description provided for @storeCredentialTitle.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Store {ref}'**
-  String storeCredentialTitle(Object ref);
+  String storeCredentialTitle(String ref);
 
-  /// No description provided for @namespaceMetaApplies.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'applies: {name}'**
-  String namespaceMetaApplies(Object name);
+  String namespaceMetaApplies(String name);
 
-  /// No description provided for @namespaceMetaRevision.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'revision: {revision}'**
-  String namespaceMetaRevision(Object revision);
+  String namespaceMetaRevision(int revision);
 
-  /// No description provided for @credentialMetaSource.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'source: {source}'**
-  String credentialMetaSource(Object source);
+  String credentialMetaSource(String source);
 
-  /// No description provided for @casRevisionLine.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'CAS revision {revision}; host validates against the schema'**
-  String casRevisionLine(Object revision);
+  String casRevisionLine(int revision);
 
-  /// No description provided for @newSessionInWorkspace.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'New session in {title}'**
-  String newSessionInWorkspace(Object title);
+  String newSessionInWorkspace(String title);
 
-  /// No description provided for @workspaceActionsFor.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Workspace actions for {title}'**
-  String workspaceActionsFor(Object title);
+  String workspaceActionsFor(String title);
 
-  /// No description provided for @workspaceNameExists.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'A workspace named \"{name}\" already exists.'**
-  String workspaceNameExists(Object name);
+  String workspaceNameExists(String name);
 
-  /// No description provided for @deleteWorkspaceConfirm.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'Delete workspace \"{name}\"? Its sessions stay; the connector is removed.'**
-  String deleteWorkspaceConfirm(Object name);
+  /// **'This removes \"{name}\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.'**
+  String deleteWorkspaceConfirm(String name, String ungroupedLabel);
 
-  /// No description provided for @newFolderIn.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'New folder in \"{parent}\"'**
-  String newFolderIn(Object parent);
+  String newFolderIn(String parent);
 
-  /// No description provided for @secretsSetCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 secret set} other{{count} secrets set}}'**
-  String secretsSetCount(num count);
+  String secretsSetCount(int count);
 
-  /// No description provided for @workspaceSessionCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 session} other{{count} sessions}}'**
-  String workspaceSessionCount(num count);
+  String workspaceSessionCount(int count);
 
   /// No description provided for @settingsNavBackends.
   ///
@@ -1441,41 +1436,41 @@ abstract class AppLocalizations {
   /// **'now'**
   String get relativeTimeNow;
 
-  /// No description provided for @relativeTimeMinutes.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{minutes}min'**
-  String relativeTimeMinutes(Object minutes);
+  String relativeTimeMinutes(int minutes);
 
-  /// No description provided for @relativeTimeHours.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{hours}h'**
-  String relativeTimeHours(Object hours);
+  String relativeTimeHours(int hours);
 
-  /// No description provided for @relativeTimeDays.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{days}d'**
-  String relativeTimeDays(Object days);
+  String relativeTimeDays(int days);
 
-  /// No description provided for @relativeTimeMonths.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{months}mo'**
-  String relativeTimeMonths(Object months);
+  String relativeTimeMonths(int months);
 
-  /// No description provided for @relativeTimeYears.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{years}y'**
-  String relativeTimeYears(Object years);
+  String relativeTimeYears(int years);
 
-  /// No description provided for @sessionCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 session} other{{count} sessions}}'**
-  String sessionCount(num count);
+  String sessionCount(int count);
 
   /// No description provided for @showLess.
   ///
@@ -1483,11 +1478,11 @@ abstract class AppLocalizations {
   /// **'Show less'**
   String get showLess;
 
-  /// No description provided for @showAll.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Show all {count}'**
-  String showAll(Object count);
+  String showAll(int count);
 
   /// No description provided for @noWorkspacesRegistered.
   ///
@@ -1633,11 +1628,11 @@ abstract class AppLocalizations {
   /// **'connected'**
   String get appBarConnected;
 
-  /// No description provided for @appBarConnectedWithVersion.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'connected {version}'**
-  String appBarConnectedWithVersion(Object version);
+  String appBarConnectedWithVersion(String version);
 
   /// No description provided for @appBarConnecting.
   ///
@@ -1657,11 +1652,11 @@ abstract class AppLocalizations {
   /// **'disconnected'**
   String get appBarDisconnected;
 
-  /// No description provided for @connectionBannerConnected.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'connected {version}'**
-  String connectionBannerConnected(Object version);
+  String connectionBannerConnected(String version);
 
   /// No description provided for @connectionBannerConnecting.
   ///
@@ -1735,21 +1730,21 @@ abstract class AppLocalizations {
   /// **'Plan'**
   String get planBadge;
 
-  /// No description provided for @imagePlaceholderSuffix.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **' · {name}'**
-  String imagePlaceholderSuffix(Object name);
+  String imagePlaceholderSuffix(String name);
 
-  /// No description provided for @imageLoadingPlaceholder.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'image {width}×{height} ({bytes} bytes){suffix}'**
   String imageLoadingPlaceholder(
-    Object bytes,
-    Object height,
-    Object suffix,
-    Object width,
+    int bytes,
+    int height,
+    String suffix,
+    int width,
   );
 
   /// No description provided for @semanticsRunning.
@@ -1818,11 +1813,11 @@ abstract class AppLocalizations {
   /// **'Open goal'**
   String get openGoal;
 
-  /// No description provided for @queuedMessagesCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 queued message} other{{count} queued messages}}'**
-  String queuedMessagesCount(num count);
+  String queuedMessagesCount(int count);
 
   /// No description provided for @editQueuedMessageHint.
   ///
@@ -1854,11 +1849,11 @@ abstract class AppLocalizations {
   /// **'Remove queued message'**
   String get removeQueuedMessage;
 
-  /// No description provided for @approveTool.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Approve tool: {tool}'**
-  String approveTool(Object tool);
+  String approveTool(String tool);
 
   /// No description provided for @allow.
   ///
@@ -1914,11 +1909,11 @@ abstract class AppLocalizations {
   /// **'Message DeepSeek Harness'**
   String get messagePlaceholder;
 
-  /// No description provided for @removeImage.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Remove {name}'**
-  String removeImage(Object name);
+  String removeImage(String name);
 
   /// No description provided for @newLine.
   ///
@@ -1962,23 +1957,23 @@ abstract class AppLocalizations {
   /// **'Pick from gallery'**
   String get pickFromGallery;
 
-  /// No description provided for @unknownImageType.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'unknown image type for {name}'**
-  String unknownImageType(Object name);
+  String unknownImageType(String name);
 
-  /// No description provided for @beforeFirstTurnHeader.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Before first turn · {count} messages'**
-  String beforeFirstTurnHeader(Object count);
+  String beforeFirstTurnHeader(int count);
 
-  /// No description provided for @turnHeader.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Turn {turn} · {count} messages · {toolCount} tools'**
-  String turnHeader(Object count, Object toolCount, Object turn);
+  String turnHeader(int count, int toolCount, int turn);
 
   /// No description provided for @contextCompacted.
   ///
@@ -1986,11 +1981,11 @@ abstract class AppLocalizations {
   /// **'Context compacted'**
   String get contextCompacted;
 
-  /// No description provided for @compactedHistoryCount.
+  /// Localized screen copy.
   ///
   /// In en, this message translates to:
   /// **'Compacted {count} history items'**
-  String compactedHistoryCount(Object count);
+  String compactedHistoryCount(int count);
 
   /// No description provided for @recallLabel.
   ///
@@ -2033,6 +2028,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Think'**
   String get thinkLabel;
+
+  /// No description provided for @commandPlanDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter or leave plan mode'**
+  String get commandPlanDescription;
+
+  /// No description provided for @commandGoalDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'set or view the goal for a long-running task'**
+  String get commandGoalDescription;
+
+  /// No description provided for @commandCompactDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact older conversation history'**
+  String get commandCompactDescription;
+
+  /// No description provided for @commandPermissionDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch the permission preset (sandbox mode + approval policy)'**
+  String get commandPermissionDescription;
+
+  /// No description provided for @commandFeedbackDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'record feedback about this session'**
+  String get commandFeedbackDescription;
 }
 
 class _AppLocalizationsDelegate

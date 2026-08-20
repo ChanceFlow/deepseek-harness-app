@@ -103,17 +103,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goalPhaseComplete => 'COMPLETE';
 
   @override
-  String goalStatusLine(
-    Object max,
-    Object phase,
-    Object revision,
-    Object started,
-  ) {
+  String goalStatusLine(int max, String phase, int revision, int started) {
     return '$phase · revision $revision · rounds $started/$max';
   }
 
   @override
-  String contextUsedPercent(Object percent) {
+  String contextUsedPercent(int percent) {
     return '$percent% of context used';
   }
 
@@ -127,7 +122,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationLabel => 'Conversation';
 
   @override
-  String contextTokens(Object used, Object window) {
+  String contextTokens(String used, String window) {
     return '~$used / $window';
   }
 
@@ -144,7 +139,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsTitle => 'Models';
 
   @override
-  String modelCurrent(Object name) {
+  String modelCurrent(String name) {
     return '$name (current)';
   }
 
@@ -155,17 +150,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get todosLabel => 'To-dos';
 
   @override
-  String todoCountDone(Object count) {
+  String todoCountDone(int count) {
     return '$count completed';
   }
 
   @override
-  String todoCountActive(Object count) {
+  String todoCountActive(int count) {
     return '$count active';
   }
 
   @override
-  String todoCountPending(Object count) {
+  String todoCountPending(int count) {
     return '$count pending';
   }
 
@@ -173,7 +168,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backgroundJobsTitle => 'Background jobs';
 
   @override
-  String jobCountRunning(num count) {
+  String jobCountRunning(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -184,7 +179,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String jobCount(num count) {
+  String jobCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -210,17 +205,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobStatusFailed => 'failed';
 
   @override
-  String jobDurationHoursMinutes(Object hours, Object minutes) {
+  String jobDurationHoursMinutes(int hours, int minutes) {
     return '${hours}h ${minutes}m';
   }
 
   @override
-  String jobDurationMinutesSeconds(Object minutes, Object seconds) {
+  String jobDurationMinutesSeconds(int minutes, int seconds) {
     return '${minutes}m ${seconds}s';
   }
 
   @override
-  String jobDurationSeconds(Object seconds) {
+  String jobDurationSeconds(int seconds) {
     return '${seconds}s';
   }
 
@@ -234,12 +229,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get waitingForApproval => 'Waiting for approval';
 
   @override
-  String approveToolFallback(Object tool) {
+  String approveToolFallback(String tool) {
     return 'Approve tool: $tool';
   }
 
   @override
-  String toolRequestsPrivileged(Object tool) {
+  String toolRequestsPrivileged(String tool) {
     return 'Tool $tool requests privileged execution';
   }
 
@@ -260,7 +255,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accessModeLabel => 'Access mode';
 
   @override
-  String accessModeTooltip(Object label) {
+  String accessModeTooltip(String label) {
     return 'Access mode: $label';
   }
 
@@ -357,107 +352,107 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolUpdateTodoTitle => 'Update to-do list';
 
   @override
-  String toolTodoPlanCompleted(Object done, Object total) {
+  String toolTodoPlanCompleted(int done, int total) {
     return '$done/$total completed';
   }
 
   @override
-  String statsTurnsSteps(Object steps, Object turns) {
+  String statsTurnsSteps(int steps, int turns) {
     return '$turns turns · $steps steps';
   }
 
   @override
-  String statsLlmDuration(Object duration) {
+  String statsLlmDuration(String duration) {
     return 'LLM $duration';
   }
 
   @override
-  String statsToolDuration(Object duration) {
+  String statsToolDuration(String duration) {
     return 'Tool call $duration';
   }
 
   @override
-  String statsTtftAvg(Object duration) {
+  String statsTtftAvg(String duration) {
     return 'TTFT avg $duration';
   }
 
   @override
-  String statsTokensPerSecond(Object rate) {
+  String statsTokensPerSecond(String rate) {
     return '$rate tok/s';
   }
 
   @override
-  String statsCacheHit(Object percent) {
+  String statsCacheHit(int percent) {
     return 'Cache hit $percent%';
   }
 
   @override
-  String statsInputTokens(Object tokens) {
+  String statsInputTokens(int tokens) {
     return 'Input $tokens tok';
   }
 
   @override
-  String statsOutputTokens(Object tokens) {
+  String statsOutputTokens(int tokens) {
     return 'Output $tokens tok';
   }
 
   @override
-  String credentialStateUnavailable(Object error) {
+  String credentialStateUnavailable(String error) {
     return 'Credential state unavailable: $error';
   }
 
   @override
-  String storeCredentialTitle(Object ref) {
+  String storeCredentialTitle(String ref) {
     return 'Store $ref';
   }
 
   @override
-  String namespaceMetaApplies(Object name) {
+  String namespaceMetaApplies(String name) {
     return 'applies: $name';
   }
 
   @override
-  String namespaceMetaRevision(Object revision) {
+  String namespaceMetaRevision(int revision) {
     return 'revision: $revision';
   }
 
   @override
-  String credentialMetaSource(Object source) {
+  String credentialMetaSource(String source) {
     return 'source: $source';
   }
 
   @override
-  String casRevisionLine(Object revision) {
+  String casRevisionLine(int revision) {
     return 'CAS revision $revision; host validates against the schema';
   }
 
   @override
-  String newSessionInWorkspace(Object title) {
+  String newSessionInWorkspace(String title) {
     return 'New session in $title';
   }
 
   @override
-  String workspaceActionsFor(Object title) {
+  String workspaceActionsFor(String title) {
     return 'Workspace actions for $title';
   }
 
   @override
-  String workspaceNameExists(Object name) {
+  String workspaceNameExists(String name) {
     return 'A workspace named \"$name\" already exists.';
   }
 
   @override
-  String deleteWorkspaceConfirm(Object name) {
-    return 'Delete workspace \"$name\"? Its sessions stay; the connector is removed.';
+  String deleteWorkspaceConfirm(String name, String ungroupedLabel) {
+    return 'This removes \"$name\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under $ungroupedLabel.';
   }
 
   @override
-  String newFolderIn(Object parent) {
+  String newFolderIn(String parent) {
     return 'New folder in \"$parent\"';
   }
 
   @override
-  String secretsSetCount(num count) {
+  String secretsSetCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -468,7 +463,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String workspaceSessionCount(num count) {
+  String workspaceSessionCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -809,32 +804,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relativeTimeNow => 'now';
 
   @override
-  String relativeTimeMinutes(Object minutes) {
+  String relativeTimeMinutes(int minutes) {
     return '${minutes}min';
   }
 
   @override
-  String relativeTimeHours(Object hours) {
+  String relativeTimeHours(int hours) {
     return '${hours}h';
   }
 
   @override
-  String relativeTimeDays(Object days) {
+  String relativeTimeDays(int days) {
     return '${days}d';
   }
 
   @override
-  String relativeTimeMonths(Object months) {
+  String relativeTimeMonths(int months) {
     return '${months}mo';
   }
 
   @override
-  String relativeTimeYears(Object years) {
+  String relativeTimeYears(int years) {
     return '${years}y';
   }
 
   @override
-  String sessionCount(num count) {
+  String sessionCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -848,7 +843,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get showLess => 'Show less';
 
   @override
-  String showAll(Object count) {
+  String showAll(int count) {
     return 'Show all $count';
   }
 
@@ -929,7 +924,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appBarConnected => 'connected';
 
   @override
-  String appBarConnectedWithVersion(Object version) {
+  String appBarConnectedWithVersion(String version) {
     return 'connected $version';
   }
 
@@ -943,7 +938,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appBarDisconnected => 'disconnected';
 
   @override
-  String connectionBannerConnected(Object version) {
+  String connectionBannerConnected(String version) {
     return 'connected $version';
   }
 
@@ -985,16 +980,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planBadge => 'Plan';
 
   @override
-  String imagePlaceholderSuffix(Object name) {
+  String imagePlaceholderSuffix(String name) {
     return ' · $name';
   }
 
   @override
   String imageLoadingPlaceholder(
-    Object bytes,
-    Object height,
-    Object suffix,
-    Object width,
+    int bytes,
+    int height,
+    String suffix,
+    int width,
   ) {
     return 'image $width×$height ($bytes bytes)$suffix';
   }
@@ -1033,7 +1028,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openGoal => 'Open goal';
 
   @override
-  String queuedMessagesCount(num count) {
+  String queuedMessagesCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1059,7 +1054,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeQueuedMessage => 'Remove queued message';
 
   @override
-  String approveTool(Object tool) {
+  String approveTool(String tool) {
     return 'Approve tool: $tool';
   }
 
@@ -1091,7 +1086,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messagePlaceholder => 'Message DeepSeek Harness';
 
   @override
-  String removeImage(Object name) {
+  String removeImage(String name) {
     return 'Remove $name';
   }
 
@@ -1117,17 +1112,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pickFromGallery => 'Pick from gallery';
 
   @override
-  String unknownImageType(Object name) {
+  String unknownImageType(String name) {
     return 'unknown image type for $name';
   }
 
   @override
-  String beforeFirstTurnHeader(Object count) {
+  String beforeFirstTurnHeader(int count) {
     return 'Before first turn · $count messages';
   }
 
   @override
-  String turnHeader(Object count, Object toolCount, Object turn) {
+  String turnHeader(int count, int toolCount, int turn) {
     return 'Turn $turn · $count messages · $toolCount tools';
   }
 
@@ -1135,7 +1130,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contextCompacted => 'Context compacted';
 
   @override
-  String compactedHistoryCount(Object count) {
+  String compactedHistoryCount(int count) {
     return 'Compacted $count history items';
   }
 
@@ -1159,4 +1154,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get thinkLabel => 'Think';
+
+  @override
+  String get commandPlanDescription => 'Enter or leave plan mode';
+
+  @override
+  String get commandGoalDescription =>
+      'set or view the goal for a long-running task';
+
+  @override
+  String get commandCompactDescription => 'Compact older conversation history';
+
+  @override
+  String get commandPermissionDescription =>
+      'Switch the permission preset (sandbox mode + approval policy)';
+
+  @override
+  String get commandFeedbackDescription => 'record feedback about this session';
 }

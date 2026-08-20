@@ -51,7 +51,7 @@ class StatsLine extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final groups = <String>[];
     if (stats.steps > 0) {
-      groups.add(l10n.statsTurnsSteps(stats.turns, stats.steps));
+      groups.add(l10n.statsTurnsSteps(stats.steps, stats.turns));
       final durations = <String>[];
       if (stats.llmMs > 0) {
         durations.add(l10n.statsLlmDuration(formatDuration(stats.llmMs)));

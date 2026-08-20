@@ -11,6 +11,7 @@
 /// bgLayer2, lv3 shadow) as bottom-docked cards and dialogs.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/workspace.dart';

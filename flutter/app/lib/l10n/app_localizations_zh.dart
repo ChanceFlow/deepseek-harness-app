@@ -103,17 +103,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get goalPhaseComplete => '已完成';
 
   @override
-  String goalStatusLine(
-    Object max,
-    Object phase,
-    Object revision,
-    Object started,
-  ) {
+  String goalStatusLine(int max, String phase, int revision, int started) {
     return '$phase · 版本 $revision · 轮数 $started/$max';
   }
 
   @override
-  String contextUsedPercent(Object percent) {
+  String contextUsedPercent(int percent) {
     return '已用上下文 $percent%';
   }
 
@@ -127,7 +122,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationLabel => '会话';
 
   @override
-  String contextTokens(Object used, Object window) {
+  String contextTokens(String used, String window) {
     return '约 $used / $window';
   }
 
@@ -144,7 +139,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsTitle => '模型';
 
   @override
-  String modelCurrent(Object name) {
+  String modelCurrent(String name) {
     return '$name（当前）';
   }
 
@@ -155,17 +150,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get todosLabel => '待办';
 
   @override
-  String todoCountDone(Object count) {
+  String todoCountDone(int count) {
     return '已完成 $count';
   }
 
   @override
-  String todoCountActive(Object count) {
+  String todoCountActive(int count) {
     return '进行中 $count';
   }
 
   @override
-  String todoCountPending(Object count) {
+  String todoCountPending(int count) {
     return '待处理 $count';
   }
 
@@ -173,7 +168,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backgroundJobsTitle => '后台任务';
 
   @override
-  String jobCountRunning(num count) {
+  String jobCountRunning(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -184,7 +179,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String jobCount(num count) {
+  String jobCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -210,17 +205,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get jobStatusFailed => '失败';
 
   @override
-  String jobDurationHoursMinutes(Object hours, Object minutes) {
+  String jobDurationHoursMinutes(int hours, int minutes) {
     return '$hours小时$minutes分';
   }
 
   @override
-  String jobDurationMinutesSeconds(Object minutes, Object seconds) {
+  String jobDurationMinutesSeconds(int minutes, int seconds) {
     return '$minutes分$seconds秒';
   }
 
   @override
-  String jobDurationSeconds(Object seconds) {
+  String jobDurationSeconds(int seconds) {
     return '$seconds秒';
   }
 
@@ -234,12 +229,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get waitingForApproval => '等待审批';
 
   @override
-  String approveToolFallback(Object tool) {
+  String approveToolFallback(String tool) {
     return '批准工具：$tool';
   }
 
   @override
-  String toolRequestsPrivileged(Object tool) {
+  String toolRequestsPrivileged(String tool) {
     return '工具 $tool 请求特权执行';
   }
 
@@ -259,7 +254,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get accessModeLabel => '访问模式';
 
   @override
-  String accessModeTooltip(Object label) {
+  String accessModeTooltip(String label) {
     return '访问模式：$label';
   }
 
@@ -356,107 +351,107 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolUpdateTodoTitle => '更新待办列表';
 
   @override
-  String toolTodoPlanCompleted(Object done, Object total) {
+  String toolTodoPlanCompleted(int done, int total) {
     return '已完成 $done/$total';
   }
 
   @override
-  String statsTurnsSteps(Object steps, Object turns) {
+  String statsTurnsSteps(int steps, int turns) {
     return '$turns 轮 · $steps 步';
   }
 
   @override
-  String statsLlmDuration(Object duration) {
+  String statsLlmDuration(String duration) {
     return 'LLM $duration';
   }
 
   @override
-  String statsToolDuration(Object duration) {
+  String statsToolDuration(String duration) {
     return '工具调用 $duration';
   }
 
   @override
-  String statsTtftAvg(Object duration) {
+  String statsTtftAvg(String duration) {
     return 'TTFT 均值 $duration';
   }
 
   @override
-  String statsTokensPerSecond(Object rate) {
+  String statsTokensPerSecond(String rate) {
     return '$rate tok/s';
   }
 
   @override
-  String statsCacheHit(Object percent) {
+  String statsCacheHit(int percent) {
     return '缓存命中 $percent%';
   }
 
   @override
-  String statsInputTokens(Object tokens) {
+  String statsInputTokens(int tokens) {
     return '输入 $tokens tok';
   }
 
   @override
-  String statsOutputTokens(Object tokens) {
+  String statsOutputTokens(int tokens) {
     return '输出 $tokens tok';
   }
 
   @override
-  String credentialStateUnavailable(Object error) {
+  String credentialStateUnavailable(String error) {
     return '凭据状态不可用：$error';
   }
 
   @override
-  String storeCredentialTitle(Object ref) {
+  String storeCredentialTitle(String ref) {
     return '存储 $ref';
   }
 
   @override
-  String namespaceMetaApplies(Object name) {
+  String namespaceMetaApplies(String name) {
     return '应用：$name';
   }
 
   @override
-  String namespaceMetaRevision(Object revision) {
+  String namespaceMetaRevision(int revision) {
     return '修订号：$revision';
   }
 
   @override
-  String credentialMetaSource(Object source) {
+  String credentialMetaSource(String source) {
     return '来源：$source';
   }
 
   @override
-  String casRevisionLine(Object revision) {
+  String casRevisionLine(int revision) {
     return 'CAS 修订号 $revision；主机依据 schema 校验';
   }
 
   @override
-  String newSessionInWorkspace(Object title) {
+  String newSessionInWorkspace(String title) {
     return '在 $title 中新建会话';
   }
 
   @override
-  String workspaceActionsFor(Object title) {
+  String workspaceActionsFor(String title) {
     return '$title 的工作区操作';
   }
 
   @override
-  String workspaceNameExists(Object name) {
+  String workspaceNameExists(String name) {
     return '名为 \"$name\" 的工作区已存在。';
   }
 
   @override
-  String deleteWorkspaceConfirm(Object name) {
-    return '删除工作区 \"$name\"？其会话保留；连接器将被移除。';
+  String deleteWorkspaceConfirm(String name, String ungroupedLabel) {
+    return '这将从工作区列表中移除 \"$name\"。文件夹与会话日志将保留。其会话将出现在$ungroupedLabel下。';
   }
 
   @override
-  String newFolderIn(Object parent) {
+  String newFolderIn(String parent) {
     return '在 \"$parent\" 中新建文件夹';
   }
 
   @override
-  String secretsSetCount(num count) {
+  String secretsSetCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -467,7 +462,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String workspaceSessionCount(num count) {
+  String workspaceSessionCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -789,32 +784,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get relativeTimeNow => '刚刚';
 
   @override
-  String relativeTimeMinutes(Object minutes) {
+  String relativeTimeMinutes(int minutes) {
     return '$minutes 分钟';
   }
 
   @override
-  String relativeTimeHours(Object hours) {
+  String relativeTimeHours(int hours) {
     return '$hours 小时';
   }
 
   @override
-  String relativeTimeDays(Object days) {
+  String relativeTimeDays(int days) {
     return '$days 天';
   }
 
   @override
-  String relativeTimeMonths(Object months) {
+  String relativeTimeMonths(int months) {
     return '$months 个月';
   }
 
   @override
-  String relativeTimeYears(Object years) {
+  String relativeTimeYears(int years) {
     return '$years 年';
   }
 
   @override
-  String sessionCount(num count) {
+  String sessionCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -828,7 +823,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get showLess => '收起';
 
   @override
-  String showAll(Object count) {
+  String showAll(int count) {
     return '显示全部 $count 个';
   }
 
@@ -905,7 +900,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appBarConnected => '已连接';
 
   @override
-  String appBarConnectedWithVersion(Object version) {
+  String appBarConnectedWithVersion(String version) {
     return '已连接 $version';
   }
 
@@ -919,7 +914,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appBarDisconnected => '已断开';
 
   @override
-  String connectionBannerConnected(Object version) {
+  String connectionBannerConnected(String version) {
     return '已连接 $version';
   }
 
@@ -960,16 +955,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get planBadge => '方案';
 
   @override
-  String imagePlaceholderSuffix(Object name) {
+  String imagePlaceholderSuffix(String name) {
     return ' · $name';
   }
 
   @override
   String imageLoadingPlaceholder(
-    Object bytes,
-    Object height,
-    Object suffix,
-    Object width,
+    int bytes,
+    int height,
+    String suffix,
+    int width,
   ) {
     return '图片 $width×$height（$bytes 字节）$suffix';
   }
@@ -1008,7 +1003,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get openGoal => '打开目标';
 
   @override
-  String queuedMessagesCount(num count) {
+  String queuedMessagesCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1034,7 +1029,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get removeQueuedMessage => '移除排队消息';
 
   @override
-  String approveTool(Object tool) {
+  String approveTool(String tool) {
     return '批准工具：$tool';
   }
 
@@ -1066,7 +1061,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messagePlaceholder => '给 DeepSeek Harness 发消息';
 
   @override
-  String removeImage(Object name) {
+  String removeImage(String name) {
     return '移除 $name';
   }
 
@@ -1092,17 +1087,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pickFromGallery => '从相册选择';
 
   @override
-  String unknownImageType(Object name) {
+  String unknownImageType(String name) {
     return '不支持的图片类型：$name';
   }
 
   @override
-  String beforeFirstTurnHeader(Object count) {
+  String beforeFirstTurnHeader(int count) {
     return '首轮之前 · $count 条消息';
   }
 
   @override
-  String turnHeader(Object count, Object toolCount, Object turn) {
+  String turnHeader(int count, int toolCount, int turn) {
     return '第 $turn 轮 · $count 条消息 · $toolCount 个工具';
   }
 
@@ -1110,7 +1105,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contextCompacted => '上下文已压缩';
 
   @override
-  String compactedHistoryCount(Object count) {
+  String compactedHistoryCount(int count) {
     return '已压缩 $count 条历史';
   }
 
@@ -1134,4 +1129,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get thinkLabel => '思考';
+
+  @override
+  String get commandPlanDescription => '进入或退出方案模式';
+
+  @override
+  String get commandGoalDescription => '设置或查看长期任务的执行目标';
+
+  @override
+  String get commandCompactDescription => '压缩较早的会话历史';
+
+  @override
+  String get commandPermissionDescription => '切换权限预设（沙箱模式 + 审批策略）';
+
+  @override
+  String get commandFeedbackDescription => '记录关于本会话的反馈';
 }

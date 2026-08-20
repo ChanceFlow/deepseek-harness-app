@@ -116,7 +116,7 @@
   "newSessionInWorkspace": "在 {title} 中新建会话",
   "workspaceActionsFor": "{title} 的工作区操作",
   "workspaceNameExists": "名为 \"{name}\" 的工作区已存在。",
-  "deleteWorkspaceConfirm": "删除工作区 \"{name}\"？其会话保留；连接器将被移除。",
+  "deleteWorkspaceConfirm": "这将从工作区列表中移除 \"{name}\"。文件夹与会话日志将保留。其会话将出现在{ungroupedLabel}下。",
   "newFolderIn": "在 \"{parent}\" 中新建文件夹",
   "secretsSetCount": "{count, plural, =1{已设置 1 个密钥} other{已设置 {count} 个密钥}}",
   "workspaceSessionCount": "{count, plural, =1{1 个会话} other{{count} 个会话}}",
@@ -320,5 +320,10 @@
   "chatGoalPhasePaused": "已暂停",
   "chatGoalPhaseBlocked": "受阻",
   "queue": "排队",
-  "thinkLabel": "思考"
+  "thinkLabel": "思考",
+  "commandPlanDescription": "进入或退出方案模式",
+  "commandGoalDescription": "设置或查看长期任务的执行目标",
+  "commandCompactDescription": "压缩较早的会话历史",
+  "commandPermissionDescription": "切换权限预设（沙箱模式 + 审批策略）",
+  "commandFeedbackDescription": "记录关于本会话的反馈"
 }

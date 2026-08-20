@@ -195,10 +195,10 @@ class _GoalScreenState extends State<GoalScreen> {
         Text(snapshot.objective, style: theme.textTheme.titleMedium),
         Text(
           l10n.goalStatusLine(
+            snapshot.maxGoalRounds,
             goalPhaseLabel(snapshot.phase, l10n),
             snapshot.revision,
             goal.roundsStarted,
-            snapshot.maxGoalRounds,
           ),
           style: theme.textTheme.bodySmall,
         ),
