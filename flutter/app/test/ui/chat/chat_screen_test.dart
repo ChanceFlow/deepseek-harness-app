@@ -22,11 +22,13 @@ import 'dart:async';
 
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
+import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n_app.dart';
+import 'chat_local_state_fake.dart';
 
 class _FakeRpc implements DshRpcClient {
   @override
@@ -114,6 +116,7 @@ Future<void> _pump(
   ChatUiState uiState,
   List<ChatAction> actions, {
   double width = 800,
+  ChatLocalState? localState,
 }) {
   // Phone-scale logical surface so both panes and rows lay out naturally.
   tester.view.physicalSize = Size(width, 1280);
@@ -131,7 +134,11 @@ Future<void> _pump(
             .overrideWithValue(_NeverSocket()),
       ],
       child: l10nApp(
-        home: ChatScreen(uiState: uiState, onAction: actions.add),
+        home: ChatScreen(
+          uiState: uiState,
+          onAction: actions.add,
+          localState: localState,
+        ),
       ),
     ),
   );
@@ -603,6 +610,96 @@ void main() {
         ),
       ),
     );
+  });
+
+  testWidgets('tool row restores a persisted expansion on load', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    final localState = FakeChatLocalState();
+    // Seed the same key ChatScreen computes for the row; the native
+    // expansion controller restores it without a user tap.
+    await localState
+        .forSession('s1')
+        .setExpanded(timelineKey(const TimelineToolCall(
+          id: 'call-1',
+          name: 'bash',
+          arguments: 'ls -la',
+          result: 'README.md',
+          status: ToolRunStatus.completed,
+        )), true);
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineToolCall(
+            id: 'call-1',
+            name: 'bash',
+            arguments: 'ls -la',
+            result: 'README.md',
+            status: ToolRunStatus.completed,
+          ),
+        ],
+      ),
+      actions,
+      localState: localState,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bash'), findsOneWidget);
+    expect(find.text('README.md'), findsOneWidget);
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Output'), findsOneWidget);
+  });
+
+  testWidgets('tool row collapse writes the persistence key back', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    final localState = FakeChatLocalState();
+    final session = localState.forSession('s1');
+    await session.setExpanded(
+      timelineKey(const TimelineToolCall(
+        id: 'call-1',
+        name: 'bash',
+        arguments: 'ls -la',
+        result: 'README.md',
+        status: ToolRunStatus.completed,
+      )),
+      true,
+    );
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineToolCall(
+            id: 'call-1',
+            name: 'bash',
+            arguments: 'ls -la',
+            result: 'README.md',
+            status: ToolRunStatus.completed,
+          ),
+        ],
+      ),
+      actions,
+      localState: localState,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('README.md'), findsOneWidget);
+
+    // A user collapse persists false for the same key.
+    await tester.tap(find.text('Bash'));
+    await tester.pumpAndSettle();
+    expect(find.text('README.md'), findsNothing);
+    expect(await session.expanded('tool:call-1:completed'), isFalse);
   });
 
   testWidgets('queue dock: single row, inline edit, steer gating', (
