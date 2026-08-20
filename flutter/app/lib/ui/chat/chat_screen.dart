@@ -140,6 +140,11 @@ class ChatRoute extends ConsumerWidget {
                   .read(chatControllerProvider(backendId))
                   .onAction(SelectSession(sessionId));
             },
+            // Web SessionNodeItem session verbs (sidebar long-press):
+            // dispatch on whichever backend owns the row.
+            dispatchSessionAction: (backendId, action) => ref
+                .read(chatControllerProvider(backendId))
+                .onAction(action),
           ),
           error: (error, _) =>
               Scaffold(body: Center(child: Text(error.toString()))),
@@ -161,6 +166,7 @@ class ChatScreen extends StatefulWidget {
     this.backendSlices,
     this.onSelectBackend,
     this.onSelectBackendSession,
+    this.dispatchSessionAction,
   });
 
   final ChatUiState uiState;
@@ -190,6 +196,12 @@ class ChatScreen extends StatefulWidget {
   /// reduces to a plain SelectSession).
   final void Function(String backendId, String sessionId)?
   onSelectBackendSession;
+
+  /// Web SessionNodeItem session verbs (sidebar long-press): dispatch one
+  /// ChatAction on whichever backend owns the row (rename's dialog is
+  /// owned here).
+  final void Function(String backendId, ChatAction action)?
+  dispatchSessionAction;
 
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
@@ -280,6 +292,41 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Web SessionNodeItem "Rename session" (sidebar long-press verb):
+  /// opens the session rename dialog and dispatches through the
+  /// backend-aware action callback.
+  void _dispatchRenameSession(String backendId, String sessionId) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _RenameSessionDialog(
+        onSave: (title) {
+          widget.dispatchSessionAction?.call(
+            backendId,
+            RenameSession(sessionId, title),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Web SessionNodeItem "Fork session" (sidebar long-press verb):
+  /// commits directly on the owning backend's controller.
+  void _dispatchForkSession(String backendId, String sessionId) {
+    widget.dispatchSessionAction?.call(
+      backendId,
+      ForkSession(sessionId),
+    );
+  }
+
+  /// Web SessionNodeItem "Archive session" (sidebar long-press verb):
+  /// commits directly (reference archive is non-destructive).
+  void _dispatchArchiveSession(String backendId, String sessionId) {
+    widget.dispatchSessionAction?.call(
+      backendId,
+      ArchiveSession(sessionId),
+    );
+  }
+
   PreferredSizeWidget _chatAppBar(
     BuildContext context,
     ChatUiState uiState,
@@ -358,6 +405,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             onSelectBackend: widget.onSelectBackend,
                             onSelectBackendSession:
                                 widget.onSelectBackendSession,
+                            backendId: widget.backendId,
+                            onRenameSession: _dispatchRenameSession,
+                            onForkSession: _dispatchForkSession,
+                            onArchiveSession: _dispatchArchiveSession,
                           ),
                         ),
                         Expanded(
@@ -426,6 +477,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   widget.onSelectBackendSession?.call(backendId, sessionId);
                   Navigator.of(context).pop();
                 },
+                backendId: widget.backendId,
+                onRenameSession: _dispatchRenameSession,
+                onForkSession: _dispatchForkSession,
+                onArchiveSession: _dispatchArchiveSession,
               ),
             ),
           ),

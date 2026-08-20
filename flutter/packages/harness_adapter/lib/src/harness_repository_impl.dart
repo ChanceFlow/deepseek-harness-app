@@ -129,6 +129,14 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// session projection of this map.
   final Map<String, Map<String, SessionPendingInteraction>> _pendingBySession =
       <String, Map<String, SessionPendingInteraction>>{};
+  /// The session the app is currently viewing (last `openSession` target).
+  /// The finished-but-unviewed reminder (green dot) is armed only when a
+  /// session stops running while it is NOT this one (web SessionManager
+  /// `completedNotifications`).
+  String? _openSessionId;
+  /// Last observed running bit per session, driving the true→false edge
+  /// that arms the completion reminder.
+  final Map<String, bool> _prevRunningBySession = <String, bool>{};
   final StateStream<ImageLimits?> _imageLimits = StateStream<ImageLimits?>(
     null,
   );
@@ -351,6 +359,13 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<void> openSession(String sessionId) async {
     final state = _sessionStateFor(sessionId);
+    // Looking at the session consumes its completion reminder (dot clears)
+    // and makes it the armed-selection for future running finishes.
+    _openSessionId = sessionId;
+    if (_prevRunningBySession[sessionId] == false ||
+        _prevRunningBySession[sessionId] == null) {
+      _setSessionCompleted(sessionId, false);
+    }
     try {
       await state.ensureLoaded(
         (beforeSeq) => _loadHistory(sessionId, beforeSeq),
@@ -358,6 +373,24 @@ class HarnessRepositoryImpl implements ChatRepository {
     } catch (_) {
       // A failed first load stays pending; the next generation retries it.
     }
+  }
+
+  /// Rewrites one session's row with [completed], re-emitting the raw
+  /// session list so `observeSessions` publishes the updated fact.
+  void _setSessionCompleted(String sessionId, bool completed) {
+    _sessions.value = _sessions.value
+        .map((item) => item.id == sessionId
+            ? _copySession(item, completed: completed)
+            : item)
+        .toList();
+  }
+
+  /// The session's current completed bit (the row the list holds).
+  bool _isCompleted(String sessionId) {
+    for (final item in _sessions.value) {
+      if (item.id == sessionId) return item.completed;
+    }
+    return false;
   }
 
   @override
@@ -1077,6 +1110,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     agentPreset: session.agentPreset,
     origin: session.origin,
     pendingInteraction: pending ?? session.pendingInteraction,
+    completed: session.completed,
   );
 
   void _handleProjection(ServerRequest frame) {
@@ -1227,6 +1261,22 @@ class HarnessRepositoryImpl implements ChatRepository {
             final running =
                 frame.payload['running'] == 'true' ||
                 frame.payload['running'] == true;
+            // Finished-but-unviewed fold (web SessionManager
+            // `syncCompletedNotifications`): the true→false edge while the
+            // session is not the one being viewed arms the green dot;
+            // running again clears it. The first observation of a session
+            // seeds prev-running without arming anything.
+            final wasRunning = _prevRunningBySession[sessionId];
+            _prevRunningBySession[sessionId] = running;
+            if (running) {
+              // Running again clears the completion reminder; a first
+              // sight of a running session arms nothing.
+              if (_isCompleted(sessionId)) {
+                _setSessionCompleted(sessionId, false);
+              }
+            } else if (wasRunning == true) {
+              _setSessionCompleted(sessionId, sessionId != _openSessionId);
+            }
             _sessions.value = _sessions.value.map((item) {
               if (item.id != sessionId) return item;
               // Web parity: a blank session never runs; the first running:true
@@ -1380,8 +1430,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       }
     }
     // A session dropped from the list cannot wait on the user anymore
-    // (pending interactions for absent sessions are pruned)
-    // (web manager removes pending on session-removed).
+    // (web manager removes pending on session-removed); its prev-running
+    // edge and completion reminder die with it.
     final liveIds = <String>{for (final session in listing) session.sessionId};
     var pendingChanged = false;
     for (final sessionId in _pendingBySession.keys.toList()) {
@@ -1390,10 +1440,24 @@ class HarnessRepositoryImpl implements ChatRepository {
         pendingChanged = true;
       }
     }
+    _prevRunningBySession.removeWhere((sessionId, _) => !liveIds.contains(sessionId));
     if (pendingChanged) {
       _pendingInteractions.value = _projectPending();
     }
-    return listing.map(_toDomainSession).toList();
+    // A list refresh rebuilds from the wire summaries, which carry no
+    // completion fact — preserve the folded bit for sessions that still
+    // hold it (web SessionManager keeps completedNotifications across
+    // list pulls).
+    final completedById = <String, bool>{
+      for (final item in _sessions.value)
+        if (item.completed) item.id: true,
+    };
+    final result = listing.map((wire) {
+      final session = _toDomainSession(wire);
+      final completed = completedById[session.id] ?? false;
+      return completed ? _copySession(session, completed: true) : session;
+    }).toList();
+    return result;
   }
 
   /// Re-derives the per-session last-status projection from the key map.
@@ -1616,6 +1680,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     bool? running,
     bool? blank,
     String? agentPreset,
+    bool? completed,
   }) => SessionSummary(
     id: session.id,
     title: title ?? session.title,
@@ -1625,6 +1690,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     cwd: session.cwd,
     agentPreset: agentPreset ?? session.agentPreset,
     origin: session.origin,
+    completed: completed ?? session.completed,
   );
 
   _SessionState _sessionStateFor(String sessionId) =>

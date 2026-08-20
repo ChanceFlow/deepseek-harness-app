@@ -94,25 +94,8 @@ final class DeleteWorkspaceAction extends WorkspaceAction {
   int get hashCode => workspaceId.hashCode;
 }
 
-/// Archive every session accounted under one workspace (the web has no
-/// workspace-level archive RPC — the batch archives each session through
-/// `workspace.archiveSession`, so the workspace's rows vanish from every
-/// grouping surface while the workspace entity and session logs remain).
-final class ArchiveWorkspaceAction extends WorkspaceAction {
-  const ArchiveWorkspaceAction(this.workspaceId);
-
-  final String workspaceId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ArchiveWorkspaceAction && other.workspaceId == workspaceId;
-
-  @override
-  int get hashCode => Object.hash('archive-workspace', workspaceId);
-}
-
-/// Archive one session (web SessionNodeItem "Archive session" — covers
-/// ungrouped sessions, which no workspace-level action can reach).
+/// Archive one session (web SessionNodeItem "Archive session" — the
+/// long-press session verb that also reaches ungrouped sessions).
 final class ArchiveSessionAction extends WorkspaceAction {
   const ArchiveSessionAction(this.sessionId);
 
@@ -124,6 +107,39 @@ final class ArchiveSessionAction extends WorkspaceAction {
 
   @override
   int get hashCode => Object.hash('archive-session', sessionId);
+}
+
+/// Rename one session (web SessionNodeItem "Rename session" — the
+/// long-press session verb).
+final class RenameSessionAction extends WorkspaceAction {
+  const RenameSessionAction(this.sessionId, this.title);
+
+  final String sessionId;
+  final String title;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RenameSessionAction &&
+      other.sessionId == sessionId &&
+      other.title == title;
+
+  @override
+  int get hashCode => Object.hash('rename-session', sessionId, title);
+}
+
+/// Fork one session (web SessionNodeItem "Fork session" — the long-press
+/// session verb).
+final class ForkSessionAction extends WorkspaceAction {
+  const ForkSessionAction(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ForkSessionAction && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => Object.hash('fork-session', sessionId);
 }
 
 final class MoveWorkspaceUpAction extends WorkspaceAction {

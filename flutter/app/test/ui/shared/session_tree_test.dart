@@ -20,6 +20,7 @@ final AppLocalizations _en = lookupAppLocalizations(const Locale('en'));
 SessionSummary _session(
   String id, {
   bool running = false,
+  bool completed = false,
   SessionPendingInteraction? pendingInteraction,
   int updatedAtEpochMs = 0,
 }) => SessionSummary(
@@ -27,6 +28,7 @@ SessionSummary _session(
   title: 'session $id',
   blank: false,
   running: running,
+  completed: completed,
   pendingInteraction: pendingInteraction,
   updatedAtEpochMs: updatedAtEpochMs,
 );
@@ -165,11 +167,28 @@ void main() {
       expect(find.byType(DoneDot), findsNothing);
     });
 
-    testWidgets('idle renders the green done dot', (tester) async {
+    testWidgets('idle renders no dot (the web shows nothing idle)', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         l10nApp(
           home: Scaffold(
             body: SessionStatusDot(session: _session('a')),
+          ),
+        ),
+      );
+      expect(find.byType(DoneDot), findsNothing);
+      expect(find.byType(WarningDot), findsNothing);
+      expect(find.byType(RunningDot), findsNothing);
+    });
+
+    testWidgets('completed (finished-unviewed) renders the green done dot', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: SessionStatusDot(session: _session('a', completed: true)),
           ),
         ),
       );

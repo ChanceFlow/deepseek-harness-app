@@ -306,10 +306,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       widget.onAction(StartSessionInWorkspace(workspaceId));
 
   /// Web ProjectRowItem "⋮" menu — mobile form: a menu-surface bottom
-  /// sheet (Rename / Archive workspace / Delete workspace / Move up /
-  /// Move down). Archive sits with the other workspace verbs; the batch
-  /// asks for confirmation because it hides every session under the
-  /// workspace from all grouping surfaces at once.
+  /// sheet (Rename / Delete workspace / Move up / Move down).
   Future<void> _showWorkspaceActions(WorkspaceSummary workspace) {
     final workspaces = widget.uiState.workspaces;
     var position = 0;
@@ -326,23 +323,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         canMoveUp: position > 0,
         canMoveDown: position < workspaces.length - 1,
         onRename: () => _showRenameDialog(workspace),
-        onArchive: () => _showArchiveWorkspaceDialog(workspace),
         onDelete: () => _showDeleteDialog(workspace),
         onMoveUp: () =>
             widget.onAction(MoveWorkspaceUpAction(workspace.workspaceId)),
         onMoveDown: () =>
             widget.onAction(MoveWorkspaceDownAction(workspace.workspaceId)),
-      ),
-    );
-  }
-
-  Future<void> _showArchiveWorkspaceDialog(WorkspaceSummary workspace) {
-    return showDialog<void>(
-      context: context,
-      builder: (_) => _ArchiveWorkspaceDialog(
-        workspace: workspace,
-        onArchive: () =>
-            widget.onAction(ArchiveWorkspaceAction(workspace.workspaceId)),
       ),
     );
   }
@@ -357,6 +342,20 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             .toList(growable: false),
         onSave: (title) => widget.onAction(
           RenameWorkspaceAction(workspace.workspaceId, title),
+        ),
+      ),
+    );
+  }
+
+  /// Web SessionNodeItem "Rename session": the long-press session verb's
+  /// dialog — names one session.
+  Future<void> _showRenameSessionDialog(SessionSummary session) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => _RenameSessionDialog(
+        initialTitle: session.displayTitle,
+        onSave: (title) => widget.onAction(
+          RenameSessionAction(session.id, title),
         ),
       ),
     );
@@ -530,9 +529,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       onMenu: _showWorkspaceActions,
       onStartSession: _startSession,
       onSelectSession: widget.onSelectSession,
-      // Web SessionNodeItem "Archive session": the per-row verb (also
-      // covers ungrouped sessions); commits without a dialog, matching
-      // the reference's non-destructive archive semantics.
+      // Web SessionNodeItem session verbs via long-press: rename / fork /
+      // archive. Rename opens this surface's session dialog; fork and
+      // archive commit directly (reference archive is non-destructive).
+      onRenameSession: (sessionId) {
+        final session = uiState.sessions
+            .where((item) => item.id == sessionId)
+            .firstOrNull;
+        if (session != null) _showRenameSessionDialog(session);
+      },
+      onForkSession: (sessionId) =>
+          widget.onAction(ForkSessionAction(sessionId)),
       onArchiveSession: (sessionId) =>
           widget.onAction(ArchiveSessionAction(sessionId)),
       shrinkWrap: widget.embedded,
@@ -838,6 +845,8 @@ class _WorkspaceTree extends StatelessWidget {
     required this.onMenu,
     required this.onStartSession,
     required this.onSelectSession,
+    this.onRenameSession,
+    this.onForkSession,
     this.onArchiveSession,
     this.shrinkWrap = false,
   });
@@ -853,8 +862,11 @@ class _WorkspaceTree extends StatelessWidget {
   final void Function(String workspaceId) onStartSession;
   final void Function(String sessionId)? onSelectSession;
 
-  /// Archive one session (web SessionNodeItem "Archive session" — the
-  /// per-row verb that also reaches ungrouped sessions).
+  /// Web SessionNodeItem session verbs (long-press): rename / fork /
+  /// archive one session — the per-row verbs that also reach ungrouped
+  /// sessions.
+  final void Function(String sessionId)? onRenameSession;
+  final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
 
   /// Aggregate form: the tree rides the section's outer scroll view.
@@ -911,6 +923,8 @@ class _WorkspaceTree extends StatelessWidget {
             onMenu: onMenu,
             onStartSession: onStartSession,
             onSelectSession: onSelectSession,
+            onRenameSession: onRenameSession,
+            onForkSession: onForkSession,
             onArchiveSession: onArchiveSession,
           ),
         ],
@@ -936,6 +950,8 @@ class _WorkspaceGroup extends StatelessWidget {
     required this.onMenu,
     required this.onStartSession,
     required this.onSelectSession,
+    this.onRenameSession,
+    this.onForkSession,
     this.onArchiveSession,
   });
 
@@ -951,7 +967,9 @@ class _WorkspaceGroup extends StatelessWidget {
   final void Function(String workspaceId) onStartSession;
   final void Function(String sessionId)? onSelectSession;
 
-  /// Archive one session (web SessionNodeItem "Archive session").
+  /// Web SessionNodeItem session verbs (long-press).
+  final void Function(String sessionId)? onRenameSession;
+  final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
 
   @override
@@ -986,6 +1004,12 @@ class _WorkspaceGroup extends StatelessWidget {
               onSelect: sessions[i].id == selectedSessionId
                   ? null
                   : () => onSelectSession?.call(sessions[i].id),
+              onRename: onRenameSession == null
+                  ? null
+                  : () => onRenameSession!(sessions[i].id),
+              onFork: onForkSession == null
+                  ? null
+                  : () => onForkSession!(sessions[i].id),
               onArchive: onArchiveSession == null
                   ? null
                   : () => onArchiveSession!(sessions[i].id),
@@ -1185,7 +1209,6 @@ class _WorkspaceActionSheet extends StatelessWidget {
     required this.canMoveUp,
     required this.canMoveDown,
     required this.onRename,
-    required this.onArchive,
     required this.onDelete,
     required this.onMoveUp,
     required this.onMoveDown,
@@ -1194,7 +1217,6 @@ class _WorkspaceActionSheet extends StatelessWidget {
   final bool canMoveUp;
   final bool canMoveDown;
   final VoidCallback onRename;
-  final VoidCallback onArchive;
   final VoidCallback onDelete;
   final VoidCallback onMoveUp;
   final VoidCallback onMoveDown;
@@ -1223,14 +1245,6 @@ class _WorkspaceActionSheet extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).pop();
                 onRename();
-              },
-            ),
-            _MenuRow(
-              icon: Icons.archive_outlined,
-              label: l10n.archiveWorkspace,
-              onTap: () {
-                Navigator.of(context).pop();
-                onArchive();
               },
             ),
             _MenuRow(
@@ -1550,6 +1564,75 @@ class _RenameWorkspaceDialogState extends State<_RenameWorkspaceDialog> {
   }
 }
 
+/// Web SessionNodeItem "Rename session" modal: names one session (no
+/// duplicate-title guard — the wire session rename accepts any non-blank
+/// title).
+class _RenameSessionDialog extends StatefulWidget {
+  const _RenameSessionDialog({
+    required this.initialTitle,
+    required this.onSave,
+  });
+
+  final String initialTitle;
+  final void Function(String title) onSave;
+
+  @override
+  State<_RenameSessionDialog> createState() => _RenameSessionDialogState();
+}
+
+class _RenameSessionDialogState extends State<_RenameSessionDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialTitle,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final title = _controller.text.trim();
+    if (title.isEmpty) return;
+    widget.onSave(title);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final blocked = _controller.text.trim().isEmpty;
+    return _DsModalCard(
+      title: l10n.renameSession,
+      actions: [
+        OutlinedButton(
+          style: _dsCapsuleButton(theme),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          style: _dsCapsuleButton(theme),
+          onPressed: blocked ? null : _save,
+          child: Text(l10n.rename),
+        ),
+      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DsTextInput(
+            controller: _controller,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _save(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Web delete-workspace modal: description copy (`delete.desc`) plus the
 /// error-ink outline confirm (`deleteAction`).
 class _DeleteWorkspaceDialog extends StatelessWidget {
@@ -1588,50 +1671,6 @@ class _DeleteWorkspaceDialog extends StatelessWidget {
       ],
       child: Text(
         l10n.deleteWorkspaceConfirm(workspace.title, l10n.ungroupedLabel),
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-}
-
-/// Web archive-workspace modal: the workspace's sessions are archived
-/// (hidden from every grouping surface) while the workspace entity and
-/// every session log remain — the reverse of delete, which only drops
-/// the registration. The batch is the reason for the confirmation.
-class _ArchiveWorkspaceDialog extends StatelessWidget {
-  const _ArchiveWorkspaceDialog({
-    required this.workspace,
-    required this.onArchive,
-  });
-
-  final WorkspaceSummary workspace;
-  final VoidCallback onArchive;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    return _DsModalCard(
-      title: l10n.archiveWorkspace,
-      actions: [
-        OutlinedButton(
-          style: _dsCapsuleButton(theme),
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          style: _dsCapsuleButton(theme),
-          onPressed: () {
-            onArchive();
-            Navigator.of(context).pop();
-          },
-          child: Text(l10n.archive),
-        ),
-      ],
-      child: Text(
-        l10n.archiveWorkspaceConfirm(workspace.title),
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),

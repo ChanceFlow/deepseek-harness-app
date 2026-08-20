@@ -1670,18 +1670,6 @@ abstract class AppLocalizations {
   /// **'Archive'**
   String get archive;
 
-  /// No description provided for @archiveWorkspace.
-  ///
-  /// In en, this message translates to:
-  /// **'Archive workspace'**
-  String get archiveWorkspace;
-
-  /// No description provided for @archiveWorkspaceConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Archive every session in “{name}”? The workspace and its session logs are kept; the sessions disappear from all grouping surfaces.'**
-  String archiveWorkspaceConfirm(Object name);
-
   /// No description provided for @expandAll.
   ///
   /// In en, this message translates to:

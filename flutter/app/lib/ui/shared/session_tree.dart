@@ -11,7 +11,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart' show dsOf;
+import '../theme/deepsuite_extension.dart' show dsOf, kDsShadowLv3;
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic;
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
@@ -258,9 +258,10 @@ String relativeTimeLabel(
 /// Web Rows.tsx `SessionNodeItem` (mobile form): a 44px touch row with
 /// the status dot slot, the title, and the compact relative time; the
 /// selected row keeps the sidebar nav-item treatment (active fill +
-/// accent edge). A trailing ellipsis menu with the session verbs
-/// (archive) renders when [onArchive] is provided — the Workspaces tab
-/// wires it, the switching sidebar does not.
+/// accent edge). Long-pressing a non-blank row opens the session-verb
+/// menu (web SessionNodeItem ⋮: rename / fork / archive) when any verb
+/// is provided — both the switching sidebar and the Workspaces tab wire
+/// the verbs that belong to their surface.
 class SessionTreeRow extends StatelessWidget {
   const SessionTreeRow({
     super.key,
@@ -268,6 +269,8 @@ class SessionTreeRow extends StatelessWidget {
     required this.selected,
     required this.nowEpochMs,
     this.onSelect,
+    this.onRename,
+    this.onFork,
     this.onArchive,
   });
 
@@ -276,9 +279,30 @@ class SessionTreeRow extends StatelessWidget {
   final int nowEpochMs;
   final VoidCallback? onSelect;
 
-  /// Archive-this-session action; present makes the row's ellipsis menu
-  /// visible (blank provisional rows carry no verbs, web rule).
+  /// Web SessionNodeItem row verbs; present verbs appear in the
+  /// long-press menu (blank provisional rows carry no verbs, web rule).
+  final VoidCallback? onRename;
+  final VoidCallback? onFork;
   final VoidCallback? onArchive;
+
+  bool get _hasVerbs => onRename != null || onFork != null || onArchive != null;
+
+  void _openMenu(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final items = <(IconData, String, VoidCallback)>[
+      if (onRename != null) (Icons.edit_outlined, l10n.renameSession, onRename!),
+      if (onFork != null) (Icons.call_split_outlined, l10n.forkSession, onFork!),
+      if (onArchive != null) (Icons.archive_outlined, l10n.archiveSession, onArchive!),
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SessionVerbsSheet(
+        title: session.blank ? l10n.newSession : session.displayTitle,
+        items: items,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -296,6 +320,9 @@ class SessionTreeRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         hoverColor: ds.sidebarNavItemHover,
         onTap: onSelect,
+        onLongPress: !session.blank && _hasVerbs
+            ? () => _openMenu(context)
+            : null,
         child: IntrinsicHeight(
           child: Row(
             children: [
@@ -309,7 +336,7 @@ class SessionTreeRow extends StatelessWidget {
                 child: SizedBox(
                   height: 44,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
                       children: [
                         // Web `.slot`: the fixed status seat keeps titles
@@ -345,16 +372,6 @@ class SessionTreeRow extends StatelessWidget {
                             ),
                           ),
                         ],
-                        // Web row menu (rename/fork/archive): present on
-                        // the management surface, always-visible for
-                        // touch (the Workspaces tab's idiom).
-                        if (onArchive != null && !session.blank) ...[
-                          const SizedBox(width: 4),
-                          _RowArchiveButton(
-                            session: session,
-                            onArchive: onArchive!,
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -368,41 +385,92 @@ class SessionTreeRow extends StatelessWidget {
   }
 }
 
-/// Web SessionNodeItem "⋮" menu — mobile form: an always-visible
-/// ellipsis seat that opens a menu-surface bottom sheet with the session
-/// verbs. Archive is the management surface's verb (the switching
-/// sidebar wires none).
-class _RowArchiveButton extends StatelessWidget {
-  const _RowArchiveButton({
-    required this.session,
-    required this.onArchive,
-  });
+/// Web Menu (figma MenuDropdown) as a bottom sheet for the session-verb
+/// menu: the same menu surface as the workspace action sheet — r12 card,
+/// inverted hairline, lv3 shadow — with the row's title as a caption and
+/// one row per provided verb.
+class _SessionVerbsSheet extends StatelessWidget {
+  const _SessionVerbsSheet({required this.title, required this.items});
 
-  final SessionSummary session;
-  final VoidCallback onArchive;
+  final String title;
+  final List<(IconData, String, VoidCallback)> items;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
-    return SizedBox(
-      width: 32,
-      height: 44,
-      child: Tooltip(
-        message: l10n.archiveSession,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            hoverColor: ds.interactiveBgHover,
-            onTap: onArchive,
-            child: Center(
-              child: Icon(
-                Icons.archive_outlined,
-                size: 16,
-                color: ds.labelTertiary,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: ds.menu,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: ds.borderInverted),
+          boxShadow: kDsShadowLv3,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: ds.labelTertiary,
+                ),
               ),
             ),
+            for (final (icon, label, onTap) in items)
+              _VerbRow(icon: icon, label: label, onTap: onTap),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Web Menu `.item`: min-h 44, r10, 14px label, 16px tertiary leading
+/// glyph; tapping pops the sheet and runs the verb.
+class _VerbRow extends StatelessWidget {
+  const _VerbRow({required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        hoverColor: ds.interactiveBgHover,
+        onTap: () {
+          Navigator.of(context).pop();
+          onTap();
+        },
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: ds.labelTertiary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -413,8 +481,10 @@ class _RowArchiveButton extends StatelessWidget {
 /// Web Rows.tsx `sessionStatuses` + StateDot (mobile form): the session
 /// row's status dot. Pending user interaction (approval / plan-review /
 /// question) outranks everything and renders the amber warning dot;
-/// running renders the blue ongoing dot; otherwise the green done dot
-/// (web always shows a dot, idle included).
+/// running renders the blue ongoing dot; a finished-but-unviewed session
+/// (`completed`) renders the green done dot; idle renders nothing (the
+/// web's `showStatus` is false for an idle row — the status seat stays
+/// empty).
 class SessionStatusDot extends StatelessWidget {
   const SessionStatusDot({super.key, required this.session});
 
@@ -428,7 +498,11 @@ class SessionStatusDot extends StatelessWidget {
     if (session.running) {
       return const RunningDot(size: 10);
     }
-    return const DoneDot(size: 10);
+    if (session.completed) {
+      return const DoneDot(size: 10);
+    }
+    // Idle: the web shows no dot (slot reserved for alignment).
+    return const SizedBox(width: 10, height: 10);
   }
 }
 
