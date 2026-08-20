@@ -1,4 +1,5 @@
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/agent_preset.dart';
@@ -145,6 +146,16 @@ class FakeChatRepository implements ChatRepository {
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
     sentMessages.add(request);
+  }
+
+  /// Host-command executions answered by the fake, keyed by the submitted
+  /// line; a line absent from the map answers the unmatched miss (null —
+  /// the caller falls back to the prompt send).
+  final commandExecutions = <String, CommandExecution?>{};
+
+  @override
+  Future<CommandExecution?> executeCommand(String sessionId, String line) {
+    return Future<CommandExecution?>.value(commandExecutions[line]);
   }
 
   @override
@@ -833,7 +844,7 @@ void main() {
     expect(answered.$2.answers.single.selectedOptions, isEmpty);
   });
 
-  test('/goal command creates the goal instead of sending a prompt', () async {
+  test('host-command lines execute through commands/execute, never prompts', () async {
     final repository = _GoalRecordingRepository();
     final controller = ChatController(repository);
     await pumpEventQueue();
@@ -841,11 +852,30 @@ void main() {
     controller.onAction(const SelectSession('s1'));
     await pumpEventQueue();
 
-    controller.onAction(const SendPrompt('/goal Ship the MVP'));
-    await pumpEventQueue();
-
-    expect(repository.createdGoals, [('s1', 'Ship the MVP')]);
+    // Every roster command with an input hint is args-tolerant: the full
+    // line rides the command RPC (the host's own grammar — /goal creates
+    // the goal server-side, /plan toggles plan mode).
+    for (final text in [
+      '/plan',
+      '/plan off',
+      '/goal Ship the MVP',
+      '/goal edit fix bugs first',
+      '/permission workspace-write',
+      '/feedback great session',
+    ]) {
+      controller.onAction(SendPrompt(text));
+      await pumpEventQueue();
+    }
+    expect(repository.executedCommands, [
+      '/plan',
+      '/plan off',
+      '/goal Ship the MVP',
+      '/goal edit fix bugs first',
+      '/permission workspace-write',
+      '/feedback great session',
+    ]);
     expect(repository.sentTexts, isEmpty);
+    expect(repository.createdGoals, isEmpty);
 
     // Plain prompts still ride the message channel.
     controller.onAction(const SendPrompt('hello'));
@@ -853,7 +883,7 @@ void main() {
     expect(repository.sentTexts, ['hello']);
   });
 
-  test('/goal control words execute as host commands, never create', () async {
+  test('the submit table mirrors the web decision rules', () async {
     final repository = _GoalRecordingRepository();
     final controller = ChatController(repository);
     await pumpEventQueue();
@@ -861,24 +891,59 @@ void main() {
     controller.onAction(const SelectSession('s1'));
     await pumpEventQueue();
 
-    // clear/pause/resume/edit are the command's own grammar (web
-    // parseGoalCommand) — they fall through to the prompt channel.
-    for (final text in [
-      '/goal clear',
-      '/goal pause',
-      '/goal resume',
-      '/goal edit fix bugs first',
-    ]) {
-      controller.onAction(SendPrompt(text));
-      await pumpEventQueue();
-    }
-    expect(repository.createdGoals, isEmpty);
-    expect(repository.sentTexts, [
-      '/goal clear',
-      '/goal pause',
-      '/goal resume',
-      '/goal edit fix bugs first',
-    ]);
+    // A bare-only command (no input hint) executes bare; with args it
+    // rides the prompt channel (web matchEnter: `if (!bare) return
+    // undefined`).
+    controller.onAction(const SendPrompt('/compact'));
+    await pumpEventQueue();
+    expect(repository.executedCommands, ['/compact']);
+
+    controller.onAction(const SendPrompt('/compact extra'));
+    await pumpEventQueue();
+    expect(repository.sentTexts, ['/compact extra']);
+
+    // Unknown names and skills fall through to the prompt channel (the
+    // model serves them).
+    controller.onAction(const SendPrompt('/unknown thing'));
+    await pumpEventQueue();
+    expect(repository.sentTexts, ['/compact extra', '/unknown thing']);
+  });
+
+  test('an unmatched host command falls back to the prompt channel', () async {
+    final repository = FakeChatRepository();
+    // No execution registered for '/plan': the host reports no command.
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/plan'));
+    await pumpEventQueue();
+
+    expect(repository.sentMessages.map((m) => m.text), ['/plan']);
+  });
+
+  test('a command error result surfaces the text and keeps the images', () async {
+    final repository = FakeChatRepository();
+    repository.commandExecutions['/permission bogus'] = const CommandExecution(
+      commandId: 'cmd-9',
+      kind: CommandOutcomeKind.error,
+      text: 'unknown preset "bogus"',
+    );
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/permission bogus'));
+    await pumpEventQueue();
+
+    final state = controller.state;
+    expect(state.errorMessage, 'unknown preset "bogus"');
+    // The line never rode the prompt channel.
+    expect(repository.sentMessages, isEmpty);
   });
 
   test('ClearGoal deletes the goal from any phase', () async {
@@ -1169,6 +1234,21 @@ class _GoalRecordingRepository extends FakeChatRepository {
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
     sentTexts.add(request.text);
+  }
+
+  /// Executed host-command lines: the generic dispatch routes every
+  /// roster-command line here (the /goal interception is gone).
+  final executedCommands = <String>[];
+
+  @override
+  Future<CommandExecution?> executeCommand(String sessionId, String line) {
+    executedCommands.add(line);
+    return Future<CommandExecution?>.value(
+      const CommandExecution(
+        commandId: 'cmd-1',
+        kind: CommandOutcomeKind.success,
+      ),
+    );
   }
 }
 
