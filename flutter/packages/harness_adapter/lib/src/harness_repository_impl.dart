@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/session_window_stats.dart';
@@ -80,6 +81,7 @@ const String _goalPause = 'goal.pause';
 const String _goalResume = 'goal.resume';
 const String _goalComplete = 'goal.complete';
 const String _goalClear = 'goal.clear';
+const String _commandsExecute = 'commands/execute';
 const String _agentPresetList = 'agentPreset.list';
 const String _agentPresetSelect = 'agentPreset.select';
 
@@ -379,6 +381,44 @@ class HarnessRepositoryImpl implements ChatRepository {
       // waiting for the next list pull.
       _markSessionNoLongerBlank(request.sessionId);
     }
+  }
+
+  @override
+  Future<CommandExecution?> executeCommand(String sessionId, String line) async {
+    // The typert remote envelope: the args carry the addressed agent (a
+    // session id — sessions are agent-backed), the complete line, and the
+    // images slot (the mobile composer sends none with commands).
+    final result = await _call(_commandsExecute, _commandsExecute, {
+      'args': <String, Object?>{
+        'agentId': sessionId,
+        'line': line,
+        'images': const <Object?>[],
+      },
+    });
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+      );
+    }
+    // The unmatched case serializes as ok with no value slot (reference
+    // CommandRuntime.execute returns undefined on a syntax or name miss).
+    final value = result.value;
+    if (value == null) return null;
+    final wire = CommandExecutionWire.fromJson(value);
+    final kind = switch (wire.result.kind) {
+      'success' => CommandOutcomeKind.success,
+      'error' => CommandOutcomeKind.error,
+      _ => throw FormatException(
+        'commands/execute: unknown result kind "${wire.result.kind}"',
+      ),
+    };
+    return CommandExecution(
+      commandId: wire.commandId,
+      kind: kind,
+      text: wire.result.text,
+    );
   }
 
   @override

@@ -621,6 +621,32 @@ final class PermissionSelectWire {
 }
 
 // ---------------------------------------------------------------------------
+// Command execution (commands/execute value)
+// ---------------------------------------------------------------------------
+
+/// The settled host-command execution: reference
+/// packages/interaction/commands/src/index.ts `CommandExecution` and
+/// types.ts `CommandResult` (kind is required; text is optional on
+/// success, required on error).
+final class CommandExecutionWire {
+  CommandExecutionWire.fromJson(JsonMap json)
+    : commandId = _reqString(json, 'commandId'),
+      result = CommandResultWire.fromJson(_reqObject(json, 'result'));
+
+  final String commandId;
+  final CommandResultWire result;
+}
+
+final class CommandResultWire {
+  CommandResultWire.fromJson(JsonMap json)
+    : kind = _reqString(json, 'kind'),
+      text = wireString(json, 'text');
+
+  final String kind;
+  final String? text;
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 

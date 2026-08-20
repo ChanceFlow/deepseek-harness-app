@@ -10,6 +10,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
@@ -30,6 +31,7 @@ import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
 
 import '../state_stream.dart';
+import 'command_roster.dart';
 import 'chat_ui_state.dart';
 
 /// Bounded attachment byte cache; decoded images are bounded by the same
@@ -438,30 +440,17 @@ class ChatController {
     if (sessionId == null) return;
     final images = _pendingImages;
     if (action.text.trim().isEmpty && images.isEmpty) return;
-    // Web GoalCommandInput parity: `/goal <objective>` creates the goal
-    // instead of riding the prompt. Control words (clear/pause/resume,
-    // edit) are the host command's own grammar — they fall through and
-    // execute as ordinary slash commands.
-    final command = RegExp(
-      r'^/goal(?:\s+(.+))?$',
-      caseSensitive: false,
-    ).firstMatch(action.text.trim());
-    if (command != null) {
-      final objective = command.group(1)?.trim() ?? '';
-      final control = objective.toLowerCase();
-      final isControlWord =
-          objective.isEmpty ||
-          control == 'clear' ||
-          control == 'pause' ||
-          control == 'resume' ||
-          control == 'show' ||
-          control.startsWith('edit');
-      if (objective.isNotEmpty && !isControlWord) {
-        unawaited(
-          _runCatchingForUi(() => _repository.createGoal(sessionId, objective)),
-        );
-        return;
-      }
+    // Web CommandUiRuntime submit table: a submitted line whose leading
+    // token names a known host command routes through `commands/execute`
+    // — never the prompt channel (the host does not parse commands out of
+    // prompts; the model would receive the text as ordinary content).
+    // Input-hinted commands take args; bare-only commands (no hint)
+    // execute only without args; skills and unknown names fall through
+    // to the prompt channel (the model serves them).
+    final commandLine = _hostCommandLineFor(action.text.trim());
+    if (commandLine != null) {
+      unawaited(_executeHostCommand(sessionId, commandLine));
+      return;
     }
     unawaited(() async {
       _isSending = true;
@@ -487,6 +476,62 @@ class ChatController {
         _publish();
       }
     }());
+  }
+
+  /// The host-command line a submit routes through `commands/execute`,
+  /// or null when the text is not a host command (web `matchEnter`
+  /// decision table on the roster's live stand-in).
+  String? _hostCommandLineFor(String text) {
+    if (!text.startsWith('/')) return null;
+    final boundary = text.indexOf(RegExp(r'[\t\n\r ]'));
+    final token = boundary == -1 ? text : text.substring(0, boundary);
+    final name = token.substring(1);
+    if (name.isEmpty) return null;
+    for (final command in kHostCommands) {
+      if (command.name != name) continue;
+      // A bare-only command (no input hint) with args rides the prompt
+      // channel (web: `if (!bare) return undefined`).
+      if (command.hint == null && boundary != -1) return null;
+      return text;
+    }
+    return null;
+  }
+
+  /// Executes one slash-command line. An unmatched name (null execution)
+  /// falls back to the ordinary prompt send — the web live-directory
+  /// miss; an error result keeps the pending images and surfaces the
+  /// command's text; success clears them (the state projections — plan
+  /// chip, goal bar — carry the feedback).
+  Future<void> _executeHostCommand(String sessionId, String line) async {
+    _isSending = true;
+    _publish();
+    try {
+      final execution = await _runCatchingForUi<CommandExecution?>(
+        () => _repository.executeCommand(sessionId, line),
+      );
+      if (execution == null) {
+        await _runCatchingForUi(() async {
+          await _repository.sendMessage(
+            SendMessageRequest(
+              sessionId: sessionId,
+              text: line,
+              mode: PromptMode.queue,
+            ),
+          );
+        });
+        _pendingImages = const <PendingImage>[];
+        return;
+      }
+      if (execution.kind == CommandOutcomeKind.error) {
+        _errorMessage = execution.text ?? 'command failed';
+        _publish();
+        return;
+      }
+      _pendingImages = const <PendingImage>[];
+    } finally {
+      _isSending = false;
+      _publish();
+    }
   }
 
   /// Validate picked images against the host limits, then queue the rest.
