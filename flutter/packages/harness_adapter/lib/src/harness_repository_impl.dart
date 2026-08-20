@@ -115,7 +115,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// outstanding user-wait status (approval / plan-review / question).
   /// Fed from the raw approval/question frame stream BEFORE the per-session
   /// fan-out, so sessions never instantiated in the app still light the
-  /// sidebar's amber dot (web SessionManager parity). Cleared per
+  /// sidebar's amber dot and notification detection (web SessionManager
+  /// parity). Cleared per
   /// connection generation — the reopen replay re-adds still-pending
   /// requests.
   final StateStream<Map<String, SessionPendingInteraction>>
@@ -954,8 +955,9 @@ class HarnessRepositoryImpl implements ChatRepository {
         }
         // Registry-global pending-interaction fold: tracked for every
         // session, instantiated or not, before the per-session fan-out
-        // (web SessionManager parity — the sidebar's amber dot must light
-        // for sessions never opened here). Stable keys make replays
+        // (web SessionManager parity — the sidebar's amber dot and
+        // approval/plan-review alerts must fire for sessions never opened
+        // here). Stable keys make replays
         // idempotent.
         _foldPendingFrame(frame);
         final sessionId = _frameSessionId(frame);
@@ -1378,6 +1380,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       }
     }
     // A session dropped from the list cannot wait on the user anymore
+    // (pending interactions for absent sessions are pruned)
     // (web manager removes pending on session-removed).
     final liveIds = <String>{for (final session in listing) session.sessionId};
     var pendingChanged = false;

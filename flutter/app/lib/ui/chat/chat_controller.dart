@@ -38,7 +38,7 @@ import 'chat_ui_state.dart';
 const int _attachmentCacheLimit = 24;
 
 class ChatController {
-  ChatController(this._repository, {this.onTurnComplete}) {
+  ChatController(this._repository) {
     _refresh();
     _subscribeBaselines();
     _observeSelectedSessionRemoval();
@@ -47,8 +47,6 @@ class ChatController {
 
   final ChatRepository _repository;
 
-  /// Fired when the selected session's turn finishes (running → idle).
-  final void Function(String sessionTitle)? onTurnComplete;
   final AppStateStream<ChatUiState> _state = AppStateStream<ChatUiState>(
     const ChatUiState(),
   );
@@ -162,27 +160,10 @@ class ChatController {
     );
   }
 
-  bool _selectedWasRunning = false;
-
-  void _handleSessionsForTurns(List<SessionSummary> sessions) {
-    final selectedId = _selectedSessionId;
-    if (selectedId == null) {
-      _selectedWasRunning = false;
-      return;
-    }
-    final session = sessions.where((item) => item.id == selectedId).firstOrNull;
-    final running = session?.running ?? false;
-    if (_selectedWasRunning && !running && session != null) {
-      onTurnComplete?.call(session.displayTitle);
-    }
-    _selectedWasRunning = running;
-  }
-
   void _subscribeBaselines() {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
-        _handleSessionsForTurns(sessions);
         _publish();
       }),
     );

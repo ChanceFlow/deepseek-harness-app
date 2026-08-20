@@ -358,5 +358,13 @@
   "turnMaxTokens": "已达到输出 token 上限",
   "turnCompleteTitle": "回合完成",
   "turnCompletionChannel": "回合完成通知",
-  "turnCompletionChannelDescription": "在对话回合运行完成时通知。"
+  "turnCompletionChannelDescription": "在对话回合运行完成时通知。",
+  "otherTurnCompleteTitle": "其他会话有新回合",
+  "approvalRequestedTitle": "有待审批的请求",
+  "planReviewRequestedTitle": "有待审阅的 plan",
+  "approvalChannel": "审批请求",
+  "approvalChannelDescription": "会话等待你审批权限请求时通知。",
+  "planReviewChannel": "plan 审阅",
+  "planReviewChannelDescription": "会话等待你审阅 plan 时通知。",
+  "notificationDismissTooltip": "关闭通知"
 }

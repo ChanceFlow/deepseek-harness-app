@@ -1228,4 +1228,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get turnCompletionChannelDescription => '在对话回合运行完成时通知。';
+
+  @override
+  String get otherTurnCompleteTitle => '其他会话有新回合';
+
+  @override
+  String get approvalRequestedTitle => '有待审批的请求';
+
+  @override
+  String get planReviewRequestedTitle => '有待审阅的 plan';
+
+  @override
+  String get approvalChannel => '审批请求';
+
+  @override
+  String get approvalChannelDescription => '会话等待你审批权限请求时通知。';
+
+  @override
+  String get planReviewChannel => 'plan 审阅';
+
+  @override
+  String get planReviewChannelDescription => '会话等待你审阅 plan 时通知。';
+
+  @override
+  String get notificationDismissTooltip => '关闭通知';
 }

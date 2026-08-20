@@ -2202,6 +2202,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifies when a running conversation turn finishes.'**
   String get turnCompletionChannelDescription;
+
+  /// No description provided for @otherTurnCompleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New turn in another session'**
+  String get otherTurnCompleteTitle;
+
+  /// No description provided for @approvalRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval requested'**
+  String get approvalRequestedTitle;
+
+  /// No description provided for @planReviewRequestedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan review requested'**
+  String get planReviewRequestedTitle;
+
+  /// No description provided for @approvalChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get approvalChannel;
+
+  /// No description provided for @approvalChannelDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifies when a session waits on your approval.'**
+  String get approvalChannelDescription;
+
+  /// No description provided for @planReviewChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan reviews'**
+  String get planReviewChannel;
+
+  /// No description provided for @planReviewChannelDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifies when a session waits on your plan review.'**
+  String get planReviewChannelDescription;
+
+  /// No description provided for @notificationDismissTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss notification'**
+  String get notificationDismissTooltip;
 }
 
 class _AppLocalizationsDelegate

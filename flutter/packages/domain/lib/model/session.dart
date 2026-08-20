@@ -6,7 +6,8 @@ library;
 /// `PendingInteractionStatus`). Present when the host has an unanswered
 /// approval, a plan review, or a question for the user; null when nothing
 /// blocks on the user. Navigation surfaces rank sessions by this fact and
-/// light the amber status dot.
+/// light the amber status dot; notification detection reads it to raise
+/// approval/plan-review alerts.
 enum SessionPendingInteraction { approval, planReview, question }
 
 final class SessionSummary {

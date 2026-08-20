@@ -3,14 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'notifications/turn_complete_notifier.dart';
+import 'di/providers.dart' show systemNotifierProvider;
+import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
 import 'ui/theme/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await TurnCompleteNotifier().initialize();
-  runApp(const ProviderScope(child: DshApp()));
+  // One system notifier, initialized here (permission request + launch-time
+  // locale + cold-start tap capture) and handed to the DI layer through an
+  // override so the provider consumers share the exact initialized instance.
+  final notifier = SystemNotifier();
+  await notifier.initialize();
+  runApp(
+    ProviderScope(
+      overrides: [systemNotifierProvider.overrideWithValue(notifier)],
+      child: const DshApp(),
+    ),
+  );
 }
 
 class DshApp extends StatelessWidget {

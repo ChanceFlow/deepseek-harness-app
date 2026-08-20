@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The client talks to a plain-http dsh host (e.g. http://127.0.0.1:3080). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ local notifications: the flutter_local_notifications
+         plugin (v16+) no longer merges these in, so without them the
+         turn-complete/approval/plan notifications never appear. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
         android:label="app"
         android:name="${applicationName}"

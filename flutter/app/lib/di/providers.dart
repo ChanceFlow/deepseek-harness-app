@@ -8,6 +8,7 @@
 /// the other backends' connections or state.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
@@ -35,7 +36,9 @@ export '../backends/backend_registry_controller.dart';
 import '../backends/backend_registry_controller.dart';
 import '../backends/backend_store.dart';
 import '../config.dart';
-import '../notifications/turn_complete_notifier.dart';
+import '../notifications/app_notification_center.dart';
+import '../notifications/notification_events.dart' show AppNotificationEvent;
+import '../notifications/system_notifier.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_ui_state.dart';
 import '../ui/goal/goal_controller.dart';
@@ -177,26 +180,71 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository,
   );
 });
 
-/// Turn-complete system notifications (single instance, active backend
-/// only — the hook is installed on that backend's chat controller).
-final turnCompleteNotifierProvider = Provider<TurnCompleteNotifier>((ref) {
-  return TurnCompleteNotifier();
+/// System (OS-level) notifications, single instance shared by every
+/// backend's notification center.
+final systemNotifierProvider = Provider<SystemNotifier>((ref) {
+  return SystemNotifier();
 });
+
+/// Per-backend notification center: folds the session list into
+/// notification events and routes them to the foreground toast channel or
+/// the background system channel. The app-root toast host keeps every
+/// configured backend's center alive so backgrounded turns still notify.
+final appNotificationCenterProvider =
+    Provider.family.autoDispose<AppNotificationCenter, String>((ref,
+        backendId) {
+  final systemNotifier = ref.watch(systemNotifierProvider);
+  final center = AppNotificationCenter(
+    repository: ref.watch(chatRepositoryProvider(backendId)),
+    backendId: backendId,
+    isForegrounded: () =>
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    selectedSessionIdOf: () =>
+        ref.read(chatControllerProvider(backendId)).state.selectedSessionId,
+    onBackground: systemNotifier.show,
+  );
+  ref.onDispose(center.dispose);
+  return center;
+});
+
+/// Merged foreground channel across every configured backend: the app-root
+/// toast host listens here and watches the family, which keeps every
+/// backend's center (and its session fold) alive for the app's lifetime.
+final foregroundNotificationEventsProvider = StreamProvider<AppNotificationEvent>(
+  (ref) async* {
+    final registry =
+        ref.watch(backendRegistryStateProvider).value ??
+        const BackendRegistryState();
+    final controller = StreamController<AppNotificationEvent>.broadcast();
+    final subscriptions = <StreamSubscription<AppNotificationEvent>>[];
+    for (final backend in registry.backends) {
+      subscriptions.add(
+        ref
+            .watch(appNotificationCenterProvider(backend.id))
+            .foregroundEvents
+            .listen(controller.add),
+      );
+    }
+    ref.onDispose(() {
+      for (final subscription in subscriptions) {
+        unawaited(subscription.cancel());
+      }
+      unawaited(controller.close());
+    });
+    yield* controller.stream;
+  },
+);
+
+/// System-notification tap destinations (running-app taps plus cold-start
+/// launches), merged so the app root can navigate on either.
+final systemNotificationTargetsProvider = StreamProvider<NotificationTarget>(
+  (ref) => ref.watch(systemNotifierProvider).targets,
+);
 
 /// Chat screen controller (UDF), one per backend.
 final chatControllerProvider = Provider.family.autoDispose<ChatController,
     String>((ref, backendId) {
-  final notifier = ref.watch(turnCompleteNotifierProvider);
-  final controller = ChatController(
-    ref.watch(chatRepositoryProvider(backendId)),
-    onTurnComplete: (sessionTitle) {
-      // Only when backgrounded: a foregrounded user is already watching.
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
-        notifier.showTurnComplete(sessionTitle);
-      }
-    },
-  );
+  final controller = ChatController(ref.watch(chatRepositoryProvider(backendId)));
   ref.onDispose(controller.dispose);
   return controller;
 });
