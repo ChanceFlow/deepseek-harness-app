@@ -30,7 +30,6 @@ import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
-import 'circle_button.dart';
 import 'command_roster.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
@@ -2243,9 +2242,10 @@ class _QueueItemRowState extends State<_QueueItemRow> {
   }
 }
 
-/// One dock action (web `.action`): a 28px circle on the tertiary glyph
-/// with the interactive hover fill; 36px+ touch target through padding.
-class _QueueAction extends StatefulWidget {
+/// One dock action (web `.action`): a standard [IconButton] squeezed to
+/// the 28px web visual via its constraints — native ripple, focus, and
+/// disabled handling on the compact 36px dock-row footprint.
+class _QueueAction extends StatelessWidget {
   const _QueueAction({
     required this.tooltip,
     required this.icon,
@@ -2259,39 +2259,18 @@ class _QueueAction extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<_QueueAction> createState() => _QueueActionState();
-}
-
-class _QueueActionState extends State<_QueueAction> {
-  bool _hovering = false;
-
-  @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
-    return Tooltip(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: widget.enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: Opacity(
-          opacity: widget.enabled ? 1 : 0.45,
-          child: Material(
-            color: _hovering ? ds.interactiveBgHover : Colors.transparent,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: widget.enabled ? widget.onTap : null,
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: Icon(widget.icon, size: 14, color: ds.labelTertiary),
-              ),
-            ),
-          ),
-        ),
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: enabled ? onTap : null,
+      icon: Icon(icon, size: 14),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+      style: IconButton.styleFrom(
+        foregroundColor: ds.labelTertiary,
+        disabledForegroundColor: ds.labelTertiary.withValues(alpha: 0.45),
+        hoverColor: ds.interactiveBgHover,
       ),
     );
   }
@@ -3862,15 +3841,21 @@ class _PlusButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return DsCircleButton(
+    final ds = dsOf(context);
+    return IconButton(
       tooltip: l10n.commandsTooltip,
-      enabled: enabled,
-      onTap: () => _open(context),
-      // Web .add: the glyph rides --dsw-alias-label-primary.
-      child: Icon(
-        Icons.add,
-        size: 14,
-        color: Theme.of(context).colorScheme.onSurface,
+      onPressed: enabled ? () => _open(context) : null,
+      icon: const Icon(Icons.add, size: 22),
+      // Native tool control: a standard 40px M3 icon button on the
+      // selector fill, solid interactive fill on hover (the web `.add`
+      // family's visual kept on the component's surface).
+      style: IconButton.styleFrom(
+        backgroundColor: ds.specificSelector,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        disabledBackgroundColor: ds.specificSelector,
+        disabledForegroundColor: ds.labelTertiary,
+        hoverColor: ds.interactiveBgHoverSolid,
+        shape: const CircleBorder(),
       ),
     );
   }
@@ -4133,37 +4118,34 @@ class _PrimarySendButton extends StatelessWidget {
           : sending
           ? l10n.sending
           : l10n.send,
-      child: Material(
-        color: Colors.transparent,
+      // Native primary submit: an M3 small FAB. Brand fill when
+      // actionable; the neutral selector fill with a tertiary glyph when
+      // idle — the composer's "no idle blue" rule carried into the
+      // component. heroTag is disabled so sibling send/stop FABs do not
+      // fight over the shared hero.
+      child: FloatingActionButton.small(
+        heroTag: null,
         shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: active ? (running ? onStop : onSend) : null,
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Center(
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: running
-                    // Stop glyph: 10x10 rounded-3 square.
-                    ? Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: glyph,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      )
-                    // Send glyph: the 16px up arrow.
-                    : Icon(Icons.arrow_upward, size: 16, color: glyph),
-              ),
-            ),
-          ),
-        ),
+        backgroundColor: fill,
+        foregroundColor: glyph,
+        elevation: 2,
+        highlightElevation: 3,
+        hoverElevation: 3,
+        focusElevation: 3,
+        disabledElevation: 0,
+        onPressed: active ? (running ? onStop : onSend) : null,
+        child: running
+            // Stop glyph: 10x10 rounded-3 square.
+            ? Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: glyph,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              )
+            // Send glyph: the up arrow.
+            : const Icon(Icons.arrow_upward, size: 22),
       ),
     );
   }

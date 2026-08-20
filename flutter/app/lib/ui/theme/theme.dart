@@ -66,6 +66,21 @@ class DshTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
       splashFactory: InkSparkle.splashFactory,
+      // Native component defaults ride the brand: the composer's small
+      // send/stop FAB takes the brand fill unless the seat overrides it
+      // (idle keeps the neutral selector fill).
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        smallSizeConstraints: const BoxConstraints.tightFor(
+          width: 40,
+          height: 40,
+        ),
+        backgroundColor: brand,
+        foregroundColor: onBrand,
+        elevation: 2,
+        highlightElevation: 3,
+        hoverElevation: 3,
+        focusElevation: 3,
+      ),
       extensions: <ThemeExtension<dynamic>>[
         isDark ? DeepSuiteColors.dark() : DeepSuiteColors.light(),
       ],

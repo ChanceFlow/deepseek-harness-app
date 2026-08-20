@@ -20,9 +20,10 @@ Widget _host(ContextPressure? pressure) => l10nApp(
   ),
 );
 
+/// The occupancy seat is a native determinate progress indicator.
 final Finder _ringPaint = find.descendant(
   of: find.byKey(const ValueKey('ring-scope')),
-  matching: find.byType(CustomPaint),
+  matching: find.byType(CircularProgressIndicator),
 );
 
 void main() {
@@ -45,6 +46,10 @@ void main() {
       _host(const ContextPressure(pressureTokens: 15000, contextWindow: 30000)),
     );
     expect(_ringPaint, findsOneWidget);
+    // The native ring is determinate at the occupancy fraction.
+    final ring = tester.widget<CircularProgressIndicator>(_ringPaint);
+    expect(ring.value, 0.5);
+    expect(ring.strokeWidth, 2);
     expect(find.bySemanticsLabel('50% of context used'), findsOneWidget);
   });
 

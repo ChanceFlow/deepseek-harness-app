@@ -870,7 +870,9 @@ class _HeaderIconButton extends StatelessWidget {
 
 /// Web WorkspaceBrowser `.searchExpanded` (Workspaces-tab idiom): the
 /// bordered search capsule — r10, border-l2, 13px input, trailing clear
-/// circle that clears and collapses.
+/// circle that clears and collapses — now an inline M3 [SearchBar]
+/// squeezed to the capsule's 36px footprint (native field internals,
+/// focus, and keyboard behavior on the compact sidebar density).
 class _SearchCapsule extends StatelessWidget {
   const _SearchCapsule({
     required this.controller,
@@ -887,58 +889,40 @@ class _SearchCapsule extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final textStyle = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: ds.borderL2),
+      child: SearchBar(
+        controller: controller,
+        autoFocus: true,
+        onChanged: onChanged,
+        hintText: l10n.searchSessionsHint,
+        // Flat, bordered capsule: no elevation, no tint, the capsule's
+        // own border and radius carried onto the component's surface.
+        elevation: const WidgetStatePropertyAll(0),
+        shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+        side: WidgetStatePropertyAll(BorderSide(color: ds.borderL2)),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        child: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: Icon(Icons.search, size: 14, color: ds.labelTertiary),
-            ),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                autofocus: true,
-                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: l10n.searchSessionsHint,
-                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    color: ds.labelTertiary,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-                ),
-                onChanged: onChanged,
-              ),
-            ),
-            SizedBox(
-              width: 36,
-              height: 36,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  hoverColor: ds.interactiveBgHover,
-                  onTap: onCollapse,
-                  child: Center(
-                    child: Icon(
-                      Icons.close,
-                      size: 14,
-                      color: ds.labelSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        constraints: const BoxConstraints.tightFor(height: 36),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 8),
+        ),
+        leading: Icon(Icons.search, size: 16, color: ds.labelTertiary),
+        trailing: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            onPressed: onCollapse,
+            icon: Icon(Icons.close, color: ds.labelSecondary),
+          ),
+        ],
+        textStyle: WidgetStatePropertyAll(textStyle),
+        hintStyle: WidgetStatePropertyAll(
+          textStyle?.copyWith(color: ds.labelTertiary),
         ),
       ),
     );
