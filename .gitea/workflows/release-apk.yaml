@@ -3,9 +3,10 @@
 #      mounted from vars.APK_WWW_DIR), always;
 #   2. a Gitea Release attachment, on v* tag pushes.
 # Runs on the prebaked `flutter-android` runner label built by
-# docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 from the host
-# toolchain — no SDK downloads per run). Tooling contract lives in the
-# process note .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
+# docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 + dependency
+# caches from the host toolchain — no SDK or maven downloads per run).
+# Tooling contract lives in the process note
+# .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
 name: Release APK
 
 on:
@@ -20,6 +21,11 @@ on:
 
 permissions:
   contents: write
+
+defaults:
+  run:
+    # act's default `sh` has no [[ ]]; the image ships bash.
+    shell: bash
 
 jobs:
   build:
@@ -38,24 +44,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore pub cache
-        continue-on-error: true
-        uses: actions/cache/restore@v4
-        with:
-          path: /root/.pub-cache
-          key: pub-${{ hashFiles('flutter/pubspec.lock') }}
-          restore-keys: pub-
-
-      - name: Restore gradle cache
-        continue-on-error: true
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            /root/.gradle/caches
-            /root/.gradle/wrapper
-          key: gradle-${{ hashFiles('flutter/app/android/gradle/wrapper/gradle-wrapper.properties', 'flutter/pubspec.lock') }}
-          restore-keys: gradle-
-
       - name: Resolve version
         id: ver
         run: |
@@ -71,19 +59,12 @@ jobs:
         working-directory: flutter
         run: flutter pub get
 
-      - name: Save pub cache
-        if: always()
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: /root/.pub-cache
-          key: pub-${{ hashFiles('flutter/pubspec.lock') }}
-
       - name: Analyze (fail before the slow build)
         working-directory: flutter
         run: flutter analyze
 
       - name: Build signed release APK
+        working-directory: flutter
         env:
           DSH_KEYSTORE_FILE: /tmp/dsh-release.keystore
           DSH_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -96,16 +77,6 @@ jobs:
             --build-name="${{ steps.ver.outputs.version }}" \
             --build-number="$GITHUB_RUN_NUMBER"
           rm -f "$DSH_KEYSTORE_FILE"
-
-      - name: Save gradle cache
-        if: always()
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /root/.gradle/caches
-            /root/.gradle/wrapper
-          key: gradle-${{ hashFiles('flutter/app/android/gradle/wrapper/gradle-wrapper.properties', 'flutter/pubspec.lock') }}
 
       - name: Stage artifact
         id: stage
@@ -130,16 +101,6 @@ jobs:
           # keep the newest 10 versioned APKs besides dsh-latest
           ls -1t /out/dsh-android-*.apk 2>/dev/null | tail -n +11 | xargs -r rm -f
           ls -1t /out/dsh-android-*.apk.sha256 2>/dev/null | tail -n +11 | xargs -r rm -f
-
-      - name: Upload workflow artifact
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.stage.outputs.apk }}
-          path: |
-            dsh-android-*.apk
-            dsh-android-*.apk.sha256
-          if-no-files-found: error
 
       - name: Create Gitea release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/v')
