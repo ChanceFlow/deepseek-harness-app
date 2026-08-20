@@ -1013,6 +1013,10 @@ class _WorkspaceGroup extends StatelessWidget {
               onArchive: onArchiveSession == null
                   ? null
                   : () => onArchiveSession!(sessions[i].id),
+              // The management surface keeps the verbs discoverable for
+              // touch: always-visible ellipsis seat beside the timestamp
+              // (the long-press stays active too).
+              showVerbButton: true,
             ),
           ],
           if (sessions.length > kCollapsedSessionLimit) ...[

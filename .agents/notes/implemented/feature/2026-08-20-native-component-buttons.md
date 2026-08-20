@@ -94,7 +94,12 @@ fraction in `context_ring_test.dart`; existing tap-by-tooltip tests are
 untouched. The sidebar session-row verbs moved to the long-press menu
 during the same window (feat/sidebar-session-actions-status), so the
 per-row archive seat this note first targeted no longer exists — its
-native-ification dropped out of the merge, not a regression.
+native-ification dropped out of the merge, not a regression. The
+Workspaces tab's session rows additionally render an always-visible
+ellipsis seat beside the timestamp (`SessionTreeRow.showVerbButton`),
+opening the same verbs sheet the long-press opens — the touch
+affordance for the management surface, while the switching sidebar
+keeps the long-press-only form.
 Partially supersedes the custom-circle vocabulary in
 [2026-08-20-composer-mobile-parity.md](2026-08-20-composer-mobile-parity.md)
 — its access/preset/draft decisions still stand.

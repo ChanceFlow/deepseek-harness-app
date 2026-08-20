@@ -791,6 +791,12 @@ abstract class AppLocalizations {
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
+  /// **'Session actions for {title}'**
+  String sessionActionsFor(String title);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
   /// **'A workspace named “{name}” already exists.'**
   String workspaceNameExists(String name);
 

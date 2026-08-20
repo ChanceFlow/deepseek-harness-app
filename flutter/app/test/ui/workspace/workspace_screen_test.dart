@@ -268,6 +268,38 @@ void main() {
     expect(actions, contains(const ArchiveSessionAction('s1')));
   });
 
+  testWidgets('session rows carry an always-visible verbs seat on the tab', (
+    tester,
+  ) async {
+    final actions = <WorkspaceAction>[];
+    await _pump(
+      tester,
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+      ),
+      actions,
+    );
+
+    // Expand the group to reveal the session rows; each non-blank row
+    // carries an always-visible ellipsis seat (the Workspaces touch
+    // idiom), which opens the same verbs sheet as the long-press.
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    expect(find.byTooltip('Session actions for alpha session'), findsOneWidget);
+    expect(find.byTooltip('Session actions for beta session'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Session actions for alpha session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename session'), findsOneWidget);
+    expect(find.text('Fork session'), findsOneWidget);
+    expect(find.text('Archive session'), findsOneWidget);
+
+    await tester.tap(find.text('Archive session'));
+    await tester.pumpAndSettle();
+    expect(actions, contains(const ArchiveSessionAction('s1')));
+  });
+
   testWidgets('long-press fork dispatches and rename opens the dialog', (
     tester,
   ) async {

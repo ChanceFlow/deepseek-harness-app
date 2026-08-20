@@ -261,7 +261,9 @@ String relativeTimeLabel(
 /// accent edge). Long-pressing a non-blank row opens the session-verb
 /// menu (web SessionNodeItem ⋮: rename / fork / archive) when any verb
 /// is provided — both the switching sidebar and the Workspaces tab wire
-/// the verbs that belong to their surface.
+/// the verbs that belong to their surface. The management surface
+/// (Workspaces tab) additionally renders an always-visible ellipsis seat
+/// via [showVerbButton], keeping the verbs discoverable for touch.
 class SessionTreeRow extends StatelessWidget {
   const SessionTreeRow({
     super.key,
@@ -272,6 +274,7 @@ class SessionTreeRow extends StatelessWidget {
     this.onRename,
     this.onFork,
     this.onArchive,
+    this.showVerbButton = false,
   });
 
   final SessionSummary session;
@@ -284,6 +287,11 @@ class SessionTreeRow extends StatelessWidget {
   final VoidCallback? onRename;
   final VoidCallback? onFork;
   final VoidCallback? onArchive;
+
+  /// Renders the always-visible ellipsis seat beside the timestamp when
+  /// the row carries verbs (the Workspaces tab's touch idiom; the
+  /// switching sidebar keeps the long-press-only form).
+  final bool showVerbButton;
 
   bool get _hasVerbs => onRename != null || onFork != null || onArchive != null;
 
@@ -336,7 +344,7 @@ class SessionTreeRow extends StatelessWidget {
                 child: SizedBox(
                   height: 44,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.only(left: 8, right: 4),
                     child: Row(
                       children: [
                         // Web `.slot`: the fixed status seat keeps titles
@@ -372,12 +380,63 @@ class SessionTreeRow extends StatelessWidget {
                             ),
                           ),
                         ],
+                        // The management surface's always-visible verbs
+                        // seat (web ⋮): present only when the row carries
+                        // verbs and [showVerbButton] is set — the same
+                        // menu the long-press opens.
+                        if (showVerbButton && _hasVerbs && !session.blank) ...[
+                          const SizedBox(width: 4),
+                          _SessionVerbButton(
+                            session: session,
+                            onTap: () => _openMenu(context),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Web SessionNodeItem "⋮" seat — mobile form: an always-visible
+/// ellipsis that opens the session-verbs menu on tap.
+class _SessionVerbButton extends StatelessWidget {
+  const _SessionVerbButton({
+    required this.session,
+    required this.onTap,
+  });
+
+  final SessionSummary session;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final ds = dsOf(context);
+    return SizedBox(
+      width: 32,
+      height: 44,
+      child: Tooltip(
+        message: l10n.sessionActionsFor(session.displayTitle),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            hoverColor: ds.interactiveBgHover,
+            onTap: onTap,
+            child: Center(
+              child: Icon(
+                Icons.more_horiz,
+                size: 16,
+                color: ds.labelTertiary,
+              ),
+            ),
           ),
         ),
       ),
