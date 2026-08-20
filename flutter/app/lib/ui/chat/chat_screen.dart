@@ -4222,38 +4222,56 @@ class OutlineTimeline extends StatelessWidget {
           )
           .toList(),
     );
-    final slivers = <Widget>[];
+    // One sliver per rendered element — the group header, then its rows.
+    // Headers and rows are separate slivers so off-screen elements stay
+    // unbuilt: a long outline materializes only the visible turn.
+    final elements = <Widget>[];
     for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
       final group = groups[groupIndex];
       final turn = group.turn;
       final collapsed = turn != null && collapsedTurns.contains(turn);
-      slivers.add(
-        TurnGroupHeader(
+      elements.add(
+        SliverToBoxAdapter(
           key: ValueKey('group-${turn ?? groupIndex}'),
-          turn: turn,
-          items: group.items,
-          collapsed: collapsed,
-          onToggle: onToggle,
+          child: TurnGroupHeader(
+            turn: turn,
+            items: group.items,
+            collapsed: collapsed,
+            onToggle: onToggle,
+          ),
         ),
       );
       if (!collapsed) {
-        slivers.addAll([
-          for (final item in group.items)
-            TimelineRow(
-              key: ValueKey(timelineKey(item)),
-              item: item,
-              onAction: onAction,
-              loadAttachment: loadAttachment,
-              expansion: expansion,
-            ),
-        ]);
+        elements.add(
+          // Lazily built rows: only the visible slice is laid out, and a
+          // collapsed turn contributes no row slivers at all.
+          SliverList.separated(
+            itemCount: group.items.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final item = group.items[index];
+              return TimelineRow(
+                key: ValueKey(timelineKey(item)),
+                item: item,
+                onAction: onAction,
+                loadAttachment: loadAttachment,
+                expansion: expansion,
+              );
+            },
+          ),
+        );
       }
     }
-    return ListView.separated(
-      itemCount: slivers.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => slivers[index],
-    );
+    // The ledger rhythm is one 8px gap between elements; the last element
+    // sits flush at the bottom, matching the previous separator layout.
+    final slivers = <Widget>[
+      for (var i = 0; i < elements.length; i++)
+        SliverPadding(
+          padding: EdgeInsets.only(bottom: i == elements.length - 1 ? 0 : 8),
+          sliver: elements[i],
+        ),
+    ];
+    return CustomScrollView(slivers: slivers);
   }
 }
 
