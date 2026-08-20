@@ -7,8 +7,8 @@ Status: implemented
 The composer and its dock carried custom-drawn controls — 28–34px circles
 painted with `Material + InkWell + Container(BoxShape.circle)` — instead
 of native Material components. The ➕ tool, the model seat, the primary
-send/stop circle, the queue-dock row actions, the sidebar's archive seat,
-and the sidebar's search capsule were all hand-rolled: no Material
+send/stop circle, the queue-dock row actions, and the sidebar's search
+capsule were all hand-rolled: no Material
 ripple/focus semantics for some, no standard tap-target behavior, and
 more surface code to maintain. The mobile client should feel native on
 Android while keeping the DeepSuite brand palette.
@@ -39,8 +39,6 @@ stay.
   web's 28px visual (`BoxConstraints.tightFor(28, 28)`, `padding: zero`)
   so the compact 36px dock rows keep their height; disabled rows render
   the 45%-alpha tertiary glyph via `disabledForegroundColor`.
-- **Sidebar session-row archive seat → standard `IconButton`** constrained
-  to its 32×44 seat; `Tooltip` archive message unchanged.
 - **Sidebar search capsule → inline M3 `SearchBar`** (the expand /
   collapse / clear / live-query flow is unchanged): elevation and tint
   forced off, transparent fill, the capsule's `borderL2` side and r10
@@ -91,9 +89,12 @@ dock strips grow slightly on the tool seats (40px standard vs 28px
 visuals) as the intended M3 footprint. Tests assert the native shapes:
 FAB-state transitions in `composer_bar_test.dart`, status glyph icons in
 `todo_panel_test.dart`, `SearchBar` flow in `session_panel_test.dart`,
-the `IconButton` archive seat in `workspace_screen_test.dart`, and the
-determinate `CircularProgressIndicator` at the occupancy fraction in
-`context_ring_test.dart`; existing tap-by-tooltip tests are untouched.
+and the determinate `CircularProgressIndicator` at the occupancy
+fraction in `context_ring_test.dart`; existing tap-by-tooltip tests are
+untouched. The sidebar session-row verbs moved to the long-press menu
+during the same window (feat/sidebar-session-actions-status), so the
+per-row archive seat this note first targeted no longer exists — its
+native-ification dropped out of the merge, not a regression.
 Partially supersedes the custom-circle vocabulary in
 [2026-08-20-composer-mobile-parity.md](2026-08-20-composer-mobile-parity.md)
 — its access/preset/draft decisions still stand.
