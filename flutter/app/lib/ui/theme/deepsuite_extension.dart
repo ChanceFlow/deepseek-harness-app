@@ -25,6 +25,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.labelSecondary,
     required this.labelTertiary,
     required this.labelCaption,
+    required this.markdownCodeBlock,
+    required this.stateSuccessPrimary,
+    required this.stateBusinessPrimary,
     required this.inputMajor,
     required this.borderThin,
     required this.bubble,
@@ -66,6 +69,14 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color labelSecondary;
   final Color labelTertiary;
   final Color labelCaption;
+
+  /// `--dsw-alias-markdown-code-block` — tool IN/OUT card surface.
+  final Color markdownCodeBlock;
+
+  /// `--dsw-alias-state-success-primary` / `--dsw-alias-state-business-primary`
+  /// — run-state glyphs (tool row leading slot, streaming caret).
+  final Color stateSuccessPrimary;
+  final Color stateBusinessPrimary;
 
   /// Composer card surface + its one-notch-weaker stroke.
   final Color inputMajor;
@@ -125,6 +136,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     labelSecondary: DeepSuiteLight.aliasLabelSecondary,
     labelTertiary: DeepSuiteLight.aliasLabelTertiary,
     labelCaption: DeepSuiteLight.aliasLabelCaption,
+    markdownCodeBlock: DeepSuiteLight.aliasMarkdownCodeBlock,
+    stateSuccessPrimary: DeepSuiteLight.aliasStateSuccessPrimary,
+    stateBusinessPrimary: DeepSuiteLight.aliasStateBusinessPrimary,
     inputMajor: DeepSuiteLight.specificInputMajor,
     borderThin: DeepSuiteLight.aliasBorderL2DarkmodeThin,
     bubble: DeepSuiteLight.specificBubble,
@@ -160,6 +174,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     labelSecondary: DeepSuiteDark.aliasLabelSecondary,
     labelTertiary: DeepSuiteDark.aliasLabelTertiary,
     labelCaption: DeepSuiteDark.aliasLabelCaption,
+    markdownCodeBlock: DeepSuiteDark.aliasMarkdownCodeBlock,
+    stateSuccessPrimary: DeepSuiteDark.aliasStateSuccessPrimary,
+    stateBusinessPrimary: DeepSuiteDark.aliasStateBusinessPrimary,
     inputMajor: DeepSuiteDark.specificInputMajor,
     borderThin: DeepSuiteDark.aliasBorderL2DarkmodeThin,
     bubble: DeepSuiteDark.specificBubble,
@@ -195,6 +212,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? labelSecondary,
     Color? labelTertiary,
     Color? labelCaption,
+    Color? markdownCodeBlock,
+    Color? stateSuccessPrimary,
+    Color? stateBusinessPrimary,
     Color? inputMajor,
     Color? borderThin,
     Color? bubble,
@@ -229,6 +249,9 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: labelSecondary ?? this.labelSecondary,
       labelTertiary: labelTertiary ?? this.labelTertiary,
       labelCaption: labelCaption ?? this.labelCaption,
+      markdownCodeBlock: markdownCodeBlock ?? this.markdownCodeBlock,
+      stateSuccessPrimary: stateSuccessPrimary ?? this.stateSuccessPrimary,
+      stateBusinessPrimary: stateBusinessPrimary ?? this.stateBusinessPrimary,
       inputMajor: inputMajor ?? this.inputMajor,
       borderThin: borderThin ?? this.borderThin,
       bubble: bubble ?? this.bubble,
@@ -280,6 +303,21 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: Color.lerp(labelSecondary, other.labelSecondary, t)!,
       labelTertiary: Color.lerp(labelTertiary, other.labelTertiary, t)!,
       labelCaption: Color.lerp(labelCaption, other.labelCaption, t)!,
+      markdownCodeBlock: Color.lerp(
+        markdownCodeBlock,
+        other.markdownCodeBlock,
+        t,
+      )!,
+      stateSuccessPrimary: Color.lerp(
+        stateSuccessPrimary,
+        other.stateSuccessPrimary,
+        t,
+      )!,
+      stateBusinessPrimary: Color.lerp(
+        stateBusinessPrimary,
+        other.stateBusinessPrimary,
+        t,
+      )!,
       inputMajor: Color.lerp(inputMajor, other.inputMajor, t)!,
       borderThin: Color.lerp(borderThin, other.borderThin, t)!,
       bubble: Color.lerp(bubble, other.bubble, t)!,

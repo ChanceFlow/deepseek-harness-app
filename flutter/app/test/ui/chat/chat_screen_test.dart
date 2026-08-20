@@ -531,6 +531,10 @@ void main() {
     await tester.tap(find.text('Bash'));
     await tester.pumpAndSettle();
     expect(find.text('README.md'), findsOneWidget);
+    // Expanded details ride the IN/OUT card: gutter labels beside the
+    // arguments and the settled result.
+    expect(find.text('IN'), findsOneWidget);
+    expect(find.text('OUT'), findsOneWidget);
     // Approval takes over the composer seat: web takeover card.
     expect(find.text('Waiting for approval'), findsOneWidget);
     expect(find.text('Would run a command'), findsOneWidget);
@@ -1466,6 +1470,10 @@ void main() {
     await tester.pump();
     expect(position().maxScrollExtent, greaterThan(0));
     expect(position().pixels, position().maxScrollExtent);
+    // Streaming assistant text ends in the blinking caret, not the
+    // pre-first-token loader.
+    expect(find.byKey(const ValueKey('streaming-caret')), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     // Streaming growth follows while pinned. The driven glide's ticker
     // establishes its start at the first tick, so frames advance in two
