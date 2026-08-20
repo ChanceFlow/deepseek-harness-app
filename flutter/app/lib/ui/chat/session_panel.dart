@@ -5,10 +5,12 @@
 /// the settings trigger (web `sidebar.settings` seat): a divider-topped
 /// 44px row that selects the Settings destination. The browsing toggles
 /// (per-group expansion overrides, per-group overflow expansions)
-/// persist through the local state store. Shares its design language
-/// with the Workspaces tab (workspace_screen.dart): 44px touch rows,
-/// folder group headers, and the flat search-result list that replaces
-/// the tree while a query is active.
+/// persist through the local state store — except that the group
+/// holding the active session never folds, and within any group the
+/// active session rides first (same-group pinning). Shares its design
+/// language with the Workspaces tab (workspace_screen.dart): 44px touch
+/// rows, folder group headers, and the flat search-result list that
+/// replaces the tree while a query is active.
 ///
 /// With more than one backend configured, the browsing region groups
 /// under per-backend section headers (live connection dot + label +
@@ -125,9 +127,9 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Web `searchExpanded`: the capsule is mounted and owns the live query.
   bool _searchActive = false;
 
-  /// Web `groupExpansion` (user-toggled half): explicit expansion by group
-  /// key. Absent keys default to the selected session's group, mirroring
-  /// the web auto-expand of the current group.
+  /// Web `groupExpansion` (user-toggled half): explicit expansion by
+  /// group key for the groups that can fold. The current group is
+  /// exempt — it is always expanded regardless of any override.
   final Map<String, bool> _groupOverrides = <String, bool>{};
 
   /// Web `expandedSessionGroups`: groups whose overflow control is
@@ -183,15 +185,19 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     widget.onRailChanged?.call(false);
   }
 
-  /// Web ProjectRowItem `onToggle`: flip one group's expansion, pinning it
-  /// so later selection changes no longer auto-expand it.
+  /// Web ProjectRowItem `onToggle` for the groups that CAN fold: flips
+  /// one group's expansion and persists the override. The group holding
+  /// the active session never folds (see [_isGroupExpanded]) — its
+  /// toggle is a no-op, collapsing it would hide the active session
+  /// behind a hunt.
   void _toggleGroup(String key) {
     final currentGroupKey = _currentGroupKeyOf(
       widget.sessions,
       widget.workspaces,
       widget.selectedSessionId,
     );
-    final expanded = _groupOverrides[key] ?? key == currentGroupKey;
+    if (key == currentGroupKey) return;
+    final expanded = _groupOverrides[key] ?? false;
     _userToggled = true;
     setState(() => _groupOverrides[key] = !expanded);
     _persistBrowsingState();
@@ -258,8 +264,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     return _ungroupedKey;
   }
 
+  /// The group holding the active session is ALWAYS expanded — the
+  /// current session must never hide behind a fold the user has to
+  /// hunt through. Every other group follows its persisted override
+  /// (default collapsed).
   bool _isGroupExpanded(String key, String? currentGroupKey) =>
-      _groupOverrides[key] ?? key == currentGroupKey;
+      key == currentGroupKey || (_groupOverrides[key] ?? false);
 
   /// Web tree.ts `sessionVisible`: ordinary sessions are visible; among
   /// blank sessions, only the current one is visible. Subagent children
@@ -288,7 +298,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Web tree.ts `groupByWorkspace`: one group per workspace entity in
   /// stable host order, members resolved from `sessionIds` in their
   /// stored order; sessions outside every account trail in the
-  /// browser-local Ungrouped bucket by recency.
+  /// browser-local Ungrouped bucket by recency. Within a group the
+  /// active session rides first (same-group pinning — the row the user
+  /// is most likely to reach stays above the fold even past the
+  /// collapsed-session overflow limit).
   List<_SessionGroupData> _deriveSessionGroupsOf(
     List<SessionSummary> sessions,
     List<WorkspaceSummary> workspaces,
@@ -314,7 +327,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         _SessionGroupData(
           key: workspace.workspaceId,
           label: workspace.title,
-          sessions: members,
+          sessions: _withActiveSessionPinned(members, selectedSessionId),
         ),
       );
     }
@@ -330,11 +343,29 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         _SessionGroupData(
           key: _ungroupedKey,
           label: 'Ungrouped',
-          sessions: ungrouped,
+          sessions: _withActiveSessionPinned(ungrouped, selectedSessionId),
         ),
       );
     }
     return groups;
+  }
+
+  /// Moves the active session (when present) to the head of [members],
+  /// preserving the rest of the order.
+  List<SessionSummary> _withActiveSessionPinned(
+    List<SessionSummary> members,
+    String? selectedSessionId,
+  ) {
+    if (selectedSessionId == null) return members;
+    final index = members.indexWhere(
+      (session) => session.id == selectedSessionId,
+    );
+    if (index <= 0) return members;
+    return <SessionSummary>[
+      members[index],
+      ...members.sublist(0, index),
+      ...members.sublist(index + 1),
+    ];
   }
 
   /// The browsing-slice group key: the active backend keeps its raw
