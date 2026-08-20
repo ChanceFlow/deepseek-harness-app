@@ -51,7 +51,9 @@ The Flutter port follows that table on the static roster
   a failed submission); success clears them (the state projections —
   plan chip, goal bar — carry the feedback, per the host's "state
   change is the feedback" contract). A null execution falls back to
-  the ordinary prompt send (the live-directory miss).
+  the ordinary prompt send (the live-directory miss); a dispatch
+  failure does not — it surfaces as the error banner
+  ([command-dispatch-failure-prompt-fallback](../bug-fix/2026-08-20-command-dispatch-failure-prompt-fallback.md)).
 - The client-side `/goal <objective>` interception is removed: the host
   command owns the grammar (verified — `/goal Ship the MVP` through
   `commands/execute` creates the goal server-side and answers with the

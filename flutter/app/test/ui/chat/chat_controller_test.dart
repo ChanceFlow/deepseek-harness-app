@@ -153,8 +153,15 @@ class FakeChatRepository implements ChatRepository {
   /// the caller falls back to the prompt send).
   final commandExecutions = <String, CommandExecution?>{};
 
+  /// Lines whose dispatch fails before an answer (transport abort,
+  /// business error) — the fake throws instead of returning.
+  final commandFailures = <String>{};
+
   @override
   Future<CommandExecution?> executeCommand(String sessionId, String line) {
+    if (commandFailures.contains(line)) {
+      throw UnsupportedError('commands/execute: connection aborted');
+    }
     return Future<CommandExecution?>.value(commandExecutions[line]);
   }
 
@@ -949,6 +956,29 @@ void main() {
     final state = controller.state;
     expect(state.errorMessage, 'unknown preset "bogus"');
     // The line never rode the prompt channel.
+    expect(repository.sentMessages, isEmpty);
+  });
+
+  test('a dispatch failure surfaces the error and never prompts the model',
+      () async {
+    final repository = FakeChatRepository();
+    // The dispatch itself fails — a transport abort mid-command (observed
+    // live: a 45s socket death during a 69s compaction).
+    repository.commandFailures.add('/compact');
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/compact'));
+    await pumpEventQueue();
+
+    final state = controller.state;
+    expect(state.errorMessage, contains('connection aborted'));
+    expect(state.isSending, isFalse);
+    // The command line never rode the prompt channel — the roster already
+    // adjudicated it as a host command, so the model must not receive it.
     expect(repository.sentMessages, isEmpty);
   });
 

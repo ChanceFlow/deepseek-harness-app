@@ -504,14 +504,25 @@ class ChatController {
   /// falls back to the ordinary prompt send — the web live-directory
   /// miss; an error result keeps the pending images and surfaces the
   /// command's text; success clears them (the state projections — plan
-  /// chip, goal bar — carry the feedback).
+  /// chip, goal bar — carry the feedback). A dispatch failure (transport
+  /// abort, business error) never re-routes the line to the prompt
+  /// channel: the roster already adjudicated it as a host command, and
+  /// the web's `execute()` reports such failures to the composer notice
+  /// instead of submitting the line — re-sending it would hand the model
+  /// the literal command text.
   Future<void> _executeHostCommand(String sessionId, String line) async {
     _isSending = true;
     _publish();
     try {
-      final execution = await _runCatchingForUi<CommandExecution?>(
-        () => _repository.executeCommand(sessionId, line),
-      );
+      _errorMessage = null;
+      _commandFailed = false;
+      final CommandExecution? execution;
+      try {
+        execution = await _repository.executeCommand(sessionId, line);
+      } catch (error) {
+        _errorMessage = error.toString();
+        return;
+      }
       if (execution == null) {
         await _runCatchingForUi(() async {
           await _repository.sendMessage(
@@ -528,7 +539,6 @@ class ChatController {
       if (execution.kind == CommandOutcomeKind.error) {
         _errorMessage = execution.text;
         _commandFailed = execution.text == null;
-        _publish();
         return;
       }
       _pendingImages = const <PendingImage>[];
