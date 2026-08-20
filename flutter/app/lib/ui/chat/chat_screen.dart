@@ -1029,7 +1029,9 @@ class _ChatPanelState extends State<ChatPanel> {
         : ListView.separated(
             controller: _timelineScroll,
             itemCount: _timelineItems.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            // Web ChatView: one 16px rhythm everywhere through the column
+            // gap.
+            separatorBuilder: (_, _) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
               final item = _timelineItems[index];
               return TimelineRow(
@@ -1360,11 +1362,15 @@ class MessageRow extends StatelessWidget {
             loadAttachment: loadAttachment,
           ),
         if (message.streaming)
-          const SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
+          // Pre-first-token shows the small loader; once text flows the
+          // streaming tail is the blinking caret.
+          message.text.isEmpty
+              ? const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const _StreamingCaret(key: ValueKey('streaming-caret'))
         else if (message.text.isNotEmpty)
           MessageIconActions(
             text: message.text,
@@ -1372,6 +1378,48 @@ class MessageRow extends StatelessWidget {
             clockAtStart: false,
           ),
       ],
+    );
+  }
+}
+
+/// Streaming assistant tail: a 2×18 business-blue caret blinking at 1s,
+/// the flat-flow stand-in for the web turn-status line.
+class _StreamingCaret extends StatefulWidget {
+  const _StreamingCaret({super.key});
+
+  @override
+  State<_StreamingCaret> createState() => _StreamingCaretState();
+}
+
+class _StreamingCaretState extends State<_StreamingCaret>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _blink = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1000),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _blink.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    return FadeTransition(
+      opacity: _blink,
+      child: Container(
+        width: 2,
+        height: 18,
+        color: ds.stateBusinessPrimary,
+      ),
     );
   }
 }
@@ -1506,7 +1554,10 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
 /// Tool summary row — port of the web ToolRow (figma 122:9479): one 24px
 /// line [leading state slot] gap6 [title] dot [summary FILL truncate]; the
 /// details (arguments + result) expand below on tap. Running rows carry the
-/// shared sweep glare.
+/// shared sweep glare. The leading slot carries a state-colored glyph
+/// (success check / business spinner / error cross) and the title sets the
+/// monospace stack; the expanded details render as the web IN/OUT card
+/// (bordered code surface with gutter labels and a hairline divider).
 class ToolCallRow extends StatefulWidget {
   const ToolCallRow({super.key, required this.call, this.expansion});
 
@@ -1599,16 +1650,22 @@ class _ToolCallRowState extends State<ToolCallRow>
                   child: Row(
                     children: [
                       // A product row may carry its own glyph (the todo
-                      // checklist); otherwise the shared variant chrome.
+                      // checklist); otherwise the state-colored variant
+                      // chrome.
                       model.leading != null
                           ? Icon(
                               model.leading,
                               size: 14,
                               color: ds.labelSecondary,
                             )
-                          : _leading(context, failed),
+                          : _leading(context, model.state),
                       const SizedBox(width: 6),
-                      Text(model.title, style: theme.textTheme.bodyMedium),
+                      Text(
+                        model.title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontFamily: kFontFamilyMonospace,
+                        ),
+                      ),
                       Container(
                         width: 2,
                         height: 2,
@@ -1663,30 +1720,25 @@ class _ToolCallRowState extends State<ToolCallRow>
         if (_expanded && hasDetails)
           Container(
             width: double.infinity,
-            margin: const EdgeInsets.only(top: 2, left: 22),
-            padding: const EdgeInsets.all(8),
+            margin: const EdgeInsets.only(top: 4, left: 20),
             decoration: BoxDecoration(
-              color: ds.bgLayer1,
-              borderRadius: BorderRadius.circular(8),
+              color: ds.markdownCodeBlock,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ds.divider),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (model.body case final body?)
-                  Text(
-                    body,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: kFontFamilyMonospace,
-                    ),
+                  _ioSection(context, 'IN', body, failed: false),
+                if (model.body != null && model.output != null)
+                  Container(
+                    height: 1,
+                    color: ds.borderL2,
+                    margin: const EdgeInsets.symmetric(horizontal: 14),
                   ),
                 if (model.output case final output?)
-                  Text(
-                    output,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: failed ? theme.colorScheme.error : null,
-                      fontFamily: kFontFamilyMonospace,
-                    ),
-                  ),
+                  _ioSection(context, 'OUT', output, failed: failed),
               ],
             ),
           ),
@@ -1694,22 +1746,64 @@ class _ToolCallRowState extends State<ToolCallRow>
     );
   }
 
-  Widget _leading(BuildContext context, bool failed) {
-    if (failed) {
-      return Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.error,
-          shape: BoxShape.circle,
-        ),
-      );
-    }
-    return Icon(
-      Icons.terminal_outlined,
-      size: 14,
-      color: dsOf(context).labelSecondary,
+  /// One IN/OUT gutter-label section of the expanded card: sticky-label
+  /// caption beside the monospace payload (web ToolRow .io-section).
+  Widget _ioSection(
+    BuildContext context,
+    String label,
+    String payload, {
+    required bool failed,
+  }) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: ds.labelCaption,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              payload,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: failed ? theme.colorScheme.error : ds.labelSecondary,
+                fontFamily: kFontFamilyMonospace,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _leading(BuildContext context, ToolRowState state) {
+    final ds = dsOf(context);
+    switch (state) {
+      case ToolRowState.running:
+        return SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: ds.stateBusinessPrimary,
+          ),
+        );
+      case ToolRowState.ok:
+        return Icon(Icons.check, size: 14, color: ds.stateSuccessPrimary);
+      case ToolRowState.error:
+        return Icon(
+          Icons.close,
+          size: 14,
+          color: Theme.of(context).colorScheme.error,
+        );
+    }
   }
 }
 
@@ -3532,8 +3626,9 @@ class TurnGroupHeader extends StatelessWidget {
   }
 }
 
-/// Ledger-style turn divider, the first slice of the Web trajectory
-/// grouping.
+/// Ledger-style turn divider: a left-aligned micro label (14px hairline
+/// tick + letterspaced caption text) marking where a turn begins — quiet
+/// enough to read as a boundary notice, not conversation content.
 class TurnBoundaryRow extends StatelessWidget {
   const TurnBoundaryRow({super.key, required this.turn});
 
@@ -3541,22 +3636,24 @@ class TurnBoundaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ds = dsOf(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          const Expanded(child: Divider(height: 1)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: SizedBox(
+        height: 20,
+        child: Row(
+          children: [
+            Container(width: 14, height: 1, color: ds.borderL2),
+            const SizedBox(width: 10),
+            Text(
               'Turn $turn',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: ds.labelCaption,
+                letterSpacing: 0.8,
               ),
             ),
-          ),
-          const Expanded(child: Divider(height: 1)),
-        ],
+          ],
+        ),
       ),
     );
   }
