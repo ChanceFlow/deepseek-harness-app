@@ -1608,7 +1608,7 @@ class ToolCallRow extends StatefulWidget {
 
 class _ToolCallRowState extends State<ToolCallRow>
     with SingleTickerProviderStateMixin {
-  bool _expanded = false;
+  late final ExpansibleController _tileController = ExpansibleController();
   late final AnimationController _sweep = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 2600),
@@ -1621,7 +1621,12 @@ class _ToolCallRowState extends State<ToolCallRow>
     if (expansion != null) {
       final key = timelineKey(widget.call);
       expansion.expanded(key).then((restored) {
-        if (mounted && restored) setState(() => _expanded = true);
+        // Restore through the native controller: the tile reads this same
+        // instance at initState, so a restore landing before or after the
+        // first build both take effect.
+        if (mounted && restored && !_tileController.isExpanded) {
+          _tileController.expand();
+        }
       });
     }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
@@ -1641,6 +1646,7 @@ class _ToolCallRowState extends State<ToolCallRow>
 
   @override
   void dispose() {
+    _tileController.dispose();
     _sweep.dispose();
     super.dispose();
   }
@@ -1655,130 +1661,129 @@ class _ToolCallRowState extends State<ToolCallRow>
     final running = model.state == ToolRowState.running;
     final failed = model.state == ToolRowState.error;
     final hasDetails = model.body != null || model.output != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          label: running
-              ? l10n.semanticsRunning
-              : failed
-              ? l10n.semanticsFailed
-              : null,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: hasDetails
-                ? () {
-                    final next = !_expanded;
-                    setState(() => _expanded = next);
-                    widget.expansion?.setExpanded(
-                      timelineKey(widget.call),
-                      next,
-                    );
-                  }
+    return Semantics(
+      label: running
+          ? l10n.semanticsRunning
+          : failed
+          ? l10n.semanticsFailed
+          : null,
+      child: ExpansionTile(
+        controller: _tileController,
+        // No payload means a non-interactive row: the native tile drops
+        // its ripple and trailing arrow the same way the web row is inert.
+        enabled: hasDetails,
+        showTrailingIcon: hasDetails,
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 28,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        onExpansionChanged: (expanded) {
+          if (hasDetails) {
+            widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
+          }
+        },
+        title: ClipRect(
+          child: SweepHighlight(
+            controller: running && !MediaQuery.disableAnimationsOf(context)
+                ? _sweep
                 : null,
-            child: ClipRect(
-              child: SweepHighlight(
-                controller: running && !MediaQuery.disableAnimationsOf(context)
-                    ? _sweep
-                    : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      // A product row may carry its own glyph (the todo
-                      // checklist); otherwise the state-colored variant
-                      // chrome.
-                      model.leading != null
-                          ? Icon(
-                              model.leading,
-                              size: 14,
-                              color: ds.labelSecondary,
-                            )
-                          : _leading(context, model.state),
-                      const SizedBox(width: 6),
-                      Text(
-                        model.title,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontFamily: kFontFamilyMonospace,
-                        ),
-                      ),
-                      Container(
-                        width: 2,
-                        height: 2,
-                        margin: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: ds.labelCaption,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          // Web ToolRow: the summary is args-derived; the
-                          // settled result text never reaches this slot.
-                          failed && model.errorSummary != null
-                              ? model.errorSummary!
-                              : model.summary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: failed
-                                ? theme.colorScheme.error
-                                : ds.labelTertiary,
-                          ),
-                        ),
-                      ),
-                      // The todo parallel-active count rides a
-                      // non-shrinking suffix beside the truncatable text.
-                      if (model.summarySuffix case final suffix?) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          suffix,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: ds.labelSecondary,
-                          ),
-                        ),
-                      ],
-                      if (hasDetails)
-                        Icon(
-                          _expanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  // A product row may carry its own glyph (the todo
+                  // checklist); otherwise the state-colored variant
+                  // chrome.
+                  model.leading != null
+                      ? Icon(
+                          model.leading,
                           size: 14,
                           color: ds.labelSecondary,
-                        ),
-                    ],
+                        )
+                      : _leading(context, model.state),
+                  const SizedBox(width: 6),
+                  Text(
+                    model.title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: kFontFamilyMonospace,
+                    ),
                   ),
-                ),
+                  Container(
+                    width: 2,
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: ds.labelCaption,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      // Web ToolRow: the summary is args-derived; the
+                      // settled result text never reaches this slot.
+                      failed && model.errorSummary != null
+                          ? model.errorSummary!
+                          : model.summary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: failed
+                            ? theme.colorScheme.error
+                            : ds.labelTertiary,
+                      ),
+                    ),
+                  ),
+                  // The todo parallel-active count rides a
+                  // non-shrinking suffix beside the truncatable text.
+                  if (model.summarySuffix case final suffix?) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      suffix,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ds.labelSecondary,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
         ),
-        if (_expanded && hasDetails)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(top: 4, left: 20),
-            decoration: BoxDecoration(
-              color: ds.markdownCodeBlock,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: ds.divider),
+        // The theme's childrenPadding (left 20) carries the web IN/OUT
+        // card's inset; the card keeps only its top gap.
+        children: [
+          if (hasDetails)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 4),
+              decoration: BoxDecoration(
+                color: ds.markdownCodeBlock,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ds.divider),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (model.body case final body?)
+                    _ioSection(context, l10n.inputLabel, body, failed: false),
+                  if (model.body != null && model.output != null)
+                    Container(
+                      height: 1,
+                      color: ds.borderL2,
+                      margin: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  if (model.output case final output?)
+                    _ioSection(
+                      context,
+                      l10n.outputLabel,
+                      output,
+                      failed: failed,
+                    ),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (model.body case final body?)
-                  _ioSection(context, l10n.inputLabel, body, failed: false),
-                if (model.body != null && model.output != null)
-                  Container(
-                    height: 1,
-                    color: ds.borderL2,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                  ),
-                if (model.output case final output?)
-                  _ioSection(context, l10n.outputLabel, output, failed: failed),
-              ],
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -2610,12 +2615,35 @@ class _QuestionCard extends StatelessWidget {
                   MarkdownText(text: detail),
                 if (hasOptions) ...[
                   const SizedBox(height: 8),
-                  for (final option in question.options)
-                    _QuestionOptionTile(
-                      question: question,
-                      option: option,
-                      selected: draft.selected.contains(option),
-                      onTap: () => onChoose(question.id, option),
+                  if (question.multiSelect)
+                    for (final option in question.options)
+                      _QuestionOptionTile(
+                        question: question,
+                        option: option,
+                        selected: draft.selected.contains(option),
+                        onChanged: () => onChoose(question.id, option),
+                      )
+                  else
+                    RadioGroup<String>(
+                      groupValue: draft.selected.isEmpty
+                          ? null
+                          : draft.selected.first,
+                      onChanged: (value) {
+                        if (value != null) onChoose(question.id, value);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final option in question.options)
+                            _QuestionOptionTile(
+                              question: question,
+                              option: option,
+                              selected: draft.selected.contains(option),
+                              onChanged: () =>
+                                  onChoose(question.id, option),
+                            ),
+                        ],
+                      ),
                     ),
                 ],
               ],
@@ -2706,113 +2734,99 @@ class _QuestionCardHeader extends StatelessWidget {
   }
 }
 
-/// One selectable option row (web `.option`): a leading number chip
-/// (single-select) or checkbox (multi-select), the display label with the
-/// recommended badge, and the asker's description.
+/// One selectable option row (web `.option`): a native indicator seat
+/// (RadioListTile under the card's RadioGroup for single-select,
+/// CheckboxListTile for multi-select), the display label with the
+/// recommended badge, and the asker's description. The deepsuite visual
+/// rides the ListTile/Radio/Checkbox themes; the row fill and indicator
+/// replace the hand-drawn number chip and checkbox.
 class _QuestionOptionTile extends StatelessWidget {
   const _QuestionOptionTile({
     required this.question,
     required this.option,
     required this.selected,
-    required this.onTap,
+    required this.onChanged,
   });
 
   final QuestionItem question;
   final String option;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
     final display = _parseRecommendedLabel(option);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          margin: const EdgeInsets.only(top: 1),
-          padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: selected ? ds.interactiveBgHover : Colors.transparent,
-            border: Border.all(
-              color: selected ? ds.borderL2 : Colors.transparent,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (question.multiSelect)
-                _QuestionCheckbox(checked: selected, ds: ds)
-              else
-                _QuestionNumberChip(
-                  child: Text(
-                    '${question.options.indexOf(option) + 1}',
-                    style: TextStyle(
-                      color: ds.labelSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      height: 18 / 12,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
-                      runSpacing: 2,
-                      children: [
-                        Text(
-                          display.label,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontSize: 14,
-                            height: 24 / 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (display.recommended)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            decoration: BoxDecoration(
-                              color: ds.sidebarNavItemActiveAccent,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              AppLocalizations.of(context)!.questionRecommended,
-                              style: TextStyle(
-                                color: ds.buttonInfoFill,
-                                fontSize: 11,
-                                height: 18 / 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (question.optionDescriptions[option]
-                        case final String description)
-                      Text(
-                        description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 14,
-                          height: 24 / 14,
-                          color: ds.labelTertiary,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+    Widget? subtitle;
+    if (question.optionDescriptions[option] case final String description) {
+      subtitle = Text(
+        description,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontSize: 14,
+          height: 24 / 14,
+          color: dsOf(context).labelTertiary,
+        ),
+      );
+    }
+    final title = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      runSpacing: 2,
+      children: [
+        Text(
+          display.label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 14,
+            height: 24 / 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
-      ),
+        if (display.recommended)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: dsOf(context).sidebarNavItemActiveAccent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              AppLocalizations.of(context)!.questionRecommended,
+              style: TextStyle(
+                color: dsOf(context).buttonInfoFill,
+                fontSize: 11,
+                height: 18 / 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    );
+    // The option rows need their own Material ancestor: the question card
+    // behind them is a decorated container, and ListTile paints its
+    // background and ink splashes on the nearest Material — one must sit
+    // between the tile and the card decoration.
+    return Material(
+      color: Colors.transparent,
+      child: question.multiSelect
+          ? CheckboxListTile(
+              value: selected,
+              onChanged: (_) => onChanged(),
+              controlAffinity: ListTileControlAffinity.leading,
+              shape: shape,
+              title: title,
+              subtitle: subtitle,
+            )
+          : RadioListTile<String>(
+              // The ancestor RadioGroup owns the group value and change
+              // routing; the tile carries only its own value.
+              value: option,
+              controlAffinity: ListTileControlAffinity.leading,
+              shape: shape,
+              title: title,
+              subtitle: subtitle,
+            ),
     );
   }
 }
@@ -4443,96 +4457,78 @@ class CompactionRow extends StatelessWidget {
 /// ("Context injection", or "Recall" for cross-session material) beside
 /// the durable producer the source identifies; the expanded body carries
 /// the injected content.
-class ContextInjectionRow extends StatefulWidget {
+class ContextInjectionRow extends StatelessWidget {
   const ContextInjectionRow({super.key, required this.injection});
 
   final TimelineContextInjection injection;
-
-  @override
-  State<ContextInjectionRow> createState() => _ContextInjectionRowState();
-}
-
-class _ContextInjectionRowState extends State<ContextInjectionRow> {
-  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final injection = widget.injection;
+    final injection = this.injection;
     final hasBody = injection.text.trim().isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: hasBody ? () => setState(() => _expanded = !_expanded) : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                Icon(Icons.travel_explore, size: 14, color: ds.labelSecondary),
-                const SizedBox(width: 6),
-                Text(
-                  injection.isRecall
-                      ? l10n.recallLabel
-                      : l10n.contextInjectionLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: ds.labelPrimaryDimmed,
-                  ),
-                ),
-                if (injection.producerLabel case final label?) ...[
-                  Container(
-                    width: 2,
-                    height: 2,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: ds.labelCaption,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: ds.labelSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-                if (injection.summary case final summary?) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: ds.labelTertiary,
-                      ),
-                    ),
-                  ),
-                ],
-                if (hasBody)
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 14,
-                    color: ds.labelSecondary,
-                  ),
-              ],
+    return ExpansionTile(
+      // No body means a non-interactive disclosure: the native tile drops
+      // its ripple and trailing arrow (web rule).
+      enabled: hasBody,
+      showTrailingIcon: hasBody,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minTileHeight: 28,
+      tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+      title: Row(
+        children: [
+          Icon(Icons.travel_explore, size: 14, color: ds.labelSecondary),
+          const SizedBox(width: 6),
+          Text(
+            injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: ds.labelPrimaryDimmed,
             ),
           ),
+          if (injection.producerLabel case final label?) ...[
+            Container(
+              width: 2,
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: ds.labelCaption,
+                shape: BoxShape.circle,
+              ),
+            ),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: ds.labelSecondary,
+                ),
+              ),
+            ),
+          ],
+          if (injection.summary case final summary?) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                summary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: ds.labelTertiary,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 4),
+          child: MarkdownText(text: injection.text),
         ),
-        if (_expanded && hasBody)
-          Padding(
-            padding: const EdgeInsets.only(left: 20, top: 2, bottom: 4),
-            child: MarkdownText(text: injection.text),
-          ),
       ],
     );
   }

@@ -2,6 +2,9 @@
 ///
 /// Collapsed: icon + "Think" title + first/latest-line summary; expanded:
 /// the full reasoning body. The streaming tail shows a sweeping highlight.
+/// Expansion rides the native [ExpansionTile] (M3 animation, ripple, and
+/// expand/collapse semantics) themed to the deepsuite flat visual; the
+/// title row keeps the web chrome and the sweep.
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -72,79 +75,71 @@ class _ReasoningRowState extends State<ReasoningRow>
     final l10n = AppLocalizations.of(context)!;
     return Semantics(
       label: widget.running ? l10n.semanticsRunning : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: ClipRect(
-              child: SweepHighlight(
-                controller: widget.running && !reduced ? _sweep : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 4,
-                    horizontal: 2,
+      child: ExpansionTile(
+        // Native expansion mirrors into _expanded so the collapsed
+        // summary hides once the body opens (web disclosure contract).
+        onExpansionChanged: (expanded) =>
+            setState(() => _expanded = expanded),
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 24,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+        childrenPadding: const EdgeInsets.only(left: 22),
+        title: ClipRect(
+          child: SweepHighlight(
+            controller: widget.running && !reduced ? _sweep : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.psychology_outlined,
+                    size: 14,
+                    color: ds.labelSecondary,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.psychology_outlined,
-                        size: 14,
-                        color: ds.labelSecondary,
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.thinkLabel,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: ds.labelSecondary,
+                    ),
+                  ),
+                  if (!_expanded) ...[
+                    Container(
+                      width: 2,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: ds.labelCaption,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        l10n.thinkLabel,
+                    ),
+                    Expanded(
+                      child: Text(
+                        _summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelSecondary,
+                          color: ds.labelTertiary,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        _expanded
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        size: 14,
-                        color: ds.labelSecondary,
-                      ),
-                      if (!_expanded) ...[
-                        Container(
-                          width: 2,
-                          height: 2,
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: ds.labelCaption,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            _summary,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: ds.labelTertiary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 4, left: 22),
-              child: Text(
-                widget.text,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: ds.labelTertiary,
-                ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              widget.text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ds.labelTertiary,
               ),
             ),
+          ),
         ],
       ),
     );

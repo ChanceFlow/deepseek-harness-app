@@ -86,11 +86,74 @@ class DshTheme {
       ],
     );
     final titles = base.textTheme;
+    final ds = isDark ? DeepSuiteColors.dark() : DeepSuiteColors.light();
     return base.copyWith(
       textTheme: titles.copyWith(
         titleLarge: titles.titleLarge?.copyWith(fontWeight: FontWeight.w500),
         titleMedium: titles.titleMedium?.copyWith(fontWeight: FontWeight.w500),
         titleSmall: titles.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+      ),
+      // Timeline row chrome rides native components while keeping the
+      // deepsuite flat visual: transparent tiles, no M3 card chrome, a
+      // compact trailing arrow in the label-toned ink. Rows override only
+      // per-row geometry (tilePadding / minTileHeight / childrenPadding).
+      expansionTileTheme: ExpansionTileThemeData(
+        backgroundColor: Colors.transparent,
+        collapsedBackgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(),
+        collapsedShape: const RoundedRectangleBorder(),
+        iconColor: ds.labelSecondary,
+        collapsedIconColor: ds.labelSecondary,
+        textColor: ds.labelSecondary,
+        collapsedTextColor: ds.labelPrimaryDimmed,
+        childrenPadding: const EdgeInsets.only(left: 20),
+      ),
+      // Question-card option rows (RadioListTile / CheckboxListTile): the
+      // selected row keeps the web option fill, the tile text rides the
+      // card's 14px body rhythm, and native indicators use the deepsuite
+      // accent (radio) and the on-surface fill + foreground check
+      // (checkbox) of the hand-drawn seats they replace.
+      listTileTheme: ListTileThemeData(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        contentPadding: const EdgeInsets.only(left: 8),
+        minVerticalPadding: 4,
+        selectedTileColor: ds.interactiveBgHover,
+        selectedColor: scheme.onSurface,
+        titleTextStyle: titles.bodyMedium?.copyWith(
+          fontSize: 14,
+          height: 24 / 14,
+          fontWeight: FontWeight.w500,
+        ),
+        subtitleTextStyle: titles.bodyMedium?.copyWith(
+          fontSize: 14,
+          height: 24 / 14,
+          color: ds.labelTertiary,
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? ds.accent
+              : Colors.transparent,
+        ),
+        overlayColor: WidgetStatePropertyAll(
+          ds.interactiveBgHover.withValues(alpha: 0.25),
+        ),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.onSurface
+              : Colors.transparent,
+        ),
+        checkColor: WidgetStatePropertyAll(ds.labelPrimaryForeground),
+        side: BorderSide(color: ds.borderL4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
       ),
     );
   }
