@@ -16,6 +16,16 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # Egress (Flutter SDK download, pub) goes through the LAN proxy from
+      # the repo variable EGRESS_PROXY; Gitea itself and the submodule URL
+      # (127.0.0.1:3000) must bypass it.
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4

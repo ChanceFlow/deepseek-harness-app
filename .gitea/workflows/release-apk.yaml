@@ -38,8 +38,8 @@ jobs:
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
-      NO_PROXY: gitea,localhost,127.0.0.1
-      no_proxy: gitea,localhost,127.0.0.1
+      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,7 +64,7 @@ jobs:
         run: flutter analyze
 
       - name: Build signed release APK
-        working-directory: flutter
+        working-directory: flutter/app
         env:
           DSH_KEYSTORE_FILE: /tmp/dsh-release.keystore
           DSH_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
