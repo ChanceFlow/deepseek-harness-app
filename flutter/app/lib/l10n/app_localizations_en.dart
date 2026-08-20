@@ -1210,4 +1210,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commandFailed => 'Command failed';
+
+  @override
+  String turnFailed(String detail) {
+    return 'This turn failed: $detail';
+  }
+
+  @override
+  String get unknownModelFailure => 'unknown model failure';
+
+  @override
+  String get turnStopped => 'Turn stopped';
+
+  @override
+  String get turnInterrupted => 'Turn interrupted';
+
+  @override
+  String get turnBlocked => 'Turn blocked';
+
+  @override
+  String get turnMaxTokens => 'Output token limit reached';
+
+  @override
+  String get turnCompleteTitle => 'Turn complete';
+
+  @override
+  String get turnCompletionChannel => 'Turn completion';
+
+  @override
+  String get turnCompletionChannelDescription =>
+      'Notifies when a running conversation turn finishes.';
 }

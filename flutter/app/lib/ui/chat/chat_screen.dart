@@ -1275,6 +1275,7 @@ class TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return switch (item) {
       TimelineMessage(:final value) => MessageRow(
         message: value,
@@ -1304,10 +1305,19 @@ class TimelineRow extends StatelessWidget {
       ),
       TimelineQueue() => const SizedBox.shrink(),
       TimelineJobs() => const SizedBox.shrink(),
-      TimelineError(:final message) => SizedBox(
+      TimelineError(:final message, :final code) => SizedBox(
         width: double.infinity,
         child: Text(
-          message,
+          switch (code) {
+            'error' => l10n.turnFailed(
+              message.isEmpty ? l10n.unknownModelFailure : message,
+            ),
+            'aborted' => l10n.turnStopped,
+            'interrupted' => l10n.turnInterrupted,
+            'blocked' => l10n.turnBlocked,
+            'max-tokens' => l10n.turnMaxTokens,
+            _ => message,
+          },
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),

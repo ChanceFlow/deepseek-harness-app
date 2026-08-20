@@ -57,11 +57,20 @@ Wire `flutter_localizations` + `intl` with ARB-based generation:
 - **The host-command roster splits in two**: `kHostCommandNames` (const,
   wire names/hints for the controller's `/command` membership check) and
   `hostCommands(l10n)` (localized descriptions for UI rows).
-- **System notifications stay English** ('Turn complete' title, 'Turn
-  completion' channel name/description). They post from
-  `di/providers.dart` with no BuildContext; localizing them needs a
-  locale registry threaded into the DI layer. Documented scope decision —
-  the in-app surface is fully localized; see Alternatives.
+- **System notifications localize at launch.** `TurnCompleteNotifier`
+  resolves `lookupAppLocalizations(platformDispatcher.locale)` once in
+  `initialize()` (main's `ensureInitialized` path), so the
+  turn-complete title and Android channel strings follow the device
+  language without context plumbing into the DI layer; the pre-init
+  seat is en. `MaterialApp.onGenerateTitle` resolves the OS
+  task-switcher label through l10n likewise.
+- **Turn/end timeline errors localize in the UI layer.**
+  `timeline_reducer` publishes the wire kind (`code`) plus host error
+  detail only (`message`, empty for non-error kinds) — never composed
+  English; `chat_screen` maps the known kinds (`error`/`aborted`/
+  `interrupted`/`blocked`/`max-tokens`) to l10n keys (reference
+  `message.turnError`/`maxTokens` family), falling back to `message`
+  for unrecognized kinds. spec.md documents the contract.
 - **Widget tests resolve localization** through a shared helper
   `test/l10n_app.dart` (`l10nApp(home: ...)`); every pump site switched
   from a bare `MaterialApp` to it. Pure-function tests (tool row model,
@@ -74,9 +83,12 @@ Wire `flutter_localizations` + `intl` with ARB-based generation:
   following covers the stated 中英 requirement. Deferred; the wiring here
   (supportedLocales, delegates) is switch-ready if it lands later.
 - **Locale registry for system notifications** (a Riverpod
-  `localeProvider` synced from DshApp + `lookupAppLocalizations` in the
-  DI provider). Small, but reaches into DI for two strings that only
-  render while backgrounded; recorded as a follow-up, not in this MR.
+  `localeProvider` synced from DshApp, live-updating titles on locale
+  switch). Rejected: notifications post only while backgrounded and the
+  plugin caches Android channel metadata; resolving the launch-time
+  locale once in `initialize()` covers device-language changes with a
+  fraction of the plumbing. An in-app switcher (above) would revisit
+  this.
 - **Keep the "no generated files" stance and hand-write localizations.**
   Flutter 3.47 has no synthetic package; hand-rolled lookup tables would
   duplicate gen-l10n and rot; committing SDK output is the ecosystem

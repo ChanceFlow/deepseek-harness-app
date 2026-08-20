@@ -122,7 +122,7 @@ Raw dsh session events are folded by `TimelineReducer` into neutral items.
 | `assistant/message` | final `TimelineItem.Message` with `streaming = false` |
 | `tool/call` | `TimelineItem.ToolCall` with `status = RUNNING` |
 | `tool/result` | paired `TimelineItem.ToolCall` with result/error status |
-| `turn/end` (error/aborted/interrupted/max-tokens) | `TimelineItem.Error` |
+| `turn/end` (error/aborted/interrupted/max-tokens) | `TimelineItem.Error` — `code` = the wire kind; `message` = host error detail only (empty for non-error kinds); the client localizes known kinds by `code`, falling back to `message` |
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |

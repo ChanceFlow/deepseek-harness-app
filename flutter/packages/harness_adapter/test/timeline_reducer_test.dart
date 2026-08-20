@@ -460,4 +460,40 @@ void main() {
     expect(recall.isRecall, isTrue);
     expect(recall.producerLabel, 'Yesterday debugging');
   });
+
+  test('turn/end publishes wire kind and host detail, never composed copy', () {
+    final reducer = TimelineReducer('s1');
+    void turnEnd(int seq, JsonMap reason) {
+      reducer.ingestFrame(
+        ServerRequest(
+          rpcId: 'rpc-$seq',
+          method: 'session/event',
+          payload: <String, Object?>{
+            'type': 'session/event',
+            'event': event(seq, 'turn/end', <String, Object?>{'reason': reason}),
+          },
+        ),
+      );
+    }
+    turnEnd(1, <String, Object?>{
+      'kind': 'error',
+      'error': <String, Object?>{'message': 'model exploded'},
+    });
+    turnEnd(2, <String, Object?>{'kind': 'aborted'});
+    turnEnd(3, <String, Object?>{'kind': 'blocked'});
+    turnEnd(4, <String, Object?>{'kind': 'max-tokens'});
+
+    final errors = reducer.snapshot().whereType<TimelineError>().toList();
+    expect(errors, hasLength(4));
+    // Error keeps the host detail verbatim; the client localizes the
+    // known kinds by code (spec.md turn/end contract).
+    expect(errors[0].code, 'error');
+    expect(errors[0].message, 'model exploded');
+    expect(errors[1].code, 'aborted');
+    expect(errors[1].message, isEmpty);
+    expect(errors[2].code, 'blocked');
+    expect(errors[2].message, isEmpty);
+    expect(errors[3].code, 'max-tokens');
+    expect(errors[3].message, isEmpty);
+  });
 }

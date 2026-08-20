@@ -2118,6 +2118,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Command failed'**
   String get commandFailed;
+
+  /// Turn/end error line with host detail.
+  ///
+  /// In en, this message translates to:
+  /// **'This turn failed: {detail}'**
+  String turnFailed(String detail);
+
+  /// No description provided for @unknownModelFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown model failure'**
+  String get unknownModelFailure;
+
+  /// No description provided for @turnStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn stopped'**
+  String get turnStopped;
+
+  /// No description provided for @turnInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn interrupted'**
+  String get turnInterrupted;
+
+  /// No description provided for @turnBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn blocked'**
+  String get turnBlocked;
+
+  /// No description provided for @turnMaxTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Output token limit reached'**
+  String get turnMaxTokens;
+
+  /// No description provided for @turnCompleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn complete'**
+  String get turnCompleteTitle;
+
+  /// No description provided for @turnCompletionChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn completion'**
+  String get turnCompletionChannel;
+
+  /// No description provided for @turnCompletionChannelDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifies when a running conversation turn finishes.'**
+  String get turnCompletionChannelDescription;
 }
 
 class _AppLocalizationsDelegate

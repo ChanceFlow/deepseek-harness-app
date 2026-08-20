@@ -335,5 +335,14 @@
   "imageRejectionUnsupported": "{name}：不支持的图片类型 {type}",
   "imageRejectionTooLarge": "{name}：超过 {maxBytes} 字节上限",
   "imageRejectionNoRoom": "一条消息最多还能添加 {room} 张图片",
-  "commandFailed": "命令失败"
+  "commandFailed": "命令失败",
+  "turnFailed": "本轮运行失败：{detail}",
+  "unknownModelFailure": "未知模型错误",
+  "turnStopped": "回合已停止",
+  "turnInterrupted": "回合已中断",
+  "turnBlocked": "回合受阻",
+  "turnMaxTokens": "已达到输出 token 上限",
+  "turnCompleteTitle": "回合完成",
+  "turnCompletionChannel": "回合完成通知",
+  "turnCompletionChannelDescription": "在对话回合运行完成时通知。"
 }

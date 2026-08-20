@@ -1100,5 +1100,22 @@
       }
     }
   },
-  "commandFailed": "Command failed"
+  "commandFailed": "Command failed",
+  "turnFailed": "This turn failed: {detail}",
+  "unknownModelFailure": "unknown model failure",
+  "turnStopped": "Turn stopped",
+  "turnInterrupted": "Turn interrupted",
+  "turnBlocked": "Turn blocked",
+  "turnMaxTokens": "Output token limit reached",
+  "@turnFailed": {
+    "description": "Turn/end error line with host detail.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "turnCompleteTitle": "Turn complete",
+  "turnCompletionChannel": "Turn completion",
+  "turnCompletionChannelDescription": "Notifies when a running conversation turn finishes."
 }

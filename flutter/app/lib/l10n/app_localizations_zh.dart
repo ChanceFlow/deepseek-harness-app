@@ -1182,4 +1182,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commandFailed => '命令失败';
+
+  @override
+  String turnFailed(String detail) {
+    return '本轮运行失败：$detail';
+  }
+
+  @override
+  String get unknownModelFailure => '未知模型错误';
+
+  @override
+  String get turnStopped => '回合已停止';
+
+  @override
+  String get turnInterrupted => '回合已中断';
+
+  @override
+  String get turnBlocked => '回合受阻';
+
+  @override
+  String get turnMaxTokens => '已达到输出 token 上限';
+
+  @override
+  String get turnCompleteTitle => '回合完成';
+
+  @override
+  String get turnCompletionChannel => '回合完成通知';
+
+  @override
+  String get turnCompletionChannelDescription => '在对话回合运行完成时通知。';
 }
