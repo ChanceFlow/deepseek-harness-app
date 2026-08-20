@@ -1,7 +1,18 @@
-# APK release pipeline — builds the signed release APK and publishes it to:
-#   1. the persistent download server at http://127.0.0.1:8899 (host dir
-#      mounted from vars.APK_WWW_DIR), always;
-#   2. a Gitea Release attachment, on v* tag pushes.
+# APK release pipeline — builds the signed release APK and publishes it
+# as a Gitea Release attachment (the only distribution channel).
+#
+# Naming standard (industry / SemVer 2.0):
+#   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
+#                                            v0.1.0-beta.2, v0.1.0-rc.1
+#   - versionName:     tag sans v           0.1.0, 0.1.0-alpha.1
+#   - dev builds:      0.0.0-dev.<run>      workflow_dispatch on master
+#   - artifacts:       dsh-android-<versionName>.apk (+ .sha256 sidecar)
+#   - dev channel:     rolling prerelease on the tag `dev` (no `v`
+#     prefix — deliberately outside the `v*` tag trigger, so the
+#     release API's tag creation can never re-trigger this pipeline);
+#     every dispatch build replaces it, so
+#     /releases/tag/dev always serves the newest master build.
+#
 # Runs on the prebaked `flutter-android` runner label built by
 # docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 + dependency
 # caches the image warms itself from the committed workspace — no SDK or
@@ -35,7 +46,6 @@ jobs:
     runs-on: flutter-android
     container:
       image: flutter-3.47-android:latest
-      options: -v ${{ vars.APK_WWW_DIR }}:/out
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -67,10 +77,10 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "channel=release" >> "$GITHUB_OUTPUT"
           else
-            echo "version=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "version=0.0.0-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Pub get (workspace)
@@ -105,42 +115,64 @@ jobs:
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "$APK.sha256")" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to download server (8899)
-        run: |
-          APK="${{ steps.stage.outputs.apk }}"
-          cp "$APK" "$APK.sha256" /out/
-          cp "$APK" /out/dsh-latest.apk
-          cp "$APK.sha256" /out/dsh-latest.apk.sha256
-          printf 'version=%s\nversionCode=%s\nsha256=%s\nbaseUrl=%s\nbuiltAt=%s\n' \
-            "${{ steps.ver.outputs.version }}" "$GITHUB_RUN_NUMBER" \
-            "${{ steps.stage.outputs.sha256 }}" \
-            "${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
-            "$(date -u +%FT%TZ)" > /out/LATEST.txt
-          # keep the newest 10 versioned APKs besides dsh-latest
-          ls -1t /out/dsh-android-*.apk 2>/dev/null | tail -n +11 | xargs -r rm -f
-          ls -1t /out/dsh-android-*.apk.sha256 2>/dev/null | tail -n +11 | xargs -r rm -f
-
-      - name: Create Gitea release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish Gitea Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: |
           set -eu
           APK="${{ steps.stage.outputs.apk }}"
-          python3 - "$GITHUB_REF_NAME" "${{ steps.ver.outputs.version }}" "$APK" \
-            "${{ steps.stage.outputs.sha256 }}" \
-            "${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" > /tmp/release.json <<'PY'
-          import json, sys
-          tag, ver, apk, sha, base_url = sys.argv[1:6]
-          body = (
-              f"Download: `{apk}` (or always-latest: http://127.0.0.1:8899/dsh-latest.apk)\n\n"
-              f"- versionName: `{ver}`\n- sha256: `{sha}`\n"
-              f"- DSH_BASE_URL: `{base_url}`"
-          )
-          print(json.dumps({"tag_name": tag, "name": f"DSH Android {ver}", "body": body}))
-          PY
+          VERSION="${{ steps.ver.outputs.version }}"
+          CHANNEL="${{ steps.ver.outputs.channel }}"
+          BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}"
           API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
           AUTH="Authorization: token $GITHUB_TOKEN"
+
+          if [[ "$CHANNEL" == "release" ]]; then
+            TAG="$GITHUB_REF_NAME"
+            NAME="DSH Android $VERSION"
+            PRERELEASE=false
+          else
+            # Rolling dev channel: replace the prerelease under the
+            # `dev` tag (outside the v* trigger) so the newest master
+            # build is always the one served there.
+            TAG="dev"
+            NAME="DSH Android Dev"
+            PRERELEASE=true
+            OLD_REL_ID=$(curl -sf "$API/releases/tags/dev" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' \
+              || true)
+            if [[ -n "${OLD_REL_ID:-}" ]]; then
+              curl -sf -X DELETE "$API/releases/$OLD_REL_ID" -H "$AUTH" || true
+            fi
+            curl -sf -X DELETE "$API/tags/dev" -H "$AUTH" || true
+          fi
+
+          python3 - "$TAG" "$NAME" "$PRERELEASE" "$VERSION" "$GITHUB_RUN_NUMBER" \
+            "$APK" "${{ steps.stage.outputs.sha256 }}" "$BASE_URL" \
+            "$GITHUB_SHA" "$CHANNEL" > /tmp/release.json <<'PY'
+          import json, sys
+          tag, name, prerelease, ver, run, apk, sha, base_url, commit, channel = sys.argv[1:11]
+          pre = prerelease == "true"
+          body = (
+              f"- versionName: `{ver}`\n"
+              f"- versionCode: `{run}`\n"
+              f"- sha256: `{sha}`\n"
+              f"- DSH_BASE_URL: `{base_url}`\n"
+              f"- commit: `{commit[:12]}`\n"
+          )
+          if channel == "dev":
+              body = (
+                  "Rolling dev channel — always the latest `master` build; "
+                  "this artifact supersedes any earlier dev build.\n\n" + body
+              )
+          print(json.dumps({
+              "tag_name": tag,
+              "name": name,
+              "body": body,
+              "prerelease": pre,
+              "target_commitish": commit,
+          }))
+          PY
           REL_ID=$(curl -sf -X POST "$API/releases" -H "$AUTH" \
             -H 'Content-Type: application/json' -d @/tmp/release.json \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
@@ -148,4 +180,4 @@ jobs:
             curl -sf -X POST "$API/releases/$REL_ID/assets?name=$f" -H "$AUTH" \
               -F "attachment=@$f" >/dev/null
           done
-          echo "release $GITHUB_REF_NAME created (id $REL_ID) with $APK"
+          echo "release $TAG created (id $REL_ID) with $APK"
