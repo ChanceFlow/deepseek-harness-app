@@ -948,14 +948,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get archive => 'Archive';
 
   @override
-  String get archiveWorkspace => 'Archive workspace';
-
-  @override
-  String archiveWorkspaceConfirm(Object name) {
-    return 'Archive every session in “$name”? The workspace and its session logs are kept; the sessions disappear from all grouping surfaces.';
-  }
-
-  @override
   String get expandAll => 'Expand all';
 
   @override

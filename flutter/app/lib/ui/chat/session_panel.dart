@@ -71,6 +71,10 @@ class SessionPanel extends ConsumerStatefulWidget {
     this.backendSlices,
     this.onSelectBackend,
     this.onSelectBackendSession,
+    this.backendId,
+    this.onRenameSession,
+    this.onForkSession,
+    this.onArchiveSession,
   });
 
   /// Drawer form: no rail toggle, full-height fill.
@@ -101,6 +105,16 @@ class SessionPanel extends ConsumerStatefulWidget {
   /// to [onSelectSession].
   final void Function(String backendId, String sessionId)?
   onSelectBackendSession;
+
+  /// The backend this panel presents (the chat surface's backend); used
+  /// as the action target for the flat single-host tree.
+  final String? backendId;
+
+  /// Web SessionNodeItem session verbs via long-press: rename / fork /
+  /// archive one session under any backend's slice.
+  final void Function(String backendId, String sessionId)? onRenameSession;
+  final void Function(String backendId, String sessionId)? onForkSession;
+  final void Function(String backendId, String sessionId)? onArchiveSession;
 
   @override
   ConsumerState<SessionPanel> createState() => _SessionPanelState();
@@ -252,6 +266,24 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     } else {
       backendAware(slice.backend.id, sessionId);
     }
+  }
+
+  /// The action target backend for a row: the slice's backend, or the
+  /// panel's presented backend for the flat single-host tree.
+  String? _actionBackend(BackendSessionSlice? slice) =>
+      slice?.backend.id ?? widget.backendId;
+
+  /// Web SessionNodeItem long-press verbs: rename / fork / archive one
+  /// session. The row's slice routes to its backend; the flat tree uses
+  /// the panel's presented backend.
+  void _sessionVerb(
+    BackendSessionSlice? slice,
+    String sessionId,
+    void Function(String backendId, String sessionId)? verb,
+  ) {
+    final backendId = _actionBackend(slice);
+    if (backendId == null || verb == null) return;
+    verb(backendId, sessionId);
   }
 
   /// Web tree.ts `labelOf`: the workspace title when an account holds the
@@ -532,6 +564,21 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             onToggle: () => _toggleGroup(groups[i].key),
             onToggleOverflow: () => _toggleOverflow(groups[i].key),
             onSelectSession: widget.onSelectSession,
+            onRenameSession: (sessionId) => _sessionVerb(
+              null,
+              sessionId,
+              widget.onRenameSession,
+            ),
+            onForkSession: (sessionId) => _sessionVerb(
+              null,
+              sessionId,
+              widget.onForkSession,
+            ),
+            onArchiveSession: (sessionId) => _sessionVerb(
+              null,
+              sessionId,
+              widget.onArchiveSession,
+            ),
           ),
         ],
       ],
@@ -616,6 +663,21 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onToggleOverflow: () =>
               _toggleOverflow(_sliceGroupKey(slice, groups[i].key)),
           onSelectSession: (sessionId) => _selectSessionOn(slice, sessionId),
+          onRenameSession: (sessionId) => _sessionVerb(
+            slice,
+            sessionId,
+            widget.onRenameSession,
+          ),
+          onForkSession: (sessionId) => _sessionVerb(
+            slice,
+            sessionId,
+            widget.onForkSession,
+          ),
+          onArchiveSession: (sessionId) => _sessionVerb(
+            slice,
+            sessionId,
+            widget.onArchiveSession,
+          ),
         ),
       ],
     ];
@@ -977,6 +1039,9 @@ class _GroupSection extends StatelessWidget {
     required this.onToggle,
     required this.onToggleOverflow,
     required this.onSelectSession,
+    this.onRenameSession,
+    this.onForkSession,
+    this.onArchiveSession,
   });
 
   final SessionGroupData group;
@@ -988,6 +1053,11 @@ class _GroupSection extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onToggleOverflow;
   final void Function(String sessionId) onSelectSession;
+
+  /// Web SessionNodeItem session verbs (long-press row menu).
+  final void Function(String sessionId)? onRenameSession;
+  final void Function(String sessionId)? onForkSession;
+  final void Function(String sessionId)? onArchiveSession;
 
   @override
   Widget build(BuildContext context) {
@@ -1017,6 +1087,15 @@ class _GroupSection extends StatelessWidget {
               onSelect: sessions[i].id == selectedSessionId
                   ? null
                   : () => onSelectSession(sessions[i].id),
+              onRename: onRenameSession == null
+                  ? null
+                  : () => onRenameSession!(sessions[i].id),
+              onFork: onForkSession == null
+                  ? null
+                  : () => onForkSession!(sessions[i].id),
+              onArchive: onArchiveSession == null
+                  ? null
+                  : () => onArchiveSession!(sessions[i].id),
             ),
           ],
           if (sessions.length > kCollapsedSessionLimit) ...[

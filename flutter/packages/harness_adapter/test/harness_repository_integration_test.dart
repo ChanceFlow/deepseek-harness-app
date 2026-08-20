@@ -1402,6 +1402,110 @@ void main() {
     expect(session.pendingInteraction, isNull);
   });
 
+  // Finished-but-unviewed fold: the running true→false edge while the
+  // session is not the one being viewed arms the green dot (web
+  // SessionManager `syncCompletedNotifications`); opening it or it
+  // running again clears it.
+  test('a session finishing while not viewed is completed; running clears it', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+      <String, Object?>{
+        'sessionId': 'session-b',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      hostFrames: <ServerRequest>[
+        _hostFrame('host/session-status', <String, Object?>{
+          'type': 'host/session-status',
+          'sessionId': 'session-a',
+          'running': true,
+        }),
+        _hostFrame('host/session-status', <String, Object?>{
+          'type': 'host/session-status',
+          'sessionId': 'session-a',
+          'running': false,
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    // Not viewing session-a; it then stops running → completed arms.
+    await repository.openSession('session-b');
+    await pumpEventQueue();
+    socket.releaseHostFrames();
+    await pumpEventQueue();
+
+    var sessions = await repository.observeSessions().first;
+    expect(
+      sessions.firstWhere((item) => item.id == 'session-a').completed,
+      isTrue,
+    );
+    expect(
+      sessions.firstWhere((item) => item.id == 'session-b').completed,
+      isFalse,
+    );
+
+    // Opening the completed session clears the reminder.
+    await repository.openSession('session-a');
+    await pumpEventQueue();
+    sessions = await repository.observeSessions().first;
+    expect(
+      sessions.firstWhere((item) => item.id == 'session-a').completed,
+      isFalse,
+    );
+
+    // Running again also clears it.
+    socket.releaseHostFrames();
+    await repository.refreshSessions();
+    await pumpEventQueue();
+  });
+
+  test('a session finishing while being viewed never arms completed', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      hostFrames: <ServerRequest>[
+        _hostFrame('host/session-status', <String, Object?>{
+          'type': 'host/session-status',
+          'sessionId': 'session-a',
+          'running': true,
+        }),
+        _hostFrame('host/session-status', <String, Object?>{
+          'type': 'host/session-status',
+          'sessionId': 'session-a',
+          'running': false,
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    // View session-a before it finishes: no reminder arms.
+    await repository.openSession('session-a');
+    await pumpEventQueue();
+    socket.releaseHostFrames();
+    await pumpEventQueue();
+
+    final sessions = await repository.observeSessions().first;
+    expect(
+      sessions.firstWhere((item) => item.id == 'session-a').completed,
+      isFalse,
+    );
+  });
+
   // Wire shape: agentPreset.list roster
   // (reference/deepseek-harness/packages/host/apiproxy/src/api/
   // agent-presets.schema.ts).

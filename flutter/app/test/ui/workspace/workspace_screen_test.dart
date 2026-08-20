@@ -241,7 +241,7 @@ void main() {
     expect(actions, contains(const DeleteWorkspaceAction('w1')));
   });
 
-  testWidgets('archive workspace confirms then dispatches the batch', (
+  testWidgets('long-press a session row opens the verbs sheet and archives', (
     tester,
   ) async {
     final actions = <WorkspaceAction>[];
@@ -254,24 +254,23 @@ void main() {
       actions,
     );
 
-    await tester.tap(find.byTooltip('Workspace actions for one'));
+    // Expand the group to reveal the session rows, then long-press one.
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    await tester.longPress(find.text('alpha session'));
     await tester.pumpAndSettle();
-    expect(find.text('Archive workspace'), findsOneWidget);
-    await tester.tap(find.text('Archive workspace'));
-    await tester.pumpAndSettle();
-    // The confirm names the workspace and the destructive-free copy.
-    expect(find.textContaining('one'), findsWidgets);
-    expect(
-      find.textContaining('sessions disappear from all grouping surfaces'),
-      findsOneWidget,
-    );
+    expect(find.text('Archive session'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    // The long-press verb commits without a dialog (web archive
+    // semantics).
+    await tester.tap(find.text('Archive session'));
     await tester.pumpAndSettle();
-    expect(actions, contains(const ArchiveWorkspaceAction('w1')));
+    expect(actions, contains(const ArchiveSessionAction('s1')));
   });
 
-  testWidgets('session rows archive through the per-row verb', (tester) async {
+  testWidgets('long-press fork dispatches and rename opens the dialog', (
+    tester,
+  ) async {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
@@ -282,15 +281,30 @@ void main() {
       actions,
     );
 
-    // Expand the group to reveal the session rows and their archive seat.
     await tester.tap(find.text('one'));
     await tester.pump();
-    expect(find.byTooltip('Archive session'), findsNWidgets(2));
+    await tester.longPress(find.text('alpha session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fork session'), findsOneWidget);
+    expect(find.text('Rename session'), findsOneWidget);
 
-    // The per-row verb commits without a dialog (web archive semantics).
-    await tester.tap(find.byTooltip('Archive session').first);
-    await tester.pump();
-    expect(actions, contains(const ArchiveSessionAction('s1')));
+    await tester.tap(find.text('Fork session'));
+    await tester.pumpAndSettle();
+    expect(actions, contains(const ForkSessionAction('s1')));
+
+    // Rename opens the session dialog; saving dispatches.
+    await tester.longPress(find.text('alpha session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename session'), findsWidgets);
+    await tester.enterText(
+      find.byType(TextField).last,
+      'renamed session',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
+    await tester.pumpAndSettle();
+    expect(actions, contains(const RenameSessionAction('s1', 'renamed session')));
   });
 
   testWidgets('directory browser navigates, filters hidden, creates folders', (

@@ -1,4 +1,4 @@
-# Agent Note: Sidebar activity priority, pending-interaction dot, and workspace archive
+# Agent Note: Sidebar activity priority, pending-interaction dot, session verbs and completion dot
 
 Status: implemented
 
@@ -8,12 +8,15 @@ The chat sidebar surfaced every workspace account in stored order with
 no sense of what needs the user, so running conversations, sessions
 waiting on an approval/plan-review/question, and recent activity were
 buried under idle rows — the user asked the sidebar to focus on what is
-currently active. The sidebar also had no archive affordance at all,
-and the "unread" tier the user wanted (needs-a-user-interaction) has no
-wire field: `SessionSummary` carries nothing about outstanding
-interactions, and the adapter only tracked approval/question frames for
-sessions already opened in the app, so a never-opened session could
-never light up.
+currently active. The "unread" tier the user wanted (needs-a-user-
+interaction) has no wire field, and the adapter only tracked approval/
+question frames for sessions already opened in the app, so a
+never-opened session could never light up. Session rows had no
+long-press actions at all, and the finished-but-unviewed session had no
+reminder dot, while a first implementation wrongly (a) batch-archived
+whole workspaces (the reference has no such concept — only per-session
+`workspace.archiveSession`) and (b) showed the status dot on idle
+sessions.
 
 ## Decision
 
@@ -24,77 +27,80 @@ never light up.
   parity). `approval/requested` tracks `a:<approvalId>` as approval,
   `question/requested` tracks `q:<rpcId>` classified by the web's
   `questionInteractionStatus` rule (a single binary plan-review intent
-  is `planReview`, everything else `question`), and the matching
-  `* /resolved` frames drop the key. Keys make replays idempotent; a
-  new connection generation clears the mirror (the reopen replay
-  re-adds still-pending frames), and a session dropped from the list
-  loses its pending status. `SessionSummary` gains
-  `SessionPendingInteraction?` (approval/planReview/question), enriched
-  at the `observeSessions` boundary via `combineLatest3` with the
-  archived set.
+  is `planReview`, else `question`); matching `* /resolved` frames drop
+  the key. Keys make replays idempotent, a new connection generation
+  clears the mirror, and a session dropped from the list loses its
+  pending status. `SessionSummary` gains `SessionPendingInteraction?`,
+  enriched at the `observeSessions` boundary via `combineLatest3`.
 - **Sidebar activity priority** (session_tree.dart): within each
   workspace group, members sort by activity — selected session pinned
   first (the current session must never hide behind the fold), then
   running, then pending interaction, then updated within the last 24
   hours, then recency. This is the sidebar's `priorityOrder`; the
-  Workspaces management tab keeps the stored account order
-  (`deriveSessionGroups` takes a `priorityOrder` flag).
-- **Status dot parity** (session_tree.dart): every row renders the web
-  `sessionStatuses` dot — amber warning for pending interaction,
-  blue ongoing for running, green done otherwise (the reference always
-  shows a dot). The sidebar is a switching surface and now hides
+  Workspaces management tab keeps stored account order.
+- **Status dot parity** (session_tree.dart): rows render the web
+  `sessionStatuses` dot only at the reference's `showStatus` times —
+  amber warning for a pending interaction, blue ongoing while running,
+  and green done ONLY for a session that finished while not being
+  viewed (`completed`). Idle sessions show no dot. The sidebar hides
   workspace groups with no visible sessions (`includeEmptyGroups:
   false`), which also makes fully-archived workspaces vanish from it.
-- **Workspace archive in the Workspaces tab**: the workspace-row ⋮
-  sheet gains "Archive workspace" (a confirm dialog, then
-  `ArchiveWorkspaceAction` — the controller batch-archives every
-  accounted session through the existing `workspace.archiveSession`
-  RPC, since the wire has no workspace-level archive). Session rows
-  gain the per-row "Archive session" verb (web SessionNodeItem
-  parity, no confirm — reference archive semantics), which also
-  reaches ungrouped sessions. The sidebar itself carries no archive
-  action (it is for switching only).
+- **Long-press session verbs** (session_tree.dart + workspace/chat
+  wiring): a long-press on a session row opens a bottom sheet with
+  Archive session, Rename session, and Fork session (web SessionNodeItem
+  parity). Sidebar rows and Workspaces-tab rows share the same widget;
+  rename prompts for a title (`RenameSessionAction`), archive and fork
+  dispatch immediately (`ArchiveSessionAction`, `ForkSessionAction`).
+  There is NO workspace-level archive — the reference archives only per
+  session via the `workspace.archiveSession` RPC, so workspace rows
+  keep their existing sheet (move/delete controls only).
+- **Finished-but-unviewed fold** (harness_repository_impl.dart): the
+  adapter tracks last-seen `running` per session and folds
+  `host/session-status` true→false edges while the session is not the
+  one being viewed into a `completed` bit on `SessionSummary` (web
+  SessionManager `completedNotifications`). Opening the session or it
+  running again clears the bit; `refreshSessions` rebuilds preserve it
+  from the live list. The `observeSessions` projection must forward
+  the bit (a dropped field here silently reset it).
 
 ## Alternatives considered
 
-- **A workspace-level `archived` field**: rejected — the wire has no
-  such field (`WorkspaceView` is workspaceId/path/title/sessionIds/
-  timestamps); archiving is per-session through the registry-global
-  `archivedSessionIds` set, so "archive this workspace" is a batch of
-  per-session archives.
+- **A workspace-level `archived` field / workspace batch archive**:
+  rejected — the wire has no such field and the reference has no
+  workspace-archive action (archiving is per-session only through the
+  registry-global `archivedSessionIds` set).
 - **Priority sort in both surfaces**: rejected — the Workspaces tab is
-  the management surface and must keep the stored account order; only
-  the switching sidebar reorders by activity.
+  the management surface and must keep the stored account order.
 - **Client-computed pending from per-session timelines**: rejected —
-  the sidebar must light up for sessions never opened in the app, which
-  requires folding the raw frame stream globally, not per opened
-  session.
-- **Archive with confirmation on session rows too**: rejected — the web
-  archives sessions without a dialog ("not styled as destructive");
-  only the multi-session workspace batch confirms.
+  the sidebar must light up for sessions never opened in the app, so
+  the raw frame stream folds globally.
+- **Status dot on idle sessions**: rejected — the reference renders no
+  dot when the session is idle and not completed; a constant dot misread
+  as unread.
 
 ## Consequences
 
-The sidebar now leads with running and needs-your-attention sessions
+The sidebar leads with running and needs-your-attention sessions
 (yellow dot), then recent activity, matching the user's "focus on what
 is active" direction while the Workspaces tab owns management
-(rename/delete/archive/move). The pending fold adds wire decoding
-coverage for the four approval/question frame types at the list level
-(the per-session timeline already rendered them as cards). Because the
-pending status is derived from live frames, it is only as current as
-the last frame — a cold session with a stale projection shows no
-pending until its frames replay. Unarchive remains unexposed (the wire
-has no unarchive RPC), so an archived workspace's sessions stay hidden
-until the host restores them.
+(rename/delete/archive/move). Long-press verbs on session rows reach
+both surfaces; archive stays per-session (no workspace-level concept,
+matching the reference). The pending status is only as current as the
+last frame — a cold session shows no pending until its frames replay;
+unarchive remains unexposed. The completed bit is client-derived: it
+survives list refreshes but resets on reconnect.
 
 ## Testing
 
 Adapter integration tests cover the pending fold (approval
 requested/resolved, plan-review vs plain question classification,
-question resolution by rpcId, and that a never-opened session still
-lights up). session_tree_test.dart covers the priority ordering, the
-empty-group hiding, the management-surface account order, and the
-status-dot mapping. session_panel_test.dart assertions move to the
-priority semantics (selected pinned, recency tail below the fold).
-workspace_screen_test.dart adds the archive-workspace confirm dispatch
-and the per-session archive verb.
+question resolution by rpcId, never-opened session lights up) and the
+completed fold (finished-while-unviewed arms and survives a list
+refresh, opening/running again clears it, finished-while-viewed never
+arms). session_tree_test.dart covers the priority ordering, empty-group
+hiding, management-surface account order, the status-dot mapping (idle
+no dot, pending amber, running blue, completed green) and the long-press
+sheet verbs. session_panel_test.dart assertions move to the priority
+semantics (selected pinned, recency tail below the fold).
+workspace_screen_test.dart covers the long-press verbs and the rename
+dialog dispatch.

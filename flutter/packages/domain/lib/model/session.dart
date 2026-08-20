@@ -21,6 +21,7 @@ final class SessionSummary {
     this.agentPreset,
     this.origin,
     this.pendingInteraction,
+    this.completed = false,
   });
 
   final String id;
@@ -40,6 +41,14 @@ final class SessionSummary {
   /// summary carries no such field, so it is folded from the live
   /// approval/question frame stream (see the harness adapter).
   final SessionPendingInteraction? pendingInteraction;
+
+  /// Finished-but-unviewed reminder: the session stopped running while
+  /// it was not the selected/opened session (web SessionManager
+  /// `completedNotifications`). The green status dot renders only while
+  /// this is true; opening the session or it running again clears it.
+  /// Also derived — the wire summary has no such field (see the harness
+  /// adapter).
+  final bool completed;
 
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.
@@ -67,7 +76,8 @@ final class SessionSummary {
       other.cwd == cwd &&
       other.agentPreset == agentPreset &&
       other.origin == origin &&
-      other.pendingInteraction == pendingInteraction;
+      other.pendingInteraction == pendingInteraction &&
+      other.completed == completed;
 
   @override
   int get hashCode => Object.hash(
@@ -80,6 +90,7 @@ final class SessionSummary {
     agentPreset,
     origin,
     pendingInteraction,
+    completed,
   );
 }
 

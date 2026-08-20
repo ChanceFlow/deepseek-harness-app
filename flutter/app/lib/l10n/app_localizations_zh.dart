@@ -923,14 +923,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get archive => '归档';
 
   @override
-  String get archiveWorkspace => '归档工作区';
-
-  @override
-  String archiveWorkspaceConfirm(Object name) {
-    return '归档“$name”下的所有会话？工作区与其会话日志保留；会话将从所有分组界面消失。';
-  }
-
-  @override
   String get expandAll => '全部展开';
 
   @override
