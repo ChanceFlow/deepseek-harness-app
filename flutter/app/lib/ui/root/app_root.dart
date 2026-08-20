@@ -34,11 +34,14 @@ class _AppRootState extends State<AppRoot> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: switch (AppDestination.values[_selectedIndex]) {
-        AppDestination.chat => const ChatRoute(),
-        AppDestination.workspaces => const WorkspaceRoute(),
-        AppDestination.settings => const SettingsRoute(),
-      },
+      // IndexedStack keeps every destination's state alive across tab
+      // switches — the composer draft, scroll positions, and expansion
+      // states survive leaving and returning to a tab (a switch here
+      // would unmount the route and drop them).
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: const [ChatRoute(), WorkspaceRoute(), SettingsRoute()],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) =>

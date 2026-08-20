@@ -409,11 +409,11 @@ void main() {
 
     // The queue rides the dock above the composer, not a timeline row.
     expect(find.byType(TimelineRow), findsOneWidget);
-    expect(find.text('Queued: queued work'), findsOneWidget);
+    expect(find.text('queued work'), findsOneWidget);
     // queueMutable = false on a child view: no edit/steer/remove controls.
-    expect(find.text('Edit'), findsNothing);
-    expect(find.text('Steer'), findsNothing);
-    expect(find.text('Remove'), findsNothing);
+    expect(find.byTooltip('Edit queued message'), findsNothing);
+    expect(find.byTooltip('Steer'), findsNothing);
+    expect(find.byTooltip('Remove queued message'), findsNothing);
   });
 
   testWidgets('child plan rides the read-only plan chip', (tester) async {

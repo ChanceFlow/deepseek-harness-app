@@ -718,6 +718,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 for (final dock in uiState.timeline.whereType<TimelineQueue>())
                   ...dock.items,
               ],
+              running: isSessionRunning,
               onAction: widget.onAction,
             ),
           if (_pendingApproval == null)
@@ -875,7 +876,7 @@ class TimelineRow extends StatelessWidget {
         request: item as TimelineQuestionRequest,
         onAction: onAction,
       ),
-      TimelineQueue(:final items) => QueueRow(items: items, onAction: onAction),
+      TimelineQueue() => const SizedBox.shrink(),
       TimelineJobs() => const SizedBox.shrink(),
       TimelineError(:final message) => SizedBox(
         width: double.infinity,
@@ -1415,17 +1416,39 @@ class GoalBarStrip extends StatelessWidget {
 
 /// Queue dock — port of the web QueueDock (FileContainerText 1:791): a
 /// panel attached above the composer card, r12 top corners, tip fill,
-/// l1 border (the composer card's own edge closes the bottom).
-class QueueDock extends StatelessWidget {
-  const QueueDock({super.key, required this.items, required this.onAction});
+/// l1 border (the composer card's own edge closes the bottom). One
+/// queued message renders directly; several collapse behind a count
+/// header; only `queued`-placement rows ride the dock (steering rides
+/// the timeline, context the injection rows).
+class QueueDock extends StatefulWidget {
+  const QueueDock({
+    super.key,
+    required this.items,
+    required this.running,
+    required this.onAction,
+  });
 
   final List<SessionQueueItem> items;
+  final bool running;
   final void Function(ChatAction) onAction;
 
   @override
+  State<QueueDock> createState() => _QueueDockState();
+}
+
+class _QueueDockState extends State<QueueDock> {
+  bool _collapsed = true;
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
+    final queue = widget.items
+        .where((item) => item.placement == QueuePlacement.queued)
+        .toList();
+    if (queue.isEmpty) return const SizedBox.shrink();
     final ds = dsOf(context);
+    // Interaction reopens the list; an emptied queue recollapses (web
+    // effect).
+    final expanded = !_collapsed || queue.length == 1;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
@@ -1437,150 +1460,299 @@ class QueueDock extends StatelessWidget {
           right: BorderSide(color: ds.divider),
         ),
       ),
-      child: QueueRow(items: items, onAction: onAction),
-    );
-  }
-}
-
-class QueueRow extends StatelessWidget {
-  const QueueRow({super.key, required this.items, required this.onAction});
-
-  final List<SessionQueueItem> items;
-  final void Function(ChatAction) onAction;
-
-  Future<void> _edit(BuildContext context, SessionQueueItem item) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => QueueEditDialog(
-        itemId: item.itemId,
-        initialText: item.text,
-        onSave: (edited) => onAction(
-          UpdateQueueAction(
-            itemId: item.itemId,
-            kind: QueueUpdateKind.edit,
-            text: edited,
-          ),
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (queue.length > 1)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => setState(() => _collapsed = !_collapsed),
+                child: SizedBox(
+                  height: 36,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${queue.length} queued messages',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ),
+                        Icon(
+                          expanded
+                              ? Icons.keyboard_arrow_down
+                              : Icons.keyboard_arrow_up,
+                          size: 14,
+                          color: ds.labelTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (expanded)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 180),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: queue.length,
+                itemBuilder: (context, index) => _QueueItemRow(
+                  key: ValueKey(queue[index].itemId),
+                  item: queue[index],
+                  // Single-item strip has no count header, so the row
+                  // itself carries the queue glyph.
+                  leadIcon: queue.length == 1,
+                  running: widget.running,
+                  separated: index > 0,
+                  onAction: widget.onAction,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final item in items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${queuePlacementLabel(item.placement)}: ${item.text}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                if (item.placement != QueuePlacement.context)
-                  Row(
-                    children: [
-                      if (item.placement == QueuePlacement.queued &&
-                          item.text.trim().isNotEmpty)
-                        OutlinedButton(
-                          onPressed: () => _edit(context, item),
-                          child: const Text('Edit'),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: OutlinedButton(
-                          onPressed: () => onAction(
-                            UpdateQueueAction(
-                              itemId: item.itemId,
-                              kind: QueueUpdateKind.steer,
-                            ),
-                          ),
-                          child: const Text('Steer'),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: OutlinedButton(
-                          onPressed: () => onAction(
-                            UpdateQueueAction(
-                              itemId: item.itemId,
-                              kind: QueueUpdateKind.remove,
-                            ),
-                          ),
-                          child: const Text('Remove'),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
 }
 
-String queuePlacementLabel(QueuePlacement placement) => switch (placement) {
-  QueuePlacement.queued => 'Queued',
-  QueuePlacement.steering => 'Steering',
-  QueuePlacement.context => 'Context',
-};
-
-/// Queue text edit: blank text never dispatches (Save no-ops), matching
-/// the Web composer's non-empty constraint for queue edits.
-class QueueEditDialog extends StatefulWidget {
-  const QueueEditDialog({
+/// One queued row (web `.row`): 36px tall, 12/5 padding, 1px inset
+/// hairline above every row but the first; the preview is a single
+/// 13px dimmed line, and the trailing actions are 28px circles (edit →
+/// inline editor, steer — only while the turn runs, remove).
+class _QueueItemRow extends StatefulWidget {
+  const _QueueItemRow({
     super.key,
-    required this.itemId,
-    required this.initialText,
-    required this.onSave,
+    required this.item,
+    required this.leadIcon,
+    required this.running,
+    required this.separated,
+    required this.onAction,
   });
 
-  final String itemId;
-  final String initialText;
-  final void Function(String text) onSave;
+  final SessionQueueItem item;
+  final bool leadIcon;
+  final bool running;
+  final bool separated;
+  final void Function(ChatAction) onAction;
 
   @override
-  State<QueueEditDialog> createState() => _QueueEditDialogState();
+  State<_QueueItemRow> createState() => _QueueItemRowState();
 }
 
-class _QueueEditDialogState extends State<QueueEditDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialText,
-  );
+class _QueueItemRowState extends State<_QueueItemRow> {
+  final TextEditingController _editor = TextEditingController();
+  bool _editing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _editor.text = widget.item.text;
+  }
+
+  @override
+  void didUpdateWidget(covariant _QueueItemRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_editing && oldWidget.item.text != widget.item.text) {
+      _editor.text = widget.item.text;
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _editor.dispose();
     super.dispose();
+  }
+
+  void _save() {
+    final text = _editor.text.trim();
+    if (text.isEmpty) return;
+    widget.onAction(
+      UpdateQueueAction(
+        itemId: widget.item.itemId,
+        kind: QueueUpdateKind.edit,
+        text: text,
+      ),
+    );
+    setState(() => _editing = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Edit queued message'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        onSubmitted: (_) => Navigator.of(context).pop(),
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final item = widget.item;
+    return Container(
+      decoration: BoxDecoration(
+        border: widget.separated
+            ? Border(top: BorderSide(color: ds.divider))
+            : null,
       ),
-      actions: [
-        OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+      child: SizedBox(
+        height: 36,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 5, 4),
+          child: Row(
+            children: [
+              if (widget.leadIcon) ...[
+                Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: _editing
+                    ? SizedBox(
+                        height: 28,
+                        child: TextField(
+                          controller: _editor,
+                          autofocus: true,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 13,
+                          ),
+                          onSubmitted: (_) => _save(),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Edit queued message',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(color: ds.borderL2),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(color: ds.borderL2),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(color: ds.accent),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        item.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 13,
+                          color: ds.labelPrimaryDimmed,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 10),
+              if (_editing) ...[
+                _QueueAction(
+                  tooltip: 'Save queued message',
+                  icon: Icons.check,
+                  onTap: _save,
+                ),
+                _QueueAction(
+                  tooltip: 'Cancel edit',
+                  icon: Icons.close,
+                  onTap: () => setState(() => _editing = false),
+                ),
+              ] else ...[
+                // Web rule: editing is a text-only affordance; a
+                // non-text row keeps the button disabled.
+                _QueueAction(
+                  tooltip: 'Edit queued message',
+                  icon: Icons.edit_outlined,
+                  enabled: item.text.trim().isNotEmpty,
+                  onTap: () => setState(() => _editing = true),
+                ),
+                _QueueAction(
+                  tooltip: 'Steer',
+                  icon: Icons.send_outlined,
+                  // Web: steering needs the running window.
+                  enabled: widget.running,
+                  onTap: () => widget.onAction(
+                    UpdateQueueAction(
+                      itemId: item.itemId,
+                      kind: QueueUpdateKind.steer,
+                    ),
+                  ),
+                ),
+                _QueueAction(
+                  tooltip: 'Remove queued message',
+                  icon: Icons.delete_outline,
+                  onTap: () => widget.onAction(
+                    UpdateQueueAction(
+                      itemId: item.itemId,
+                      kind: QueueUpdateKind.remove,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-        FilledButton(
-          onPressed: () {
-            final text = _controller.text.trim();
-            if (text.isNotEmpty) widget.onSave(text);
-            Navigator.of(context).pop();
-          },
-          child: const Text('Save'),
+      ),
+    );
+  }
+}
+
+/// One dock action (web `.action`): a 28px circle on the tertiary glyph
+/// with the interactive hover fill; 36px+ touch target through padding.
+class _QueueAction extends StatefulWidget {
+  const _QueueAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  State<_QueueAction> createState() => _QueueActionState();
+}
+
+class _QueueActionState extends State<_QueueAction> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        cursor: widget.enabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: Opacity(
+          opacity: widget.enabled ? 1 : 0.45,
+          child: Material(
+            color: _hovering ? ds.interactiveBgHover : Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.enabled ? widget.onTap : null,
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: Icon(widget.icon, size: 14, color: ds.labelTertiary),
+              ),
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 }

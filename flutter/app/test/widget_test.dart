@@ -4,19 +4,27 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/material.dart' show Icons, NavigationBar;
+import 'package:flutter/material.dart'
+    show Icons, NavigationBar, Size, TextField;
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/main.dart';
 
 class _FakeRpc implements DshRpcClient {
+  _FakeRpc([this._sessions = const <Object?>[]]);
+
+  final List<Object?> _sessions;
+
   @override
   Future<RpcResult> call(
     String endpoint,
     String method,
     JsonMap payload,
   ) async {
+    if (endpoint == 'session.list') {
+      return RpcResult(ok: true, value: <String, Object?>{'items': _sessions});
+    }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 
@@ -35,11 +43,11 @@ class _NeverSocket implements DshEventSocket {
   }
 }
 
-Future<void> _pumpApp(WidgetTester tester) {
+Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
-        dshRpcClientProvider.overrideWithValue(_FakeRpc()),
+        dshRpcClientProvider.overrideWithValue(rpc ?? _FakeRpc()),
         dshEventSocketProvider.overrideWithValue(_NeverSocket()),
       ],
       child: const DshApp(),
@@ -121,5 +129,54 @@ void main() {
     await tester.tap(find.text('Chat').last);
     await tester.pumpAndSettle();
     expect(find.byTooltip('Commands'), findsOneWidget);
+  });
+
+  testWidgets('the composer draft survives tab switches', (tester) async {
+    // A selected session keeps the composer enabled; the app-level default
+    // fake serves none.
+    await _pumpApp(
+      tester,
+      rpc: _FakeRpc(const <Object?>[
+        <String, Object?>{
+          'sessionId': 's1',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+          'cwd': '/tmp/proj',
+        },
+      ]),
+    );
+    // Wide surface docks the session panel (compact hides it in the
+    // drawer); the default test surface is phone-narrow.
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpAndSettle();
+
+    // Select the served session so the composer enables: the Ungrouped
+    // bucket only auto-expands for the selected session, so open it first.
+    await tester.tap(find.text('Ungrouped'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('proj'));
+    await tester.pumpAndSettle();
+
+    final composerField = find.byType(TextField).first;
+    await tester.enterText(composerField, 'half-finished thought');
+    await tester.pump();
+
+    // Leave and return through both other tabs; the IndexedStack keeps
+    // the chat route (and its draft controller) alive.
+    await tester.tap(find.text('Workspaces').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chat').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(composerField).controller?.text,
+      'half-finished thought',
+    );
   });
 }

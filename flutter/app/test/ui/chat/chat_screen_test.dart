@@ -608,7 +608,7 @@ void main() {
     );
   });
 
-  testWidgets('queue rows dispatch steer/remove and edit dialog saves', (
+  testWidgets('queue dock: single row, inline edit, steer gating', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -627,6 +627,8 @@ void main() {
                 placement: QueuePlacement.queued,
                 text: 'first',
               ),
+              // Only queued-placement rows ride the dock (web rule);
+              // context material is not a queued message.
               SessionQueueItem(
                 itemId: 'q2',
                 placement: QueuePlacement.context,
@@ -639,19 +641,14 @@ void main() {
       actions,
     );
 
-    expect(find.text('Queued: first'), findsOneWidget);
-    expect(find.text('Context: context only'), findsOneWidget);
-    // Context items carry no actions (the composer Steer chip is the only
-    // other Steer on screen).
-    final queueRowSteer = find.descendant(
-      of: find.byType(QueueRow),
-      matching: find.text('Steer'),
-    );
-    expect(queueRowSteer, findsOneWidget);
+    // Single queued message renders directly and carries the queue glyph
+    // (no count header).
+    expect(find.text('first'), findsOneWidget);
+    expect(find.text('context only'), findsNothing);
+    expect(find.textContaining('queued messages'), findsNothing);
 
-    await tester.tap(
-      find.descendant(of: find.byType(QueueRow), matching: find.text('Remove')),
-    );
+    // Remove dispatches.
+    await tester.tap(find.byTooltip('Remove queued message'));
     await tester.pump();
     expect(
       actions,
@@ -660,29 +657,38 @@ void main() {
       ),
     );
 
-    await tester.tap(queueRowSteer);
+    // Steer needs the running window: the idle session disables it.
+    await tester.tap(find.byTooltip('Steer'));
     await tester.pump();
     expect(
-      actions,
-      contains(
-        const UpdateQueueAction(itemId: 'q1', kind: QueueUpdateKind.steer),
+      actions.where(
+        (action) =>
+            action is UpdateQueueAction && action.kind == QueueUpdateKind.steer,
       ),
+      isEmpty,
     );
 
-    await tester.tap(
-      find.descendant(of: find.byType(QueueRow), matching: find.text('Edit')),
+    // Edit swaps the preview for the inline editor; save dispatches the
+    // revision.
+    await tester.tap(find.byTooltip('Edit queued message'));
+    await tester.pump();
+    // The inline editor takes the preview's seat (seeded with the text).
+    expect(
+      find.descendant(
+        of: find.byType(QueueDock),
+        matching: find.byType(TextField),
+      ),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-    expect(find.text('Edit queued message'), findsOneWidget);
     await tester.enterText(
       find.descendant(
-        of: find.byType(QueueEditDialog),
+        of: find.byType(QueueDock),
         matching: find.byType(TextField),
       ),
       'revised',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Save queued message'));
+    await tester.pump();
     expect(
       actions,
       contains(
@@ -691,6 +697,58 @@ void main() {
           kind: QueueUpdateKind.edit,
           text: 'revised',
         ),
+      ),
+    );
+  });
+
+  testWidgets('multiple queued messages collapse behind the count header', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'q1',
+                placement: QueuePlacement.queued,
+                text: 'first',
+              ),
+              SessionQueueItem(
+                itemId: 'q2',
+                placement: QueuePlacement.queued,
+                text: 'second',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // Collapsed by default: the count header, not the rows.
+    expect(find.text('2 queued messages'), findsOneWidget);
+    expect(find.text('first'), findsNothing);
+    expect(find.text('second'), findsNothing);
+
+    await tester.tap(find.text('2 queued messages'));
+    await tester.pumpAndSettle();
+    expect(find.text('first'), findsOneWidget);
+    expect(find.text('second'), findsOneWidget);
+
+    // Running session: steer dispatches.
+    await tester.tap(find.byTooltip('Steer').first);
+    await tester.pump();
+    expect(
+      actions,
+      contains(
+        const UpdateQueueAction(itemId: 'q1', kind: QueueUpdateKind.steer),
       ),
     );
   });

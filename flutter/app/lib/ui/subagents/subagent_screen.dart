@@ -28,8 +28,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
-import '../chat/chat_screen.dart'
-    show PlanChip, TimelineRow, queuePlacementLabel, timelineKey;
+import '../chat/chat_screen.dart' show PlanChip, TimelineRow, timelineKey;
 import '../theme/deepsuite_extension.dart';
 import '../theme/deepsuite_tokens.dart';
 import 'subagent_ui_state.dart';
@@ -855,10 +854,23 @@ class _ReadOnlyQueueDock extends StatelessWidget {
         children: [
           for (final item in items)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-              child: Text(
-                '${queuePlacementLabel(item.placement)}: ${item.text}',
-                style: theme.textTheme.bodySmall,
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      item.text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
+                        color: ds.labelPrimaryDimmed,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
