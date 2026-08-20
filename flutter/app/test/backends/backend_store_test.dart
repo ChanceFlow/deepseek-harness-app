@@ -17,7 +17,16 @@ void main() {
   });
 
   tearDown(() async {
-    await tempDir.delete(recursive: true);
+    // Retry like the registry suite: an unawaited writer racing the
+    // recursive delete surfaces as errno 39.
+    for (var i = 0; i < 50; i++) {
+      try {
+        await tempDir.delete(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
   });
 
   File fileFor(String name) => File('${tempDir.path}/$name.json');

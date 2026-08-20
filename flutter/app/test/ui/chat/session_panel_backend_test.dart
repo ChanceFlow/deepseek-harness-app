@@ -66,7 +66,18 @@ class _QuietSocket implements DshEventSocket {
 
 BackendStore _testStore({String? document}) {
   final dir = Directory.systemTemp.createTempSync('sidebar_backends_test');
-  addTearDown(() => dir.deleteSync(recursive: true));
+  // Retry like the settings suite: an unawaited registry persist can
+  // race the recursive delete (errno 39).
+  addTearDown(() async {
+    for (var i = 0; i < 50; i++) {
+      try {
+        dir.deleteSync(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+  });
   final file = File('${dir.path}/backends.json');
   if (document != null) file.writeAsStringSync(document);
   return BackendStore(file, seedBaseUrl: kDshBaseUrl);

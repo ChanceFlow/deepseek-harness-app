@@ -19,7 +19,17 @@ void main() {
   });
 
   tearDown(() async {
-    await tempDir.delete(recursive: true);
+    // The registry persists unawaited; the atomic write's temp+rename
+    // can race the recursive delete (errno 39, directory not empty) —
+    // retry until the write lands.
+    for (var i = 0; i < 50; i++) {
+      try {
+        await tempDir.delete(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
   });
 
   File fileFor(String name) => File('${tempDir.path}/$name.json');
