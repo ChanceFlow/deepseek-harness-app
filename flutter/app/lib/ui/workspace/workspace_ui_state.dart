@@ -2,11 +2,14 @@
 library;
 
 import 'package:domain/model/directory.dart';
-import 'package:domain/model/workspace.dart';
+import 'package:domain/model/session.dart';
+import 'package:domain/model/workspace.dart' show WorkspaceSummary, SessionSearchResult;
 
 final class WorkspaceUiState {
   const WorkspaceUiState({
     this.workspaces = const <WorkspaceSummary>[],
+    this.sessions = const <SessionSummary>[],
+    this.searchResults = const <SessionSearchResult>[],
     this.isLoading = false,
     this.errorMessage,
     this.directoryListing,
@@ -15,6 +18,14 @@ final class WorkspaceUiState {
   });
 
   final List<WorkspaceSummary> workspaces;
+
+  /// Session summaries behind the workspace groups (web
+  /// WorkspaceBrowser renders the session tree under each group).
+  final List<SessionSummary> sessions;
+
+  /// Content-search results replacing the tree while a query is active
+  /// (web `session.search` flat result list).
+  final List<SessionSearchResult> searchResults;
   final bool isLoading;
   final String? errorMessage;
   final DirectoryListing? directoryListing;
@@ -24,6 +35,21 @@ final class WorkspaceUiState {
 
 sealed class WorkspaceAction {
   const WorkspaceAction();
+}
+
+/// Content search over this backend's sessions (the browsing surface's
+/// search capsule).
+final class SearchSessionsAction extends WorkspaceAction {
+  const SearchSessionsAction(this.query);
+
+  final String query;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SearchSessionsAction && other.query == query;
+
+  @override
+  int get hashCode => query.hashCode;
 }
 
 final class CreateWorkspaceAction extends WorkspaceAction {

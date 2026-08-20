@@ -1,6 +1,7 @@
-/// SessionPanel widget tests — the sidebar foot's settings trigger (the
-/// web `sidebar.settings` seat), the destination switch it drives, and
-/// the browsing toggles' persistence through the local state store.
+/// SessionPanel widget tests — the browsing toggles' persistence
+/// through the local state store and the destination selection's
+/// restore (driven through the provider; the bottom tab bar owns the
+/// Settings entry on mobile, so the panel carries no trigger).
 ///
 /// Real disk IO never completes inside a testWidgets fake-async zone,
 /// so persistence asserts the store's synchronous cache (the write
@@ -122,86 +123,17 @@ Future<ProviderContainer> _pumpPanel(
 }
 
 void main() {
-  testWidgets('the foot carries the settings trigger in the pane form', (
-    tester,
-  ) async {
-    await _pumpPanel(tester);
-
-    final panel = find.byType(SessionPanel);
-    // Web chrome.tsx TriggerContent: gear glyph + one-word label.
-    expect(
-      find.descendant(
-        of: panel,
-        matching: find.byIcon(Icons.settings_outlined),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: panel, matching: find.text('Settings')),
-      findsOneWidget,
-    );
-    // The SettingsRoot.module.css foot vocabulary: a hairline divider
-    // above the trigger row.
-    expect(
-      find.descendant(of: panel, matching: find.byType(Divider)),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('the drawer form carries the same trigger', (tester) async {
-    await _pumpPanel(tester, inDrawer: true);
-
-    final panel = find.byType(SessionPanel);
-    expect(
-      find.descendant(
-        of: panel,
-        matching: find.byIcon(Icons.settings_outlined),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: panel, matching: find.text('Settings')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('tapping the pane trigger selects the Settings destination', (
-    tester,
-  ) async {
-    final store = _store();
-    final container = await _pumpPanel(tester, store: store);
-    expect(container.read(appDestinationProvider), AppDestination.chat);
-
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-
-    expect(container.read(appDestinationProvider), AppDestination.settings);
-    // The selection wrote through to the store's cache.
-    expect(store.read('app.destination'), AppDestination.settings.index);
-    // Retire the store's write timer.
-    await tester.pump(_debounceWindow);
-  });
-
-  testWidgets('tapping the drawer trigger selects the Settings destination', (
-    tester,
-  ) async {
-    final container = await _pumpPanel(tester, inDrawer: true);
-    expect(container.read(appDestinationProvider), AppDestination.chat);
-
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-
-    expect(container.read(appDestinationProvider), AppDestination.settings);
-    await tester.pump(_debounceWindow);
-  });
-
   testWidgets('the destination selection restores from the store', (
     tester,
   ) async {
     final store = _store();
     final container = await _pumpPanel(tester, store: store);
 
-    await tester.tap(find.text('Settings'));
+    // The bottom tab bar owns Settings on mobile; drive the provider
+    // the way the tab bar does.
+    container
+        .read(appDestinationProvider.notifier)
+        .select(AppDestination.settings);
     await tester.pumpAndSettle();
     expect(container.read(appDestinationProvider), AppDestination.settings);
     await tester.pump(_debounceWindow);
