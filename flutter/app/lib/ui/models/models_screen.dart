@@ -1,6 +1,7 @@
 /// Models screen — Flutter port of the legacy ModelsRoute.kt.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,8 +47,9 @@ class ModelsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Models')),
+      appBar: AppBar(title: Text(l10n.modelsTitle)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -56,7 +58,7 @@ class ModelsScreen extends StatelessWidget {
             children: [
               if (uiState.errorMessage case final error?)
                 Text(error, style: TextStyle(color: theme.colorScheme.error)),
-              Text('Session', style: theme.textTheme.labelLarge),
+              Text(l10n.sessionLabel, style: theme.textTheme.labelLarge),
               Expanded(
                 flex: 35,
                 child: ListView(
@@ -75,7 +77,7 @@ class ModelsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('Providers', style: theme.textTheme.labelLarge),
+              Text(l10n.providersLabel, style: theme.textTheme.labelLarge),
               Expanded(
                 flex: 65,
                 child: ListView(
@@ -126,6 +128,7 @@ class _ModelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final isCurrent =
         selected?.provider == group.id && selected?.model == model.id;
     final defaultEffort = model.reasoning?.defaultEffort;
@@ -139,7 +142,7 @@ class _ModelRow extends StatelessWidget {
           FilledButton(
             onPressed: () =>
                 onAction(SelectModelAction(group.id, model.id, selectedEffort)),
-            child: Text('${model.name} (current)'),
+            child: Text(l10n.modelCurrent(model.name)),
           )
         else
           OutlinedButton(
@@ -160,7 +163,7 @@ class _ModelRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Reasoning effort', style: theme.textTheme.labelMedium),
+                Text(l10n.reasoningEffortLabel, style: theme.textTheme.labelMedium),
                 for (final effort in model.reasoning!.efforts)
                   _effortChip(
                     context,

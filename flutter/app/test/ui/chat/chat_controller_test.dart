@@ -554,7 +554,10 @@ void main() {
     await pumpEventQueue();
 
     expect(controller.state.pendingImages, isEmpty);
-    expect(controller.state.errorMessage ?? '', contains('image/bmp'));
+    expect(
+      controller.state.imageRejections,
+      const <ImageRejection>[UnsupportedImageType(null, 'image/bmp')],
+    );
   });
 
   test('pending image count is capped at the per-message limit', () async {
@@ -580,7 +583,10 @@ void main() {
       controller.state.pendingImages.length,
       ImageLimits.defaultMaxImagesPerMessage,
     );
-    expect(controller.state.errorMessage ?? '', contains('more image'));
+    expect(
+      controller.state.imageRejections,
+      const <ImageRejection>[NoImageRoom(20)],
+    );
   });
 
   test('remove pending image drops only that image', () async {

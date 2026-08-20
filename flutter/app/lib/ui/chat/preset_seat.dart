@@ -6,6 +6,7 @@
 /// default backs the staged choice until one is picked.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/session.dart';
 import 'package:flutter/material.dart';
@@ -23,9 +24,13 @@ List<AgentPresetEntry> selectablePresets(AgentPresetRoster roster) =>
 
 /// Display label for one preset id against [roster]; the raw id when the
 /// roster carries no such entry.
-String presetIdLabel(AgentPresetRoster? roster, String presetId) {
+String presetIdLabel(
+  AgentPresetRoster? roster,
+  String presetId,
+  AppLocalizations l10n,
+) {
   for (final entry in roster?.entries ?? const <AgentPresetEntry>[]) {
-    if (entry.id == presetId) return agentPresetDisplayName(entry);
+    if (entry.id == presetId) return agentPresetDisplayName(entry, l10n);
   }
   return presetId;
 }
@@ -71,8 +76,9 @@ class AgentPresetSeat extends StatelessWidget {
     }
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Tooltip(
-      message: 'Agent preset for the session you are about to start',
+      message: l10n.agentPresetTooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -95,7 +101,7 @@ class AgentPresetSeat extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  presetIdLabel(roster, current),
+                  presetIdLabel(roster, current, l10n),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
@@ -167,13 +173,14 @@ class _PresetSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-          child: Text('Agent preset', style: theme.textTheme.titleSmall),
+          child: Text(l10n.agentPresetLabel, style: theme.textTheme.titleSmall),
         ),
         Flexible(
           child: ListView(
@@ -201,15 +208,17 @@ class _PresetSheet extends StatelessWidget {
                                   children: [
                                     Flexible(
                                       child: Text(
-                                        agentPresetDisplayName(option),
+                                        agentPresetDisplayName(option, l10n),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
-                                              fontSize: 13,
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                            ),
+                                                  fontSize: 13,
+                                                  color:
+                                                      theme
+                                                          .colorScheme
+                                                          .onSurface,
+                                                ),
                                       ),
                                     ),
                                     if (option.isDefault) ...[
@@ -226,17 +235,20 @@ class _PresetSheet extends StatelessWidget {
                                           ),
                                         ),
                                         child: Text(
-                                          'Default',
+                                          l10n.defaultBadge,
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                                color: ds.labelSecondary,
-                                              ),
+                                                    color: ds.labelSecondary,
+                                                  ),
                                         ),
                                       ),
                                     ],
                                   ],
                                 ),
-                                if (agentPresetDisplayDescription(option)
+                                if (agentPresetDisplayDescription(
+                                      option,
+                                      l10n,
+                                    )
                                     case final String description)
                                   Text(
                                     description,
@@ -293,6 +305,7 @@ class AgentPresetHeaderLabel extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
@@ -300,7 +313,7 @@ class AgentPresetHeaderLabel extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        presetIdLabel(roster, presetId),
+        presetIdLabel(roster, presetId, l10n),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(

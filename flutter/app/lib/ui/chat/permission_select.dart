@@ -7,6 +7,7 @@
 /// read-only (nothing to switch to).
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
@@ -30,9 +31,12 @@ String permissionDisplayName(String name) {
 
 /// Web `optionLabel`: the full-access machine name carries the product
 /// label `Full access`; every other row title-cases its published name.
-String permissionOptionLabel(PermissionPresetOption option) {
+String permissionOptionLabel(
+  PermissionPresetOption option,
+  AppLocalizations l10n,
+) {
   return option.value == _kFullAccess
-      ? 'Full access'
+      ? l10n.fullAccessOption
       : permissionDisplayName(option.name);
 }
 
@@ -68,11 +72,11 @@ class PermissionSelectChip extends StatelessWidget {
 
   String get _currentValue => value.currentValue;
 
-  String get _label {
+  String _label(AppLocalizations l10n) {
     final current = value.currentOption;
     return current == null
         ? permissionDisplayName(_currentValue)
-        : permissionOptionLabel(current);
+        : permissionOptionLabel(current, l10n);
   }
 
   /// A `custom` effective value has no switch target (the host composed
@@ -143,9 +147,11 @@ class PermissionSelectChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final enabled = !locked && !_readOnly;
     return Tooltip(
-      message: value.currentOption?.description ?? 'Access mode: $_label',
+      message:
+          value.currentOption?.description ?? l10n.accessModeTooltip(_label(l10n)),
       child: Opacity(
         // Web .trigger:disabled — the locked seat dims.
         opacity: enabled ? 1 : 0.6,
@@ -170,7 +176,7 @@ class PermissionSelectChip extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _label,
+                    _label(l10n),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelMedium?.copyWith(
@@ -207,6 +213,7 @@ class _PermissionSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     // Web drops `custom` from the menu — it is a derived state, not a
     // switch target.
     final options = value.options
@@ -218,7 +225,7 @@ class _PermissionSheet extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-          child: Text('Access mode', style: theme.textTheme.titleSmall),
+          child: Text(l10n.accessModeLabel, style: theme.textTheme.titleSmall),
         ),
         Flexible(
           child: ListView(
@@ -248,7 +255,7 @@ class _PermissionSheet extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  permissionOptionLabel(option),
+                                  permissionOptionLabel(option, l10n),
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontSize: 13,
                                     color: theme.colorScheme.onSurface,
@@ -304,36 +311,32 @@ class _FullAccessDialogState extends State<_FullAccessDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Enable Full access?'),
+      title: Text(l10n.enableFullAccessTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Full access reduces confirmation steps and lets the agent '
-            'perform more actions directly, including sensitive '
-            'operations, file changes, or external commands. Only use it '
-            'when you trust the current task.',
-          ),
+          Text(l10n.fullAccessRisks),
           CheckboxListTile(
             value: _acknowledged,
             onChanged: (checked) =>
                 setState(() => _acknowledged = checked ?? false),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
-            title: const Text('I understand the risks and want to continue'),
+            title: Text(l10n.acknowledgeRisks),
           ),
         ],
       ),
       actions: [
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _acknowledged ? widget.onEnable : null,
-          child: const Text('Enable Full access'),
+          child: Text(l10n.enableFullAccess),
         ),
       ],
     );

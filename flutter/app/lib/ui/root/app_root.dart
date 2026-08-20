@@ -6,6 +6,7 @@
 /// bottom bar and the chat sidebar's settings trigger switch it.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,7 @@ class AppRoot extends ConsumerWidget {
           for (final destination in AppDestination.values)
             NavigationDestination(
               icon: Icon(destination.icon),
-              label: destination.label,
+              label: destination.label(AppLocalizations.of(context)!),
             ),
         ],
       ),

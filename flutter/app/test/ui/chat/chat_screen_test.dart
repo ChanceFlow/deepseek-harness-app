@@ -27,6 +27,8 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n_app.dart';
+
 class _FakeRpc implements DshRpcClient {
   @override
   Future<RpcResult> call(
@@ -130,14 +132,12 @@ Future<void> _pump(
       overrides: [
         // Family seams keyed by the seed backend's URL (the store seeds
         // from kDshBaseUrl).
-        dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          _FakeRpc(),
-        ),
-        dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          _NeverSocket(),
-        ),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_NeverSocket()),
       ],
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -449,7 +449,7 @@ void main() {
       // Web ContextInjectionRow: the header names the role beside the
       // durable producer; the body stays collapsed until tapped.
       expect(find.text('Context injection'), findsNWidgets(2));
-      expect(find.text('Recall'), findsOneWidget);
+      expect(find.text('Session recall'), findsOneWidget);
       expect(find.text('goal'), findsOneWidget);
       expect(find.text('Yesterday debugging'), findsOneWidget);
       expect(find.text('compacted 12 events'), findsOneWidget);
@@ -533,8 +533,8 @@ void main() {
     expect(find.text('README.md'), findsOneWidget);
     // Expanded details ride the IN/OUT card: gutter labels beside the
     // arguments and the settled result.
-    expect(find.text('IN'), findsOneWidget);
-    expect(find.text('OUT'), findsOneWidget);
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Output'), findsOneWidget);
     // Approval takes over the composer seat: web takeover card.
     expect(find.text('Waiting for approval'), findsOneWidget);
     expect(find.text('Would run a command'), findsOneWidget);
@@ -542,7 +542,7 @@ void main() {
       find.text('Tool bash requests privileged execution'),
       findsOneWidget,
     );
-    expect(find.text('Message DeepSeek Harness'), findsNothing);
+    expect(find.text('Message the agent'), findsNothing);
     // Web compaction row: dim title + count fragment.
     expect(find.text('Context compacted'), findsOneWidget);
     expect(find.text('Compacted 3 history items'), findsOneWidget);
@@ -1316,7 +1316,7 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(
+        child: l10nApp(
           home: ChatScreen(
             uiState: _state(
               sessions: const [
@@ -1363,7 +1363,7 @@ void main() {
         tester.view.devicePixelRatio = 1.0;
         await tester.pumpWidget(
           ProviderScope(
-            child: MaterialApp(
+            child: l10nApp(
               home: ChatScreen(
                 uiState: ChatUiState(
                   sessions: const [
@@ -1448,7 +1448,7 @@ void main() {
           ],
         );
     Widget host(ChatUiState ui) => ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: ui, onAction: (_) {}),
       ),
     );
@@ -1518,7 +1518,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       return tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(
+          child: l10nApp(
             home: ChatScreen(uiState: uiState, onAction: actions.add),
           ),
         ),

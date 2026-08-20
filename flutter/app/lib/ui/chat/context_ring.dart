@@ -10,6 +10,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
 
@@ -34,8 +35,9 @@ class ContextRing extends StatelessWidget {
     }
     final occupancy = (used / window).clamp(0.0, 1.0).toDouble();
     final percent = (occupancy * 100).round();
+    final l10n = AppLocalizations.of(context)!;
     return Semantics(
-      label: '$percent% of context used',
+      label: l10n.contextUsedPercent(percent),
       button: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
@@ -60,19 +62,20 @@ class ContextRing extends StatelessWidget {
       builder: (dialogContext) {
         final ds = dsOf(dialogContext);
         final theme = Theme.of(dialogContext);
+        final l10n = AppLocalizations.of(dialogContext)!;
         final rows = <(String, int, Color)>[
           (
-            'System prompt',
+            l10n.systemPromptLabel,
             breakdown?.systemTokens ?? 0,
             DeepSuiteStatic.neutralBluish400,
           ),
           (
-            'Tools',
+            l10n.toolsLabel,
             breakdown?.toolsTokens ?? 0,
             const Color(0xffA78BFA),
           ), // violet-400 literal, as the web
           (
-            'Conversation',
+            l10n.conversationLabel,
             breakdown?.messageTokens ?? 0,
             DeepSuiteStatic.blue450,
           ),
@@ -93,13 +96,16 @@ class ContextRing extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$percent% of context used',
+                    l10n.contextUsedPercent(percent),
                     style: theme.textTheme.bodyMedium,
                   ),
                   // Web panel header `.figures`: the reading's numerator
                   // and capacity in compact token form.
                   Text(
-                    '~${formatTokens(used)} / ${formatTokens(window)}',
+                    l10n.contextTokens(
+                      formatTokens(used),
+                      formatTokens(window),
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w500,
                     ),

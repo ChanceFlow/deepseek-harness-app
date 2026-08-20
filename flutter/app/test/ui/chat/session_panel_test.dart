@@ -24,6 +24,8 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
 
+import '../../l10n_app.dart';
+
 /// Two workspace groups: `proj` with seven sessions (the selected
 /// session rides the group, and the run is long enough to carry the
 /// overflow control past the collapsed session limit) and `other`
@@ -99,7 +101,7 @@ Future<ProviderContainer> _pumpPanel(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(
+      child: l10nApp(
         home: Scaffold(
           body: SessionPanel(
             inDrawer: inDrawer,
@@ -207,9 +209,7 @@ void main() {
     // A fresh container over the same store: Chat while the provider
     // is still resolving, the persisted destination once it lands.
     final container2 = ProviderContainer(
-      overrides: [
-        localStateStoreProvider.overrideWith((ref) async => store),
-      ],
+      overrides: [localStateStoreProvider.overrideWith((ref) async => store)],
     );
     addTearDown(container2.dispose);
     expect(container2.read(appDestinationProvider), AppDestination.chat);
@@ -218,41 +218,42 @@ void main() {
     expect(container2.read(appDestinationProvider), AppDestination.settings);
   });
 
-  testWidgets('the active session\'s group never folds; other overrides persist', (
-    tester,
-  ) async {
-    final store = _store();
+  testWidgets(
+    'the active session\'s group never folds; other overrides persist',
+    (tester) async {
+      final store = _store();
 
-    // The current group (holds the selected session) is expanded, and
-    // tapping its header is a no-op — collapsing it would hide the
-    // active session behind a hunt. No override is written.
-    await _pumpPanel(tester, store: store);
-    expect(find.text('session 2'), findsOneWidget);
-    await tester.tap(find.text('proj'));
-    await tester.pumpAndSettle();
-    expect(find.text('session 2'), findsOneWidget);
-    expect(store.read('sidebar.groupOverrides'), isNull);
+      // The current group (holds the selected session) is expanded, and
+      // tapping its header is a no-op — collapsing it would hide the
+      // active session behind a hunt. No override is written.
+      await _pumpPanel(tester, store: store);
+      expect(find.text('session 2'), findsOneWidget);
+      await tester.tap(find.text('proj'));
+      await tester.pumpAndSettle();
+      expect(find.text('session 2'), findsOneWidget);
+      expect(store.read('sidebar.groupOverrides'), isNull);
 
-    // A non-current group starts folded (default); the toggle expands
-    // it and the override writes through to the store's cache.
-    expect(find.text('other session'), findsNothing);
-    await tester.tap(find.text('other'));
-    await tester.pumpAndSettle();
-    expect(find.text('other session'), findsOneWidget);
-    expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': true});
-    // Folding it back writes the collapse override.
-    await tester.tap(find.text('other'));
-    await tester.pumpAndSettle();
-    expect(find.text('other session'), findsNothing);
-    expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': false});
-    await tester.pump(_debounceWindow);
+      // A non-current group starts folded (default); the toggle expands
+      // it and the override writes through to the store's cache.
+      expect(find.text('other session'), findsNothing);
+      await tester.tap(find.text('other'));
+      await tester.pumpAndSettle();
+      expect(find.text('other session'), findsOneWidget);
+      expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': true});
+      // Folding it back writes the collapse override.
+      await tester.tap(find.text('other'));
+      await tester.pumpAndSettle();
+      expect(find.text('other session'), findsNothing);
+      expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': false});
+      await tester.pump(_debounceWindow);
 
-    // A fresh panel instance seeded from the same store keeps the
-    // non-current group collapsed while the current group stays open.
-    await _pumpPanel(tester, store: store);
-    expect(find.text('session 2'), findsOneWidget);
-    expect(find.text('other session'), findsNothing);
-  });
+      // A fresh panel instance seeded from the same store keeps the
+      // non-current group collapsed while the current group stays open.
+      await _pumpPanel(tester, store: store);
+      expect(find.text('session 2'), findsOneWidget);
+      expect(find.text('other session'), findsNothing);
+    },
+  );
 
   testWidgets('the active session rides its group\'s top', (tester) async {
     await _pumpPanel(tester, selectedSessionId: 's3');

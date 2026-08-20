@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/stats_line.dart';
 
+import '../../l10n_app.dart';
+
 void main() {
   test('formatTokens matches the web compact scale', () {
     expect(formatTokens(517), '517');
@@ -27,8 +29,8 @@ void main() {
 
   testWidgets('renders pipe-separated groups', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      l10nApp(
+        home: const Scaffold(
           body: Center(
             child: StatsLine(
               stats: SessionWindowStats(
@@ -59,8 +61,8 @@ void main() {
 
   testWidgets('empty stats render nothing', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      l10nApp(
+        home: const Scaffold(
           body: Center(child: StatsLine(stats: SessionWindowStats())),
         ),
       ),

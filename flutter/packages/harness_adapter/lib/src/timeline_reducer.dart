@@ -414,26 +414,31 @@ class TimelineReducer {
     _finalizePartial();
     final reason = asJsonObject(_eventData(event)['reason']);
     final kind = reason != null ? wireString(reason, 'kind') : null;
+    // The item publishes the wire kind plus host-authored detail only —
+    // never composed UI copy: the chat surface localizes the known kinds
+    // by `code` and falls back to `message` for host error text.
     final String? message;
     switch (kind) {
       case 'error':
         final failure = asJsonObject(reason!['error']);
-        message =
-            'Turn failed: ${failure != null ? (wireString(failure, 'message') ?? 'unknown model failure') : 'unknown model failure'}';
+        message = failure == null
+            ? null
+            : wireString(failure, 'message') ?? '';
       case 'aborted':
-        message = 'Turn stopped';
       case 'interrupted':
-        message = 'Turn interrupted';
       case 'max-tokens':
-        message = 'Maximum output tokens reached';
       case 'blocked':
-        message = 'Turn blocked';
+        message = null;
       default:
         message = null;
     }
-    if (message != null) {
+    if (message != null || kind != null) {
       _items.add(
-        TimelineError(id: 'turn-end:$_lastSeq', message: message, code: kind),
+        TimelineError(
+          id: 'turn-end:$_lastSeq',
+          message: message ?? '',
+          code: kind,
+        ),
       );
     }
   }

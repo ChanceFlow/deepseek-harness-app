@@ -4,7 +4,6 @@ library;
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/message_icon_actions.dart';
+
+import '../../l10n_app.dart';
 
 ChatMessage _message({
   MessageRole role = MessageRole.assistant,
@@ -34,7 +35,7 @@ Future<void> _pump(WidgetTester tester, List<TimelineItem> timeline) {
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(
           uiState: ChatUiState(
             sessions: const [

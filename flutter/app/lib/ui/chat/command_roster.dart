@@ -9,6 +9,8 @@
 /// ZIP through the browser, which this client cannot host).
 library;
 
+import 'package:app/l10n/app_localizations.dart';
+
 /// One roster entry: the slash name, its registry description, and the
 /// input hint shown as the row's trailing detail.
 final class HostCommand {
@@ -19,18 +21,36 @@ final class HostCommand {
   final String? hint;
 }
 
-const List<HostCommand> kHostCommands = <HostCommand>[
-  HostCommand('plan', 'Enter or leave plan mode', '[off|message]'),
+/// The built-in command roster, names and input hints only — the wire
+/// membership check the controller performs (names and hints mirror host
+/// syntax verbatim, never localized; the localized descriptions live in
+/// [hostCommands]).
+const List<HostCommand> kHostCommandNames = <HostCommand>[
+  HostCommand('plan', '', '[off|message]'),
   HostCommand(
     'goal',
-    'set or view the goal for a long-running task',
+    '',
     '[<objective>|clear|edit <objective>|pause|resume]',
   ),
-  HostCommand('compact', 'Compact older conversation history', null),
+  HostCommand('compact', '', null),
+  HostCommand('permission', '', '<preset>'),
+  HostCommand('feedback', '', '<text>'),
+];
+
+/// The built-in command roster; descriptions are localized, the input
+/// hints mirror host syntax verbatim.
+List<HostCommand> hostCommands(AppLocalizations l10n) => <HostCommand>[
+  HostCommand('plan', l10n.commandPlanDescription, '[off|message]'),
+  HostCommand(
+    'goal',
+    l10n.commandGoalDescription,
+    '[<objective>|clear|edit <objective>|pause|resume]',
+  ),
+  HostCommand('compact', l10n.commandCompactDescription, null),
   HostCommand(
     'permission',
-    'Switch the permission preset (sandbox mode + approval policy)',
+    l10n.commandPermissionDescription,
     '<preset>',
   ),
-  HostCommand('feedback', 'record feedback about this session', '<text>'),
+  HostCommand('feedback', l10n.commandFeedbackDescription, '<text>'),
 ];

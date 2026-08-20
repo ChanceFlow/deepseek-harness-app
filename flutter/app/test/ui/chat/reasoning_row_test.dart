@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 
+import '../../l10n_app.dart';
+
 Future<void> _pump(
   WidgetTester tester,
   ChatUiState uiState,
@@ -22,7 +24,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),

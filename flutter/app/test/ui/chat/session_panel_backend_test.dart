@@ -21,6 +21,8 @@ import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 
+import '../../l10n_app.dart';
+
 class _FakeRpc implements DshRpcClient {
   _FakeRpc({this.sessions = const <Object?>[]});
 
@@ -37,14 +39,17 @@ class _FakeRpc implements DshRpcClient {
       return RpcResult(ok: true, value: <String, Object?>{'items': sessions});
     }
     if (endpoint == 'host.describe') {
-      return RpcResult(ok: true, value: <String, Object?>{
-        'version': 'test',
-        'cwd': '/tmp',
-        'provider': 'deepseek',
-        'model': 'test-model',
-        'attachedSessions': 0,
-        'canOpenPath': true,
-      });
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{
+          'version': 'test',
+          'cwd': '/tmp',
+          'provider': 'deepseek',
+          'model': 'test-model',
+          'attachedSessions': 0,
+          'canOpenPath': true,
+        },
+      );
     }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
@@ -113,13 +118,17 @@ final _twoSlices = <BackendSessionSlice>[
   BackendSessionSlice(
     backend: _laptop,
     active: true,
-    sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+    sessions: const [
+      SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+    ],
     workspaces: const [],
   ),
   BackendSessionSlice(
     backend: _buildBox,
     active: false,
-    sessions: const [SessionSummary(id: 'sB1', title: 'Beta on buildbox', blank: false)],
+    sessions: const [
+      SessionSummary(id: 'sB1', title: 'Beta on buildbox', blank: false),
+    ],
     workspaces: const [],
   ),
 ];
@@ -142,14 +151,12 @@ Future<void> _pumpSlices(
     ProviderScope(
       overrides: [
         backendStoreProvider.overrideWith((ref) async => _testStore()),
-        dshRpcClientProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_FakeRpc()),
-        dshEventSocketProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_QuietSocket()),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_QuietSocket()),
       ],
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(
           uiState: uiState,
           onAction: actions.add,
@@ -172,7 +179,9 @@ void main() {
     await _pumpSlices(
       tester,
       uiState: _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+        ],
       ),
       actions: [],
       backendSelections: [],
@@ -199,7 +208,9 @@ void main() {
     await _pumpSlices(
       tester,
       uiState: _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+        ],
       ),
       actions: [],
       backendSelections: selections,
@@ -216,36 +227,36 @@ void main() {
     expect(selections, <String>['b1']);
   });
 
-  testWidgets("a session under another backend routes through the backend-aware callback", (
-    tester,
-  ) async {
-    final backendSessions = <(String, String)>[];
-    final actions = <ChatAction>[];
-    await _pumpSlices(
-      tester,
-      uiState: _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
-      ),
-      actions: actions,
-      backendSelections: [],
-      backendSessionSelections: backendSessions,
-    );
+  testWidgets(
+    "a session under another backend routes through the backend-aware callback",
+    (tester) async {
+      final backendSessions = <(String, String)>[];
+      final actions = <ChatAction>[];
+      await _pumpSlices(
+        tester,
+        uiState: _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+          ],
+        ),
+        actions: actions,
+        backendSelections: [],
+        backendSessionSelections: backendSessions,
+      );
 
-    // Expand the standby backend's Ungrouped group (second 'Ungrouped'
-    // header — the sections render in registry order), then tap its row.
-    await tester.tap(find.text('Ungrouped').at(1));
-    await tester.pump();
-    expect(find.text('Beta on buildbox'), findsOneWidget);
-    await tester.tap(find.text('Beta on buildbox'));
-    await tester.pump();
+      // Expand the standby backend's Ungrouped group (second 'Ungrouped'
+      // header — the sections render in registry order), then tap its row.
+      await tester.tap(find.text('Ungrouped').at(1));
+      await tester.pump();
+      expect(find.text('Beta on buildbox'), findsOneWidget);
+      await tester.tap(find.text('Beta on buildbox'));
+      await tester.pump();
 
-    expect(backendSessions, <(String, String)>[('b1', 'sB1')]);
-    // The direct path never fired for another backend's row.
-    expect(
-      actions.whereType<SelectSession>(),
-      isEmpty,
-    );
-  });
+      expect(backendSessions, <(String, String)>[('b1', 'sB1')]);
+      // The direct path never fired for another backend's row.
+      expect(actions.whereType<SelectSession>(), isEmpty);
+    },
+  );
 
   testWidgets('active-backend rows keep the direct selection path', (
     tester,
@@ -311,7 +322,9 @@ void main() {
     await _pumpSlices(
       tester,
       uiState: _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+        ],
       ),
       actions: [],
       backendSelections: [],
@@ -326,7 +339,9 @@ void main() {
     await _pumpSlices(
       tester,
       uiState: _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+        ],
       ),
       actions: [],
       backendSelections: [],
@@ -335,7 +350,9 @@ void main() {
         BackendSessionSlice(
           backend: _laptop,
           active: true,
-          sessions: const [SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false)],
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+          ],
           workspaces: const [],
         ),
       ],
@@ -368,42 +385,45 @@ void main() {
           ),
           dshRpcClientProvider(Uri.parse('http://10.0.2.2:3080'))
               .overrideWithValue(
-                _FakeRpc(sessions: <Object?>[
-                  <String, Object?>{
-                    'sessionId': 's1',
-                    'updatedAt': 5,
-                    'running': false,
-                    'blank': false,
-                    'cwd': '/tmp/laptop',
-                    'projections': <String, Object?>{
-                      'values': <String, Object?>{'title': 'Alpha on laptop'},
+                _FakeRpc(
+                  sessions: <Object?>[
+                    <String, Object?>{
+                      'sessionId': 's1',
+                      'updatedAt': 5,
+                      'running': false,
+                      'blank': false,
+                      'cwd': '/tmp/laptop',
+                      'projections': <String, Object?>{
+                        'values': <String, Object?>{'title': 'Alpha on laptop'},
+                      },
                     },
-                  },
-                ]),
+                  ],
+                ),
               ),
-          dshRpcClientProvider(Uri.parse('http://10.0.2.2:3081'))
-              .overrideWithValue(
-                _FakeRpc(sessions: <Object?>[
-                  <String, Object?>{
-                    'sessionId': 'sB1',
-                    'updatedAt': 6,
-                    'running': false,
-                    'blank': false,
-                    'cwd': '/tmp/box',
-                    'projections': <String, Object?>{
-                      'values': <String, Object?>{'title': 'Beta on buildbox'},
-                    },
-                  },
-                ]),
-              ),
-          dshEventSocketProvider(
-            Uri.parse('http://10.0.2.2:3080'),
-          ).overrideWithValue(_QuietSocket()),
-          dshEventSocketProvider(
+          dshRpcClientProvider(
             Uri.parse('http://10.0.2.2:3081'),
-          ).overrideWithValue(_QuietSocket()),
+          ).overrideWithValue(
+            _FakeRpc(
+              sessions: <Object?>[
+                <String, Object?>{
+                  'sessionId': 'sB1',
+                  'updatedAt': 6,
+                  'running': false,
+                  'blank': false,
+                  'cwd': '/tmp/box',
+                  'projections': <String, Object?>{
+                    'values': <String, Object?>{'title': 'Beta on buildbox'},
+                  },
+                },
+              ],
+            ),
+          ),
+          dshEventSocketProvider(Uri.parse('http://10.0.2.2:3080'))
+              .overrideWithValue(_QuietSocket()),
+          dshEventSocketProvider(Uri.parse('http://10.0.2.2:3081'))
+              .overrideWithValue(_QuietSocket()),
         ],
-        child: const MaterialApp(home: ChatRoute()),
+        child: l10nApp(home: const ChatRoute()),
       ),
     );
     // Let the registry load and both backends' controllers pull their

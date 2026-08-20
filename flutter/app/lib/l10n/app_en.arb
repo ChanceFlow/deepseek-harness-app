@@ -1,0 +1,1121 @@
+{
+  "appTitle": "DeepSeek Harness",
+  "@appTitle": {
+    "description": "Application title used in the OS task switcher and window title."
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Generic cancel action."
+  },
+  "save": "Save",
+  "@save": {
+    "description": "Generic save action."
+  },
+  "create": "Create",
+  "@create": {
+    "description": "Generic create action."
+  },
+  "refresh": "Refresh",
+  "@refresh": {
+    "description": "Generic refresh action."
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Generic retry action."
+  },
+  "back": "Back",
+  "@back": {
+    "description": "Back navigation tooltip."
+  },
+  "close": "Close",
+  "@close": {
+    "description": "Generic close action."
+  },
+  "dismiss": "Dismiss",
+  "@dismiss": {
+    "description": "Dismiss an error banner."
+  },
+  "delete": "Delete",
+  "@delete": {
+    "description": "Generic delete action."
+  },
+  "rename": "Rename",
+  "@rename": {
+    "description": "Generic rename action."
+  },
+  "open": "Open",
+  "@open": {
+    "description": "Generic open action."
+  },
+  "defaultBadge": "Default",
+  "destinationChat": "Chat",
+  "@destinationChat": {
+    "description": "Bottom navigation label for the chat surface."
+  },
+  "destinationWorkspaces": "Workspaces",
+  "@destinationWorkspaces": {
+    "description": "Bottom navigation label for the workspace browser."
+  },
+  "destinationSettings": "Settings",
+  "@destinationSettings": {
+    "description": "Bottom navigation label for host configuration."
+  },
+  "goalTitle": "Goal",
+  "@goalTitle": {
+    "description": "Goal screen app bar title."
+  },
+  "sessionLabel": "Session",
+  "@sessionLabel": {
+    "description": "Section label naming the selected session."
+  },
+  "providersLabel": "Providers",
+  "@providersLabel": {
+    "description": "Section label naming model providers."
+  },
+  "noCurrentGoal": "No ongoing goal",
+  "@noCurrentGoal": {
+    "description": "Empty state when no goal is active."
+  },
+  "goalObjectiveHint": "Goal objective",
+  "@goalObjectiveHint": {
+    "description": "Hint and edit-field label for the goal objective text."
+  },
+  "maxGoalRoundsHint": "Max goal rounds (optional)",
+  "@maxGoalRoundsHint": {
+    "description": "Hint for the optional max-rounds field."
+  },
+  "pause": "Pause goal",
+  "@pause": {
+    "description": "Pause an active goal."
+  },
+  "resume": "Resume goal",
+  "@resume": {
+    "description": "Resume a paused goal."
+  },
+  "clear": "Clear goal",
+  "@clear": {
+    "description": "Clear a goal."
+  },
+  "complete": "Complete goal",
+  "@complete": {
+    "description": "Complete a goal."
+  },
+  "edit": "Edit goal",
+  "@edit": {
+    "description": "Edit a goal."
+  },
+  "goalPhaseActive": "Ongoing Goal",
+  "@goalPhaseActive": {
+    "description": "Goal phase label, active."
+  },
+  "goalPhasePaused": "Paused Goal",
+  "@goalPhasePaused": {
+    "description": "Goal phase label, paused."
+  },
+  "goalPhaseBlocked": "Blocked Goal",
+  "@goalPhaseBlocked": {
+    "description": "Goal phase label, blocked."
+  },
+  "goalPhaseComplete": "Completed Goal",
+  "@goalPhaseComplete": {
+    "description": "Goal phase label, complete."
+  },
+  "goalStatusLine": "{phase} · revision {revision} · rounds {started}/{max}",
+  "contextUsedPercent": "{percent}% of context used",
+  "systemPromptLabel": "System prompt",
+  "@systemPromptLabel": {
+    "description": "Context composition legend, system prompt row."
+  },
+  "toolsLabel": "Tools",
+  "@toolsLabel": {
+    "description": "Context composition legend, tools row."
+  },
+  "conversationLabel": "Messages",
+  "@conversationLabel": {
+    "description": "Context composition legend, conversation row."
+  },
+  "contextTokens": "~{used} / {window}",
+  "heroHeadline": "Into the Unknown",
+  "@heroHeadline": {
+    "description": "Empty-chat hero headline."
+  },
+  "heroPreview": "Preview",
+  "@heroPreview": {
+    "description": "Preview badge on the hero."
+  },
+  "heroChooseWorkspace": "Choose workspace",
+  "@heroChooseWorkspace": {
+    "description": "Workspace chip label and tooltip on the empty hero."
+  },
+  "modelsTitle": "Models",
+  "@modelsTitle": {
+    "description": "Models screen app bar title."
+  },
+  "modelCurrent": "{name} (current)",
+  "reasoningEffortLabel": "Reasoning effort",
+  "@reasoningEffortLabel": {
+    "description": "Section label for reasoning effort chips."
+  },
+  "todosLabel": "To-dos",
+  "@todosLabel": {
+    "description": "Plan-strip header label."
+  },
+  "todoCountDone": "{count} completed",
+  "todoCountActive": "{count} in progress",
+  "todoCountPending": "{count} pending",
+  "backgroundJobsTitle": "Background jobs",
+  "@backgroundJobsTitle": {
+    "description": "Background-jobs sheet title."
+  },
+  "jobCountRunning": "{count, plural, =1{1 background job running} other{{count} background jobs running}}",
+  "jobCount": "{count, plural, =1{1 background job} other{{count} background jobs}}",
+  "jobStatusRunning": "running",
+  "@jobStatusRunning": {
+    "description": "Job status label, running."
+  },
+  "jobStatusStopping": "stopping",
+  "@jobStatusStopping": {
+    "description": "Job status label, stopping."
+  },
+  "jobStatusCompleted": "completed",
+  "@jobStatusCompleted": {
+    "description": "Job status label, completed."
+  },
+  "jobStatusKilled": "cancelled",
+  "@jobStatusKilled": {
+    "description": "Job status label, cancelled."
+  },
+  "jobStatusFailed": "failed",
+  "@jobStatusFailed": {
+    "description": "Job status label, failed."
+  },
+  "jobDurationHoursMinutes": "{hours}h {minutes}m",
+  "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
+  "jobDurationSeconds": "{seconds}s",
+  "copyTooltip": "Copy",
+  "@copyTooltip": {
+    "description": "Copy-message icon tooltip."
+  },
+  "copiedTooltip": "Copied",
+  "@copiedTooltip": {
+    "description": "Copy-message icon tooltip after a successful copy."
+  },
+  "waitingForApproval": "Waiting for approval",
+  "@waitingForApproval": {
+    "description": "Approval panel header strip."
+  },
+  "approveToolFallback": "Approve tool: {tool}",
+  "toolRequestsPrivileged": "Tool {tool} requests privileged execution",
+  "reject": "Reject",
+  "@reject": {
+    "description": "Reject an approval request."
+  },
+  "allowOnce": "Allow once",
+  "@allowOnce": {
+    "description": "Allow a privileged execution a single time."
+  },
+  "agentPresetLabel": "Agent preset",
+  "@agentPresetLabel": {
+    "description": "Label for the agent-preset seat and sheet title."
+  },
+  "agentPresetTooltip": "Agent preset for the session you are about to start",
+  "@agentPresetTooltip": {
+    "description": "Tooltip explaining the preset seat."
+  },
+  "accessModeLabel": "Access mode",
+  "@accessModeLabel": {
+    "description": "Access-mode sheet title."
+  },
+  "accessModeTooltip": "Access mode: {label}",
+  "fullAccessOption": "Full access",
+  "@fullAccessOption": {
+    "description": "Product label for the danger-full-access permission value."
+  },
+  "enableFullAccessTitle": "Enable Full access?",
+  "@enableFullAccessTitle": {
+    "description": "Risk-confirmation dialog title."
+  },
+  "fullAccessRisks": "Full access reduces confirmation steps and lets the agent perform more actions directly, including sensitive operations, file changes, or external commands. Only use it when you trust the current task.",
+  "@fullAccessRisks": {
+    "description": "Risk-confirmation dialog body."
+  },
+  "acknowledgeRisks": "I understand the risks and want to continue",
+  "@acknowledgeRisks": {
+    "description": "Acknowledgement checkbox in the risk-confirmation dialog."
+  },
+  "enableFullAccess": "Enable Full access",
+  "@enableFullAccess": {
+    "description": "Confirm button in the risk-confirmation dialog."
+  },
+  "modelLabel": "Model",
+  "@modelLabel": {
+    "description": "Model seat label and sheet menu row."
+  },
+  "effortLabel": "Effort",
+  "@effortLabel": {
+    "description": "Reasoning-effort seat label and sheet menu row."
+  },
+  "providerDefault": "Default",
+  "@providerDefault": {
+    "description": "Effort option meaning the provider's default effort."
+  },
+  "presetStandardName": "Standard mode",
+  "@presetStandardName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetStandardDescription": "Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.",
+  "@presetStandardDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetCodeName": "Code mode",
+  "@presetCodeName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetCodeDescription": "All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.",
+  "@presetCodeDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetMinimalName": "Minimal mode",
+  "@presetMinimalName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetMinimalDescription": "Two-tool coding agent with persistent bash and str_replace_editor.",
+  "@presetMinimalDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetCordisName": "Creator mode",
+  "@presetCordisName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetCordisDescription": "Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance.",
+  "@presetCordisDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "toolSearchTitle": "Search",
+  "@toolSearchTitle": {
+    "description": "Tool row title for search variants."
+  },
+  "toolReadTitle": "Read",
+  "@toolReadTitle": {
+    "description": "Tool row title for read variants."
+  },
+  "toolBashTitle": "Bash",
+  "@toolBashTitle": {
+    "description": "Tool row title for bash variants."
+  },
+  "toolWriteTitle": "Write",
+  "@toolWriteTitle": {
+    "description": "Tool row title for write variants."
+  },
+  "toolEditTitle": "Edit",
+  "@toolEditTitle": {
+    "description": "Tool row title for edit variants."
+  },
+  "toolCodeTitle": "Code",
+  "@toolCodeTitle": {
+    "description": "Tool row title for code variants."
+  },
+  "toolCallTitle": "Tool call",
+  "@toolCallTitle": {
+    "description": "Tool row title for other variants."
+  },
+  "toolInspectTitle": "Inspect",
+  "@toolInspectTitle": {
+    "description": "Tool title for cordis inspection tools."
+  },
+  "toolRunCordisPlugin": "Run Cordis Plugin",
+  "@toolRunCordisPlugin": {
+    "description": "Tool title for running a Cordis plugin."
+  },
+  "toolStopCordisPlugin": "Stop Cordis Plugin",
+  "@toolStopCordisPlugin": {
+    "description": "Tool title for stopping a Cordis plugin."
+  },
+  "toolRemoveCordisPlugin": "Remove Cordis Plugin",
+  "@toolRemoveCordisPlugin": {
+    "description": "Tool title for removing a Cordis plugin."
+  },
+  "toolPwshTitle": "Pwsh",
+  "@toolPwshTitle": {
+    "description": "Tool title for the PowerShell shell tool."
+  },
+  "toolUpdateTodoTitle": "Update to-do list",
+  "@toolUpdateTodoTitle": {
+    "description": "Tool row title for the todo_write tool."
+  },
+  "toolTodoPlanCompleted": "{done}/{total} completed",
+  "statsTurnsSteps": "{turns} turns · {steps} steps",
+  "statsLlmDuration": "LLM {duration}",
+  "statsToolDuration": "Tool call {duration}",
+  "statsTtftAvg": "TTFT avg {duration}",
+  "statsTokensPerSecond": "{rate} tok/s",
+  "statsCacheHit": "Cache hit {percent}%",
+  "statsInputTokens": "Input {tokens} tok",
+  "statsOutputTokens": "Output {tokens} tok",
+  "credentialStateUnavailable": "Credential state unavailable: {error}",
+  "storeCredentialTitle": "Store {ref}",
+  "namespaceMetaApplies": "applies: {name}",
+  "namespaceMetaRevision": "revision: {revision}",
+  "credentialMetaSource": "source: {source}",
+  "casRevisionLine": "CAS revision {revision}; host validates against the schema",
+  "newSessionInWorkspace": "New session in {title}",
+  "workspaceActionsFor": "Workspace actions for {title}",
+  "workspaceNameExists": "A workspace named “{name}” already exists.",
+  "deleteWorkspaceConfirm": "This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.",
+  "newFolderIn": "New folder in \"{parent}\"",
+  "secretsSetCount": "{count, plural, =1{1 secret set} other{{count} secrets set}}",
+  "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
+  "settingsNavBackends": "Backends",
+  "settingsNavGeneral": "General",
+  "settingsNavModels": "Models",
+  "settingsNavPlugins": "Plugins",
+  "settingsNavAgentPresets": "Agent presets",
+  "settingsNavCredentials": "Credentials",
+  "settingsLoopbackHint": "settings/credentials are loopback-only on the host; connect via adb reverse",
+  "backendsIntro": "Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.",
+  "addBackend": "Add backend",
+  "editBackend": "Edit backend",
+  "removeActiveBackendFirst": "Switch away before removing the active backend.",
+  "cannotRemoveLastBackend": "The last backend cannot be removed.",
+  "backendStatusActive": "Active",
+  "backendStatusStandby": "Standby",
+  "hostSettingsUnavailable": "Host settings unavailable",
+  "hostSettingsUnavailableBody": "The active backend did not answer. Repoint or switch it from the Backends page.",
+  "hostWritesLabel": "Host writes",
+  "hostWritesDescription": "Whether the host accepts settings and credential writes.",
+  "writableValue": "Writable",
+  "readOnlyValue": "Read-only",
+  "settingsDocumentLabel": "Settings document",
+  "settingsDocumentDescription": "Whether a user settings document backs the namespaces.",
+  "presentValue": "Present",
+  "noneValue": "None",
+  "generalIntro": "New-session defaults and the host settings plane.",
+  "busyPreferenceLabel": "Enter behavior while busy",
+  "busyPreferenceDescription": "Busy only; Cmd/Ctrl+Enter uses the other behavior",
+  "busyBehaviorQueue": "Queue",
+  "busyBehaviorSteer": "Steer",
+  "agentPresetPreferenceLabel": "Agent preset",
+  "agentPresetPreferenceDescription": "Applies to sessions you start from now on. Running sessions keep the preset they began with.",
+  "agentPresetsIntro": "A preset is the plugin composition one session''s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.",
+  "presetGroupBuiltIn": "Built-in",
+  "presetGroupCustom": "Custom",
+  "presetsFooter": "Presets are authored on the host: copy, edit, and delete them from the desktop settings.",
+  "noDescription": "No description.",
+  "presetBrokenBadge": "Failed to load",
+  "presetInUseBadge": "In use",
+  "pluginsIntro": "Configure and inspect the plugins installed in this deployment.",
+  "noPluginSettings": "This deployment exposes no plugin settings.",
+  "modelsIntro": "Enter your API keys to use models from the following providers.",
+  "settingsReadOnlyNotice": "The settings document is read-only in this deployment.",
+  "modelsFooter": "Custom providers are managed on the host: this client covers the DeepSeek API key only.",
+  "apiKeyConfigured": "API key configured",
+  "apiKeyMissing": "API key missing",
+  "credentialsIntro": "Secret references named by the host namespaces.",
+  "noCredentialsReferenced": "No credentials referenced.",
+  "patchKey": "Patch key",
+  "replaceSection": "Replace section",
+  "topLevelKey": "Top-level key",
+  "wholeUserLayerJson": "Whole user-layer JSON object",
+  "jsonValue": "JSON value",
+  "jsonKeyValueExampleHint": "'{' \"key\": value '}'",
+  "jsonValueExampleHint": "true / 42 / \"text\" / '{'…'}'",
+  "discard": "Discard",
+  "stateConfigured": "Configured",
+  "stateNotSet": "Not set",
+  "credentialReadOnlyHint": "Read-only on this connection; the stored value cannot be changed from this client.",
+  "unset": "Unset",
+  "secretValueLabel": "Secret value",
+  "secretValueHint": "secret value",
+  "secretValueHintLine": "Stored on the host; the value never rides a response.",
+  "backendLabel": "Label",
+  "backendLabelHint": "Laptop host, build box, …",
+  "backendBaseUrlLabel": "Base URL",
+  "backendBaseUrlHint": "http://10.0.2.2:3080",
+  "baseUrlDerivationHint": "RPC and event paths derive from this base.",
+  "baseUrlValidHint": "http or https with a host, e.g. http://10.0.2.2:3080",
+  "remove": "Remove",
+  "add": "Add",
+  "userLayerLabel": "user layer",
+  "credentialMetaConfigured": "configured",
+  "credentialMetaNotConfigured": "not configured",
+  "credentialMetaWritable": "writable",
+  "credentialMetaReadOnly": "read-only",
+  "workspacesNavTitle": "Workspaces",
+  "searchWorkspacesHint": "Search workspaces...",
+  "noMatchingWorkspaces": "No matches",
+  "noWorkspacesYet": "No workspaces yet",
+  "moveUp": "Move up",
+  "moveDown": "Move down",
+  "deleteWorkspace": "Delete workspace",
+  "renameWorkspace": "Rename workspace",
+  "renameWorkspaceTitle": "Rename workspace",
+  "newFolder": "New folder",
+  "untitledFolderHint": "Untitled folder",
+  "homeCrumb": "Home",
+  "selectWorkspaceDirectoryTitle": "Select Workspace Directory",
+  "editPathTooltip": "Edit path",
+  "unableToLoadDirectory": "Unable to load directory",
+  "noFolders": "No folders",
+  "tooManyFoldersHint": "Too many folders to list; only the beginning is shown.",
+  "showHiddenFiles": "Show hidden files",
+  "pathLabel": "Path",
+  "ungroupedLabel": "Ungrouped",
+  "openSidebar": "Open sidebar",
+  "collapseSidebar": "Collapse sidebar",
+  "newSession": "New session",
+  "searchSessions": "Search sessions",
+  "searchSessionsHint": "Search sessions...",
+  "noSessionsYet": "No sessions yet",
+  "noMatchingSessions": "No matching sessions",
+  "relativeTimeNow": "now",
+  "relativeTimeMinutes": "{minutes}min",
+  "relativeTimeHours": "{hours}h",
+  "relativeTimeDays": "{days}d",
+  "relativeTimeMonths": "{months}mo",
+  "relativeTimeYears": "{years}y",
+  "sessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
+  "showLess": "Show less",
+  "showAll": "Show all {count}",
+  "noWorkspacesRegistered": "No workspaces registered.",
+  "noWorkspacesRegisteredBody": "Use the Workspaces tab to register a directory first, or choose Default to create an unaccounted session.",
+  "chooseWorkspaceOrDefault": "Choose a workspace or keep the default.",
+  "subagentsTitle": "Subagents",
+  "selectParentSession": "Select a parent session",
+  "noSubagents": "No subagents",
+  "loadingSubagents": "Loading subagents…",
+  "unableToLoadSubagents": "Unable to load subagents",
+  "messageSelectedSubagentHint": "Message selected subagent",
+  "sending": "Sending",
+  "send": "Send",
+  "stopTooltip": "Stop",
+  "modeOneShot": "one-shot",
+  "modeContinuable": "continuable",
+  "activityRunning": "running",
+  "activityNotRunning": "not running",
+  "diagnosticCorrupt": "corrupted session record",
+  "diagnosticUnsupported": "unsupported subagent record version",
+  "diagnosticUnavailable": "session record temporarily unavailable",
+  "oneShotRecordTitle": "One-shot subagent record",
+  "parentUnavailableTitle": "This subagent is read-only for now",
+  "oneShotRecordBody": "One-shot tasks do not accept follow-ups; review the full execution record here.",
+  "parentUnavailableBody": "The parent session is offline; reopen it to continue sending messages.",
+  "appBarConnected": "connected",
+  "appBarConnectedWithVersion": "connected {version}",
+  "appBarConnecting": "connecting",
+  "appBarReconnecting": "reconnecting",
+  "appBarDisconnected": "disconnected",
+  "connectionBannerConnected": "connected {version}",
+  "connectionBannerConnecting": "connecting",
+  "connectionBannerReconnecting": "reconnecting",
+  "connectionBannerDisconnected": "disconnected",
+  "outlineTooltip": "Outline",
+  "subagentsTooltip": "Subagents",
+  "renameSession": "Rename session",
+  "forkSession": "Fork session",
+  "archiveSession": "Archive session",
+  "archiveSessionBody": "The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.",
+  "archive": "Archive",
+  "expandAll": "Expand all",
+  "planBadge": "Plan",
+  "imagePlaceholderSuffix": " · {name}",
+  "imageLoadingPlaceholder": "image {width}×{height} ({bytes} bytes){suffix}",
+  "semanticsRunning": "Running",
+  "semanticsFailed": "Failed",
+  "inputLabel": "Input",
+  "outputLabel": "Output",
+  "runStatusRunning": "Running…",
+  "runStatusDone": "Done",
+  "runStatusFailed": "Failed",
+  "pauseGoal": "Pause goal",
+  "resumeGoal": "Resume goal",
+  "clearGoal": "Clear goal",
+  "openGoal": "Open goal",
+  "queuedMessagesCount": "{count, plural, =1{1 queued message} other{{count} queued messages}}",
+  "editQueuedMessageHint": "Edit queued message",
+  "saveQueuedMessage": "Save queued message",
+  "cancelEdit": "Cancel editing",
+  "steer": "Steer",
+  "removeQueuedMessage": "Remove queued message",
+  "approveTool": "Approve tool: {tool}",
+  "allow": "Allow",
+  "answer": "Answer",
+  "planReview": "Plan review",
+  "skipped": "Skipped",
+  "answerInstead": "Answer instead",
+  "typeYourAnswerHint": "Type your answer",
+  "skip": "Skip",
+  "planPlaceholder": "describe your task to generate plan",
+  "messagePlaceholder": "Message the agent",
+  "removeImage": "Remove {name}",
+  "newLine": "New line",
+  "delivery": "Delivery",
+  "commandsTooltip": "Commands",
+  "searchCommandsHint": "Search commands",
+  "noMatchingCommands": "No matching commands",
+  "attachImages": "Attach images",
+  "pickFromGallery": "Pick from gallery",
+  "unknownImageType": "unknown image type for {name}",
+  "beforeFirstTurnHeader": "Before first turn · {count} messages",
+  "turnHeader": "Turn {turn} · {count} messages · {toolCount} tools",
+  "contextCompacted": "Context compacted",
+  "compactedHistoryCount": "Compacted {count} history items",
+  "recallLabel": "Session recall",
+  "contextInjectionLabel": "Context injection",
+  "chatGoalPhaseActive": "Active",
+  "chatGoalPhasePaused": "Paused",
+  "chatGoalPhaseBlocked": "Blocked",
+  "queue": "Queue",
+  "thinkLabel": "Think",
+  "commandPlanDescription": "Enter or leave plan mode",
+  "commandGoalDescription": "set or view the goal for a long-running task",
+  "commandCompactDescription": "Compact older conversation history",
+  "commandPermissionDescription": "Switch the permission preset (sandbox mode + approval policy)",
+  "commandFeedbackDescription": "record feedback about this session",
+  "@deleteWorkspaceConfirm": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "ungroupedLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "@goalStatusLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      },
+      "phase": {
+        "type": "String"
+      },
+      "revision": {
+        "type": "int"
+      },
+      "started": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextUsedPercent": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@contextTokens": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "@modelCurrent": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@todoCountDone": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@todoCountActive": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@todoCountPending": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobCountRunning": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationHoursMinutes": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationMinutesSeconds": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobDurationSeconds": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@approveToolFallback": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@toolRequestsPrivileged": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@accessModeTooltip": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@toolTodoPlanCompleted": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsTurnsSteps": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "turns": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsLlmDuration": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsToolDuration": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsTtftAvg": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsTokensPerSecond": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsCacheHit": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@statsInputTokens": {
+    "description": "Composer stats: billed input token count.",
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
+  "@statsOutputTokens": {
+    "description": "Composer stats: output token count.",
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
+  "@credentialStateUnavailable": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@storeCredentialTitle": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "ref": {
+        "type": "String"
+      }
+    }
+  },
+  "@namespaceMetaApplies": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@namespaceMetaRevision": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "revision": {
+        "type": "int"
+      }
+    }
+  },
+  "@credentialMetaSource": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "@casRevisionLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "revision": {
+        "type": "int"
+      }
+    }
+  },
+  "@newSessionInWorkspace": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "@workspaceActionsFor": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "@workspaceNameExists": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@newFolderIn": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "parent": {
+        "type": "String"
+      }
+    }
+  },
+  "@secretsSetCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@workspaceSessionCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeMinutes": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeHours": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeDays": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeMonths": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "months": {
+        "type": "int"
+      }
+    }
+  },
+  "@relativeTimeYears": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "years": {
+        "type": "int"
+      }
+    }
+  },
+  "@sessionCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@showAll": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@appBarConnectedWithVersion": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectionBannerConnected": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@imagePlaceholderSuffix": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@imageLoadingPlaceholder": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      },
+      "suffix": {
+        "type": "String"
+      },
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "@queuedMessagesCount": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@approveTool": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "@removeImage": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@unknownImageType": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@beforeFirstTurnHeader": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@turnHeader": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "toolCount": {
+        "type": "int"
+      },
+      "turn": {
+        "type": "int"
+      }
+    }
+  },
+  "@compactedHistoryCount": {
+    "description": "Compaction notice line count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "parentSession": "Parent session",
+  "addWorkspace": "Add workspace",
+  "searchTooltip": "Search",
+  "namespaceReadOnlyHint": "Host is read-only on this connection; namespace edits are unavailable.",
+  "turnNumberLabel": "Turn {turn}",
+  "attachmentName": "attachment",
+  "@turnNumberLabel": {
+    "description": "Turn boundary micro-label.",
+    "placeholders": {
+      "turn": {
+        "type": "int"
+      }
+    }
+  },
+  "imageRejectionUnsupported": "{name}: unsupported type {type}",
+  "imageRejectionTooLarge": "{name}: exceeds {maxBytes} bytes",
+  "imageRejectionNoRoom": "Only {room} more image(s) allowed per message",
+  "@imageRejectionUnsupported": {
+    "description": "Picked image refused: media type not supported.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "@imageRejectionTooLarge": {
+    "description": "Picked image refused: exceeds host byte ceiling.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "maxBytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@imageRejectionNoRoom": {
+    "description": "Picked image refused: composer seat full.",
+    "placeholders": {
+      "room": {
+        "type": "int"
+      }
+    }
+  },
+  "commandFailed": "Command failed",
+  "turnFailed": "This turn failed: {detail}",
+  "unknownModelFailure": "unknown model failure",
+  "turnStopped": "Turn stopped",
+  "turnInterrupted": "Turn interrupted",
+  "turnBlocked": "Turn blocked",
+  "turnMaxTokens": "Output token limit reached",
+  "@turnFailed": {
+    "description": "Turn/end error line with host detail.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "turnCompleteTitle": "Turn complete",
+  "turnCompletionChannel": "Turn completion",
+  "turnCompletionChannelDescription": "Notifies when a running conversation turn finishes."
+}

@@ -2,12 +2,17 @@
 /// (ui-tool/src/client/tool/models/tool-call-model.ts).
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/tool_row_model.dart';
+
+import '../../l10n_app.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   test(
@@ -26,6 +31,7 @@ void main() {
           result: 'message queued as the next turn for subagent s-9',
           status: ToolRunStatus.completed,
         ),
+        _en,
       );
       expect(model.title, 'Tool call');
       expect(model.variant, ToolRowVariant.others);
@@ -48,6 +54,7 @@ void main() {
         result: 'total 0',
         status: ToolRunStatus.completed,
       ),
+      _en,
     );
     expect(model.title, 'Bash');
     expect(model.summary, 'list the directory');
@@ -63,6 +70,7 @@ void main() {
         result: 'void main() {}',
         status: ToolRunStatus.completed,
       ),
+      _en,
     );
     expect(model.title, 'Read');
     expect(model.summary, '/ws/src/main.dart');
@@ -77,6 +85,7 @@ void main() {
         arguments: '{"command":"Get-ChildItem"}',
         status: ToolRunStatus.completed,
       ),
+      _en,
     );
     expect(model.title, 'Pwsh');
     expect(model.variant, ToolRowVariant.bash);
@@ -94,6 +103,7 @@ void main() {
         isError: true,
         status: ToolRunStatus.failed,
       ),
+      _en,
     );
     expect(model.state, ToolRowState.error);
     expect(model.errorSummary, 'subagent not available');
@@ -108,8 +118,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      l10nApp(
+        home: const Scaffold(
           body: ToolCallRow(
             call: TimelineToolCall(
               id: 'c6',

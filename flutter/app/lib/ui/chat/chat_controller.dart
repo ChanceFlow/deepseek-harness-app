@@ -63,6 +63,8 @@ class ChatController {
   TimelineWindow _timelineWindow = const TimelineWindow();
   bool _isSending = false;
   String? _errorMessage;
+  bool _commandFailed = false;
+  List<ImageRejection> _imageRejections = const <ImageRejection>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
@@ -144,6 +146,8 @@ class ChatController {
       searchResults: _searchResults,
       isSending: _isSending,
       errorMessage: _errorMessage,
+      commandFailed: _commandFailed,
+      imageRejections: _imageRejections,
       pendingImages: _pendingImages,
       imageLimits: _imageLimits,
       plan: _plan,
@@ -221,6 +225,8 @@ class ChatController {
         );
       case DismissError():
         _errorMessage = null;
+        _commandFailed = false;
+        _imageRejections = const <ImageRejection>[];
         _publish();
       case RetrySessions():
         _refresh();
@@ -484,7 +490,7 @@ class ChatController {
     final token = boundary == -1 ? text : text.substring(0, boundary);
     final name = token.substring(1);
     if (name.isEmpty) return null;
-    for (final command in kHostCommands) {
+    for (final command in kHostCommandNames) {
       if (command.name != name) continue;
       // A bare-only command (no input hint) with args rides the prompt
       // channel (web: `if (!bare) return undefined`).
@@ -520,7 +526,8 @@ class ChatController {
         return;
       }
       if (execution.kind == CommandOutcomeKind.error) {
-        _errorMessage = execution.text ?? 'command failed';
+        _errorMessage = execution.text;
+        _commandFailed = execution.text == null;
         _publish();
         return;
       }
@@ -536,16 +543,12 @@ class ChatController {
     if (images.isEmpty) return;
     final limits = _imageLimits;
     final admitted = <PendingImage>[];
-    final rejected = <String>[];
+    final rejected = <ImageRejection>[];
     for (final image in images) {
       if (!limits.mediaTypes.contains(image.mediaType)) {
-        rejected.add(
-          '${image.name ?? image.id}: unsupported type ${image.mediaType}',
-        );
+        rejected.add(UnsupportedImageType(image.name, image.mediaType));
       } else if (image.byteSize > limits.maxImageBytes) {
-        rejected.add(
-          '${image.name ?? image.id}: exceeds ${limits.maxImageBytes} bytes',
-        );
+        rejected.add(ImageTooLarge(image.name, limits.maxImageBytes));
       } else {
         admitted.add(image);
       }
@@ -559,11 +562,12 @@ class ChatController {
       _pendingImages = List.of(_pendingImages)..addAll(keep);
     }
     if (overflow.isNotEmpty) {
-      rejected.add('only $room more image(s) allowed per message');
+      rejected.add(NoImageRoom(room));
     }
-    if (rejected.isNotEmpty) {
-      _errorMessage = rejected.join('; ');
-    }
+    // Admission facts ride the state stream for the UI layer to localize;
+    // they clear on the next pass (an empty list reads as "no new
+    // rejections", distinct from the shared error strip).
+    _imageRejections = rejected;
     _publish();
   }
 
@@ -827,6 +831,7 @@ class ChatController {
   Future<T?> _runCatchingForUi<T>(Future<T> Function() block) async {
     try {
       _errorMessage = null;
+      _commandFailed = false;
       _publish();
       return await block();
     } catch (error) {

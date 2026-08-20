@@ -5,6 +5,7 @@
 /// MenuDropdown form).
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
@@ -27,9 +28,9 @@ class ModelSelect extends StatelessWidget {
 
   ModelSelection? get _current => models?.current;
 
-  String get _modelLabel {
+  String _modelLabel(AppLocalizations l10n) {
     final current = _current;
-    if (current == null) return 'Model';
+    if (current == null) return l10n.modelLabel;
     final groups = models?.groups ?? const <ModelProviderGroup>[];
     for (final group in groups) {
       if (group.id != current.provider) continue;
@@ -42,9 +43,10 @@ class ModelSelect extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return DsCircleButton(
       // Long-press discloses the active model; the sheet carries the rest.
-      tooltip: 'Model: $_modelLabel',
+      tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
       enabled: !locked,
       onTap: () => _open(context),
       // The settings-style glyph (the tune vocabulary the sheet header
@@ -134,22 +136,23 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   Widget _rootPane(BuildContext context, ModelCatalogModel? currentModel) {
     final current = widget.models?.current;
     final hasEffort = currentModel?.reasoning != null;
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _paneHeader(context, 'Model'),
+        _paneHeader(context, l10n.modelLabel),
         _menuCell(
           context,
-          label: 'Model',
-          value: _modelLabelOf(current),
+          label: l10n.modelLabel,
+          value: _modelLabelOf(current, l10n),
           onTap: () => setState(() => _pane = _Pane.model),
         ),
         if (hasEffort)
           _menuCell(
             context,
-            label: 'Effort',
-            value: _effortLabelOf(current, currentModel),
+            label: l10n.effortLabel,
+            value: _effortLabelOf(current, currentModel, l10n),
             onTap: () => setState(() => _pane = _Pane.effort),
           ),
       ],
@@ -158,8 +161,9 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
   Widget _modelPane(BuildContext context) {
     final models = widget.models;
+    final l10n = AppLocalizations.of(context)!;
     if (models == null) {
-      return _paneHeader(context, 'Model');
+      return _paneHeader(context, l10n.modelLabel);
     }
     // models.current is a required field on SessionModels.
     final current = models.current;
@@ -167,7 +171,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _paneHeader(context, 'Model'),
+        _paneHeader(context, l10n.modelLabel),
         Flexible(
           child: ListView(
             shrinkWrap: true,
@@ -218,10 +222,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   Widget _effortPane(BuildContext context, ModelCatalogModel? currentModel) {
     final reasoning = currentModel?.reasoning;
     final current = widget.models?.current;
+    final l10n = AppLocalizations.of(context)!;
     final effective = current?.reasoningEffort ?? reasoning?.defaultEffort;
     final rows = <({String? id, String label, String? detail})>[
       if (reasoning == null || reasoning.defaultEffort == null)
-        (id: null, label: 'Provider default', detail: null),
+        (id: null, label: l10n.providerDefault, detail: null),
       for (final effort in reasoning?.efforts ?? const <ModelReasoningEffort>[])
         (id: effort.id, label: effort.name, detail: effort.description),
     ];
@@ -229,7 +234,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _paneHeader(context, 'Effort'),
+        _paneHeader(context, l10n.effortLabel),
         Flexible(
           child: ListView(
             shrinkWrap: true,
@@ -384,8 +389,8 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     );
   }
 
-  String _modelLabelOf(ModelSelection? current) {
-    if (current == null) return 'Model';
+  String _modelLabelOf(ModelSelection? current, AppLocalizations l10n) {
+    if (current == null) return l10n.modelLabel;
     final groups = widget.models?.groups ?? const <ModelProviderGroup>[];
     for (final group in groups) {
       if (group.id != current.provider) continue;
@@ -399,11 +404,12 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
   String _effortLabelOf(
     ModelSelection? current,
     ModelCatalogModel? currentModel,
+    AppLocalizations l10n,
   ) {
     final reasoning = currentModel?.reasoning;
     if (reasoning == null) return '';
     final effective = current?.reasoningEffort ?? reasoning.defaultEffort;
-    if (effective == null) return 'Provider default';
+    if (effective == null) return l10n.providerDefault;
     for (final effort in reasoning.efforts) {
       if (effort.id == effective) return effort.name;
     }

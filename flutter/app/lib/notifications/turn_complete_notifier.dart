@@ -2,9 +2,14 @@
 ///
 /// Posts a system notification when the selected session's turn finishes
 /// while the app is backgrounded (mobile-useful; web has no equivalent).
+/// The notification copy resolves once at [initialize] from the platform
+/// locale — an app restart is what picks up a device-language change,
+/// which matches how the plugin caches its Android channel metadata.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class TurnCompleteNotifier {
@@ -15,6 +20,11 @@ class TurnCompleteNotifier {
   bool _initialized = false;
   int _nextId = 1;
 
+  /// Notification copy for the launch-time device locale; the English
+  /// seat is the pre-initialize default (posts are no-ops before
+  /// initialize in debug builds).
+  AppLocalizations _l10n = lookupAppLocalizations(const Locale('en'));
+
   Future<void> initialize() async {
     if (_initialized) return;
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -24,6 +34,11 @@ class TurnCompleteNotifier {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
+    // Resolve the launch-time device locale so notifications render in
+    // the app's language without context plumbing into the DI layer.
+    _l10n = lookupAppLocalizations(
+      WidgetsBinding.instance.platformDispatcher.locale,
+    );
     _initialized = true;
   }
 
@@ -36,14 +51,13 @@ class TurnCompleteNotifier {
     try {
       await _plugin.show(
         _nextId++,
-        'Turn complete',
+        _l10n.turnCompleteTitle,
         sessionTitle,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'turns',
-            'Turn completion',
-            channelDescription:
-                'Notifies when a running conversation turn finishes.',
+            _l10n.turnCompletionChannel,
+            channelDescription: _l10n.turnCompletionChannelDescription,
             importance: Importance.defaultImportance,
             priority: Priority.defaultPriority,
           ),

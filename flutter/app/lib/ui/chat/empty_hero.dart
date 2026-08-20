@@ -2,6 +2,7 @@
 /// soft blue glow, and the workspace chip over the blank draft.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +10,6 @@ import 'package:flutter/material.dart';
 import '../theme/deepsuite_extension.dart';
 import 'fish_logo.dart';
 import 'preset_seat.dart';
-
-/// Web `hero.*` locale strings (English seat).
-const String kHeroHeadline = 'Into the Unknown';
-const String kHeroPreview = 'Preview';
-const String kHeroChooseWorkspace = 'Choose workspace';
 
 class EmptyHero extends StatelessWidget {
   const EmptyHero({
@@ -45,6 +41,7 @@ class EmptyHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Stack(
       children: [
         // figma 313:14109 — soft blue ellipse behind the headline.
@@ -79,7 +76,7 @@ class EmptyHero extends StatelessWidget {
                     FishLogo(size: 34, color: theme.colorScheme.onSurface),
                     const SizedBox(width: 10),
                     Text(
-                      kHeroHeadline,
+                      l10n.heroHeadline,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
@@ -95,7 +92,7 @@ class EmptyHero extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        kHeroPreview,
+                        l10n.heroPreview,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: ds.labelSecondary,
                         ),
@@ -149,9 +146,10 @@ class WorkspaceChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
-    final resolvedLabel = label ?? kHeroChooseWorkspace;
+    final l10n = AppLocalizations.of(context)!;
+    final resolvedLabel = label ?? l10n.heroChooseWorkspace;
     return PopupMenuButton<String>(
-      tooltip: kHeroChooseWorkspace,
+      tooltip: l10n.heroChooseWorkspace,
       onSelected: onPickWorkspace,
       itemBuilder: (context) => [
         for (final workspace in workspaces)

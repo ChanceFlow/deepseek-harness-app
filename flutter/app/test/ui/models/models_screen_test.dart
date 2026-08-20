@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/models/models_screen.dart';
 import 'package:app/ui/models/models_ui_state.dart';
 
+import '../../l10n_app.dart';
+
 const _catalog = SessionModels(
   current: ModelSelection(
     provider: 'deepseek',
@@ -61,7 +63,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    MaterialApp(
+    l10nApp(
       home: ModelsScreen(uiState: uiState, onAction: actions.add),
     ),
   );
