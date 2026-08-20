@@ -1,0 +1,527 @@
+{
+  "@@locale": "en",
+  "appTitle": "DeepSeek Harness",
+  "@appTitle": {
+    "description": "Application title used in the OS task switcher and window title."
+  },
+
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Generic cancel action."
+  },
+  "save": "Save",
+  "@save": {
+    "description": "Generic save action."
+  },
+  "create": "Create",
+  "@create": {
+    "description": "Generic create action."
+  },
+  "refresh": "Refresh",
+  "@refresh": {
+    "description": "Generic refresh action."
+  },
+  "retry": "Retry",
+  "@retry": {
+    "description": "Generic retry action."
+  },
+  "back": "Back",
+  "@back": {
+    "description": "Back navigation tooltip."
+  },
+  "close": "Close",
+  "@close": {
+    "description": "Generic close action."
+  },
+  "dismiss": "Dismiss",
+  "@dismiss": {
+    "description": "Dismiss an error banner."
+  },
+  "delete": "Delete",
+  "@delete": {
+    "description": "Generic delete action."
+  },
+  "rename": "Rename",
+  "@rename": {
+    "description": "Generic rename action."
+  },
+  "open": "Open",
+  "@open": {
+    "description": "Generic open action."
+  },
+  "defaultBadge": "Default",
+  "@default": {
+    "description": "Default value or option badge."
+  },
+
+  "destinationChat": "Chat",
+  "@destinationChat": {
+    "description": "Bottom navigation label for the chat surface."
+  },
+  "destinationWorkspaces": "Workspaces",
+  "@destinationWorkspaces": {
+    "description": "Bottom navigation label for the workspace browser."
+  },
+  "destinationSettings": "Settings",
+  "@destinationSettings": {
+    "description": "Bottom navigation label for host configuration."
+  },
+
+  "goalTitle": "Goal",
+  "@goalTitle": {
+    "description": "Goal screen app bar title."
+  },
+  "sessionLabel": "Session",
+  "@sessionLabel": {
+    "description": "Section label naming the selected session."
+  },
+  "providersLabel": "Providers",
+  "@providersLabel": {
+    "description": "Section label naming model providers."
+  },
+  "noCurrentGoal": "No current goal",
+  "@noCurrentGoal": {
+    "description": "Empty state when no goal is active."
+  },
+  "goalObjectiveHint": "Goal objective",
+  "@goalObjectiveHint": {
+    "description": "Hint and edit-field label for the goal objective text."
+  },
+  "maxGoalRoundsHint": "Max goal rounds (optional)",
+  "@maxGoalRoundsHint": {
+    "description": "Hint for the optional max-rounds field."
+  },
+  "pause": "Pause",
+  "@pause": {
+    "description": "Pause an active goal."
+  },
+  "resume": "Resume",
+  "@resume": {
+    "description": "Resume a paused goal."
+  },
+  "clear": "Clear",
+  "@clear": {
+    "description": "Clear a goal."
+  },
+  "complete": "Complete",
+  "@complete": {
+    "description": "Complete a goal."
+  },
+  "edit": "Edit",
+  "@edit": {
+    "description": "Edit a goal."
+  },
+  "goalPhaseActive": "ACTIVE",
+  "@goalPhaseActive": {
+    "description": "Goal phase label, active."
+  },
+  "goalPhasePaused": "PAUSED",
+  "@goalPhasePaused": {
+    "description": "Goal phase label, paused."
+  },
+  "goalPhaseBlocked": "BLOCKED",
+  "@goalPhaseBlocked": {
+    "description": "Goal phase label, blocked."
+  },
+  "goalPhaseComplete": "COMPLETE",
+  "@goalPhaseComplete": {
+    "description": "Goal phase label, complete."
+  },
+  "goalStatusLine": "{phase} · revision {revision} · rounds {started}/{max}",
+  "@goalStatusLine": {
+    "description": "Goal metadata line under the objective.",
+    "placeholders": {
+      "phase": {"type": "String"},
+      "revision": {"type": "int"},
+      "started": {"type": "int"},
+      "max": {"type": "int"}
+    }
+  },
+
+  "contextUsedPercent": "{percent}% of context used",
+  "@contextUsedPercent": {
+    "description": "Context occupancy reading and its accessibility label.",
+    "placeholders": {
+      "percent": {"type": "int"}
+    }
+  },
+  "systemPromptLabel": "System prompt",
+  "@systemPromptLabel": {
+    "description": "Context composition legend, system prompt row."
+  },
+  "toolsLabel": "Tools",
+  "@toolsLabel": {
+    "description": "Context composition legend, tools row."
+  },
+  "conversationLabel": "Conversation",
+  "@conversationLabel": {
+    "description": "Context composition legend, conversation row."
+  },
+  "contextTokens": "~{used} / {window}",
+  "@contextTokens": {
+    "description": "Compact token figures for the context composition.",
+    "placeholders": {
+      "used": {"type": "String"},
+      "window": {"type": "String"}
+    }
+  },
+
+  "heroHeadline": "Into the Unknown",
+  "@heroHeadline": {
+    "description": "Empty-chat hero headline."
+  },
+  "heroPreview": "Preview",
+  "@heroPreview": {
+    "description": "Preview badge on the hero."
+  },
+  "heroChooseWorkspace": "Choose workspace",
+  "@heroChooseWorkspace": {
+    "description": "Workspace chip label and tooltip on the empty hero."
+  },
+
+  "modelsTitle": "Models",
+  "@modelsTitle": {
+    "description": "Models screen app bar title."
+  },
+  "modelCurrent": "{name} (current)",
+  "@modelCurrent": {
+    "description": "Model row button label for the active model.",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "reasoningEffortLabel": "Reasoning effort",
+  "@reasoningEffortLabel": {
+    "description": "Section label for reasoning effort chips."
+  },
+
+  "todosLabel": "To-dos",
+  "@todosLabel": {
+    "description": "Plan-strip header label."
+  },
+  "todoCountDone": "{count} completed",
+  "@todoCountDone": {
+    "description": "Completed to-do count segment.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "todoCountActive": "{count} active",
+  "@todoCountActive": {
+    "description": "In-progress to-do count segment.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "todoCountPending": "{count} pending",
+  "@todoCountPending": {
+    "description": "Pending to-do count segment.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+
+  "backgroundJobsTitle": "Background jobs",
+  "@backgroundJobsTitle": {
+    "description": "Background-jobs sheet title."
+  },
+  "jobCountRunning": "{count, plural, =1{1 background job running} other{{count} background jobs running}}",
+  "@jobCountRunning": {
+    "description": "Header pill while jobs are still live.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "jobCount": "{count, plural, =1{1 background job} other{{count} background jobs}}",
+  "@jobCount": {
+    "description": "Header pill when all jobs are settled.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "jobStatusRunning": "running",
+  "@jobStatusRunning": {
+    "description": "Job status label, running."
+  },
+  "jobStatusStopping": "stopping",
+  "@jobStatusStopping": {
+    "description": "Job status label, stopping."
+  },
+  "jobStatusCompleted": "completed",
+  "@jobStatusCompleted": {
+    "description": "Job status label, completed."
+  },
+  "jobStatusKilled": "cancelled",
+  "@jobStatusKilled": {
+    "description": "Job status label, cancelled."
+  },
+  "jobStatusFailed": "failed",
+  "@jobStatusFailed": {
+    "description": "Job status label, failed."
+  },
+  "jobDurationHoursMinutes": "{hours}h {minutes}m",
+  "@jobDurationHoursMinutes": {
+    "description": "Compact elapsed duration, hours and minutes.",
+    "placeholders": {
+      "hours": {"type": "int"},
+      "minutes": {"type": "int"}
+    }
+  },
+  "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
+  "@jobDurationMinutesSeconds": {
+    "description": "Compact elapsed duration, minutes and seconds.",
+    "placeholders": {
+      "minutes": {"type": "int"},
+      "seconds": {"type": "int"}
+    }
+  },
+  "jobDurationSeconds": "{seconds}s",
+  "@jobDurationSeconds": {
+    "description": "Compact elapsed duration, seconds only.",
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
+
+  "copyTooltip": "Copy",
+  "@copyTooltip": {
+    "description": "Copy-message icon tooltip."
+  },
+  "copiedTooltip": "Copied",
+  "@copiedTooltip": {
+    "description": "Copy-message icon tooltip after a successful copy."
+  },
+
+  "waitingForApproval": "Waiting for approval",
+  "@waitingForApproval": {
+    "description": "Approval panel header strip."
+  },
+  "approveToolFallback": "Approve tool: {tool}",
+  "@approveToolFallback": {
+    "description": "Approval justification fallback naming the tool.",
+    "placeholders": {
+      "tool": {"type": "String"}
+    }
+  },
+  "toolRequestsPrivileged": "Tool {tool} requests privileged execution",
+  "@toolRequestsPrivileged": {
+    "description": "Approval panel secondary line.",
+    "placeholders": {
+      "tool": {"type": "String"}
+    }
+  },
+  "reject": "Reject",
+  "@reject": {
+    "description": "Reject an approval request."
+  },
+  "allowOnce": "Allow once",
+  "@allowOnce": {
+    "description": "Allow a privileged execution a single time."
+  },
+
+  "agentPresetLabel": "Agent preset",
+  "@agentPresetLabel": {
+    "description": "Label for the agent-preset seat and sheet title."
+  },
+  "agentPresetTooltip": "Agent preset for the session you are about to start",
+  "@agentPresetTooltip": {
+    "description": "Tooltip explaining the preset seat."
+  },
+
+  "accessModeLabel": "Access mode",
+  "@accessModeLabel": {
+    "description": "Access-mode sheet title."
+  },
+  "accessModeTooltip": "Access mode: {label}",
+  "@accessModeTooltip": {
+    "description": "Access chip tooltip naming the current mode.",
+    "placeholders": {
+      "label": {"type": "String"}
+    }
+  },
+  "fullAccessOption": "Full access",
+  "@fullAccessOption": {
+    "description": "Product label for the danger-full-access permission value."
+  },
+  "enableFullAccessTitle": "Enable Full access?",
+  "@enableFullAccessTitle": {
+    "description": "Risk-confirmation dialog title."
+  },
+  "fullAccessRisks": "Full access reduces confirmation steps and lets the agent perform more actions directly, including sensitive operations, file changes, or external commands. Only use it when you trust the current task.",
+  "@fullAccessRisks": {
+    "description": "Risk-confirmation dialog body."
+  },
+  "acknowledgeRisks": "I understand the risks and want to continue",
+  "@acknowledgeRisks": {
+    "description": "Acknowledgement checkbox in the risk-confirmation dialog."
+  },
+  "enableFullAccess": "Enable Full access",
+  "@enableFullAccess": {
+    "description": "Confirm button in the risk-confirmation dialog."
+  },
+
+  "modelLabel": "Model",
+  "@modelLabel": {
+    "description": "Model seat label and sheet menu row."
+  },
+  "effortLabel": "Effort",
+  "@effortLabel": {
+    "description": "Reasoning-effort seat label and sheet menu row."
+  },
+  "providerDefault": "Provider default",
+  "@providerDefault": {
+    "description": "Effort option meaning the provider's default effort."
+  },
+
+  "presetStandardName": "Standard mode",
+  "@presetStandardName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetStandardDescription": "Full coding agent with file editing, shell, file and web search, skills, planning, goals, subagents, and workflows.",
+  "@presetStandardDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetCodeName": "Code mode",
+  "@presetCodeName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetCodeDescription": "All Standard mode capabilities, with tools exposed through the Code Mode SDK so the model can combine multi-step operations in one TypeScript program.",
+  "@presetCodeDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetMinimalName": "Minimal mode",
+  "@presetMinimalName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetMinimalDescription": "Two-tool coding agent with persistent bash and str_replace_editor.",
+  "@presetMinimalDescription": {
+    "description": "Built-in agent preset display description."
+  },
+  "presetCordisName": "Creator mode",
+  "@presetCordisName": {
+    "description": "Built-in agent preset display name."
+  },
+  "presetCordisDescription": "Built for creating custom agent presets, with all Standard mode capabilities plus runtime inspection, plugin experiments, and preset-authoring guidance.",
+  "@presetCordisDescription": {
+    "description": "Built-in agent preset display description."
+  },
+
+  "toolSearchTitle": "Search",
+  "@toolSearchTitle": {
+    "description": "Tool row title for search variants."
+  },
+  "toolReadTitle": "Read",
+  "@toolReadTitle": {
+    "description": "Tool row title for read variants."
+  },
+  "toolBashTitle": "Bash",
+  "@toolBashTitle": {
+    "description": "Tool row title for bash variants."
+  },
+  "toolWriteTitle": "Write",
+  "@toolWriteTitle": {
+    "description": "Tool row title for write variants."
+  },
+  "toolEditTitle": "Edit",
+  "@toolEditTitle": {
+    "description": "Tool row title for edit variants."
+  },
+  "toolCodeTitle": "Code",
+  "@toolCodeTitle": {
+    "description": "Tool row title for code variants."
+  },
+  "toolCallTitle": "Tool call",
+  "@toolCallTitle": {
+    "description": "Tool row title for other variants."
+  },
+  "toolInspectTitle": "Inspect",
+  "@toolInspectTitle": {
+    "description": "Tool title for cordis inspection tools."
+  },
+  "toolRunCordisPlugin": "Run Cordis Plugin",
+  "@toolRunCordisPlugin": {
+    "description": "Tool title for running a Cordis plugin."
+  },
+  "toolStopCordisPlugin": "Stop Cordis Plugin",
+  "@toolStopCordisPlugin": {
+    "description": "Tool title for stopping a Cordis plugin."
+  },
+  "toolRemoveCordisPlugin": "Remove Cordis Plugin",
+  "@toolRemoveCordisPlugin": {
+    "description": "Tool title for removing a Cordis plugin."
+  },
+  "toolPwshTitle": "Pwsh",
+  "@toolPwshTitle": {
+    "description": "Tool title for the PowerShell shell tool."
+  },
+  "toolUpdateTodoTitle": "Update to-do list",
+  "@toolUpdateTodoTitle": {
+    "description": "Tool row title for the todo_write tool."
+  },
+  "toolTodoPlanCompleted": "{done}/{total} completed",
+  "@toolTodoPlanCompleted": {
+    "description": "Todo plan summary segment.",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+
+  "statsTurnsSteps": "{turns} turns · {steps} steps",
+  "@statsTurnsSteps": {
+    "description": "Composer stats: turn and step counts.",
+    "placeholders": {
+      "turns": {"type": "int"},
+      "steps": {"type": "int"}
+    }
+  },
+  "statsLlmDuration": "LLM {duration}",
+  "@statsLlmDuration": {
+    "description": "Composer stats: LLM processing duration.",
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "statsToolDuration": "Tool call {duration}",
+  "@statsToolDuration": {
+    "description": "Composer stats: tool-call duration.",
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "statsTtftAvg": "TTFT avg {duration}",
+  "@statsTtftAvg": {
+    "description": "Composer stats: average time to first token.",
+    "placeholders": {
+      "duration": {"type": "String"}
+    }
+  },
+  "statsTokensPerSecond": "{rate} tok/s",
+  "@statsTokensPerSecond": {
+    "description": "Composer stats: decode throughput.",
+    "placeholders": {
+      "rate": {"type": "String"}
+    }
+  },
+  "statsCacheHit": "Cache hit {percent}%",
+  "@statsCacheHit": {
+    "description": "Composer stats: cache hit percentage.",
+    "placeholders": {
+      "percent": {"type": "int"}
+    }
+  },
+  "statsInputTokens": "Input {tokens} tok",
+  "@statsInputTokens": {
+    "description": "Composer stats: billed input token count.",
+    "placeholders": {
+      "tokens": {"type": "String"}
+    }
+  },
+  "statsOutputTokens": "Output {tokens} tok",
+  "@statsOutputTokens": {
+    "description": "Composer stats: output token count.",
+    "placeholders": {
+      "tokens": {"type": "String"}
+    }
+  }
+}

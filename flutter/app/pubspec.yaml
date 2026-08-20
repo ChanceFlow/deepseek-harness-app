@@ -10,6 +10,9 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   domain: ^0.1.0
   network: ^0.1.0
   harness_adapter: ^0.1.0
@@ -26,3 +29,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true

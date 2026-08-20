@@ -1,4 +1,6 @@
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'notifications/turn_complete_notifier.dart';
@@ -20,6 +22,16 @@ class DshApp extends StatelessWidget {
       title: 'DeepSeek Harness',
       theme: DshTheme.light(),
       darkTheme: DshTheme.dark(),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('zh'),
+      ],
       home: const AppRoot(),
     );
   }
