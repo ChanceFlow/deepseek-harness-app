@@ -760,4 +760,375 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pathLabel => '路径';
+
+  @override
+  String get ungroupedLabel => '未分组';
+
+  @override
+  String get openSidebar => '展开侧栏';
+
+  @override
+  String get collapseSidebar => '收起侧栏';
+
+  @override
+  String get newSession => '新会话';
+
+  @override
+  String get searchSessions => '搜索会话';
+
+  @override
+  String get searchSessionsHint => '搜索会话…';
+
+  @override
+  String get noSessionsYet => '暂无会话';
+
+  @override
+  String get noMatchingSessions => '无匹配会话';
+
+  @override
+  String get relativeTimeNow => '刚刚';
+
+  @override
+  String relativeTimeMinutes(Object minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String relativeTimeHours(Object hours) {
+    return '$hours 小时';
+  }
+
+  @override
+  String relativeTimeDays(Object days) {
+    return '$days 天';
+  }
+
+  @override
+  String relativeTimeMonths(Object months) {
+    return '$months 个月';
+  }
+
+  @override
+  String relativeTimeYears(Object years) {
+    return '$years 年';
+  }
+
+  @override
+  String sessionCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个会话',
+      one: '1 个会话',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get showLess => '收起';
+
+  @override
+  String showAll(Object count) {
+    return '显示全部 $count 个';
+  }
+
+  @override
+  String get noWorkspacesRegistered => '尚未注册工作区。';
+
+  @override
+  String get noWorkspacesRegisteredBody => '请先使用工作区页签注册一个目录，或选择默认以创建未记账会话。';
+
+  @override
+  String get chooseWorkspaceOrDefault => '选择工作区或保留默认。';
+
+  @override
+  String get subagentsTitle => '子代理';
+
+  @override
+  String get selectParentSession => '选择父会话';
+
+  @override
+  String get noSubagents => '暂无子代理';
+
+  @override
+  String get loadingSubagents => '正在加载子代理…';
+
+  @override
+  String get unableToLoadSubagents => '无法加载子代理';
+
+  @override
+  String get messageSelectedSubagentHint => '给选中的子代理发消息';
+
+  @override
+  String get sending => '发送中';
+
+  @override
+  String get send => '发送';
+
+  @override
+  String get stopTooltip => '停止';
+
+  @override
+  String get modeOneShot => '一次性';
+
+  @override
+  String get modeContinuable => '可续接';
+
+  @override
+  String get activityRunning => '运行中';
+
+  @override
+  String get activityNotRunning => '未运行';
+
+  @override
+  String get diagnosticCorrupt => '会话记录已损坏';
+
+  @override
+  String get diagnosticUnsupported => '不支持的子代理记录版本';
+
+  @override
+  String get diagnosticUnavailable => '会话记录暂时不可用';
+
+  @override
+  String get oneShotRecordTitle => '一次性子代理记录';
+
+  @override
+  String get parentUnavailableTitle => '此子代理当前为只读';
+
+  @override
+  String get oneShotRecordBody => '一次性任务不接受后续消息；请在此查看完整执行记录。';
+
+  @override
+  String get parentUnavailableBody => '父会话已离线；重新打开它即可继续发送消息。';
+
+  @override
+  String get appBarConnected => '已连接';
+
+  @override
+  String appBarConnectedWithVersion(Object version) {
+    return '已连接 $version';
+  }
+
+  @override
+  String get appBarConnecting => '连接中';
+
+  @override
+  String get appBarReconnecting => '重连中';
+
+  @override
+  String get appBarDisconnected => '已断开';
+
+  @override
+  String connectionBannerConnected(Object version) {
+    return '已连接 $version';
+  }
+
+  @override
+  String get connectionBannerConnecting => '连接中';
+
+  @override
+  String get connectionBannerReconnecting => '重连中';
+
+  @override
+  String get connectionBannerDisconnected => '已断开';
+
+  @override
+  String get outlineTooltip => '大纲';
+
+  @override
+  String get subagentsTooltip => '子代理';
+
+  @override
+  String get renameSession => '重命名会话';
+
+  @override
+  String get forkSession => '派生会话';
+
+  @override
+  String get archiveSession => '归档会话';
+
+  @override
+  String get archiveSessionBody => '会话日志与其工作区席位保留；此行将从所有分组界面隐藏。';
+
+  @override
+  String get archive => '归档';
+
+  @override
+  String get expandAll => '全部展开';
+
+  @override
+  String get planBadge => '方案';
+
+  @override
+  String imagePlaceholderSuffix(Object name) {
+    return ' · $name';
+  }
+
+  @override
+  String imageLoadingPlaceholder(
+    Object bytes,
+    Object height,
+    Object suffix,
+    Object width,
+  ) {
+    return '图片 $width×$height（$bytes 字节）$suffix';
+  }
+
+  @override
+  String get semanticsRunning => '运行中';
+
+  @override
+  String get semanticsFailed => '失败';
+
+  @override
+  String get inputLabel => '入参';
+
+  @override
+  String get outputLabel => '输出';
+
+  @override
+  String get runStatusRunning => '运行中…';
+
+  @override
+  String get runStatusDone => '完成';
+
+  @override
+  String get runStatusFailed => '失败';
+
+  @override
+  String get pauseGoal => '暂停目标';
+
+  @override
+  String get resumeGoal => '继续目标';
+
+  @override
+  String get clearGoal => '清除目标';
+
+  @override
+  String get openGoal => '打开目标';
+
+  @override
+  String queuedMessagesCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条排队消息',
+      one: '1 条排队消息',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get editQueuedMessageHint => '编辑排队消息';
+
+  @override
+  String get saveQueuedMessage => '保存排队消息';
+
+  @override
+  String get cancelEdit => '取消编辑';
+
+  @override
+  String get steer => '转向';
+
+  @override
+  String get removeQueuedMessage => '移除排队消息';
+
+  @override
+  String approveTool(Object tool) {
+    return '批准工具：$tool';
+  }
+
+  @override
+  String get allow => '允许';
+
+  @override
+  String get answer => '回答';
+
+  @override
+  String get planReview => '方案评审';
+
+  @override
+  String get skipped => '已跳过';
+
+  @override
+  String get answerInstead => '改为回答';
+
+  @override
+  String get typeYourAnswerHint => '输入你的回答';
+
+  @override
+  String get skip => '跳过';
+
+  @override
+  String get planPlaceholder => '描述你的任务以生成方案';
+
+  @override
+  String get messagePlaceholder => '给 DeepSeek Harness 发消息';
+
+  @override
+  String removeImage(Object name) {
+    return '移除 $name';
+  }
+
+  @override
+  String get newLine => '换行';
+
+  @override
+  String get delivery => '投递';
+
+  @override
+  String get commandsTooltip => '命令';
+
+  @override
+  String get searchCommandsHint => '搜索命令';
+
+  @override
+  String get noMatchingCommands => '无匹配命令';
+
+  @override
+  String get attachImages => '附加图片';
+
+  @override
+  String get pickFromGallery => '从相册选择';
+
+  @override
+  String unknownImageType(Object name) {
+    return '不支持的图片类型：$name';
+  }
+
+  @override
+  String beforeFirstTurnHeader(Object count) {
+    return '首轮之前 · $count 条消息';
+  }
+
+  @override
+  String turnHeader(Object count, Object toolCount, Object turn) {
+    return '第 $turn 轮 · $count 条消息 · $toolCount 个工具';
+  }
+
+  @override
+  String get contextCompacted => '上下文已压缩';
+
+  @override
+  String compactedHistoryCount(Object count) {
+    return '已压缩 $count 条历史';
+  }
+
+  @override
+  String get recallLabel => '召回';
+
+  @override
+  String get contextInjectionLabel => '上下文注入';
+
+  @override
+  String get chatGoalPhaseActive => '进行中';
+
+  @override
+  String get chatGoalPhasePaused => '已暂停';
+
+  @override
+  String get chatGoalPhaseBlocked => '受阻';
+
+  @override
+  String get queue => '排队';
 }

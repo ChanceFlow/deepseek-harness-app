@@ -1386,6 +1386,647 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Path'**
   String get pathLabel;
+
+  /// No description provided for @ungroupedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ungrouped'**
+  String get ungroupedLabel;
+
+  /// No description provided for @openSidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Open sidebar'**
+  String get openSidebar;
+
+  /// No description provided for @collapseSidebar.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse sidebar'**
+  String get collapseSidebar;
+
+  /// No description provided for @newSession.
+  ///
+  /// In en, this message translates to:
+  /// **'New session'**
+  String get newSession;
+
+  /// No description provided for @searchSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Search sessions'**
+  String get searchSessions;
+
+  /// No description provided for @searchSessionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search sessions...'**
+  String get searchSessionsHint;
+
+  /// No description provided for @noSessionsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No sessions yet'**
+  String get noSessionsYet;
+
+  /// No description provided for @noMatchingSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching sessions'**
+  String get noMatchingSessions;
+
+  /// No description provided for @relativeTimeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'now'**
+  String get relativeTimeNow;
+
+  /// No description provided for @relativeTimeMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}min'**
+  String relativeTimeMinutes(Object minutes);
+
+  /// No description provided for @relativeTimeHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h'**
+  String relativeTimeHours(Object hours);
+
+  /// No description provided for @relativeTimeDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d'**
+  String relativeTimeDays(Object days);
+
+  /// No description provided for @relativeTimeMonths.
+  ///
+  /// In en, this message translates to:
+  /// **'{months}mo'**
+  String relativeTimeMonths(Object months);
+
+  /// No description provided for @relativeTimeYears.
+  ///
+  /// In en, this message translates to:
+  /// **'{years}y'**
+  String relativeTimeYears(Object years);
+
+  /// No description provided for @sessionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 session} other{{count} sessions}}'**
+  String sessionCount(num count);
+
+  /// No description provided for @showLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get showLess;
+
+  /// No description provided for @showAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all {count}'**
+  String showAll(Object count);
+
+  /// No description provided for @noWorkspacesRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'No workspaces registered.'**
+  String get noWorkspacesRegistered;
+
+  /// No description provided for @noWorkspacesRegisteredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the Workspaces tab to register a directory first, or choose Default to create an unaccounted session.'**
+  String get noWorkspacesRegisteredBody;
+
+  /// No description provided for @chooseWorkspaceOrDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a workspace or keep the default.'**
+  String get chooseWorkspaceOrDefault;
+
+  /// No description provided for @subagentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Subagents'**
+  String get subagentsTitle;
+
+  /// No description provided for @selectParentSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a parent session'**
+  String get selectParentSession;
+
+  /// No description provided for @noSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'No subagents'**
+  String get noSubagents;
+
+  /// No description provided for @loadingSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading subagents…'**
+  String get loadingSubagents;
+
+  /// No description provided for @unableToLoadSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to load subagents'**
+  String get unableToLoadSubagents;
+
+  /// No description provided for @messageSelectedSubagentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Message selected subagent'**
+  String get messageSelectedSubagentHint;
+
+  /// No description provided for @sending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending'**
+  String get sending;
+
+  /// No description provided for @send.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get send;
+
+  /// No description provided for @stopTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get stopTooltip;
+
+  /// No description provided for @modeOneShot.
+  ///
+  /// In en, this message translates to:
+  /// **'one-shot'**
+  String get modeOneShot;
+
+  /// No description provided for @modeContinuable.
+  ///
+  /// In en, this message translates to:
+  /// **'continuable'**
+  String get modeContinuable;
+
+  /// No description provided for @activityRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get activityRunning;
+
+  /// No description provided for @activityNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'not running'**
+  String get activityNotRunning;
+
+  /// No description provided for @diagnosticCorrupt.
+  ///
+  /// In en, this message translates to:
+  /// **'corrupted session record'**
+  String get diagnosticCorrupt;
+
+  /// No description provided for @diagnosticUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'unsupported subagent record version'**
+  String get diagnosticUnsupported;
+
+  /// No description provided for @diagnosticUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'session record temporarily unavailable'**
+  String get diagnosticUnavailable;
+
+  /// No description provided for @oneShotRecordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'One-shot subagent record'**
+  String get oneShotRecordTitle;
+
+  /// No description provided for @parentUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This subagent is read-only for now'**
+  String get parentUnavailableTitle;
+
+  /// No description provided for @oneShotRecordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'One-shot tasks do not accept follow-ups; review the full execution record here.'**
+  String get oneShotRecordBody;
+
+  /// No description provided for @parentUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The parent session is offline; reopen it to continue sending messages.'**
+  String get parentUnavailableBody;
+
+  /// No description provided for @appBarConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'connected'**
+  String get appBarConnected;
+
+  /// No description provided for @appBarConnectedWithVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'connected {version}'**
+  String appBarConnectedWithVersion(Object version);
+
+  /// No description provided for @appBarConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'connecting'**
+  String get appBarConnecting;
+
+  /// No description provided for @appBarReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'reconnecting'**
+  String get appBarReconnecting;
+
+  /// No description provided for @appBarDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get appBarDisconnected;
+
+  /// No description provided for @connectionBannerConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'connected {version}'**
+  String connectionBannerConnected(Object version);
+
+  /// No description provided for @connectionBannerConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'connecting'**
+  String get connectionBannerConnecting;
+
+  /// No description provided for @connectionBannerReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'reconnecting'**
+  String get connectionBannerReconnecting;
+
+  /// No description provided for @connectionBannerDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get connectionBannerDisconnected;
+
+  /// No description provided for @outlineTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Outline'**
+  String get outlineTooltip;
+
+  /// No description provided for @subagentsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Subagents'**
+  String get subagentsTooltip;
+
+  /// No description provided for @renameSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename session'**
+  String get renameSession;
+
+  /// No description provided for @forkSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Fork session'**
+  String get forkSession;
+
+  /// No description provided for @archiveSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive session'**
+  String get archiveSession;
+
+  /// No description provided for @archiveSessionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.'**
+  String get archiveSessionBody;
+
+  /// No description provided for @archive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get archive;
+
+  /// No description provided for @expandAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand all'**
+  String get expandAll;
+
+  /// No description provided for @planBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get planBadge;
+
+  /// No description provided for @imagePlaceholderSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' · {name}'**
+  String imagePlaceholderSuffix(Object name);
+
+  /// No description provided for @imageLoadingPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'image {width}×{height} ({bytes} bytes){suffix}'**
+  String imageLoadingPlaceholder(
+    Object bytes,
+    Object height,
+    Object suffix,
+    Object width,
+  );
+
+  /// No description provided for @semanticsRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get semanticsRunning;
+
+  /// No description provided for @semanticsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get semanticsFailed;
+
+  /// No description provided for @inputLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'IN'**
+  String get inputLabel;
+
+  /// No description provided for @outputLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'OUT'**
+  String get outputLabel;
+
+  /// No description provided for @runStatusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running...'**
+  String get runStatusRunning;
+
+  /// No description provided for @runStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'done'**
+  String get runStatusDone;
+
+  /// No description provided for @runStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get runStatusFailed;
+
+  /// No description provided for @pauseGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause goal'**
+  String get pauseGoal;
+
+  /// No description provided for @resumeGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume goal'**
+  String get resumeGoal;
+
+  /// No description provided for @clearGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear goal'**
+  String get clearGoal;
+
+  /// No description provided for @openGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Open goal'**
+  String get openGoal;
+
+  /// No description provided for @queuedMessagesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 queued message} other{{count} queued messages}}'**
+  String queuedMessagesCount(num count);
+
+  /// No description provided for @editQueuedMessageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit queued message'**
+  String get editQueuedMessageHint;
+
+  /// No description provided for @saveQueuedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Save queued message'**
+  String get saveQueuedMessage;
+
+  /// No description provided for @cancelEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel edit'**
+  String get cancelEdit;
+
+  /// No description provided for @steer.
+  ///
+  /// In en, this message translates to:
+  /// **'Steer'**
+  String get steer;
+
+  /// No description provided for @removeQueuedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove queued message'**
+  String get removeQueuedMessage;
+
+  /// No description provided for @approveTool.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve tool: {tool}'**
+  String approveTool(Object tool);
+
+  /// No description provided for @allow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get allow;
+
+  /// No description provided for @answer.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer'**
+  String get answer;
+
+  /// No description provided for @planReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan review'**
+  String get planReview;
+
+  /// No description provided for @skipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get skipped;
+
+  /// No description provided for @answerInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer instead'**
+  String get answerInstead;
+
+  /// No description provided for @typeYourAnswerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type your answer'**
+  String get typeYourAnswerHint;
+
+  /// No description provided for @skip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get skip;
+
+  /// No description provided for @planPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'describe your task to generate plan'**
+  String get planPlaceholder;
+
+  /// No description provided for @messagePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Message DeepSeek Harness'**
+  String get messagePlaceholder;
+
+  /// No description provided for @removeImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {name}'**
+  String removeImage(Object name);
+
+  /// No description provided for @newLine.
+  ///
+  /// In en, this message translates to:
+  /// **'New line'**
+  String get newLine;
+
+  /// No description provided for @delivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery'**
+  String get delivery;
+
+  /// No description provided for @commandsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Commands'**
+  String get commandsTooltip;
+
+  /// No description provided for @searchCommandsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search commands'**
+  String get searchCommandsHint;
+
+  /// No description provided for @noMatchingCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching commands'**
+  String get noMatchingCommands;
+
+  /// No description provided for @attachImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach images'**
+  String get attachImages;
+
+  /// No description provided for @pickFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from gallery'**
+  String get pickFromGallery;
+
+  /// No description provided for @unknownImageType.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown image type for {name}'**
+  String unknownImageType(Object name);
+
+  /// No description provided for @beforeFirstTurnHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Before first turn · {count} messages'**
+  String beforeFirstTurnHeader(Object count);
+
+  /// No description provided for @turnHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {turn} · {count} messages · {toolCount} tools'**
+  String turnHeader(Object count, Object toolCount, Object turn);
+
+  /// No description provided for @contextCompacted.
+  ///
+  /// In en, this message translates to:
+  /// **'Context compacted'**
+  String get contextCompacted;
+
+  /// No description provided for @compactedHistoryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Compacted {count} history items'**
+  String compactedHistoryCount(Object count);
+
+  /// No description provided for @recallLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recall'**
+  String get recallLabel;
+
+  /// No description provided for @contextInjectionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Context injection'**
+  String get contextInjectionLabel;
+
+  /// No description provided for @chatGoalPhaseActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get chatGoalPhaseActive;
+
+  /// No description provided for @chatGoalPhasePaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get chatGoalPhasePaused;
+
+  /// No description provided for @chatGoalPhaseBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get chatGoalPhaseBlocked;
+
+  /// No description provided for @queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get queue;
 }
 
 class _AppLocalizationsDelegate

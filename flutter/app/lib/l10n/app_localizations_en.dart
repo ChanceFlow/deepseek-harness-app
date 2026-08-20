@@ -780,4 +780,380 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pathLabel => 'Path';
+
+  @override
+  String get ungroupedLabel => 'Ungrouped';
+
+  @override
+  String get openSidebar => 'Open sidebar';
+
+  @override
+  String get collapseSidebar => 'Collapse sidebar';
+
+  @override
+  String get newSession => 'New session';
+
+  @override
+  String get searchSessions => 'Search sessions';
+
+  @override
+  String get searchSessionsHint => 'Search sessions...';
+
+  @override
+  String get noSessionsYet => 'No sessions yet';
+
+  @override
+  String get noMatchingSessions => 'No matching sessions';
+
+  @override
+  String get relativeTimeNow => 'now';
+
+  @override
+  String relativeTimeMinutes(Object minutes) {
+    return '${minutes}min';
+  }
+
+  @override
+  String relativeTimeHours(Object hours) {
+    return '${hours}h';
+  }
+
+  @override
+  String relativeTimeDays(Object days) {
+    return '${days}d';
+  }
+
+  @override
+  String relativeTimeMonths(Object months) {
+    return '${months}mo';
+  }
+
+  @override
+  String relativeTimeYears(Object years) {
+    return '${years}y';
+  }
+
+  @override
+  String sessionCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessions',
+      one: '1 session',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get showLess => 'Show less';
+
+  @override
+  String showAll(Object count) {
+    return 'Show all $count';
+  }
+
+  @override
+  String get noWorkspacesRegistered => 'No workspaces registered.';
+
+  @override
+  String get noWorkspacesRegisteredBody =>
+      'Use the Workspaces tab to register a directory first, or choose Default to create an unaccounted session.';
+
+  @override
+  String get chooseWorkspaceOrDefault =>
+      'Choose a workspace or keep the default.';
+
+  @override
+  String get subagentsTitle => 'Subagents';
+
+  @override
+  String get selectParentSession => 'Select a parent session';
+
+  @override
+  String get noSubagents => 'No subagents';
+
+  @override
+  String get loadingSubagents => 'Loading subagents…';
+
+  @override
+  String get unableToLoadSubagents => 'Unable to load subagents';
+
+  @override
+  String get messageSelectedSubagentHint => 'Message selected subagent';
+
+  @override
+  String get sending => 'Sending';
+
+  @override
+  String get send => 'Send';
+
+  @override
+  String get stopTooltip => 'Stop';
+
+  @override
+  String get modeOneShot => 'one-shot';
+
+  @override
+  String get modeContinuable => 'continuable';
+
+  @override
+  String get activityRunning => 'running';
+
+  @override
+  String get activityNotRunning => 'not running';
+
+  @override
+  String get diagnosticCorrupt => 'corrupted session record';
+
+  @override
+  String get diagnosticUnsupported => 'unsupported subagent record version';
+
+  @override
+  String get diagnosticUnavailable => 'session record temporarily unavailable';
+
+  @override
+  String get oneShotRecordTitle => 'One-shot subagent record';
+
+  @override
+  String get parentUnavailableTitle => 'This subagent is read-only for now';
+
+  @override
+  String get oneShotRecordBody =>
+      'One-shot tasks do not accept follow-ups; review the full execution record here.';
+
+  @override
+  String get parentUnavailableBody =>
+      'The parent session is offline; reopen it to continue sending messages.';
+
+  @override
+  String get appBarConnected => 'connected';
+
+  @override
+  String appBarConnectedWithVersion(Object version) {
+    return 'connected $version';
+  }
+
+  @override
+  String get appBarConnecting => 'connecting';
+
+  @override
+  String get appBarReconnecting => 'reconnecting';
+
+  @override
+  String get appBarDisconnected => 'disconnected';
+
+  @override
+  String connectionBannerConnected(Object version) {
+    return 'connected $version';
+  }
+
+  @override
+  String get connectionBannerConnecting => 'connecting';
+
+  @override
+  String get connectionBannerReconnecting => 'reconnecting';
+
+  @override
+  String get connectionBannerDisconnected => 'disconnected';
+
+  @override
+  String get outlineTooltip => 'Outline';
+
+  @override
+  String get subagentsTooltip => 'Subagents';
+
+  @override
+  String get renameSession => 'Rename session';
+
+  @override
+  String get forkSession => 'Fork session';
+
+  @override
+  String get archiveSession => 'Archive session';
+
+  @override
+  String get archiveSessionBody =>
+      'The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.';
+
+  @override
+  String get archive => 'Archive';
+
+  @override
+  String get expandAll => 'Expand all';
+
+  @override
+  String get planBadge => 'Plan';
+
+  @override
+  String imagePlaceholderSuffix(Object name) {
+    return ' · $name';
+  }
+
+  @override
+  String imageLoadingPlaceholder(
+    Object bytes,
+    Object height,
+    Object suffix,
+    Object width,
+  ) {
+    return 'image $width×$height ($bytes bytes)$suffix';
+  }
+
+  @override
+  String get semanticsRunning => 'Running';
+
+  @override
+  String get semanticsFailed => 'Failed';
+
+  @override
+  String get inputLabel => 'IN';
+
+  @override
+  String get outputLabel => 'OUT';
+
+  @override
+  String get runStatusRunning => 'running...';
+
+  @override
+  String get runStatusDone => 'done';
+
+  @override
+  String get runStatusFailed => 'failed';
+
+  @override
+  String get pauseGoal => 'Pause goal';
+
+  @override
+  String get resumeGoal => 'Resume goal';
+
+  @override
+  String get clearGoal => 'Clear goal';
+
+  @override
+  String get openGoal => 'Open goal';
+
+  @override
+  String queuedMessagesCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count queued messages',
+      one: '1 queued message',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get editQueuedMessageHint => 'Edit queued message';
+
+  @override
+  String get saveQueuedMessage => 'Save queued message';
+
+  @override
+  String get cancelEdit => 'Cancel edit';
+
+  @override
+  String get steer => 'Steer';
+
+  @override
+  String get removeQueuedMessage => 'Remove queued message';
+
+  @override
+  String approveTool(Object tool) {
+    return 'Approve tool: $tool';
+  }
+
+  @override
+  String get allow => 'Allow';
+
+  @override
+  String get answer => 'Answer';
+
+  @override
+  String get planReview => 'Plan review';
+
+  @override
+  String get skipped => 'Skipped';
+
+  @override
+  String get answerInstead => 'Answer instead';
+
+  @override
+  String get typeYourAnswerHint => 'Type your answer';
+
+  @override
+  String get skip => 'Skip';
+
+  @override
+  String get planPlaceholder => 'describe your task to generate plan';
+
+  @override
+  String get messagePlaceholder => 'Message DeepSeek Harness';
+
+  @override
+  String removeImage(Object name) {
+    return 'Remove $name';
+  }
+
+  @override
+  String get newLine => 'New line';
+
+  @override
+  String get delivery => 'Delivery';
+
+  @override
+  String get commandsTooltip => 'Commands';
+
+  @override
+  String get searchCommandsHint => 'Search commands';
+
+  @override
+  String get noMatchingCommands => 'No matching commands';
+
+  @override
+  String get attachImages => 'Attach images';
+
+  @override
+  String get pickFromGallery => 'Pick from gallery';
+
+  @override
+  String unknownImageType(Object name) {
+    return 'unknown image type for $name';
+  }
+
+  @override
+  String beforeFirstTurnHeader(Object count) {
+    return 'Before first turn · $count messages';
+  }
+
+  @override
+  String turnHeader(Object count, Object toolCount, Object turn) {
+    return 'Turn $turn · $count messages · $toolCount tools';
+  }
+
+  @override
+  String get contextCompacted => 'Context compacted';
+
+  @override
+  String compactedHistoryCount(Object count) {
+    return 'Compacted $count history items';
+  }
+
+  @override
+  String get recallLabel => 'Recall';
+
+  @override
+  String get contextInjectionLabel => 'Context injection';
+
+  @override
+  String get chatGoalPhaseActive => 'Active';
+
+  @override
+  String get chatGoalPhasePaused => 'Paused';
+
+  @override
+  String get chatGoalPhaseBlocked => 'Blocked';
+
+  @override
+  String get queue => 'Queue';
 }
