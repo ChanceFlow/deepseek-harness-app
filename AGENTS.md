@@ -41,6 +41,14 @@ cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2
 - Wire-contract truth for any adapter change:
   [reference/README.md](reference/README.md) maps the submodule paths.
 
+## Branch workflow
+
+`master` takes no direct task pushes: one branch per task
+(`feat/…`, `fix/…`, `docs/…`), push, open a PR, let CI's verify aggregate
+gate it, then merge — the repo auto-deletes the merged branch (Gitea
+setting). Release tags (`v*`) ride `master` only. Mechanics and API
+shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md) §3.
+
 ## Conventions
 
 - **The import boundary is absolute.** `app` (outside `lib/di/`) and `domain`
