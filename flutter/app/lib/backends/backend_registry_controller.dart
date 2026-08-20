@@ -70,8 +70,6 @@ class BackendRegistryController {
   BackendRegistryState get state => _state;
 
   BackendRegistryState _state = const BackendRegistryState();
-  String? _errorMessage;
-  String? get errorMessage => _errorMessage;
 
   int _idCounter = 0;
 
@@ -89,12 +87,14 @@ class BackendRegistryController {
         activeId: activeId,
       );
     } on BackendStoreException catch (error) {
-      // A corrupt document never blocks the app: fall back to the seed.
-      _errorMessage = error.toString();
-      final seed = await _store.load();
+      // A corrupt document never blocks the app: fall back to the seed
+      // (re-reading the same file would throw again), with the
+      // corruption reported on the state.
+      final seed = _store.seedDocument();
       _state = BackendRegistryState(
         backends: seed.backends,
         activeId: seed.backends.first.id,
+        errorMessage: error.toString(),
       );
     }
     _publish();
@@ -206,7 +206,7 @@ class BackendRegistryController {
   }
 
   void _fail(String message) {
-    _errorMessage = message;
+    _state = _state.withError(message);
     _publish();
   }
 
@@ -219,11 +219,11 @@ class BackendRegistryController {
       _store
           .save(BackendStoreData(backends: _state.backends, activeId: _state.activeId))
           .then((_) {
-            _errorMessage = null;
+            _state = _state.withError(null);
             _publish();
           })
           .catchError((Object error) {
-            _errorMessage = error.toString();
+            _state = _state.withError(error.toString());
             _publish();
           }),
     );

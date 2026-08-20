@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
@@ -87,6 +88,27 @@ class ChatRoute extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final controller = ref.watch(chatControllerProvider(resolved));
+    // Every configured backend's browsing slice: watching each host's
+    // chat state keeps its controller alive, so every backend's session
+    // list stays live in the sidebar (and its browsing state survives
+    // switching back).
+    final registry =
+        ref.watch(backendRegistryStateProvider).value ??
+        const BackendRegistryState();
+    final slices = <BackendSessionSlice>[];
+    for (final backend in registry.backends) {
+      final backendUi =
+          ref.watch(chatUiStateProvider(backend.id)).value ??
+          const ChatUiState();
+      slices.add(
+        BackendSessionSlice(
+          backend: backend,
+          active: backend.id == resolved,
+          sessions: backendUi.sessions,
+          workspaces: backendUi.workspaces,
+        ),
+      );
+    }
     return ref
         .watch(chatUiStateProvider(resolved))
         .when(
@@ -95,6 +117,29 @@ class ChatRoute extends ConsumerWidget {
             onAction: controller.onAction,
             loadAttachment: controller.loadAttachmentBytes,
             backendId: resolved,
+            backendSlices: slices,
+            onSelectBackend: (backendId) => ref
+                .read(backendRegistryProvider.future)
+                .then(
+                  (registry) => registry.onAction(SelectBackend(backendId)),
+                ),
+            onSelectBackendSession: (backendId, sessionId) {
+              if (backendId == resolved) {
+                controller.onAction(SelectSession(sessionId));
+                return;
+              }
+              // Switch the registry first, then select on the target
+              // backend's own controller — the chat surface rebinds to
+              // it with the session already chosen.
+              ref
+                  .read(backendRegistryProvider.future)
+                  .then(
+                    (registry) => registry.onAction(SelectBackend(backendId)),
+                  );
+              ref
+                  .read(chatControllerProvider(backendId))
+                  .onAction(SelectSession(sessionId));
+            },
           ),
           error: (error, _) =>
               Scaffold(body: Center(child: Text(error.toString()))),
@@ -113,6 +158,9 @@ class ChatScreen extends StatefulWidget {
     this.onRefreshModels,
     this.backendId,
     this.localState,
+    this.backendSlices,
+    this.onSelectBackend,
+    this.onSelectBackendSession,
   });
 
   final ChatUiState uiState;
@@ -129,6 +177,19 @@ class ChatScreen extends StatefulWidget {
   /// Chat-surface persistence (drafts, reading offsets, expansion
   /// states, busy-send preference); null disables all of them.
   final ChatLocalState? localState;
+
+  /// Every configured backend's sidebar slice; more than one switches
+  /// the sidebar into backend-grouped form. Null keeps the flat
+  /// single-host tree (bare pumps and single-backend builds).
+  final List<BackendSessionSlice>? backendSlices;
+
+  /// Backend header tap in the sidebar: makes that backend active.
+  final void Function(String backendId)? onSelectBackend;
+
+  /// Session tap under any backend's sidebar slice (the active backend
+  /// reduces to a plain SelectSession).
+  final void Function(String backendId, String sessionId)?
+  onSelectBackendSession;
 
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
@@ -180,6 +241,17 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {
       // An unreadable documents directory leaves persistence off.
     }
+  }
+
+  /// The active backend's label for the app-bar subtitle; null while
+  /// only one backend is configured (nothing to disambiguate).
+  String? _activeBackendLabel() {
+    final slices = widget.backendSlices;
+    if (slices == null || slices.length <= 1) return null;
+    for (final slice in slices) {
+      if (slice.active) return slice.backend.label;
+    }
+    return null;
   }
 
   /// Session-scoped tool pages (web embeds them into conversation context;
@@ -234,13 +306,20 @@ class _ChatScreenState extends State<ChatScreen> {
     final title = session?.displayTitle ?? 'DeepSeek Harness';
     final connection = uiState.connection;
     final hostVersion = connection.hostDescription?.version ?? '';
-    final subtitle = switch (connection.phase) {
+    // Multi-backend form: the subtitle names WHICH host this surface
+    // presents before its connection line (single-backend builds keep
+    // the bare connection line — the host is unambiguous there).
+    final activeBackendLabel = _activeBackendLabel();
+    final connectionLine = switch (connection.phase) {
       ConnectionPhase.connected =>
         hostVersion.isEmpty ? 'connected' : 'connected $hostVersion',
       ConnectionPhase.connecting => 'connecting',
       ConnectionPhase.reconnecting => 'reconnecting',
       ConnectionPhase.disconnected => 'disconnected',
     };
+    final subtitle = activeBackendLabel == null
+        ? connectionLine
+        : '$activeBackendLabel · $connectionLine';
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
@@ -317,6 +396,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onAction(CreateSessionInWorkspace(workspaceId)),
                             onSearchSessions: (query) =>
                                 onAction(SearchSessions(query)),
+                            backendSlices: widget.backendSlices,
+                            onSelectBackend: widget.onSelectBackend,
+                            onSelectBackendSession:
+                                widget.onSelectBackendSession,
                           ),
                         ),
                         Expanded(
@@ -376,6 +459,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 onCreateSession: (workspaceId) =>
                     onAction(CreateSessionInWorkspace(workspaceId)),
                 onSearchSessions: (query) => onAction(SearchSessions(query)),
+                backendSlices: widget.backendSlices,
+                onSelectBackend: (backendId) {
+                  widget.onSelectBackend?.call(backendId);
+                  Navigator.of(context).pop();
+                },
+                onSelectBackendSession: (backendId, sessionId) {
+                  widget.onSelectBackendSession?.call(backendId, sessionId);
+                  Navigator.of(context).pop();
+                },
               ),
             ),
           ),

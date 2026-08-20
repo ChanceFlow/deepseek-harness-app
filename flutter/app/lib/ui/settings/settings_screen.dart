@@ -9,24 +9,28 @@
 /// kept token-for-token (reference packages/client/ui-settings-* module
 /// css). The web's two-pane panel (nav rail + content column) collapses
 /// to a horizontal capsule nav over an IndexedStack of pages in the
-/// web nav's order — General, Models, Plugins, Agent presets — plus a
-/// mobile-only Credentials page; IndexedStack preserves each section's
-/// scroll and entry state across switches. General facts render as
-/// value rows, the Enter-behavior and agent-preset defaults render as
-/// the web's interactive preference rows, presets render as the web's
-/// selectable cards (read-only: authoring verbs are loopback-pinned),
-/// namespaces disclose in place under Plugins (web PluginCard), the
-/// DeepSeek API-key card rides Models, and the credential editor opens
-/// as a bottom sheet on the popover surface instead of a side panel.
+/// web nav's order — General, Models, Plugins, Agent presets — plus
+/// mobile-only pages: Backends (the device-local multi-host registry,
+/// which stays reachable even when the active host is not) and
+/// Credentials; IndexedStack preserves each section's scroll and entry
+/// state across switches. General facts render as value rows, the
+/// Enter-behavior and agent-preset defaults render as the web's
+/// interactive preference rows, presets render as the web's selectable
+/// cards (read-only: authoring verbs are loopback-pinned), namespaces
+/// disclose in place under Plugins (web PluginCard), the DeepSeek
+/// API-key card rides Models, and the credential editor opens as a
+/// bottom sheet on the popover surface instead of a side panel.
 library;
 
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/backend.dart';
 import 'package:domain/model/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
+import '../shared/backend_connection_dot.dart';
 import '../theme/deepsuite_extension.dart';
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
 import 'busy_enter_preference.dart';
@@ -59,14 +63,16 @@ class SettingsRoute extends ConsumerWidget {
   }
 }
 
-/// Phone-tab settings sections in the web panel's nav order (web
-/// section orders: general 0, models 10, plugins 15, agent-presets 20).
-/// Credentials has no web nav entry — the web manages secrets inside
-/// the Models provider editors — so the mobile credential rows keep
-/// their own page, last.
-enum _SettingsSection { general, models, plugins, presets, credentials }
+/// Phone-tab settings sections. The web nav order is general 0, models
+/// 10, plugins 15, agent-presets 20 (reference ui-settings nav); the
+/// mobile-only pages bracket it: Backends first (the device-local
+/// registry decides which host every other page even describes, and it
+/// stays reachable when that host is not), Credentials last (the web
+/// manages secrets inside the Models provider editors).
+enum _SettingsSection { backends, general, models, plugins, presets, credentials }
 
 String _sectionLabel(_SettingsSection section) => switch (section) {
+  _SettingsSection.backends => 'Backends',
   _SettingsSection.general => 'General',
   _SettingsSection.models => 'Models',
   _SettingsSection.plugins => 'Plugins',
@@ -99,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
+    final described = uiState.snapshot;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -115,68 +122,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             // Web surfaces write/refresh state on the controls; the mobile
             // tab keeps one slim activity line above the content column.
-            if (uiState.snapshot != null && uiState.isLoading)
+            if (described != null && uiState.isLoading)
               LinearProgressIndicator(
                 minHeight: 2,
                 color: dsOf(context).accent,
                 backgroundColor: Colors.transparent,
               ),
-            switch (uiState.snapshot) {
-              null => Expanded(
-                child: Center(
-                  child: uiState.isLoading
-                      ? const CircularProgressIndicator()
-                      : const SizedBox.shrink(),
-                ),
-              ),
-              // IndexedStack keeps every section's scroll position and
-              // disclosure state across nav switches (the web panel keeps
-              // each section mounted behind its nav rail).
-              final described => Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SettingsSectionNav(
-                      section: _section,
-                      onSelect: (next) =>
-                          setState(() => _section = next),
-                    ),
-                    Expanded(
-                      child: IndexedStack(
-                        index: _section.index,
-                        children: [
-                          _GeneralPage(
-                            snapshot: described,
+            // The nav and the page stack always mount: the Backends page
+            // is device-local, so it stays reachable when the active host
+            // is unreachable (fixing that host's URL is exactly the flow
+            // that must not dead-end).
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingsSectionNav(
+                    section: _section,
+                    onSelect: (next) =>
+                        setState(() => _section = next),
+                  ),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _section.index,
+                      children: [
+                        const _BackendsPage(),
+                        _HostPageGate(
+                          snapshot: described,
+                          loading: uiState.isLoading,
+                          onOpenBackends: () => setState(
+                            () => _section = _SettingsSection.backends,
+                          ),
+                          page: (host) => _GeneralPage(
+                            snapshot: host,
                             roster: uiState.roster,
                             busy: uiState.isLoading,
                             onAction: widget.onAction,
                           ),
-                          _ModelsPage(
-                            writable: described.writable,
+                        ),
+                        _HostPageGate(
+                          snapshot: described,
+                          loading: uiState.isLoading,
+                          onOpenBackends: () => setState(
+                            () => _section = _SettingsSection.backends,
+                          ),
+                          page: (host) => _ModelsPage(
+                            writable: host.writable,
                             credentials: uiState.credentials,
                             onAction: widget.onAction,
                           ),
-                          _PluginsPage(
-                            snapshot: described,
+                        ),
+                        _HostPageGate(
+                          snapshot: described,
+                          loading: uiState.isLoading,
+                          onOpenBackends: () => setState(
+                            () => _section = _SettingsSection.backends,
+                          ),
+                          page: (host) => _PluginsPage(
+                            snapshot: host,
                             busy: uiState.isLoading,
                             onAction: widget.onAction,
                           ),
-                          _AgentPresetsPage(
+                        ),
+                        _HostPageGate(
+                          snapshot: described,
+                          loading: uiState.isLoading,
+                          onOpenBackends: () => setState(
+                            () => _section = _SettingsSection.backends,
+                          ),
+                          page: (_) => _AgentPresetsPage(
                             roster: uiState.roster,
                             onAction: widget.onAction,
                           ),
-                          _CredentialsPage(
+                        ),
+                        _HostPageGate(
+                          snapshot: described,
+                          loading: uiState.isLoading,
+                          onOpenBackends: () => setState(
+                            () => _section = _SettingsSection.backends,
+                          ),
+                          page: (_) => _CredentialsPage(
                             credentials: uiState.credentials,
                             credentialError: uiState.credentialError,
                             onAction: widget.onAction,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            },
+            ),
           ],
         ),
       ),
@@ -307,6 +342,337 @@ class _ErrorBanner extends StatelessWidget {
             onTap: onDismiss,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Backends page — the device-local multi-host registry (no web peer:
+/// the web client is compiled against one host). One row per configured
+/// backend with its LIVE connection dot; tapping a non-active row
+/// makes it the backend the chat surface presents. The edit sheet owns
+/// add/rename/repoint/remove with the registry's guards surfaced
+/// inline.
+class _BackendsPage extends ConsumerWidget {
+  const _BackendsPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watching the keep-alive here pins every configured backend's
+    // connection while this page exists (the dots read live phases).
+    ref.watch(allBackendConnectionsProvider);
+    final registry = ref.watch(backendRegistryStateProvider);
+    return registry.when(
+      loading: () =>
+          const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text(error.toString())),
+      data: (state) => _BackendsList(state: state, ref: ref),
+    );
+  }
+}
+
+class _BackendsList extends StatelessWidget {
+  const _BackendsList({required this.state, required this.ref});
+
+  final BackendRegistryState state;
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        const _SectionHeader(
+          title: 'Backends',
+          intro: 'Host endpoints this device keeps connected — every '
+              'configured backend stays live; the active one drives Chat '
+              'and these host-settings pages.',
+        ),
+        // The registry's last refusal or persist failure (guards fail
+        // loud on the state); the next successful mutation clears it.
+        if (state.errorMessage case final String message)
+          _RegistryErrorLine(message: message),
+        ..._divided(
+          ds,
+          [
+            for (final backend in state.backends)
+              _BackendRow(
+                backend: backend,
+                active: backend.id == state.activeId,
+                onAction: (action) => _dispatchBackendAction(ref, action),
+                onEdit: () => _openBackendSheet(
+                  context,
+                  ref,
+                  backend,
+                  removeBlockedReason: _removeBlockedReason(state, backend),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Web empty-column convention: the trailing affordance is a
+        // capsule on the selector vocabulary.
+        Center(
+          child: OutlinedButton(
+            onPressed: () => _openBackendSheet(context, ref, null),
+            style: _outlineCapsule(context),
+            child: const Text('Add backend'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Why a backend cannot be removed right now (the registry's guards,
+/// mirrored as visible UI instead of a dead button); null = removable.
+String? _removeBlockedReason(
+  BackendRegistryState state,
+  BackendConfig backend,
+) {
+  if (backend.id == state.activeId) {
+    return 'Switch away before removing the active backend.';
+  }
+  if (state.backends.length <= 1) {
+    return 'The last backend cannot be removed.';
+  }
+  return null;
+}
+
+void _dispatchBackendAction(WidgetRef ref, BackendAction action) {
+  ref
+      .read(backendRegistryProvider.future)
+      .then((controller) => controller.onAction(action));
+}
+
+/// The add/edit sheet on the settings menu-surface idiom (credential
+/// editor): menu fill, 12px radius, popover hairline, lv3 shadow.
+Future<void> _openBackendSheet(
+  BuildContext context,
+  WidgetRef ref,
+  BackendConfig? backend, {
+  String? removeBlockedReason,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: dsOf(sheetContext).menu,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: dsOf(sheetContext).borderInverted),
+            boxShadow: kDsShadowLv3,
+          ),
+          child: _BackendSheet(
+            backend: backend,
+            removeBlockedReason: backend == null ? null : removeBlockedReason,
+            onSave: (label, baseUrl) {
+              if (backend == null) {
+                _dispatchBackendAction(
+                  ref,
+                  AddBackend(label, baseUrl),
+                );
+                return;
+              }
+              if (label != backend.label) {
+                _dispatchBackendAction(
+                  ref,
+                  RenameBackend(backend.id, label),
+                );
+              }
+              if (baseUrl != backend.baseUri.toString()) {
+                _dispatchBackendAction(
+                  ref,
+                  UpdateBackendUrl(backend.id, baseUrl),
+                );
+              }
+            },
+            onRemove: backend == null || removeBlockedReason != null
+                ? null
+                : () => _dispatchBackendAction(
+                    ref,
+                    RemoveBackend(backend.id),
+                  ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// One backend row: live connection dot, label over `host:port`, the
+/// Active badge on the presented backend, and the edit affordance.
+/// Tapping a non-active row selects it (the registry guards the rest).
+class _BackendRow extends StatelessWidget {
+  const _BackendRow({
+    required this.backend,
+    required this.active,
+    required this.onAction,
+    required this.onEdit,
+  });
+
+  final BackendConfig backend;
+  final bool active;
+
+  final void Function(BackendAction action) onAction;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ds = dsOf(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: ds.interactiveBgHover,
+        onTap: active ? null : () => onAction(SelectBackend(backend.id)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              BackendConnectionDot(backendId: backend.id),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(backend.label, style: theme.textTheme.bodyMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${backend.baseUri.host}:${backend.baseUri.port}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ds.labelTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (active)
+                const _StateBadge(configured: true, label: 'Active')
+              else
+                const _StateBadge(configured: false, label: 'Standby'),
+              const SizedBox(width: 4),
+              _CircleAction(
+                icon: Icons.edit_outlined,
+                iconSize: 16,
+                tooltip: 'Edit backend',
+                onTap: onEdit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Registry refusal line: error ink at 12/18 with the outline glyph,
+/// matching the transport error banner's vocabulary (no dismiss — the
+/// next successful mutation clears it).
+class _RegistryErrorLine extends StatelessWidget {
+  const _RegistryErrorLine({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Icon(
+              Icons.error_outline,
+              size: 14,
+              color: theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Host-settings page gate: the page renders from a snapshot; before
+/// the first snapshot the surface is the loading state, and after a
+/// failed load it states the unreachable host and routes to Backends
+/// (repointing the host is the fix for exactly this dead end).
+class _HostPageGate extends StatelessWidget {
+  const _HostPageGate({
+    required this.snapshot,
+    required this.loading,
+    required this.onOpenBackends,
+    required this.page,
+  });
+
+  final SettingsSnapshot? snapshot;
+  final bool loading;
+  final VoidCallback onOpenBackends;
+  final Widget Function(SettingsSnapshot) page;
+
+  @override
+  Widget build(BuildContext context) {
+    final described = snapshot;
+    if (described != null) return page(described);
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final theme = Theme.of(context);
+    final ds = dsOf(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 24,
+              color: ds.labelTertiary,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Host settings unavailable',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'The active backend did not answer. Repoint or switch it '
+              'from the Backends page.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ds.labelTertiary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: onOpenBackends,
+              style: _filledCapsule(context),
+              child: const Text('Backends'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1643,11 +2009,16 @@ class _CredentialRow extends StatelessWidget {
 
 /// Web SecretField state badge (fields.module.css `.badge`/`.badgeMuted`):
 /// a 999px pill at 11/17 w500 — module fill with label-secondary ink when
-/// configured, borderless label-tertiary when not.
+/// configured, borderless label-tertiary when not. Backends rows reuse
+/// the pill for the Active/Standby marker.
 class _StateBadge extends StatelessWidget {
-  const _StateBadge({required this.configured});
+  const _StateBadge({required this.configured, this.label});
 
   final bool configured;
+
+  /// Overrides the default Configured/Not-set copy (the Backends rows
+  /// say Active/Standby on the same pill geometry).
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -1659,7 +2030,7 @@ class _StateBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        configured ? 'Configured' : 'Not set',
+        label ?? (configured ? 'Configured' : 'Not set'),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: configured ? ds.labelSecondary : ds.labelTertiary,
         ),
@@ -1792,6 +2163,175 @@ class _CredentialSheetState extends State<_CredentialSheet> {
           style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
         ),
       ],
+    );
+  }
+}
+
+/// The backend add/edit sheet body: label + base-URL fields with the
+/// registry's validation mirrored as immediate inline feedback (the
+/// controller remains the authority — it re-checks on dispatch), plus
+/// the destructive remove with its guard stated, never a dead control.
+class _BackendSheet extends StatefulWidget {
+  const _BackendSheet({
+    required this.backend,
+    required this.onSave,
+    this.onRemove,
+    this.removeBlockedReason,
+  });
+
+  /// Null = add mode (no remove control).
+  final BackendConfig? backend;
+
+  /// Fires with the trimmed label and the raw base URL when the drafts
+  /// validate; the caller maps it onto Add/Rename/UpdateUrl.
+  final void Function(String label, String baseUrl) onSave;
+
+  /// Only passed when the registry would accept the removal; otherwise
+  /// [removeBlockedReason] states why the control is absent.
+  final VoidCallback? onRemove;
+
+  /// The registry's refusal for removing this backend right now (null
+  /// = removable; unused in add mode).
+  final String? removeBlockedReason;
+
+  @override
+  State<_BackendSheet> createState() => _BackendSheetState();
+}
+
+class _BackendSheetState extends State<_BackendSheet> {
+  late final TextEditingController _labelController;
+  late final TextEditingController _urlController;
+
+  @override
+  void initState() {
+    super.initState();
+    final backend = widget.backend;
+    _labelController = TextEditingController(text: backend?.label ?? '');
+    _urlController = TextEditingController(
+      text: backend?.baseUri.toString() ?? 'http://',
+    );
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  /// The registry's URL rule (http/https scheme, non-empty host).
+  bool _validUrl(String raw) {
+    final uri = Uri.tryParse(raw.trim());
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
+  bool get _canSave =>
+      _labelController.text.trim().isNotEmpty && _validUrl(_urlController.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final editing = widget.backend != null;
+    final urlValid = _validUrl(_urlController.text);
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            editing ? 'Edit backend' : 'Add backend',
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          const _FieldLabel('Label'),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _labelController,
+            autofocus: !editing,
+            decoration: _dsInputDecoration(
+              context,
+              hint: 'Laptop host, build box, …',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 12),
+          const _FieldLabel('Base URL'),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _urlController,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: _dsInputDecoration(
+              context,
+              hint: 'http://10.0.2.2:3080',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            urlValid
+                ? 'RPC and event paths derive from this base.'
+                : 'http or https with a host, e.g. http://10.0.2.2:3080',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: urlValid ? ds.labelTertiary : theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Add mode has nothing to remove; a blocked removal states
+              // why instead of rendering a dead destructive control.
+              if (editing)
+                Expanded(
+                  child: widget.onRemove != null
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: widget.onRemove,
+                            style: _dangerCapsule(context),
+                            child: const Text('Remove'),
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Text(
+                            widget.removeBlockedReason ?? '',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: ds.labelTertiary,
+                            ),
+                          ),
+                        ),
+                )
+              else
+                const Spacer(),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: _outlineCapsule(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _canSave
+                    ? () {
+                        widget.onSave(
+                          _labelController.text.trim(),
+                          _urlController.text.trim(),
+                        );
+                        Navigator.of(context).pop();
+                      }
+                    : null,
+                style: _filledCapsule(context),
+                child: Text(editing ? 'Save' : 'Add'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

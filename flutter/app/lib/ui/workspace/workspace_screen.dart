@@ -12,14 +12,13 @@
 library;
 
 import 'package:domain/model/backend.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
-import '../subagents/subagent_screen.dart' show SubagentDotState, SubagentStateDot;
+import '../shared/backend_connection_dot.dart';
 import '../theme/deepsuite_extension.dart';
 import 'workspace_ui_state.dart';
 
@@ -129,7 +128,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      _BackendConnectionDot(backendId: backend.id),
+                      BackendConnectionDot(backendId: backend.id),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -196,29 +195,9 @@ class _BackendWorkspaceSection extends ConsumerWidget {
   }
 }
 
-/// Live connection dot for one backend (connection-state phases mapped
-/// onto the StateDot vocabulary).
-class _BackendConnectionDot extends ConsumerWidget {
-  const _BackendConnectionDot({required this.backendId});
-
-  final String backendId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // The keep-alive map guarantees the member exists.
-    final connections = ref.watch(allBackendConnectionsProvider);
-    final phase = connections[backendId]?.state.value.phase;
-    final dotState = switch (phase) {
-      ConnectionPhase.connected => SubagentDotState.done,
-      ConnectionPhase.connecting ||
-      ConnectionPhase.reconnecting => SubagentDotState.ongoing,
-      ConnectionPhase.disconnected => SubagentDotState.error,
-      null => SubagentDotState.error,
-    };
-    return SubagentStateDot(state: dotState);
-  }
-}
-
+/// The browsing surface: renders the workspace tree and the embedded
+/// directory browser. The aggregate form (embedded) drops the Scaffold —
+/// the backend section owns the surface.
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
     super.key,

@@ -1,6 +1,7 @@
 /// SettingsScreen widget parity tests — the sectioned panel port.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:domain/model/agent_preset.dart';
@@ -10,6 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/backends/backend_store.dart';
+import 'package:app/config.dart';
+import 'package:app/di/providers.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/settings/busy_enter_preference.dart';
@@ -78,6 +82,100 @@ File _storeFile() {
   return File('${directory.path}/local_state.json');
 }
 
+/// The connection-manager fake pair: host.describe answers a valid
+/// description and both downlinks open and stay open, so every
+/// generation reaches CONNECTED and the retry loop sits quiescent (no
+/// backoff timers for pumpAndSettle to trip over).
+class _FakeRpc implements DshRpcClient {
+  @override
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
+    if (endpoint == 'host.describe') {
+      return RpcResult(ok: true, value: <String, Object?>{
+        'version': 'test',
+        'cwd': '/tmp',
+        'provider': 'deepseek',
+        'model': 'test-model',
+        'attachedSessions': 0,
+        'canOpenPath': true,
+      });
+    }
+    return RpcResult(ok: true, value: <String, Object?>{});
+  }
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {}
+}
+
+class _QuietSocket implements DshEventSocket {
+  final StreamController<ServerRequest> _frames =
+      StreamController<ServerRequest>.broadcast();
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    onOpen?.call();
+    return _frames.stream;
+  }
+}
+
+/// In-memory-backed backend registry (path_provider has no plugin in
+/// tests). An optional document seeds more than the one default
+/// backend; the registry's real controller + real store decode it.
+BackendStore _backendStore({String? document}) {
+  final dir = Directory.systemTemp.createTempSync('settings_backends_test');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  final file = File('${dir.path}/backends.json');
+  if (document != null) {
+    file.writeAsStringSync(document);
+  }
+  return BackendStore(file, seedBaseUrl: kDshBaseUrl);
+}
+
+/// Lets the registry's real dart:io chain (exists → readAsString →
+/// decode → publish) and the connection handshake complete: each
+/// runAsync round turns the real event loop once, each pump flushes
+/// the fake-zone microtasks the completions scheduled. A seeded
+/// document needs several rounds; a fresh store settles in the first.
+Future<void> _letRegistryLoad(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+  }
+}
+
+/// The horizontal capsule nav. Six capsules overflow the phone-width
+/// viewport in the test font (every glyph renders at its full em), so
+/// the trailing section reveals on scroll.
+final _navScrollable = find.byWidgetPredicate(
+  (widget) =>
+      widget is SingleChildScrollView &&
+      widget.scrollDirection == Axis.horizontal,
+);
+
+Future<void> _revealCapsule(WidgetTester tester, String label) async {
+  final capsule = find.descendant(
+    of: _navScrollable,
+    matching: find.text(label),
+  );
+  if (capsule.hitTestable().evaluate().isNotEmpty) return;
+  // Off the right edge drags left; clipped on the left drags right.
+  final box = tester.renderObject<RenderBox>(capsule);
+  final dx = box.localToGlobal(Offset.zero).dx;
+  final viewportWidth =
+      tester.view.physicalSize.width / tester.view.devicePixelRatio;
+  await tester.drag(
+    _navScrollable,
+    Offset(dx > viewportWidth ? -600.0 : 600.0, 0),
+  );
+  await tester.pumpAndSettle();
+  expect(capsule.hitTestable(), findsOneWidget);
+}
+
 /// Pumps the screen with the shared-store provider overridden to one
 /// temp-backed [LocalStateStore]. The store stays unloaded — real
 /// dart:io never completes inside a testWidgets fake-async zone, and an
@@ -97,6 +195,15 @@ Future<LocalStateStore> _pump(
     ProviderScope(
       overrides: [
         localStateStoreProvider.overrideWith((ref) async => store),
+        backendStoreProvider.overrideWith(
+          (ref) async => _backendStore(),
+        ),
+        dshRpcClientProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_QuietSocket()),
       ],
       child: MaterialApp(
         home: SettingsScreen(uiState: uiState, onAction: actions.add),
@@ -141,6 +248,15 @@ Future<LocalStateStore> _pumpController(
     ProviderScope(
       overrides: [
         localStateStoreProvider.overrideWith((ref) async => store),
+        backendStoreProvider.overrideWith(
+          (ref) async => _backendStore(),
+        ),
+        dshRpcClientProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_QuietSocket()),
       ],
       child: MaterialApp(home: _ControllerHarness(controller: controller)),
     ),
@@ -203,18 +319,24 @@ void main() {
     );
 
     // The panel nav (web nav rail) collapsed to capsules, in the web
-    // nav order with the mobile-only Credentials page last. Every
-    // label is visible; the active section's page header repeats its
-    // title, so presence (not count) is the assertion.
+    // nav order with the mobile-only Credentials page last. Six
+    // capsules overflow the phone width in the test font, so the nav
+    // scrolls: the first five sit in the viewport, Credentials reveals
+    // on scroll. The active section's page header repeats its title,
+    // so presence (not count) is the assertion.
     for (final label in [
+      'Backends',
       'General',
       'Models',
       'Plugins',
       'Agent presets',
-      'Credentials',
     ]) {
       expect(find.text(label).hitTestable(), findsWidgets);
     }
+    await _revealCapsule(tester, 'Credentials');
+    expect(find.text('Credentials').hitTestable(), findsWidgets);
+    // Back to the leading capsules for the page assertions below.
+    await _revealCapsule(tester, 'Backends');
 
     // General page: the interactive rows over the connection facts.
     expect(
@@ -241,6 +363,7 @@ void main() {
     // General went behind the nav.
     expect(find.text('Host writes').hitTestable(), findsNothing);
 
+    await _revealCapsule(tester, 'Credentials');
     await tester.tap(find.text('Credentials').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('DEEPSEEK_API_KEY').hitTestable(), findsOneWidget);
@@ -526,6 +649,7 @@ void main() {
     );
 
     // Tapping the credential row opens the editor sheet.
+    await _revealCapsule(tester, 'Credentials');
     await tester.tap(find.text('Credentials').hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('DEEPSEEK_API_KEY'));
@@ -603,8 +727,173 @@ void main() {
       findsOneWidget,
     );
 
+    await _revealCapsule(tester, 'Credentials');
     await tester.tap(find.text('Credentials').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('No credentials referenced.'), findsOneWidget);
+  });
+
+  // The Backends section: device-local registry surface. The registry
+  // runs its real controller over a temp-file store seeded with two
+  // hosts; both endpoints ride the quiet transport fakes (a second
+  // port on the emulator-loopback host).
+  const twoBackendsDoc =
+      '{"backends": ['
+      '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+      '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
+      '], "activeId": "default"}';
+
+  Future<void> pumpBackends(
+    WidgetTester tester, {
+    String document = twoBackendsDoc,
+    SettingsUiState uiState = const SettingsUiState(snapshot: _snapshot),
+  }) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendStoreProvider.overrideWith(
+            (ref) async => _backendStore(document: document),
+          ),
+          for (final uri in [
+            Uri.parse(kDshBaseUrl),
+            Uri.parse('http://10.0.2.2:3081'),
+            Uri.parse('http://10.0.2.2:3082'),
+          ]) ...[
+            dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
+            dshEventSocketProvider(uri).overrideWithValue(_QuietSocket()),
+          ],
+          localStateStoreProvider.overrideWith(
+            (ref) async => LocalStateStore(_storeFile()),
+          ),
+        ],
+        child: MaterialApp(
+          home: SettingsScreen(uiState: uiState, onAction: (_) {}),
+        ),
+      ),
+    );
+    await _letRegistryLoad(tester);
+    // The nav capsule is the first 'Backends' text in the column (the
+    // unreachable-host gate's shortcut button may render below it).
+    await tester.tap(find.text('Backends').hitTestable().first);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('backends section lists rows and switches the active one', (
+    tester,
+  ) async {
+    await pumpBackends(tester);
+
+    // Both configured rows with their endpoints; the active one badged.
+    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Build box'), findsOneWidget);
+    expect(find.text('10.0.2.2:3080'), findsOneWidget);
+    expect(find.text('10.0.2.2:3081'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Standby'), findsOneWidget);
+    expect(find.text('Add backend'), findsOneWidget);
+
+    // Tapping the standby row selects it: the badges swap (the chat
+    // surface follows the registry's active id).
+    await tester.tap(find.text('Build box'));
+    await tester.pumpAndSettle();
+    final buildBoxRow = find.ancestor(
+      of: find.text('Build box'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('Laptop'),
+          matching: find.byType(InkWell),
+        ),
+        matching: find.text('Standby'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('add backend flow appends through the registry', (tester) async {
+    await pumpBackends(tester);
+
+    await tester.tap(find.text('Add backend').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Label'), findsOneWidget);
+    expect(find.text('Base URL'), findsOneWidget);
+
+    final fields = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(0), 'CI host');
+    await tester.pump();
+    await tester.enterText(fields.at(1), 'http://10.0.2.2:3082');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+
+    // The sheet closed and the new row renders.
+    expect(find.text('Label'), findsNothing);
+    expect(find.text('CI host'), findsOneWidget);
+    expect(find.text('10.0.2.2:3082'), findsOneWidget);
+  });
+
+  testWidgets('edit sheet repoints a backend and states removal guards', (
+    tester,
+  ) async {
+    await pumpBackends(tester);
+
+    // The standby backend's editor: prefilled fields, removable.
+    await tester.tap(find.byTooltip('Edit backend').at(1));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit backend'), findsOneWidget);
+    expect(find.text('Remove'), findsOneWidget);
+
+    // Repoint the URL; the row's endpoint line follows.
+    final fields = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(1), 'http://10.0.2.2:3082');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('10.0.2.2:3082'), findsOneWidget);
+    expect(find.text('10.0.2.2:3081'), findsNothing);
+
+    // The active backend's editor states the guard instead of a dead
+    // remove control.
+    await tester.tap(find.byTooltip('Edit backend').at(0));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove'), findsNothing);
+    expect(
+      find.textContaining('Switch away before removing'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('unreachable host page routes to the backends section', (
+    tester,
+  ) async {
+    // No snapshot and not loading: the host pages state the dead end;
+    // the Backends page (device-local) is the way out.
+    await pumpBackends(tester, uiState: const SettingsUiState());
+
+    await tester.tap(find.text('General').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Host settings unavailable'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Backends'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add backend').hitTestable(), findsOneWidget);
+    expect(find.text('Host settings unavailable'), findsNothing);
   });
 }

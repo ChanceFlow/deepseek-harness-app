@@ -9,8 +9,15 @@
 /// with the Workspaces tab (workspace_screen.dart): 44px touch rows,
 /// folder group headers, and the flat search-result list that replaces
 /// the tree while a query is active.
+///
+/// With more than one backend configured, the browsing region groups
+/// under per-backend section headers (live connection dot + label +
+/// host + the Active marker): every configured backend's sessions stay
+/// browsable and live, tapping another backend's header or one of its
+/// sessions makes it the backend the chat surface presents.
 library;
 
+import 'package:domain/model/backend.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
@@ -18,9 +25,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 import '../root/app_destination.dart';
+import '../shared/backend_connection_dot.dart';
 import '../theme/deepsuite_extension.dart' show DeepSuiteColors, dsOf;
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
 import 'brand_wordmark.dart';
+
+/// One backend's slice of the sidebar's browsing region: that host's
+/// config, whether it is the one the chat surface presents, and its
+/// live session/workspace facts.
+final class BackendSessionSlice {
+  const BackendSessionSlice({
+    required this.backend,
+    required this.active,
+    required this.sessions,
+    required this.workspaces,
+  });
+
+  final BackendConfig backend;
+  final bool active;
+  final List<SessionSummary> sessions;
+  final List<WorkspaceSummary> workspaces;
+}
 
 /// Web tree.ts `UNGROUPED_KEY`: group key for sessions outside every
 /// registered workspace.
@@ -55,6 +80,9 @@ class SessionPanel extends ConsumerStatefulWidget {
     required this.onCreateSession,
     required this.onSearchSessions,
     this.onRailChanged,
+    this.backendSlices,
+    this.onSelectBackend,
+    this.onSelectBackendSession,
   });
 
   /// Drawer form: no rail toggle, full-height fill.
@@ -70,6 +98,21 @@ class SessionPanel extends ConsumerStatefulWidget {
   final void Function(String sessionId) onSelectSession;
   final void Function(String? workspaceId) onCreateSession;
   final void Function(String query) onSearchSessions;
+
+  /// Every configured backend's browsing slice; more than one switches
+  /// the browsing region into backend-grouped form (null/one keeps the
+  /// flat single-host tree). The active slice mirrors [sessions] and
+  /// [workspaces].
+  final List<BackendSessionSlice>? backendSlices;
+
+  /// Backend section header tap: makes that backend the one the chat
+  /// surface presents.
+  final void Function(String backendId)? onSelectBackend;
+
+  /// Session tap under any backend's slice; the active backend reduces
+  /// to [onSelectSession].
+  final void Function(String backendId, String sessionId)?
+  onSelectBackendSession;
 
   @override
   ConsumerState<SessionPanel> createState() => _SessionPanelState();
@@ -143,7 +186,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Web ProjectRowItem `onToggle`: flip one group's expansion, pinning it
   /// so later selection changes no longer auto-expand it.
   void _toggleGroup(String key) {
-    final currentGroupKey = _currentGroupKey();
+    final currentGroupKey = _currentGroupKeyOf(
+      widget.sessions,
+      widget.workspaces,
+      widget.selectedSessionId,
+    );
     final expanded = _groupOverrides[key] ?? key == currentGroupKey;
     _userToggled = true;
     setState(() => _groupOverrides[key] = !expanded);
@@ -193,14 +240,17 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// holds the selected session, or the Ungrouped key when no account
   /// names it (null when nothing is selected or the summary has not
   /// landed yet).
-  String? _currentGroupKey() {
-    final selectedSessionId = widget.selectedSessionId;
+  String? _currentGroupKeyOf(
+    List<SessionSummary> sessions,
+    List<WorkspaceSummary> workspaces,
+    String? selectedSessionId,
+  ) {
     if (selectedSessionId == null) return null;
-    final session = widget.sessions
+    final session = sessions
         .where((session) => session.id == selectedSessionId)
         .firstOrNull;
     if (session == null) return null;
-    for (final workspace in widget.workspaces) {
+    for (final workspace in workspaces) {
       if (workspace.sessionIds.contains(selectedSessionId)) {
         return workspace.workspaceId;
       }
@@ -216,15 +266,20 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// use their parent header catalog. Archived sessions never reach this
   /// panel — the adapter's `observeSessions` drops ids in the workspace
   /// registry's archived set — so this port does not re-filter them.
-  bool _sessionVisible(SessionSummary session) =>
+  /// A non-active backend's slice passes a null selection: blank
+  /// placeholders never browse there.
+  bool _sessionVisibleOf(SessionSummary session, String? selectedSessionId) =>
       session.origin != _subagentOrigin &&
-      (!session.blank || session.id == widget.selectedSessionId);
+      (!session.blank || session.id == selectedSessionId);
 
   /// The workspace account holding one session, if any (web membership is
   /// the Workspace's `sessionIds` — the wire session summary carries no
   /// workspace field).
-  WorkspaceSummary? _workspaceOf(SessionSummary session) {
-    for (final workspace in widget.workspaces) {
+  WorkspaceSummary? _workspaceOf(
+    SessionSummary session,
+    List<WorkspaceSummary> workspaces,
+  ) {
+    for (final workspace in workspaces) {
       if (workspace.sessionIds.contains(session.id)) return workspace;
     }
     return null;
@@ -234,13 +289,17 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// stable host order, members resolved from `sessionIds` in their
   /// stored order; sessions outside every account trail in the
   /// browser-local Ungrouped bucket by recency.
-  List<_SessionGroupData> _deriveSessionGroups() {
+  List<_SessionGroupData> _deriveSessionGroupsOf(
+    List<SessionSummary> sessions,
+    List<WorkspaceSummary> workspaces,
+    String? selectedSessionId,
+  ) {
     final sessionsById = <String, SessionSummary>{
-      for (final session in widget.sessions) session.id: session,
+      for (final session in sessions) session.id: session,
     };
     final accounted = <String>{};
     final groups = <_SessionGroupData>[];
-    for (final workspace in widget.workspaces) {
+    for (final workspace in workspaces) {
       final members = <SessionSummary>[];
       for (final id in workspace.sessionIds) {
         final summary = sessionsById[id];
@@ -248,7 +307,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         // summary lands (web rule).
         if (summary == null) continue;
         accounted.add(id);
-        if (!_sessionVisible(summary)) continue;
+        if (!_sessionVisibleOf(summary, selectedSessionId)) continue;
         members.add(summary);
       }
       groups.add(
@@ -260,9 +319,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       );
     }
     final ungrouped = _sortedByRecency(
-      widget.sessions.where(
+      sessions.where(
         (session) =>
-            !accounted.contains(session.id) && _sessionVisible(session),
+            !accounted.contains(session.id) &&
+            _sessionVisibleOf(session, selectedSessionId),
       ),
     );
     if (ungrouped.isNotEmpty) {
@@ -277,10 +337,30 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     return groups;
   }
 
+  /// The browsing-slice group key: the active backend keeps its raw
+  /// workspace ids (persisted expansion overrides from the
+  /// single-backend era stay valid), other backends namespace under
+  /// their backend id.
+  String _sliceGroupKey(BackendSessionSlice slice, String key) =>
+      slice.active ? key : '${slice.backend.id}\u0000$key';
+
+  /// Session tap under one slice: the active backend selects directly;
+  /// another backend's row routes through the backend-aware callback
+  /// (which switches the active backend first).
+  void _selectSessionOn(BackendSessionSlice slice, String sessionId) {
+    final backendAware = widget.onSelectBackendSession;
+    if (backendAware == null || slice.active) {
+      widget.onSelectSession(sessionId);
+    } else {
+      backendAware(slice.backend.id, sessionId);
+    }
+  }
+
   /// Web tree.ts `labelOf`: the workspace title when an account holds the
-  /// session, else the cwd basename (search-result context rows).
+  /// session, else the cwd basename (search-result context rows). The
+  /// result list is active-backend scoped.
   String _workspaceLabel(SessionSummary session) {
-    final workspace = _workspaceOf(session);
+    final workspace = _workspaceOf(session, widget.workspaces);
     if (workspace != null) return workspace.title;
     return _cwdBasename(session.cwd);
   }
@@ -407,7 +487,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         child: ListView(
           padding: const EdgeInsets.only(top: 4, bottom: 16),
           children: [
-            for (final session in widget.sessions.where(_sessionVisible))
+            for (final session in widget.sessions.where(
+              (session) =>
+                  _sessionVisibleOf(session, widget.selectedSessionId),
+            ))
               IconButton(
                 tooltip: session.displayTitle,
                 onPressed: () => widget.onSelectSession(session.id),
@@ -453,7 +536,15 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             // Web listArea: a non-empty query replaces the tree with the
             // flat result list; clearing restores the tree.
             if (_queryController.text.trim().isEmpty)
-              _buildSessionTree(context, ds, _currentGroupKey())
+              _buildSessionTree(
+                context,
+                ds,
+                _currentGroupKeyOf(
+                  widget.sessions,
+                  widget.workspaces,
+                  widget.selectedSessionId,
+                ),
+              )
             else
               _buildSearchResults(context, ds),
             // Web WorkspaceBrowser `.fade`: bottom continuation hint
@@ -535,13 +626,23 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   }
 
   /// Web WorkspaceBrowser `SessionTree` (mobile form): the grouped
-  /// browsing list — the panel's only scrolling region.
+  /// browsing list — the panel's only scrolling region. With more than
+  /// one backend configured, every backend gets its own section: a
+  /// live-status header over its own workspace-grouped tree.
   Widget _buildSessionTree(
     BuildContext context,
     DeepSuiteColors ds,
     String? currentGroupKey,
   ) {
-    final groups = _deriveSessionGroups();
+    final slices = widget.backendSlices;
+    if (slices != null && slices.length > 1) {
+      return _buildBackendSections(context, ds);
+    }
+    final groups = _deriveSessionGroupsOf(
+      widget.sessions,
+      widget.workspaces,
+      widget.selectedSessionId,
+    );
     if (groups.isEmpty) {
       // Web `.empty` (aligned with the row grid).
       return Padding(
@@ -576,6 +677,85 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     );
   }
 
+  /// The multi-backend browsing region: one section per configured
+  /// backend — live connection dot + label + host + the Active marker,
+  /// tapping another backend's header selects it — over that backend's
+  /// own grouped tree. The active backend's group keys stay raw
+  /// (persisted overrides compatible); others namespace under their
+  /// backend id and default collapsed.
+  Widget _buildBackendSections(BuildContext context, DeepSuiteColors ds) {
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 16),
+      children: [
+        for (var i = 0; i < widget.backendSlices!.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _BackendSectionHeader(
+            slice: widget.backendSlices![i],
+            // The active backend's header is not a switch control (the
+            // registry would no-op the redundant select anyway).
+            onSelectBackend: widget.backendSlices![i].active
+                ? null
+                : () => widget.onSelectBackend?.call(
+                    widget.backendSlices![i].backend.id,
+                  ),
+          ),
+          ..._sliceGroupSections(
+            context,
+            ds,
+            widget.backendSlices![i],
+            nowEpochMs,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// One backend's grouped-tree rows (no header): the slice's own
+  /// sessions/workspaces, its own selection highlight (only the active
+  /// backend carries one), and backend-aware row taps.
+  List<Widget> _sliceGroupSections(
+    BuildContext context,
+    DeepSuiteColors ds,
+    BackendSessionSlice slice,
+    int nowEpochMs,
+  ) {
+    final selectedSessionId = slice.active ? widget.selectedSessionId : null;
+    final groups = _deriveSessionGroupsOf(
+      slice.sessions,
+      slice.workspaces,
+      selectedSessionId,
+    );
+    final currentGroupKey = _currentGroupKeyOf(
+      slice.sessions,
+      slice.workspaces,
+      selectedSessionId,
+    );
+    return [
+      for (var i = 0; i < groups.length; i++) ...[
+        if (i > 0) const SizedBox(height: 4),
+        _GroupSection(
+          group: groups[i],
+          expanded: _isGroupExpanded(
+            _sliceGroupKey(slice, groups[i].key),
+            currentGroupKey,
+          ),
+          overflowExpanded: _overflowExpandedGroups.contains(
+            _sliceGroupKey(slice, groups[i].key),
+          ),
+          containsCurrent: slice.active && groups[i].key == currentGroupKey,
+          selectedSessionId: selectedSessionId,
+          nowEpochMs: nowEpochMs,
+          onToggle: () => _toggleGroup(_sliceGroupKey(slice, groups[i].key)),
+          onToggleOverflow: () =>
+              _toggleOverflow(_sliceGroupKey(slice, groups[i].key)),
+          onSelectSession: (sessionId) =>
+              _selectSessionOn(slice, sessionId),
+        ),
+      ],
+    ];
+  }
+
   /// Web WorkspaceBrowser `SearchResults`: the flat result list replaces
   /// the tree while a query is active; rows whose session summary has not
   /// landed stay hidden until the list catches up (web drops them the
@@ -586,7 +766,8 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     // blank placeholders never match a query (not even the current one).
     final sessionsById = <String, SessionSummary>{
       for (final session in widget.sessions.where(
-        (session) => !session.blank && _sessionVisible(session),
+        (session) =>
+            !session.blank && _sessionVisibleOf(session, widget.selectedSessionId),
       ))
         session.id: session,
     };
@@ -889,6 +1070,86 @@ class _SearchCapsule extends StatelessWidget {
 /// Web WorkspaceBrowser `.groupSection`: the group header row plus its
 /// expanded session run (2px intra-group rhythm) and the local overflow
 /// control.
+/// One backend's section header in the multi-backend browsing region:
+/// the live connection dot, the backend label over `host:port`, and
+/// the Active marker — the same vocabulary as the Workspaces tab's
+/// backend headers. Tapping a non-active header selects that backend.
+class _BackendSectionHeader extends StatelessWidget {
+  const _BackendSectionHeader({
+    required this.slice,
+    required this.onSelectBackend,
+  });
+
+  final BackendSessionSlice slice;
+
+  /// Null on the active backend (nothing to switch to) and when no
+  /// switch wiring was provided.
+  final VoidCallback? onSelectBackend;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ds = dsOf(context);
+    final backend = slice.backend;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onSelectBackend,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+          decoration: BoxDecoration(
+            color: slice.active ? ds.sidebarNavItemActive : null,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              BackendConnectionDot(backendId: backend.id),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      backend.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium,
+                    ),
+                    Text(
+                      '${backend.baseUri.host}:${backend.baseUri.port}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: ds.labelTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: slice.active ? ds.specificSelector : null,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  slice.active ? 'Active' : 'Standby',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: slice.active ? ds.labelSecondary : ds.labelTertiary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _GroupSection extends StatelessWidget {
   const _GroupSection({
     required this.group,

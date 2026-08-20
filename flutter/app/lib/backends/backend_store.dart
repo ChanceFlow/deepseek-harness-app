@@ -46,6 +46,12 @@ class BackendStore {
   /// (label `host:port`, id `default`).
   final String seedBaseUrl;
 
+  /// The seed-only document: fresh-install state, and the fallback when
+  /// the persisted document is unreadable (the corrupt file stays on
+  /// disk until the next successful save rewrites it).
+  BackendStoreData seedDocument() =>
+      BackendStoreData(backends: [_seedBackend()]);
+
   /// Reads the document; an absent file yields the seed-only document.
   Future<BackendStoreData> load() async {
     if (!await _file.exists()) {
