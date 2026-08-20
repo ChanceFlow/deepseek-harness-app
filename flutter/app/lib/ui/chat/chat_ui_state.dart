@@ -1,7 +1,6 @@
 /// Chat screen UI state and user intents (UDF).
 library;
 
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -21,7 +20,6 @@ import 'package:flutter/foundation.dart' show listEquals;
 
 final class ChatUiState {
   const ChatUiState({
-    this.connection = const ConnectionState(),
     this.sessions = const <SessionSummary>[],
     this.workspaces = const <WorkspaceSummary>[],
     this.selectedSessionId,
@@ -49,7 +47,6 @@ final class ChatUiState {
     this.agentPresets,
   });
 
-  final ConnectionState connection;
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
   final String? selectedSessionId;

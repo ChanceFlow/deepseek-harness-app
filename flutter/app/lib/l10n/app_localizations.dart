@@ -1622,59 +1622,11 @@ abstract class AppLocalizations {
   /// **'The parent session is offline; reopen it to continue sending messages.'**
   String get parentUnavailableBody;
 
-  /// No description provided for @appBarConnected.
-  ///
-  /// In en, this message translates to:
-  /// **'connected'**
-  String get appBarConnected;
-
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'connected {version}'**
-  String appBarConnectedWithVersion(String version);
-
-  /// No description provided for @appBarConnecting.
-  ///
-  /// In en, this message translates to:
-  /// **'connecting'**
-  String get appBarConnecting;
-
-  /// No description provided for @appBarReconnecting.
-  ///
-  /// In en, this message translates to:
-  /// **'reconnecting'**
-  String get appBarReconnecting;
-
-  /// No description provided for @appBarDisconnected.
-  ///
-  /// In en, this message translates to:
-  /// **'disconnected'**
-  String get appBarDisconnected;
-
-  /// Localized screen copy.
-  ///
-  /// In en, this message translates to:
-  /// **'connected {version}'**
-  String connectionBannerConnected(String version);
-
-  /// No description provided for @connectionBannerConnecting.
-  ///
-  /// In en, this message translates to:
-  /// **'connecting'**
-  String get connectionBannerConnecting;
-
-  /// No description provided for @connectionBannerReconnecting.
-  ///
-  /// In en, this message translates to:
-  /// **'reconnecting'**
-  String get connectionBannerReconnecting;
-
-  /// No description provided for @connectionBannerDisconnected.
-  ///
-  /// In en, this message translates to:
-  /// **'disconnected'**
-  String get connectionBannerDisconnected;
+  /// **'v{version}'**
+  String backendVersion(String version);
 
   /// No description provided for @outlineTooltip.
   ///

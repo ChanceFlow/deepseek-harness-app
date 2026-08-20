@@ -5,7 +5,6 @@ library;
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -16,7 +15,7 @@ import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
-import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'dart:async';
@@ -85,9 +84,7 @@ const _catalog = SessionModels(
 );
 
 ChatUiState _state({
-  ConnectionPhase phase = ConnectionPhase.connected,
   List<JobView> jobs = const <JobView>[],
-  String version = '1.2.3',
   List<SessionSummary> sessions = const <SessionSummary>[],
   List<WorkspaceSummary> workspaces = const <WorkspaceSummary>[],
   List<TimelineItem> timeline = const <TimelineItem>[],
@@ -99,10 +96,6 @@ ChatUiState _state({
   String? errorMessage,
 }) {
   return ChatUiState(
-    connection: ConnectionState(
-      phase: phase,
-      hostDescription: HostDescription(version: version, cwd: '/tmp'),
-    ),
     sessions: sessions,
     workspaces: workspaces,
     timeline: timeline,
@@ -145,7 +138,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('connection banner shows phase and host version', (tester) async {
+  testWidgets('chat surface shows no persistent connection status', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -154,17 +149,11 @@ void main() {
       ),
       actions,
     );
-    expect(find.text('connected 1.2.3'), findsOneWidget);
-
-    await _pump(
-      tester,
-      _state(
-        phase: ConnectionPhase.reconnecting,
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha')],
-      ),
-      actions,
-    );
-    expect(find.text('reconnecting'), findsOneWidget);
+    // Connection state and host version live in the Settings Backends
+    // rows, not as a persistent line on the chat surface.
+    expect(find.textContaining('connected'), findsNothing);
+    expect(find.textContaining('connecting'), findsNothing);
+    expect(find.textContaining('v1.2.3'), findsNothing);
   });
 
   testWidgets(
@@ -375,9 +364,7 @@ void main() {
     expect(actions, contains(const SelectSession('s9')));
   });
 
-  testWidgets('app bar shows session title, connection subtitle, actions', (
-    tester,
-  ) async {
+  testWidgets('app bar shows session title, actions', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -394,7 +381,6 @@ void main() {
       find.descendant(of: find.byType(AppBar), matching: find.text('Alpha')),
       findsOneWidget,
     );
-    expect(find.text('connected 1.2.3'), findsOneWidget);
     expect(find.byTooltip('Rename session'), findsOneWidget);
     expect(find.byTooltip('Fork session'), findsOneWidget);
     expect(find.byTooltip('Archive session'), findsOneWidget);

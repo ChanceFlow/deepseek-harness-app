@@ -500,10 +500,11 @@ Future<void> _openBackendSheet(
   );
 }
 
-/// One backend row: live connection dot, label over `host:port`, the
-/// Active badge on the presented backend, and the edit affordance.
-/// Tapping a non-active row selects it (the registry guards the rest).
-class _BackendRow extends StatelessWidget {
+/// One backend row: live connection dot, label over `host:port` (with
+/// the connected host's version appended when one is known), the Active
+/// badge on the presented backend, and the edit affordance. Tapping a
+/// non-active row selects it (the registry guards the rest).
+class _BackendRow extends ConsumerWidget {
   const _BackendRow({
     required this.backend,
     required this.active,
@@ -518,10 +519,18 @@ class _BackendRow extends StatelessWidget {
   final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final ds = dsOf(context);
     final l10n = AppLocalizations.of(context)!;
+    final connection = ref
+        .watch(backendConnectionStateProvider(backend.id))
+        .value;
+    final version = connection?.hostDescription?.version ?? '';
+    final endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
+    final subtitle = version.isEmpty
+        ? endpoint
+        : '$endpoint · ${l10n.backendVersion(version)}';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -541,7 +550,7 @@ class _BackendRow extends StatelessWidget {
                     Text(backend.label, style: theme.textTheme.bodyMedium),
                     const SizedBox(height: 4),
                     Text(
-                      '${backend.baseUri.host}:${backend.baseUri.port}',
+                      subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: ds.labelTertiary,
                       ),

@@ -921,35 +921,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The parent session is offline; reopen it to continue sending messages.';
 
   @override
-  String get appBarConnected => 'connected';
-
-  @override
-  String appBarConnectedWithVersion(String version) {
-    return 'connected $version';
+  String backendVersion(String version) {
+    return 'v$version';
   }
-
-  @override
-  String get appBarConnecting => 'connecting';
-
-  @override
-  String get appBarReconnecting => 'reconnecting';
-
-  @override
-  String get appBarDisconnected => 'disconnected';
-
-  @override
-  String connectionBannerConnected(String version) {
-    return 'connected $version';
-  }
-
-  @override
-  String get connectionBannerConnecting => 'connecting';
-
-  @override
-  String get connectionBannerReconnecting => 'reconnecting';
-
-  @override
-  String get connectionBannerDisconnected => 'disconnected';
 
   @override
   String get outlineTooltip => 'Outline';
