@@ -764,7 +764,7 @@ void main() {
     );
   });
 
-  testWidgets('question drafts collect options, custom text, skip', (
+  testWidgets('question card collects options, custom text, skip, submit', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -791,15 +791,18 @@ void main() {
       actions,
     );
 
-    // Nothing drafted yet: Answer stays disabled.
-    final answerButton = find.widgetWithText(FilledButton, 'Answer').first;
-    expect(tester.widget<FilledButton>(answerButton).onPressed, isNull);
+    // Nothing drafted yet: Submit stays disabled.
+    final submitButton = find.widgetWithText(FilledButton, 'Submit').first;
+    expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
 
+    // A single-select tap enables Submit and, as the last question, does not
+    // advance the pager (progress stays 1 / 1).
     await tester.tap(find.text('yes'));
     await tester.pump();
-    expect(tester.widget<FilledButton>(answerButton).onPressed, isNotNull);
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(tester.widget<FilledButton>(submitButton).onPressed, isNotNull);
 
-    await tester.tap(answerButton);
+    await tester.tap(submitButton);
     await tester.pump();
     expect(
       actions,
@@ -813,11 +816,9 @@ void main() {
       ),
     );
 
-    // Skip answers with empty selections.
+    // Skip on the last question answers with empty selections.
     actions.clear();
-    await tester.tap(find.text('Skip'));
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Answer').first);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Skip'));
     await tester.pump();
     expect(
       actions,
@@ -828,12 +829,300 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Skipped'), findsOneWidget);
+  });
 
-    // "Answer instead" clears the skip.
-    await tester.tap(find.text('Answer instead'));
+  testWidgets('question card pages through a batch with a recommended badge', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-3',
+            questions: [
+              QuestionItem(
+                id: 'q1',
+                question: 'Pick a target',
+                options: ['Code（推荐）', 'Docs'],
+                optionDescriptions: {'Docs': 'documentation'},
+              ),
+              QuestionItem(
+                id: 'q2',
+                question: 'Anything else?',
+                multiSelect: true,
+                options: ['a', 'b'],
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // First page: the recommended suffix renders as a badge, the option
+    // number chip leads, and the pager reads 1 / 2.
+    expect(find.text('Pick a target'), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Recommended'), findsOneWidget);
+    expect(find.text('documentation'), findsOneWidget);
+    expect(find.text('Code'), findsOneWidget);
+    expect(find.text('Code（推荐）'), findsNothing);
+
+    // Single-select choose on a non-last question advances to page 2.
+    await tester.tap(find.text('Code'));
     await tester.pump();
-    expect(find.text('Skipped'), findsNothing);
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Anything else?'), findsOneWidget);
+
+    // Multi-select keeps both options; custom text preserves selections.
+    await tester.tap(find.text('a'));
+    await tester.pump();
+    await tester.tap(find.text('b'));
+    await tester.pump();
+    final customField = find.descendant(
+      of: find.byType(QuestionRow),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(customField, 'extra');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+    await tester.pump();
+    expect(
+      actions,
+      contains(
+        const AnswerQuestionAction(
+          requestId: 'rpc-3',
+          answers: [
+            QuestionAnswer(questionId: 'q1', selectedOptions: ['Code（推荐）']),
+            QuestionAnswer(
+              questionId: 'q2',
+              selectedOptions: ['a', 'b'],
+              customText: 'extra',
+            ),
+          ],
+        ),
+      ),
+    );
+  });
+
+  testWidgets('optionless question answers through the free-form field', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-4',
+            questions: [
+              QuestionItem(
+                id: 'q1',
+                question: 'Describe it',
+                detail: 'details here',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    expect(find.text('Describe it'), findsOneWidget);
+    expect(find.text('details here'), findsOneWidget);
+    final submitButton = find.widgetWithText(FilledButton, 'Submit');
+    expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
+
+    final field = find.descendant(
+      of: find.byType(QuestionRow),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(field, 'my answer');
+    await tester.pump();
+    await tester.tap(submitButton);
+    await tester.pump();
+    expect(
+      actions,
+      contains(
+        const AnswerQuestionAction(
+          requestId: 'rpc-4',
+          answers: [
+            QuestionAnswer(
+              questionId: 'q1',
+              selectedOptions: [],
+              customText: 'my answer',
+            ),
+          ],
+        ),
+      ),
+    );
+  });
+
+  testWidgets('question card dismisses the whole batch', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-5',
+            questions: [
+              QuestionItem(
+                id: 'q1',
+                question: 'Pick',
+                options: ['a', 'b'],
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    await tester.tap(find.byTooltip('Dismiss all questions'));
+    await tester.pump();
+    expect(
+      actions,
+      contains(const DismissQuestionAction(requestId: 'rpc-5')),
+    );
+  });
+
+  testWidgets('plan review renders a decision card with approve/decline/discuss',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineQuestionRequest(
+              requestId: 'rpc-6',
+              questions: [
+                QuestionItem(
+                  id: 'plan-1',
+                  question: 'Approve this plan?',
+                  detail: '## Plan\n\nStep one.',
+                  options: ['Approve', 'Keep planning'],
+                  intent: QuestionIntent(
+                    kind: 'plan-review',
+                    approve: 'Approve',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions,
+      );
+
+      // The strip header reads "Plan review"; the plan renders as markdown.
+      expect(find.text('Plan review'), findsOneWidget);
+      expect(find.textContaining('Step one'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Refuse'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Chat about it'), findsOneWidget);
+
+      // Approve answers with the asker's approve label.
+      await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
+      await tester.pump();
+      expect(
+        actions,
+        contains(
+          const AnswerQuestionAction(
+            requestId: 'rpc-6',
+            answers: [
+              QuestionAnswer(
+                questionId: 'plan-1',
+                selectedOptions: ['Approve'],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Decline answers with the other option label.
+      actions.clear();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Refuse'));
+      await tester.pump();
+      expect(
+        actions,
+        contains(
+          const AnswerQuestionAction(
+            requestId: 'rpc-6',
+            answers: [
+              QuestionAnswer(
+                questionId: 'plan-1',
+                selectedOptions: ['Keep planning'],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Discuss dismisses the request without answering.
+      actions.clear();
+      await tester.tap(find.widgetWithText(TextButton, 'Chat about it'));
+      await tester.pump();
+      expect(
+        actions,
+        contains(const DismissQuestionAction(requestId: 'rpc-6')),
+      );
+    });
+
+  testWidgets('a non-binary question batch stays in the generic flow', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-7',
+            questions: [
+              QuestionItem(
+                id: 'plan-1',
+                question: 'Pick one',
+                options: ['Approve', 'Maybe', 'No'],
+                intent: QuestionIntent(
+                  kind: 'plan-review',
+                  approve: 'Approve',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // Three options: the plan-review card cannot express them, so the
+    // generic card owns the request.
+    expect(find.text('Plan review'), findsNothing);
+    expect(find.text('Pick one'), findsOneWidget);
+    expect(find.text('Approve'), findsOneWidget);
   });
 
   testWidgets('idle composer sends queue; plan pill stays hidden while off', (

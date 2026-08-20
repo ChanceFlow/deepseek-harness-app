@@ -25,6 +25,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     required this.labelSecondary,
     required this.labelTertiary,
     required this.labelCaption,
+    required this.bgOverlay,
+    required this.borderL4,
+    required this.labelPrimaryForeground,
+    required this.bgModulePlatform,
     required this.markdownCodeBlock,
     required this.stateSuccessPrimary,
     required this.stateBusinessPrimary,
@@ -69,6 +73,18 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
   final Color labelSecondary;
   final Color labelTertiary;
   final Color labelCaption;
+
+  /// `--dsw-alias-bg-overlay` — option-number chip fill in the question card.
+  final Color bgOverlay;
+
+  /// `--dsw-alias-border-l4` — question-card checkbox stroke.
+  final Color borderL4;
+
+  /// `--dsw-alias-label-primary-foreground` — check glyph on the checkbox fill.
+  final Color labelPrimaryForeground;
+
+  /// `--dsw-alias-bg-module-platform` — optionless question textarea surface.
+  final Color bgModulePlatform;
 
   /// `--dsw-alias-markdown-code-block` — tool IN/OUT card surface.
   final Color markdownCodeBlock;
@@ -136,6 +152,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     labelSecondary: DeepSuiteLight.aliasLabelSecondary,
     labelTertiary: DeepSuiteLight.aliasLabelTertiary,
     labelCaption: DeepSuiteLight.aliasLabelCaption,
+    bgOverlay: DeepSuiteLight.aliasBgOverlay,
+    borderL4: DeepSuiteLight.aliasBorderL4,
+    labelPrimaryForeground: DeepSuiteLight.aliasLabelPrimaryForeground,
+    bgModulePlatform: DeepSuiteLight.aliasBgModulePlatform,
     markdownCodeBlock: DeepSuiteLight.aliasMarkdownCodeBlock,
     stateSuccessPrimary: DeepSuiteLight.aliasStateSuccessPrimary,
     stateBusinessPrimary: DeepSuiteLight.aliasStateBusinessPrimary,
@@ -174,6 +194,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     labelSecondary: DeepSuiteDark.aliasLabelSecondary,
     labelTertiary: DeepSuiteDark.aliasLabelTertiary,
     labelCaption: DeepSuiteDark.aliasLabelCaption,
+    bgOverlay: DeepSuiteDark.aliasBgOverlay,
+    borderL4: DeepSuiteDark.aliasBorderL4,
+    labelPrimaryForeground: DeepSuiteDark.aliasLabelPrimaryForeground,
+    bgModulePlatform: DeepSuiteDark.aliasBgModulePlatform,
     markdownCodeBlock: DeepSuiteDark.aliasMarkdownCodeBlock,
     stateSuccessPrimary: DeepSuiteDark.aliasStateSuccessPrimary,
     stateBusinessPrimary: DeepSuiteDark.aliasStateBusinessPrimary,
@@ -212,6 +236,10 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
     Color? labelSecondary,
     Color? labelTertiary,
     Color? labelCaption,
+    Color? bgOverlay,
+    Color? borderL4,
+    Color? labelPrimaryForeground,
+    Color? bgModulePlatform,
     Color? markdownCodeBlock,
     Color? stateSuccessPrimary,
     Color? stateBusinessPrimary,
@@ -249,6 +277,11 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: labelSecondary ?? this.labelSecondary,
       labelTertiary: labelTertiary ?? this.labelTertiary,
       labelCaption: labelCaption ?? this.labelCaption,
+      bgOverlay: bgOverlay ?? this.bgOverlay,
+      borderL4: borderL4 ?? this.borderL4,
+      labelPrimaryForeground:
+          labelPrimaryForeground ?? this.labelPrimaryForeground,
+      bgModulePlatform: bgModulePlatform ?? this.bgModulePlatform,
       markdownCodeBlock: markdownCodeBlock ?? this.markdownCodeBlock,
       stateSuccessPrimary: stateSuccessPrimary ?? this.stateSuccessPrimary,
       stateBusinessPrimary: stateBusinessPrimary ?? this.stateBusinessPrimary,
@@ -303,6 +336,18 @@ class DeepSuiteColors extends ThemeExtension<DeepSuiteColors> {
       labelSecondary: Color.lerp(labelSecondary, other.labelSecondary, t)!,
       labelTertiary: Color.lerp(labelTertiary, other.labelTertiary, t)!,
       labelCaption: Color.lerp(labelCaption, other.labelCaption, t)!,
+      bgOverlay: Color.lerp(bgOverlay, other.bgOverlay, t)!,
+      borderL4: Color.lerp(borderL4, other.borderL4, t)!,
+      labelPrimaryForeground: Color.lerp(
+        labelPrimaryForeground,
+        other.labelPrimaryForeground,
+        t,
+      )!,
+      bgModulePlatform: Color.lerp(
+        bgModulePlatform,
+        other.bgModulePlatform,
+        t,
+      )!,
       markdownCodeBlock: Color.lerp(
         markdownCodeBlock,
         other.markdownCodeBlock,

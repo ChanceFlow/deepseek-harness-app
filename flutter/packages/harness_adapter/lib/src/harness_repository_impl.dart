@@ -519,6 +519,22 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<void> cancelQuestions(String requestId, String sessionId) async {
+    await _rpcClient.respond(
+      requestId,
+      RpcResult(
+        ok: false,
+        value: <String, Object?>{'sessionId': sessionId},
+        error: RpcError(
+          code: 'cancelled',
+          message: 'the user closed this question request',
+          details: <String, Object?>{},
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<String> renameSession(String sessionId, String title) async {
     final result = await _call(_sessionRename, _sessionRename, {
       'sessionId': sessionId,

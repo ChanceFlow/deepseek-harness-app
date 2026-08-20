@@ -530,6 +530,21 @@ void main() {
     expect((firstAnswer['selected'] as List).length, 0);
   });
 
+  test('cancelled question responds with the cancelled error envelope', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.cancelQuestions('rpc-question', 'session-1');
+
+    final received = rpc.receivedResponses().single;
+    expect(received.$1, 'rpc-question');
+    final result = received.$2;
+    expect(result.ok, isFalse);
+    expect(result.error?.code, 'cancelled');
+    expect(result.value?['sessionId'], 'session-1');
+  });
+
   test('goal edit sends objective with cas ref', () async {
     final rpc = HarnessFakeRpc();
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());

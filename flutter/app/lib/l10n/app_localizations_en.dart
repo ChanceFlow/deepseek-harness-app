@@ -1080,6 +1080,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get skip => 'Skip';
 
   @override
+  String get questionPrev => 'Previous question';
+
+  @override
+  String get questionNext => 'Next question';
+
+  @override
+  String get questionCancel => 'Dismiss all questions';
+
+  @override
+  String get questionRecommended => 'Recommended';
+
+  @override
+  String get questionErrorIncomplete => 'Please complete this question first.';
+
+  @override
+  String get questionErrorUnanswered =>
+      'Please select an option or enter a custom answer.';
+
+  @override
+  String get questionSubmit => 'Submit';
+
+  @override
+  String get questionSubmitNext => 'Next';
+
+  @override
+  String get planApprove => 'Approve';
+
+  @override
+  String get planDecline => 'Refuse';
+
+  @override
+  String get planDiscuss => 'Chat about it';
+
+  @override
   String get planPlaceholder => 'describe your task to generate plan';
 
   @override

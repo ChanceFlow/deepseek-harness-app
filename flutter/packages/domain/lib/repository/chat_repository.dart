@@ -155,6 +155,11 @@ abstract class ChatRepository {
 
   Future<void> answerQuestions(String requestId, QuestionEvidence evidence);
 
+  /// Dismiss a pending question request without answering; the host resolves
+  /// the asker's call as cancelled.
+  Future<void> cancelQuestions(String requestId, String sessionId) =>
+      _unsupported('cancelQuestions');
+
   Stream<List<WorkspaceSummary>> observeWorkspaces();
 
   /// Registry-global archive set mirrored from `workspace.list` and host

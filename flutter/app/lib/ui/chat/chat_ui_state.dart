@@ -254,6 +254,21 @@ final class AnswerQuestionAction extends ChatAction {
   int get hashCode => Object.hash(requestId, Object.hashAll(answers));
 }
 
+/// Dismiss a pending question request without answering; the host resolves
+/// the asker's call as cancelled.
+final class DismissQuestionAction extends ChatAction {
+  const DismissQuestionAction({required this.requestId});
+
+  final String requestId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DismissQuestionAction && other.requestId == requestId;
+
+  @override
+  int get hashCode => Object.hash('dismiss-question', requestId);
+}
+
 final class SearchSessions extends ChatAction {
   const SearchSessions(this.query);
 

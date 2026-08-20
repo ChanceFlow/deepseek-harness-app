@@ -236,6 +236,8 @@ class ChatController {
         _respondApproval(action);
       case AnswerQuestionAction():
         _answerQuestion(action);
+      case DismissQuestionAction():
+        _dismissQuestion(action);
       case SearchSessions():
         _searchSessions(action.query);
       case ArchiveSession():
@@ -776,6 +778,16 @@ class ChatController {
           action.requestId,
           QuestionEvidence(sessionId: sessionId, answers: action.answers),
         ),
+      ),
+    );
+  }
+
+  void _dismissQuestion(DismissQuestionAction action) {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.cancelQuestions(action.requestId, sessionId),
       ),
     );
   }
