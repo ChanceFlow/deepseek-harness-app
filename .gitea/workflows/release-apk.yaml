@@ -4,7 +4,8 @@
 #   2. a Gitea Release attachment, on v* tag pushes.
 # Runs on the prebaked `flutter-android` runner label built by
 # docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 + dependency
-# caches from the host toolchain — no SDK or maven downloads per run).
+# caches the image warms itself from the committed workspace — no SDK or
+# maven downloads per run).
 # Tooling contract lives in the process note
 # .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
 name: Release APK
