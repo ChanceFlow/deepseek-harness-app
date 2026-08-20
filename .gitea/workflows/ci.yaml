@@ -12,25 +12,37 @@ on:
   push:
     branches: ["*"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     env:
       # Egress (Flutter SDK download, pub) goes through the LAN proxy from
-      # the repo variable EGRESS_PROXY; Gitea itself and the submodule URL
-      # (127.0.0.1:3000) must bypass it.
+      # the repo variable EGRESS_PROXY; Gitea itself, the submodule URL
+      # (127.0.0.1:3000) and the runner cache server (runner:3899,
+      # used by actions/cache below) must bypass it.
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
-      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1
-      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1
+      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
+      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      # Pub deps (~/.pub-cache) survive runs; keyed on the lockfile so a
+      # dependency bump saves a fresh entry while older ones still restore
+      # via the prefix fallback.
+      - name: Restore pub cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-v1-${{ hashFiles('flutter/pubspec.lock') }}
+          restore-keys: pub-v1-
 
       - name: Set up Flutter 3.47 stable
         uses: subosito/flutter-action@v2
