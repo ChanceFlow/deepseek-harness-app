@@ -2,6 +2,7 @@
 /// centered, ellipsized row of pipe-separated groups above the composer.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:flutter/material.dart';
 
@@ -47,34 +48,45 @@ class StatsLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final groups = <String>[];
     if (stats.steps > 0) {
-      groups.add('${stats.turns} turns · ${stats.steps} steps');
+      groups.add(l10n.statsTurnsSteps(stats.turns, stats.steps));
       final durations = <String>[];
-      if (stats.llmMs > 0) durations.add('LLM ${formatDuration(stats.llmMs)}');
+      if (stats.llmMs > 0) {
+        durations.add(l10n.statsLlmDuration(formatDuration(stats.llmMs)));
+      }
       if (stats.toolMs > 0) {
-        durations.add('Tool call ${formatDuration(stats.toolMs)}');
+        durations.add(
+          l10n.statsToolDuration(formatDuration(stats.toolMs)),
+        );
       }
       if (durations.isNotEmpty) groups.add(durations.join(' · '));
       final speeds = <String>[];
       if (stats.ttftSteps > 0) {
         speeds.add(
-          'TTFT avg ${formatDuration(stats.ttftMs ~/ stats.ttftSteps)}',
+          l10n.statsTtftAvg(
+            formatDuration(stats.ttftMs ~/ stats.ttftSteps),
+          ),
         );
       }
       if (stats.decodeMs > 0) {
         speeds.add(
-          '${formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1000))} tok/s',
+          l10n.statsTokensPerSecond(
+            formatTokensPerSecond(
+              stats.decodeTokens / (stats.decodeMs / 1000),
+            ),
+          ),
         );
       }
       if (speeds.isNotEmpty) groups.add(speeds.join(' · '));
     }
     if (stats.billedInputTokens > 0 || stats.outputTokens > 0) {
       final cacheHit = stats.cacheHitPercent;
-      if (cacheHit != null) groups.add('Cache hit $cacheHit%');
+      if (cacheHit != null) groups.add(l10n.statsCacheHit(cacheHit));
       groups.add(
-        'Input ${formatTokens(stats.billedInputTokens)} tok · '
-        'Output ${formatTokens(stats.outputTokens)} tok',
+        '${l10n.statsInputTokens(formatTokens(stats.billedInputTokens))} · '
+        '${l10n.statsOutputTokens(formatTokens(stats.outputTokens))}',
       );
     }
     if (groups.isEmpty) return const SizedBox.shrink();
@@ -83,7 +95,7 @@ class StatsLine extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.only(top: 4, bottom: 2),
         child: Text(
-          groups.join(' | '),
+          groups.join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,

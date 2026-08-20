@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 
@@ -31,23 +32,24 @@ List<JobView> orderedJobs(List<JobView> jobs) {
 }
 
 /// Elapsed in at most two adjacent units (web formatDuration).
-String formatJobDuration(int elapsedMs) {
+String formatJobDuration(int elapsedMs, AppLocalizations l10n) {
   final total = elapsedMs < 0 ? 0 : elapsedMs ~/ 1000;
   final seconds = total % 60;
   final minutes = total ~/ 60 % 60;
   final hours = total ~/ 3600;
-  if (hours > 0) return '${hours}h ${minutes}m';
-  if (minutes > 0) return '${minutes}m ${seconds}s';
-  return '${seconds}s';
+  if (hours > 0) return l10n.jobDurationHoursMinutes(hours, minutes);
+  if (minutes > 0) return l10n.jobDurationMinutesSeconds(minutes, seconds);
+  return l10n.jobDurationSeconds(seconds);
 }
 
-String _statusLabel(JobStatus status) => switch (status) {
-  JobStatus.running => 'running',
-  JobStatus.stopping => 'stopping',
-  JobStatus.completed => 'completed',
-  JobStatus.killed => 'cancelled',
-  JobStatus.failed => 'failed',
-};
+String _statusLabel(JobStatus status, AppLocalizations l10n) =>
+    switch (status) {
+      JobStatus.running => l10n.jobStatusRunning,
+      JobStatus.stopping => l10n.jobStatusStopping,
+      JobStatus.completed => l10n.jobStatusCompleted,
+      JobStatus.killed => l10n.jobStatusKilled,
+      JobStatus.failed => l10n.jobStatusFailed,
+    };
 
 class JobListAction extends StatelessWidget {
   const JobListAction({super.key, required this.jobs});
@@ -57,13 +59,12 @@ class JobListAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (jobs.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
     final liveCount = jobs.where(_isLive).length;
     final count = liveCount > 0 ? liveCount : jobs.length;
     final countLabel = liveCount > 0
-        ? (count == 1
-              ? '$count background job running'
-              : '$count background jobs running')
-        : (count == 1 ? '$count background job' : '$count background jobs');
+        ? l10n.jobCountRunning(count)
+        : l10n.jobCount(count);
     final ds = dsOf(context);
     return InkWell(
       borderRadius: BorderRadius.circular(24),
@@ -138,6 +139,7 @@ class _JobsSheetState extends State<_JobsSheet> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final rows = orderedJobs(widget.jobs);
     return SafeArea(
       child: Padding(
@@ -151,7 +153,7 @@ class _JobsSheetState extends State<_JobsSheet> {
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  'Background jobs',
+                  l10n.backgroundJobsTitle,
                   style: theme.textTheme.titleSmall,
                 ),
               ),
@@ -181,7 +183,7 @@ class _JobsSheetState extends State<_JobsSheet> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              job.detail ?? _statusLabel(job.status),
+                              job.detail ?? _statusLabel(job.status, l10n),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
@@ -190,7 +192,7 @@ class _JobsSheetState extends State<_JobsSheet> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              formatJobDuration(_elapsedMs(job)),
+                              formatJobDuration(_elapsedMs(job), l10n),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: ds.labelTertiary,
                               ),

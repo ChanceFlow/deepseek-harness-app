@@ -5,6 +5,7 @@ library;
 
 import 'dart:async';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -57,6 +58,7 @@ class _MessageIconActionsState extends State<MessageIconActions> {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     final clock = Text(
       _clock,
       style: Theme.of(context).textTheme.labelSmall
@@ -67,7 +69,7 @@ class _MessageIconActionsState extends State<MessageIconActions> {
       iconSize: 14,
       padding: const EdgeInsets.all(4),
       constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-      tooltip: _copied ? 'Copied' : 'Copy',
+      tooltip: _copied ? l10n.copiedTooltip : l10n.copyTooltip,
       onPressed: _copy,
       icon: Icon(
         _copied ? Icons.check_outlined : Icons.copy_outlined,

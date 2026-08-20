@@ -2027,6 +2027,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Queue'**
   String get queue;
+
+  /// No description provided for @thinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Think'**
+  String get thinkLabel;
 }
 
 class _AppLocalizationsDelegate

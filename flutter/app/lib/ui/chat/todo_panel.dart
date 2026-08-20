@@ -7,6 +7,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
 
@@ -14,7 +15,7 @@ import '../theme/deepsuite_extension.dart';
 
 /// Web `progressLabel`: "·"-joined per-status counts; zero-count segments
 /// drop out as noise (a non-empty list keeps at least one).
-String todoProgressLabel(List<TodoItem> todos) {
+String todoProgressLabel(List<TodoItem> todos, AppLocalizations l10n) {
   final done = todos
       .where((item) => item.status == TodoStatus.completed)
       .length;
@@ -23,9 +24,9 @@ String todoProgressLabel(List<TodoItem> todos) {
       .length;
   final pending = todos.length - done - active;
   return [
-    if (done > 0) '$done completed',
-    if (active > 0) '$active active',
-    if (pending > 0) '$pending pending',
+    if (done > 0) l10n.todoCountDone(done),
+    if (active > 0) l10n.todoCountActive(active),
+    if (pending > 0) l10n.todoCountPending(pending),
   ].join(' · ');
 }
 
@@ -124,6 +125,7 @@ class _TodoPanelState extends State<TodoPanel> {
     if (widget.todos.isEmpty) return const SizedBox.shrink();
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
@@ -151,11 +153,11 @@ class _TodoPanelState extends State<TodoPanel> {
                     children: [
                       Icon(Icons.checklist, size: 14, color: ds.labelSecondary),
                       const SizedBox(width: 6),
-                      Text('To-dos', style: theme.textTheme.bodySmall),
+                      Text(l10n.todosLabel, style: theme.textTheme.bodySmall),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          todoProgressLabel(widget.todos),
+                          todoProgressLabel(widget.todos, l10n),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(

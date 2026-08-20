@@ -564,5 +564,6 @@
   "chatGoalPhaseActive": "Active",
   "chatGoalPhasePaused": "Paused",
   "chatGoalPhaseBlocked": "Blocked",
-  "queue": "Queue"
+  "queue": "Queue",
+  "thinkLabel": "Think"
 }

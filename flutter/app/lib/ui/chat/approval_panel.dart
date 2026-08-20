@@ -4,6 +4,7 @@
 /// and right-aligned Reject / Allow once actions.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
@@ -24,6 +25,7 @@ class ApprovalPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: ds.inputMajor,
@@ -53,7 +55,7 @@ class ApprovalPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Waiting for approval',
+                  l10n.waitingForApproval,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: ds.warnPrimary,
                   ),
@@ -67,11 +69,12 @@ class ApprovalPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.reason ?? 'Approve tool: ${request.toolName}',
+                  request.reason ??
+                      l10n.approveToolFallback(request.toolName),
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(
-                  'Tool ${request.toolName} requests privileged execution',
+                  l10n.toolRequestsPrivileged(request.toolName),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: ds.labelSecondary,
                   ),
@@ -92,7 +95,7 @@ class ApprovalPanel extends StatelessWidget {
                       allowed: false,
                     ),
                   ),
-                  child: const Text('Reject'),
+                  child: Text(l10n.reject),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
@@ -103,7 +106,7 @@ class ApprovalPanel extends StatelessWidget {
                       allowed: true,
                     ),
                   ),
-                  child: const Text('Allow once'),
+                  child: Text(l10n.allowOnce),
                 ),
               ],
             ),

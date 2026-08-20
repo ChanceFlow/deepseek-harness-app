@@ -1156,4 +1156,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get queue => 'Queue';
+
+  @override
+  String get thinkLabel => 'Think';
 }

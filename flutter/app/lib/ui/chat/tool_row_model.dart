@@ -7,6 +7,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart' show IconData, Icons;
 
@@ -14,16 +15,17 @@ import 'package:flutter/material.dart' show IconData, Icons;
 /// `ToolRowVariant`).
 enum ToolRowVariant { search, read, bash, write, edit, code, others }
 
-/// Figma row titles per variant (design literals, not translatable copy).
-const Map<ToolRowVariant, String> kVariantTitles = <ToolRowVariant, String>{
-  ToolRowVariant.search: 'Search',
-  ToolRowVariant.read: 'Read',
-  ToolRowVariant.bash: 'Bash',
-  ToolRowVariant.write: 'Write',
-  ToolRowVariant.edit: 'Edit',
-  ToolRowVariant.code: 'Code',
-  ToolRowVariant.others: 'Tool call',
-};
+/// Figma row titles per variant, localized.
+Map<ToolRowVariant, String> variantTitles(AppLocalizations l10n) =>
+    <ToolRowVariant, String>{
+      ToolRowVariant.search: l10n.toolSearchTitle,
+      ToolRowVariant.read: l10n.toolReadTitle,
+      ToolRowVariant.bash: l10n.toolBashTitle,
+      ToolRowVariant.write: l10n.toolWriteTitle,
+      ToolRowVariant.edit: l10n.toolEditTitle,
+      ToolRowVariant.code: l10n.toolCodeTitle,
+      ToolRowVariant.others: l10n.toolCallTitle,
+    };
 
 /// Known tool name → variant (web `TOOL_VARIANTS`).
 const Map<String, ToolRowVariant> _toolVariants = <String, ToolRowVariant>{
@@ -47,14 +49,14 @@ const Map<String, ToolRowVariant> _toolVariants = <String, ToolRowVariant>{
 };
 
 /// Tool-owned titles that refine a generic row variant without replacing
-/// it (web `TOOL_TITLES`).
-const Map<String, String> _toolTitles = <String, String>{
-  'cordis_package_inspect': 'Inspect',
-  'cordis_runtime_inspect': 'Inspect',
-  'cordis_run': 'Run Cordis Plugin',
-  'cordis_stop': 'Stop Cordis Plugin',
-  'cordis_undefine': 'Remove Cordis Plugin',
-  'pwsh': 'Pwsh',
+/// it (web `TOOL_TITLES`), localized.
+Map<String, String> _toolTitles(AppLocalizations l10n) => <String, String>{
+  'cordis_package_inspect': l10n.toolInspectTitle,
+  'cordis_runtime_inspect': l10n.toolInspectTitle,
+  'cordis_run': l10n.toolRunCordisPlugin,
+  'cordis_stop': l10n.toolStopCordisPlugin,
+  'cordis_undefine': l10n.toolRemoveCordisPlugin,
+  'pwsh': l10n.toolPwshTitle,
 };
 
 /// Summary key preference per variant (args-derived; result-derived
@@ -218,11 +220,11 @@ enum ToolRowState { running, ok, error }
 
 /// Derive the full row model from one timeline tool call (web
 /// `toolRowModel`).
-ToolRowModel deriveToolRowModel(TimelineToolCall call) {
+ToolRowModel deriveToolRowModel(TimelineToolCall call, AppLocalizations l10n) {
   final variant = classifyTool(call.name);
   final argsRaw = call.arguments ?? '';
   final base = argsRaw.isEmpty ? call.id : _deriveSummary(variant, argsRaw);
-  final toolTitle = _toolTitles[call.name];
+  final toolTitle = _toolTitles(l10n)[call.name];
   // Others keeps the static "Tool call" title (figma literal); the real
   // tool name rides the mutable summary slot unless the tool owns a
   // specific title.
@@ -232,13 +234,13 @@ ToolRowModel deriveToolRowModel(TimelineToolCall call) {
           toolTitle == null
       ? '${call.name} · $base'
       : base;
-  var title = toolTitle ?? kVariantTitles[variant]!;
+  var title = toolTitle ?? variantTitles(l10n)[variant]!;
   String? summarySuffix;
   IconData? leading;
   // todo_write carries a product row (web todo-row.tsx): the checklist
   // glyph, a dedicated title, and the plan summary from the args.
   if (call.name == 'todo_write') {
-    title = 'Update to-do list';
+    title = l10n.toolUpdateTodoTitle;
     leading = Icons.checklist;
     final parsed = _parseArgs(argsRaw);
     final todosRaw = parsed is Map<String, Object?> ? parsed['todos'] : null;
@@ -246,7 +248,7 @@ ToolRowModel deriveToolRowModel(TimelineToolCall call) {
         todosRaw.every((item) => item is Map<String, Object?>)) {
       final todos = todosRaw.cast<Map<String, Object?>>();
       final plan = _planSummary(todos);
-      final head = '${plan.done}/${plan.total} completed';
+      final head = l10n.toolTodoPlanCompleted(plan.done, plan.total);
       summary = plan.activeContent == null
           ? head
           : '$head · ${plan.activeContent}';

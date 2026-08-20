@@ -1,6 +1,7 @@
 /// Goal screen — Flutter port of the legacy GoalScreen.kt.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/goal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,13 +34,15 @@ class GoalRoute extends ConsumerWidget {
   }
 }
 
-/// Kotlin enum toString renders the declaration name (uppercase).
-String goalPhaseLabel(GoalPhase phase) => switch (phase) {
-  GoalPhase.active => 'ACTIVE',
-  GoalPhase.paused => 'PAUSED',
-  GoalPhase.blocked => 'BLOCKED',
-  GoalPhase.complete => 'COMPLETE',
-};
+/// Phase label rendered under the objective; wire phase names map to
+/// localized copy.
+String goalPhaseLabel(GoalPhase phase, AppLocalizations l10n) =>
+    switch (phase) {
+      GoalPhase.active => l10n.goalPhaseActive,
+      GoalPhase.paused => l10n.goalPhasePaused,
+      GoalPhase.blocked => l10n.goalPhaseBlocked,
+      GoalPhase.complete => l10n.goalPhaseComplete,
+    };
 
 class GoalScreen extends StatefulWidget {
   const GoalScreen({super.key, required this.uiState, required this.onAction});
@@ -81,9 +84,10 @@ class _GoalScreenState extends State<GoalScreen> {
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final goal = uiState.goal;
     return Scaffold(
-      appBar: AppBar(title: const Text('Goal')),
+      appBar: AppBar(title: Text(l10n.goalTitle)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -95,13 +99,14 @@ class _GoalScreenState extends State<GoalScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Session', style: theme.textTheme.labelLarge),
+                    child: Text(l10n.sessionLabel,
+                        style: theme.textTheme.labelLarge),
                   ),
                   OutlinedButton(
                     onPressed: uiState.selectedSessionId != null
                         ? () => widget.onAction(const RefreshGoalAction())
                         : null,
-                    child: const Text('Refresh'),
+                    child: Text(l10n.refresh),
                   ),
                 ],
               ),
@@ -126,11 +131,11 @@ class _GoalScreenState extends State<GoalScreen> {
               ),
               const SizedBox(height: 12),
               if (goal == null) ...[
-                Text('No current goal', style: theme.textTheme.titleSmall),
+                Text(l10n.noCurrentGoal, style: theme.textTheme.titleSmall),
                 TextField(
                   controller: _objectiveController,
-                  decoration: const InputDecoration(
-                    hintText: 'Goal objective',
+                  decoration: InputDecoration(
+                    hintText: l10n.goalObjectiveHint,
                     isDense: true,
                   ),
                   onChanged: (_) => setState(() {}),
@@ -140,8 +145,8 @@ class _GoalScreenState extends State<GoalScreen> {
                     Expanded(
                       child: TextField(
                         controller: _maxRoundsController,
-                        decoration: const InputDecoration(
-                          hintText: 'Max goal rounds (optional)',
+                        decoration: InputDecoration(
+                          hintText: l10n.maxGoalRoundsHint,
                           isDense: true,
                         ),
                         onChanged: (text) {
@@ -166,7 +171,7 @@ class _GoalScreenState extends State<GoalScreen> {
                                 ),
                               )
                             : null,
-                        child: const Text('Create'),
+                        child: Text(l10n.create),
                       ),
                     ),
                   ],
@@ -182,14 +187,19 @@ class _GoalScreenState extends State<GoalScreen> {
 
   List<Widget> _goalBody(BuildContext context, GoalProjection goal) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final snapshot = goal.goal;
     final editing = _editingObjective;
     if (editing == null) {
       return [
         Text(snapshot.objective, style: theme.textTheme.titleMedium),
         Text(
-          '${goalPhaseLabel(snapshot.phase)} · revision ${snapshot.revision} · '
-          'rounds ${goal.roundsStarted}/${snapshot.maxGoalRounds}',
+          l10n.goalStatusLine(
+            goalPhaseLabel(snapshot.phase, l10n),
+            snapshot.revision,
+            goal.roundsStarted,
+            snapshot.maxGoalRounds,
+          ),
           style: theme.textTheme.bodySmall,
         ),
         Wrap(
@@ -197,15 +207,15 @@ class _GoalScreenState extends State<GoalScreen> {
             switch (snapshot.phase) {
               GoalPhase.active => FilledButton(
                 onPressed: () => widget.onAction(const PauseGoalAction()),
-                child: const Text('Pause'),
+                child: Text(l10n.pause),
               ),
               GoalPhase.paused || GoalPhase.blocked => FilledButton(
                 onPressed: () => widget.onAction(const ResumeGoalAction()),
-                child: const Text('Resume'),
+                child: Text(l10n.resume),
               ),
               GoalPhase.complete => FilledButton(
                 onPressed: () => widget.onAction(const ClearGoalAction()),
-                child: const Text('Clear'),
+                child: Text(l10n.clear),
               ),
             },
             if (snapshot.phase != GoalPhase.complete)
@@ -213,7 +223,7 @@ class _GoalScreenState extends State<GoalScreen> {
                 padding: const EdgeInsets.only(left: 8),
                 child: OutlinedButton(
                   onPressed: () => widget.onAction(const CompleteGoalAction()),
-                  child: const Text('Complete'),
+                  child: Text(l10n.complete),
                 ),
               ),
             if (snapshot.phase != GoalPhase.complete)
@@ -224,7 +234,7 @@ class _GoalScreenState extends State<GoalScreen> {
                     _editController.text = snapshot.objective;
                     _editingObjective = snapshot.objective;
                   }),
-                  child: const Text('Edit'),
+                  child: Text(l10n.edit),
                 ),
               ),
             // Deleting works from any phase (web GoalBar trash /
@@ -234,7 +244,7 @@ class _GoalScreenState extends State<GoalScreen> {
                 padding: const EdgeInsets.only(left: 8),
                 child: OutlinedButton(
                   onPressed: () => widget.onAction(const ClearGoalAction()),
-                  child: const Text('Clear'),
+                  child: Text(l10n.clear),
                 ),
               ),
           ],
@@ -244,8 +254,8 @@ class _GoalScreenState extends State<GoalScreen> {
     return [
       TextField(
         controller: _editController,
-        decoration: const InputDecoration(
-          labelText: 'Goal objective',
+        decoration: InputDecoration(
+          labelText: l10n.goalObjectiveHint,
           isDense: true,
         ),
         onChanged: (text) => setState(() => _editingObjective = text),
@@ -259,13 +269,13 @@ class _GoalScreenState extends State<GoalScreen> {
                     setState(() => _editingObjective = null);
                   }
                 : null,
-            child: const Text('Save'),
+            child: Text(l10n.save),
           ),
           Padding(
             padding: const EdgeInsets.only(left: 8),
             child: OutlinedButton(
               onPressed: () => setState(() => _editingObjective = null),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
           ),
         ],

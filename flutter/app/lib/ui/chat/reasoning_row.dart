@@ -4,6 +4,7 @@
 /// the full reasoning body. The streaming tail shows a sweeping highlight.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/deepsuite_extension.dart';
@@ -68,8 +69,9 @@ class _ReasoningRowState extends State<ReasoningRow>
     final ds = dsOf(context);
     final reduced = MediaQuery.disableAnimationsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Semantics(
-      label: widget.running ? 'Running' : null,
+      label: widget.running ? l10n.semanticsRunning : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -93,7 +95,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Think',
+                        l10n.thinkLabel,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: ds.labelSecondary,
                         ),

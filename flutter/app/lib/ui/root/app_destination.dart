@@ -5,20 +5,27 @@
 /// switch destinations without a callback chain.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 
 enum AppDestination {
-  chat('Chat', Icons.chat_bubble_outline),
-  workspaces('Workspaces', Icons.folder_outlined),
-  settings('Settings', Icons.settings_outlined);
+  chat(Icons.chat_bubble_outline),
+  workspaces(Icons.folder_outlined),
+  settings(Icons.settings_outlined);
 
-  const AppDestination(this.label, this.icon);
+  const AppDestination(this.icon);
 
-  final String label;
   final IconData icon;
+
+  /// Bottom-navigation label, localized.
+  String label(AppLocalizations l10n) => switch (this) {
+    AppDestination.chat => l10n.destinationChat,
+    AppDestination.workspaces => l10n.destinationWorkspaces,
+    AppDestination.settings => l10n.destinationSettings,
+  };
 }
 
 /// Local state store key: the selected [AppDestination]'s `index`.

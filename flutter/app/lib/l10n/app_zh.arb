@@ -319,5 +319,6 @@
   "chatGoalPhaseActive": "进行中",
   "chatGoalPhasePaused": "已暂停",
   "chatGoalPhaseBlocked": "受阻",
-  "queue": "排队"
+  "queue": "排队",
+  "thinkLabel": "思考"
 }

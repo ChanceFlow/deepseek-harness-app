@@ -1131,4 +1131,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get queue => '排队';
+
+  @override
+  String get thinkLabel => '思考';
 }
