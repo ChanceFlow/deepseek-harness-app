@@ -487,7 +487,7 @@ class ChatController {
     final token = boundary == -1 ? text : text.substring(0, boundary);
     final name = token.substring(1);
     if (name.isEmpty) return null;
-    for (final command in kHostCommands) {
+    for (final command in kHostCommandNames) {
       if (command.name != name) continue;
       // A bare-only command (no input hint) with args rides the prompt
       // channel (web: `if (!bare) return undefined`).

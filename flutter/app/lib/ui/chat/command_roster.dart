@@ -21,6 +21,22 @@ final class HostCommand {
   final String? hint;
 }
 
+/// The built-in command roster, names and input hints only — the wire
+/// membership check the controller performs (names and hints mirror host
+/// syntax verbatim, never localized; the localized descriptions live in
+/// [hostCommands]).
+const List<HostCommand> kHostCommandNames = <HostCommand>[
+  HostCommand('plan', '', '[off|message]'),
+  HostCommand(
+    'goal',
+    '',
+    '[<objective>|clear|edit <objective>|pause|resume]',
+  ),
+  HostCommand('compact', '', null),
+  HostCommand('permission', '', '<preset>'),
+  HostCommand('feedback', '', '<text>'),
+];
+
 /// The built-in command roster; descriptions are localized, the input
 /// hints mirror host syntax verbatim.
 List<HostCommand> hostCommands(AppLocalizations l10n) => <HostCommand>[
