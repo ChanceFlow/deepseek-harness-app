@@ -81,6 +81,12 @@ class WorkspaceController {
             () => _repository.deleteWorkspace(action.workspaceId),
           ),
         );
+      case ArchiveWorkspaceAction():
+        unawaited(_archiveWorkspace(action.workspaceId));
+      case ArchiveSessionAction():
+        unawaited(
+          _runCatchingForUi(() => _repository.archiveSession(action.sessionId)),
+        );
       case MoveWorkspaceUpAction():
         _move(action.workspaceId, up: true);
       case MoveWorkspaceDownAction():
@@ -268,6 +274,18 @@ class WorkspaceController {
         _publish();
       }
     }());
+  }
+
+  /// Archive every session accounted under the workspace. The web has no
+  /// workspace-level archive RPC; each accounted session is archived
+  /// individually (idempotent), so a partial failure surfaces in the
+  /// shared error strip and the rest still archives.
+  Future<void> _archiveWorkspace(String workspaceId) async {
+    final workspace = _workspaceById(workspaceId);
+    if (workspace == null) return;
+    for (final sessionId in workspace.sessionIds) {
+      await _runCatchingForUi(() => _repository.archiveSession(sessionId));
+    }
   }
 
   Future<T?> _runCatchingForUi<T>(Future<T> Function() block) async {

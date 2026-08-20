@@ -507,6 +507,8 @@
   "archiveSession": "Archive session",
   "archiveSessionBody": "The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.",
   "archive": "Archive",
+  "archiveWorkspace": "Archive workspace",
+  "archiveWorkspaceConfirm": "Archive every session in “{name}”? The workspace and its session logs are kept; the sessions disappear from all grouping surfaces.",
   "expandAll": "Expand all",
   "planBadge": "Plan",
   "imagePlaceholderSuffix": " · {name}",

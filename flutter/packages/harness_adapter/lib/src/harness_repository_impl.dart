@@ -111,6 +111,23 @@ class HarnessRepositoryImpl implements ChatRepository {
   final StateStream<Set<String>> _archivedSessionIds = StateStream<Set<String>>(
     <String>{},
   );
+  /// Registry-global pending-interaction mirror: session id -> the
+  /// outstanding user-wait status (approval / plan-review / question).
+  /// Fed from the raw approval/question frame stream BEFORE the per-session
+  /// fan-out, so sessions never instantiated in the app still light the
+  /// sidebar's amber dot (web SessionManager parity). Cleared per
+  /// connection generation — the reopen replay re-adds still-pending
+  /// requests.
+  final StateStream<Map<String, SessionPendingInteraction>>
+      _pendingInteractions = StateStream<Map<String, SessionPendingInteraction>>(
+    const <String, SessionPendingInteraction>{},
+  );
+  /// Session id -> per-key pending status (`a:<approvalId>` /
+  /// `q:<rpcId>`); a session may wait on several interactions at once.
+  /// [StateStream.value] of [_pendingInteractions] is the last-status-per-
+  /// session projection of this map.
+  final Map<String, Map<String, SessionPendingInteraction>> _pendingBySession =
+      <String, Map<String, SessionPendingInteraction>>{};
   final StateStream<ImageLimits?> _imageLimits = StateStream<ImageLimits?>(
     null,
   );
@@ -139,12 +156,14 @@ class HarnessRepositoryImpl implements ChatRepository {
       _connectionManager.state.stream;
 
   @override
-  Stream<List<SessionSummary>> observeSessions() => combineLatest2(
+  Stream<List<SessionSummary>> observeSessions() => combineLatest3(
     _sessions.stream,
     _archivedSessionIds.stream,
-    (current, archived) => archived.isEmpty
-        ? current
-        : current.where((item) => !archived.contains(item.id)).toList(),
+    _pendingInteractions.stream,
+    (current, archived, pending) => current
+        .where((item) => !archived.contains(item.id))
+        .map((item) => _withPending(item, pending[item.id]))
+        .toList(),
   );
 
   @override
@@ -933,6 +952,12 @@ class HarnessRepositoryImpl implements ChatRepository {
           _handleProjection(frame);
           return;
         }
+        // Registry-global pending-interaction fold: tracked for every
+        // session, instantiated or not, before the per-session fan-out
+        // (web SessionManager parity — the sidebar's amber dot must light
+        // for sessions never opened here). Stable keys make replays
+        // idempotent.
+        _foldPendingFrame(frame);
         final sessionId = _frameSessionId(frame);
         if (sessionId == null) return;
         final state = _sessionStates[sessionId];
@@ -941,6 +966,116 @@ class HarnessRepositoryImpl implements ChatRepository {
       }),
     );
   }
+
+  /// Web SessionManager list-level pending fold: `approval/requested`
+  /// tracks `a:<approvalId>`, `question/requested` tracks `q:<rpcId>`
+  /// with the plan-review/question classification, and the matching
+  /// `* /resolved` frames drop the key. Replays are idempotent by key.
+  void _foldPendingFrame(ServerRequest envelope) {
+    final frame = envelope.payload;
+    switch (wireString(frame, 'type')) {
+      case 'approval/requested':
+        final sessionId = wireString(frame, 'sessionId');
+        final approvalId = wireString(frame, 'approvalId');
+        if (sessionId == null || approvalId == null) return;
+        _trackPending(
+          sessionId,
+          'a:$approvalId',
+          SessionPendingInteraction.approval,
+        );
+      case 'approval/resolved':
+        final sessionId = wireString(frame, 'sessionId');
+        final approvalId = wireString(frame, 'approvalId');
+        if (sessionId == null || approvalId == null) return;
+        _dropPending(sessionId, 'a:$approvalId');
+      case 'question/requested':
+        final sessionId = wireString(frame, 'sessionId');
+        if (sessionId == null) return;
+        _trackPending(
+          sessionId,
+          'q:${envelope.rpcId}',
+          _questionInteractionStatus(asJsonArray(frame['questions'])),
+        );
+      case 'question/resolved':
+        final sessionId = wireString(frame, 'sessionId');
+        final questionRpcId = wireString(frame, 'questionRpcId');
+        if (sessionId == null || questionRpcId == null) return;
+        _dropPending(sessionId, 'q:$questionRpcId');
+    }
+  }
+
+  /// Web SessionManager `questionInteractionStatus`: a single binary
+  /// plan-review intent routes to `plan-review`, everything else is a
+  /// plain `question`.
+  SessionPendingInteraction _questionInteractionStatus(
+    List<Object?>? questionArray,
+  ) {
+    if (questionArray == null || questionArray.length != 1) {
+      return SessionPendingInteraction.question;
+    }
+    final question = asJsonObject(questionArray[0]);
+    if (question == null) return SessionPendingInteraction.question;
+    final intent = asJsonObject(question['intent']);
+    final kind = intent == null ? null : wireString(intent, 'kind');
+    if (kind != 'plan-review' ||
+        wireString(question, 'detail') == null ||
+        wireBool(question, 'multiSelect') == true) {
+      return SessionPendingInteraction.question;
+    }
+    final options = asJsonArray(question['options']) ?? const <Object?>[];
+    if (options.length > 2) return SessionPendingInteraction.question;
+    final approve = intent == null ? null : wireString(intent, 'approve');
+    for (final option in options) {
+      final optionObj = asJsonObject(option);
+      if (optionObj == null) continue;
+      if (wireString(optionObj, 'label') == approve) {
+        return SessionPendingInteraction.planReview;
+      }
+    }
+    return SessionPendingInteraction.question;
+  }
+
+  void _trackPending(
+    String sessionId,
+    String key,
+    SessionPendingInteraction status,
+  ) {
+    final keys = _pendingBySession.putIfAbsent(
+      sessionId,
+      () => <String, SessionPendingInteraction>{},
+    );
+    if (keys[key] == status) return;
+    keys[key] = status;
+    _publishPending();
+  }
+
+  void _dropPending(String sessionId, String key) {
+    final keys = _pendingBySession[sessionId];
+    if (keys == null || keys.remove(key) == null) return;
+    if (keys.isEmpty) _pendingBySession.remove(sessionId);
+    _publishPending();
+  }
+
+  /// Re-derives the per-session last-status projection from the key map
+  /// and publishes it (list rows read the per-session status).
+  void _publishPending() {
+    _pendingInteractions.value = _projectPending();
+  }
+
+  SessionSummary _withPending(
+    SessionSummary session,
+    SessionPendingInteraction? pending,
+  ) => SessionSummary(
+    id: session.id,
+    title: session.title,
+    running: session.running,
+    blank: session.blank,
+    updatedAtEpochMs: session.updatedAtEpochMs,
+    cwd: session.cwd,
+    agentPreset: session.agentPreset,
+    origin: session.origin,
+    pendingInteraction: pending ?? session.pendingInteraction,
+  );
 
   void _handleProjection(ServerRequest frame) {
     final sessionId = _frameSessionId(frame);
@@ -1197,6 +1332,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final state in _sessionStates.values) {
         state.prepareResync();
       }
+      // New connection generation: the reopen replay re-adds still-pending
+      // approval/question frames, so the old mirror is dropped first (web
+      // SessionManager parity).
+      _pendingBySession.clear();
+      _pendingInteractions.value = const <String, SessionPendingInteraction>{};
       try {
         await refreshSessions();
         await refreshWorkspaces();
@@ -1237,7 +1377,30 @@ class HarnessRepositoryImpl implements ChatRepository {
         break;
       }
     }
+    // A session dropped from the list cannot wait on the user anymore
+    // (web manager removes pending on session-removed).
+    final liveIds = <String>{for (final session in listing) session.sessionId};
+    var pendingChanged = false;
+    for (final sessionId in _pendingBySession.keys.toList()) {
+      if (!liveIds.contains(sessionId)) {
+        _pendingBySession.remove(sessionId);
+        pendingChanged = true;
+      }
+    }
+    if (pendingChanged) {
+      _pendingInteractions.value = _projectPending();
+    }
     return listing.map(_toDomainSession).toList();
+  }
+
+  /// Re-derives the per-session last-status projection from the key map.
+  Map<String, SessionPendingInteraction> _projectPending() {
+    final next = <String, SessionPendingInteraction>{};
+    for (final entry in _pendingBySession.entries) {
+      if (entry.value.isEmpty) continue;
+      next[entry.key] = entry.value.values.last;
+    }
+    return next;
   }
 
   SessionSummary _toDomainSession(SessionWire wire) => SessionSummary(

@@ -1,6 +1,14 @@
 /// Session list vocabulary.
 library;
 
+/// A session's outstanding wait for a user action, mirrored from the
+/// registry-global pending-interaction set (the web's
+/// `PendingInteractionStatus`). Present when the host has an unanswered
+/// approval, a plan review, or a question for the user; null when nothing
+/// blocks on the user. Navigation surfaces rank sessions by this fact and
+/// light the amber status dot.
+enum SessionPendingInteraction { approval, planReview, question }
+
 final class SessionSummary {
   const SessionSummary({
     required this.id,
@@ -11,6 +19,7 @@ final class SessionSummary {
     this.cwd,
     this.agentPreset,
     this.origin,
+    this.pendingInteraction,
   });
 
   final String id;
@@ -24,6 +33,12 @@ final class SessionSummary {
   /// Coarse durable origin used by navigation surfaces; `subagent` marks a
   /// subagent child (absent for root sessions).
   final String? origin;
+
+  /// Pending user interaction (approval / plan-review / question); null
+  /// while nothing blocks on the user. A derived fact: the wire session
+  /// summary carries no such field, so it is folded from the live
+  /// approval/question frame stream (see the harness adapter).
+  final SessionPendingInteraction? pendingInteraction;
 
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.
@@ -50,7 +65,8 @@ final class SessionSummary {
       other.updatedAtEpochMs == updatedAtEpochMs &&
       other.cwd == cwd &&
       other.agentPreset == agentPreset &&
-      other.origin == origin;
+      other.origin == origin &&
+      other.pendingInteraction == pendingInteraction;
 
   @override
   int get hashCode => Object.hash(
@@ -62,6 +78,7 @@ final class SessionSummary {
     cwd,
     agentPreset,
     origin,
+    pendingInteraction,
   );
 }
 
