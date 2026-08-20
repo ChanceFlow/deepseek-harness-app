@@ -213,13 +213,64 @@ void main() {
     expect(link.url, 'https://example.com/docs');
     expect(link.label, 'https://example.com/docs');
 
-    // www. prefix normalizes to https.
+    // www. prefixes open http:// + the raw span, like the web reference.
     final www = MarkdownParser.parse('go to www.example.com now');
     final wwwLink = (www.single as ParagraphBlock).inlines
         .whereType<LinkInline>()
         .single;
-    expect(wwwLink.url, 'https://www.example.com');
+    expect(wwwLink.url, 'http://www.example.com');
     expect(wwwLink.label, 'www.example.com');
+  });
+
+  test('URLs glued to CJK text autolink', () {
+    final blocks = MarkdownParser.parse('详见https://example.com/a');
+    final link = (blocks.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(link.url, 'https://example.com/a');
+    expect(link.label, 'https://example.com/a');
+
+    // CJK closing punctuation is span material, not a terminator.
+    final wrapped = MarkdownParser.parse('（见https://example.com）ok');
+    final wrappedLink = (wrapped.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(wrappedLink.url, 'https://example.com）ok');
+  });
+
+  test('digits and punctuation may precede an http(s) URL', () {
+    final digits = MarkdownParser.parse('第2条https://example.com');
+    expect(
+      (digits.single as ParagraphBlock).inlines.whereType<LinkInline>().single
+          .url,
+      'https://example.com',
+    );
+
+    final underscore = MarkdownParser.parse('see_https://example.com');
+    expect(
+      (underscore.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
+          .url,
+      'https://example.com',
+    );
+  });
+
+  test('www requires a start, whitespace, or punctuation predecessor', () {
+    final glued = MarkdownParser.parse('详见www.example.com');
+    expect(
+      (glued.single as ParagraphBlock).inlines.whereType<LinkInline>(),
+      isEmpty,
+    );
+
+    final wrapped = MarkdownParser.parse('（www.example.com）');
+    expect(
+      (wrapped.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
+          .url,
+      'http://www.example.com）',
+    );
   });
 
   test('trailing punctuation stays out of the autolink', () {
@@ -232,6 +283,27 @@ void main() {
       'https://example.com/a',
       'https://example.com/b',
     ]);
+
+    final trimmed = MarkdownParser.parse(
+      'see https://example.com_"*]~ end and https://example.com/x&quot; now',
+    );
+    expect(
+      (trimmed.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .map((l) => l.url)
+          .toList(),
+      ['https://example.com', 'https://example.com/x'],
+    );
+
+    // Full-width punctuation is not in the ASCII trail set.
+    final fullWidth = MarkdownParser.parse('去 https://example.com，看看');
+    expect(
+      (fullWidth.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
+          .url,
+      'https://example.com，看看',
+    );
   });
 
   test('balanced parens stay in, unbalanced close trims out', () {
@@ -254,11 +326,84 @@ void main() {
     expect(inlines.whereType<LinkInline>(), isEmpty);
   });
 
+  test('underscore in the last two domain segments stays text', () {
+    final rejected = MarkdownParser.parse('go https://foo_bar.com now');
+    expect(
+      (rejected.single as ParagraphBlock).inlines.whereType<LinkInline>(),
+      isEmpty,
+    );
+
+    final deeper = MarkdownParser.parse('go https://foo_bar.example.com now');
+    expect(
+      (deeper.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
+          .url,
+      'https://foo_bar.example.com',
+    );
+
+    final path = MarkdownParser.parse('go https://example.com/a_b now');
+    expect(
+      (path.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
+          .url,
+      'https://example.com/a_b',
+    );
+  });
+
+  test('a scheme must open a domain', () {
+    final slashes = MarkdownParser.parse('see https:///foo');
+    expect(
+      (slashes.single as ParagraphBlock).inlines.whereType<LinkInline>(),
+      isEmpty,
+    );
+
+    final fullWidth = MarkdownParser.parse('see https://，foo');
+    expect(
+      (fullWidth.single as ParagraphBlock).inlines.whereType<LinkInline>(),
+      isEmpty,
+    );
+  });
+
+  test('schemes match case-insensitively', () {
+    final blocks = MarkdownParser.parse('see HTTP://EXAMPLE.COM');
+    final link = (blocks.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .single;
+    expect(link.url, 'HTTP://EXAMPLE.COM');
+    expect(link.label, 'HTTP://EXAMPLE.COM');
+  });
+
   test('bare scheme alone is not a link', () {
     final blocks = MarkdownParser.parse('visit www. sometime');
     expect(
       (blocks.single as ParagraphBlock).inlines.whereType<LinkInline>(),
       isEmpty,
     );
+  });
+
+  test('an unclosed bracket does not eat a later link', () {
+    final blocks = MarkdownParser.parse(
+      '[see https://example.com] and [x](https://y.com)',
+    );
+    final links = (blocks.single as ParagraphBlock).inlines
+        .whereType<LinkInline>()
+        .toList();
+    expect(links, hasLength(2));
+    expect(links[0].url, 'https://example.com');
+    expect(links[1].label, 'x');
+    expect(links[1].url, 'https://y.com');
+  });
+
+  test('link labels close at the first depth-zero bracket', () {
+    final inlines = MarkdownParser.parseInlines('[foo [bar]](baz)');
+    expect(inlines.whereType<LinkInline>().single.label, 'foo [bar]');
+
+    final plain = MarkdownParser.parseInlines('[x] y [z](w)');
+    final links = plain.whereType<LinkInline>().toList();
+    expect(links, hasLength(1));
+    expect(links.single.label, 'z');
+    expect(links.single.url, 'w');
   });
 }
