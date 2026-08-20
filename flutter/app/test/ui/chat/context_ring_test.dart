@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/context_ring.dart';
 
-Widget _host(ContextPressure? pressure) => MaterialApp(
+import '../../l10n_app.dart';
+
+Widget _host(ContextPressure? pressure) => l10nApp(
   home: Scaffold(
     body: Center(
       child: KeyedSubtree(
@@ -56,7 +58,7 @@ void main() {
     expect(find.text('50% of context used'), findsOneWidget);
     expect(find.text('System prompt'), findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
-    expect(find.text('Conversation'), findsOneWidget);
+    expect(find.text('Messages'), findsOneWidget);
   });
 
   test('occupancy clamps above capacity', () {

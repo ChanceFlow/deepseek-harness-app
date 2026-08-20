@@ -1981,11 +1981,11 @@ abstract class AppLocalizations {
   /// **'Context compacted'**
   String get contextCompacted;
 
-  /// Localized screen copy.
+  /// Compaction notice line count.
   ///
   /// In en, this message translates to:
-  /// **'Compacted {count} history items (~{tokens} tokens)'**
-  String compactedHistoryCount(int count, Object tokens);
+  /// **'Compacted {count} history items'**
+  String compactedHistoryCount(int count);
 
   /// No description provided for @recallLabel.
   ///
@@ -2082,6 +2082,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Host is read-only on this connection; namespace edits are unavailable.'**
   String get namespaceReadOnlyHint;
+
+  /// Turn boundary micro-label.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {turn}'**
+  String turnNumberLabel(int turn);
+
+  /// No description provided for @attachmentName.
+  ///
+  /// In en, this message translates to:
+  /// **'attachment'**
+  String get attachmentName;
+
+  /// Picked image refused: media type not supported.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: unsupported type {type}'**
+  String imageRejectionUnsupported(String name, String type);
+
+  /// Picked image refused: exceeds host byte ceiling.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: exceeds {maxBytes} bytes'**
+  String imageRejectionTooLarge(String name, int maxBytes);
+
+  /// Picked image refused: composer seat full.
+  ///
+  /// In en, this message translates to:
+  /// **'Only {room} more image(s) allowed per message'**
+  String imageRejectionNoRoom(int room);
 }
 
 class _AppLocalizationsDelegate

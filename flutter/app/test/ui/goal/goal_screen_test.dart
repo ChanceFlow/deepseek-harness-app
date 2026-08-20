@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/goal/goal_screen.dart';
 import 'package:app/ui/goal/goal_ui_state.dart';
 
+import '../../l10n_app.dart';
+
 GoalProjection _projection(GoalPhase phase, {int revision = 3}) {
   return GoalProjection(
     goal: GoalSnapshot(
@@ -34,7 +36,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    MaterialApp(
+    l10nApp(
       home: GoalScreen(uiState: uiState, onAction: actions.add),
     ),
   );
@@ -113,15 +115,15 @@ void main() {
     expect(find.text('Finish the Android MVP'), findsOneWidget);
     expect(find.text('ACTIVE · revision 3 · rounds 2/10'), findsOneWidget);
 
-    await tester.tap(find.text('Pause'));
+    await tester.tap(find.text('Pause goal'));
     await tester.pump();
     expect(actions, contains(const PauseGoalAction()));
 
-    await tester.tap(find.text('Complete'));
+    await tester.tap(find.text('Complete goal'));
     await tester.pump();
     expect(actions, contains(const CompleteGoalAction()));
 
-    await tester.tap(find.text('Edit'));
+    await tester.tap(find.text('Edit goal'));
     await tester.pump();
     await tester.enterText(
       find.widgetWithText(TextField, 'Finish the Android MVP').first,
@@ -142,7 +144,7 @@ void main() {
       GoalUiState(selectedSessionId: 's1', goal: _projection(GoalPhase.paused)),
       actions,
     );
-    await tester.tap(find.text('Resume'));
+    await tester.tap(find.text('Resume goal'));
     await tester.pump();
     expect(actions, contains(const ResumeGoalAction()));
 
@@ -154,7 +156,7 @@ void main() {
       ),
       actions,
     );
-    await tester.tap(find.text('Resume'));
+    await tester.tap(find.text('Resume goal'));
     await tester.pump();
     expect(actions.length, 2);
 
@@ -166,9 +168,9 @@ void main() {
       ),
       actions,
     );
-    expect(find.text('Resume'), findsNothing);
-    expect(find.text('Edit'), findsNothing);
-    await tester.tap(find.text('Clear'));
+    expect(find.text('Resume goal'), findsNothing);
+    expect(find.text('Edit goal'), findsNothing);
+    await tester.tap(find.text('Clear goal'));
     await tester.pump();
     expect(actions, contains(const ClearGoalAction()));
   });

@@ -19,6 +19,7 @@ import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_local_state_fake.dart';
+import '../../l10n_app.dart';
 
 const SessionSummary _session = SessionSummary(
   id: 's1',
@@ -38,7 +39,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(
           uiState: uiState,
           onAction: actions.add,
@@ -70,9 +71,7 @@ void main() {
     expect(await session.readDraft(), isNull);
   });
 
-  testWidgets('newline button inserts a newline at the caret', (
-    tester,
-  ) async {
+  testWidgets('newline button inserts a newline at the caret', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -101,9 +100,7 @@ void main() {
     expect(actions, isEmpty);
   });
 
-  testWidgets('keyboard action key does not submit the draft', (
-    tester,
-  ) async {
+  testWidgets('keyboard action key does not submit the draft', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -341,9 +338,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    final position = tester
-        .state<ScrollableState>(timelineScrollable)
-        .position;
+    final position = tester.state<ScrollableState>(timelineScrollable).position;
     expect(position.pixels, 0);
     expect(position.maxScrollExtent, greaterThan(0));
   });
@@ -393,9 +388,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    final position = tester
-        .state<ScrollableState>(timelineScrollable)
-        .position;
+    final position = tester.state<ScrollableState>(timelineScrollable).position;
     expect(position.pixels, position.maxScrollExtent);
   });
 

@@ -27,6 +27,8 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n_app.dart';
+
 class _FakeRpc implements DshRpcClient {
   @override
   Future<RpcResult> call(
@@ -130,14 +132,12 @@ Future<void> _pump(
       overrides: [
         // Family seams keyed by the seed backend's URL (the store seeds
         // from kDshBaseUrl).
-        dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          _FakeRpc(),
-        ),
-        dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          _NeverSocket(),
-        ),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_NeverSocket()),
       ],
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -1316,7 +1316,7 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
-        child: MaterialApp(
+        child: l10nApp(
           home: ChatScreen(
             uiState: _state(
               sessions: const [
@@ -1363,7 +1363,7 @@ void main() {
         tester.view.devicePixelRatio = 1.0;
         await tester.pumpWidget(
           ProviderScope(
-            child: MaterialApp(
+            child: l10nApp(
               home: ChatScreen(
                 uiState: ChatUiState(
                   sessions: const [
@@ -1448,7 +1448,7 @@ void main() {
           ],
         );
     Widget host(ChatUiState ui) => ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: ui, onAction: (_) {}),
       ),
     );
@@ -1518,7 +1518,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       return tester.pumpWidget(
         ProviderScope(
-          child: MaterialApp(
+          child: l10nApp(
             home: ChatScreen(uiState: uiState, onAction: actions.add),
           ),
         ),

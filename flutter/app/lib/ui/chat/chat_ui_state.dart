@@ -31,6 +31,7 @@ final class ChatUiState {
     this.searchResults = const <SessionSearchResult>[],
     this.isSending = false,
     this.errorMessage,
+    this.imageRejections = const <ImageRejection>[],
     this.pendingImages = const <PendingImage>[],
     this.imageLimits = const ImageLimits(),
     this.plan,
@@ -56,6 +57,10 @@ final class ChatUiState {
   final List<SessionSearchResult> searchResults;
   final bool isSending;
   final String? errorMessage;
+
+  /// Picked images refused admission this load, with the reason (facts for
+  /// the UI layer to localize); cleared on the next admission pass.
+  final List<ImageRejection> imageRejections;
 
   /// Composer images awaiting the next send.
   final List<PendingImage> pendingImages;
@@ -396,6 +401,35 @@ final class ImagePickError extends ChatAction {
 
   @override
   int get hashCode => message.hashCode;
+}
+
+/// Why one picked image was refused admission, locale-free facts for the
+/// UI layer to format (the controller never composes user-facing copy).
+sealed class ImageRejection {
+  const ImageRejection();
+}
+
+/// The host does not accept this media type.
+final class UnsupportedImageType extends ImageRejection {
+  const UnsupportedImageType(this.name, this.mediaType);
+
+  final String? name;
+  final String mediaType;
+}
+
+/// The image exceeds the host's per-image byte ceiling.
+final class ImageTooLarge extends ImageRejection {
+  const ImageTooLarge(this.name, this.maxBytes);
+
+  final String? name;
+  final int maxBytes;
+}
+
+/// The composer's per-message seat is full.
+final class NoImageRoom extends ImageRejection {
+  const NoImageRoom(this.room);
+
+  final int room;
 }
 
 /// Switch a blank session's agent preset (web AgentPresetSeat select).

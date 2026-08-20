@@ -15,6 +15,8 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/permission_select.dart';
 
+import '../../l10n_app.dart';
+
 const SessionSummary _session = SessionSummary(
   id: 's1',
   title: 'Permissions',
@@ -58,7 +60,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -113,7 +115,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       actions,
-      contains(const SendPrompt('/permission read-only', mode: PromptMode.queue)),
+      contains(
+        const SendPrompt('/permission read-only', mode: PromptMode.queue),
+      ),
     );
   });
 
@@ -151,7 +155,10 @@ void main() {
     expect(
       actions,
       contains(
-        const SendPrompt('/permission danger-full-access', mode: PromptMode.queue),
+        const SendPrompt(
+          '/permission danger-full-access',
+          mode: PromptMode.queue,
+        ),
       ),
     );
   });

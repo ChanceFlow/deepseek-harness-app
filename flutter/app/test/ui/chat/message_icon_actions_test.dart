@@ -13,6 +13,8 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/message_icon_actions.dart';
 
+import '../../l10n_app.dart';
+
 ChatMessage _message({
   MessageRole role = MessageRole.assistant,
   bool streaming = false,
@@ -34,7 +36,7 @@ Future<void> _pump(WidgetTester tester, List<TimelineItem> timeline) {
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(
           uiState: ChatUiState(
             sessions: const [

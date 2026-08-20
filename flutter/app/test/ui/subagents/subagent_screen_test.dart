@@ -20,6 +20,8 @@ import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/deepsuite_extension.dart';
 
+import '../../l10n_app.dart';
+
 const _workerId = 'child-12345678abcd';
 
 const _catalog = SubagentCatalog(
@@ -76,7 +78,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    MaterialApp(
+    l10nApp(
       home: SubagentScreen(uiState: uiState, onAction: actions.add),
     ),
   );

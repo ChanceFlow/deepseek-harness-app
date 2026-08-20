@@ -558,7 +558,7 @@
   "beforeFirstTurnHeader": "Before first turn · {count} messages",
   "turnHeader": "Turn {turn} · {count} messages · {toolCount} tools",
   "contextCompacted": "Context compacted",
-  "compactedHistoryCount": "Compacted {count} history items (~{tokens} tokens)",
+  "compactedHistoryCount": "Compacted {count} history items",
   "recallLabel": "Session recall",
   "contextInjectionLabel": "Context injection",
   "chatGoalPhaseActive": "Active",
@@ -1046,7 +1046,7 @@
     }
   },
   "@compactedHistoryCount": {
-    "description": "Localized screen copy.",
+    "description": "Compaction notice line count.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1056,5 +1056,48 @@
   "parentSession": "Parent session",
   "addWorkspace": "Add workspace",
   "searchTooltip": "Search",
-  "namespaceReadOnlyHint": "Host is read-only on this connection; namespace edits are unavailable."
+  "namespaceReadOnlyHint": "Host is read-only on this connection; namespace edits are unavailable.",
+  "turnNumberLabel": "Turn {turn}",
+  "attachmentName": "attachment",
+  "@turnNumberLabel": {
+    "description": "Turn boundary micro-label.",
+    "placeholders": {
+      "turn": {
+        "type": "int"
+      }
+    }
+  },
+  "imageRejectionUnsupported": "{name}: unsupported type {type}",
+  "imageRejectionTooLarge": "{name}: exceeds {maxBytes} bytes",
+  "imageRejectionNoRoom": "Only {room} more image(s) allowed per message",
+  "@imageRejectionUnsupported": {
+    "description": "Picked image refused: media type not supported.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "@imageRejectionTooLarge": {
+    "description": "Picked image refused: exceeds host byte ceiling.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "maxBytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@imageRejectionNoRoom": {
+    "description": "Picked image refused: composer seat full.",
+    "placeholders": {
+      "room": {
+        "type": "int"
+      }
+    }
+  }
 }

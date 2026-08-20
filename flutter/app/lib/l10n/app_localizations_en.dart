@@ -1130,8 +1130,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contextCompacted => 'Context compacted';
 
   @override
-  String compactedHistoryCount(int count, Object tokens) {
-    return 'Compacted $count history items (~$tokens tokens)';
+  String compactedHistoryCount(int count) {
+    return 'Compacted $count history items';
   }
 
   @override
@@ -1184,4 +1184,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get namespaceReadOnlyHint =>
       'Host is read-only on this connection; namespace edits are unavailable.';
+
+  @override
+  String turnNumberLabel(int turn) {
+    return 'Turn $turn';
+  }
+
+  @override
+  String get attachmentName => 'attachment';
+
+  @override
+  String imageRejectionUnsupported(String name, String type) {
+    return '$name: unsupported type $type';
+  }
+
+  @override
+  String imageRejectionTooLarge(String name, int maxBytes) {
+    return '$name: exceeds $maxBytes bytes';
+  }
+
+  @override
+  String imageRejectionNoRoom(int room) {
+    return 'Only $room more image(s) allowed per message';
+  }
 }

@@ -4,11 +4,12 @@ library;
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart' as material;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/workspace/workspace_screen.dart';
 import 'package:app/ui/workspace/workspace_ui_state.dart';
+
+import '../../l10n_app.dart';
 
 const _homeListing = DirectoryListing(
   path: '/home/user',
@@ -50,7 +51,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    material.MaterialApp(
+    l10nApp(
       home: WorkspaceScreen(uiState: uiState, onAction: actions.add),
     ),
   );

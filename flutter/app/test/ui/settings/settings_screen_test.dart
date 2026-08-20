@@ -21,6 +21,8 @@ import 'package:app/ui/settings/settings_controller.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
 
+import '../../l10n_app.dart';
+
 const _snapshot = SettingsSnapshot(
   writable: true,
   hasDocument: true,
@@ -94,14 +96,17 @@ class _FakeRpc implements DshRpcClient {
     JsonMap payload,
   ) async {
     if (endpoint == 'host.describe') {
-      return RpcResult(ok: true, value: <String, Object?>{
-        'version': 'test',
-        'cwd': '/tmp',
-        'provider': 'deepseek',
-        'model': 'test-model',
-        'attachedSessions': 0,
-        'canOpenPath': true,
-      });
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{
+          'version': 'test',
+          'cwd': '/tmp',
+          'provider': 'deepseek',
+          'model': 'test-model',
+          'attachedSessions': 0,
+          'canOpenPath': true,
+        },
+      );
     }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
@@ -206,17 +211,13 @@ Future<LocalStateStore> _pump(
     ProviderScope(
       overrides: [
         localStateStoreProvider.overrideWith((ref) async => store),
-        backendStoreProvider.overrideWith(
-          (ref) async => _backendStore(),
-        ),
-        dshRpcClientProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_FakeRpc()),
-        dshEventSocketProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_QuietSocket()),
+        backendStoreProvider.overrideWith((ref) async => _backendStore()),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_QuietSocket()),
       ],
-      child: MaterialApp(
+      child: l10nApp(
         home: SettingsScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -259,17 +260,13 @@ Future<LocalStateStore> _pumpController(
     ProviderScope(
       overrides: [
         localStateStoreProvider.overrideWith((ref) async => store),
-        backendStoreProvider.overrideWith(
-          (ref) async => _backendStore(),
-        ),
-        dshRpcClientProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_FakeRpc()),
-        dshEventSocketProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_QuietSocket()),
+        backendStoreProvider.overrideWith((ref) async => _backendStore()),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_QuietSocket()),
       ],
-      child: MaterialApp(home: _ControllerHarness(controller: controller)),
+      child: l10nApp(home: _ControllerHarness(controller: controller)),
     ),
   );
   await tester.pumpAndSettle();
@@ -279,10 +276,7 @@ Future<LocalStateStore> _pumpController(
 /// Repository double recording the settings write path; everything the
 /// screen never calls throws through [noSuchMethod].
 class _RecordingSettingsRepository implements ChatRepository {
-  _RecordingSettingsRepository({
-    required this.snapshot,
-    required this.roster,
-  });
+  _RecordingSettingsRepository({required this.snapshot, required this.roster});
 
   final SettingsSnapshot snapshot;
   final AgentPresetRoster roster;
@@ -297,9 +291,8 @@ class _RecordingSettingsRepository implements ChatRepository {
   Future<AgentPresetRoster> listAgentPresets() async => roster;
 
   @override
-  Future<List<CredentialStatus>> describeCredentials(
-    List<String> refs,
-  ) async => const <CredentialStatus>[];
+  Future<List<CredentialStatus>> describeCredentials(List<String> refs) async =>
+      const <CredentialStatus>[];
 
   @override
   Future<SettingsNamespace> updateSetting(
@@ -367,7 +360,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('llm-deepseek').hitTestable(), findsOneWidget);
     expect(
-      find.text('applies: live · revision: 3 · user layer · 1 secrets set')
+      find
+          .text('applies: live · revision: 3 · user layer · 1 secrets set')
           .hitTestable(),
       findsOneWidget,
     );
@@ -407,10 +401,7 @@ void main() {
 
     // A fresh preference controller over the same store (the read path
     // the provider seeds) resolves the stored behavior.
-    expect(
-      BusyEnterPreferenceController(store).state,
-      BusyEnterBehavior.steer,
-    );
+    expect(BusyEnterPreferenceController(store).state, BusyEnterBehavior.steer);
 
     // Walk past the store's 500ms write debounce so no store timer
     // outlives the test.
@@ -508,10 +499,7 @@ void main() {
   testWidgets('empty roster renders only the presets footnote', (tester) async {
     await _pump(
       tester,
-      const SettingsUiState(
-        snapshot: _snapshot,
-        roster: AgentPresetRoster(),
-      ),
+      const SettingsUiState(snapshot: _snapshot, roster: AgentPresetRoster()),
       [],
     );
 
@@ -529,35 +517,32 @@ void main() {
     expect(find.text('Standard mode'), findsNothing);
   });
 
-  testWidgets(
-    'models page shows the DeepSeek key card and opens the editor',
-    (tester) async {
-      final actions = <SettingsAction>[];
-      await _pump(
-        tester,
-        const SettingsUiState(
-          snapshot: _snapshot,
-          credentials: _credentials,
-        ),
-        actions,
-      );
+  testWidgets('models page shows the DeepSeek key card and opens the editor', (
+    tester,
+  ) async {
+    final actions = <SettingsAction>[];
+    await _pump(
+      tester,
+      const SettingsUiState(snapshot: _snapshot, credentials: _credentials),
+      actions,
+    );
 
-      await tester.tap(find.text('Models').hitTestable());
-      await tester.pumpAndSettle();
-      expect(find.text('DeepSeek').hitTestable(), findsOneWidget);
-      expect(find.text('API key configured').hitTestable(), findsOneWidget);
-      expect(find.text('Configured').hitTestable(), findsOneWidget);
-      expect(
-        find.textContaining('Custom providers are managed on the host')
-            .hitTestable(),
-        findsOneWidget,
-      );
+    await tester.tap(find.text('Models').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('DeepSeek').hitTestable(), findsOneWidget);
+    expect(find.text('API key configured').hitTestable(), findsOneWidget);
+    expect(find.text('Configured').hitTestable(), findsOneWidget);
+    expect(
+      find
+          .textContaining('Custom providers are managed on the host')
+          .hitTestable(),
+      findsOneWidget,
+    );
 
-      await tester.tap(find.text('DeepSeek').hitTestable());
-      await tester.pumpAndSettle();
-      expect(find.text('Store DEEPSEEK_API_KEY'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.text('DeepSeek').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Store DEEPSEEK_API_KEY'), findsOneWidget);
+  });
 
   testWidgets('error shows the loopback hint and dismisses', (tester) async {
     final actions = <SettingsAction>[];
@@ -733,7 +718,8 @@ void main() {
     await tester.tap(find.text('Models').hitTestable());
     await tester.pumpAndSettle();
     expect(
-      find.text('The settings document is read-only in this deployment.')
+      find
+          .text('The settings document is read-only in this deployment.')
           .hitTestable(),
       findsOneWidget,
     );
@@ -781,7 +767,7 @@ void main() {
             (ref) async => LocalStateStore(_storeFile()),
           ),
         ],
-        child: MaterialApp(
+        child: l10nApp(
           home: SettingsScreen(uiState: uiState, onAction: (_) {}),
         ),
       ),
@@ -885,10 +871,7 @@ void main() {
     await tester.tap(find.byTooltip('Edit backend').at(0));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsNothing);
-    expect(
-      find.textContaining('Switch away before removing'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Switch away before removing'), findsOneWidget);
   });
 
   testWidgets('unreachable host page routes to the backends section', (

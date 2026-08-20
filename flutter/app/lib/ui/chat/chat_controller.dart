@@ -61,6 +61,7 @@ class ChatController {
   TimelineWindow _timelineWindow = const TimelineWindow();
   bool _isSending = false;
   String? _errorMessage;
+  List<ImageRejection> _imageRejections = const <ImageRejection>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
@@ -142,6 +143,7 @@ class ChatController {
       searchResults: _searchResults,
       isSending: _isSending,
       errorMessage: _errorMessage,
+      imageRejections: _imageRejections,
       pendingImages: _pendingImages,
       imageLimits: _imageLimits,
       plan: _plan,
@@ -219,6 +221,7 @@ class ChatController {
         );
       case DismissError():
         _errorMessage = null;
+        _imageRejections = const <ImageRejection>[];
         _publish();
       case RetrySessions():
         _refresh();
@@ -491,16 +494,12 @@ class ChatController {
     if (images.isEmpty) return;
     final limits = _imageLimits;
     final admitted = <PendingImage>[];
-    final rejected = <String>[];
+    final rejected = <ImageRejection>[];
     for (final image in images) {
       if (!limits.mediaTypes.contains(image.mediaType)) {
-        rejected.add(
-          '${image.name ?? image.id}: unsupported type ${image.mediaType}',
-        );
+        rejected.add(UnsupportedImageType(image.name, image.mediaType));
       } else if (image.byteSize > limits.maxImageBytes) {
-        rejected.add(
-          '${image.name ?? image.id}: exceeds ${limits.maxImageBytes} bytes',
-        );
+        rejected.add(ImageTooLarge(image.name, limits.maxImageBytes));
       } else {
         admitted.add(image);
       }
@@ -514,11 +513,12 @@ class ChatController {
       _pendingImages = List.of(_pendingImages)..addAll(keep);
     }
     if (overflow.isNotEmpty) {
-      rejected.add('only $room more image(s) allowed per message');
+      rejected.add(NoImageRoom(room));
     }
-    if (rejected.isNotEmpty) {
-      _errorMessage = rejected.join('; ');
-    }
+    // Admission facts ride the state stream for the UI layer to localize;
+    // they clear on the next pass (an empty list reads as "no new
+    // rejections", distinct from the shared error strip).
+    _imageRejections = rejected;
     _publish();
   }
 

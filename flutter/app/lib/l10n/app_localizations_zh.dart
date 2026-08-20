@@ -1105,8 +1105,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contextCompacted => '上下文已压缩';
 
   @override
-  String compactedHistoryCount(int count, Object tokens) {
-    return '已压缩 $count 条历史记录（约 $tokens tokens）';
+  String compactedHistoryCount(int count) {
+    return '已压缩 $count 条历史记录';
   }
 
   @override
@@ -1156,4 +1156,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get namespaceReadOnlyHint => '此连接上的主机为只读；命名空间编辑不可用。';
+
+  @override
+  String turnNumberLabel(int turn) {
+    return '第 $turn 轮';
+  }
+
+  @override
+  String get attachmentName => '附件';
+
+  @override
+  String imageRejectionUnsupported(String name, String type) {
+    return '$name：不支持的图片类型 $type';
+  }
+
+  @override
+  String imageRejectionTooLarge(String name, int maxBytes) {
+    return '$name：超过 $maxBytes 字节上限';
+  }
+
+  @override
+  String imageRejectionNoRoom(int room) {
+    return '一条消息最多还能添加 $room 张图片';
+  }
 }

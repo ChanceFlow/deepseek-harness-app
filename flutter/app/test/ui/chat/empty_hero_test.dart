@@ -15,6 +15,8 @@ import 'package:app/ui/chat/empty_hero.dart';
 import 'package:app/ui/chat/fish_logo.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n_app.dart';
+
 Future<void> _pump(
   WidgetTester tester,
   ChatUiState uiState,
@@ -28,7 +30,7 @@ Future<void> _pump(
   // the host needs a scope even with no local state injected.
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -112,9 +114,7 @@ void main() {
     expect(find.text('Choose workspace'), findsNothing);
   });
 
-  testWidgets('preset seat rides beside the workspace chip', (
-    tester,
-  ) async {
+  testWidgets('preset seat rides beside the workspace chip', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -190,8 +190,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      l10nApp(
+        home: const Scaffold(
           body: Center(child: FishLogo(size: 34, color: Colors.blue)),
         ),
       ),

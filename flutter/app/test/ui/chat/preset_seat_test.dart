@@ -16,6 +16,8 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/preset_seat.dart';
 
+import '../../l10n_app.dart';
+
 /// Roster fixture: the web client's four shipped ids plus one broken
 /// user row (ui-agent-preset locales.ts + agent-presets.schema semantics).
 const AgentPresetRoster _roster = AgentPresetRoster(
@@ -46,7 +48,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     ProviderScope(
-      child: MaterialApp(
+      child: l10nApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),
       ),
     ),
@@ -176,9 +178,7 @@ void main() {
     );
   });
 
-  testWidgets('header label names the running session preset', (
-    tester,
-  ) async {
+  testWidgets('header label names the running session preset', (tester) async {
     await _pump(
       tester,
       const ChatUiState(

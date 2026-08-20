@@ -1074,6 +1074,26 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
             const SizedBox(height: 8),
           ],
+          for (final rejection in uiState.imageRejections)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                switch (rejection) {
+                  UnsupportedImageType(:final name, :final mediaType) =>
+                    l10n.imageRejectionUnsupported(
+                      name ?? l10n.attachmentName,
+                      mediaType,
+                    ),
+                  ImageTooLarge(:final name, :final maxBytes) =>
+                    l10n.imageRejectionTooLarge(
+                      name ?? l10n.attachmentName,
+                      maxBytes,
+                    ),
+                  NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
+                },
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           const SizedBox(height: 4),
           if (widget.outline && _collapsedTurns.isNotEmpty)
             Align(
@@ -1213,7 +1233,11 @@ class _PlanChipState extends State<PlanChip> {
                       height: 20 / 13,
                       color: label,
                     ),
-                    child: Text(l10n.planBadge),
+                    child: Text(
+                      // Design literal, not copy: the chip wordmark stays
+                      // 'Plan' in every locale.
+                      'Plan',
+                    ),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.close, size: 12, color: label),
@@ -1532,9 +1556,10 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   Widget _placeholder(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
-    final nameSuffix = ref.name == null
+    final name = ref.name;
+    final nameSuffix = name == null
         ? ''
-        : l10n.imagePlaceholderSuffix(ref.name);
+        : l10n.imagePlaceholderSuffix(name);
     return Row(
       children: [
         Expanded(
@@ -2879,7 +2904,7 @@ class _ComposerBarState extends State<ComposerBar> {
                                   widget.onAction(RemovePendingImage(image.id)),
                               icon: const Icon(Icons.close, size: 16),
                               tooltip: l10n.removeImage(
-                                image.name ?? 'attachment',
+                                image.name ?? l10n.attachmentName,
                               ),
                             ),
                           ],
@@ -3593,9 +3618,11 @@ class TurnGroupHeader extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final messages = items.whereType<TimelineMessage>().length;
     final tools = items.whereType<TimelineToolCall>().toList();
-    final label = turn == null
-        ? l10n.beforeFirstTurnHeader(messages)
-        : l10n.turnHeader(messages, tools.length, turn);
+    final turnLabel = switch (turn) {
+      null => l10n.beforeFirstTurnHeader(messages),
+      final int value => l10n.turnHeader(messages, tools.length, value),
+    };
+    final label = turnLabel;
 
     final statusByName = <String, List<ToolRunStatus>>{};
     for (final tool in tools) {
@@ -3666,6 +3693,7 @@ class TurnBoundaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: SizedBox(
@@ -3675,7 +3703,7 @@ class TurnBoundaryRow extends StatelessWidget {
             Container(width: 14, height: 1, color: ds.borderL2),
             const SizedBox(width: 10),
             Text(
-              'Turn $turn',
+              l10n.turnNumberLabel(turn),
               style: Theme.of(context).textTheme.labelSmall
                   ?.copyWith(color: ds.labelCaption, letterSpacing: 0.8),
             ),
