@@ -324,7 +324,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   a roster host command through `commands/execute` (args-tolerant when
   the command advertises an input hint, bare-only otherwise — the web
   `matchEnter` table); skills, unknown names, and unmatched host answers
-  fall back to the ordinary prompt channel.
+  fall back to the ordinary prompt channel. A dispatch failure
+  (transport abort, business error) does not: the line surfaces as the
+  chat error banner instead — re-sending it would hand the model the
+  literal command text.
 - `commands/list` stays uncovered: the roster's names/descriptions/hints
   are mirrored statically (`command_roster.dart`); fetching the live
   catalog is deferred.
