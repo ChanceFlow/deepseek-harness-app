@@ -1148,59 +1148,6 @@ void main() {
       expect(repository.resumedRefs, isNotEmpty);
     },
   );
-  test(
-    'turn completion fires the hook on running-to-idle transition',
-    () async {
-      final completed = <String>[];
-      final repository = _TurnCompletionRepository();
-      final controller = ChatController(
-        repository,
-        onTurnComplete: completed.add,
-      );
-      await pumpEventQueue();
-
-      controller.onAction(const SelectSession('s1'));
-      await pumpEventQueue();
-      expect(completed, isEmpty);
-
-      // Running flips true: no notification yet.
-      repository._states.value = [
-        const SessionSummary(
-          id: 's1',
-          title: 'Working session',
-          running: true,
-          blank: false,
-        ),
-      ];
-      await pumpEventQueue();
-      expect(completed, isEmpty);
-
-      // Turn ends: hook fires with the session title.
-      repository._states.value = [
-        const SessionSummary(
-          id: 's1',
-          title: 'Working session',
-          running: false,
-          blank: false,
-        ),
-      ];
-      await pumpEventQueue();
-      expect(completed, ['Working session']);
-
-      // Idle → idle does not re-fire.
-      repository._states.value = [
-        const SessionSummary(
-          id: 's1',
-          title: 'Working session',
-          running: false,
-          blank: false,
-        ),
-      ];
-      await pumpEventQueue();
-      expect(completed, ['Working session']);
-    },
-  );
-
   test('loads the agent-preset roster into uiState', () async {
     const roster = AgentPresetRoster(
       entries: [
@@ -1386,11 +1333,3 @@ class _GoalRecordingRepository extends FakeChatRepository {
   }
 }
 
-class _TurnCompletionRepository extends FakeChatRepository {
-  final _states = AppStateStream<List<SessionSummary>>(const <SessionSummary>[
-    SessionSummary(id: 's1', title: 'Working session', blank: false),
-  ]);
-
-  @override
-  Stream<List<SessionSummary>> observeSessions() => _states.stream;
-}

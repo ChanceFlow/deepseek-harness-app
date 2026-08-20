@@ -1279,4 +1279,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get turnCompletionChannelDescription =>
       'Notifies when a running conversation turn finishes.';
+
+  @override
+  String get otherTurnCompleteTitle => 'New turn in another session';
+
+  @override
+  String get approvalRequestedTitle => 'Approval requested';
+
+  @override
+  String get planReviewRequestedTitle => 'Plan review requested';
+
+  @override
+  String get approvalChannel => 'Approvals';
+
+  @override
+  String get approvalChannelDescription =>
+      'Notifies when a session waits on your approval.';
+
+  @override
+  String get planReviewChannel => 'Plan reviews';
+
+  @override
+  String get planReviewChannelDescription =>
+      'Notifies when a session waits on your plan review.';
+
+  @override
+  String get notificationDismissTooltip => 'Dismiss notification';
 }

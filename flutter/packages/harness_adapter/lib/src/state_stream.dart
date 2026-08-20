@@ -98,6 +98,55 @@ Stream<R> combineLatest2<A, B, R>(
   return outgoing.stream;
 }
 
+/// Combine-latest over three streams (all must have emitted at least once).
+/// Used with [StateStream.stream]s which always seed immediately.
+Stream<R> combineLatest3<A, B, C, R>(
+  Stream<A> a,
+  Stream<B> b,
+  Stream<C> c,
+  R Function(A, B, C) convert,
+) {
+  final outgoing = StreamController<R>.broadcast();
+  var haveA = false;
+  var haveB = false;
+  var haveC = false;
+  var lastA = null as A?;
+  var lastB = null as B?;
+  var lastC = null as C?;
+  late final StreamSubscription<A> subA;
+  late final StreamSubscription<B> subB;
+  late final StreamSubscription<C> subC;
+  void emit() {
+    if (haveA && haveB && haveC) {
+      outgoing.add(convert(lastA as A, lastB as B, lastC as C));
+    }
+  }
+
+  outgoing.onListen = () {
+    subA = a.listen((value) {
+      lastA = value;
+      haveA = true;
+      emit();
+    });
+    subB = b.listen((value) {
+      lastB = value;
+      haveB = true;
+      emit();
+    });
+    subC = c.listen((value) {
+      lastC = value;
+      haveC = true;
+      emit();
+    });
+  };
+  outgoing.onCancel = () async {
+    await subA.cancel();
+    await subB.cancel();
+    await subC.cancel();
+  };
+  return outgoing.stream;
+}
+
 /// Stable sort by [keyOf], mirroring Kotlin's `sortedBy` (List.sort in Dart
 /// is not guaranteed stable).
 List<T> stableSortedBy<T, K extends Comparable<K>>(

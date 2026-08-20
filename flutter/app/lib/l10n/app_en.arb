@@ -1138,5 +1138,13 @@
   },
   "turnCompleteTitle": "Turn complete",
   "turnCompletionChannel": "Turn completion",
-  "turnCompletionChannelDescription": "Notifies when a running conversation turn finishes."
+  "turnCompletionChannelDescription": "Notifies when a running conversation turn finishes.",
+  "otherTurnCompleteTitle": "New turn in another session",
+  "approvalRequestedTitle": "Approval requested",
+  "planReviewRequestedTitle": "Plan review requested",
+  "approvalChannel": "Approvals",
+  "approvalChannelDescription": "Notifies when a session waits on your approval.",
+  "planReviewChannel": "Plan reviews",
+  "planReviewChannelDescription": "Notifies when a session waits on your plan review.",
+  "notificationDismissTooltip": "Dismiss notification"
 }

@@ -87,6 +87,19 @@ question/requested  ->  answers per question id
 
 `/api/respond` returns a carrier receipt (`RpcReceipt`), not a server response.
 
+### 4.4 Registry-level pending interactions
+
+The interactive frames above also feed a registry-global pending map,
+independent of any open session store: `approval/requested` tracks a
+per-session `approval` wait keyed by `approvalId`, `question/requested`
+tracks a `question`/`planReview` wait keyed by the frame's `rpcId` (a single
+binary plan-review intent classifies as `planReview`), and the matching
+`approval/resolved` / `question/resolved` frames drop the key. `session.list`
+rows then carry a derived `SessionSummary.pendingInteraction`
+(`approval` / `planReview` / `question`), which notification detection and
+navigation surfaces read. Replays are idempotent by key; keys for sessions
+that disappear from `session.list` are pruned.
+
 ## 5. Connection Lifecycle
 
 A connection generation is healthy only when all three readiness facts hold:
