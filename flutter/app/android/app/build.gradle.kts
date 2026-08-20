@@ -31,11 +31,33 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Release signing comes from the DSH_KEYSTORE_* environment when present
+    // (Gitea Actions injects the keystore from ANDROID_KEYSTORE_* secrets);
+    // absent env falls back to debug signing so local `flutter run --release`
+    // works with no setup.
+    val releaseKeystore = System.getenv("DSH_KEYSTORE_FILE")
+    val hasReleaseKeystore = listOf(
+        "DSH_KEYSTORE_FILE", "DSH_KEYSTORE_PASSWORD", "DSH_KEY_ALIAS", "DSH_KEY_PASSWORD",
+    ).all { System.getenv(it) != null }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("DSH_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("DSH_KEY_ALIAS")
+                keyPassword = System.getenv("DSH_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
