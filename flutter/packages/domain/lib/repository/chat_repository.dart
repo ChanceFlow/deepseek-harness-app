@@ -8,6 +8,7 @@ import 'dart:async';
 
 import '../model/agent_preset.dart';
 import '../model/attachment.dart';
+import '../model/command.dart';
 import '../model/connection_state.dart';
 import '../model/context_pressure.dart';
 import '../model/session_window_stats.dart';
@@ -119,6 +120,14 @@ abstract class ChatRepository {
   Future<bool> loadOlderHistory(String sessionId) async => false;
 
   Future<void> sendMessage(SendMessageRequest request);
+
+  /// Executes one host slash-command line through the command registry
+  /// (`commands/execute`): the line never reaches the model. Returns the
+  /// settled execution, or null when the host reports no registered
+  /// command for the line (an unmatched name is not an error — the caller
+  /// falls back to the ordinary prompt channel, the web live-directory
+  /// miss).
+  Future<CommandExecution?> executeCommand(String sessionId, String line);
 
   /// Download one durable image; bytes are session-authorized.
   Future<AttachmentData> readAttachment(

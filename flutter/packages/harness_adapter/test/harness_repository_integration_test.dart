@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -109,6 +110,16 @@ class HarnessFakeRpc implements DshRpcClient {
 
   final Map<String, String> _failures = <String, String>{};
 
+  /// Scripted commands/execute value slot: a recorded execution shape, or
+  /// null for the unmatched miss (the host answers ok with no value).
+  JsonMap? commandValue = <String, Object?>{
+    'commandId': 'cmd-e487ba23-1',
+    'result': <String, Object?>{
+      'kind': 'success',
+      'text': 'Plan mode on. Use /plan off to leave.',
+    },
+  };
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -122,6 +133,9 @@ class HarnessFakeRpc implements DshRpcClient {
         ok: false,
         error: RpcError(code: code, message: 'scripted failure: $code'),
       );
+    }
+    if (endpoint == 'commands/execute') {
+      return RpcResult(ok: true, value: commandValue);
     }
     final value = _valueFor(endpoint);
     return RpcResult(ok: true, value: value);
@@ -536,6 +550,91 @@ void main() {
     expect(ref, isNotNull, reason: 'missing goal ref');
     expect(ref!['id'], 'goal-1');
     expect(ref['revision'], 1);
+  });
+
+  test('executeCommand decodes the settled execution', () async {
+    // Recorded from the reference host (commands/execute over the typert
+    // remote bridge; reference packages/interaction/commands/src/index.ts
+    // CommandRuntime.execute -> CommandExecution).
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final execution = await repository.executeCommand('session-1', '/plan');
+
+    expect(execution, isNotNull);
+    expect(execution!.commandId, 'cmd-e487ba23-1');
+    expect(execution.kind, CommandOutcomeKind.success);
+    expect(execution.text, 'Plan mode on. Use /plan off to leave.');
+    // The typert remote envelope: the args carry the addressed agent
+    // (session id), the complete line, and the images slot.
+    final payload = rpc.payloads('commands/execute').single;
+    final args = asJsonObject(payload['args']);
+    expect(args, isNotNull, reason: 'missing args envelope');
+    expect(args!['agentId'], 'session-1');
+    expect(args['line'], '/plan');
+    expect(args['images'], <Object?>[]);
+  });
+
+  test('executeCommand unmatched answers ok with no value slot', () async {
+    final rpc = HarnessFakeRpc()..commandValue = null;
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    // Reference: CommandRuntime.execute returns undefined on a syntax or
+    // name miss — the wire serializes that as ok without a value.
+    final execution = await repository.executeCommand('session-1', '/nope');
+    expect(execution, isNull);
+  });
+
+  test('executeCommand error kind carries the command text', () async {
+    final rpc = HarnessFakeRpc()
+      ..commandValue = <String, Object?>{
+        'commandId': 'cmd-e487ba23-4',
+        'result': <String, Object?>{
+          'kind': 'error',
+          'text': 'unknown preset "bogus-preset" (available: read-only, '
+              'workspace-write, danger-full-access)',
+        },
+      };
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final execution = await repository.executeCommand('session-1', '/permission bogus');
+    expect(execution!.kind, CommandOutcomeKind.error);
+    expect(
+      execution.text,
+      startsWith('unknown preset "bogus-preset"'),
+    );
+  });
+
+  test('executeCommand fails loud on a malformed execution', () async {
+    final rpc = HarnessFakeRpc()
+      ..commandValue = <String, Object?>{
+        'result': <String, Object?>{'kind': 'success'},
+      };
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand('session-1', '/plan'),
+      throwsFormatException,
+    );
+  });
+
+  test('executeCommand fails loud on an unknown result kind', () async {
+    final rpc = HarnessFakeRpc()
+      ..commandValue = <String, Object?>{
+        'commandId': 'cmd-x',
+        'result': <String, Object?>{'kind': 'explosion'},
+      };
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand('session-1', '/plan'),
+      throwsFormatException,
+    );
   });
 
   test('directory listing maps host wire shape', () async {

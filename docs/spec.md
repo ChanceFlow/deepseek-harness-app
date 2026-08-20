@@ -309,3 +309,22 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - `agentPreset.read`/`copy`/`openDocument`/`remove` are loopback-pinned and
   stay uncovered: a mobile client cannot manage the roster, only read it
   and switch blank sessions.
+
+## 16. Host Commands
+
+- `commands/execute` (typert remote bridge: wire path
+  `/api/commands/execute`, envelope `payload.args {agentId, line,
+  images}`) executes one slash-command line through the host command
+  registry — the line never reaches the model (`session.prompt` does not
+  parse commands; the host's own docs notwithstanding, the model would
+  receive the text as ordinary content). A matched command returns the
+  settled execution (`commandId`, `result.kind` `success|error`,
+  optional `text`); an unmatched name returns ok with no value slot.
+- The chat controller routes a submitted line whose leading token names
+  a roster host command through `commands/execute` (args-tolerant when
+  the command advertises an input hint, bare-only otherwise — the web
+  `matchEnter` table); skills, unknown names, and unmatched host answers
+  fall back to the ordinary prompt channel.
+- `commands/list` stays uncovered: the roster's names/descriptions/hints
+  are mirrored statically (`command_roster.dart`); fetching the live
+  catalog is deferred.
