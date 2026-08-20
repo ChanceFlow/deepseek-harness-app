@@ -186,6 +186,40 @@ void main() {
     );
   });
 
+  testWidgets('empty timeline while the conversation loads shows a spinner',
+      (tester) async {
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        isTimelineLoading: true,
+      ),
+      [],
+    );
+
+    // The in-flight first load must read as a wait, not as an empty
+    // session: a centered loader replaces the empty hero.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(EmptyHero), findsNothing);
+    expect(find.text('Into the Unknown'), findsNothing);
+  });
+
+  testWidgets('empty timeline after a settled load shows the empty hero',
+      (tester) async {
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+      ),
+      [],
+    );
+
+    expect(find.byType(EmptyHero), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('fish path parser yields a bounded non-empty path', (
     tester,
   ) async {
