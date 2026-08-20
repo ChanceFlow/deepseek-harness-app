@@ -2112,6 +2112,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only {room} more image(s) allowed per message'**
   String imageRejectionNoRoom(int room);
+
+  /// No description provided for @commandFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Command failed'**
+  String get commandFailed;
 }
 
 class _AppLocalizationsDelegate

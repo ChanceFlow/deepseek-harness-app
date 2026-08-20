@@ -1073,6 +1073,12 @@ class _ChatPanelState extends State<ChatPanel> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             const SizedBox(height: 8),
+          ] else if (uiState.commandFailed) ...[
+            Text(
+              l10n.commandFailed,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 8),
           ],
           for (final rejection in uiState.imageRejections)
             Padding(

@@ -334,5 +334,6 @@
   "attachmentName": "附件",
   "imageRejectionUnsupported": "{name}：不支持的图片类型 {type}",
   "imageRejectionTooLarge": "{name}：超过 {maxBytes} 字节上限",
-  "imageRejectionNoRoom": "一条消息最多还能添加 {room} 张图片"
+  "imageRejectionNoRoom": "一条消息最多还能添加 {room} 张图片",
+  "commandFailed": "命令失败"
 }

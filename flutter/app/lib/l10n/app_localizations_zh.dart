@@ -1179,4 +1179,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String imageRejectionNoRoom(int room) {
     return '一条消息最多还能添加 $room 张图片';
   }
+
+  @override
+  String get commandFailed => '命令失败';
 }

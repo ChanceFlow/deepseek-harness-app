@@ -1207,4 +1207,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String imageRejectionNoRoom(int room) {
     return 'Only $room more image(s) allowed per message';
   }
+
+  @override
+  String get commandFailed => 'Command failed';
 }

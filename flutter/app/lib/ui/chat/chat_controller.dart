@@ -63,6 +63,7 @@ class ChatController {
   TimelineWindow _timelineWindow = const TimelineWindow();
   bool _isSending = false;
   String? _errorMessage;
+  bool _commandFailed = false;
   List<ImageRejection> _imageRejections = const <ImageRejection>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<PendingImage> _pendingImages = const <PendingImage>[];
@@ -145,6 +146,7 @@ class ChatController {
       searchResults: _searchResults,
       isSending: _isSending,
       errorMessage: _errorMessage,
+      commandFailed: _commandFailed,
       imageRejections: _imageRejections,
       pendingImages: _pendingImages,
       imageLimits: _imageLimits,
@@ -223,6 +225,7 @@ class ChatController {
         );
       case DismissError():
         _errorMessage = null;
+        _commandFailed = false;
         _imageRejections = const <ImageRejection>[];
         _publish();
       case RetrySessions():
@@ -523,7 +526,8 @@ class ChatController {
         return;
       }
       if (execution.kind == CommandOutcomeKind.error) {
-        _errorMessage = execution.text ?? 'command failed';
+        _errorMessage = execution.text;
+        _commandFailed = execution.text == null;
         _publish();
         return;
       }
@@ -827,6 +831,7 @@ class ChatController {
   Future<T?> _runCatchingForUi<T>(Future<T> Function() block) async {
     try {
       _errorMessage = null;
+      _commandFailed = false;
       _publish();
       return await block();
     } catch (error) {

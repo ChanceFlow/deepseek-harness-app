@@ -50,7 +50,13 @@ Wire `flutter_localizations` + `intl` with ARB-based generation:
   instead of joining English strings into `errorMessage`; `ChatUiState`
   carries it; `chat_screen` renders each rejection through l10n.
   Non-image `errorMessage` (host error strings, action messages) stays as
-  data — host-authored text is not translated client-side.
+  data — host-authored text is not translated client-side. A host
+  command that errors with no message sets `ChatUiState.commandFailed`;
+  the strip renders the localized `commandFailed` line (reference
+  `command.failed`), keeping the controller English-free.
+- **The host-command roster splits in two**: `kHostCommandNames` (const,
+  wire names/hints for the controller's `/command` membership check) and
+  `hostCommands(l10n)` (localized descriptions for UI rows).
 - **System notifications stay English** ('Turn complete' title, 'Turn
   completion' channel name/description). They post from
   `di/providers.dart` with no BuildContext; localizing them needs a

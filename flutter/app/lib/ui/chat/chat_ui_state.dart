@@ -31,6 +31,7 @@ final class ChatUiState {
     this.searchResults = const <SessionSearchResult>[],
     this.isSending = false,
     this.errorMessage,
+    this.commandFailed = false,
     this.imageRejections = const <ImageRejection>[],
     this.pendingImages = const <PendingImage>[],
     this.imageLimits = const ImageLimits(),
@@ -57,6 +58,11 @@ final class ChatUiState {
   final List<SessionSearchResult> searchResults;
   final bool isSending;
   final String? errorMessage;
+
+  /// A host command executed but returned an error outcome with no
+  /// message; the UI renders the localized [l10n.commandFailed] line
+  /// (the controller stays locale-free).
+  final bool commandFailed;
 
   /// Picked images refused admission this load, with the reason (facts for
   /// the UI layer to localize); cleared on the next admission pass.
