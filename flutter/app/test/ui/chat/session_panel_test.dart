@@ -24,15 +24,22 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
 
-/// One workspace group with seven sessions: the selected session rides
-/// the group (auto-expand), and the run is long enough to carry the
-/// overflow control past the collapsed session limit.
+/// Two workspace groups: `proj` with seven sessions (the selected
+/// session rides the group, and the run is long enough to carry the
+/// overflow control past the collapsed session limit) and `other`
+/// with one — the foldable group that is NOT current.
 const _workspaces = <WorkspaceSummary>[
   WorkspaceSummary(
     workspaceId: 'w1',
     path: '/tmp/proj',
     title: 'proj',
     sessionIds: <String>['s1', 's2', 's3', 's4', 's5', 's6', 's7'],
+  ),
+  WorkspaceSummary(
+    workspaceId: 'w2',
+    path: '/tmp/other',
+    title: 'other',
+    sessionIds: <String>['o1'],
   ),
 ];
 
@@ -45,6 +52,13 @@ final _sessions = <SessionSummary>[
       updatedAtEpochMs: 1000 * i,
       cwd: '/tmp/proj',
     ),
+  const SessionSummary(
+    id: 'o1',
+    title: 'other session',
+    blank: false,
+    updatedAtEpochMs: 8000,
+    cwd: '/tmp/other',
+  ),
 ];
 
 /// The store's debounce window (kLocalStateFlushDelay, 500ms) plus a
@@ -67,6 +81,7 @@ Future<ProviderContainer> _pumpPanel(
   WidgetTester tester, {
   bool inDrawer = false,
   LocalStateStore? store,
+  String selectedSessionId = 's1',
 }) async {
   // Phone-scale logical surface so the tree rows and the foot lay out
   // naturally.
@@ -91,7 +106,7 @@ Future<ProviderContainer> _pumpPanel(
             sessions: _sessions,
             workspaces: _workspaces,
             searchResults: const <SessionSearchResult>[],
-            selectedSessionId: 's1',
+            selectedSessionId: selectedSessionId,
             onSelectSession: (_) {},
             onCreateSession: (_) {},
             onSearchSessions: (_) {},
@@ -203,26 +218,64 @@ void main() {
     expect(container2.read(appDestinationProvider), AppDestination.settings);
   });
 
-  testWidgets('a group expansion override writes through and restores', (
+  testWidgets('the active session\'s group never folds; other overrides persist', (
     tester,
   ) async {
     final store = _store();
 
-    // First instance: the selected session's group auto-expands; tap
-    // the header to pin it collapsed.
+    // The current group (holds the selected session) is expanded, and
+    // tapping its header is a no-op — collapsing it would hide the
+    // active session behind a hunt. No override is written.
     await _pumpPanel(tester, store: store);
     expect(find.text('session 2'), findsOneWidget);
     await tester.tap(find.text('proj'));
     await tester.pumpAndSettle();
-    expect(find.text('session 2'), findsNothing);
-    // The override wrote through to the store's cache.
-    expect(store.read('sidebar.groupOverrides'), <String, bool>{'w1': false});
+    expect(find.text('session 2'), findsOneWidget);
+    expect(store.read('sidebar.groupOverrides'), isNull);
+
+    // A non-current group starts folded (default); the toggle expands
+    // it and the override writes through to the store's cache.
+    expect(find.text('other session'), findsNothing);
+    await tester.tap(find.text('other'));
+    await tester.pumpAndSettle();
+    expect(find.text('other session'), findsOneWidget);
+    expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': true});
+    // Folding it back writes the collapse override.
+    await tester.tap(find.text('other'));
+    await tester.pumpAndSettle();
+    expect(find.text('other session'), findsNothing);
+    expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': false});
     await tester.pump(_debounceWindow);
 
     // A fresh panel instance seeded from the same store keeps the
-    // group collapsed despite the selected session riding it.
+    // non-current group collapsed while the current group stays open.
     await _pumpPanel(tester, store: store);
-    expect(find.text('session 2'), findsNothing);
+    expect(find.text('session 2'), findsOneWidget);
+    expect(find.text('other session'), findsNothing);
+  });
+
+  testWidgets('the active session rides its group\'s top', (tester) async {
+    await _pumpPanel(tester, selectedSessionId: 's3');
+
+    // The selected session pins above the account's stored order:
+    // 'session 3' renders above 'session 1' inside the proj group.
+    expect(find.text('session 3'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('session 3')).dy,
+      lessThan(tester.getTopLeft(find.text('session 1')).dy),
+    );
+  });
+
+  testWidgets('a pinned active session stays visible past the overflow limit', (
+    tester,
+  ) async {
+    // 'session 6' sits at stored index 5 — beyond the collapsed limit
+    // of 5 — but selection pins it to the head: no hunt, no Show-all
+    // expansion needed. The tail behind the limit still folds.
+    await _pumpPanel(tester, selectedSessionId: 's6');
+    expect(find.text('session 6'), findsOneWidget);
+    expect(find.text('session 5'), findsNothing);
+    expect(find.text('Show all 7'), findsOneWidget);
   });
 
   testWidgets('an overflow expansion writes through and restores', (

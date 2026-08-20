@@ -41,6 +41,14 @@ LocalStateStore (`flutter/app/lib/local_state/`):
   `sidebar.overflowExpanded` (`List<String>`): SessionPanel seeds both
   once the store resolves and writes both on every toggle.
 
+The group-override contract carries two always-on rules no override
+defeats (the active session never hides behind a fold the user must
+hunt through): the group holding the active session is always expanded
+— its header toggle is a no-op — and within any group the active
+session rides first (same-group pinning), which also keeps it above
+the collapsed-session overflow limit. Non-current groups default
+folded and follow their overrides.
+
 Until the store resolves, every surface behaves as with an empty store
 (the defaults); a user toggle inside that pre-load window outranks the
 persisted snapshot — seeding is skipped, live intent wins. Decoders
