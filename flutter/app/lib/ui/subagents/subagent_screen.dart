@@ -159,7 +159,9 @@ class _SubagentScreenState extends State<SubagentScreen> {
                   onPressed: () => widget.onAction(const CloseChildView()),
                 ),
           title: Text(
-            childId == null ? l10n.subagentsTitle : childEntry?.label ?? childId,
+            childId == null
+                ? l10n.subagentsTitle
+                : childEntry?.label ?? childId,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -322,7 +324,7 @@ class _ParentSelectorRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Parent session',
+                      l10n.parentSession,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: ds.labelCaption,
                       ),
@@ -371,7 +373,7 @@ class _ParentSessionSheet extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-            child: Text('Parent session', style: theme.textTheme.titleSmall),
+            child: Text(l10n.parentSession, style: theme.textTheme.titleSmall),
           ),
           Flexible(
             child: ListView(
@@ -743,6 +745,7 @@ class _BranchErrorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(left: 12 + 16.0 * level),
@@ -906,6 +909,7 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
     return Container(
@@ -976,14 +980,15 @@ class _ChildComposerBarState extends State<_ChildComposerBar> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
           child: TextField(
             controller: _draftController,
             enabled: widget.enabled,
-            decoration: const InputDecoration(
-              hintText: 'Message selected subagent',
+            decoration: InputDecoration(
+              hintText: l10n.messageSelectedSubagentHint,
               isDense: true,
             ),
             onSubmitted: (_) => _send(),
@@ -997,7 +1002,7 @@ class _ChildComposerBarState extends State<_ChildComposerBar> {
                 _draftController.text.trim().isNotEmpty && !widget.isSending
                 ? _send
                 : null,
-            child: Text(widget.isSending ? 'Sending' : 'Send'),
+            child: Text(widget.isSending ? l10n.sending : l10n.send),
           ),
         ),
       ],
@@ -1013,6 +1018,7 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
@@ -1027,7 +1033,7 @@ class _ErrorBanner extends StatelessWidget {
           IconButton(
             iconSize: 16,
             visualDensity: VisualDensity.compact,
-            tooltip: 'Dismiss',
+            tooltip: l10n.dismiss,
             onPressed: onDismiss,
             icon: Icon(Icons.close, size: 16, color: theme.colorScheme.error),
           ),
@@ -1084,53 +1090,59 @@ class SubagentStateDot extends StatelessWidget {
 /// `tokenTotal`/`activityDuration`) need `tokenUsage`/`subagentTiming`
 /// projections the domain does not expose yet, so rows carry no metric
 /// chip.
-String _secondaryLine(SubagentEntry entry, SessionSummary? summary) {
+String _secondaryLine(
+  SubagentEntry entry,
+  SessionSummary? summary,
+  AppLocalizations l10n,
+) {
   return <String?>[
     summary?.title,
-    _modeLabel(entry.mode),
-    _activityLabel(entry.activity),
+    _modeLabel(entry.mode, l10n),
+    _activityLabel(entry.activity, l10n),
   ].whereType<String>().where((part) => part.isNotEmpty).join(' · ');
 }
 
 /// Web locales.ts EN `mode.*`; unknown mode strings surface verbatim
 /// rather than being swallowed.
-String? _modeLabel(String? mode) => switch (mode) {
+String? _modeLabel(String? mode, AppLocalizations l10n) => switch (mode) {
   null => null,
-  'one-shot' => 'one-shot',
-  'continuable' => 'continuable',
+  'one-shot' => l10n.modeOneShot,
+  'continuable' => l10n.modeContinuable,
   final other => other,
 };
 
 /// Web locales.ts EN `activity.*`; unknown activities surface verbatim.
-String? _activityLabel(String? activity) => switch (activity) {
-  null => null,
-  'running' => 'running',
-  'inactive' => 'not running',
-  final other => other,
-};
+String? _activityLabel(String? activity, AppLocalizations l10n) =>
+    switch (activity) {
+      null => null,
+      'running' => l10n.activityRunning,
+      'inactive' => l10n.activityNotRunning,
+      final other => other,
+    };
 
 /// Web locales.ts EN `diagnostic.*` reasons.
-String? _diagnosticReasonLabel(String? reason) => switch (reason) {
-  null => null,
-  'corrupt' => 'corrupted session record',
-  'unsupported' => 'unsupported subagent record version',
-  'unavailable' => 'session record temporarily unavailable',
-  final other => other,
-};
+String? _diagnosticReasonLabel(String? reason, AppLocalizations l10n) =>
+    switch (reason) {
+      null => null,
+      'corrupt' => l10n.diagnosticCorrupt,
+      'unsupported' => l10n.diagnosticUnsupported,
+      'unavailable' => l10n.diagnosticUnavailable,
+      final other => other,
+    };
 
 /// Web locales.ts EN `readonly.oneShot.*`.
-String _readOnlyTitle(SubagentReadOnlyReason reason) => switch (reason) {
-  SubagentReadOnlyReason.oneShot => 'One-shot subagent record',
-  SubagentReadOnlyReason.parentUnavailable =>
-    'This subagent is read-only for now',
-};
+String _readOnlyTitle(SubagentReadOnlyReason reason, AppLocalizations l10n) =>
+    switch (reason) {
+      SubagentReadOnlyReason.oneShot => l10n.oneShotRecordTitle,
+      SubagentReadOnlyReason.parentUnavailable => l10n.parentUnavailableTitle,
+    };
 
 /// Web locales.ts EN `readonly.oneShot.body` / `readonly.body`.
-String _readOnlyBody(SubagentReadOnlyReason reason) => switch (reason) {
-  SubagentReadOnlyReason.oneShot => 'One-shot tasks do not accept follow-ups; review the full execution record here.',
-  SubagentReadOnlyReason.parentUnavailable =>
-    'The parent session is offline; reopen it to continue sending messages.',
-};
+String _readOnlyBody(SubagentReadOnlyReason reason, AppLocalizations l10n) =>
+    switch (reason) {
+      SubagentReadOnlyReason.oneShot => l10n.oneShotRecordBody,
+      SubagentReadOnlyReason.parentUnavailable => l10n.parentUnavailableBody,
+    };
 
 /// Child records render without durable attachments: the loader always
 /// resolves empty (the null-returning seat `TimelineRow` requires).

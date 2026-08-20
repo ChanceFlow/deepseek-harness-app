@@ -17,7 +17,10 @@ mechanics live here.
   tests live beside the screen they drive (per-screen parity is the goal, see
   [README §Feature surface](../README.md#feature-surface)).
 - **No codegen toolchain.** No `build_runner`, no generated files; see the
-  root [no-codegen rule](../AGENTS.md#conventions).
+  root [no-codegen rule](../AGENTS.md#conventions). One SDK-mandated
+  exception: gen-l10n output under `app/lib/l10n/` is committed
+  (Flutter 3.47 removed synthetic packages) — see
+  [the i18n decision note](../.agents/notes/implemented/feature/2026-08-20-bilingual-i18n-zh-en.md).
 - **Analyzer excludes are platform dirs only.** `build/`, `android/`, and
   other platform folders are excluded in
   [analysis_options.yaml](analysis_options.yaml); Dart code under `lib/` and

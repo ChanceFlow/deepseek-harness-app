@@ -728,17 +728,17 @@ abstract class AppLocalizations {
   /// **'Cache hit {percent}%'**
   String statsCacheHit(int percent);
 
-  /// Localized screen copy.
+  /// Composer stats: billed input token count.
   ///
   /// In en, this message translates to:
   /// **'Input {tokens} tok'**
-  String statsInputTokens(int tokens);
+  String statsInputTokens(String tokens);
 
-  /// Localized screen copy.
+  /// Composer stats: output token count.
   ///
   /// In en, this message translates to:
   /// **'Output {tokens} tok'**
-  String statsOutputTokens(int tokens);
+  String statsOutputTokens(String tokens);
 
   /// Localized screen copy.
   ///
@@ -2058,6 +2058,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'record feedback about this session'**
   String get commandFeedbackDescription;
+
+  /// No description provided for @parentSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Parent session'**
+  String get parentSession;
 }
 
 class _AppLocalizationsDelegate

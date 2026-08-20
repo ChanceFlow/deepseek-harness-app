@@ -387,12 +387,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String statsInputTokens(int tokens) {
+  String statsInputTokens(String tokens) {
     return 'Input $tokens tok';
   }
 
   @override
-  String statsOutputTokens(int tokens) {
+  String statsOutputTokens(String tokens) {
     return 'Output $tokens tok';
   }
 
@@ -1171,4 +1171,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commandFeedbackDescription => 'record feedback about this session';
+
+  @override
+  String get parentSession => 'Parent session';
 }

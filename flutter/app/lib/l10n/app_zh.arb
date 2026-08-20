@@ -325,5 +325,6 @@
   "commandGoalDescription": "设置或查看长期任务的执行目标",
   "commandCompactDescription": "压缩较早的会话历史",
   "commandPermissionDescription": "切换权限预设（沙箱模式 + 审批策略）",
-  "commandFeedbackDescription": "记录关于本会话的反馈"
+  "commandFeedbackDescription": "记录关于本会话的反馈",
+  "parentSession": "父会话"
 }

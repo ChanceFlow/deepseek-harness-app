@@ -783,18 +783,18 @@
     }
   },
   "@statsInputTokens": {
-    "description": "Localized screen copy.",
+    "description": "Composer stats: billed input token count.",
     "placeholders": {
       "tokens": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
   "@statsOutputTokens": {
-    "description": "Localized screen copy.",
+    "description": "Composer stats: output token count.",
     "placeholders": {
       "tokens": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -1052,5 +1052,6 @@
         "type": "int"
       }
     }
-  }
+  },
+  "parentSession": "Parent session"
 }

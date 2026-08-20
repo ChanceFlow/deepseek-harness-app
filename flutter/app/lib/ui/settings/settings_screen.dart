@@ -22,6 +22,7 @@
 /// bottom sheet on the popover surface instead of a side panel.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/settings.dart';
@@ -71,14 +72,15 @@ class SettingsRoute extends ConsumerWidget {
 /// manages secrets inside the Models provider editors).
 enum _SettingsSection { backends, general, models, plugins, presets, credentials }
 
-String _sectionLabel(_SettingsSection section) => switch (section) {
-  _SettingsSection.backends => 'Backends',
-  _SettingsSection.general => 'General',
-  _SettingsSection.models => 'Models',
-  _SettingsSection.plugins => 'Plugins',
-  _SettingsSection.presets => 'Agent presets',
-  _SettingsSection.credentials => 'Credentials',
-};
+String _sectionLabel(_SettingsSection section, AppLocalizations l10n) =>
+    switch (section) {
+      _SettingsSection.backends => l10n.settingsNavBackends,
+      _SettingsSection.general => l10n.settingsNavGeneral,
+      _SettingsSection.models => l10n.settingsNavModels,
+      _SettingsSection.plugins => l10n.settingsNavPlugins,
+      _SettingsSection.presets => l10n.settingsNavAgentPresets,
+      _SettingsSection.credentials => l10n.settingsNavCredentials,
+    };
 
 /// The credential reference the official DeepSeek route resolves by
 /// default (reference packages/llm/llm-deepseek DEFAULT_API_KEY_ENV);
@@ -233,6 +235,7 @@ class _SettingsSectionNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 44,
       child: SingleChildScrollView(
@@ -244,7 +247,7 @@ class _SettingsSectionNav extends StatelessWidget {
               if (candidate != _SettingsSection.values.first)
                 const SizedBox(width: 8),
               _ModeButton(
-                label: _sectionLabel(candidate),
+                label: _sectionLabel(candidate, l10n),
                 selected: candidate == section,
                 onTap: () => onSelect(candidate),
               ),
@@ -265,19 +268,20 @@ class _SettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              'Settings',
+              l10n.destinationSettings,
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
           _CircleAction(
             icon: Icons.refresh,
-            tooltip: 'Refresh',
+            tooltip: l10n.refresh,
             onTap: onRefresh,
           ),
         ],
@@ -297,6 +301,7 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
       child: Row(
@@ -325,8 +330,7 @@ class _ErrorBanner extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'settings/credentials are loopback-only on the host; '
-                    'connect via adb reverse',
+                    l10n.settingsLoopbackHint,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -338,7 +342,7 @@ class _ErrorBanner extends StatelessWidget {
           _CircleAction(
             icon: Icons.close,
             iconSize: 14,
-            tooltip: 'Dismiss',
+            tooltip: l10n.dismiss,
             onTap: onDismiss,
           ),
         ],
@@ -380,14 +384,13 @@ class _BackendsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SectionHeader(
-          title: 'Backends',
-          intro: 'Host endpoints this device keeps connected — every '
-              'configured backend stays live; the active one drives Chat '
-              'and these host-settings pages.',
+        _SectionHeader(
+          title: l10n.settingsNavBackends,
+          intro: l10n.backendsIntro,
         ),
         // The registry's last refusal or persist failure (guards fail
         // loud on the state); the next successful mutation clears it.
@@ -405,7 +408,7 @@ class _BackendsList extends StatelessWidget {
                   context,
                   ref,
                   backend,
-                  removeBlockedReason: _removeBlockedReason(state, backend),
+                  removeBlockedReason: _removeBlockedReason(state, backend, l10n),
                 ),
               ),
           ],
@@ -417,7 +420,7 @@ class _BackendsList extends StatelessWidget {
           child: OutlinedButton(
             onPressed: () => _openBackendSheet(context, ref, null),
             style: _outlineCapsule(context),
-            child: const Text('Add backend'),
+            child: Text(l10n.addBackend),
           ),
         ),
       ],
@@ -430,12 +433,13 @@ class _BackendsList extends StatelessWidget {
 String? _removeBlockedReason(
   BackendRegistryState state,
   BackendConfig backend,
+  AppLocalizations l10n,
 ) {
   if (backend.id == state.activeId) {
-    return 'Switch away before removing the active backend.';
+    return l10n.removeActiveBackendFirst;
   }
   if (state.backends.length <= 1) {
-    return 'The last backend cannot be removed.';
+    return l10n.cannotRemoveLastBackend;
   }
   return null;
 }
@@ -528,6 +532,7 @@ class _BackendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -557,14 +562,14 @@ class _BackendRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (active)
-                const _StateBadge(configured: true, label: 'Active')
+                _StateBadge(configured: true, label: l10n.backendStatusActive)
               else
-                const _StateBadge(configured: false, label: 'Standby'),
+                _StateBadge(configured: false, label: l10n.backendStatusStandby),
               const SizedBox(width: 4),
               _CircleAction(
                 icon: Icons.edit_outlined,
                 iconSize: 16,
-                tooltip: 'Edit backend',
+                tooltip: l10n.editBackend,
                 onTap: onEdit,
               ),
             ],
@@ -640,6 +645,7 @@ class _HostPageGate extends StatelessWidget {
     }
     final theme = Theme.of(context);
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -654,13 +660,12 @@ class _HostPageGate extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Host settings unavailable',
+              l10n.hostSettingsUnavailable,
               style: theme.textTheme.titleSmall,
             ),
             const SizedBox(height: 4),
             Text(
-              'The active backend did not answer. Repoint or switch it '
-              'from the Backends page.',
+              l10n.hostSettingsUnavailableBody,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: ds.labelTertiary,
               ),
@@ -669,7 +674,7 @@ class _HostPageGate extends StatelessWidget {
             FilledButton(
               onPressed: onOpenBackends,
               style: _filledCapsule(context),
-              child: const Text('Backends'),
+              child: Text(l10n.settingsNavBackends),
             ),
           ],
         ),
@@ -697,6 +702,7 @@ class _GeneralPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     final rows = <Widget>[
       const _EnterBehaviorRow(),
       // Web rule: the row exists only when the deployment composes at
@@ -709,27 +715,24 @@ class _GeneralPage extends StatelessWidget {
           onAction: onAction,
         ),
       _GeneralRow(
-        title: 'Host writes',
-        description:
-            'Whether the host accepts settings and credential writes.',
-        value: snapshot.writable ? 'Writable' : 'Read-only',
+        title: l10n.hostWritesLabel,
+        description: l10n.hostWritesDescription,
+        value: snapshot.writable ? l10n.writableValue : l10n.readOnlyValue,
         tone: snapshot.writable ? _FactTone.positive : _FactTone.warning,
       ),
       _GeneralRow(
-        title: 'Settings document',
-        description:
-            'Whether a user settings document backs the '
-            'namespaces.',
-        value: snapshot.hasDocument ? 'Present' : 'None',
+        title: l10n.settingsDocumentLabel,
+        description: l10n.settingsDocumentDescription,
+        value: snapshot.hasDocument ? l10n.presentValue : l10n.noneValue,
         tone: snapshot.hasDocument ? _FactTone.positive : _FactTone.neutral,
       ),
     ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SectionHeader(
-          title: 'General',
-          intro: 'New-session defaults and the host settings plane.',
+        _SectionHeader(
+          title: l10n.settingsNavGeneral,
+          intro: l10n.generalIntro,
         ),
         ..._divided(ds, rows),
       ],
@@ -755,16 +758,17 @@ class _EnterBehaviorRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final controller = ref.watch(busyEnterPreferenceProvider).value;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Enter behavior while busy', style: theme.textTheme.bodyMedium),
+          Text(l10n.busyPreferenceLabel, style: theme.textTheme.bodyMedium),
           const SizedBox(height: 4),
           Text(
-            'Applies only while an agent is running.',
+            l10n.busyPreferenceDescription,
             style: theme.textTheme.bodySmall?.copyWith(
               color: ds.labelTertiary,
             ),
@@ -796,14 +800,15 @@ class _EnterBehaviorRow extends ConsumerWidget {
     BusyEnterBehavior current,
     ValueChanged<BusyEnterBehavior>? onSelect,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return Wrap(
       spacing: 8,
       children: [
         for (final option in BusyEnterBehavior.values)
           _ModeButton(
             label: switch (option) {
-              BusyEnterBehavior.queue => 'Queue',
-              BusyEnterBehavior.steer => 'Steer',
+              BusyEnterBehavior.queue => l10n.busyBehaviorQueue,
+              BusyEnterBehavior.steer => l10n.busyBehaviorSteer,
             },
             selected: option == current,
             onTap: onSelect == null ? null : () => onSelect(option),
@@ -835,6 +840,7 @@ class _AgentPresetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final options = _pickerOptions(roster);
     // A roster can mark nothing default; the picker still has to show
     // something, so the label falls back to the first entry (web rule).
@@ -854,11 +860,10 @@ class _AgentPresetRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Agent preset', style: theme.textTheme.bodyMedium),
+                    Text(l10n.agentPresetLabel, style: theme.textTheme.bodyMedium),
                     const SizedBox(height: 4),
                     Text(
-                      'Applies to sessions you start from now on. '
-                      'Running sessions keep the preset they began with.',
+                      l10n.agentPresetPreferenceDescription,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: ds.labelTertiary,
                       ),
@@ -868,7 +873,7 @@ class _AgentPresetRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                agentPresetDisplayName(current),
+                agentPresetDisplayName(current, l10n),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: ds.labelSecondary,
                 ),
@@ -889,6 +894,7 @@ class _AgentPresetRow extends StatelessWidget {
     BuildContext context,
     List<AgentPresetEntry> options,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final currentId = (roster.defaultEntry ?? roster.entries.first).id;
     return showModalBottomSheet<void>(
       context: context,
@@ -912,7 +918,7 @@ class _AgentPresetRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Agent preset', style: theme.textTheme.titleMedium),
+                  Text(l10n.agentPresetLabel, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 12),
                   for (final option in options)
                     Material(
@@ -930,7 +936,7 @@ class _AgentPresetRow extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  agentPresetDisplayName(option),
+                                  agentPresetDisplayName(option, l10n),
                                   style: theme.textTheme.bodyMedium,
                                 ),
                               ),
@@ -975,24 +981,23 @@ class _AgentPresetsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final entries = roster?.entries ?? const <AgentPresetEntry>[];
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         if (entries.isNotEmpty) ...[
-          const _SectionHeader(
-            title: 'Agent presets',
-            intro:
-                'A preset is the plugin composition one session\'s agent '
-                'runs — its tools, prompt, and capabilities.',
+          _SectionHeader(
+            title: l10n.settingsNavAgentPresets,
+            intro: l10n.agentPresetsIntro,
           ),
           for (final (trust, heading) in [
-            (AgentPresetTrust.system, 'Built-in'),
-            (AgentPresetTrust.user, 'Custom'),
+            (AgentPresetTrust.system, l10n.presetGroupBuiltIn),
+            (AgentPresetTrust.user, l10n.presetGroupCustom),
           ])
             if (entries.any((entry) => entry.trust == trust)) ...[
               Text(
-                heading.toUpperCase(),
+                heading,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: ds.labelTertiary,
                   letterSpacing: 0.6,
@@ -1013,8 +1018,7 @@ class _AgentPresetsPage extends StatelessWidget {
             ],
         ],
         Text(
-          'Presets are authored on the host: copy, edit, and delete them '
-          'from the desktop settings.',
+          l10n.presetsFooter,
           style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
         ),
       ],
@@ -1042,12 +1046,13 @@ class _PresetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final broken = entry.broken != null;
     final active = entry.isDefault;
     // Web rule: the card offers the full description on hover when the
     // 4-line clamp cut it; an unpublished description says so.
-    final description = agentPresetDisplayDescription(entry) ??
-        'No description.';
+    final description = agentPresetDisplayDescription(entry, l10n) ??
+        l10n.noDescription;
     return AnimatedContainer(
       duration: kDsDuration,
       curve: Curves.easeInOut,
@@ -1079,25 +1084,25 @@ class _PresetCard extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        agentPresetDisplayName(entry),
+                        agentPresetDisplayName(entry, l10n),
                         style: theme.textTheme.titleSmall,
                       ),
                     ),
                     if (broken) ...[
                       const SizedBox(width: 8),
-                      const _PresetBadge(
-                        label: 'Failed to load',
+                      _PresetBadge(
+                        label: l10n.presetBrokenBadge,
                         filled: true,
                       ),
                     ],
                     if (entry.trust == AgentPresetTrust.user) ...[
                       const SizedBox(width: 8),
-                      const _PresetBadge(label: 'Custom'),
+                      _PresetBadge(label: l10n.presetGroupCustom),
                     ],
                     if (active) ...[
                       const SizedBox(width: 8),
                       const Spacer(),
-                      const _PresetBadge(label: 'In use', inverted: true),
+                      _PresetBadge(label: l10n.presetInUseBadge, inverted: true),
                     ],
                   ],
                 ),
@@ -1205,18 +1210,17 @@ class _PluginsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SectionHeader(
-          title: 'Plugins',
-          intro:
-              'Configure and inspect the plugins installed in this '
-              'deployment.',
+        _SectionHeader(
+          title: l10n.settingsNavPlugins,
+          intro: l10n.pluginsIntro,
         ),
         if (snapshot.namespaces.isEmpty)
           Text(
-            'This deployment exposes no plugin settings.',
+            l10n.noPluginSettings,
             style: theme.textTheme.bodySmall?.copyWith(
               color: ds.labelTertiary,
             ),
@@ -1257,23 +1261,22 @@ class _ModelsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final deepSeek = credentials
         .where((credential) => credential.ref == _kDeepSeekCredentialRef)
         .firstOrNull;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SectionHeader(
-          title: 'Models',
-          intro:
-              'Enter your API keys to use models from the following '
-              'providers.',
+        _SectionHeader(
+          title: l10n.settingsNavModels,
+          intro: l10n.modelsIntro,
         ),
         if (!writable)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'The settings document is read-only in this deployment.',
+              l10n.settingsReadOnlyNotice,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: ds.labelTertiary,
               ),
@@ -1284,8 +1287,7 @@ class _ModelsPage extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         Text(
-          'Custom providers are managed on the host: this client covers '
-          'the DeepSeek API key only.',
+          l10n.modelsFooter,
           style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
         ),
       ],
@@ -1306,6 +1308,7 @@ class _DeepSeekCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return AnimatedContainer(
       duration: kDsDuration,
       curve: Curves.easeInOut,
@@ -1332,8 +1335,8 @@ class _DeepSeekCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         credential.configured
-                            ? 'API key configured'
-                            : 'API key missing',
+                            ? l10n.apiKeyConfigured
+                            : l10n.apiKeyMissing,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: ds.labelTertiary,
                         ),
@@ -1407,22 +1410,23 @@ class _CredentialsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final tertiary = theme.textTheme.bodySmall?.copyWith(
       color: ds.labelTertiary,
     );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        const _SectionHeader(
-          title: 'Credentials',
-          intro: 'Secret references named by the host namespaces.',
+        _SectionHeader(
+          title: l10n.settingsNavCredentials,
+          intro: l10n.credentialsIntro,
         ),
         if (credentialError case final String error) ...[
-          Text('Credential state unavailable: $error', style: tertiary),
+          Text(l10n.credentialStateUnavailable(error), style: tertiary),
           if (credentials.isNotEmpty) const SizedBox(height: 8),
         ],
         if (credentials.isEmpty)
-          Text('No credentials referenced.', style: tertiary)
+          Text(l10n.noCredentialsReferenced, style: tertiary)
         else
           ..._divided(
             ds,

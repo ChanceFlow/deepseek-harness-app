@@ -105,6 +105,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
     final ds = dsOf(context);
     final theme = Theme.of(context);
     final controller = ref.watch(workspaceControllerProvider(backend.id));
+    final l10n = AppLocalizations.of(context)!;
     return StreamBuilder<WorkspaceUiState>(
       stream: controller.uiState,
       initialData: controller.state,
@@ -163,7 +164,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            'Active',
+                            l10n.backendStatusActive,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: ds.labelSecondary,
                             ),
@@ -391,6 +392,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     List<WorkspaceSummary> workspaces,
     String query,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final tree = _WorkspaceTree(
       workspaces: workspaces,
       expandedGroups: _expandedGroups,
@@ -405,7 +407,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       mainAxisSize: widget.embedded ? MainAxisSize.min : MainAxisSize.max,
       children: [
         _SectionHeader(
-          title: widget.titleOverride ?? 'Workspaces',
+          title: widget.titleOverride ?? l10n.destinationWorkspaces,
           searchActive: _searchActive,
           onToggleSearch: _toggleSearch,
           onAdd: () => widget.onAction(const OpenDirectoryBrowser()),
@@ -574,6 +576,7 @@ class _SearchCapsule extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
       child: Container(
@@ -596,7 +599,7 @@ class _SearchCapsule extends StatelessWidget {
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: 'Search workspaces...',
+                  hintText: l10n.searchWorkspacesHint,
                   hintStyle: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
                     color: ds.labelTertiary,
@@ -704,12 +707,13 @@ class _WorkspaceTree extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     if (workspaces.isEmpty) {
       // Web `.empty` (aligned with the row grid).
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Text(
-          hasQuery ? 'No matches' : 'No workspaces yet',
+          hasQuery ? l10n.noMatchingWorkspaces : l10n.noWorkspacesYet,
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(fontSize: 13, color: ds.labelTertiary),
         ),
@@ -797,6 +801,7 @@ class _WorkspaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -829,14 +834,14 @@ class _WorkspaceRow extends StatelessWidget {
                 ),
               ),
               _RowIconButton(
-                tooltip: 'New session in ${workspace.title}',
+                tooltip: l10n.newSessionInWorkspace(workspace.title),
                 icon: Icons.add_outlined,
                 onTap: () => onStartSession(workspace.workspaceId),
               ),
               // Web `.rowActions` gap.
               const SizedBox(width: 12),
               _RowIconButton(
-                tooltip: 'Workspace actions for ${workspace.title}',
+                tooltip: l10n.workspaceActionsFor(workspace.title),
                 icon: Icons.more_horiz,
                 onTap: () => onMenu(workspace),
               ),
@@ -895,8 +900,9 @@ class _GroupDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final count = workspace.sessionIds.length;
-    final countLabel = count == 1 ? '$count session' : '$count sessions';
+    final countLabel = l10n.workspaceSessionCount(count);
     final caption = theme.textTheme.bodySmall?.copyWith(
       color: ds.labelTertiary,
     );
@@ -942,6 +948,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: Container(
@@ -958,7 +965,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
           children: [
             _MenuRow(
               icon: Icons.edit_outlined,
-              label: 'Rename',
+              label: l10n.rename,
               onTap: () {
                 Navigator.of(context).pop();
                 onRename();
@@ -966,7 +973,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
             ),
             _MenuRow(
               icon: Icons.delete_outline,
-              label: 'Delete workspace',
+              label: l10n.deleteWorkspace,
               isDanger: true,
               onTap: () {
                 Navigator.of(context).pop();
@@ -977,7 +984,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
             // Web reorders by drag; touch keeps the move verbs here.
             _MenuRow(
               icon: Icons.arrow_upward,
-              label: 'Move up',
+              label: l10n.moveUp,
               enabled: canMoveUp,
               onTap: () {
                 Navigator.of(context).pop();
@@ -986,7 +993,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
             ),
             _MenuRow(
               icon: Icons.arrow_downward,
-              label: 'Move down',
+              label: l10n.moveDown,
               enabled: canMoveDown,
               onTap: () {
                 Navigator.of(context).pop();
@@ -1234,22 +1241,23 @@ class _RenameWorkspaceDialogState extends State<_RenameWorkspaceDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final trimmed = _controller.text.trim();
     final duplicate = _duplicate;
     final blocked =
         trimmed.isEmpty || trimmed == widget.initialTitle || duplicate;
     return _DsModalCard(
-      title: 'Rename workspace',
+      title: l10n.renameWorkspaceTitle,
       actions: [
         OutlinedButton(
           style: _dsCapsuleButton(theme),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           style: _dsCapsuleButton(theme),
           onPressed: blocked ? null : _save,
-          child: const Text('Rename'),
+          child: Text(l10n.rename),
         ),
       ],
       child: Column(
@@ -1268,7 +1276,7 @@ class _RenameWorkspaceDialogState extends State<_RenameWorkspaceDialog> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'A workspace named “$trimmed” already exists.',
+                l10n.workspaceNameExists(trimmed),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),
@@ -1294,13 +1302,14 @@ class _DeleteWorkspaceDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return _DsModalCard(
-      title: 'Delete workspace',
+      title: l10n.deleteWorkspace,
       actions: [
         OutlinedButton(
           style: _dsCapsuleButton(theme),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         OutlinedButton(
           style: _dsCapsuleButton(theme).copyWith(
@@ -1312,13 +1321,11 @@ class _DeleteWorkspaceDialog extends StatelessWidget {
             onDelete();
             Navigator.of(context).pop();
           },
-          child: const Text('Delete workspace'),
+          child: Text(l10n.deleteWorkspace),
         ),
       ],
       child: Text(
-        'This removes “${workspace.title}” from the workspace list. '
-        'The folder and session logs will be kept. Its sessions will '
-        'appear under Ungrouped.',
+        l10n.deleteWorkspaceConfirm(workspace.title),
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -1358,18 +1365,19 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return _DsModalCard(
-      title: 'New folder',
+      title: l10n.newFolder,
       actions: [
         OutlinedButton(
           style: _dsCapsuleButton(theme),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           style: _dsCapsuleButton(theme),
           onPressed: _controller.text.trim().isEmpty ? null : _create,
-          child: const Text('Create'),
+          child: Text(l10n.create),
         ),
       ],
       child: Column(
@@ -1377,7 +1385,7 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'New folder in “${widget.targetName}”',
+            l10n.newFolderIn(widget.targetName),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1385,7 +1393,7 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
           const SizedBox(height: 12),
           _DsTextInput(
             controller: _controller,
-            hintText: 'Untitled folder',
+            hintText: l10n.untitledFolderHint,
             autofocus: true,
             onChanged: (text) {
               final sanitized = text.replaceAll('/', '').replaceAll('\\', '');
@@ -1446,12 +1454,13 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   /// Web `displayCrumbs`: inside the home subtree the chain starts at a
   /// localized Home crumb; outside it the full ancestry shows.
   List<DirectoryEntry> _displayCrumbs(DirectoryListing listing) {
+    final l10n = AppLocalizations.of(context)!;
     final homeIndex = listing.crumbs.indexWhere(
       (crumb) => crumb.path == listing.home,
     );
     if (homeIndex == -1) return listing.crumbs;
     return <DirectoryEntry>[
-      DirectoryEntry(name: 'Home', path: listing.home, hidden: false),
+      DirectoryEntry(name: l10n.homeCrumb, path: listing.home, hidden: false),
       ...listing.crumbs.skip(homeIndex + 1),
     ];
   }
@@ -1530,6 +1539,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   Widget _buildHeader(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     final crumbs = listing == null
         ? const <DirectoryEntry>[]
@@ -1543,12 +1553,12 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
             children: [
               Expanded(
                 child: Text(
-                  'Select Workspace Directory',
+                  l10n.selectWorkspaceDirectoryTitle,
                   style: theme.textTheme.titleMedium,
                 ),
               ),
               _SheetIconButton(
-                tooltip: 'Close',
+                tooltip: l10n.close,
                 icon: Icons.close,
                 onTap: widget.onClose,
               ),
@@ -1587,7 +1597,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                     ),
                   ),
                   _SheetIconButton(
-                    tooltip: 'Edit path',
+                    tooltip: l10n.editPathTooltip,
                     icon: Icons.edit_outlined,
                     iconSize: 16,
                     onTap: _beginPathEdit,
@@ -1605,6 +1615,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   Widget _buildBody(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     if (listing == null) {
       return Padding(
@@ -1613,7 +1624,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
           child: widget.loading
               ? const CircularProgressIndicator()
               : Text(
-                  'Unable to load directory',
+                  l10n.unableToLoadDirectory,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.error,
                   ),
@@ -1632,7 +1643,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'No folders',
+              l10n.noFolders,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: 13,
                 color: ds.labelTertiary,
@@ -1648,7 +1659,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
-              'Too many folders to list; only the beginning is shown.',
+              l10n.tooManyFoldersHint,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: ds.labelSecondary,
               ),
@@ -1661,6 +1672,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   Widget _buildFooter(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     return Container(
       decoration: BoxDecoration(
@@ -1677,7 +1689,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                     ? null
                     : _showNewFolderDialog,
                 icon: const Icon(Icons.add, size: 14),
-                label: const Text('New folder'),
+                label: Text(l10n.newFolder),
               ),
               const Spacer(),
               // Web `.showHiddenToggle`: fixed label, trailing check.
@@ -1692,7 +1704,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                   child: Row(
                     children: [
                       Text(
-                        'Show hidden files',
+                        l10n.showHiddenFiles,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
@@ -1722,7 +1734,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
               OutlinedButton(
                 style: _dsCapsuleButton(theme),
                 onPressed: widget.onClose,
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               const SizedBox(width: 8),
               FilledButton(
@@ -1730,7 +1742,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                 onPressed: listing == null || widget.loading
                     ? null
                     : () => widget.onSelect(listing.path),
-                child: const Text('Open'),
+                child: Text(l10n.open),
               ),
             ],
           ),
@@ -1803,6 +1815,7 @@ class _PathEditorRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(color: ds.borderL2),
@@ -1813,7 +1826,7 @@ class _PathEditorRow extends StatelessWidget {
       style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
       decoration: InputDecoration(
         isDense: true,
-        hintText: 'Path',
+        hintText: l10n.pathLabel,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           fontSize: 13,
           color: ds.labelTertiary,

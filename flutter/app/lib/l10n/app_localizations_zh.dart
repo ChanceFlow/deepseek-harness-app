@@ -386,12 +386,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String statsInputTokens(int tokens) {
+  String statsInputTokens(String tokens) {
     return '输入 $tokens tok';
   }
 
   @override
-  String statsOutputTokens(int tokens) {
+  String statsOutputTokens(String tokens) {
     return '输出 $tokens tok';
   }
 
@@ -1144,4 +1144,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commandFeedbackDescription => '记录关于本会话的反馈';
+
+  @override
+  String get parentSession => '父会话';
 }

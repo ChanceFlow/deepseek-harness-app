@@ -19,6 +19,7 @@
 /// sessions makes it the backend the chat surface presents.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
@@ -306,6 +307,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     List<SessionSummary> sessions,
     List<WorkspaceSummary> workspaces,
     String? selectedSessionId,
+    AppLocalizations l10n,
   ) {
     final sessionsById = <String, SessionSummary>{
       for (final session in sessions) session.id: session,
@@ -342,7 +344,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       groups.add(
         _SessionGroupData(
           key: _ungroupedKey,
-          label: 'Ungrouped',
+          label: l10n.ungroupedLabel,
           sessions: _withActiveSessionPinned(ungrouped, selectedSessionId),
         ),
       );
@@ -390,10 +392,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Web tree.ts `labelOf`: the workspace title when an account holds the
   /// session, else the cwd basename (search-result context rows). The
   /// result list is active-backend scoped.
-  String _workspaceLabel(SessionSummary session) {
+  String _workspaceLabel(SessionSummary session, AppLocalizations l10n) {
     final workspace = _workspaceOf(session, widget.workspaces);
     if (workspace != null) return workspace.title;
-    return _cwdBasename(session.cwd);
+    return _cwdBasename(session.cwd, l10n);
   }
 
   Future<void> _showNewSessionDialog() {
@@ -409,6 +411,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
   /// toggle collapses to the icon rail.
   Widget _buildBrandRow(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     final rail = !widget.inDrawer && _collapsedToRail;
     return SizedBox(
       height: 60,
@@ -431,7 +434,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           if (!rail) const SizedBox(width: 8),
           if (!widget.inDrawer)
             IconButton(
-              tooltip: rail ? 'Open sidebar' : 'Collapse sidebar',
+              tooltip: rail ? l10n.openSidebar : l10n.collapseSidebar,
               constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               padding: EdgeInsets.zero,
               onPressed: () {
@@ -453,6 +456,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// The sidebar keeps it above the browsing region (web sidebar order);
   /// workspace management itself lives in the Workspaces tab.
   Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
       child: InkWell(
@@ -477,7 +481,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               ),
               const SizedBox(width: 6),
               Text(
-                'New session',
+                l10n.newSession,
                 style: Theme.of(context).textTheme.labelMedium
                     ?.copyWith(fontWeight: FontWeight.w500),
               ),
@@ -493,9 +497,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// lands in the box) — above the icon-per-session list. Rail avatars
   /// follow the same tree.ts `sessionVisible` rule as the grouped tree.
   List<Widget> _buildRailChildren(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     return [
       IconButton(
-        tooltip: 'New session',
+        tooltip: l10n.newSession,
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
         padding: EdgeInsets.zero,
         onPressed: _showNewSessionDialog,
@@ -507,7 +512,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       ),
       const SizedBox(height: 12),
       IconButton(
-        tooltip: 'Search sessions',
+        tooltip: l10n.searchSessions,
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
         padding: EdgeInsets.zero,
         onPressed: _openSearchFromRail,
@@ -519,8 +524,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           padding: const EdgeInsets.only(top: 4, bottom: 16),
           children: [
             for (final session in widget.sessions.where(
-              (session) =>
-                  _sessionVisibleOf(session, widget.selectedSessionId),
+              (session) => _sessionVisibleOf(session, widget.selectedSessionId),
             ))
               IconButton(
                 tooltip: session.displayTitle,
@@ -548,10 +552,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// search-result list with the bottom continuation fade, and the
   /// settings trigger pinned in the foot below it all.
   List<Widget> _buildWideChildren(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     return [
       _buildNewSessionButton(context, ds),
       _SectionHeader(
-        title: 'Workspaces',
+        title: l10n.destinationWorkspaces,
         searchActive: _searchActive,
         onToggleSearch: _toggleSearch,
       ),
@@ -616,6 +621,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// so each shows icon + label. Tapping selects the Settings
   /// destination through [appDestinationProvider].
   Widget _buildSettingsFooter(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -643,7 +649,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Settings',
+                      l10n.destinationSettings,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -665,6 +671,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     DeepSuiteColors ds,
     String? currentGroupKey,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final slices = widget.backendSlices;
     if (slices != null && slices.length > 1) {
       return _buildBackendSections(context, ds);
@@ -673,13 +680,14 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       widget.sessions,
       widget.workspaces,
       widget.selectedSessionId,
+      l10n,
     );
     if (groups.isEmpty) {
       // Web `.empty` (aligned with the row grid).
       return Padding(
         padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
         child: Text(
-          'No sessions yet',
+          l10n.noSessionsYet,
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(fontSize: 13, color: ds.labelTertiary),
         ),
@@ -751,11 +759,13 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     BackendSessionSlice slice,
     int nowEpochMs,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final selectedSessionId = slice.active ? widget.selectedSessionId : null;
     final groups = _deriveSessionGroupsOf(
       slice.sessions,
       slice.workspaces,
       selectedSessionId,
+      l10n,
     );
     final currentGroupKey = _currentGroupKeyOf(
       slice.sessions,
@@ -780,8 +790,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onToggle: () => _toggleGroup(_sliceGroupKey(slice, groups[i].key)),
           onToggleOverflow: () =>
               _toggleOverflow(_sliceGroupKey(slice, groups[i].key)),
-          onSelectSession: (sessionId) =>
-              _selectSessionOn(slice, sessionId),
+          onSelectSession: (sessionId) => _selectSessionOn(slice, sessionId),
         ),
       ],
     ];
@@ -792,13 +801,15 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// landed stay hidden until the list catches up (web drops them the
   /// same way).
   Widget _buildSearchResults(BuildContext context, DeepSuiteColors ds) {
+    final l10n = AppLocalizations.of(context)!;
     // Web tree.ts `deriveSearchResults`: content matches render only for
     // visible non-blank summaries — subagent children never surface, and
     // blank placeholders never match a query (not even the current one).
     final sessionsById = <String, SessionSummary>{
       for (final session in widget.sessions.where(
         (session) =>
-            !session.blank && _sessionVisibleOf(session, widget.selectedSessionId),
+            !session.blank &&
+            _sessionVisibleOf(session, widget.selectedSessionId),
       ))
         session.id: session,
     };
@@ -808,7 +819,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           _SearchResultRow(
             session: session,
             snippet: result.snippet,
-            workspaceLabel: _workspaceLabel(session),
+            workspaceLabel: _workspaceLabel(session, l10n),
             selected: session.id == widget.selectedSessionId,
             onSelect: () => widget.onSelectSession(session.id),
           ),
@@ -818,7 +829,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
           child: Text(
-            'No matching sessions',
+            l10n.noMatchingSessions,
             style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(fontSize: 13, color: ds.labelTertiary),
           ),
@@ -899,13 +910,16 @@ Map<String, bool> _decodeGroupOverrides(Object? raw) {
 /// Decodes [_overflowExpandedKey] under the same checked rule.
 List<String> _decodeOverflowExpanded(Object? raw) {
   if (raw is! List) return const <String>[];
-  return <String>[for (final item in raw) if (item is String) item];
+  return <String>[
+    for (final item in raw)
+      if (item is String) item,
+  ];
 }
 
 /// Web tree.ts `workspaceLabel`: the cwd basename, or the Ungrouped label
 /// when there is no path to name.
-String _cwdBasename(String? cwd) {
-  if (cwd == null || cwd.isEmpty) return 'Ungrouped';
+String _cwdBasename(String? cwd, AppLocalizations l10n) {
+  if (cwd == null || cwd.isEmpty) return l10n.ungroupedLabel;
   final segments = cwd.split(RegExp(r'[/\\]+'));
   for (final segment in segments.reversed) {
     if (segment.isNotEmpty) return segment;
@@ -915,19 +929,23 @@ String _cwdBasename(String? cwd) {
 
 /// Web tree.ts `relativeTime` plus the en dictionary: the compact trailing
 /// label for session rows ("now"/"5min"/"3h"/"2d"/"4mo"/"1y").
-String _relativeTimeLabel(int updatedAtEpochMs, int nowEpochMs) {
+String _relativeTimeLabel(
+  int updatedAtEpochMs,
+  int nowEpochMs,
+  AppLocalizations l10n,
+) {
   const minuteMs = 60 * 1000;
   const hourMs = 60 * minuteMs;
   const dayMs = 24 * hourMs;
   final diff = nowEpochMs - updatedAtEpochMs;
   final elapsed = diff < 0 ? 0 : diff;
   return switch (elapsed) {
-    < minuteMs => 'now',
-    < hourMs => '${elapsed ~/ minuteMs}min',
-    < dayMs => '${elapsed ~/ hourMs}h',
-    < 30 * dayMs => '${elapsed ~/ dayMs}d',
-    < 365 * dayMs => '${elapsed ~/ (30 * dayMs)}mo',
-    _ => '${elapsed ~/ (365 * dayMs)}y',
+    < minuteMs => l10n.relativeTimeNow,
+    < hourMs => l10n.relativeTimeMinutes(elapsed ~/ minuteMs),
+    < dayMs => l10n.relativeTimeHours(elapsed ~/ hourMs),
+    < 30 * dayMs => l10n.relativeTimeDays(elapsed ~/ dayMs),
+    < 365 * dayMs => l10n.relativeTimeMonths(elapsed ~/ (30 * dayMs)),
+    _ => l10n.relativeTimeYears(elapsed ~/ (365 * dayMs)),
   };
 }
 
@@ -948,6 +966,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
@@ -965,7 +984,7 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
             _HeaderIconButton(
-              tooltip: 'Search sessions',
+              tooltip: l10n.searchSessions,
               icon: Icons.search,
               active: searchActive,
               onTap: onToggleSearch,
@@ -1038,6 +1057,7 @@ class _SearchCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
     return Padding(
@@ -1062,7 +1082,7 @@ class _SearchCapsule extends StatelessWidget {
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: 'Search sessions...',
+                  hintText: l10n.searchSessionsHint,
                   hintStyle: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
                     color: ds.labelTertiary,
@@ -1119,6 +1139,7 @@ class _BackendSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final ds = dsOf(context);
     final backend = slice.backend;
@@ -1158,16 +1179,15 @@ class _BackendSectionHeader extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: slice.active ? ds.specificSelector : null,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  slice.active ? 'Active' : 'Standby',
+                  slice.active
+                      ? l10n.backendStatusActive
+                      : l10n.backendStatusStandby,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: slice.active ? ds.labelSecondary : ds.labelTertiary,
                   ),
@@ -1269,6 +1289,7 @@ class _GroupHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
     return Material(
@@ -1304,7 +1325,7 @@ class _GroupHeaderRow extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                sessionCount == 1 ? '1 session' : '$sessionCount sessions',
+                l10n.sessionCount(sessionCount),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -1339,10 +1360,11 @@ class _SessionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
     // Web `displayTitle`: blank rows show the New Session label.
-    final title = session.blank ? 'New session' : session.displayTitle;
+    final title = session.blank ? l10n.newSession : session.displayTitle;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: selected ? ds.sidebarNavItemActive : null,
@@ -1393,6 +1415,7 @@ class _SessionRow extends StatelessWidget {
                             _relativeTimeLabel(
                               session.updatedAtEpochMs,
                               nowEpochMs,
+                              l10n,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1431,6 +1454,7 @@ class _OverflowRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     return Material(
       color: Colors.transparent,
@@ -1444,7 +1468,7 @@ class _OverflowRow extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                expanded ? 'Show less' : 'Show all $totalCount',
+                expanded ? l10n.showLess : l10n.showAll(totalCount),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall
@@ -1478,9 +1502,10 @@ class _SearchResultRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
     final theme = Theme.of(context);
-    final title = session.blank ? 'New session' : session.displayTitle;
+    final title = session.blank ? l10n.newSession : session.displayTitle;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: selected ? ds.sidebarNavItemActive : null,
@@ -1625,21 +1650,21 @@ class _NewSessionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('New session'),
+      title: Text(l10n.newSession),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (workspaces.isEmpty) ...[
-            const Text('No workspaces registered.'),
+            Text(l10n.noWorkspacesRegistered),
             Text(
-              'Use the Workspaces tab to register a directory first, '
-              'or choose Default to create an unaccounted session.',
+              l10n.noWorkspacesRegisteredBody,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ] else ...[
             Text(
-              'Choose a workspace or keep the default.',
+              l10n.chooseWorkspaceOrDefault,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
@@ -1664,14 +1689,14 @@ class _NewSessionDialog extends StatelessWidget {
       actions: [
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () {
             onCreateSession(null);
             Navigator.of(context).pop();
           },
-          child: const Text('Default'),
+          child: Text(l10n.defaultBadge),
         ),
       ],
     );

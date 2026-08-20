@@ -9,6 +9,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
@@ -299,11 +300,12 @@ class _ChatScreenState extends State<ChatScreen> {
     void Function(ChatAction) onAction, {
     required bool compact,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final sessionId = uiState.selectedSessionId;
     final session = uiState.sessions
         .where((item) => item.id == sessionId)
         .firstOrNull;
-    final title = session?.displayTitle ?? 'DeepSeek Harness';
+    final title = session?.displayTitle ?? l10n.appTitle;
     final connection = uiState.connection;
     final hostVersion = connection.hostDescription?.version ?? '';
     // Multi-backend form: the subtitle names WHICH host this surface
@@ -311,11 +313,12 @@ class _ChatScreenState extends State<ChatScreen> {
     // the bare connection line — the host is unambiguous there).
     final activeBackendLabel = _activeBackendLabel();
     final connectionLine = switch (connection.phase) {
-      ConnectionPhase.connected =>
-        hostVersion.isEmpty ? 'connected' : 'connected $hostVersion',
-      ConnectionPhase.connecting => 'connecting',
-      ConnectionPhase.reconnecting => 'reconnecting',
-      ConnectionPhase.disconnected => 'disconnected',
+      ConnectionPhase.connected => hostVersion.isEmpty
+          ? l10n.appBarConnected
+          : l10n.appBarConnectedWithVersion(hostVersion),
+      ConnectionPhase.connecting => l10n.appBarConnecting,
+      ConnectionPhase.reconnecting => l10n.appBarReconnecting,
+      ConnectionPhase.disconnected => l10n.appBarDisconnected,
     };
     final subtitle = activeBackendLabel == null
         ? connectionLine
@@ -367,6 +370,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
     final onAction = widget.onAction;
+    final l10n = AppLocalizations.of(context)!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final useTwoPanes = constraints.maxWidth >= 720;
@@ -432,7 +436,7 @@ class _ChatScreenState extends State<ChatScreen> {
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('DeepSeek Harness'),
+                Text(l10n.appTitle),
                 const SizedBox(width: 8),
                 AgentPresetHeaderLabel(
                   session: uiState.sessions
@@ -508,11 +512,13 @@ class ConnectionBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final connection = uiState.connection;
     final hostVersion = connection.hostDescription?.version ?? '';
+    final l10n = AppLocalizations.of(context)!;
     final text = switch (connection.phase) {
-      ConnectionPhase.connected => 'connected $hostVersion',
-      ConnectionPhase.connecting => 'connecting',
-      ConnectionPhase.reconnecting => 'reconnecting',
-      ConnectionPhase.disconnected => 'disconnected',
+      ConnectionPhase.connected =>
+        l10n.connectionBannerConnected(hostVersion),
+      ConnectionPhase.connecting => l10n.connectionBannerConnecting,
+      ConnectionPhase.reconnecting => l10n.connectionBannerReconnecting,
+      ConnectionPhase.disconnected => l10n.connectionBannerDisconnected,
     };
     return SizedBox(
       width: double.infinity,
@@ -560,31 +566,32 @@ class ChatHeaderActions extends StatelessWidget {
   Future<void> _archive(BuildContext context, String sessionId) {
     return showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Archive session'),
-        content: const Text(
-          'The session log and its workspace seat are kept; '
-          'this row is hidden from all grouping surfaces.',
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              onAction(ArchiveSession(sessionId));
-              Navigator.of(context).pop();
-            },
-            child: const Text('Archive'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return AlertDialog(
+          title: Text(l10n.archiveSession),
+          content: Text(l10n.archiveSessionBody),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                onAction(ArchiveSession(sessionId));
+                Navigator.of(context).pop();
+              },
+              child: Text(l10n.archive),
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final sessionId = uiState.selectedSessionId;
     if (sessionId == null) {
       return const SizedBox.shrink();
@@ -597,7 +604,7 @@ class ChatHeaderActions extends StatelessWidget {
       children: [
         JobListAction(jobs: uiState.jobs),
         IconButton(
-          tooltip: 'Outline',
+          tooltip: l10n.outlineTooltip,
           isSelected: outline,
           onPressed: onToggleOutline,
           icon: const Icon(Icons.view_list_outlined),
@@ -605,22 +612,22 @@ class ChatHeaderActions extends StatelessWidget {
         ),
         if (onOpenSubagents != null)
           IconButton(
-            tooltip: 'Subagents',
+            tooltip: l10n.subagentsTooltip,
             onPressed: onOpenSubagents,
             icon: const Icon(Icons.account_tree_outlined),
           ),
         IconButton(
-          tooltip: 'Rename session',
+          tooltip: l10n.renameSession,
           onPressed: () => _rename(context, sessionId),
           icon: const Icon(Icons.edit_outlined),
         ),
         IconButton(
-          tooltip: 'Fork session',
+          tooltip: l10n.forkSession,
           onPressed: () => onAction(ForkSession(sessionId)),
           icon: const Icon(Icons.call_split_outlined),
         ),
         IconButton(
-          tooltip: 'Archive session',
+          tooltip: l10n.archiveSession,
           onPressed: selectedSession?.blank == true
               ? null
               : () => _archive(context, sessionId),
@@ -1047,6 +1054,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final uiState = widget.uiState;
     final selectedSessionId = uiState.selectedSessionId;
     final selectedSession = uiState.sessions
@@ -1071,7 +1079,7 @@ class _ChatPanelState extends State<ChatPanel> {
               alignment: Alignment.centerLeft,
               child: TextButton(
                 onPressed: () => _setCollapsedTurns(const <int>{}),
-                child: const Text('Expand all'),
+                child: Text(l10n.expandAll),
               ),
             ),
           Expanded(child: _timelineBody(uiState, selectedSession)),
@@ -1171,6 +1179,7 @@ class _PlanChipState extends State<PlanChip> {
     if (!target) return const SizedBox.shrink();
 
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     // Web .chip:hover — the label deepens toward warn-primary.
     final label = _hovering ? ds.warnPrimary : ds.warnLabel;
     return MouseRegion(
@@ -1203,9 +1212,7 @@ class _PlanChipState extends State<PlanChip> {
                       height: 20 / 13,
                       color: label,
                     ),
-                    // Design literal, not copy: the chip wordmark stays
-                    // 'Plan' in every locale.
-                    child: const Text('Plan'),
+                    child: Text(l10n.planBadge),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.close, size: 12, color: label),
@@ -1526,14 +1533,20 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   }
 
   Widget _placeholder(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
-    final nameSuffix = ref.name == null ? '' : ' · ${ref.name}';
+    final nameSuffix =
+        ref.name == null ? '' : l10n.imagePlaceholderSuffix(ref.name);
     return Row(
       children: [
         Expanded(
           child: Text(
-            'image ${ref.width}×${ref.height} (${ref.bytes} bytes)'
-            '$nameSuffix',
+            l10n.imageLoadingPlaceholder(
+              ref.bytes,
+              ref.height,
+              nameSuffix,
+              ref.width,
+            ),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -1544,7 +1557,7 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
             setState(() => _bytes = null);
             _load();
           },
-          child: const Text('Retry'),
+          child: Text(l10n.retry),
         ),
       ],
     );
@@ -1614,8 +1627,9 @@ class _ToolCallRowState extends State<ToolCallRow>
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final call = widget.call;
-    final model = deriveToolRowModel(call);
+    final model = deriveToolRowModel(call, l10n);
     final running = model.state == ToolRowState.running;
     final failed = model.state == ToolRowState.error;
     final hasDetails = model.body != null || model.output != null;
@@ -1624,9 +1638,9 @@ class _ToolCallRowState extends State<ToolCallRow>
       children: [
         Semantics(
           label: running
-              ? 'Running'
+              ? l10n.semanticsRunning
               : failed
-              ? 'Failed'
+              ? l10n.semanticsFailed
               : null,
           child: InkWell(
             borderRadius: BorderRadius.circular(4),
@@ -1730,7 +1744,7 @@ class _ToolCallRowState extends State<ToolCallRow>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (model.body case final body?)
-                  _ioSection(context, 'IN', body, failed: false),
+                  _ioSection(context, l10n.inputLabel, body, failed: false),
                 if (model.body != null && model.output != null)
                   Container(
                     height: 1,
@@ -1738,7 +1752,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                     margin: const EdgeInsets.symmetric(horizontal: 14),
                   ),
                 if (model.output case final output?)
-                  _ioSection(context, 'OUT', output, failed: failed),
+                  _ioSection(context, l10n.outputLabel, output, failed: failed),
               ],
             ),
           ),
@@ -1807,11 +1821,12 @@ class _ToolCallRowState extends State<ToolCallRow>
   }
 }
 
-String toolRunStatusLabel(ToolRunStatus status) => switch (status) {
-  ToolRunStatus.running => 'running...',
-  ToolRunStatus.completed => 'done',
-  ToolRunStatus.failed => 'failed',
-};
+String toolRunStatusLabel(ToolRunStatus status, AppLocalizations l10n) =>
+    switch (status) {
+      ToolRunStatus.running => l10n.runStatusRunning,
+      ToolRunStatus.completed => l10n.runStatusDone,
+      ToolRunStatus.failed => l10n.runStatusFailed,
+    };
 
 class GoalBarStrip extends StatelessWidget {
   const GoalBarStrip({
@@ -1833,10 +1848,11 @@ class GoalBarStrip extends StatelessWidget {
     if (snapshot.phase == GoalPhase.complete) return const SizedBox.shrink();
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final phaseLabel = switch (snapshot.phase) {
-      GoalPhase.active => 'Active',
-      GoalPhase.paused => 'Paused',
-      GoalPhase.blocked => 'Blocked',
+      GoalPhase.active => l10n.chatGoalPhaseActive,
+      GoalPhase.paused => l10n.chatGoalPhasePaused,
+      GoalPhase.blocked => l10n.chatGoalPhaseBlocked,
       GoalPhase.complete => '',
     };
     return Padding(
@@ -1875,8 +1891,8 @@ class GoalBarStrip extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               iconSize: 14,
               tooltip: snapshot.phase == GoalPhase.active
-                  ? 'Pause goal'
-                  : 'Resume goal',
+                  ? l10n.pauseGoal
+                  : l10n.resumeGoal,
               onPressed: () => onAction(const ToggleGoalPause()),
               icon: Icon(
                 snapshot.phase == GoalPhase.active
@@ -1890,7 +1906,7 @@ class GoalBarStrip extends StatelessWidget {
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 14,
-              tooltip: 'Clear goal',
+              tooltip: l10n.clearGoal,
               onPressed: () => onAction(const ClearGoal()),
               icon: Icon(
                 Icons.delete_outline,
@@ -1902,7 +1918,7 @@ class GoalBarStrip extends StatelessWidget {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 iconSize: 14,
-                tooltip: 'Open goal',
+                tooltip: l10n.openGoal,
                 onPressed: onOpen,
                 icon: Icon(Icons.chevron_right, color: ds.labelSecondary),
               ),
@@ -1945,6 +1961,7 @@ class _QueueDockState extends State<QueueDock> {
         .toList();
     if (queue.isEmpty) return const SizedBox.shrink();
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     // Interaction reopens the list; an emptied queue recollapses (web
     // effect).
     final expanded = !_collapsed || queue.length == 1;
@@ -1978,7 +1995,7 @@ class _QueueDockState extends State<QueueDock> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '${queue.length} queued messages',
+                            l10n.queuedMessagesCount(queue.length),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodyMedium
@@ -2091,6 +2108,7 @@ class _QueueItemRowState extends State<_QueueItemRow> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final item = widget.item;
     return Container(
       decoration: BoxDecoration(
@@ -2121,7 +2139,7 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                           onSubmitted: (_) => _save(),
                           decoration: InputDecoration(
                             isDense: true,
-                            hintText: 'Edit queued message',
+                            hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(color: ds.borderL2),
@@ -2153,12 +2171,12 @@ class _QueueItemRowState extends State<_QueueItemRow> {
               const SizedBox(width: 10),
               if (_editing) ...[
                 _QueueAction(
-                  tooltip: 'Save queued message',
+                  tooltip: l10n.saveQueuedMessage,
                   icon: Icons.check,
                   onTap: _save,
                 ),
                 _QueueAction(
-                  tooltip: 'Cancel edit',
+                  tooltip: l10n.cancelEdit,
                   icon: Icons.close,
                   onTap: () => setState(() => _editing = false),
                 ),
@@ -2166,13 +2184,13 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                 // Web rule: editing is a text-only affordance; a
                 // non-text row keeps the button disabled.
                 _QueueAction(
-                  tooltip: 'Edit queued message',
+                  tooltip: l10n.editQueuedMessageHint,
                   icon: Icons.edit_outlined,
                   enabled: item.text.trim().isNotEmpty,
                   onTap: () => setState(() => _editing = true),
                 ),
                 _QueueAction(
-                  tooltip: 'Steer',
+                  tooltip: l10n.steer,
                   icon: Icons.send_outlined,
                   // Web: steering needs the running window.
                   enabled: widget.running,
@@ -2184,7 +2202,7 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                   ),
                 ),
                 _QueueAction(
-                  tooltip: 'Remove queued message',
+                  tooltip: l10n.removeQueuedMessage,
                   icon: Icons.delete_outline,
                   onTap: () => widget.onAction(
                     UpdateQueueAction(
@@ -2274,11 +2292,12 @@ class ApprovalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Approve tool: $toolName',
+          l10n.approveTool(toolName),
           style: Theme.of(context).textTheme.titleSmall,
         ),
         if (reason case final String because)
@@ -2293,7 +2312,7 @@ class ApprovalRow extends StatelessWidget {
                   allowed: true,
                 ),
               ),
-              child: const Text('Allow'),
+              child: Text(l10n.allow),
             ),
             Padding(
               padding: const EdgeInsets.only(left: 8),
@@ -2305,7 +2324,7 @@ class ApprovalRow extends StatelessWidget {
                     allowed: false,
                   ),
                 ),
-                child: const Text('Reject'),
+                child: Text(l10n.reject),
               ),
             ),
           ],
@@ -2339,6 +2358,7 @@ class _QuestionRowState extends State<QuestionRow> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final request = widget.request;
     final answerEnabled =
         request.questions.isNotEmpty &&
@@ -2373,7 +2393,7 @@ class _QuestionRowState extends State<QuestionRow> {
                   );
                 }
               : null,
-          child: const Text('Answer'),
+          child: Text(l10n.answer),
         ),
       ],
     );
