@@ -2,12 +2,15 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart'
     show Icons, NavigationBar, Size, TextField;
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app/backends/backend_store.dart';
+import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/main.dart';
 
@@ -43,12 +46,30 @@ class _NeverSocket implements DshEventSocket {
   }
 }
 
+/// In-memory-backed store: path_provider has no plugin in tests, so the
+/// registry reads a temp file instead of the documents directory.
+BackendStore _testStore() {
+  final dir = Directory.systemTemp.createTempSync('dsh-backends-test');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  return BackendStore(
+    File('${dir.path}/backends.json'),
+    seedBaseUrl: kDshBaseUrl,
+  );
+}
+
 Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
-        dshRpcClientProvider.overrideWithValue(rpc ?? _FakeRpc()),
-        dshEventSocketProvider.overrideWithValue(_NeverSocket()),
+        backendStoreProvider.overrideWith((ref) async => _testStore()),
+        // Family seams keyed by the seed backend's URL (the store seeds
+        // from kDshBaseUrl).
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
+          rpc ?? _FakeRpc(),
+        ),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
+          _NeverSocket(),
+        ),
       ],
       child: const DshApp(),
     ),

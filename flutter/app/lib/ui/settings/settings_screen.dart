@@ -22,11 +22,21 @@ import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
 import 'settings_ui_state.dart';
 
 class SettingsRoute extends ConsumerWidget {
-  const SettingsRoute({super.key});
+  const SettingsRoute({super.key, this.backendId});
+
+  /// The backend whose HOST settings this surface presents; null uses
+  /// the active backend. The Backends section is device-local and always
+  /// shows.
+  final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(settingsControllerProvider);
+    final resolved =
+        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
+    if (resolved.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final controller = ref.watch(settingsControllerProvider(resolved));
     return StreamBuilder<SettingsUiState>(
       stream: controller.uiState,
       initialData: controller.state,

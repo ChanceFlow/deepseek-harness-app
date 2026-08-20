@@ -9,11 +9,19 @@ import '../../di/providers.dart';
 import 'goal_ui_state.dart';
 
 class GoalRoute extends ConsumerWidget {
-  const GoalRoute({super.key});
+  const GoalRoute({super.key, this.backendId});
+
+  /// The backend this surface presents; null uses the active backend.
+  final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(goalControllerProvider);
+    final resolved =
+        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
+    if (resolved.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final controller = ref.watch(goalControllerProvider(resolved));
     return StreamBuilder<GoalUiState>(
       stream: controller.uiState,
       initialData: controller.state,

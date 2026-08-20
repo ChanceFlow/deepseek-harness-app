@@ -34,11 +34,19 @@ import '../theme/deepsuite_tokens.dart';
 import 'subagent_ui_state.dart';
 
 class SubagentRoute extends ConsumerWidget {
-  const SubagentRoute({super.key});
+  const SubagentRoute({super.key, this.backendId});
+
+  /// The backend this surface presents; null uses the active backend.
+  final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(subagentControllerProvider);
+    final resolved =
+        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
+    if (resolved.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final controller = ref.watch(subagentControllerProvider(resolved));
     return StreamBuilder<SubagentUiState>(
       stream: controller.uiState,
       initialData: controller.state,

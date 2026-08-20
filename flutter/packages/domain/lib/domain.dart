@@ -2,6 +2,7 @@
 library;
 
 export 'model/attachment.dart';
+export 'model/backend.dart';
 export 'model/chat_message.dart';
 export 'model/connection_state.dart';
 export 'model/directory.dart';

@@ -11,12 +11,15 @@
 /// bgLayer2, lv3 shadow) as bottom-docked cards and dialogs.
 library;
 
+import 'package:domain/model/backend.dart';
+import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
+import '../subagents/subagent_screen.dart' show SubagentDotState, SubagentStateDot;
 import '../theme/deepsuite_extension.dart';
 import 'workspace_ui_state.dart';
 
@@ -25,15 +28,194 @@ class WorkspaceRoute extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(workspaceControllerProvider);
+    // Watching the keep-alive here pins every configured backend's
+    // connection while this tab exists.
+    ref.watch(allBackendConnectionsProvider);
+    final registry = ref.watch(backendRegistryStateProvider);
+    return registry.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (error, _) =>
+          Scaffold(body: Center(child: Text(error.toString()))),
+      data: (state) => _BackendAggregateScreen(
+        backends: state.backends,
+        activeId: state.activeId,
+        onAction: (action) => ref
+            .read(backendRegistryProvider.future)
+            .then((controller) => controller.onAction(action)),
+      ),
+    );
+  }
+}
+
+/// The aggregate Workspaces surface: every configured backend's browsing
+/// region, grouped under a backend header (label + live connection dot +
+/// active marker). Tapping a header makes that backend active; starting
+/// a session in a workspace switches there too.
+class _BackendAggregateScreen extends ConsumerWidget {
+  const _BackendAggregateScreen({
+    required this.backends,
+    required this.activeId,
+    required this.onAction,
+  });
+
+  final List<BackendConfig> backends;
+  final String? activeId;
+  final void Function(BackendAction action) onAction;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = dsOf(context);
+    return Scaffold(
+      backgroundColor: ds.sidebarFill,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            for (final backend in backends)
+              _BackendWorkspaceSection(
+                key: ValueKey(backend.id),
+                backend: backend,
+                active: backend.id == activeId,
+                onAction: onAction,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One backend's group: the header row plus its embedded browsing
+/// region.
+class _BackendWorkspaceSection extends ConsumerWidget {
+  const _BackendWorkspaceSection({
+    super.key,
+    required this.backend,
+    required this.active,
+    required this.onAction,
+  });
+
+  final BackendConfig backend;
+  final bool active;
+  final void Function(BackendAction action) onAction;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final controller = ref.watch(workspaceControllerProvider(backend.id));
     return StreamBuilder<WorkspaceUiState>(
       stream: controller.uiState,
       initialData: controller.state,
       builder: (context, snapshot) {
         final uiState = snapshot.data ?? const WorkspaceUiState();
-        return WorkspaceScreen(uiState: uiState, onAction: controller.onAction);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Backend header: connection dot + label + host, with the
+            // active marker; tapping selects the backend.
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => onAction(SelectBackend(backend.id)),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  decoration: BoxDecoration(
+                    color: active ? ds.sidebarNavItemActive : null,
+                    border: Border(
+                      bottom: BorderSide(color: ds.divider),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _BackendConnectionDot(backendId: backend.id),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              backend.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            Text(
+                              '${backend.baseUri.host}:${backend.baseUri.port}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: ds.labelTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (active)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: ds.specificSelector,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Active',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: ds.labelSecondary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // The embedded browsing region; starting a session in a
+            // non-active backend's workspace selects it first so the
+            // chat surface follows.
+            WorkspaceScreen(
+              uiState: uiState,
+              onAction: (action) {
+                if (action is StartSessionInWorkspace && !active) {
+                  onAction(SelectBackend(backend.id));
+                }
+                controller.onAction(action);
+              },
+              embedded: true,
+              titleOverride: backend.label,
+            ),
+            const SizedBox(height: 16),
+          ],
+        );
       },
     );
+  }
+}
+
+/// Live connection dot for one backend (connection-state phases mapped
+/// onto the StateDot vocabulary).
+class _BackendConnectionDot extends ConsumerWidget {
+  const _BackendConnectionDot({required this.backendId});
+
+  final String backendId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The keep-alive map guarantees the member exists.
+    final connections = ref.watch(allBackendConnectionsProvider);
+    final phase = connections[backendId]?.state.value.phase;
+    final dotState = switch (phase) {
+      ConnectionPhase.connected => SubagentDotState.done,
+      ConnectionPhase.connecting ||
+      ConnectionPhase.reconnecting => SubagentDotState.ongoing,
+      ConnectionPhase.disconnected => SubagentDotState.error,
+      null => SubagentDotState.error,
+    };
+    return SubagentStateDot(state: dotState);
   }
 }
 
@@ -42,10 +224,20 @@ class WorkspaceScreen extends StatefulWidget {
     super.key,
     required this.uiState,
     required this.onAction,
+    this.embedded = false,
+    this.titleOverride,
   });
 
   final WorkspaceUiState uiState;
   final void Function(WorkspaceAction) onAction;
+
+  /// Aggregate form: render the browsing region without the Scaffold
+  /// (the backend section owns the surface).
+  final bool embedded;
+
+  /// Replaces the section-header title in the aggregate form (the
+  /// backend label names the region).
+  final String? titleOverride;
 
   @override
   State<WorkspaceScreen> createState() => _WorkspaceScreenState();
@@ -149,112 +341,140 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                     workspace.path.toLowerCase().contains(query),
               )
               .toList(growable: false);
-    return Scaffold(
-      // Web: the browser region lives on the sidebar fill.
-      backgroundColor: ds.sidebarFill,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      children: [
+        if (widget.embedded)
+          _browsingRegion(context, ds, uiState, workspaces, query)
+        else
+          Scaffold(
+            // Web: the browser region lives on the sidebar fill.
+            backgroundColor: ds.sidebarFill,
+            body: SafeArea(child: _browsingRegionBody(context, ds, uiState, workspaces, query)),
+          ),
+        if (uiState.directoryBrowserOpen) ...[
+          // Web Modal mask: rgba(0,0,0,0.24); tapping it closes.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.onAction(const CloseDirectoryBrowser()),
+              child: ColoredBox(color: Colors.black.withValues(alpha: 0.24)),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              child: DirectoryBrowserDialog(
+                listing: uiState.directoryListing,
+                loading: uiState.directoryLoading,
+                onNavigate: (destination) =>
+                    widget.onAction(NavigateDirectory(destination)),
+                onCreateDirectory: (name) {
+                  final parent = uiState.directoryListing?.path;
+                  if (parent != null) {
+                    widget.onAction(CreateDirectoryAction(parent, name));
+                  }
+                },
+                // Web adoption: picking a folder creates the workspace
+                // (the flow's one action — no intermediate form).
+                onSelect: (selected) {
+                  widget.onAction(CreateWorkspaceAction(selected));
+                  widget.onAction(const CloseDirectoryBrowser());
+                },
+                onClose: () => widget.onAction(const CloseDirectoryBrowser()),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The browsing region: header, search, errors, and the workspace
+  /// tree. The standalone form stretches the tree (Expanded); the
+  /// embedded aggregate form shrink-wraps it onto the outer scroll.
+  Widget _browsingRegion(
+    BuildContext context,
+    DeepSuiteColors ds,
+    WorkspaceUiState uiState,
+    List<WorkspaceSummary> workspaces,
+    String query,
+  ) {
+    return Material(color: ds.sidebarFill, child: _browsingRegionBody(context, ds, uiState, workspaces, query));
+  }
+
+  Widget _browsingRegionBody(
+    BuildContext context,
+    DeepSuiteColors ds,
+    WorkspaceUiState uiState,
+    List<WorkspaceSummary> workspaces,
+    String query,
+  ) {
+    final tree = _WorkspaceTree(
+      workspaces: workspaces,
+      expandedGroups: _expandedGroups,
+      hasQuery: query.isNotEmpty,
+      onToggle: _toggleGroup,
+      onMenu: _showWorkspaceActions,
+      onStartSession: _startSession,
+      shrinkWrap: widget.embedded,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: widget.embedded ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        _SectionHeader(
+          title: widget.titleOverride ?? 'Workspaces',
+          searchActive: _searchActive,
+          onToggleSearch: _toggleSearch,
+          onAdd: () => widget.onAction(const OpenDirectoryBrowser()),
+        ),
+        if (_searchActive)
+          _SearchCapsule(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            onCollapse: _collapseSearch,
+          ),
+        if (uiState.errorMessage case final String error)
+          _ErrorBanner(
+            message: error,
+            onDismiss: () => widget.onAction(const DismissWorkspaceError()),
+          ),
+        if (uiState.isLoading) const LinearProgressIndicator(minHeight: 2),
+        if (widget.embedded)
+          tree
+        else
+          Expanded(
+            child: Stack(
               children: [
-                _SectionHeader(
-                  title: 'Workspaces',
-                  searchActive: _searchActive,
-                  onToggleSearch: _toggleSearch,
-                  onAdd: () => widget.onAction(const OpenDirectoryBrowser()),
-                ),
-                if (_searchActive)
-                  _SearchCapsule(
-                    controller: _searchController,
-                    onChanged: (_) => setState(() {}),
-                    onCollapse: _collapseSearch,
-                  ),
-                if (uiState.errorMessage case final String error)
-                  _ErrorBanner(
-                    message: error,
-                    onDismiss: () =>
-                        widget.onAction(const DismissWorkspaceError()),
-                  ),
-                if (uiState.isLoading)
-                  const LinearProgressIndicator(minHeight: 2),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      _WorkspaceTree(
-                        workspaces: workspaces,
-                        expandedGroups: _expandedGroups,
-                        hasQuery: query.isNotEmpty,
-                        onToggle: _toggleGroup,
-                        onMenu: _showWorkspaceActions,
-                        onStartSession: _startSession,
-                      ),
-                      // Web `.fade`: bottom continuation hint tracking the
-                      // sidebar fill across themes.
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            height: 24,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  ds.sidebarFill.withValues(alpha: 0),
-                                  ds.sidebarFill,
-                                ],
-                              ),
-                            ),
-                          ),
+                tree,
+                // Web `.fade`: bottom continuation hint tracking the
+                // sidebar fill across themes.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 24,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            ds.sidebarFill.withValues(alpha: 0),
+                            ds.sidebarFill,
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          if (uiState.directoryBrowserOpen) ...[
-            // Web Modal mask: rgba(0,0,0,0.24); tapping it closes.
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => widget.onAction(const CloseDirectoryBrowser()),
-                child: ColoredBox(color: Colors.black.withValues(alpha: 0.24)),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                child: DirectoryBrowserDialog(
-                  listing: uiState.directoryListing,
-                  loading: uiState.directoryLoading,
-                  onNavigate: (destination) =>
-                      widget.onAction(NavigateDirectory(destination)),
-                  onCreateDirectory: (name) {
-                    final parent = uiState.directoryListing?.path;
-                    if (parent != null) {
-                      widget.onAction(CreateDirectoryAction(parent, name));
-                    }
-                  },
-                  // Web adoption: picking a folder creates the workspace
-                  // (the flow's one action — no intermediate form).
-                  onSelect: (selected) {
-                    widget.onAction(CreateWorkspaceAction(selected));
-                    widget.onAction(const CloseDirectoryBrowser());
-                  },
-                  onClose: () => widget.onAction(const CloseDirectoryBrowser()),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+      ],
     );
   }
 }
@@ -488,6 +708,7 @@ class _WorkspaceTree extends StatelessWidget {
     required this.onToggle,
     required this.onMenu,
     required this.onStartSession,
+    this.shrinkWrap = false,
   });
 
   final List<WorkspaceSummary> workspaces;
@@ -496,6 +717,9 @@ class _WorkspaceTree extends StatelessWidget {
   final void Function(String workspaceId) onToggle;
   final void Function(WorkspaceSummary workspace) onMenu;
   final void Function(String workspaceId) onStartSession;
+
+  /// Aggregate form: the tree rides the section's outer scroll view.
+  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -513,6 +737,8 @@ class _WorkspaceTree extends StatelessWidget {
     }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       children: [
         for (var i = 0; i < workspaces.length; i++) ...[
           // Web `.groupSection + .groupSection` inter-group spacing.

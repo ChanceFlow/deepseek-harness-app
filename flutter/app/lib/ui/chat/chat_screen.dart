@@ -65,18 +65,30 @@ typedef AttachmentLoader = Future<Uint8List?> Function(
 );
 
 class ChatRoute extends ConsumerWidget {
-  const ChatRoute({super.key});
+  const ChatRoute({super.key, this.backendId});
+
+  /// The backend this surface presents; null uses the active backend
+  /// (the tab's default).
+  final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(chatControllerProvider);
+    // Watching the keep-alive here pins every configured backend's
+    // connection for the app's lifetime.
+    ref.watch(allBackendConnectionsProvider);
+    final resolved = backendId ?? ref.watch(activeBackendIdProvider).value;
+    if (resolved == null || resolved.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final controller = ref.watch(chatControllerProvider(resolved));
     return ref
-        .watch(chatUiStateProvider)
+        .watch(chatUiStateProvider(resolved))
         .when(
           data: (uiState) => ChatScreen(
             uiState: uiState,
             onAction: controller.onAction,
             loadAttachment: controller.loadAttachmentBytes,
+            backendId: resolved,
           ),
           error: (error, _) =>
               Scaffold(body: Center(child: Text(error.toString()))),
@@ -93,11 +105,16 @@ class ChatScreen extends StatefulWidget {
     required this.onAction,
     this.loadAttachment = _noAttachment,
     this.onRefreshModels,
+    this.backendId,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// The backend this surface presents (drives pushed session-tool
+  /// pages); null falls back to the active backend at push time.
+  final String? backendId;
 
   /// Composer model seat refresh (re-pulls the session directory).
   final VoidCallback? onRefreshModels;
@@ -120,31 +137,35 @@ class _ChatScreenState extends State<ChatScreen> {
     final sessionId = widget.uiState.selectedSessionId;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => sessionId == null
-            ? page(null)
-            : ProviderScope(
-                overrides: [
-                  modelsControllerProvider.overrideWith(
-                    (ref) => ModelsController(
-                      ref.watch(chatRepositoryProvider),
-                      initialSessionId: sessionId,
-                    ),
-                  ),
-                  goalControllerProvider.overrideWith(
-                    (ref) => GoalController(
-                      ref.watch(chatRepositoryProvider),
-                      initialSessionId: sessionId,
-                    ),
-                  ),
-                  subagentControllerProvider.overrideWith(
-                    (ref) => SubagentController(
-                      ref.watch(chatRepositoryProvider),
-                      initialSessionId: sessionId,
-                    ),
-                  ),
-                ],
-                child: page(sessionId),
+        builder: (scopeContext) {
+          final backendId = widget.backendId;
+          if (sessionId == null || backendId == null) {
+            return page(sessionId);
+          }
+          return ProviderScope(
+            overrides: [
+              modelsControllerProvider(backendId).overrideWith(
+                (ref) => ModelsController(
+                  ref.watch(chatRepositoryProvider(backendId)),
+                  initialSessionId: sessionId,
+                ),
               ),
+              goalControllerProvider(backendId).overrideWith(
+                (ref) => GoalController(
+                  ref.watch(chatRepositoryProvider(backendId)),
+                  initialSessionId: sessionId,
+                ),
+              ),
+              subagentControllerProvider(backendId).overrideWith(
+                (ref) => SubagentController(
+                  ref.watch(chatRepositoryProvider(backendId)),
+                  initialSessionId: sessionId,
+                ),
+              ),
+            ],
+            child: page(sessionId),
+          );
+        },
       ),
     );
   }

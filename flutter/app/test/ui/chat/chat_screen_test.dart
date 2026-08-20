@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'dart:async';
 
+import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
@@ -127,8 +128,14 @@ Future<void> _pump(
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
-        dshRpcClientProvider.overrideWithValue(_FakeRpc()),
-        dshEventSocketProvider.overrideWithValue(_NeverSocket()),
+        // Family seams keyed by the seed backend's URL (the store seeds
+        // from kDshBaseUrl).
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
+          _FakeRpc(),
+        ),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
+          _NeverSocket(),
+        ),
       ],
       child: MaterialApp(
         home: ChatScreen(uiState: uiState, onAction: actions.add),

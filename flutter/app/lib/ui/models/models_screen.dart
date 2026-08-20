@@ -9,11 +9,19 @@ import '../../di/providers.dart';
 import 'models_ui_state.dart';
 
 class ModelsRoute extends ConsumerWidget {
-  const ModelsRoute({super.key});
+  const ModelsRoute({super.key, this.backendId});
+
+  /// The backend this surface presents; null uses the active backend.
+  final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(modelsControllerProvider);
+    final resolved =
+        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
+    if (resolved.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final controller = ref.watch(modelsControllerProvider(resolved));
     return StreamBuilder<ModelsUiState>(
       stream: controller.uiState,
       initialData: controller.state,
