@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/deepsuite_extension.dart';
 import '../theme/deepsuite_tokens.dart';
+import 'stats_line.dart' show formatTokens;
 
 class ContextRing extends StatelessWidget {
   const ContextRing({super.key, required this.pressure, this.breakdown});
@@ -38,7 +39,7 @@ class ContextRing extends StatelessWidget {
       button: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
-        onTap: () => _openPanel(context, percent),
+        onTap: () => _openPanel(context, percent, used, window),
         child: CustomPaint(
           size: const Size(14, 14),
           painter: _RingPainter(
@@ -51,7 +52,7 @@ class ContextRing extends StatelessWidget {
     );
   }
 
-  void _openPanel(BuildContext context, int percent) {
+  void _openPanel(BuildContext context, int percent, int used, int window) {
     // Web anchors a popover above the ring; mobile v2 uses a right-aligned
     // bottom sheet-like dialog with the same panel chrome (deviation §8.1).
     showDialog<void>(
@@ -94,6 +95,14 @@ class ContextRing extends StatelessWidget {
                   Text(
                     '$percent% of context used',
                     style: theme.textTheme.bodyMedium,
+                  ),
+                  // Web panel header `.figures`: the reading's numerator
+                  // and capacity in compact token form.
+                  Text(
+                    '~${formatTokens(used)} / ${formatTokens(window)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   for (final (label, tokens, color) in rows)

@@ -57,8 +57,8 @@ BackendStore _testStore() {
   );
 }
 
-Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) {
-  return tester.pumpWidget(
+Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) async {
+  await tester.pumpWidget(
     ProviderScope(
       overrides: [
         backendStoreProvider.overrideWith((ref) async => _testStore()),
@@ -74,6 +74,13 @@ Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) {
       child: const DshApp(),
     ),
   );
+  // Real dart:io (the backend registry's document read) only completes in
+  // a real-async zone — give the store load a beat before the fake clock
+  // takes over, or the shell stays on its loading spinner forever.
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  });
+  await tester.pump();
 }
 
 void main() {

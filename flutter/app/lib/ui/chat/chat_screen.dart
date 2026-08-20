@@ -5,6 +5,7 @@
 /// like the Compose `remember` blocks they replace.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -15,6 +16,7 @@ import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/session.dart';
@@ -24,13 +26,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
+import '../../local_state/local_state_providers.dart';
 import 'chat_ui_state.dart';
+import 'chat_local_state.dart';
 import 'circle_button.dart';
 import 'command_roster.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'model_select.dart';
+import 'permission_select.dart';
 import 'session_panel.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +50,7 @@ import '../subagents/subagent_screen.dart';
 import 'context_ring.dart';
 import 'stats_line.dart';
 import 'empty_hero.dart';
+import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
@@ -106,6 +112,7 @@ class ChatScreen extends StatefulWidget {
     this.loadAttachment = _noAttachment,
     this.onRefreshModels,
     this.backendId,
+    this.localState,
   });
 
   final ChatUiState uiState;
@@ -119,6 +126,10 @@ class ChatScreen extends StatefulWidget {
   /// Composer model seat refresh (re-pulls the session directory).
   final VoidCallback? onRefreshModels;
 
+  /// Chat-surface persistence (drafts, reading offsets, expansion
+  /// states, busy-send preference); null disables all of them.
+  final ChatLocalState? localState;
+
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
   }
@@ -130,6 +141,46 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   bool _rail = false;
   bool _outline = false;
+
+  /// Shared-store persistence resolved from the enclosing
+  /// [ProviderScope]; a [ChatScreen] mounted without a scope (bare test
+  /// pumps) keeps persistence off.
+  ChatLocalState? _resolvedLocalState;
+  bool _localStateResolveStarted = false;
+
+  ChatLocalState? get _effectiveLocalState =>
+      widget.localState ?? _resolvedLocalState;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolveLocalState();
+  }
+
+  /// Resolve the shared [LocalStateStore] once: every surface must write
+  /// the same instance, or the whole-document flushes overwrite each
+  /// other's keys.
+  Future<void> _resolveLocalState() async {
+    if (widget.localState != null || _localStateResolveStarted) return;
+    _localStateResolveStarted = true;
+    ProviderContainer container;
+    try {
+      container = ProviderScope.containerOf(context, listen: false);
+    } catch (_) {
+      // No scope above: drafts and offsets stay in memory only.
+      return;
+    }
+    try {
+      final store = await container.read(localStateStoreProvider.future);
+      if (mounted &&
+          widget.localState == null &&
+          _resolvedLocalState == null) {
+        setState(() => _resolvedLocalState = StoreChatLocalState(store));
+      }
+    } catch (_) {
+      // An unreadable documents directory leaves persistence off.
+    }
+  }
 
   /// Session-scoped tool pages (web embeds them into conversation context;
   /// mobile pushes them as full routes with the current session preloaded).
@@ -191,7 +242,21 @@ class _ChatScreenState extends State<ChatScreen> {
       ConnectionPhase.disconnected => 'disconnected',
     };
     return AppBar(
-      title: Text(title),
+      // Web's third preset surface: the read-only label naming the
+      // preset this session runs, beside the title.
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(title)),
+          const SizedBox(width: 8),
+          AgentPresetHeaderLabel(
+            session: uiState.sessions
+                .where((item) => item.id == sessionId)
+                .firstOrNull,
+            roster: uiState.agentPresets,
+          ),
+        ],
+      ),
       actions: [
         ChatHeaderActions(
           uiState: uiState,
@@ -266,6 +331,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
                             onRefreshModels: widget.onRefreshModels,
+                            localState: _effectiveLocalState,
                           ),
                         ),
                       ],
@@ -279,7 +345,21 @@ class _ChatScreenState extends State<ChatScreen> {
         // Compact: the session panel lives in a drawer (web's narrow
         // viewport overlay-sidebar semantics), not a stacked strip.
         return Scaffold(
-          appBar: AppBar(title: const Text('DeepSeek Harness')),
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('DeepSeek Harness'),
+                const SizedBox(width: 8),
+                AgentPresetHeaderLabel(
+                  session: uiState.sessions
+                      .where((item) => item.id == uiState.selectedSessionId)
+                      .firstOrNull,
+                  roster: uiState.agentPresets,
+                ),
+              ],
+            ),
+          ),
           drawer: Drawer(
             width: 320,
             child: SafeArea(
@@ -315,6 +395,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
                     onRefreshModels: widget.onRefreshModels,
+                    localState: _effectiveLocalState,
                   ),
                 ),
               ],
@@ -469,6 +550,7 @@ class ChatPanel extends StatefulWidget {
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
+    this.localState,
   });
 
   final ChatUiState uiState;
@@ -480,6 +562,10 @@ class ChatPanel extends StatefulWidget {
   final SessionModels? models;
   final void Function(ModelSelection selection)? onSelectModel;
   final VoidCallback? onRefreshModels;
+
+  /// Chat-surface persistence; null disables drafts, reading offsets,
+  /// expansion states, and the busy-send preference.
+  final ChatLocalState? localState;
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -500,17 +586,37 @@ class _ChatPanelState extends State<ChatPanel> {
   String? _lastFollowSignature;
   String? _lastTrailingUserKey;
 
+  /// Session-scoped persistence view of the selected session.
+  ChatSessionLocalState? _sessionState;
+
+  /// Busy-send preference resolved from [ChatLocalState]; 'steer' routes
+  /// the send action through the steering window while a turn runs.
+  bool _busyEnterSteer = false;
+
+  /// Reading-position restore for the armed initial jump: the saved
+  /// offset, and whether the restore read has settled (a null seam or an
+  /// actively running session skips straight to bottom).
+  double? _restoredOffset;
+  bool _restoreDecided = true;
+
+  /// Debounced reading-position write; the last observed pixels ride
+  /// along so a switch or dispose can flush them for the leaving session.
+  Timer? _readOffsetSave;
+  double? _pendingReadOffset;
+
   @override
   void initState() {
     super.initState();
     _timelineScroll.addListener(_onTimelineScroll);
+    _bindSession();
     // First mount lands at the bottom like the web's restore-or-bottom.
-    _needsInitialJump = true;
     _scheduleFollow();
   }
 
   @override
   void dispose() {
+    _flushReadOffset();
+    _readOffsetSave?.cancel();
     _timelineScroll.removeListener(_onTimelineScroll);
     _timelineScroll.dispose();
     super.dispose();
@@ -522,20 +628,40 @@ class _ChatPanelState extends State<ChatPanel> {
     // Compose remembered these with selectedSessionId as the key.
     if (oldWidget.uiState.selectedSessionId !=
         widget.uiState.selectedSessionId) {
+      _flushReadOffset();
+      _readOffsetSave?.cancel();
+      _readOffsetSave = null;
       _collapsedTurns = const <int>{};
       _pinned = true;
       _lastFollowSignature = null;
       _lastTrailingUserKey = null;
-      _needsInitialJump = true;
+      _bindSession();
       _scheduleFollow();
       return;
     }
     if (widget.outline) return;
+    if (oldWidget.localState != widget.localState) {
+      _bindSession();
+      return;
+    }
+    // The busy-send preference is live: the settings row can flip it
+    // mid-session, and the send action must follow on its next use.
+    widget.localState?.busyEnterBehavior().then((behavior) {
+      if (!mounted) return;
+      final steer = behavior == kBusyEnterSteer;
+      if (steer != _busyEnterSteer) {
+        setState(() => _busyEnterSteer = steer);
+      }
+    });
     // Own words must be visible: a new trailing user node force-scrolls
-    // (send lives in the composer, so arrival is detected here).
+    // (send lives in the composer, so arrival is detected here) — never
+    // the first laid-out frame of a session, whose jump is the
+    // restore-or-bottom landing.
     final trailingUser = _trailingUserKey;
     final appendedUser =
-        trailingUser != null && trailingUser != _lastTrailingUserKey;
+        _lastFollowSignature != null &&
+        trailingUser != null &&
+        trailingUser != _lastTrailingUserKey;
     _lastTrailingUserKey = trailingUser;
     // Follow new flow content while pinned; do NOT re-pin on every rebuild
     // merely because the offset happens to sit at the bottom.
@@ -576,7 +702,85 @@ class _ChatPanelState extends State<ChatPanel> {
     final position = _timelineScroll.position;
     if (!position.hasContentDimensions) return;
     _pinned = position.maxScrollExtent - position.pixels <= kFollowThreshold;
+    _scheduleReadOffsetSave(position.pixels);
   }
+
+  /// Bind the selected session's persistence view, restore its collapsed
+  /// outline turns, and arm the reading-position restore (the initial
+  /// jump waits for that read; an actively running or streaming session
+  /// lands at the bottom and follows instead).
+  void _bindSession() {
+    _needsInitialJump = true;
+    _restoredOffset = null;
+    _restoreDecided = true;
+    final sessionId = widget.uiState.selectedSessionId;
+    final sessionState = sessionId == null
+        ? null
+        : widget.localState?.forSession(sessionId);
+    _sessionState = sessionState;
+    if (sessionState == null) return;
+    sessionState.readCollapsedTurns().then((turns) {
+      if (!mounted || _sessionState != sessionState) return;
+      setState(() => _collapsedTurns = turns);
+    });
+    widget.localState?.busyEnterBehavior().then((behavior) {
+      if (!mounted) return;
+      setState(() => _busyEnterSteer = behavior == kBusyEnterSteer);
+    });
+    if (_sessionActivelyRunning()) return;
+    _restoreDecided = false;
+    sessionState.readReadOffset().then((offset) {
+      if (!mounted) return;
+      _restoredOffset = offset;
+      _restoreDecided = true;
+      // Content may already be laid out; the armed jump waits on us.
+      if (_needsInitialJump) _scheduleFollow();
+    }, onError: (_) {
+      if (!mounted) return;
+      _restoreDecided = true;
+      if (_needsInitialJump) _scheduleFollow();
+    });
+  }
+
+  /// Whether the selected session's turn is running or streaming: the
+  /// reading-position restore is skipped so the view follows the tail.
+  bool _sessionActivelyRunning() {
+    final sessionId = widget.uiState.selectedSessionId;
+    final session = widget.uiState.sessions
+        .where((item) => item.id == sessionId)
+        .firstOrNull;
+    if (session?.running ?? false) return true;
+    return widget.uiState.timeline.any(
+      (item) => item is TimelineMessage && item.value.streaming,
+    );
+  }
+
+  /// Reading positions persist debounced (the store debounces disk
+  /// writes on its own); only reader-driven scrolls land here.
+  void _scheduleReadOffsetSave(double offset) {
+    if (_sessionState == null) return;
+    _pendingReadOffset = offset;
+    _readOffsetSave?.cancel();
+    _readOffsetSave = Timer(const Duration(milliseconds: 500), () {
+      _pendingReadOffset = null;
+      _sessionState?.writeReadOffset(offset);
+    });
+  }
+
+  /// Write a still-pending reading position for the leaving session.
+  void _flushReadOffset() {
+    final offset = _pendingReadOffset;
+    if (offset == null) return;
+    _pendingReadOffset = null;
+    _sessionState?.writeReadOffset(offset);
+  }
+
+  /// Web ComposerSubmissionPolicy.resolve: queue outside a running turn;
+  /// inside it the persisted busy-Enter preference decides (the send
+  /// button is this client's only submit gesture, so the preference
+  /// governs it there).
+  PromptMode _promptModeFor(bool running) =>
+      running && _busyEnterSteer ? PromptMode.steer : PromptMode.queue;
 
   void _scheduleFollow() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -594,17 +798,32 @@ class _ChatPanelState extends State<ChatPanel> {
     // so the first history frame still lands at the bottom without a long
     // smooth glide from the top.
     if (target <= 0) return;
+    // The reading-position restore owns the initial jump until its read
+    // settles; it re-schedules this follow once it has.
+    if (!_restoreDecided) return;
     final jump = _needsInitialJump;
     _needsInitialJump = false;
     // A jump (session switch, first mount) pins without ceremony; growth
     // follows with a short ease so streaming glides instead of snapping.
-    _pinned = true;
     _followDepth++;
     try {
       if (jump) {
+        final restored = _restoredOffset;
+        if (restored != null) {
+          // Reading restore: land at the saved position (clamped to the
+          // laid-out extents) instead of the tail, and only follow from
+          // there when the landing sits at the bottom anyway.
+          final clamped = restored.clamp(0.0, target).toDouble();
+          _pinned = target - clamped <= kFollowThreshold;
+          _timelineScroll.jumpTo(clamped);
+          return;
+        }
+        _pinned = true;
         _timelineScroll.jumpTo(target);
         return;
       }
+      // Driven follows re-pin (the scroll listener skips driven scrolls).
+      _pinned = true;
       // The lazy list's extent estimate moves as tail items materialize
       // under the glide; re-issue while still short of (or past) the
       // settled bottom (bounded so a pathological estimator cannot loop
@@ -653,25 +872,67 @@ class _ChatPanelState extends State<ChatPanel> {
       )
       .toList();
 
+  /// Collapsed-turn set mutation: state and persistence move together.
+  void _setCollapsedTurns(Set<int> next) {
+    setState(() => _collapsedTurns = next);
+    _sessionState?.writeCollapsedTurns(next);
+  }
+
+  /// Preset staged for the next session (web seat's stage); spent by the
+  /// workspace pick that creates the session.
+  String? _stagedPreset;
+
+  /// A hero-seat pick: a selected blank session switches its own preset
+  /// through the host verb; anything else stages the choice for the
+  /// session a later workspace pick creates.
+  void _pickPreset(SessionSummary? session, String presetId) {
+    final sessionId = widget.uiState.selectedSessionId;
+    if (session != null && session.blank && sessionId != null) {
+      widget.onAction(
+        SelectAgentPreset(sessionId: sessionId, agentPreset: presetId),
+      );
+      return;
+    }
+    setState(() => _stagedPreset = presetId);
+  }
+
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
     return uiState.timeline.isEmpty
         ? EmptyHero(
             workspaces: uiState.workspaces,
             currentWorkspaceLabel: _workspaceLabel(session?.cwd),
-            onPickWorkspace: (workspaceId) =>
-                widget.onAction(CreateSessionInWorkspace(workspaceId)),
+            onPickWorkspace: (workspaceId) {
+              // The staged preset rides the creation; the stage is spent
+              // on first use (web seat semantics), so the next new
+              // session opens on the default again.
+              final preset = _stagedPreset;
+              widget.onAction(
+                CreateSessionInWorkspace(workspaceId, agentPreset: preset),
+              );
+              if (preset != null) {
+                setState(() => _stagedPreset = null);
+              }
+            },
+            presetRoster: uiState.agentPresets,
+            currentPresetId: stagedPresetId(
+              roster: uiState.agentPresets,
+              staged: _stagedPreset,
+              selectedSession: session,
+            ),
+            onPickPreset: (presetId) => _pickPreset(session, presetId),
           )
         : widget.outline
         ? OutlineTimeline(
             timeline: uiState.timeline,
             collapsedTurns: _collapsedTurns,
-            onToggle: (turn) => setState(() {
+            onToggle: (turn) {
               final next = Set<int>.of(_collapsedTurns);
               if (!next.add(turn)) next.remove(turn);
-              _collapsedTurns = next;
-            }),
+              _setCollapsedTurns(next);
+            },
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
+            expansion: _sessionState,
           )
         : ListView.separated(
             controller: _timelineScroll,
@@ -684,6 +945,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 item: item,
                 onAction: widget.onAction,
                 loadAttachment: widget.loadAttachment,
+                expansion: _sessionState,
               );
             },
           );
@@ -714,8 +976,7 @@ class _ChatPanelState extends State<ChatPanel> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: () =>
-                    setState(() => _collapsedTurns = const <int>{}),
+                onPressed: () => _setCollapsedTurns(const <int>{}),
                 child: const Text('Expand all'),
               ),
             ),
@@ -763,10 +1024,15 @@ class _ChatPanelState extends State<ChatPanel> {
                     contextPressure: uiState.contextPressure,
                     contextBreakdown: uiState.contextBreakdown,
                     onAction: widget.onAction,
-                    // Web: Enter while running queues; steering rides the
-                    // queue dock's per-item action.
+                    sessionId: selectedSessionId,
+                    sessionState: _sessionState,
+                    permissions: uiState.permissions,
+                    // Web ComposerSubmissionPolicy: queue outside a
+                    // running turn; inside it the persisted busy-Enter
+                    // preference decides (the send button is the only
+                    // submit gesture on a soft keyboard).
                     onSend: (text) => widget.onAction(
-                      SendPrompt(text, mode: PromptMode.queue),
+                      SendPrompt(text, mode: _promptModeFor(isSessionRunning)),
                     ),
                   ),
                 ),
@@ -865,11 +1131,16 @@ class TimelineRow extends StatelessWidget {
     required this.item,
     required this.onAction,
     required this.loadAttachment,
+    this.expansion,
   });
 
   final TimelineItem item;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Tool-row expansion persistence of the selected session; null keeps
+  /// expansion in memory only.
+  final ToolExpansionPersistence? expansion;
 
   @override
   Widget build(BuildContext context) {
@@ -885,7 +1156,10 @@ class TimelineRow extends StatelessWidget {
       TimelineContextInjection() => ContextInjectionRow(
         injection: item as TimelineContextInjection,
       ),
-      TimelineToolCall() => ToolCallRow(call: item as TimelineToolCall),
+      TimelineToolCall() => ToolCallRow(
+        call: item as TimelineToolCall,
+        expansion: expansion,
+      ),
       TimelineApprovalRequest() => ApprovalRow(
         requestId: (item as TimelineApprovalRequest).requestId,
         approvalId: (item as TimelineApprovalRequest).approvalId,
@@ -1142,9 +1416,13 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
 /// details (arguments + result) expand below on tap. Running rows carry the
 /// shared sweep glare.
 class ToolCallRow extends StatefulWidget {
-  const ToolCallRow({super.key, required this.call});
+  const ToolCallRow({super.key, required this.call, this.expansion});
 
   final TimelineToolCall call;
+
+  /// Expansion persistence keyed by this row's [timelineKey] value;
+  /// null keeps expansion in memory only.
+  final ToolExpansionPersistence? expansion;
 
   @override
   State<ToolCallRow> createState() => _ToolCallRowState();
@@ -1161,6 +1439,13 @@ class _ToolCallRowState extends State<ToolCallRow>
   @override
   void initState() {
     super.initState();
+    final expansion = widget.expansion;
+    if (expansion != null) {
+      final key = timelineKey(widget.call);
+      expansion.expanded(key).then((restored) {
+        if (mounted && restored) setState(() => _expanded = true);
+      });
+    }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
   }
 
@@ -1203,7 +1488,14 @@ class _ToolCallRowState extends State<ToolCallRow>
           child: InkWell(
             borderRadius: BorderRadius.circular(4),
             onTap: hasDetails
-                ? () => setState(() => _expanded = !_expanded)
+                ? () {
+                    final next = !_expanded;
+                    setState(() => _expanded = next);
+                    widget.expansion?.setExpanded(
+                      timelineKey(widget.call),
+                      next,
+                    );
+                  }
                 : null,
             child: ClipRect(
               child: SweepHighlight(
@@ -2166,6 +2458,9 @@ class ComposerBar extends StatefulWidget {
     this.onRefreshModels,
     this.contextPressure,
     this.contextBreakdown,
+    this.sessionId,
+    this.sessionState,
+    this.permissions,
   });
 
   final bool enabled;
@@ -2177,6 +2472,18 @@ class ComposerBar extends StatefulWidget {
   final void Function(ChatAction) onAction;
   final void Function(String text) onSend;
   final VoidCallback? onStop;
+
+  /// The session whose draft this composer edits; drives draft
+  /// persistence alongside [sessionState].
+  final String? sessionId;
+
+  /// Draft persistence for [sessionId]; null keeps the draft in memory
+  /// only.
+  final ChatSessionLocalState? sessionState;
+
+  /// Permission-preset projection (web conversation.input.access);
+  /// null hides the access chip.
+  final PermissionSelect? permissions;
 
   /// Plan collaboration state (web input.plan): while the target is plan
   /// mode the placeholder swaps and the warn pill rides the tools row.
@@ -2199,9 +2506,70 @@ class _ComposerBarState extends State<ComposerBar> {
   final TextEditingController _draftController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _restoreDraft();
+  }
+
+  @override
+  void didUpdateWidget(covariant ComposerBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Drafts are session-scoped: switching sessions swaps the draft for
+    // the target session's saved one (the leaving draft was persisted on
+    // change).
+    if (oldWidget.sessionId != widget.sessionId ||
+        oldWidget.sessionState != widget.sessionState) {
+      _restoreDraft();
+    }
+  }
+
+  @override
   void dispose() {
     _draftController.dispose();
     super.dispose();
+  }
+
+  /// Load the selected session's saved draft into the field; an absent
+  /// draft clears it.
+  void _restoreDraft() {
+    final sessionState = widget.sessionState;
+    final sessionId = widget.sessionId;
+    if (sessionState == null || sessionId == null) {
+      _draftController.clear();
+      setState(() {});
+      return;
+    }
+    sessionState.readDraft().then((draft) {
+      if (!mounted) return;
+      _draftController
+        ..text = draft ?? ''
+        ..selection = TextSelection.collapsed(
+          offset: _draftController.text.length,
+        );
+      setState(() {});
+    });
+  }
+
+  void _persistDraft() {
+    widget.sessionState?.writeDraft(_draftController.text);
+  }
+
+  /// Insert one newline at the caret (a selection range is replaced),
+  /// leaving the caret after it — the explicit soft-keyboard form of the
+  /// web Shift+Enter gesture.
+  void _insertNewline() {
+    final value = _draftController.value;
+    final selection = value.selection;
+    final text = value.text;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    _draftController.value = value.copyWith(
+      text: text.replaceRange(start, end, '\n'),
+      selection: TextSelection.collapsed(offset: start + 1),
+      composing: TextRange.empty,
+    );
+    _persistDraft();
+    setState(() {});
   }
 
   Future<void> _pickImages() async {
@@ -2257,10 +2625,17 @@ class _ComposerBarState extends State<ComposerBar> {
             controller: _draftController,
             enabled: widget.enabled,
             minLines: 1,
-            maxLines: 5,
-            textInputAction: TextInputAction.send,
-            onChanged: (_) => setState(() {}),
-            onSubmitted: _send,
+            maxLines: 8,
+            // Web sends on Enter and newlines on Shift+Enter; soft
+            // keyboards have no reliable Shift+Enter, so the keyboard
+            // action key inserts the newline and the dedicated button
+            // makes the gesture discoverable. Sending rides the send
+            // button only.
+            textInputAction: TextInputAction.newline,
+            onChanged: (_) {
+              _persistDraft();
+              setState(() {});
+            },
             decoration: InputDecoration(
               isDense: true,
               border: InputBorder.none,
@@ -2325,6 +2700,25 @@ class _ComposerBarState extends State<ComposerBar> {
                 },
               ),
               const SizedBox(width: 12),
+              DsCircleButton(
+                tooltip: 'New line',
+                enabled: widget.enabled,
+                onTap: _insertNewline,
+                // Web .add family: the glyph rides label-primary.
+                child: Icon(
+                  Icons.subdirectory_arrow_left,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Web .modes order: the access seat precedes the plan pill.
+              if (widget.permissions case final permissions?)
+                PermissionSelectChip(
+                  value: permissions,
+                  locked: !widget.enabled,
+                  onAction: widget.onAction,
+                ),
               // Web conversation.input.plan seat: the warn pill renders only
               // while the plan target is active and exits via `/plan off`.
               PlanChip(
@@ -2348,6 +2742,23 @@ class _ComposerBarState extends State<ComposerBar> {
                 pressure: widget.contextPressure,
                 breakdown: widget.contextBreakdown,
               ),
+              // Web keeps Stop primary while a turn runs and lets
+              // keyboard Enter queue/steer; soft keyboards have no
+              // reliable Enter-as-send, so an explicit send control
+              // appears beside Stop whenever a draft is ready. Its
+              // delivery mode follows the busy-Enter preference.
+              if (widget.running &&
+                  widget.enabled &&
+                  !widget.isSending &&
+                  _canSend()) ...[
+                const SizedBox(width: 12),
+                _PrimarySendButton(
+                  running: false,
+                  sending: false,
+                  enabled: true,
+                  onSend: _send,
+                ),
+              ],
               const SizedBox(width: 12),
               _PrimarySendButton(
                 // Web primary: Send, or Stop while the turn runs.
@@ -2378,6 +2789,9 @@ class _ComposerBarState extends State<ComposerBar> {
   void _send([String? text]) {
     widget.onSend(_draftController.text);
     _draftController.clear();
+    // A sent draft is consumed: persist the cleared marker so a remount
+    // does not resurrect it.
+    _persistDraft();
     setState(() {});
   }
 }
@@ -2887,6 +3301,7 @@ class OutlineTimeline extends StatelessWidget {
     required this.onToggle,
     required this.onAction,
     required this.loadAttachment,
+    this.expansion,
   });
 
   final List<TimelineItem> timeline;
@@ -2894,6 +3309,9 @@ class OutlineTimeline extends StatelessWidget {
   final void Function(int turn) onToggle;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Tool-row expansion persistence of the selected session.
+  final ToolExpansionPersistence? expansion;
 
   @override
   Widget build(BuildContext context) {
@@ -2928,6 +3346,7 @@ class OutlineTimeline extends StatelessWidget {
               item: item,
               onAction: onAction,
               loadAttachment: loadAttachment,
+              expansion: expansion,
             ),
         ]);
       }

@@ -78,10 +78,14 @@ final activeBackendProvider = FutureProvider<BackendConfig?>((ref) async {
 });
 
 /// The active backend id; empty string before the store loads (the UI
-/// renders the loading state rather than a dead surface).
-final activeBackendIdProvider = FutureProvider<String>((ref) async {
-  final state = await ref.watch(backendRegistryStateProvider.future);
-  return state.active?.id ?? '';
+/// renders the loading state rather than a dead surface). Stream-based:
+/// the registry's first snapshot can predate its async load, so latching
+/// a single future would freeze the empty id forever.
+final activeBackendIdProvider = StreamProvider<String>((ref) async* {
+  final controller = await ref.watch(backendRegistryProvider.future);
+  await for (final state in controller.uiState) {
+    yield state.active?.id ?? '';
+  }
 });
 
 /// One backend's config by id; null once the backend is removed (the

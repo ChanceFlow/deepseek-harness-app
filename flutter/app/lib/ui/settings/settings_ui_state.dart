@@ -1,6 +1,8 @@
-/// Settings screen UI state and intents — port of SettingsUiState.kt.
+/// Settings screen UI state and intents — port of SettingsUiState.kt,
+/// extended for the sectioned panel (agent-preset roster).
 library;
 
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/settings.dart';
 
 final class SettingsUiState {
@@ -10,6 +12,7 @@ final class SettingsUiState {
     this.isLoading = false,
     this.errorMessage,
     this.credentialError,
+    this.roster,
   });
 
   final SettingsSnapshot? snapshot;
@@ -19,6 +22,11 @@ final class SettingsUiState {
 
   /// Credential describe is enrichment: its failure never blanks the page.
   final String? credentialError;
+
+  /// Agent-preset roster (web `agentPreset.list`); null while unloaded or
+  /// after a load failure — the presets section and the General picker
+  /// render nothing rather than an empty roster.
+  final AgentPresetRoster? roster;
 }
 
 sealed class SettingsAction {
@@ -117,4 +125,21 @@ final class ReplaceSettingAction extends SettingsAction {
 
   @override
   int get hashCode => Object.hash(ns, sectionJson, expectedRevision);
+}
+
+/// Make one preset the default for sessions created later (web
+/// `writeDefaultPreset`): the `agent-presets` settings namespace's
+/// `default` field. The controller resolves the CAS revision from the
+/// last describe.
+final class SelectAgentPresetDefaultAction extends SettingsAction {
+  const SelectAgentPresetDefaultAction(this.presetId);
+
+  final String presetId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SelectAgentPresetDefaultAction && other.presetId == presetId;
+
+  @override
+  int get hashCode => presetId.hashCode;
 }

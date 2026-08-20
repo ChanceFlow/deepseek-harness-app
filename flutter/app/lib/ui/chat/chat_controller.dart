@@ -16,6 +16,8 @@ import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -39,6 +41,7 @@ class ChatController {
     _refresh();
     _subscribeBaselines();
     _observeSelectedSessionRemoval();
+    _loadAgentPresets();
   }
 
   final ChatRepository _repository;
@@ -68,6 +71,8 @@ class ChatController {
   ContextBreakdown? _contextBreakdown;
   GoalProjection? _goal;
   SessionWindowStats _sessionStats = const SessionWindowStats();
+  PermissionSelect? _permissions;
+  AgentPresetRoster? _agentPresets;
 
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
@@ -89,6 +94,7 @@ class ChatController {
   StreamSubscription<void>? _breakdownSub;
   StreamSubscription<void>? _statsSub;
   StreamSubscription<void>? _goalSub;
+  StreamSubscription<void>? _permissionsSub;
 
   ChatUiState get state => _state.value;
 
@@ -115,6 +121,7 @@ class ChatController {
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
+    unawaited(_permissionsSub?.cancel());
     _subs.clear();
   }
 
@@ -146,6 +153,8 @@ class ChatController {
       goal: _goal,
       models: _models,
       jobs: _timelineJobs(),
+      permissions: _permissions,
+      agentPresets: _agentPresets,
     );
   }
 
@@ -204,7 +213,10 @@ class ChatController {
       case CreateSessionAction():
         _createSession(workspaceId: null);
       case CreateSessionInWorkspace():
-        _createSession(workspaceId: action.workspaceId);
+        _createSession(
+          workspaceId: action.workspaceId,
+          agentPreset: action.agentPreset,
+        );
       case DismissError():
         _errorMessage = null;
         _publish();
@@ -250,6 +262,8 @@ class ChatController {
       case ImagePickError():
         _errorMessage = action.message;
         _publish();
+      case SelectAgentPreset():
+        _selectAgentPreset(action);
     }
   }
 
@@ -273,6 +287,7 @@ class ChatController {
     unawaited(_breakdownSub?.cancel());
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
+    unawaited(_permissionsSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
@@ -281,6 +296,7 @@ class ChatController {
       _sessionStats = const SessionWindowStats();
       _goal = null;
       _models = null;
+      _permissions = null;
       _timelineSub = null;
       _planSub = null;
       _todosSub = null;
@@ -288,8 +304,12 @@ class ChatController {
       _breakdownSub = null;
       _statsSub = null;
       _goalSub = null;
+      _permissionsSub = null;
       return;
     }
+    // Session-scoped projections reset on rebind: the leaving
+    // session's values never flash under the entering one's header.
+    _permissions = null;
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
       window,
     ) {
@@ -318,6 +338,41 @@ class ChatController {
       _goal = goal;
       _publish();
     });
+    _permissionsSub = _repository.observePermissions(sessionId).listen((
+      permissions,
+    ) {
+      _permissions = permissions;
+      _publish();
+    });
+  }
+
+  /// Agent-preset roster for the hero chip, blank-session switch, and
+  /// header label: one load for the controller's lifetime (web
+  /// re-reads on settings/changed; the roster here is refreshed with the
+  /// controller). A load failure keeps every preset surface hidden.
+  void _loadAgentPresets() {
+    unawaited(() async {
+      try {
+        final roster = await _repository.listAgentPresets();
+        _agentPresets = roster;
+      } catch (_) {
+        _agentPresets = null;
+      }
+      _publish();
+    }());
+  }
+
+  /// Blank-session preset switch (web AgentPresetSeat select); host
+  /// refusals (`agent-preset-locked`) surface through the error strip.
+  void _selectAgentPreset(SelectAgentPreset action) {
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.selectAgentPreset(
+          action.sessionId,
+          action.agentPreset,
+        ),
+      ),
+    );
   }
 
   /// Skill catalog for the `/` composer source: one fetch per session,
@@ -589,7 +644,7 @@ class ChatController {
     unawaited(_runCatchingForUi(() => _repository.cancelTurn(sessionId)));
   }
 
-  void _createSession({String? workspaceId}) {
+  void _createSession({String? workspaceId, String? agentPreset}) {
     unawaited(() async {
       // Web parity: a workspace's blank session is the provisional New
       // Session row. Reuse it instead of minting another hidden row.
@@ -599,7 +654,10 @@ class ChatController {
       }
       sessionId ??= (await _runCatchingForUi(
         () => _repository.createSession(
-          CreateSessionRequest(workspaceId: workspaceId),
+          CreateSessionRequest(
+            workspaceId: workspaceId,
+            agentPreset: agentPreset,
+          ),
         ),
       ))?.id;
       final resolved = sessionId;
@@ -609,6 +667,21 @@ class ChatController {
       _bindSelected(resolved);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
+      // A reused blank session was created without the staged preset;
+      // the blank-session switch carries it (web stage semantics: the
+      // stage reaches a session that is still blank, created or reused).
+      final existing = _sessions
+          .where((session) => session.id == resolved)
+          .firstOrNull;
+      final preset = agentPreset;
+      if (preset != null &&
+          existing != null &&
+          existing.blank &&
+          existing.agentPreset != preset) {
+        await _runCatchingForUi(
+          () => _repository.selectAgentPreset(resolved, preset),
+        );
+      }
     }());
   }
 

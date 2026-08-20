@@ -1,6 +1,7 @@
 /// EmptyHero parity tests — fish headline, preview badge, workspace chip.
 library;
 
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -12,6 +13,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/empty_hero.dart';
 import 'package:app/ui/chat/fish_logo.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Future<void> _pump(
   WidgetTester tester,
@@ -22,9 +24,13 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  // SessionPanel (two-pane layout) watches the shared store provider, so
+  // the host needs a scope even with no local state injected.
   return tester.pumpWidget(
-    MaterialApp(
-      home: ChatScreen(uiState: uiState, onAction: actions.add),
+    ProviderScope(
+      child: MaterialApp(
+        home: ChatScreen(uiState: uiState, onAction: actions.add),
+      ),
     ),
   );
 }
@@ -104,6 +110,51 @@ void main() {
     );
     expect(find.text('proj'), findsOneWidget);
     expect(find.text('Choose workspace'), findsNothing);
+  });
+
+  testWidgets('preset seat rides beside the workspace chip', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        agentPresets: AgentPresetRoster(
+          entries: [
+            AgentPresetEntry(
+              id: 'standard',
+              trust: AgentPresetTrust.system,
+              isDefault: true,
+            ),
+            AgentPresetEntry(
+              id: 'ghost',
+              trust: AgentPresetTrust.user,
+              broken: 'composition missing',
+            ),
+          ],
+        ),
+      ),
+      actions,
+    );
+
+    // The chip opens on the deployment default; the workspace chip keeps
+    // its seat beside it (web HeroShell row).
+    expect(find.text('Standard mode'), findsOneWidget);
+    expect(find.text('Choose workspace'), findsOneWidget);
+
+    await tester.tap(find.text('Standard mode'));
+    await tester.pumpAndSettle();
+    expect(find.text('Agent preset'), findsOneWidget);
+    expect(find.text('Default'), findsOneWidget);
+    // A broken preset cannot compose a session: never offered.
+    expect(find.text('ghost'), findsNothing);
+
+    await tester.tap(find.text('Standard mode').last);
+    await tester.pumpAndSettle();
+    // Not a blank session: the pick stages instead of switching.
+    expect(actions, isEmpty);
   });
 
   testWidgets('non-empty timeline hides the hero', (tester) async {

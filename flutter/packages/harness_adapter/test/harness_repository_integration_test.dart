@@ -10,6 +10,7 @@ import 'package:domain/model/settings.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/dsh_rpc_client.dart';
@@ -18,6 +19,7 @@ import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
+import 'package:harness_adapter/src/dsh_wire_types.dart';
 import 'package:harness_adapter/src/harness_repository_impl.dart';
 import 'package:harness_adapter/src/rpc_map.dart';
 
@@ -268,6 +270,36 @@ class HarnessFakeRpc implements DshRpcClient {
         return <String, Object?>{
           'ref': <String, Object?>{'id': 'goal-1', 'revision': 2},
         };
+      case 'agentPreset.list':
+        // Fixture transcribed from
+        // reference/deepseek-harness/packages/host/apiproxy/src/api/
+        // agent-presets.schema.ts agentPresetListValueSchema.
+        return <String, Object?>{
+          'presets': <Object?>[
+            <String, Object?>{
+              'id': 'standard',
+              'trust': 'system',
+              'isDefault': true,
+            },
+            <String, Object?>{
+              'id': 'minimal',
+              'trust': 'system',
+              'isDefault': false,
+              'name': 'Tiny',
+              'description': 'Two tools only',
+            },
+            <String, Object?>{
+              'id': 'my-agent',
+              'trust': 'user',
+              'isDefault': false,
+              'broken': 'composition missing',
+            },
+          ],
+          'authorable': true,
+          'hasDocument': false,
+        };
+      case 'agentPreset.select':
+        return <String, Object?>{'agentPreset': 'minimal'};
       default:
         return <String, Object?>{};
     }
@@ -978,5 +1010,275 @@ void main() {
     expect(child.origin, 'subagent');
     final root = sessions.firstWhere((session) => session.id == 'session-root');
     expect(root.origin, isNull);
+  });
+
+  // Wire shape: agentPreset.list roster
+  // (reference/deepseek-harness/packages/host/apiproxy/src/api/
+  // agent-presets.schema.ts).
+  test('agentPreset.list decodes the roster and deployment facts', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final roster = await repository.listAgentPresets();
+
+    expect(rpc.payloads('agentPreset.list').single, isEmpty);
+    expect(roster.authorable, isTrue);
+    expect(roster.hasDocument, isFalse);
+    expect(roster.entries, hasLength(3));
+    final standard = roster.entries[0];
+    expect(standard.id, 'standard');
+    expect(standard.trust, AgentPresetTrust.system);
+    expect(standard.isDefault, isTrue);
+    expect(standard.name, isNull);
+    expect(roster.defaultEntry?.id, 'standard');
+    final minimal = roster.entries[1];
+    expect(minimal.name, 'Tiny');
+    expect(minimal.description, 'Two tools only');
+    final custom = roster.entries[2];
+    expect(custom.trust, AgentPresetTrust.user);
+    expect(custom.broken, 'composition missing');
+  });
+
+  test('agentPreset.select sends the switch and echoes the preset', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final echoed = await repository.selectAgentPreset('session-1', 'minimal');
+
+    expect(echoed, 'minimal');
+    expect(rpc.payloads('agentPreset.select').single, <String, Object?>{
+      'sessionId': 'session-1',
+      'agentPreset': 'minimal',
+    });
+  });
+
+  test('agentPreset.select surfaces the host refusal', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.failNextCall('agentPreset.select', 'agent-preset-locked');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.selectAgentPreset('session-1', 'minimal'),
+      throwsA(
+        isA<DshBusinessException>().having(
+          (error) => error.code,
+          'code',
+          'agent-preset-locked',
+        ),
+      ),
+    );
+  });
+
+  // Negative fixture: a required roster field absent must fail loud.
+  test('agentPreset.list value without authorable throws', () {
+    expect(
+      () => AgentPresetListValueWire.fromJson(<String, Object?>{
+        'presets': <Object?>[],
+        'hasDocument': false,
+      }),
+      throwsFormatException,
+    );
+  });
+
+  // Wire shape: the `permissions` projection value is the
+  // interaction/permission-presets select (options + currentValue).
+  test('permissions projection frames update the select live', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-permissions-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'permissions',
+            'value': <String, Object?>{
+              'options': <Object?>[
+                <String, Object?>{
+                  'value': 'read-only',
+                  'name': 'Read Only',
+                },
+                <String, Object?>{
+                  'value': 'workspace-write',
+                  'name': 'Workspace Write',
+                  'description': 'Edit files inside the workspace',
+                },
+              ],
+              'currentValue': 'workspace-write',
+            },
+          },
+        ),
+        ServerRequest(
+          rpcId: 'rpc-permissions-2',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'permissions',
+            'value': <String, Object?>{
+              'options': <Object?>[
+                <String, Object?>{'value': 'read-only', 'name': 'Read Only'},
+              ],
+              'currentValue': 'read-only',
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    // Seeded null before any frame — a host that composes no permission
+    // service keeps the chip hidden.
+    expect(await repository.observePermissions('session-1').first, isNull);
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    // Both frames landed; the projection is last-wins, so the second
+    // frame's select is current.
+    final select = await repository.observePermissions('session-1').first;
+    expect(select, isNotNull);
+    expect(select!.currentValue, 'read-only');
+    expect(select.options, hasLength(1));
+    expect(select.options.first.name, 'Read Only');
+    expect(select.currentOption?.name, 'Read Only');
+  });
+
+  // A single `permissions` frame decodes the full option table.
+  test('permissions projection frame carries the option table', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-permissions-table',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'permissions',
+            'value': <String, Object?>{
+              'options': <Object?>[
+                <String, Object?>{'value': 'read-only', 'name': 'Read Only'},
+                <String, Object?>{
+                  'value': 'workspace-write',
+                  'name': 'Workspace Write',
+                  'description': 'Edit files inside the workspace',
+                },
+              ],
+              'currentValue': 'workspace-write',
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final select = await repository.observePermissions('session-1').first;
+    expect(select, isNotNull);
+    expect(select!.currentValue, 'workspace-write');
+    expect(select.currentOption?.name, 'Workspace Write');
+    expect(select.options, hasLength(2));
+    expect(select.options.first.description, isNull);
+    expect(
+      select.options.last.description,
+      'Edit files inside the workspace',
+    );
+  });
+
+  // A `null`-valued frame clears the select back to the hidden state.
+  test('permissions projection null frame clears the select', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-permissions-null',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'permissions',
+            'value': 'null',
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    expect(await repository.observePermissions('session-1').first, isNull);
+  });
+
+  // Unknown projection keys are ignored: the key set is open and owned by
+  // the host's composed units.
+  test('unknown projection keys change nothing', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-unknown-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'trajectory',
+            'value': <String, Object?>{'unexpected': true},
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    expect(await repository.observePermissions('session-1').first, isNull);
+  });
+
+  // Wire shape: `agent-preset/selected` arrives as a forwarded
+  // host/remote-event frame with args [sessionId, agentPreset]
+  // (events.ts HostFrame; allowlist in dsh-api-remotes remote-events.ts).
+  test('agent-preset/selected remote event folds the session summary', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-1',
+        'updatedAt': 3,
+        'running': false,
+        'blank': true,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      hostFrames: <ServerRequest>[
+        _hostFrame('host/remote-event', <String, Object?>{
+          'type': 'host/remote-event',
+          'event': 'agent-preset/selected',
+          'args': <Object?>['session-1', 'minimal'],
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.refreshSessions();
+
+    socket.releaseHostFrames();
+    await pumpEventQueue();
+
+    final sessions = await repository.observeSessions().first;
+    final switched = sessions.firstWhere(
+      (session) => session.id == 'session-1',
+    );
+    expect(switched.agentPreset, 'minimal');
   });
 }

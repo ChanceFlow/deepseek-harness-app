@@ -6,11 +6,13 @@ library;
 
 import 'dart:async';
 
+import '../model/agent_preset.dart';
 import '../model/attachment.dart';
 import '../model/connection_state.dart';
 import '../model/context_pressure.dart';
 import '../model/session_window_stats.dart';
 import '../model/directory.dart';
+import '../model/permission_select.dart';
 import '../model/goal.dart';
 import '../model/model_catalog.dart';
 import '../model/plan.dart';
@@ -36,6 +38,19 @@ abstract class ChatRepository {
   Future<void> refreshSessions();
 
   Future<SessionSummary> createSession(CreateSessionRequest request);
+
+  /// The agent-preset roster the host composes sessions from
+  /// (`agentPreset.list`; not loopback-pinned). Roster management verbs
+  /// (read/copy/openDocument/remove) are loopback-pinned and stay
+  /// uncovered — see docs/spec.md wire coverage.
+  Future<AgentPresetRoster> listAgentPresets() =>
+      _unsupported('listAgentPresets');
+
+  /// Switch a blank session's agent preset (`agentPreset.select`). The
+  /// host rejects a session that already ran (`agent-preset-locked`);
+  /// the error surfaces to the caller. Returns the echoed preset id.
+  Future<String> selectAgentPreset(String sessionId, String agentPreset) =>
+      _unsupported('selectAgentPreset');
 
   /// List one host-directory level; a null path lists the host home.
   Future<DirectoryListing> listDirectory(String? path) =>
@@ -214,6 +229,12 @@ abstract class ChatRepository {
   /// empty until any component is priced.
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
       const Stream<ContextBreakdown?>.empty();
+
+  /// The session's permission-preset select (the `permissions` session
+  /// projection); empty while the host composes no permission service —
+  /// surfaces hide their access controls.
+  Stream<PermissionSelect?> observePermissions(String sessionId) =>
+      const Stream<PermissionSelect?>.empty();
 
   /// Window-scoped stats for the composer stats line (fallback semantics:
   /// "what is on screen").

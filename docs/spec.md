@@ -285,3 +285,27 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - `session/jobs` mux frames fold into `TimelineItem.Jobs`.
 - Job identity is backend-issued `id`; kind/status/detail/label stay display-only.
 - Jobs are live snapshots, not durable session events; history replay does not reconstruct them.
+
+## 15. Agent Presets & Permissions
+
+- `agentPreset.list` (not loopback-pinned) decodes the roster: entries
+  (`id`, `trust system|user`, `isDefault`, optional `name`/`description`/
+  `broken`) plus `authorable` and `hasDocument`. A bad `trust` value or a
+  missing required field fails loud.
+- `agentPreset.select` switches a blank session's preset and returns the
+  echoed id; host refusals (`agent-preset-locked`, `agent-preset-not-found`,
+  `agent-preset-invalid`, `agent-preset-read-only`) surface as
+  `DshBusinessException` with the host code.
+- The forwarded owner event `agent-preset/selected` (a `host/remote-event`
+  frame with `args [sessionId, agentPreset]`) folds the session summary's
+  `agentPreset` in place. Other forwarded events are ignored — the
+  allowlist is open and host-owned.
+- The `permissions` session projection (mux `session/projection`, key
+  `permissions`) decodes the permission select (`options` of
+  `value`/`name`/optional `description`, plus `currentValue`) onto
+  `observePermissions`. A `null`-valued or malformed frame yields null —
+  the same hidden state as a host composing no permission service.
+  Unknown projection keys are ignored (the key set is open).
+- `agentPreset.read`/`copy`/`openDocument`/`remove` are loopback-pinned and
+  stay uncovered: a mobile client cannot manage the roster, only read it
+  and switch blank sessions.

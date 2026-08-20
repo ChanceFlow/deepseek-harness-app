@@ -919,7 +919,10 @@ void main() {
     await tester.pump();
     expect(actions, contains(const CancelTurnAction()));
 
-    // Enter/IME submit while running still queues the draft (web Enter).
+    // A ready draft while running surfaces the explicit send control
+    // beside Stop; soft keyboards have no Enter-as-send (the keyboard
+    // action is newline), so the control queues the draft (web Enter
+    // semantics, busy preference default).
     final composerField = find
         .descendant(
           of: find.byType(ComposerBar),
@@ -927,7 +930,9 @@ void main() {
         )
         .first;
     await tester.enterText(composerField, 'queued while running');
-    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
+    expect(find.byTooltip('Send'), findsOneWidget);
+    await tester.tap(find.byTooltip('Send'));
     await tester.pump();
     expect(
       actions,
@@ -1306,30 +1311,32 @@ void main() {
       name: 'screenshot.png',
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: ChatScreen(
-          uiState: _state(
-            sessions: const [
-              SessionSummary(id: 's1', title: 'Alpha', blank: false),
-            ],
-            selectedSessionId: 's1',
-            timeline: const [
-              TimelineMessage(
-                ChatMessage(
-                  id: 'm1',
-                  sessionId: 's1',
-                  role: MessageRole.user,
-                  text: 'shot',
-                  images: [ref],
+      ProviderScope(
+        child: MaterialApp(
+          home: ChatScreen(
+            uiState: _state(
+              sessions: const [
+                SessionSummary(id: 's1', title: 'Alpha', blank: false),
+              ],
+              selectedSessionId: 's1',
+              timeline: const [
+                TimelineMessage(
+                  ChatMessage(
+                    id: 'm1',
+                    sessionId: 's1',
+                    role: MessageRole.user,
+                    text: 'shot',
+                    images: [ref],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+            onAction: (_) {},
+            loadAttachment: (sessionId, ref) async {
+              loaded.add(ref);
+              return null; // fail to decode → placeholder
+            },
           ),
-          onAction: (_) {},
-          loadAttachment: (sessionId, ref) async {
-            loaded.add(ref);
-            return null; // fail to decode → placeholder
-          },
         ),
       ),
     );
@@ -1351,16 +1358,18 @@ void main() {
         tester.view.physicalSize = const Size(800, 1280);
         tester.view.devicePixelRatio = 1.0;
         await tester.pumpWidget(
-          MaterialApp(
-            home: ChatScreen(
-              uiState: ChatUiState(
-                sessions: const [
-                  SessionSummary(id: 's1', title: 'Alpha', blank: false),
-                ],
-                selectedSessionId: 's1',
-                plan: PlanState(active: active, pending: pending),
+          ProviderScope(
+            child: MaterialApp(
+              home: ChatScreen(
+                uiState: ChatUiState(
+                  sessions: const [
+                    SessionSummary(id: 's1', title: 'Alpha', blank: false),
+                  ],
+                  selectedSessionId: 's1',
+                  plan: PlanState(active: active, pending: pending),
+                ),
+                onAction: actions.add,
               ),
-              onAction: actions.add,
             ),
           ),
         );
@@ -1434,8 +1443,10 @@ void main() {
               ),
           ],
         );
-    Widget host(ChatUiState ui) => MaterialApp(
-      home: ChatScreen(uiState: ui, onAction: (_) {}),
+    Widget host(ChatUiState ui) => ProviderScope(
+      child: MaterialApp(
+        home: ChatScreen(uiState: ui, onAction: (_) {}),
+      ),
     );
 
     Finder timelineList() => find.descendant(
@@ -1498,8 +1509,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       return tester.pumpWidget(
-        MaterialApp(
-          home: ChatScreen(uiState: uiState, onAction: actions.add),
+        ProviderScope(
+          child: MaterialApp(
+            home: ChatScreen(uiState: uiState, onAction: actions.add),
+          ),
         ),
       );
     }

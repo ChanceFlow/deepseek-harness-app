@@ -1,16 +1,23 @@
 /// Chat sidebar — Flutter port of the dsh web sidebar's browsing region
 /// (ui-workspace WorkspaceBrowser): the section header with its trailing
 /// search toggle, the expanding search capsule, and the workspace-grouped
-/// session tree with the per-group overflow control. Shares its design
-/// language with the Workspaces tab (workspace_screen.dart): 44px touch
-/// rows, folder group headers, and the flat search-result list that
-/// replaces the tree while a query is active.
+/// session tree with the per-group overflow control. The foot carries
+/// the settings trigger (web `sidebar.settings` seat): a divider-topped
+/// 44px row that selects the Settings destination. The browsing toggles
+/// (per-group expansion overrides, per-group overflow expansions)
+/// persist through the local state store. Shares its design language
+/// with the Workspaces tab (workspace_screen.dart): 44px touch rows,
+/// folder group headers, and the flat search-result list that replaces
+/// the tree while a query is active.
 library;
 
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../local_state/local_state_providers.dart';
+import '../root/app_destination.dart';
 import '../theme/deepsuite_extension.dart' show DeepSuiteColors, dsOf;
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
 import 'brand_wordmark.dart';
@@ -28,7 +35,15 @@ const int _collapsedSessionLimit = 5;
 /// never as independent sidebar rows.
 const String _subagentOrigin = 'subagent';
 
-class SessionPanel extends StatefulWidget {
+/// Local state store key: per-group expansion overrides
+/// (`sidebar.groupOverrides`, `Map<String, bool>`).
+const String _groupOverridesKey = 'sidebar.groupOverrides';
+
+/// Local state store key: groups whose overflow control is expanded
+/// (`sidebar.overflowExpanded`, `List<String>`).
+const String _overflowExpandedKey = 'sidebar.overflowExpanded';
+
+class SessionPanel extends ConsumerStatefulWidget {
   const SessionPanel({
     super.key,
     this.inDrawer = false,
@@ -57,10 +72,10 @@ class SessionPanel extends StatefulWidget {
   final void Function(String query) onSearchSessions;
 
   @override
-  State<SessionPanel> createState() => _SessionPanelState();
+  ConsumerState<SessionPanel> createState() => _SessionPanelState();
 }
 
-class _SessionPanelState extends State<SessionPanel> {
+class _SessionPanelState extends ConsumerState<SessionPanel> {
   final TextEditingController _queryController = TextEditingController();
   bool _collapsedToRail = false;
 
@@ -75,6 +90,14 @@ class _SessionPanelState extends State<SessionPanel> {
   /// Web `expandedSessionGroups`: groups whose overflow control is
   /// expanded past [_collapsedSessionLimit].
   final Set<String> _overflowExpandedGroups = <String>{};
+
+  /// Whether the persisted browsing toggles have been applied once the
+  /// store resolved; the defaults cover the pre-load window.
+  bool _seededFromStore = false;
+
+  /// Whether the user flipped any browsing toggle before the store
+  /// resolved; a live toggle outranks the persisted snapshot.
+  bool _userToggled = false;
 
   @override
   void dispose() {
@@ -122,15 +145,49 @@ class _SessionPanelState extends State<SessionPanel> {
   void _toggleGroup(String key) {
     final currentGroupKey = _currentGroupKey();
     final expanded = _groupOverrides[key] ?? key == currentGroupKey;
+    _userToggled = true;
     setState(() => _groupOverrides[key] = !expanded);
+    _persistBrowsingState();
   }
 
   /// Web `expandedSessionGroups` toggle: the per-group overflow control.
-  void _toggleOverflow(String key) => setState(() {
-    if (!_overflowExpandedGroups.remove(key)) {
-      _overflowExpandedGroups.add(key);
-    }
-  });
+  void _toggleOverflow(String key) {
+    _userToggled = true;
+    setState(() {
+      if (!_overflowExpandedGroups.remove(key)) {
+        _overflowExpandedGroups.add(key);
+      }
+    });
+    _persistBrowsingState();
+  }
+
+  /// Applies the persisted browsing toggles ([_groupOverridesKey],
+  /// [_overflowExpandedKey]) once the store resolves; until then the
+  /// panel runs on the defaults, and a user toggle inside that window
+  /// cancels the snapshot (live intent wins). Runs inside build without
+  /// setState — the same build pass renders the seeded values.
+  void _seedBrowsingStateFromStore() {
+    final store = ref.watch(localStateStoreProvider).value;
+    if (store == null || _seededFromStore) return;
+    _seededFromStore = true;
+    if (_userToggled) return;
+    _groupOverrides.addAll(
+      _decodeGroupOverrides(store.read(_groupOverridesKey)),
+    );
+    _overflowExpandedGroups.addAll(
+      _decodeOverflowExpanded(store.read(_overflowExpandedKey)),
+    );
+  }
+
+  /// Mirrors the browsing toggles into the local state store; before the
+  /// store resolves the toggles stay live-only — the next toggle after
+  /// load persists the full maps.
+  void _persistBrowsingState() {
+    final store = ref.read(localStateStoreProvider).value;
+    if (store == null) return;
+    store.write(_groupOverridesKey, Map<String, bool>.of(_groupOverrides));
+    store.write(_overflowExpandedKey, _overflowExpandedGroups.toList());
+  }
 
   /// Web tree.ts current-group derivation: the workspace whose account
   /// holds the selected session, or the Ungrouped key when no account
@@ -374,7 +431,8 @@ class _SessionPanelState extends State<SessionPanel> {
 
   /// Wide/drawer form: the browsing region below the brand row — New
   /// session bar, section header, search capsule, then the tree or the
-  /// search-result list with the bottom continuation fade.
+  /// search-result list with the bottom continuation fade, and the
+  /// settings trigger pinned in the foot below it all.
   List<Widget> _buildWideChildren(BuildContext context, DeepSuiteColors ds) {
     return [
       _buildNewSessionButton(context, ds),
@@ -423,7 +481,57 @@ class _SessionPanelState extends State<SessionPanel> {
           ],
         ),
       ),
+      _buildSettingsFooter(context, ds),
     ];
+  }
+
+  /// Web sidebar foot (`sidebar.settings` seat; ui-settings-general
+  /// chrome.tsx `TriggerContent` + SettingsRoot.module.css `.trigger`):
+  /// the bottom-pinned settings row — hairline divider, 44px touch
+  /// height, gear glyph, label, interactive-bg-hover fill. The web
+  /// drops the label in the collapsed rail column; both mobile forms
+  /// (wide pane and drawer) are wide enough for the one-word label,
+  /// so each shows icon + label. Tapping selects the Settings
+  /// destination through [appDestinationProvider].
+  Widget _buildSettingsFooter(BuildContext context, DeepSuiteColors ds) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(height: 1, thickness: 1, color: ds.divider),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            hoverColor: ds.interactiveBgHover,
+            highlightColor: ds.interactiveBgHover,
+            onTap: () => ref
+                .read(appDestinationProvider.notifier)
+                .select(AppDestination.settings),
+            child: SizedBox(
+              height: 44,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.settings_outlined,
+                      size: 18,
+                      color: ds.labelSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Settings',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   /// Web WorkspaceBrowser `SessionTree` (mobile form): the grouped
@@ -510,6 +618,7 @@ class _SessionPanelState extends State<SessionPanel> {
 
   @override
   Widget build(BuildContext context) {
+    _seedBrowsingStateFromStore();
     final ds = dsOf(context);
     final rail = !widget.inDrawer && _collapsedToRail;
     return AnimatedContainer(
@@ -561,6 +670,24 @@ List<SessionSummary> _sortedByRecency(Iterable<SessionSummary> sessions) {
       return a.id.compareTo(b.id);
     });
   return ordered;
+}
+
+/// Decodes [_groupOverridesKey]: the store's JSON round-trip yields
+/// `Map<String, dynamic>`, so members are checked, not cast wholesale —
+/// a malformed entry drops out, never throws.
+Map<String, bool> _decodeGroupOverrides(Object? raw) {
+  if (raw is! Map) return const <String, bool>{};
+  return <String, bool>{
+    for (final entry in raw.entries)
+      if (entry.key is String && entry.value is bool)
+        entry.key as String: entry.value as bool,
+  };
+}
+
+/// Decodes [_overflowExpandedKey] under the same checked rule.
+List<String> _decodeOverflowExpanded(Object? raw) {
+  if (raw is! List) return const <String>[];
+  return <String>[for (final item in raw) if (item is String) item];
 }
 
 /// Web tree.ts `workspaceLabel`: the cwd basename, or the Ungrouped label

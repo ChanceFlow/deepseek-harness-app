@@ -6,6 +6,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_screen.dart';
@@ -32,16 +33,18 @@ Future<void> _pump(WidgetTester tester, List<TimelineItem> timeline) {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
-    MaterialApp(
-      home: ChatScreen(
-        uiState: ChatUiState(
-          sessions: const [
-            SessionSummary(id: 's1', title: 'Alpha', blank: false),
-          ],
-          selectedSessionId: 's1',
-          timeline: timeline,
+    ProviderScope(
+      child: MaterialApp(
+        home: ChatScreen(
+          uiState: ChatUiState(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Alpha', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: timeline,
+          ),
+          onAction: (_) {},
         ),
-        onAction: (_) {},
       ),
     ),
   );

@@ -1,24 +1,35 @@
 /// Settings screen — Flutter port of the dsh web settings surface.
 ///
 /// Translates the web settings panel (ui-settings shell plus the
-/// ui-settings-general / -plugins / -models sections) onto a phone-width
-/// tab: the panel's content-column rhythm — 16/500 section titles over
-/// 14/22 rows with 12/18 tertiary descriptions, border-l2 hairlines
-/// between rows, 12px-radius cards, capsule controls, 8px-radius inputs —
+/// ui-settings-general / -models / -plugins sections, ui-agent-preset,
+/// and the ui-conversation Enter row) onto a phone-width tab. The
+/// panel's content-column rhythm — 16/500 section titles over 14/22
+/// rows with 12/18 tertiary descriptions, border-l2 hairlines between
+/// rows, 12px-radius cards, capsule controls, 8px-radius inputs — is
 /// kept token-for-token (reference packages/client/ui-settings-* module
-/// css). The web's two-pane panel collapses to one column: general facts
-/// render as value rows, namespaces disclose in place (web PluginCard),
-/// and the credential editor opens as a bottom sheet on the popover
-/// surface instead of a side panel.
+/// css). The web's two-pane panel (nav rail + content column) collapses
+/// to a horizontal capsule nav over an IndexedStack of pages in the
+/// web nav's order — General, Models, Plugins, Agent presets — plus a
+/// mobile-only Credentials page; IndexedStack preserves each section's
+/// scroll and entry state across switches. General facts render as
+/// value rows, the Enter-behavior and agent-preset defaults render as
+/// the web's interactive preference rows, presets render as the web's
+/// selectable cards (read-only: authoring verbs are loopback-pinned),
+/// namespaces disclose in place under Plugins (web PluginCard), the
+/// DeepSeek API-key card rides Models, and the credential editor opens
+/// as a bottom sheet on the popover surface instead of a side panel.
 library;
 
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
+import '../shared/agent_preset_display.dart';
 import '../theme/deepsuite_extension.dart';
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
+import 'busy_enter_preference.dart';
 import 'settings_ui_state.dart';
 
 class SettingsRoute extends ConsumerWidget {
@@ -48,7 +59,27 @@ class SettingsRoute extends ConsumerWidget {
   }
 }
 
-class SettingsScreen extends StatelessWidget {
+/// Phone-tab settings sections in the web panel's nav order (web
+/// section orders: general 0, models 10, plugins 15, agent-presets 20).
+/// Credentials has no web nav entry — the web manages secrets inside
+/// the Models provider editors — so the mobile credential rows keep
+/// their own page, last.
+enum _SettingsSection { general, models, plugins, presets, credentials }
+
+String _sectionLabel(_SettingsSection section) => switch (section) {
+  _SettingsSection.general => 'General',
+  _SettingsSection.models => 'Models',
+  _SettingsSection.plugins => 'Plugins',
+  _SettingsSection.presets => 'Agent presets',
+  _SettingsSection.credentials => 'Credentials',
+};
+
+/// The credential reference the official DeepSeek route resolves by
+/// default (reference packages/llm/llm-deepseek DEFAULT_API_KEY_ENV);
+/// the Models page's feasible subset keys off it.
+const String _kDeepSeekCredentialRef = 'DEEPSEEK_API_KEY';
+
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.uiState,
@@ -59,19 +90,28 @@ class SettingsScreen extends StatelessWidget {
   final void Function(SettingsAction) onAction;
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  _SettingsSection _section = _SettingsSection.general;
+
+  @override
   Widget build(BuildContext context) {
+    final uiState = widget.uiState;
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SettingsHeader(
-              onRefresh: () => onAction(const RefreshSettingsAction()),
+              onRefresh: () => widget.onAction(const RefreshSettingsAction()),
             ),
             if (uiState.errorMessage case final String error)
               _ErrorBanner(
                 message: error,
-                onDismiss: () => onAction(const DismissSettingsError()),
+                onDismiss: () =>
+                    widget.onAction(const DismissSettingsError()),
               ),
             // Web surfaces write/refresh state on the controls; the mobile
             // tab keeps one slim activity line above the content column.
@@ -89,16 +129,91 @@ class SettingsScreen extends StatelessWidget {
                       : const SizedBox.shrink(),
                 ),
               ),
+              // IndexedStack keeps every section's scroll position and
+              // disclosure state across nav switches (the web panel keeps
+              // each section mounted behind its nav rail).
               final described => Expanded(
-                child: _SettingsBody(
-                  snapshot: described,
-                  credentials: uiState.credentials,
-                  credentialError: uiState.credentialError,
-                  busy: uiState.isLoading,
-                  onAction: onAction,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SettingsSectionNav(
+                      section: _section,
+                      onSelect: (next) =>
+                          setState(() => _section = next),
+                    ),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _section.index,
+                        children: [
+                          _GeneralPage(
+                            snapshot: described,
+                            roster: uiState.roster,
+                            busy: uiState.isLoading,
+                            onAction: widget.onAction,
+                          ),
+                          _ModelsPage(
+                            writable: described.writable,
+                            credentials: uiState.credentials,
+                            onAction: widget.onAction,
+                          ),
+                          _PluginsPage(
+                            snapshot: described,
+                            busy: uiState.isLoading,
+                            onAction: widget.onAction,
+                          ),
+                          _AgentPresetsPage(
+                            roster: uiState.roster,
+                            onAction: widget.onAction,
+                          ),
+                          _CredentialsPage(
+                            credentials: uiState.credentials,
+                            credentialError: uiState.credentialError,
+                            onAction: widget.onAction,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The panel's section nav (web SettingsRoot `.navList`) collapsed to a
+/// horizontal capsule row: one 36px capsule per section on the selector
+/// vocabulary, the active one on the module fill.
+class _SettingsSectionNav extends StatelessWidget {
+  const _SettingsSectionNav({
+    required this.section,
+    required this.onSelect,
+  });
+
+  final _SettingsSection section;
+  final ValueChanged<_SettingsSection> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            for (final candidate in _SettingsSection.values) ...[
+              if (candidate != _SettingsSection.values.first)
+                const SizedBox(width: 8),
+              _ModeButton(
+                label: _sectionLabel(candidate),
+                selected: candidate == section,
+                onTap: () => onSelect(candidate),
+              ),
+            ],
           ],
         ),
       ),
@@ -197,21 +312,729 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// The web panel's content column (`.options`), stacked as one mobile
-/// list: General facts, namespace disclosure cards, credential rows.
-class _SettingsBody extends StatelessWidget {
-  const _SettingsBody({
+/// General page (web GeneralSection): the preference rows — busy-Enter
+/// (web EnterBehaviorRow) and the agent-preset default (web
+/// AgentPresetRow) — over the connection-fact rows.
+class _GeneralPage extends StatelessWidget {
+  const _GeneralPage({
     required this.snapshot,
-    required this.credentials,
-    required this.credentialError,
+    required this.roster,
     required this.busy,
     required this.onAction,
   });
 
   final SettingsSnapshot snapshot;
+  final AgentPresetRoster? roster;
+  final bool busy;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final rows = <Widget>[
+      const _EnterBehaviorRow(),
+      // Web rule: the row exists only when the deployment composes at
+      // least one preset — an empty roster has nothing to choose between.
+      if (roster?.entries.isNotEmpty ?? false)
+        _AgentPresetRow(
+          roster: roster!,
+          writable: snapshot.writable,
+          busy: busy,
+          onAction: onAction,
+        ),
+      _GeneralRow(
+        title: 'Host writes',
+        description:
+            'Whether the host accepts settings and credential writes.',
+        value: snapshot.writable ? 'Writable' : 'Read-only',
+        tone: snapshot.writable ? _FactTone.positive : _FactTone.warning,
+      ),
+      _GeneralRow(
+        title: 'Settings document',
+        description:
+            'Whether a user settings document backs the '
+            'namespaces.',
+        value: snapshot.hasDocument ? 'Present' : 'None',
+        tone: snapshot.hasDocument ? _FactTone.positive : _FactTone.neutral,
+      ),
+    ];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        const _SectionHeader(
+          title: 'General',
+          intro: 'New-session defaults and the host settings plane.',
+        ),
+        ..._divided(ds, rows),
+      ],
+    );
+  }
+}
+
+/// The healthy presets a picker may offer (web `presetOptions`): a
+/// broken preset cannot compose a session, so offering it would only
+/// defer that discovery to a failed session start.
+List<AgentPresetEntry> _pickerOptions(AgentPresetRoster? roster) =>
+    roster?.entries.where((entry) => entry.broken == null).toList() ??
+    const <AgentPresetEntry>[];
+
+/// Busy-Enter preference row (web EnterBehaviorRow): a Queue/Steer
+/// capsule selector persisted to the shared LocalStateStore. The row
+/// renders with the queue default while the store loads or refuses to
+/// load — the preference is device-local and never fails a page.
+class _EnterBehaviorRow extends ConsumerWidget {
+  const _EnterBehaviorRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final controller = ref.watch(busyEnterPreferenceProvider).value;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Enter behavior while busy', style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Applies only while an agent is running.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: ds.labelTertiary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (controller == null)
+            _enterBehaviorCapsules(
+              context,
+              BusyEnterBehavior.queue,
+              null,
+            )
+          else
+            StreamBuilder<BusyEnterBehavior>(
+              stream: controller.uiState,
+              initialData: controller.state,
+              builder: (context, snapshot) => _enterBehaviorCapsules(
+                context,
+                snapshot.data ?? BusyEnterBehavior.queue,
+                controller.select,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _enterBehaviorCapsules(
+    BuildContext context,
+    BusyEnterBehavior current,
+    ValueChanged<BusyEnterBehavior>? onSelect,
+  ) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        for (final option in BusyEnterBehavior.values)
+          _ModeButton(
+            label: switch (option) {
+              BusyEnterBehavior.queue => 'Queue',
+              BusyEnterBehavior.steer => 'Steer',
+            },
+            selected: option == current,
+            onTap: onSelect == null ? null : () => onSelect(option),
+          ),
+      ],
+    );
+  }
+}
+
+/// Agent-preset default row (web AgentPresetRow): the current default's
+/// display name trailing, a menu-surface picker listing the healthy
+/// roster. The control is disabled while the host reports read-only
+/// (the write would be refused); the row itself does not exist when the
+/// deployment composes no presets.
+class _AgentPresetRow extends StatelessWidget {
+  const _AgentPresetRow({
+    required this.roster,
+    required this.writable,
+    required this.busy,
+    required this.onAction,
+  });
+
+  final AgentPresetRoster roster;
+  final bool writable;
+  final bool busy;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final options = _pickerOptions(roster);
+    // A roster can mark nothing default; the picker still has to show
+    // something, so the label falls back to the first entry (web rule).
+    final current = roster.defaultEntry ?? roster.entries.first;
+    final enabled = writable && !busy && options.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: ds.interactiveBgHover,
+        onTap: enabled ? () => _openPicker(context, options) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Agent preset', style: theme.textTheme.bodyMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Applies to sessions you start from now on. '
+                      'Running sessions keep the preset they began with.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: ds.labelTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                agentPresetDisplayName(current),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: ds.labelSecondary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Mobile picker for the web PresetMenu: the menu-surface sheet
+  /// (MenuDropdown family, as the credential editor) listing one row
+  /// per healthy preset, the current default checked.
+  Future<void> _openPicker(
+    BuildContext context,
+    List<AgentPresetEntry> options,
+  ) {
+    final currentId = (roster.defaultEntry ?? roster.entries.first).id;
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final ds = dsOf(sheetContext);
+        final theme = Theme.of(sheetContext);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: ds.menu,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ds.borderInverted),
+              boxShadow: kDsShadowLv3,
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Agent preset', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  for (final option in options)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        hoverColor: ds.interactiveBgHover,
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          onAction(SelectAgentPresetDefaultAction(option.id));
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  agentPresetDisplayName(option),
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ),
+                              if (option.id == currentId)
+                                Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: ds.accent,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Agent-presets page (web AgentPresetSection): the roster as grouped
+/// selectable cards — Built-in and Custom (web groups). Read-only
+/// beyond the default switch: the copy, delete, and compose-viewer
+/// verbs ride loopback-pinned RPCs a mobile client cannot reach, so
+/// authoring stays on the host and the page says so. An empty or
+/// unloaded roster renders nothing but that footnote (web rule: a
+/// deployment that composes no presets has nothing to manage).
+class _AgentPresetsPage extends StatelessWidget {
+  const _AgentPresetsPage({
+    required this.roster,
+    required this.onAction,
+  });
+
+  final AgentPresetRoster? roster;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final entries = roster?.entries ?? const <AgentPresetEntry>[];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        if (entries.isNotEmpty) ...[
+          const _SectionHeader(
+            title: 'Agent presets',
+            intro:
+                'A preset is the plugin composition one session\'s agent '
+                'runs — its tools, prompt, and capabilities.',
+          ),
+          for (final (trust, heading) in [
+            (AgentPresetTrust.system, 'Built-in'),
+            (AgentPresetTrust.user, 'Custom'),
+          ])
+            if (entries.any((entry) => entry.trust == trust)) ...[
+              Text(
+                heading.toUpperCase(),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: ds.labelTertiary,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final entry in entries.where(
+                (entry) => entry.trust == trust,
+              )) ...[
+                _PresetCard(
+                  key: ValueKey(entry.id),
+                  entry: entry,
+                  onAction: onAction,
+                ),
+                const SizedBox(height: 12),
+              ],
+              const SizedBox(height: 8),
+            ],
+        ],
+        Text(
+          'Presets are authored on the host: copy, edit, and delete them '
+          'from the desktop settings.',
+          style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+/// One preset card (web `.card`): the card body IS the control —
+/// tapping a healthy non-default card makes it the default. The
+/// default reads selected (layer-2 fill, primary border — web
+/// `cardActive`), not merely badged; a broken preset carries the error
+/// border, the 'Failed to load' badge, and the discovery reason, with
+/// its body disabled.
+class _PresetCard extends StatelessWidget {
+  const _PresetCard({
+    super.key,
+    required this.entry,
+    required this.onAction,
+  });
+
+  final AgentPresetEntry entry;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final broken = entry.broken != null;
+    final active = entry.isDefault;
+    // Web rule: the card offers the full description on hover when the
+    // 4-line clamp cut it; an unpublished description says so.
+    final description = agentPresetDisplayDescription(entry) ??
+        'No description.';
+    return AnimatedContainer(
+      duration: kDsDuration,
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: active ? ds.bgLayer2 : ds.bgLayer3,
+        border: Border.all(
+          color: broken
+              ? theme.colorScheme.error
+              : active
+              ? theme.colorScheme.onSurface
+              : ds.borderL2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          hoverColor: ds.interactiveBgHover,
+          onTap: broken || active
+              ? null
+              : () => onAction(SelectAgentPresetDefaultAction(entry.id)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        agentPresetDisplayName(entry),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ),
+                    if (broken) ...[
+                      const SizedBox(width: 8),
+                      const _PresetBadge(
+                        label: 'Failed to load',
+                        filled: true,
+                      ),
+                    ],
+                    if (entry.trust == AgentPresetTrust.user) ...[
+                      const SizedBox(width: 8),
+                      const _PresetBadge(label: 'Custom'),
+                    ],
+                    if (active) ...[
+                      const SizedBox(width: 8),
+                      const Spacer(),
+                      const _PresetBadge(label: 'In use', inverted: true),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Tooltip(
+                  message: description,
+                  child: Text(
+                    description,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: ds.labelSecondary,
+                    ),
+                  ),
+                ),
+                if (broken) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    // The discovery-reported reason, verbatim: it names
+                    // the file and the fix.
+                    entry.broken!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  entry.id,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: ds.labelCaption,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Web `.badge`/`.brokenBadge`/`.inUse`: a 999px pill at 11/17 w500 —
+/// hairline outline with tertiary ink for the trust mark, the error
+/// fill with layer-3 ink when broken, and the label-primary fill with
+/// layer-3 ink for the in-use mark.
+class _PresetBadge extends StatelessWidget {
+  const _PresetBadge({
+    required this.label,
+    this.filled = false,
+    this.inverted = false,
+  });
+
+  final String label;
+  final bool filled;
+  final bool inverted;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final Color background;
+    final Color foreground;
+    if (filled) {
+      background = theme.colorScheme.error;
+      foreground = ds.bgLayer3;
+    } else if (inverted) {
+      background = theme.colorScheme.onSurface;
+      foreground = ds.bgLayer3;
+    } else {
+      background = Colors.transparent;
+      foreground = ds.labelTertiary;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: filled || inverted ? null : Border.all(color: ds.borderL2),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(color: foreground),
+      ),
+    );
+  }
+}
+
+/// Plugins page (web PluginsSettingsSection): the host settings
+/// namespaces as in-place disclosure cards (the mobile analog of the
+/// web configurable-plugins tab — one PluginCard per namespace).
+class _PluginsPage extends StatelessWidget {
+  const _PluginsPage({
+    required this.snapshot,
+    required this.busy,
+    required this.onAction,
+  });
+
+  final SettingsSnapshot snapshot;
+  final bool busy;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        const _SectionHeader(
+          title: 'Plugins',
+          intro:
+              'Configure and inspect the plugins installed in this '
+              'deployment.',
+        ),
+        if (snapshot.namespaces.isEmpty)
+          Text(
+            'This deployment exposes no plugin settings.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: ds.labelTertiary,
+            ),
+          ),
+        for (var i = 0; i < snapshot.namespaces.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _NamespaceCard(
+            key: ValueKey(snapshot.namespaces[i].ns),
+            namespace: snapshot.namespaces[i],
+            writable: snapshot.writable,
+            busy: busy,
+            onAction: onAction,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Models page (web ModelsSection), scoped to what the mobile adapter
+/// covers: the official DeepSeek route's API-key card (credential
+/// describe + set/unset — the same editor sheet as the Credentials
+/// page). The web's provider-directory joins, schema-driven profile
+/// editors, and custom-provider CRUD ride RPCs the adapter does not
+/// expose, so they stay on the host and the page says so.
+class _ModelsPage extends StatelessWidget {
+  const _ModelsPage({
+    required this.writable,
+    required this.credentials,
+    required this.onAction,
+  });
+
+  final bool writable;
+  final List<CredentialStatus> credentials;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final deepSeek = credentials
+        .where((credential) => credential.ref == _kDeepSeekCredentialRef)
+        .firstOrNull;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        const _SectionHeader(
+          title: 'Models',
+          intro:
+              'Enter your API keys to use models from the following '
+              'providers.',
+        ),
+        if (!writable)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'The settings document is read-only in this deployment.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: ds.labelTertiary,
+              ),
+            ),
+          ),
+        if (deepSeek != null) ...[
+          _DeepSeekCard(credential: deepSeek, onAction: onAction),
+          const SizedBox(height: 12),
+        ],
+        Text(
+          'Custom providers are managed on the host: this client covers '
+          'the DeepSeek API key only.',
+          style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+/// The official DeepSeek route's row (web ModelsSection `.rowCard`):
+/// provider name over the API-key state, the configured/missing dot
+/// and badge trailing, opening the credential editor sheet.
+class _DeepSeekCard extends StatelessWidget {
+  const _DeepSeekCard({required this.credential, required this.onAction});
+
+  final CredentialStatus credential;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return AnimatedContainer(
+      duration: kDsDuration,
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: ds.bgLayer3,
+        border: Border.all(color: ds.borderL2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          hoverColor: ds.interactiveBgHover,
+          onTap: () => _openSheet(context),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('DeepSeek', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 4),
+                      Text(
+                        credential.configured
+                            ? 'API key configured'
+                            : 'API key missing',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ds.labelTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _StatusDot(
+                  color: credential.configured
+                      ? DeepSuiteStatic.green500
+                      : ds.warnPrimary,
+                ),
+                const SizedBox(width: 6),
+                _StateBadge(configured: credential.configured),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The same editor sheet the Credentials page opens: write-only
+  /// secret field, capsule footer with the destructive unset.
+  Future<void> _openSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: dsOf(sheetContext).menu,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: dsOf(sheetContext).borderInverted),
+              boxShadow: kDsShadowLv3,
+            ),
+            child: _CredentialSheet(
+              credential: credential,
+              onAction: onAction,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Credentials page: the secret references the host namespaces name,
+/// each opening the editor sheet. The web manages these inside the
+/// Models provider editors; the phone keeps them addressable directly.
+class _CredentialsPage extends StatelessWidget {
+  const _CredentialsPage({
+    required this.credentials,
+    required this.credentialError,
+    required this.onAction,
+  });
+
   final List<CredentialStatus> credentials;
   final String? credentialError;
-  final bool busy;
   final void Function(SettingsAction) onAction;
 
   @override
@@ -225,63 +1048,27 @@ class _SettingsBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         const _SectionHeader(
-          title: 'General',
-          intro: 'Connection facts for the host settings plane.',
+          title: 'Credentials',
+          intro: 'Secret references named by the host namespaces.',
         ),
-        ..._divided(ds, [
-          _GeneralRow(
-            title: 'Host writes',
-            description:
-                'Whether the host accepts settings and credential writes.',
-            value: snapshot.writable ? 'Writable' : 'Read-only',
-            tone: snapshot.writable ? _FactTone.positive : _FactTone.warning,
-          ),
-          _GeneralRow(
-            title: 'Settings document',
-            description:
-                'Whether a user settings document backs the '
-                'namespaces.',
-            value: snapshot.hasDocument ? 'Present' : 'None',
-            tone: snapshot.hasDocument ? _FactTone.positive : _FactTone.neutral,
-          ),
-        ]),
-        const SizedBox(height: 28),
-        const _SectionHeader(
-          title: 'Namespaces',
-          intro: 'Host settings namespaces; values stay on the host.',
-        ),
-        if (snapshot.namespaces.isEmpty)
-          Text('No namespaces reported.', style: tertiary),
-        for (var i = 0; i < snapshot.namespaces.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
-          _NamespaceCard(
-            key: ValueKey(snapshot.namespaces[i].ns),
-            namespace: snapshot.namespaces[i],
-            writable: snapshot.writable,
-            busy: busy,
-            onAction: onAction,
-          ),
+        if (credentialError case final String error) ...[
+          Text('Credential state unavailable: $error', style: tertiary),
+          if (credentials.isNotEmpty) const SizedBox(height: 8),
         ],
-        if (credentials.isNotEmpty || credentialError != null) ...[
-          const SizedBox(height: 28),
-          const _SectionHeader(
-            title: 'Credentials',
-            intro: 'Secret references named by the host namespaces.',
-          ),
-          if (credentialError case final String error) ...[
-            Text('Credential state unavailable: $error', style: tertiary),
-            if (credentials.isNotEmpty) const SizedBox(height: 8),
-          ],
-          if (credentials.isNotEmpty)
-            ..._divided(ds, [
+        if (credentials.isEmpty)
+          Text('No credentials referenced.', style: tertiary)
+        else
+          ..._divided(
+            ds,
+            [
               for (final credential in credentials)
                 _CredentialRow(
                   key: ValueKey(credential.ref),
                   credential: credential,
                   onAction: onAction,
                 ),
-            ]),
-        ],
+            ],
+          ),
       ],
     );
   }
@@ -646,17 +1433,19 @@ class _NamespaceCardState extends State<_NamespaceCard> {
 
 /// Web segmented choice on the selector vocabulary: a 36px capsule on the
 /// module fill when selected, hairline outline when not; the padding
-/// around it keeps the touch target at 44px.
+/// around it keeps the touch target at 44px. A null [onTap] renders the
+/// capsule disabled (settings-nav and mode capsules never use it; the
+/// busy-Enter fallback does while its store is unavailable).
 class _ModeButton extends StatelessWidget {
   const _ModeButton({
     required this.label,
     required this.selected,
-    required this.onTap,
+    this.onTap,
   });
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

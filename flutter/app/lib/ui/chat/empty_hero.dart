@@ -2,11 +2,13 @@
 /// soft blue glow, and the workspace chip over the blank draft.
 library;
 
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/deepsuite_extension.dart';
 import 'fish_logo.dart';
+import 'preset_seat.dart';
 
 /// Web `hero.*` locale strings (English seat).
 const String kHeroHeadline = 'Into the Unknown';
@@ -19,6 +21,9 @@ class EmptyHero extends StatelessWidget {
     required this.workspaces,
     required this.onPickWorkspace,
     this.currentWorkspaceLabel,
+    this.presetRoster,
+    this.currentPresetId,
+    this.onPickPreset,
   });
 
   final List<WorkspaceSummary> workspaces;
@@ -26,6 +31,15 @@ class EmptyHero extends StatelessWidget {
 
   /// Active draft workspace label; null renders the placeholder chip.
   final String? currentWorkspaceLabel;
+
+  /// Agent-preset roster and the id the seat shows; a null roster
+  /// (unloaded, or a deployment composing no presets) hides the chip.
+  final AgentPresetRoster? presetRoster;
+  final String? currentPresetId;
+
+  /// A preset pick's dispatch (stage the next session or switch the
+  /// current blank one, per the owner's state).
+  final void Function(String presetId)? onPickPreset;
 
   @override
   Widget build(BuildContext context) {
@@ -91,10 +105,24 @@ class EmptyHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              WorkspaceChip(
-                workspaces: workspaces,
-                label: currentWorkspaceLabel,
-                onPickWorkspace: onPickWorkspace,
+              // Web HeroShell: the preset seat rides beside the workspace
+              // picker, same chip family.
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  WorkspaceChip(
+                    workspaces: workspaces,
+                    label: currentWorkspaceLabel,
+                    onPickWorkspace: onPickWorkspace,
+                  ),
+                  AgentPresetSeat(
+                    roster: presetRoster,
+                    currentId: currentPresetId,
+                    onSelect: onPickPreset ?? (_) {},
+                  ),
+                ],
               ),
             ],
           ),

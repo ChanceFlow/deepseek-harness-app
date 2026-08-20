@@ -550,6 +550,77 @@ List<SkillEntryWire> decodeSkillListValue(JsonMap value) =>
         .toList();
 
 // ---------------------------------------------------------------------------
+// Agent presets (agentPreset.list / agentPreset.select —
+// reference/deepseek-harness/packages/host/apiproxy/src/api/
+// agent-presets.schema.ts)
+// ---------------------------------------------------------------------------
+
+final class AgentPresetEntryWire {
+  AgentPresetEntryWire.fromJson(JsonMap json)
+    : id = _reqString(json, 'id'),
+      trust = _reqString(json, 'trust'),
+      isDefault = _reqBool(json, 'isDefault'),
+      name = wireString(json, 'name'),
+      description = wireString(json, 'description'),
+      broken = wireString(json, 'broken');
+
+  final String id;
+
+  /// `'system'` or `'user'`; the repository maps it to the domain enum
+  /// and fails loud on any other value.
+  final String trust;
+  final bool isDefault;
+  final String? name;
+  final String? description;
+  final String? broken;
+}
+
+final class AgentPresetListValueWire {
+  AgentPresetListValueWire.fromJson(JsonMap json)
+    : presets = (asJsonArray(json['presets']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(AgentPresetEntryWire.fromJson)
+          .toList(),
+      authorable = _reqBool(json, 'authorable'),
+      hasDocument = _reqBool(json, 'hasDocument');
+
+  final List<AgentPresetEntryWire> presets;
+  final bool authorable;
+  final bool hasDocument;
+}
+
+// ---------------------------------------------------------------------------
+// Permission select (the `permissions` session projection value —
+// reference/deepseek-harness/packages/interaction/permission-presets/
+// src/types.ts)
+// ---------------------------------------------------------------------------
+
+final class PermissionPresetOptionWire {
+  PermissionPresetOptionWire.fromJson(JsonMap json)
+    : value = _reqString(json, 'value'),
+      name = _reqString(json, 'name'),
+      description = wireString(json, 'description');
+
+  final String value;
+  final String name;
+  final String? description;
+}
+
+final class PermissionSelectWire {
+  PermissionSelectWire.fromJson(JsonMap json)
+    : options = (asJsonArray(json['options']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(PermissionPresetOptionWire.fromJson)
+          .toList(),
+      currentValue = _reqString(json, 'currentValue');
+
+  final List<PermissionPresetOptionWire> options;
+  final String currentValue;
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 

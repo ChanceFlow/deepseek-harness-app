@@ -1,6 +1,8 @@
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
@@ -59,6 +61,32 @@ class FakeChatRepository implements ChatRepository {
   final List<QueueUpdateRequest> queueUpdates = <QueueUpdateRequest>[];
   final List<(String, QuestionEvidence)> questionAnswers =
       <(String, QuestionEvidence)>[];
+  final List<(String, String)> selectedAgentPresets = <(String, String)>[];
+
+  /// Roster served by `listAgentPresets`; null throws (load failure).
+  AgentPresetRoster? agentPresetRoster;
+
+  /// Permission projection served per session; null stream = absent key.
+  Stream<PermissionSelect?>? Function(String sessionId)? permissionsSource;
+
+  @override
+  Future<AgentPresetRoster> listAgentPresets() async {
+    final roster = agentPresetRoster;
+    if (roster == null) throw UnsupportedError('listAgentPresets');
+    return roster;
+  }
+
+  @override
+  Future<String> selectAgentPreset(String sessionId, String agentPreset) async {
+    selectedAgentPresets.add((sessionId, agentPreset));
+    return agentPreset;
+  }
+
+  @override
+  Stream<PermissionSelect?> observePermissions(String sessionId) {
+    return permissionsSource?.call(sessionId) ??
+        const Stream<PermissionSelect?>.empty();
+  }
 
   @override
   Stream<ConnectionState> observeConnectionState() =>
@@ -977,6 +1005,124 @@ void main() {
       expect(completed, ['Working session']);
     },
   );
+
+  test('loads the agent-preset roster into uiState', () async {
+    const roster = AgentPresetRoster(
+      entries: [
+        AgentPresetEntry(
+          id: 'standard',
+          trust: AgentPresetTrust.system,
+          isDefault: true,
+        ),
+      ],
+    );
+    final repository = FakeChatRepository()..agentPresetRoster = roster;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    expect(controller.state.agentPresets, roster);
+  });
+
+  test('a roster load failure hides the preset surfaces', () async {
+    final repository = FakeChatRepository()..agentPresetRoster = null;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    expect(controller.state.agentPresets, isNull);
+  });
+
+  test('permissions subscribe per selected session', () async {
+    final repository = FakeChatRepository();
+    final bySession = <String, AppStateStream<PermissionSelect?>>{};
+    AppStateStream<PermissionSelect?> streamFor(String sessionId) =>
+        bySession.putIfAbsent(
+          sessionId,
+          () => AppStateStream<PermissionSelect?>(null),
+        );
+    repository.permissionsSource = (sessionId) => streamFor(sessionId).stream;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+    expect(controller.state.permissions, isNull);
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+    expect(controller.state.permissions, isNull);
+
+    streamFor(
+      FakeChatRepository.initialSession.id,
+    ).value = const PermissionSelect(
+      options: [PermissionPresetOption(value: 'read-only', name: 'read-only')],
+      currentValue: 'read-only',
+    );
+    await pumpEventQueue();
+    expect(controller.state.permissions?.currentValue, 'read-only');
+
+    controller.onAction(const SelectSession('other'));
+    await pumpEventQueue();
+    // The leaving session's projection does not leak across the switch.
+    expect(controller.state.permissions, isNull);
+  });
+
+  test('create in workspace carries the staged preset', () async {
+    final repository = FakeChatRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(
+      const CreateSessionInWorkspace('w1', agentPreset: 'code'),
+    );
+    await pumpEventQueue();
+
+    expect(repository.createRequests, [
+      const CreateSessionRequest(workspaceId: 'w1', agentPreset: 'code'),
+    ]);
+    expect(repository.selectedAgentPresets, isEmpty);
+  });
+
+  test('a reused blank session switches to the staged preset', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[
+        const SessionSummary(
+          id: 's-blank',
+          blank: true,
+          cwd: '/tmp/proj',
+        ),
+      ],
+      initialWorkspaces: <WorkspaceSummary>[
+        const WorkspaceSummary(
+          workspaceId: 'w1',
+          path: '/tmp/proj',
+          title: 'proj',
+          sessionIds: ['s-blank'],
+        ),
+      ],
+    );
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(
+      const CreateSessionInWorkspace('w1', agentPreset: 'minimal'),
+    );
+    await pumpEventQueue();
+
+    // Web parity: the blank session is reused, not re-created; the stage
+    // reaches it through the blank-session switch.
+    expect(repository.createRequests, isEmpty);
+    expect(repository.selectedAgentPresets, [('s-blank', 'minimal')]);
+  });
+
+  test('select agent preset routes to the repository', () async {
+    final repository = FakeChatRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(
+      const SelectAgentPreset(sessionId: 's1', agentPreset: 'minimal'),
+    );
+    await pumpEventQueue();
+
+    expect(repository.selectedAgentPresets, [('s1', 'minimal')]);
+  });
 }
 
 /// Records goal mutations for the command-interception tests.

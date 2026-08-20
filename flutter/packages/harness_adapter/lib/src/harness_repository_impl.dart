@@ -12,6 +12,7 @@ import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
@@ -22,6 +23,7 @@ import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
 import 'package:network/dsh_exceptions.dart';
@@ -78,6 +80,8 @@ const String _goalPause = 'goal.pause';
 const String _goalResume = 'goal.resume';
 const String _goalComplete = 'goal.complete';
 const String _goalClear = 'goal.clear';
+const String _agentPresetList = 'agentPreset.list';
+const String _agentPresetSelect = 'agentPreset.select';
 
 final class _HistoryPage {
   _HistoryPage({required this.events, required this.hasMore});
@@ -115,6 +119,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, StateStream<PlanState?>>{};
   final Map<String, StateStream<List<TodoItem>?>> _todoProjections =
       <String, StateStream<List<TodoItem>?>>{};
+  final Map<String, StateStream<PermissionSelect?>> _permissionProjections =
+      <String, StateStream<PermissionSelect?>>{};
   final Mutex _resyncMutex = Mutex();
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
@@ -164,6 +170,34 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
     _sessions.value = await _loadSessions();
     return SessionSummary(id: created, blank: true);
+  }
+
+  @override
+  Future<AgentPresetRoster> listAgentPresets() async {
+    final value = await _call(
+      _agentPresetList,
+      _agentPresetList,
+      <String, Object?>{},
+    ).valueOrThrow();
+    final decoded = AgentPresetListValueWire.fromJson(value);
+    return AgentPresetRoster(
+      entries: decoded.presets.map(_toDomainAgentPresetEntry).toList(),
+      authorable: decoded.authorable,
+      hasDocument: decoded.hasDocument,
+    );
+  }
+
+  @override
+  Future<String> selectAgentPreset(String sessionId, String agentPreset) async {
+    final value = await _call(_agentPresetSelect, _agentPresetSelect, {
+      'sessionId': sessionId,
+      'agentPreset': agentPreset,
+    }).valueOrThrow();
+    final echoed = wireString(value, 'agentPreset');
+    if (echoed == null) {
+      throw const FormatException('agentPreset.select missing agentPreset');
+    }
+    return echoed;
   }
 
   @override
@@ -589,6 +623,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       _sessionStateFor(sessionId).contextBreakdown.stream;
 
   @override
+  Stream<PermissionSelect?> observePermissions(String sessionId) =>
+      _permissionProjectionStateFor(sessionId).stream;
+
+  @override
   Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
       _sessionStateFor(sessionId).sessionStats.stream;
 
@@ -885,7 +923,65 @@ class HarnessRepositoryImpl implements ChatRepository {
         _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
           frame.payload['value'],
         );
+      case 'permissions':
+        // The value is the interaction/permission-presets select; a
+        // malformed frame decodes to null — the composer chip hides,
+        // the same posture as a host that composes no permission
+        // service.
+        final value = frame.payload['value'];
+        PermissionSelect? select;
+        if (value != null && value != 'null') {
+          select = _tryDecode(() {
+            final obj = asJsonObject(value);
+            if (obj == null) {
+              throw const FormatException('permissions: not an object');
+            }
+            return _toDomainPermissionSelect(
+              PermissionSelectWire.fromJson(obj),
+            );
+          });
+        }
+        _permissionProjectionStateFor(sessionId).value = select;
     }
+  }
+
+  /// Wire `permissions` projection payload
+  /// (interaction/permission-presets types.ts): the option table plus the
+  /// effective current value.
+  PermissionSelect _toDomainPermissionSelect(PermissionSelectWire wire) {
+    if (wire.currentValue.isEmpty) {
+      throw const FormatException('permissions: currentValue is empty');
+    }
+    return PermissionSelect(
+      options: wire.options
+          .map(
+            (option) => PermissionPresetOption(
+              value: option.value,
+              name: option.name,
+              description: option.description,
+            ),
+          )
+          .toList(),
+      currentValue: wire.currentValue,
+    );
+  }
+
+  /// Wire roster row (`agent-presets.schema.ts` AgentPresetEntry): trust
+  /// maps onto the domain enum and any other value fails loud.
+  AgentPresetEntry _toDomainAgentPresetEntry(AgentPresetEntryWire wire) {
+    final trust = switch (wire.trust) {
+      'system' => AgentPresetTrust.system,
+      'user' => AgentPresetTrust.user,
+      _ => throw FormatException('agentPreset.list: bad trust ${wire.trust}'),
+    };
+    return AgentPresetEntry(
+      id: wire.id,
+      trust: trust,
+      isDefault: wire.isDefault,
+      name: wire.name,
+      description: wire.description,
+      broken: wire.broken,
+    );
   }
 
   /// Wire `todos` projection payload: the whole list, or null before the
@@ -948,9 +1044,32 @@ class HarnessRepositoryImpl implements ChatRepository {
           case 'host/archived-sessions-changed':
             final archived = _stringSet(frame.payload['archivedSessionIds']);
             _archivedSessionIds.value = archived;
+          case 'host/remote-event':
+            _applyRemoteEvent(frame);
         }
       }),
     );
+  }
+
+  /// One allowlisted host cordis event forwarded verbatim
+  /// (`host/remote-event`, events.ts: `event` + `args`). Only events this
+  /// client folds are read; the rest are ignored silently — the forwarded
+  /// set is open and owned by the host's allowlist.
+  void _applyRemoteEvent(ServerRequest frame) {
+    final event = wireString(frame.payload, 'event');
+    if (event != 'agent-preset/selected') return;
+    final args = asJsonArray(frame.payload['args']) ?? const <Object?>[];
+    if (args.length < 2) return;
+    final sessionId = args[0];
+    final agentPreset = args[1];
+    if (sessionId is! String || agentPreset is! String) return;
+    _sessions.value = _sessions.value
+        .map(
+          (item) => item.id == sessionId
+              ? _copySession(item, agentPreset: agentPreset)
+              : item,
+        )
+        .toList();
   }
 
   /// Full-snapshot increment carried by `host/workspace-changed`: upsert one
@@ -1262,6 +1381,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     String? title,
     bool? running,
     bool? blank,
+    String? agentPreset,
   }) => SessionSummary(
     id: session.id,
     title: title ?? session.title,
@@ -1269,7 +1389,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     blank: blank ?? session.blank,
     updatedAtEpochMs: session.updatedAtEpochMs,
     cwd: session.cwd,
-    agentPreset: session.agentPreset,
+    agentPreset: agentPreset ?? session.agentPreset,
     origin: session.origin,
   );
 
@@ -1293,6 +1413,13 @@ class HarnessRepositoryImpl implements ChatRepository {
         sessionId,
         () => StateStream<List<TodoItem>?>(null),
       );
+
+  StateStream<PermissionSelect?> _permissionProjectionStateFor(
+    String sessionId,
+  ) => _permissionProjections.putIfAbsent(
+    sessionId,
+    () => StateStream<PermissionSelect?>(null),
+  );
 
   Object _parseJsonValue(String text) {
     final Object? decoded = jsonDecode(text);

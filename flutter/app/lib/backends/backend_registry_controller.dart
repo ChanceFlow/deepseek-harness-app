@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:domain/model/backend.dart';
 
+import '../ui/state_stream.dart';
 import 'backend_store.dart';
 
 sealed class BackendAction {
@@ -58,8 +59,14 @@ class BackendRegistryController {
 
   final BackendStore _store;
 
-  final _stateController = StreamController<BackendRegistryState>.broadcast();
-  Stream<BackendRegistryState> get uiState => _stateController.stream;
+  final AppStateStream<BackendRegistryState> _states =
+      AppStateStream<BackendRegistryState>(const BackendRegistryState());
+
+  /// Replay-seeded state stream: every subscriber first receives the
+  /// current state, then live updates — a state published between two
+  /// subscribers' attaches is never lost (the registry loads
+  /// asynchronously, so consumers attach before the first load lands).
+  Stream<BackendRegistryState> get uiState => _states.stream;
   BackendRegistryState get state => _state;
 
   BackendRegistryState _state = const BackendRegistryState();
@@ -204,7 +211,7 @@ class BackendRegistryController {
   }
 
   void _publish() {
-    _stateController.add(_state);
+    _states.value = _state;
   }
 
   void _persist() {
@@ -223,6 +230,6 @@ class BackendRegistryController {
   }
 
   Future<void> dispose() async {
-    await _stateController.close();
+    await _states.close();
   }
 }

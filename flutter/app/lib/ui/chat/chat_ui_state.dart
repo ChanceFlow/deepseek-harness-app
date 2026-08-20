@@ -6,7 +6,9 @@ import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
@@ -40,6 +42,8 @@ final class ChatUiState {
     this.goal,
     this.models,
     this.jobs = const <JobView>[],
+    this.permissions,
+    this.agentPresets,
   });
 
   final ConnectionState connection;
@@ -87,6 +91,16 @@ final class ChatUiState {
 
   /// Background jobs of the selected session (header action).
   final List<JobView> jobs;
+
+  /// Permission-preset projection of the selected session (composer
+  /// access chip); null while the host composes no permission service
+  /// or the session is not bound.
+  final PermissionSelect? permissions;
+
+  /// The deployment's agent-preset roster (hero chip, blank-session
+  /// switch, header label); null while unloaded or on load failure —
+  /// every preset surface then stays hidden.
+  final AgentPresetRoster? agentPresets;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin
@@ -143,16 +157,22 @@ final class CreateSessionAction extends ChatAction {
 }
 
 final class CreateSessionInWorkspace extends ChatAction {
-  const CreateSessionInWorkspace(this.workspaceId);
+  const CreateSessionInWorkspace(this.workspaceId, {this.agentPreset});
 
   final String? workspaceId;
 
-  @override
-  bool operator ==(Object other) =>
-      other is CreateSessionInWorkspace && other.workspaceId == workspaceId;
+  /// Agent preset the new session is composed from (the hero chip's
+  /// staged choice); null composes the deployment default.
+  final String? agentPreset;
 
   @override
-  int get hashCode => Object.hash('create-in', workspaceId);
+  bool operator ==(Object other) =>
+      other is CreateSessionInWorkspace &&
+      other.workspaceId == workspaceId &&
+      other.agentPreset == agentPreset;
+
+  @override
+  int get hashCode => Object.hash('create-in', workspaceId, agentPreset);
 }
 
 final class DismissError extends ChatAction {
@@ -376,4 +396,23 @@ final class ImagePickError extends ChatAction {
 
   @override
   int get hashCode => message.hashCode;
+}
+
+/// Switch a blank session's agent preset (web AgentPresetSeat select).
+/// The host refuses a session that already ran (`agent-preset-locked`);
+/// the refusal surfaces through the shared error strip.
+final class SelectAgentPreset extends ChatAction {
+  const SelectAgentPreset({required this.sessionId, required this.agentPreset});
+
+  final String sessionId;
+  final String agentPreset;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SelectAgentPreset &&
+      other.sessionId == sessionId &&
+      other.agentPreset == agentPreset;
+
+  @override
+  int get hashCode => Object.hash(sessionId, agentPreset);
 }
