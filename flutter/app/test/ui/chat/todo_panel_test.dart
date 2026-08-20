@@ -51,6 +51,11 @@ void main() {
     expect(find.text('ship the fix'), findsOneWidget);
     expect(find.text('write tests'), findsOneWidget);
     expect(find.text('review'), findsOneWidget);
+    // Native status glyphs: filled check circle for completed, a
+    // business ring for in-progress, an open ring for pending.
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+    expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
   });
 
   test('todo_write rows carry the plan summary and parallel suffix', () {

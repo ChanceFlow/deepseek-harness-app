@@ -10,7 +10,6 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/deepsuite_extension.dart';
-import 'circle_button.dart';
 
 class ModelSelect extends StatelessWidget {
   const ModelSelect({
@@ -44,17 +43,23 @@ class ModelSelect extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return DsCircleButton(
+    final ds = dsOf(context);
+    return IconButton(
       // Long-press discloses the active model; the sheet carries the rest.
       tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
-      enabled: !locked,
-      onTap: () => _open(context),
+      onPressed: locked ? null : () => _open(context),
       // The settings-style glyph (the tune vocabulary the sheet header
       // uses) — not a sparkle.
-      child: Icon(
-        Icons.tune,
-        size: 15,
-        color: Theme.of(context).colorScheme.onSurface,
+      icon: const Icon(Icons.tune, size: 22),
+      // Native tool control, same family as the composer ➕: a standard
+      // 40px M3 icon button on the selector fill.
+      style: IconButton.styleFrom(
+        backgroundColor: ds.specificSelector,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        disabledBackgroundColor: ds.specificSelector,
+        disabledForegroundColor: ds.labelTertiary,
+        hoverColor: ds.interactiveBgHoverSolid,
+        shape: const CircleBorder(),
       ),
     );
   }
