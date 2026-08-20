@@ -360,6 +360,7 @@
   "casRevisionLine": "CAS revision {revision}; host validates against the schema",
   "newSessionInWorkspace": "New session in {title}",
   "workspaceActionsFor": "Workspace actions for {title}",
+  "sessionActionsFor": "Session actions for {title}",
   "workspaceNameExists": "A workspace named “{name}” already exists.",
   "deleteWorkspaceConfirm": "This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.",
   "newFolderIn": "New folder in \"{parent}\"",
@@ -867,6 +868,14 @@
     }
   },
   "@workspaceActionsFor": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "@sessionActionsFor": {
     "description": "Localized screen copy.",
     "placeholders": {
       "title": {

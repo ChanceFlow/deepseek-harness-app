@@ -437,6 +437,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String sessionActionsFor(String title) {
+    return 'Session actions for $title';
+  }
+
+  @override
   String workspaceNameExists(String name) {
     return 'A workspace named “$name” already exists.';
   }

@@ -436,6 +436,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String sessionActionsFor(String title) {
+    return '$title 的会话操作';
+  }
+
+  @override
   String workspaceNameExists(String name) {
     return '已存在名为“$name”的工作区。';
   }

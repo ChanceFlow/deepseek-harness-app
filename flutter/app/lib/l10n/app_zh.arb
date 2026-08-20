@@ -115,6 +115,7 @@
   "casRevisionLine": "CAS 修订号 {revision}；主机依据 schema 校验",
   "newSessionInWorkspace": "在 {title} 中新建会话",
   "workspaceActionsFor": "{title} 的工作区操作",
+  "sessionActionsFor": "{title} 的会话操作",
   "workspaceNameExists": "已存在名为“{name}”的工作区。",
   "deleteWorkspaceConfirm": "将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“{ungroupedLabel}”下。",
   "newFolderIn": "在 \"{parent}\" 中新建文件夹",
