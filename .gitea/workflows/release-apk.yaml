@@ -5,8 +5,12 @@
 #   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
 #                                            v0.1.0-beta.2, v0.1.0-rc.1
 #   - versionName:     tag sans v           0.1.0, 0.1.0-alpha.1
-#   - dev builds:      0.0.0-dev.<run>      workflow_dispatch on master
+#   - dev builds:      <next>-alpha.<run>   workflow_dispatch on master,
+#                                            where <next> is the latest
+#                                            STABLE v* tag with its patch
+#                                            bumped (v0.0.2 -> 0.0.3)
 #   - artifacts:       dsh-android-<versionName>.apk (+ .sha256 sidecar)
+#   - release titles:  DSH Android <versionName>
 #   - dev channel:     rolling prerelease on the tag `dev` (no `v`
 #     prefix — deliberately outside the `v*` tag trigger, so the
 #     release API's tag creation can never re-trigger this pipeline);
@@ -58,6 +62,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The resolve step reads the latest stable v* tag to derive the
+          # next alpha version; a shallow clone has none.
+          fetch-depth: 0
 
       # Job containers are ephemeral: the image's baked dependency caches
       # survive, but Gradle build-cache outputs (task-level compilation
@@ -79,7 +87,15 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
             echo "channel=release" >> "$GITHUB_OUTPUT"
           else
-            echo "version=0.0.0-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+            git fetch --tags --quiet origin || true
+            # Latest stable v* tag (prerelease suffixes sort below their
+            # base; drop them), patch-bumped as the alpha baseline.
+            LATEST=$(git tag -l 'v*' --sort=-v:refname \
+              | grep -vE -- '-(alpha|beta|rc|dev)[.]?[0-9]*$' | head -1)
+            LATEST=${LATEST:-v0.0.0}
+            IFS=. read -r MAJ MIN PAT <<< "${LATEST#v}"
+            echo "version=$MAJ.$MIN.$((PAT + 1))-alpha.$GITHUB_RUN_NUMBER" \
+              >> "$GITHUB_OUTPUT"
             echo "channel=dev" >> "$GITHUB_OUTPUT"
           fi
 
@@ -129,14 +145,12 @@ jobs:
 
           if [[ "$CHANNEL" == "release" ]]; then
             TAG="$GITHUB_REF_NAME"
-            NAME="DSH Android $VERSION"
             PRERELEASE=false
           else
             # Rolling dev channel: replace the prerelease under the
             # `dev` tag (outside the v* trigger) so the newest master
             # build is always the one served there.
             TAG="dev"
-            NAME="DSH Android Dev"
             PRERELEASE=true
             OLD_REL_ID=$(curl -sf "$API/releases/tags/dev" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' \
@@ -147,7 +161,7 @@ jobs:
             curl -sf -X DELETE "$API/tags/dev" -H "$AUTH" || true
           fi
 
-          python3 - "$TAG" "$NAME" "$PRERELEASE" "$VERSION" "$GITHUB_RUN_NUMBER" \
+          python3 - "$TAG" "DSH Android $VERSION" "$PRERELEASE" "$VERSION" "$GITHUB_RUN_NUMBER" \
             "$APK" "${{ steps.stage.outputs.sha256 }}" "$BASE_URL" \
             "$GITHUB_SHA" "$CHANNEL" > /tmp/release.json <<'PY'
           import json, sys
