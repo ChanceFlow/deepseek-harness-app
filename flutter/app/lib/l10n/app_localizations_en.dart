@@ -10,7 +10,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'DeepSeek Harness';
+  String get appTitle => 'DSH Mobile';
 
   @override
   String get cancel => 'Cancel';

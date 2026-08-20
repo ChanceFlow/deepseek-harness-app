@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive launcher icon backdrop: the dsh favicon glyph sits on a
+         white plate so launcher masks (circle/squircle/rounded-square)
+         crop it cleanly. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

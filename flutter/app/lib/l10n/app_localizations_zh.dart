@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'DeepSeek Harness';
+  String get appTitle => 'DSH Mobile';
 
   @override
   String get cancel => '取消';
