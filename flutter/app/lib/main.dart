@@ -30,7 +30,7 @@ class DshApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       // Brand title; resolves through l10n so the OS task-switcher
-      // label follows the device locale (DeepSeek Harness stays the
+      // label follows the device locale (DSH Mobile stays the
       // canonical name in every locale).
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       theme: DshTheme.light(),

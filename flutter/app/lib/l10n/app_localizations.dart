@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// Application title used in the OS task switcher and window title.
   ///
   /// In en, this message translates to:
-  /// **'DeepSeek Harness'**
+  /// **'DSH Mobile'**
   String get appTitle;
 
   /// Generic cancel action.

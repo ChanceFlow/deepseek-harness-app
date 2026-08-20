@@ -1970,7 +1970,7 @@ void main() {
 
       // No stacked 160px strip: the panel content is offstage in the drawer.
       expect(find.byTooltip('Search sessions'), findsNothing);
-      expect(find.text('DeepSeek Harness'), findsOneWidget);
+      expect(find.text('DSH Mobile'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Open navigation menu'));
       await tester.pumpAndSettle();
