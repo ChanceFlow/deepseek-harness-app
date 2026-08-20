@@ -46,7 +46,11 @@ cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2
 `master` takes no direct task pushes: one branch per task
 (`feat/…`, `fix/…`, `docs/…`), push, open a PR, let CI's verify aggregate
 gate it, then merge — the repo auto-deletes the merged branch (Gitea
-setting). Release tags (`v*`) ride `master` only. Mechanics and API
+setting). Release tags (`v*`) ride `master` only. Cut every task branch in
+a fresh worktree off latest `master`
+(`git fetch origin && git worktree add -b <branch> ../dsha-<slug> origin/master`),
+never by switching branches in the shared checkout — concurrent tasks
+stay isolated and the main worktree keeps its state. Mechanics and API
 shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md) §3.
 
 ## Conventions
