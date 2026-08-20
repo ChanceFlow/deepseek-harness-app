@@ -571,6 +571,16 @@
   "commandCompactDescription": "Compact older conversation history",
   "commandPermissionDescription": "Switch the permission preset (sandbox mode + approval policy)",
   "commandFeedbackDescription": "record feedback about this session",
+  "commandImagesUnsupported": "/{command} does not accept image attachments; remove them first",
+  "@commandImagesUnsupported": {
+    "description": "Composer refusal for a submission carrying images bound for a host command that does not accept them.",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "compact"
+      }
+    }
+  },
   "@deleteWorkspaceConfirm": {
     "description": "Localized screen copy.",
     "placeholders": {

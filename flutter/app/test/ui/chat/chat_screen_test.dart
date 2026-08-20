@@ -1186,6 +1186,108 @@ void main() {
     expect(actions, contains(const RemovePendingImage('file:///tmp/a.png')));
   });
 
+  testWidgets('a submission with images refuses non-image commands', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        pendingImages: const [
+          PendingImage(
+            id: 'file:///tmp/a.png',
+            mediaType: 'image/png',
+            base64Data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            name: 'a.png',
+            byteSize: 12,
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    await tester.enterText(composerField, '/compact');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+
+    // Nothing was sent; the refusal surfaced and the draft and image
+    // chips stay in place (web envelope policy).
+    expect(
+      actions.where((a) => a is SendPrompt || a is CommandImageRefusal),
+      contains(
+        isA<CommandImageRefusal>().having(
+          (a) => a.message,
+          'message',
+          contains('/compact does not accept image attachments'),
+        ),
+      ),
+    );
+    expect(
+      actions.whereType<SendPrompt>(),
+      isEmpty,
+    );
+    expect(find.text('a.png'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(composerField).controller?.text,
+      '/compact',
+    );
+  });
+
+  testWidgets('a submission with images still sends image-accepting commands',
+      (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        pendingImages: const [
+          PendingImage(
+            id: 'file:///tmp/a.png',
+            mediaType: 'image/png',
+            base64Data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            name: 'a.png',
+            byteSize: 12,
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    await tester.enterText(composerField, '/goal Ship the MVP');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+
+    expect(
+      actions,
+      contains(const SendPrompt('/goal Ship the MVP', mode: PromptMode.queue)),
+    );
+    expect(
+      actions.whereType<CommandImageRefusal>(),
+      isEmpty,
+    );
+  });
+
   testWidgets('slash skill candidates filter and land /name text', (
     tester,
   ) async {

@@ -409,6 +409,23 @@ final class ImagePickError extends ChatAction {
   int get hashCode => message.hashCode;
 }
 
+/// The composer refused a submission carrying images for a host command
+/// that does not accept them (web envelope policy): nothing was sent,
+/// and the draft and images stay in place. The message is localized at
+/// the dispatch site; the controller only relays it.
+final class CommandImageRefusal extends ChatAction {
+  const CommandImageRefusal(this.message);
+
+  final String message;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CommandImageRefusal && other.message == message;
+
+  @override
+  int get hashCode => message.hashCode;
+}
+
 /// Why one picked image was refused admission, locale-free facts for the
 /// UI layer to format (the controller never composes user-facing copy).
 sealed class ImageRejection {

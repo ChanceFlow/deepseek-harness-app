@@ -560,7 +560,11 @@ void main() {
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    final execution = await repository.executeCommand('session-1', '/plan');
+    final execution = await repository.executeCommand(
+      'session-1',
+      '/plan',
+      const <PendingImage>[],
+    );
 
     expect(execution, isNotNull);
     expect(execution!.commandId, 'cmd-e487ba23-1');
@@ -576,6 +580,38 @@ void main() {
     expect(args['images'], <Object?>[]);
   });
 
+  test('executeCommand encodes composer images in submission order', () async {
+    // Reference admission (dsh-attachment admitEncodedImages): each
+    // image is {mediaType, data (canonical base64), name?} in caller
+    // order; the host enforces the command's image-acceptance flag.
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.executeCommand('session-1', '/goal Ship it', const [
+      PendingImage(
+        id: 'img-1',
+        mediaType: 'image/png',
+        base64Data: 'aGVsbG8=',
+        name: 'mockup.png',
+      ),
+      PendingImage(id: 'img-2', mediaType: 'image/jpeg', base64Data: 'dw=='),
+    ]);
+
+    final payload = rpc.payloads('commands/execute').single;
+    final args = asJsonObject(payload['args'])!;
+    final images = args['images'];
+    expect(images, isA<List<Object?>>());
+    expect(images, <Object?>[
+      <String, Object?>{
+        'mediaType': 'image/png',
+        'data': 'aGVsbG8=',
+        'name': 'mockup.png',
+      },
+      <String, Object?>{'mediaType': 'image/jpeg', 'data': 'dw=='},
+    ]);
+  });
+
   test('executeCommand unmatched answers ok with no value slot', () async {
     final rpc = HarnessFakeRpc()..commandValue = null;
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
@@ -583,7 +619,7 @@ void main() {
 
     // Reference: CommandRuntime.execute returns undefined on a syntax or
     // name miss — the wire serializes that as ok without a value.
-    final execution = await repository.executeCommand('session-1', '/nope');
+    final execution = await repository.executeCommand('session-1', '/nope', const <PendingImage>[]);
     expect(execution, isNull);
   });
 
@@ -600,7 +636,7 @@ void main() {
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    final execution = await repository.executeCommand('session-1', '/permission bogus');
+    final execution = await repository.executeCommand('session-1', '/permission bogus', const <PendingImage>[]);
     expect(execution!.kind, CommandOutcomeKind.error);
     expect(
       execution.text,
@@ -617,7 +653,7 @@ void main() {
     await pumpEventQueue();
 
     await expectLater(
-      repository.executeCommand('session-1', '/plan'),
+      repository.executeCommand('session-1', '/plan', const <PendingImage>[]),
       throwsFormatException,
     );
   });
@@ -632,7 +668,7 @@ void main() {
     await pumpEventQueue();
 
     await expectLater(
-      repository.executeCommand('session-1', '/plan'),
+      repository.executeCommand('session-1', '/plan', const <PendingImage>[]),
       throwsFormatException,
     );
   });

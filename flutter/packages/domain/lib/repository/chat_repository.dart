@@ -122,12 +122,18 @@ abstract class ChatRepository {
   Future<void> sendMessage(SendMessageRequest request);
 
   /// Executes one host slash-command line through the command registry
-  /// (`commands/execute`): the line never reaches the model. Returns the
-  /// settled execution, or null when the host reports no registered
-  /// command for the line (an unmatched name is not an error — the caller
-  /// falls back to the ordinary prompt channel, the web live-directory
-  /// miss).
-  Future<CommandExecution?> executeCommand(String sessionId, String line);
+  /// (`commands/execute`): the line never reaches the model. The images
+  /// ride the same admission the host applies to prompts — a command
+  /// that does not declare image acceptance settles as an error result.
+  /// Returns the settled execution, or null when the host reports no
+  /// registered command for the line (an unmatched name is not an
+  /// error — the caller falls back to the ordinary prompt channel, the
+  /// web live-directory miss).
+  Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images,
+  );
 
   /// Download one durable image; bytes are session-authorized.
   Future<AttachmentData> readAttachment(
