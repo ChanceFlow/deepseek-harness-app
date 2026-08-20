@@ -62,6 +62,7 @@ class FakeChatRepository implements ChatRepository {
   final List<QueueUpdateRequest> queueUpdates = <QueueUpdateRequest>[];
   final List<(String, QuestionEvidence)> questionAnswers =
       <(String, QuestionEvidence)>[];
+  final List<(String, String)> cancelledQuestions = <(String, String)>[];
   final List<(String, String)> selectedAgentPresets = <(String, String)>[];
 
   /// Roster served by `listAgentPresets`; null throws (load failure).
@@ -187,6 +188,11 @@ class FakeChatRepository implements ChatRepository {
     QuestionEvidence evidence,
   ) async {
     questionAnswers.add((requestId, evidence));
+  }
+
+  @override
+  Future<void> cancelQuestions(String requestId, String sessionId) async {
+    cancelledQuestions.add((requestId, sessionId));
   }
 
   @override
@@ -863,6 +869,22 @@ void main() {
     expect(answered.$1, 'rpc-question');
     expect(answered.$2.answers.single.questionId, 'question-1');
     expect(answered.$2.answers.single.selectedOptions, isEmpty);
+  });
+
+  test('dismissed question delegates to the cancel wire path', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    controller.onAction(
+      const DismissQuestionAction(requestId: 'rpc-question'),
+    );
+    await pumpEventQueue();
+
+    expect(repository.cancelledQuestions.single, ('rpc-question', 'session-1'));
   });
 
   test('host-command lines execute through commands/execute, never prompts', () async {

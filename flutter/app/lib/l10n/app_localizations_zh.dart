@@ -1055,6 +1055,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get skip => '跳过本题';
 
   @override
+  String get questionPrev => '上一题';
+
+  @override
+  String get questionNext => '下一题';
+
+  @override
+  String get questionCancel => '放弃整组问题';
+
+  @override
+  String get questionRecommended => '推荐';
+
+  @override
+  String get questionErrorIncomplete => '请先完成这道问题。';
+
+  @override
+  String get questionErrorUnanswered => '请选择一个选项或填写自定义答案。';
+
+  @override
+  String get questionSubmit => '提交';
+
+  @override
+  String get questionSubmitNext => '下一题';
+
+  @override
+  String get planApprove => '确认执行';
+
+  @override
+  String get planDecline => '拒绝';
+
+  @override
+  String get planDiscuss => '去聊天里说';
+
+  @override
   String get planPlaceholder => '描述你的任务以生成计划';
 
   @override

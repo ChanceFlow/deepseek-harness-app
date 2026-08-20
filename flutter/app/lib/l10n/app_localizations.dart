@@ -1897,6 +1897,72 @@ abstract class AppLocalizations {
   /// **'Skip'**
   String get skip;
 
+  /// No description provided for @questionPrev.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous question'**
+  String get questionPrev;
+
+  /// No description provided for @questionNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next question'**
+  String get questionNext;
+
+  /// No description provided for @questionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss all questions'**
+  String get questionCancel;
+
+  /// No description provided for @questionRecommended.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended'**
+  String get questionRecommended;
+
+  /// No description provided for @questionErrorIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Please complete this question first.'**
+  String get questionErrorIncomplete;
+
+  /// No description provided for @questionErrorUnanswered.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select an option or enter a custom answer.'**
+  String get questionErrorUnanswered;
+
+  /// No description provided for @questionSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get questionSubmit;
+
+  /// No description provided for @questionSubmitNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get questionSubmitNext;
+
+  /// No description provided for @planApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get planApprove;
+
+  /// No description provided for @planDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Refuse'**
+  String get planDecline;
+
+  /// No description provided for @planDiscuss.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat about it'**
+  String get planDiscuss;
+
   /// No description provided for @planPlaceholder.
   ///
   /// In en, this message translates to:

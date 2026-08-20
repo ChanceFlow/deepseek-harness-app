@@ -59,7 +59,7 @@ import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'tool_row_model.dart';
 import '../theme/deepsuite_extension.dart'
-    show dsOf, kDsShadowLv2, kDsShadowLv3;
+    show DeepSuiteColors, dsOf, kDsShadowLv2, kDsShadowLv3;
 import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
@@ -2384,6 +2384,8 @@ class QuestionRow extends StatefulWidget {
 
 class _QuestionRowState extends State<QuestionRow> {
   Map<String, QuestionDraft> _drafts = const <String, QuestionDraft>{};
+  int _index = 0;
+  String? _error;
 
   @override
   void didUpdateWidget(covariant QuestionRow oldWidget) {
@@ -2391,51 +2393,137 @@ class _QuestionRowState extends State<QuestionRow> {
     // Compose remembered drafts keyed by request id.
     if (oldWidget.request.requestId != widget.request.requestId) {
       _drafts = const <String, QuestionDraft>{};
+      _index = 0;
+      _error = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final request = widget.request;
-    final answerEnabled =
-        request.questions.isNotEmpty &&
-        request.questions.every((question) {
-          final draft = _drafts[question.id] ?? const QuestionDraft();
-          return draft.skipped ||
-              draft.selected.isNotEmpty ||
-              draft.customText.trim().isNotEmpty;
-        });
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final question in request.questions)
-          QuestionItemEditor(
-            question: question,
-            draft: _drafts[question.id] ?? const QuestionDraft(),
-            onDraftChange: (updated) =>
-                setState(() => _drafts = {..._drafts, question.id: updated}),
-          ),
-        FilledButton(
-          onPressed: answerEnabled
-              ? () {
-                  final answers = [
-                    for (final question in request.questions)
-                      _answerFor(question, _drafts[question.id]),
-                  ];
-                  widget.onAction(
-                    AnswerQuestionAction(
-                      requestId: request.requestId,
-                      answers: answers,
-                    ),
-                  );
-                }
-              : null,
-          child: Text(l10n.answer),
-        ),
-      ],
+    final review = _planReviewOf(request.questions);
+    if (review != null) {
+      return _PlanReviewCard(
+        requestId: request.requestId,
+        review: review,
+        onAction: widget.onAction,
+      );
+    }
+    if (request.questions.isEmpty) return const SizedBox.shrink();
+    final index = _index.clamp(0, request.questions.length - 1);
+    return _QuestionCard(
+      questions: request.questions,
+      index: index,
+      drafts: _drafts,
+      error: _error,
+      onChoose: _choose,
+      onDraftChange: (id, draft) =>
+          setState(() => _drafts = {..._drafts, id: draft}),
+      onBack: () => setState(() {
+        if (_index > 0) _index -= 1;
+        _error = null;
+      }),
+      onNext: _continue,
+      onSkip: _skip,
+      onDismiss: () => widget.onAction(
+        DismissQuestionAction(requestId: request.requestId),
+      ),
     );
   }
+
+  void _choose(String questionId, String option) {
+    final question = widget.request.questions
+        .where((item) => item.id == questionId)
+        .firstOrNull;
+    if (question == null) return;
+    if (question.multiSelect) {
+      final current = _drafts[questionId] ?? const QuestionDraft();
+      final selected = current.selected.contains(option)
+          ? current.selected.difference({option})
+          : {...current.selected, option};
+      setState(() {
+        _drafts = {
+          ..._drafts,
+          questionId: QuestionDraft(
+            selected: selected,
+            customText: current.customText,
+          ),
+        };
+      });
+    } else {
+      setState(() {
+        _drafts = {
+          ..._drafts,
+          questionId: QuestionDraft(selected: {option}, customText: ''),
+        };
+        if (_index < widget.request.questions.length - 1) _index += 1;
+      });
+    }
+  }
+
+  void _continue() {
+    final question = widget.request.questions[_index];
+    final draft = _drafts[question.id] ?? const QuestionDraft();
+    if (draft.selected.isEmpty && draft.customText.trim().isEmpty) {
+      setState(() => _error = AppLocalizations.of(context)!.questionErrorUnanswered);
+      return;
+    }
+    if (_index < widget.request.questions.length - 1) {
+      setState(() {
+        _index += 1;
+        _error = null;
+      });
+      return;
+    }
+    _submit();
+  }
+
+  void _skip() {
+    final question = widget.request.questions[_index];
+    setState(() {
+      _drafts = {
+        ..._drafts,
+        question.id: const QuestionDraft(
+          selected: <String>{},
+          customText: '',
+          skipped: true,
+        ),
+      };
+      if (_index < widget.request.questions.length - 1) _index += 1;
+    });
+    if (_index >= widget.request.questions.length - 1) {
+      _submit();
+    }
+  }
+
+  void _submit() {
+    final request = widget.request;
+    final missing = request.questions.indexWhere(
+      (question) =>
+          !_completed(question, _drafts[question.id] ?? const QuestionDraft()),
+    );
+    if (missing >= 0) {
+      setState(() {
+        _index = missing;
+        _error = AppLocalizations.of(context)!.questionErrorIncomplete;
+      });
+      return;
+    }
+    widget.onAction(
+      AnswerQuestionAction(
+        requestId: request.requestId,
+        answers: [
+          for (final question in request.questions)
+            _answerFor(question, _drafts[question.id]),
+        ],
+      ),
+    );
+  }
+
+  bool _completed(QuestionItem question, QuestionDraft draft) =>
+      draft.skipped ||
+      draft.selected.isNotEmpty ||
+      draft.customText.trim().isNotEmpty;
 
   QuestionAnswer _answerFor(QuestionItem question, QuestionDraft? draftIn) {
     final draft = draftIn ?? const QuestionDraft();
@@ -2454,12 +2542,386 @@ class _QuestionRowState extends State<QuestionRow> {
   }
 }
 
-/// Plan-review decision card: the plan body renders as markdown, the
-/// approve option is the primary action, and any other option stays
-/// secondary. Answers use the same question channel.
-class PlanReviewEditor extends StatelessWidget {
-  const PlanReviewEditor({
-    super.key,
+/// Narrow a question request to a renderable plan review, or return null to
+/// leave it to the generic question flow. Mirrors the web `planReviewOf`: the
+/// decision card answers the whole request with one of the asker's own option
+/// labels, so it claims a request only when a single question declares the
+/// intent, carries the plan as its detail, and stays a binary single choice
+/// (at most one option besides approve, never multi-select).
+({String id, String question, String plan, String approve, String? decline})?
+    _planReviewOf(List<QuestionItem> questions) {
+  if (questions.length != 1) return null;
+  final question = questions.single;
+  final intent = question.intent;
+  if (intent?.kind != 'plan-review' || question.detail == null) return null;
+  if (question.multiSelect) return null;
+  if (question.options.length > 2) return null;
+  final approve = intent!.approve;
+  if (approve == null || !question.options.contains(approve)) return null;
+  final decline =
+      question.options.where((option) => option != approve).firstOrNull;
+  return (
+    id: question.id,
+    question: question.question,
+    plan: question.detail!,
+    approve: approve,
+    decline: decline,
+  );
+}
+
+/// Split the conventional recommendation suffix off a display label without
+/// changing the answer value (the label the user picks stays the full wire
+/// string). Mirrors the web `parseRecommendedLabel`.
+({String label, bool recommended}) _parseRecommendedLabel(String label) {
+  final suffix = RegExp(
+    r'\s*(?:\((?:recommended|推荐)\)|（(?:recommended|推荐)）)\s*$',
+    caseSensitive: false,
+  );
+  if (suffix.hasMatch(label)) {
+    return (label: label.replaceAll(suffix, ''), recommended: true);
+  }
+  return (label: label, recommended: false);
+}
+
+/// Generic question flow card (the web QuestionComposer port): header with
+/// eyebrow/title and a dismiss button, body with the markdown detail, option
+/// rows (numbered single-select or checkbox multi-select with the
+/// recommended badge), a custom-answer row or optionless textarea, and a
+/// footer with the pager, validation feedback, and skip / next / submit.
+class _QuestionCard extends StatelessWidget {
+  const _QuestionCard({
+    required this.questions,
+    required this.index,
+    required this.drafts,
+    required this.error,
+    required this.onChoose,
+    required this.onDraftChange,
+    required this.onBack,
+    required this.onNext,
+    required this.onSkip,
+    required this.onDismiss,
+  });
+
+  final List<QuestionItem> questions;
+  final int index;
+  final Map<String, QuestionDraft> drafts;
+  final String? error;
+  final void Function(String questionId, String option) onChoose;
+  final void Function(String questionId, QuestionDraft draft) onDraftChange;
+  final VoidCallback onBack;
+  final VoidCallback onNext;
+  final VoidCallback onSkip;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final question = questions[index];
+    final draft = drafts[question.id] ?? const QuestionDraft();
+    final hasOptions = question.options.isNotEmpty;
+    final answered =
+        draft.selected.isNotEmpty || draft.customText.trim().isNotEmpty;
+    final isLast = index == questions.length - 1;
+    return Container(
+      decoration: BoxDecoration(
+        color: ds.inputMajor,
+        border: Border.all(color: ds.borderThin),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: kDsShadowLv2,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _QuestionCardHeader(
+            question: question,
+            onDismiss: onDismiss,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (question.detail case final String detail)
+                  MarkdownText(text: detail),
+                if (hasOptions) ...[
+                  const SizedBox(height: 8),
+                  for (final option in question.options)
+                    _QuestionOptionTile(
+                      question: question,
+                      option: option,
+                      selected: draft.selected.contains(option),
+                      onTap: () => onChoose(question.id, option),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+            child: hasOptions
+                ? _CustomAnswerRow(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  )
+                : _CustomAnswerField(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  ),
+          ),
+          _QuestionCardFooter(
+            total: questions.length,
+            index: index,
+            error: error,
+            answered: answered,
+            isLast: isLast,
+            onBack: onBack,
+            onNext: onNext,
+            onSkip: onSkip,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuestionCardHeader extends StatelessWidget {
+  const _QuestionCardHeader({
+    required this.question,
+    required this.onDismiss,
+  });
+
+  final QuestionItem question;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (question.header case final String header)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: Text(
+                      header,
+                      style: TextStyle(
+                        color: ds.labelTertiary,
+                        fontSize: 11,
+                        height: 16 / 11,
+                      ),
+                    ),
+                  ),
+                Text(
+                  question.question,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    height: 22 / 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _RoundIconButton(
+            tooltip: AppLocalizations.of(context)!.questionCancel,
+            icon: Icons.close,
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One selectable option row (web `.option`): a leading number chip
+/// (single-select) or checkbox (multi-select), the display label with the
+/// recommended badge, and the asker's description.
+class _QuestionOptionTile extends StatelessWidget {
+  const _QuestionOptionTile({
+    required this.question,
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final QuestionItem question;
+  final String option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final display = _parseRecommendedLabel(option);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          margin: const EdgeInsets.only(top: 1),
+          padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+          decoration: BoxDecoration(
+            color: selected ? ds.interactiveBgHover : Colors.transparent,
+            border: Border.all(
+              color: selected ? ds.borderL2 : Colors.transparent,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (question.multiSelect)
+                _QuestionCheckbox(checked: selected, ds: ds)
+              else
+                _QuestionNumberChip(
+                  child: Text(
+                    '${question.options.indexOf(option) + 1}',
+                    style: TextStyle(
+                      color: ds.labelSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 18 / 12,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          display.label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 14,
+                            height: 24 / 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (display.recommended)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: ds.sidebarNavItemActiveAccent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              AppLocalizations.of(context)!.questionRecommended,
+                              style: TextStyle(
+                                color: ds.buttonInfoFill,
+                                fontSize: 11,
+                                height: 18 / 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (question.optionDescriptions[option]
+                        case final String description)
+                      Text(
+                        description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 14,
+                          height: 24 / 14,
+                          color: ds.labelTertiary,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Multi-select checkbox (web `.checkbox`): a 14×14 radius-4 box centered in
+/// the 20px indicator seat, filled with the label-primary color and a
+/// foreground check when checked.
+class _QuestionCheckbox extends StatelessWidget {
+  const _QuestionCheckbox({required this.checked, required this.ds});
+
+  final bool checked;
+  final DeepSuiteColors ds;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Center(
+        child: Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: checked ? theme.colorScheme.onSurface : Colors.transparent,
+            border: Border.all(
+              color: checked
+                  ? theme.colorScheme.onSurface
+                  : ds.borderL4,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: checked
+              ? Icon(
+                  Icons.check,
+                  size: 12,
+                  color: ds.labelPrimaryForeground,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// Single-select number chip (web `.number`): a 20×20 radius-6 overlay chip
+/// holding the option index or an edit glyph.
+class _QuestionNumberChip extends StatelessWidget {
+  const _QuestionNumberChip({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: dsOf(context).bgOverlay,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+}
+
+/// Inline custom-answer row (web `.customRow`): an option-shaped row whose
+/// copy is a borderless text input; a typed draft lifts it to the selected
+/// look, and the leading indicator mirrors the option row (checkbox for
+/// multi-select, edit chip for single-select).
+class _CustomAnswerRow extends StatelessWidget {
+  const _CustomAnswerRow({
     required this.question,
     required this.draft,
     required this.onDraftChange,
@@ -2471,69 +2933,391 @@ class PlanReviewEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final approve = question.intent?.approve;
-    final chosen = draft.selected.length == 1 ? draft.selected.first : null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          question.header ?? l10n.planReview,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.primary,
+    final ds = dsOf(context);
+    final active = draft.customText.trim().isNotEmpty;
+    final controller = TextEditingController(text: draft.customText)
+      ..selection = TextSelection.collapsed(
+        offset: draft.customText.length,
+      );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: active ? ds.interactiveBgHover : Colors.transparent,
+        border: Border.all(
+          color: active ? ds.borderL2 : Colors.transparent,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (question.multiSelect)
+            _QuestionCheckbox(checked: active, ds: ds)
+          else
+            _QuestionNumberChip(
+              child: Icon(Icons.edit_outlined, size: 14, color: ds.labelSecondary),
+            ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: AppLocalizations.of(context)!.typeYourAnswerHint,
+                hintStyle: TextStyle(
+                  color: ds.labelCaption,
+                  fontSize: 14,
+                  height: 24 / 14,
+                ),
+              ),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 14,
+                height: 24 / 14,
+              ),
+              onChanged: (text) => onDraftChange(
+                QuestionDraft(
+                  selected:
+                      question.multiSelect ? draft.selected : const <String>{},
+                  customText: text,
+                ),
+              ),
+              onSubmitted: (_) {},
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Optionless question: the free-form answer is the whole body (web
+/// `.customTextarea`).
+class _CustomAnswerField extends StatelessWidget {
+  const _CustomAnswerField({
+    required this.question,
+    required this.draft,
+    required this.onDraftChange,
+  });
+
+  final QuestionItem question;
+  final QuestionDraft draft;
+  final void Function(QuestionDraft) onDraftChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final controller = TextEditingController(text: draft.customText)
+      ..selection = TextSelection.collapsed(
+        offset: draft.customText.length,
+      );
+    return TextField(
+      controller: controller,
+      minLines: 2,
+      maxLines: 4,
+      decoration: InputDecoration(
+        hintText: AppLocalizations.of(context)!.typeYourAnswerHint,
+        hintStyle: TextStyle(
+          color: ds.labelCaption,
+          fontSize: 14,
+          height: 24 / 14,
+        ),
+        filled: true,
+        fillColor: ds.bgModulePlatform,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: ds.borderL2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
-        Text(question.question, style: theme.textTheme.titleSmall),
-        if (question.detail case final String plan)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: dsOf(context).bgLayer1,
-                borderRadius: BorderRadius.circular(6),
+      ),
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface,
+        fontSize: 14,
+        height: 24 / 14,
+      ),
+      onChanged: (text) => onDraftChange(
+        QuestionDraft(
+          selected: const <String>{},
+          customText: text,
+        ),
+      ),
+    );
+  }
+}
+
+/// Footer (web `.footer`): pager + validation feedback on one line, skip and
+/// next/submit on the next.
+class _QuestionCardFooter extends StatelessWidget {
+  const _QuestionCardFooter({
+    required this.total,
+    required this.index,
+    required this.error,
+    required this.answered,
+    required this.isLast,
+    required this.onBack,
+    required this.onNext,
+    required this.onSkip,
+  });
+
+  final int total;
+  final int index;
+  final String? error;
+  final bool answered;
+  final bool isLast;
+  final VoidCallback onBack;
+  final VoidCallback onNext;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              _RoundIconButton(
+                tooltip: l10n.questionPrev,
+                icon: Icons.chevron_left,
+                enabled: index > 0,
+                onPressed: onBack,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: MarkdownText(text: plan),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '${index + 1} / $total',
+                  style: TextStyle(
+                    color: ds.labelSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              _RoundIconButton(
+                tooltip: l10n.questionNext,
+                icon: Icons.chevron_right,
+                enabled: index < total - 1,
+                onPressed: onNext,
+              ),
+              Expanded(
+                child: Text(
+                  error ?? '',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 11,
+                    height: 16 / 11,
+                  ),
+                  textAlign: TextAlign.right,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                onPressed: onSkip,
+                child: Text(l10n.skip),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: answered ? onNext : null,
+                child: Text(isLast ? l10n.questionSubmit : l10n.questionSubmitNext),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One 24×24 round icon button (web `.iconButton`): tertiary glyph on the
+/// interactive hover fill; 36px+ touch target through padding.
+class _RoundIconButton extends StatefulWidget {
+  const _RoundIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.enabled = true,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool enabled;
+
+  @override
+  State<_RoundIconButton> createState() => _RoundIconButtonState();
+}
+
+class _RoundIconButtonState extends State<_RoundIconButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        cursor: widget.enabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: Material(
+          color: _hovering && widget.enabled
+              ? ds.interactiveBgHover
+              : Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.enabled ? widget.onPressed : null,
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: Icon(
+                widget.icon,
+                size: 16,
+                color: widget.enabled ? ds.labelTertiary : ds.labelCaption,
               ),
             ),
           ),
-        Wrap(
-          children: [
-            for (final option in _orderedOptions(approve))
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: option == (approve ?? _firstOption())
-                    ? FilledButton(
-                        onPressed: () =>
-                            onDraftChange(draft.copyWith(selected: {option})),
-                        child: Text(chosen == option ? '✓ $option' : option),
-                      )
-                    : OutlinedButton(
-                        onPressed: () =>
-                            onDraftChange(draft.copyWith(selected: {option})),
-                        child: Text(chosen == option ? '✓ $option' : option),
-                      ),
-              ),
-          ],
         ),
-      ],
+      ),
     );
   }
+}
 
-  String? _firstOption() =>
-      question.options.isEmpty ? null : question.options.first;
+/// Plan-review decision card (the web PlanReviewPanel port): a warn-tinted
+/// strip with a dot, the plan as the whole body (markdown), and a
+/// right-aligned action row — discuss (dismiss), decline, and approve.
+class _PlanReviewCard extends StatelessWidget {
+  const _PlanReviewCard({
+    required this.requestId,
+    required this.review,
+    required this.onAction,
+  });
 
-  List<String> _orderedOptions(String? approve) {
-    final approveOption =
-        question.options.where((option) => option == approve).firstOrNull ??
-        _firstOption();
-    return [
-      if (approveOption != null) approveOption,
-      ...question.options.where((option) => option != approveOption),
-    ];
+  final String requestId;
+  final ({
+    String id,
+    String question,
+    String plan,
+    String approve,
+    String? decline,
+  }) review;
+  final void Function(ChatAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
+    void decide(String label) {
+      onAction(
+        AnswerQuestionAction(
+          requestId: requestId,
+          answers: [
+            QuestionAnswer(
+              questionId: review.id,
+              selectedOptions: [label],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: ds.inputMajor,
+        border: Border.all(color: ds.warnSecondary),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: kDsShadowLv2,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: ds.warnTertiary,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: ds.warnPrimary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.planReview,
+                  style: TextStyle(
+                    color: ds.warnPrimary,
+                    fontSize: 13,
+                    height: 18 / 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: MarkdownText(text: review.plan),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => onAction(
+                    DismissQuestionAction(requestId: requestId),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ds.labelSecondary,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.edit_outlined, size: 14),
+                      const SizedBox(width: 6),
+                      Text(l10n.planDiscuss),
+                    ],
+                  ),
+                ),
+                if (review.decline case final String decline)
+                  OutlinedButton(
+                    onPressed: () => decide(decline),
+                    child: Text(l10n.planDecline),
+                  ),
+                FilledButton(
+                  onPressed: () => decide(review.approve),
+                  child: Text(l10n.planApprove),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2556,135 +3340,6 @@ final class QuestionDraft {
     );
   }
 }
-
-class QuestionItemEditor extends StatelessWidget {
-  const QuestionItemEditor({
-    super.key,
-    required this.question,
-    required this.draft,
-    required this.onDraftChange,
-  });
-
-  final QuestionItem question;
-  final QuestionDraft draft;
-  final void Function(QuestionDraft) onDraftChange;
-
-  @override
-  Widget build(BuildContext context) {
-    if (question.intent?.kind == 'plan-review') {
-      return PlanReviewEditor(
-        question: question,
-        draft: draft,
-        onDraftChange: onDraftChange,
-      );
-    }
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (question.header case final String header)
-          Text(header, style: theme.textTheme.labelLarge),
-        Text(question.question, style: theme.textTheme.titleSmall),
-        if (question.detail case final String detail)
-          Text(detail, style: theme.textTheme.bodySmall),
-        if (draft.skipped) ...[
-          Text(
-            l10n.skipped,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          OutlinedButton(
-            onPressed: () => onDraftChange(
-              const QuestionDraft(
-                selected: <String>{},
-                customText: '',
-                skipped: false,
-              ),
-            ),
-            child: Text(l10n.answerInstead),
-          ),
-        ] else ...[
-          for (final option in question.options)
-            if (draft.selected.contains(option))
-              FilledButton(
-                onPressed: () => onDraftChange(
-                  QuestionDraft(
-                    selected: _selectedWithout(
-                      draft.selected,
-                      option,
-                      question.multiSelect,
-                    ),
-                    customText: draft.customText,
-                  ),
-                ),
-                child: Text(option),
-              )
-            else
-              OutlinedButton(
-                onPressed: () => onDraftChange(
-                  QuestionDraft(
-                    selected: _selectedWith(
-                      draft.selected,
-                      option,
-                      question.multiSelect,
-                    ),
-                    customText: question.multiSelect ? draft.customText : '',
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(option),
-                    if (question.optionDescriptions[option]
-                        case final String description)
-                      Text(description, style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-          SizedBox(
-            width: double.infinity,
-            child: TextField(
-              controller: TextEditingController(text: draft.customText)
-                ..selection = TextSelection.collapsed(
-                  offset: draft.customText.length,
-                ),
-              decoration: InputDecoration(
-                hintText: l10n.typeYourAnswerHint,
-                isDense: true,
-              ),
-              onChanged: (text) => onDraftChange(
-                QuestionDraft(
-                  selected: text.trim().isNotEmpty && !question.multiSelect
-                      ? const <String>{}
-                      : draft.selected,
-                  customText: text,
-                ),
-              ),
-            ),
-          ),
-          OutlinedButton(
-            onPressed: () => onDraftChange(
-              const QuestionDraft(
-                selected: <String>{},
-                customText: '',
-                skipped: true,
-              ),
-            ),
-            child: Text(l10n.skip),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-Set<String> _selectedWith(Set<String> current, String option, bool multi) =>
-    multi ? {...current, option} : {option};
-
-Set<String> _selectedWithout(Set<String> current, String option, bool multi) =>
-    multi ? current.difference({option}) : const <String>{};
 
 class ComposerBar extends StatefulWidget {
   const ComposerBar({
