@@ -1675,6 +1675,57 @@ void main() {
     expect(find.text('Turn 1'), findsOneWidget);
   });
 
+  testWidgets('outline scrolls lazily to later turns', (tester) async {
+    final actions = <ChatAction>[];
+    final items = <TimelineItem>[
+      for (var turn = 1; turn <= 5; turn++) ...[
+        TimelineTurnBoundary(turn),
+        TimelineMessage(
+          ChatMessage(
+            id: 'm$turn',
+            sessionId: 's1',
+            role: MessageRole.user,
+            text: 'prompt $turn',
+          ),
+        ),
+      ],
+    ];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: items,
+      ),
+      actions,
+    );
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pumpAndSettle();
+
+    // Shrink the viewport height so the outline must actually scroll;
+    // keep the width wide enough for the app bar title.
+    tester.view.physicalSize = const Size(600, 320);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpAndSettle();
+
+    // The first turn header is visible; later turns are reachable by
+    // scrolling the outline's own scroll surface.
+    expect(find.textContaining('▾ Turn 1'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('prompt 5', findRichText: true),
+      200,
+      scrollable: find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.text('prompt 5', findRichText: true), findsOneWidget);
+  });
+
   testWidgets('attachment placeholder shows metadata and retries', (
     tester,
   ) async {
