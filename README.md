@@ -143,16 +143,19 @@ Release APKs are built by Gitea Actions
 ([`.gitea/workflows/release-apk.yaml`](.gitea/workflows/release-apk.yaml))
 on the prebaked `flutter-android` runner image
 ([`docker/`](docker/)); they are signed with a release keystore held in
-Gitea Actions secrets, not the debug key. Download from the LAN:
+Gitea Actions secrets, not the debug key. The repository's
+[Releases page](http://127.0.0.1:3000/ChanceFlow/deepseek-harness-android/releases)
+is the only distribution channel — every build publishes a Release with
+the APK and its `.sha256` attached.
 
-- always-latest: `http://127.0.0.1:8899/dsh-latest.apk`
-- per version: `http://127.0.0.1:8899/dsh-android-<version>.apk`, or the
-  repository's Releases page for `v*` tags.
-
-Manual dispatch takes an optional `dsh_base_url` input (default
-`http://127.0.0.1:3080`); `v*` tag pushes build the same artifact and
-attach it to a Gitea Release. Local `flutter build apk --release` without
-the `DSH_KEYSTORE_*` environment still debug-signs.
+Naming follows SemVer 2.0: release tags are `v<semver>`
+(`v0.1.0`, prereleases `v0.1.0-alpha.1` / `-beta.2` / `-rc.1`), the APK
+is `dsh-android-<versionName>.apk`, and manual dispatch builds the
+rolling dev prerelease under the `dev` tag
+(`/releases/tag/dev` — always the newest `master` build, versionName
+`0.0.0-dev.<run>`). Dispatch takes an optional `dsh_base_url` input
+(default `http://127.0.0.1:3080`). Local `flutter build apk --release`
+without the `DSH_KEYSTORE_*` environment still debug-signs.
 
 ## Verification status
 
