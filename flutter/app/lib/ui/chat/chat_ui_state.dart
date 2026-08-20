@@ -415,6 +415,15 @@ final class UnsupportedImageType extends ImageRejection {
 
   final String? name;
   final String mediaType;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnsupportedImageType &&
+      other.name == name &&
+      other.mediaType == mediaType;
+
+  @override
+  int get hashCode => Object.hash(name, mediaType);
 }
 
 /// The image exceeds the host's per-image byte ceiling.
@@ -423,6 +432,15 @@ final class ImageTooLarge extends ImageRejection {
 
   final String? name;
   final int maxBytes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ImageTooLarge &&
+      other.name == name &&
+      other.maxBytes == maxBytes;
+
+  @override
+  int get hashCode => Object.hash(name, maxBytes);
 }
 
 /// The composer's per-message seat is full.
@@ -430,6 +448,12 @@ final class NoImageRoom extends ImageRejection {
   const NoImageRoom(this.room);
 
   final int room;
+
+  @override
+  bool operator ==(Object other) => other is NoImageRoom && other.room == room;
+
+  @override
+  int get hashCode => room.hashCode;
 }
 
 /// Switch a blank session's agent preset (web AgentPresetSeat select).

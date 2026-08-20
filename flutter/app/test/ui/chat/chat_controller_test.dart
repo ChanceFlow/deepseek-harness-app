@@ -545,7 +545,7 @@ void main() {
     expect(controller.state.pendingImages, isEmpty);
     expect(
       controller.state.imageRejections,
-      const <ImageRejection>[UnsupportedImageType('u1', 'image/bmp')],
+      const <ImageRejection>[UnsupportedImageType(null, 'image/bmp')],
     );
   });
 
@@ -574,7 +574,7 @@ void main() {
     );
     expect(
       controller.state.imageRejections,
-      const <ImageRejection>[NoImageRoom(0)],
+      const <ImageRejection>[NoImageRoom(20)],
     );
   });
 

@@ -361,7 +361,7 @@ void main() {
     expect(find.text('llm-deepseek').hitTestable(), findsOneWidget);
     expect(
       find
-          .text('applies: live · revision: 3 · user layer · 1 secrets set')
+          .text('applies: live · revision: 3 · user layer · 1 secret set')
           .hitTestable(),
       findsOneWidget,
     );
@@ -472,8 +472,8 @@ void main() {
 
       // Groups (web builtInGroup/customGroup), the default card reading
       // selected ('In use'), the broken card marked with its reason.
-      expect(find.text('BUILT-IN').hitTestable(), findsOneWidget);
-      expect(find.text('CUSTOM').hitTestable(), findsOneWidget);
+      expect(find.text('Built-in').hitTestable(), findsOneWidget);
+      expect(find.text('Custom').hitTestable(), findsNWidgets(2));
       expect(find.text('Standard mode').hitTestable(), findsOneWidget);
       expect(find.text('In use').hitTestable(), findsOneWidget);
       expect(find.text('My Agent').hitTestable(), findsOneWidget);
@@ -482,7 +482,7 @@ void main() {
         find.text('agent.cordis.yml not found').hitTestable(),
         findsOneWidget,
       );
-      expect(find.text('Custom').hitTestable(), findsOneWidget);
+      expect(find.text('Custom').hitTestable(), findsNWidgets(2));
       expect(find.text('my-agent').hitTestable(), findsOneWidget);
 
       // Tapping a healthy non-default card makes it the default (same
@@ -513,7 +513,7 @@ void main() {
       find.textContaining('authored on the host').hitTestable(),
       findsOneWidget,
     );
-    expect(find.text('BUILT-IN'), findsNothing);
+    expect(find.text('Built-in'), findsNothing);
     expect(find.text('Standard mode'), findsNothing);
   });
 

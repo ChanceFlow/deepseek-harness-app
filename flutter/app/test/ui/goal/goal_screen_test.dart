@@ -57,7 +57,7 @@ void main() {
       actions,
     );
 
-    expect(find.text('No current goal'), findsOneWidget);
+    expect(find.text('No ongoing goal'), findsOneWidget);
     expect(find.text('Create'), findsOneWidget);
     expect(
       tester
@@ -113,7 +113,7 @@ void main() {
     );
 
     expect(find.text('Finish the Android MVP'), findsOneWidget);
-    expect(find.text('ACTIVE · revision 3 · rounds 2/10'), findsOneWidget);
+    expect(find.text('Ongoing Goal · revision 3 · rounds 2/10'), findsOneWidget);
 
     await tester.tap(find.text('Pause goal'));
     await tester.pump();

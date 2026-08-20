@@ -1200,7 +1200,6 @@ class _PlanChipState extends State<PlanChip> {
     if (!target) return const SizedBox.shrink();
 
     final ds = dsOf(context);
-    final l10n = AppLocalizations.of(context)!;
     // Web .chip:hover — the label deepens toward warn-primary.
     final label = _hovering ? ds.warnPrimary : ds.warnLabel;
     return MouseRegion(
@@ -1233,7 +1232,7 @@ class _PlanChipState extends State<PlanChip> {
                       height: 20 / 13,
                       color: label,
                     ),
-                    child: Text(
+                    child: const Text(
                       // Design literal, not copy: the chip wordmark stays
                       // 'Plan' in every locale.
                       'Plan',

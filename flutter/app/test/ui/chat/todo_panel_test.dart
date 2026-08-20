@@ -2,6 +2,7 @@
 /// `todo-row.tsx` port rules.
 library;
 
+import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
@@ -11,13 +12,17 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/todo_panel.dart';
 import 'package:app/ui/chat/tool_row_model.dart';
 
+import '../../l10n_app.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
+
 void main() {
   testWidgets('empty list renders nothing; counts and items disclose', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: TodoPanel(todos: [])),
+      l10nApp(
+        home: const Scaffold(body: TodoPanel(todos: [])),
       ),
     );
     expect(find.text('To-dos'), findsNothing);
@@ -28,13 +33,16 @@ void main() {
       TodoItem(content: 'review', status: TodoStatus.pending),
     ];
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: TodoPanel(todos: todos)),
+      l10nApp(
+        home: const Scaffold(body: TodoPanel(todos: todos)),
       ),
     );
 
     // Web progressLabel: zero-count segments drop out.
-    expect(find.text('1 completed · 1 active · 1 pending'), findsOneWidget);
+    expect(
+      find.text('1 completed · 1 in progress · 1 pending'),
+      findsOneWidget,
+    );
     // The checklist stays behind the disclosure until tapped.
     expect(find.text('ship the fix'), findsNothing);
 
@@ -58,6 +66,7 @@ void main() {
         result: 'Todos written',
         status: ToolRunStatus.completed,
       ),
+      _en,
     );
     expect(model.title, 'Update to-do list');
     expect(model.leading, Icons.checklist);
@@ -75,6 +84,7 @@ void main() {
         arguments: 'not json',
         status: ToolRunStatus.completed,
       ),
+      _en,
     );
     expect(model.title, 'Update to-do list');
     // Web TodoRow fallback = the generic row summary (others variant:
@@ -92,8 +102,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      l10nApp(
+        home: const Scaffold(
           body: ToolCallRow(
             call: TimelineToolCall(
               id: 'c3',
