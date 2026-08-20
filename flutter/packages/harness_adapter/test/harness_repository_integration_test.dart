@@ -56,6 +56,16 @@ ServerRequest _muxFrame(String type, String sessionId, JsonMap event) =>
       },
     );
 
+/// A top-level pending-interaction frame (`approval/requested`,
+/// `approval/resolved`, `question/requested`, `question/resolved`) — these
+/// carry their fields directly on the frame payload, not inside `event`.
+ServerRequest _pendingFrame(String type, JsonMap payload) =>
+    ServerRequest(
+      rpcId: 'rpc-$type',
+      method: type,
+      payload: <String, Object?>{'type': type, ...payload},
+    );
+
 JsonMap _assistantMessageEvent() => <String, Object?>{
   'type': 'assistant/message',
   'seq': 7,
@@ -1225,6 +1235,171 @@ void main() {
     expect(child.origin, 'subagent');
     final root = sessions.firstWhere((session) => session.id == 'session-root');
     expect(root.origin, isNull);
+  });
+
+  // Pending-interaction fold: the sidebar's amber dot comes from
+  // approval/question frames tracked for every session, opened or not
+  // (web SessionManager list-level parity). Wire shapes:
+  // reference/deepseek-harness/packages/host/apiproxy/src/api/events.ts.
+  test('approval requested lights pending and resolved clears it', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('approval/requested', <String, Object?>{
+          'sessionId': 'session-a',
+          'approvalId': 'ap-1',
+          'toolName': 'bash',
+          'reason': 'run destructive command',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    // The session was never opened — the fold must still light the row.
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final pending = await repository.observeSessions().first;
+    final session = pending.firstWhere((item) => item.id == 'session-a');
+    expect(session.pendingInteraction, SessionPendingInteraction.approval);
+  });
+
+  test('approval resolution drops the pending status', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('approval/requested', <String, Object?>{
+          'sessionId': 'session-a',
+          'approvalId': 'ap-1',
+          'toolName': 'bash',
+        }),
+        _pendingFrame('approval/resolved', <String, Object?>{
+          'sessionId': 'session-a',
+          'approvalId': 'ap-1',
+          'outcome': 'allowed',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final pending = await repository.observeSessions().first;
+    final session = pending.firstWhere((item) => item.id == 'session-a');
+    expect(session.pendingInteraction, isNull);
+  });
+
+  test('plan-review question routes to planReview; a plain question stays question', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-p',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+      <String, Object?>{
+        'sessionId': 'session-q',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    // Wire question intent: `plan-review` with a single binary approve/
+    // deny option set (web manager `questionInteractionStatus`).
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-p',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Approve plan?',
+              'detail': 'Apply the plan steps?',
+              'options': <Object?>[
+                <String, Object?>{'label': 'Approve', 'description': 'yes'},
+                <String, Object?>{'label': 'Deny', 'description': 'no'},
+              ],
+              'intent': <String, Object?>{
+                'kind': 'plan-review',
+                'approve': 'Approve',
+              },
+            },
+          ],
+        }),
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-q',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q2',
+              'question': 'Pick a color',
+              'options': <Object?>[
+                <String, Object?>{'label': 'Red'},
+                <String, Object?>{'label': 'Blue'},
+              ],
+            },
+          ],
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final pending = await repository.observeSessions().first;
+    final plan = pending.firstWhere((item) => item.id == 'session-p');
+    expect(plan.pendingInteraction, SessionPendingInteraction.planReview);
+    final plain = pending.firstWhere((item) => item.id == 'session-q');
+    expect(plain.pendingInteraction, SessionPendingInteraction.question);
+  });
+
+  test('question resolution drops the pending status by rpcId', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-q',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-q',
+          'questions': <Object?>[
+            <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+          ],
+        }),
+        _pendingFrame('question/resolved', <String, Object?>{
+          'sessionId': 'session-q',
+          'questionRpcId': 'rpc-question/requested',
+          'outcome': 'answered',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final pending = await repository.observeSessions().first;
+    final session = pending.firstWhere((item) => item.id == 'session-q');
+    expect(session.pendingInteraction, isNull);
   });
 
   // Wire shape: agentPreset.list roster

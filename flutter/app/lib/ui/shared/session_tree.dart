@@ -59,6 +59,55 @@ List<SessionSummary> sortedByRecency(Iterable<SessionSummary> sessions) {
   return ordered;
 }
 
+/// The sidebar's priority window: sessions updated within the last 24
+/// hours form the "recently active" tier (below running and pending
+/// interaction, above everything older).
+const int kRecentWindowMs = 24 * 60 * 60 * 1000;
+
+/// Priority tier for the sidebar's activity sort: running sessions first,
+/// then sessions waiting on the user (pending interaction), then sessions
+/// active within [kRecentWindowMs], then everything older. Lower ranks
+/// first.
+int sessionPriorityTier(
+  SessionSummary session,
+  int nowEpochMs,
+) {
+  if (session.running) return 0;
+  if (session.pendingInteraction != null) return 1;
+  if (nowEpochMs - session.updatedAtEpochMs <= kRecentWindowMs) return 2;
+  return 3;
+}
+
+/// Orders a group's members for the sidebar: the selected session rides
+/// the top (the current session must never hide behind a fold — the
+/// [withActiveSessionPinned] invariant), then the priority tiers
+/// (running > pending interaction > recent-24h > rest), recency within
+/// each tier.
+List<SessionSummary> priorityOrderedMembers(
+  List<SessionSummary> members,
+  String? selectedSessionId,
+  int nowEpochMs,
+) {
+  final pinned = <SessionSummary>[];
+  final rest = <SessionSummary>[];
+  for (final member in members) {
+    if (member.id == selectedSessionId) {
+      pinned.add(member);
+    } else {
+      rest.add(member);
+    }
+  }
+  rest.sort((a, b) {
+    final byTier = sessionPriorityTier(a, nowEpochMs)
+        .compareTo(sessionPriorityTier(b, nowEpochMs));
+    if (byTier != 0) return byTier;
+    final byRecency = b.updatedAtEpochMs.compareTo(a.updatedAtEpochMs);
+    if (byRecency != 0) return byRecency;
+    return a.id.compareTo(b.id);
+  });
+  return <SessionSummary>[...pinned, ...rest];
+}
+
 /// Same-group pinning: the active session rides first, so the row the
 /// user is most likely to reach stays above the fold even past the
 /// collapsed-session overflow limit.
@@ -84,12 +133,23 @@ List<SessionSummary> withActiveSessionPinned(
 /// stable host order, members resolved from `sessionIds` in their
 /// stored order; sessions outside every account trail in the
 /// browser-local Ungrouped bucket by recency.
+///
+/// Members are [priorityOrderedMembers] when [priorityOrder] is set (the
+/// sidebar's activity focus: selected, running, pending interaction,
+/// recent-24h, then recency); otherwise the stored account order wins
+/// (the Workspaces management tab). The Ungrouped bucket is added only
+/// when it has members; workspace groups are added for every entity
+/// unless [includeEmptyGroups] is false (the switching surface drops
+/// groups with nothing visible).
 List<SessionGroupData> deriveSessionGroups(
   List<SessionSummary> sessions,
   List<WorkspaceSummary> workspaces,
   String? selectedSessionId,
-  AppLocalizations l10n,
-) {
+  AppLocalizations l10n, {
+  int nowEpochMs = 0,
+  bool includeEmptyGroups = true,
+  bool priorityOrder = false,
+}) {
   final sessionsById = <String, SessionSummary>{
     for (final session in sessions) session.id: session,
   };
@@ -106,11 +166,14 @@ List<SessionGroupData> deriveSessionGroups(
       if (!sessionVisible(summary, selectedSessionId)) continue;
       members.add(summary);
     }
+    if (!includeEmptyGroups && members.isEmpty) continue;
     groups.add(
       SessionGroupData(
         key: workspace.workspaceId,
         label: workspace.title,
-        sessions: withActiveSessionPinned(members, selectedSessionId),
+        sessions: priorityOrder
+            ? priorityOrderedMembers(members, selectedSessionId, nowEpochMs)
+            : withActiveSessionPinned(members, selectedSessionId),
       ),
     );
   }
@@ -126,7 +189,9 @@ List<SessionGroupData> deriveSessionGroups(
       SessionGroupData(
         key: kUngroupedKey,
         label: l10n.ungroupedLabel,
-        sessions: withActiveSessionPinned(ungrouped, selectedSessionId),
+        sessions: priorityOrder
+            ? priorityOrderedMembers(ungrouped, selectedSessionId, nowEpochMs)
+            : withActiveSessionPinned(ungrouped, selectedSessionId),
       ),
     );
   }
@@ -191,9 +256,11 @@ String relativeTimeLabel(
 }
 
 /// Web Rows.tsx `SessionNodeItem` (mobile form): a 44px touch row with
-/// the 16px status slot, the running state dot, the title, and the
-/// compact relative time; the selected row keeps the sidebar nav-item
-/// treatment (active fill + accent edge).
+/// the status dot slot, the title, and the compact relative time; the
+/// selected row keeps the sidebar nav-item treatment (active fill +
+/// accent edge). A trailing ellipsis menu with the session verbs
+/// (archive) renders when [onArchive] is provided — the Workspaces tab
+/// wires it, the switching sidebar does not.
 class SessionTreeRow extends StatelessWidget {
   const SessionTreeRow({
     super.key,
@@ -201,12 +268,17 @@ class SessionTreeRow extends StatelessWidget {
     required this.selected,
     required this.nowEpochMs,
     this.onSelect,
+    this.onArchive,
   });
 
   final SessionSummary session;
   final bool selected;
   final int nowEpochMs;
   final VoidCallback? onSelect;
+
+  /// Archive-this-session action; present makes the row's ellipsis menu
+  /// visible (blank provisional rows carry no verbs, web rule).
+  final VoidCallback? onArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -237,16 +309,14 @@ class SessionTreeRow extends StatelessWidget {
                 child: SizedBox(
                   height: 44,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.only(left: 8, right: 4),
                     child: Row(
                       children: [
                         // Web `.slot`: the fixed status seat keeps titles
                         // aligned whether or not a dot shows.
                         SizedBox(
                           width: 16,
-                          child: session.running
-                              ? const RunningDot(size: 8)
-                              : null,
+                          child: SessionStatusDot(session: session),
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -275,6 +345,16 @@ class SessionTreeRow extends StatelessWidget {
                             ),
                           ),
                         ],
+                        // Web row menu (rename/fork/archive): present on
+                        // the management surface, always-visible for
+                        // touch (the Workspaces tab's idiom).
+                        if (onArchive != null && !session.blank) ...[
+                          const SizedBox(width: 4),
+                          _RowArchiveButton(
+                            session: session,
+                            onArchive: onArchive!,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -283,6 +363,145 @@ class SessionTreeRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Web SessionNodeItem "⋮" menu — mobile form: an always-visible
+/// ellipsis seat that opens a menu-surface bottom sheet with the session
+/// verbs. Archive is the management surface's verb (the switching
+/// sidebar wires none).
+class _RowArchiveButton extends StatelessWidget {
+  const _RowArchiveButton({
+    required this.session,
+    required this.onArchive,
+  });
+
+  final SessionSummary session;
+  final VoidCallback onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final ds = dsOf(context);
+    return SizedBox(
+      width: 32,
+      height: 44,
+      child: Tooltip(
+        message: l10n.archiveSession,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            hoverColor: ds.interactiveBgHover,
+            onTap: onArchive,
+            child: Center(
+              child: Icon(
+                Icons.archive_outlined,
+                size: 16,
+                color: ds.labelTertiary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Web Rows.tsx `sessionStatuses` + StateDot (mobile form): the session
+/// row's status dot. Pending user interaction (approval / plan-review /
+/// question) outranks everything and renders the amber warning dot;
+/// running renders the blue ongoing dot; otherwise the green done dot
+/// (web always shows a dot, idle included).
+class SessionStatusDot extends StatelessWidget {
+  const SessionStatusDot({super.key, required this.session});
+
+  final SessionSummary session;
+
+  @override
+  Widget build(BuildContext context) {
+    if (session.pendingInteraction != null) {
+      return const WarningDot(size: 10);
+    }
+    if (session.running) {
+      return const RunningDot(size: 10);
+    }
+    return const DoneDot(size: 10);
+  }
+}
+
+/// Web StateDot 'done' (static form): success-primary halo plus solid
+/// core, the green idle/completed indicator.
+class DoneDot extends StatelessWidget {
+  const DoneDot({super.key, this.size = 10});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = dsOf(context).stateSuccessPrimary;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Center(
+            child: Container(
+              width: size * 0.6,
+              height: size * 0.6,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Web StateDot 'warning' (static form): warn-primary halo plus solid
+/// core, the amber "needs the user" indicator (approval / plan-review /
+/// question).
+class WarningDot extends StatelessWidget {
+  const WarningDot({super.key, this.size = 10});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = dsOf(context).warnPrimary;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Center(
+            child: Container(
+              width: size * 0.6,
+              height: size * 0.6,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -157,12 +157,14 @@ void main() {
 
       // The current group (holds the selected session) is expanded, and
       // tapping its header is a no-op — collapsing it would hide the
-      // active session behind a hunt. No override is written.
+      // active session behind a hunt. No override is written. The
+      // selected session rides the group's top (priority order), so it
+      // is the visible anchor.
       await _pumpPanel(tester, store: store);
-      expect(find.text('session 2'), findsOneWidget);
+      expect(find.text('session 1'), findsOneWidget);
       await tester.tap(find.text('proj'));
       await tester.pumpAndSettle();
-      expect(find.text('session 2'), findsOneWidget);
+      expect(find.text('session 1'), findsOneWidget);
       expect(store.read('sidebar.groupOverrides'), isNull);
 
       // A non-current group starts folded (default); the toggle expands
@@ -182,7 +184,7 @@ void main() {
       // A fresh panel instance seeded from the same store keeps the
       // non-current group collapsed while the current group stays open.
       await _pumpPanel(tester, store: store);
-      expect(find.text('session 2'), findsOneWidget);
+      expect(find.text('session 1'), findsOneWidget);
       expect(find.text('other session'), findsNothing);
     },
   );
@@ -190,24 +192,26 @@ void main() {
   testWidgets('the active session rides its group\'s top', (tester) async {
     await _pumpPanel(tester, selectedSessionId: 's3');
 
-    // The selected session pins above the account's stored order:
-    // 'session 3' renders above 'session 1' inside the proj group.
+    // The selected session pins above every other member (priority
+    // order: selected first, then recency): 'session 3' renders above
+    // 'session 7', the newest non-selected session.
     expect(find.text('session 3'), findsOneWidget);
     expect(
       tester.getTopLeft(find.text('session 3')).dy,
-      lessThan(tester.getTopLeft(find.text('session 1')).dy),
+      lessThan(tester.getTopLeft(find.text('session 7')).dy),
     );
   });
 
   testWidgets('a pinned active session stays visible past the overflow limit', (
     tester,
   ) async {
-    // 'session 6' sits at stored index 5 — beyond the collapsed limit
-    // of 5 — but selection pins it to the head: no hunt, no Show-all
-    // expansion needed. The tail behind the limit still folds.
+    // 'session 6' would sit below the collapsed limit of 5 by recency
+    // (newest-first: 7,6,5,4,3...), but selection pins it to the head:
+    // no hunt, no Show-all expansion needed. The tail behind the limit
+    // still folds ('session 1' is the oldest, below the fold).
     await _pumpPanel(tester, selectedSessionId: 's6');
     expect(find.text('session 6'), findsOneWidget);
-    expect(find.text('session 5'), findsNothing);
+    expect(find.text('session 1'), findsNothing);
     expect(find.text('Show all 7'), findsOneWidget);
   });
 
@@ -217,21 +221,23 @@ void main() {
     final store = _store();
 
     // First instance: expand the group's overflow run past the
-    // collapsed session limit.
+    // collapsed session limit. With priority order (all idle, recency
+    // tiebreak) the newest five are visible and the oldest ('session 3'
+    // at 3000ms) hides behind the fold until expanded.
     await _pumpPanel(tester, store: store);
     expect(find.text('Show all 7'), findsOneWidget);
-    expect(find.text('session 6'), findsNothing);
+    expect(find.text('session 3'), findsNothing);
     await tester.tap(find.text('Show all 7'));
     await tester.pumpAndSettle();
     expect(find.text('Show less'), findsOneWidget);
-    expect(find.text('session 7'), findsOneWidget);
+    expect(find.text('session 3'), findsOneWidget);
     // The expansion wrote through to the store's cache.
     expect(store.read('sidebar.overflowExpanded'), <String>['w1']);
     await tester.pump(_debounceWindow);
 
     // A fresh panel instance seeded from the same store restores it.
     await _pumpPanel(tester, store: store);
-    expect(find.text('session 7'), findsOneWidget);
+    expect(find.text('session 3'), findsOneWidget);
     expect(find.text('Show less'), findsOneWidget);
   });
 }
