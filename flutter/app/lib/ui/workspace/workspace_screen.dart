@@ -11,15 +11,21 @@
 /// bgLayer2, lv3 shadow) as bottom-docked cards and dialogs.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/directory.dart';
+import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../chat/chat_ui_state.dart';
 import '../../di/providers.dart';
+import '../root/app_destination.dart';
 import '../shared/backend_connection_dot.dart';
+import '../shared/session_tree.dart';
 import '../theme/deepsuite_extension.dart';
 import 'workspace_ui_state.dart';
 
@@ -100,12 +106,30 @@ class _BackendWorkspaceSection extends ConsumerWidget {
   final bool active;
   final void Function(BackendAction action) onAction;
 
+  /// Session navigation from this backend's browsing rows: select the
+  /// backend (a non-active row switches first), select the session on
+  /// its chat controller, and land on the Chat destination.
+  void _openSession(WidgetRef ref, String sessionId) {
+    if (!active) onAction(SelectBackend(backend.id));
+    ref
+        .read(chatControllerProvider(backend.id))
+        .onAction(SelectSession(sessionId));
+    ref.read(appDestinationProvider.notifier).select(AppDestination.chat);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
     final controller = ref.watch(workspaceControllerProvider(backend.id));
     final l10n = AppLocalizations.of(context)!;
+    // The chat surface's selection rides the active backend's slice only
+    // — a non-active backend's controller keeps its own stale selection,
+    // which must not highlight rows there (the sidebar's slice rule).
+    final selectedSessionId = active
+        ? (ref.watch(chatUiStateProvider(backend.id)).value ??
+                  const ChatUiState()).selectedSessionId
+        : null;
     return StreamBuilder<WorkspaceUiState>(
       stream: controller.uiState,
       initialData: controller.state,
@@ -173,17 +197,28 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                 ),
               ),
             ),
-            // The embedded browsing region; starting a session in a
-            // non-active backend's workspace selects it first so the
-            // chat surface follows.
+            // The embedded browsing region. Starting a session selects
+            // the backend first (non-active), then lands the chat
+            // surface on the resolved conversation (web
+            // `startSession` → `sessions.open`).
             WorkspaceScreen(
               uiState: uiState,
               onAction: (action) {
-                if (action is StartSessionInWorkspace && !active) {
-                  onAction(SelectBackend(backend.id));
+                if (action is StartSessionInWorkspace) {
+                  unawaited(() async {
+                    if (!active) onAction(SelectBackend(backend.id));
+                    final sessionId = await controller
+                        .startSessionInWorkspace(action.workspaceId);
+                    if (sessionId != null) {
+                      _openSession(ref, sessionId);
+                    }
+                  }());
+                  return;
                 }
                 controller.onAction(action);
               },
+              selectedSessionId: selectedSessionId,
+              onSelectSession: (sessionId) => _openSession(ref, sessionId),
               embedded: true,
               titleOverride: backend.label,
             ),
@@ -203,12 +238,22 @@ class WorkspaceScreen extends StatefulWidget {
     super.key,
     required this.uiState,
     required this.onAction,
+    this.selectedSessionId,
+    this.onSelectSession,
     this.embedded = false,
     this.titleOverride,
   });
 
   final WorkspaceUiState uiState;
   final void Function(WorkspaceAction) onAction;
+
+  /// The chat surface's selected session on this backend (row
+  /// highlight + blank-placeholder visibility; null on non-active
+  /// backends).
+  final String? selectedSessionId;
+
+  /// Opens a session row: selects it and lands on the Chat surface.
+  final void Function(String sessionId)? onSelectSession;
 
   /// Aggregate form: render the browsing region without the Scaffold
   /// (the backend section owns the surface).
@@ -225,6 +270,7 @@ class WorkspaceScreen extends StatefulWidget {
 class _WorkspaceScreenState extends State<WorkspaceScreen> {
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedGroups = <String>{};
+  final Set<String> _overflowExpandedGroups = <String>{};
   bool _searchActive = false;
 
   @override
@@ -247,6 +293,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   void _toggleGroup(String workspaceId) => setState(() {
     if (!_expandedGroups.remove(workspaceId)) {
       _expandedGroups.add(workspaceId);
+    }
+  });
+
+  void _toggleOverflow(String workspaceId) => setState(() {
+    if (!_overflowExpandedGroups.remove(workspaceId)) {
+      _overflowExpandedGroups.add(workspaceId);
     }
   });
 
@@ -306,36 +358,86 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     );
   }
 
+  /// Web tree.ts `deriveSearchResults` surface: content matches render
+  /// only for visible non-blank summaries — the flat result list
+  /// replaces the tree while a query is active.
+  Widget _searchResults(
+    BuildContext context,
+    DeepSuiteColors ds,
+    WorkspaceUiState uiState,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    final sessionsById = <String, SessionSummary>{
+      for (final session in uiState.sessions.where(
+        (session) =>
+            !session.blank && sessionVisible(session, widget.selectedSessionId),
+      ))
+        session.id: session,
+    };
+    final rows = <Widget>[
+      for (final result in uiState.searchResults)
+        if (sessionsById[result.sessionId] case final session?)
+          SessionSearchResultRow(
+            session: session,
+            snippet: result.snippet,
+            workspaceLabel: _workspaceLabel(session, uiState, l10n),
+            selected: session.id == widget.selectedSessionId,
+            onSelect: () => widget.onSelectSession?.call(session.id),
+          ),
+    ];
+    if (rows.isEmpty) {
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Text(
+            l10n.noMatchingSessions,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(fontSize: 13, color: ds.labelTertiary),
+          ),
+        ),
+      );
+    }
+    if (widget.embedded) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: rows,
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      children: rows,
+    );
+  }
+
+  /// Web tree.ts `labelOf`: the workspace title when an account holds
+  /// the session, else the cwd basename (search-result context rows).
+  String _workspaceLabel(
+    SessionSummary session,
+    WorkspaceUiState uiState,
+    AppLocalizations l10n,
+  ) {
+    for (final workspace in uiState.workspaces) {
+      if (workspace.sessionIds.contains(session.id)) return workspace.title;
+    }
+    return cwdBasename(session.cwd, l10n);
+  }
+
   @override
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
     final ds = dsOf(context);
-    final query = _searchController.text.trim().toLowerCase();
-    final workspaces = query.isEmpty
-        ? uiState.workspaces
-        : uiState.workspaces
-              .where(
-                (workspace) =>
-                    workspace.title.toLowerCase().contains(query) ||
-                    workspace.path.toLowerCase().contains(query),
-              )
-              .toList(growable: false);
+    final query = _searchController.text.trim();
     return Stack(
       children: [
         if (widget.embedded)
-          _browsingRegion(context, ds, uiState, workspaces, query)
+          _browsingRegion(context, ds, uiState, query)
         else
           Scaffold(
             // Web: the browser region lives on the sidebar fill.
             backgroundColor: ds.sidebarFill,
             body: SafeArea(
-              child: _browsingRegionBody(
-                context,
-                ds,
-                uiState,
-                workspaces,
-                query,
-              ),
+              child: _browsingRegionBody(context, ds, uiState, query),
             ),
           ),
         if (uiState.directoryBrowserOpen) ...[
@@ -378,19 +480,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     );
   }
 
-  /// The browsing region: header, search, errors, and the workspace
-  /// tree. The standalone form stretches the tree (Expanded); the
+  /// The browsing region: header, search, errors, and the grouped
+  /// session tree (or the flat search-result list while a query is
+  /// active). The standalone form stretches the tree (Expanded); the
   /// embedded aggregate form shrink-wraps it onto the outer scroll.
   Widget _browsingRegion(
     BuildContext context,
     DeepSuiteColors ds,
     WorkspaceUiState uiState,
-    List<WorkspaceSummary> workspaces,
     String query,
   ) {
     return Material(
       color: ds.sidebarFill,
-      child: _browsingRegionBody(context, ds, uiState, workspaces, query),
+      child: _browsingRegionBody(context, ds, uiState, query),
     );
   }
 
@@ -398,19 +500,24 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     BuildContext context,
     DeepSuiteColors ds,
     WorkspaceUiState uiState,
-    List<WorkspaceSummary> workspaces,
     String query,
   ) {
     final l10n = AppLocalizations.of(context)!;
+    final hasQuery = query.isNotEmpty;
     final tree = _WorkspaceTree(
-      workspaces: workspaces,
+      sessions: uiState.sessions,
+      workspaces: uiState.workspaces,
+      selectedSessionId: widget.selectedSessionId,
       expandedGroups: _expandedGroups,
-      hasQuery: query.isNotEmpty,
+      overflowExpandedGroups: _overflowExpandedGroups,
       onToggle: _toggleGroup,
+      onToggleOverflow: _toggleOverflow,
       onMenu: _showWorkspaceActions,
       onStartSession: _startSession,
+      onSelectSession: widget.onSelectSession,
       shrinkWrap: widget.embedded,
     );
+    final results = hasQuery ? _searchResults(context, ds, uiState) : tree;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: widget.embedded ? MainAxisSize.min : MainAxisSize.max,
@@ -424,8 +531,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         if (_searchActive)
           _SearchCapsule(
             controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            onCollapse: _collapseSearch,
+            onChanged: (value) {
+              setState(() {});
+              widget.onAction(SearchSessionsAction(value.trim()));
+            },
+            onCollapse: () {
+              _collapseSearch();
+              widget.onAction(const SearchSessionsAction(''));
+            },
           ),
         if (uiState.errorMessage case final String error)
           _ErrorBanner(
@@ -434,12 +547,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           ),
         if (uiState.isLoading) const LinearProgressIndicator(minHeight: 2),
         if (widget.embedded)
-          tree
+          results
         else
           Expanded(
             child: Stack(
               children: [
-                tree,
+                results,
                 // Web `.fade`: bottom continuation hint tracking the
                 // sidebar fill across themes.
                 Positioned(
@@ -695,21 +808,29 @@ class _ErrorBanner extends StatelessWidget {
 /// Web `.list`: the scrolling tree of workspace group sections.
 class _WorkspaceTree extends StatelessWidget {
   const _WorkspaceTree({
+    required this.sessions,
     required this.workspaces,
+    required this.selectedSessionId,
     required this.expandedGroups,
-    required this.hasQuery,
+    required this.overflowExpandedGroups,
     required this.onToggle,
+    required this.onToggleOverflow,
     required this.onMenu,
     required this.onStartSession,
+    required this.onSelectSession,
     this.shrinkWrap = false,
   });
 
+  final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
+  final String? selectedSessionId;
   final Set<String> expandedGroups;
-  final bool hasQuery;
+  final Set<String> overflowExpandedGroups;
   final void Function(String workspaceId) onToggle;
+  final void Function(String workspaceId) onToggleOverflow;
   final void Function(WorkspaceSummary workspace) onMenu;
   final void Function(String workspaceId) onStartSession;
+  final void Function(String sessionId)? onSelectSession;
 
   /// Aggregate form: the tree rides the section's outer scroll view.
   final bool shrinkWrap;
@@ -718,31 +839,52 @@ class _WorkspaceTree extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final l10n = AppLocalizations.of(context)!;
-    if (workspaces.isEmpty) {
+    final groups = deriveSessionGroups(
+      sessions,
+      workspaces,
+      selectedSessionId,
+      l10n,
+    );
+    if (groups.isEmpty) {
       // Web `.empty` (aligned with the row grid).
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Text(
-          hasQuery ? l10n.noMatchingWorkspaces : l10n.noWorkspacesYet,
+          l10n.noWorkspacesYet,
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(fontSize: 13, color: ds.labelTertiary),
         ),
       );
     }
+    // The group holding the active session stays expanded (the sidebar
+    // rule — the current session never hides behind a fold).
+    final currentGroupKey = currentGroupKeyOf(
+      sessions,
+      workspaces,
+      selectedSessionId,
+    );
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       shrinkWrap: shrinkWrap,
       physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       children: [
-        for (var i = 0; i < workspaces.length; i++) ...[
+        for (var i = 0; i < groups.length; i++) ...[
           // Web `.groupSection + .groupSection` inter-group spacing.
           if (i > 0) const SizedBox(height: 4),
           _WorkspaceGroup(
-            workspace: workspaces[i],
-            expanded: expandedGroups.contains(workspaces[i].workspaceId),
+            group: groups[i],
+            workspaces: workspaces,
+            expanded: expandedGroups.contains(groups[i].key) ||
+                groups[i].key == currentGroupKey,
+            overflowExpanded: overflowExpandedGroups.contains(groups[i].key),
+            nowEpochMs: nowEpochMs,
+            selectedSessionId: selectedSessionId,
             onToggle: onToggle,
+            onToggleOverflow: onToggleOverflow,
             onMenu: onMenu,
             onStartSession: onStartSession,
+            onSelectSession: onSelectSession,
           ),
         ],
       ],
@@ -750,40 +892,144 @@ class _WorkspaceTree extends StatelessWidget {
   }
 }
 
-/// Web `.groupSection`: one workspace header row plus its expanded
-/// detail run (2px intra-group rhythm).
+/// Web `.groupSection`: one workspace header row plus its session rows
+/// (2px intra-group rhythm). The Ungrouped bucket renders the header
+/// without the management actions — it has no backing Workspace (web
+/// rule: no menu, no create seat).
 class _WorkspaceGroup extends StatelessWidget {
   const _WorkspaceGroup({
-    required this.workspace,
+    required this.group,
+    required this.workspaces,
     required this.expanded,
+    required this.overflowExpanded,
+    required this.nowEpochMs,
+    required this.selectedSessionId,
     required this.onToggle,
+    required this.onToggleOverflow,
     required this.onMenu,
     required this.onStartSession,
+    required this.onSelectSession,
   });
 
-  final WorkspaceSummary workspace;
+  final SessionGroupData group;
+  final List<WorkspaceSummary> workspaces;
   final bool expanded;
+  final bool overflowExpanded;
+  final int nowEpochMs;
+  final String? selectedSessionId;
   final void Function(String workspaceId) onToggle;
+  final void Function(String workspaceId) onToggleOverflow;
   final void Function(WorkspaceSummary workspace) onMenu;
   final void Function(String workspaceId) onStartSession;
+  final void Function(String sessionId)? onSelectSession;
 
   @override
   Widget build(BuildContext context) {
+    final sessions = group.sessions;
+    final visibleCount = overflowExpanded || sessions.length <= kCollapsedSessionLimit
+        ? sessions.length
+        : kCollapsedSessionLimit;
+    final ungrouped = group.key == kUngroupedKey;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _WorkspaceRow(
-          workspace: workspace,
-          expanded: expanded,
-          onToggle: onToggle,
-          onMenu: onMenu,
-          onStartSession: onStartSession,
-        ),
+        if (ungrouped)
+          _UngroupedHeaderRow(label: group.label, expanded: expanded,
+              onToggle: () => onToggle(group.key))
+        else
+          _WorkspaceRow(
+            workspace: _workspaceOf(group),
+            expanded: expanded,
+            onToggle: onToggle,
+            onMenu: onMenu,
+            onStartSession: onStartSession,
+          ),
         if (expanded) ...[
           const SizedBox(height: 2),
-          _GroupDetails(workspace: workspace),
+          for (var i = 0; i < visibleCount; i++) ...[
+            if (i > 0) const SizedBox(height: 2),
+            SessionTreeRow(
+              session: sessions[i],
+              selected: sessions[i].id == selectedSessionId,
+              nowEpochMs: nowEpochMs,
+              onSelect: sessions[i].id == selectedSessionId
+                  ? null
+                  : () => onSelectSession?.call(sessions[i].id),
+            ),
+          ],
+          if (sessions.length > kCollapsedSessionLimit) ...[
+            const SizedBox(height: 2),
+            SessionOverflowRow(
+              expanded: overflowExpanded,
+              totalCount: sessions.length,
+              onTap: () => onToggleOverflow(group.key),
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  WorkspaceSummary _workspaceOf(SessionGroupData group) {
+    // The derive step keeps one group per workspace entity, so the row
+    // re-resolves by id through the tree's own list.
+    for (final workspace in workspaces) {
+      if (workspace.workspaceId == group.key) return workspace;
+    }
+    throw StateError('group ${group.key} has no workspace summary');
+  }
+}
+
+/// The Ungrouped bucket's header: folder + label, no management
+/// actions (web rule — no backing Workspace).
+class _UngroupedHeaderRow extends StatelessWidget {
+  const _UngroupedHeaderRow({
+    required this.label,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final String label;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: ds.interactiveBgHover,
+        onTap: onToggle,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: expanded ? ds.interactiveBgHover : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                expanded ? Icons.folder_open : Icons.folder_outlined,
+                size: 16,
+                color: ds.labelTertiary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -892,44 +1138,6 @@ class _RowIconButton extends StatelessWidget {
             child: Center(child: Icon(icon, size: 18, color: ds.labelTertiary)),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Expanded-group detail run — the mobile stand-in for the web session
-/// rows this surface has no session list for: the workspace path (web
-/// hover-card `cwd`) and the session count (web `sessions.count`),
-/// caption grey and aligned under the row title.
-class _GroupDetails extends StatelessWidget {
-  const _GroupDetails({required this.workspace});
-
-  final WorkspaceSummary workspace;
-
-  @override
-  Widget build(BuildContext context) {
-    final ds = dsOf(context);
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final count = workspace.sessionIds.length;
-    final countLabel = l10n.workspaceSessionCount(count);
-    final caption = theme.textTheme.bodySmall?.copyWith(
-      color: ds.labelTertiary,
-    );
-    return Padding(
-      padding: const EdgeInsets.only(left: 30, right: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            workspace.path,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: caption,
-          ),
-          const SizedBox(height: 2),
-          Text(countLabel, style: caption),
-        ],
       ),
     );
   }

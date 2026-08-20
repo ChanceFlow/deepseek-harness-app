@@ -1,9 +1,7 @@
 /// Chat sidebar — Flutter port of the dsh web sidebar's browsing region
 /// (ui-workspace WorkspaceBrowser): the section header with its trailing
 /// search toggle, the expanding search capsule, and the workspace-grouped
-/// session tree with the per-group overflow control. The foot carries
-/// the settings trigger (web `sidebar.settings` seat): a divider-topped
-/// 44px row that selects the Settings destination. The browsing toggles
+/// session tree with the per-group overflow control. The browsing toggles
 /// (per-group expansion overrides, per-group overflow expansions)
 /// persist through the local state store — except that the group
 /// holding the active session never folds, and within any group the
@@ -27,10 +25,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
-import '../root/app_destination.dart';
 import '../shared/backend_connection_dot.dart';
+import '../shared/session_tree.dart';
 import '../theme/deepsuite_extension.dart' show DeepSuiteColors, dsOf;
-import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
+import '../theme/deepsuite_tokens.dart' show kDsDuration;
 import 'brand_wordmark.dart';
 
 /// One backend's slice of the sidebar's browsing region: that host's
@@ -49,19 +47,6 @@ final class BackendSessionSlice {
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
 }
-
-/// Web tree.ts `UNGROUPED_KEY`: group key for sessions outside every
-/// registered workspace.
-const String _ungroupedKey = '';
-
-/// Web `COLLAPSED_SESSION_LIMIT`: session rows a group shows before its
-/// local overflow control.
-const int _collapsedSessionLimit = 5;
-
-/// Web tree.ts `sessionVisible`: the coarse wire origin marking a subagent
-/// child — such sessions browse through their parent's subagent catalog,
-/// never as independent sidebar rows.
-const String _subagentOrigin = 'subagent';
 
 /// Local state store key: per-group expansion overrides
 /// (`sidebar.groupOverrides`, `Map<String, bool>`).
@@ -134,7 +119,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   final Map<String, bool> _groupOverrides = <String, bool>{};
 
   /// Web `expandedSessionGroups`: groups whose overflow control is
-  /// expanded past [_collapsedSessionLimit].
+  /// expanded past [kCollapsedSessionLimit].
   final Set<String> _overflowExpandedGroups = <String>{};
 
   /// Whether the persisted browsing toggles have been applied once the
@@ -192,7 +177,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// toggle is a no-op, collapsing it would hide the active session
   /// behind a hunt.
   void _toggleGroup(String key) {
-    final currentGroupKey = _currentGroupKeyOf(
+    final currentGroupKey = currentGroupKeyOf(
       widget.sessions,
       widget.workspaces,
       widget.selectedSessionId,
@@ -243,132 +228,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     store.write(_overflowExpandedKey, _overflowExpandedGroups.toList());
   }
 
-  /// Web tree.ts current-group derivation: the workspace whose account
-  /// holds the selected session, or the Ungrouped key when no account
-  /// names it (null when nothing is selected or the summary has not
-  /// landed yet).
-  String? _currentGroupKeyOf(
-    List<SessionSummary> sessions,
-    List<WorkspaceSummary> workspaces,
-    String? selectedSessionId,
-  ) {
-    if (selectedSessionId == null) return null;
-    final session = sessions
-        .where((session) => session.id == selectedSessionId)
-        .firstOrNull;
-    if (session == null) return null;
-    for (final workspace in workspaces) {
-      if (workspace.sessionIds.contains(selectedSessionId)) {
-        return workspace.workspaceId;
-      }
-    }
-    return _ungroupedKey;
-  }
-
   /// The group holding the active session is ALWAYS expanded — the
   /// current session must never hide behind a fold the user has to
   /// hunt through. Every other group follows its persisted override
   /// (default collapsed).
   bool _isGroupExpanded(String key, String? currentGroupKey) =>
       key == currentGroupKey || (_groupOverrides[key] ?? false);
-
-  /// Web tree.ts `sessionVisible`: ordinary sessions are visible; among
-  /// blank sessions, only the current one is visible. Subagent children
-  /// use their parent header catalog. Archived sessions never reach this
-  /// panel — the adapter's `observeSessions` drops ids in the workspace
-  /// registry's archived set — so this port does not re-filter them.
-  /// A non-active backend's slice passes a null selection: blank
-  /// placeholders never browse there.
-  bool _sessionVisibleOf(SessionSummary session, String? selectedSessionId) =>
-      session.origin != _subagentOrigin &&
-      (!session.blank || session.id == selectedSessionId);
-
-  /// The workspace account holding one session, if any (web membership is
-  /// the Workspace's `sessionIds` — the wire session summary carries no
-  /// workspace field).
-  WorkspaceSummary? _workspaceOf(
-    SessionSummary session,
-    List<WorkspaceSummary> workspaces,
-  ) {
-    for (final workspace in workspaces) {
-      if (workspace.sessionIds.contains(session.id)) return workspace;
-    }
-    return null;
-  }
-
-  /// Web tree.ts `groupByWorkspace`: one group per workspace entity in
-  /// stable host order, members resolved from `sessionIds` in their
-  /// stored order; sessions outside every account trail in the
-  /// browser-local Ungrouped bucket by recency. Within a group the
-  /// active session rides first (same-group pinning — the row the user
-  /// is most likely to reach stays above the fold even past the
-  /// collapsed-session overflow limit).
-  List<_SessionGroupData> _deriveSessionGroupsOf(
-    List<SessionSummary> sessions,
-    List<WorkspaceSummary> workspaces,
-    String? selectedSessionId,
-    AppLocalizations l10n,
-  ) {
-    final sessionsById = <String, SessionSummary>{
-      for (final session in sessions) session.id: session,
-    };
-    final accounted = <String>{};
-    final groups = <_SessionGroupData>[];
-    for (final workspace in workspaces) {
-      final members = <SessionSummary>[];
-      for (final id in workspace.sessionIds) {
-        final summary = sessionsById[id];
-        // The account may lead the list pull; the row appears when the
-        // summary lands (web rule).
-        if (summary == null) continue;
-        accounted.add(id);
-        if (!_sessionVisibleOf(summary, selectedSessionId)) continue;
-        members.add(summary);
-      }
-      groups.add(
-        _SessionGroupData(
-          key: workspace.workspaceId,
-          label: workspace.title,
-          sessions: _withActiveSessionPinned(members, selectedSessionId),
-        ),
-      );
-    }
-    final ungrouped = _sortedByRecency(
-      sessions.where(
-        (session) =>
-            !accounted.contains(session.id) &&
-            _sessionVisibleOf(session, selectedSessionId),
-      ),
-    );
-    if (ungrouped.isNotEmpty) {
-      groups.add(
-        _SessionGroupData(
-          key: _ungroupedKey,
-          label: l10n.ungroupedLabel,
-          sessions: _withActiveSessionPinned(ungrouped, selectedSessionId),
-        ),
-      );
-    }
-    return groups;
-  }
-
-  /// Moves the active session (when present) to the head of [members],
-  /// preserving the rest of the order.
-  List<SessionSummary> _withActiveSessionPinned(
-    List<SessionSummary> members,
-    String? selectedSessionId,
-  ) {
-    if (selectedSessionId == null) return members;
-    final index = members.indexWhere(
-      (session) => session.id == selectedSessionId,
-    );
-    if (index <= 0) return members;
-    return <SessionSummary>[
-      members[index],
-      ...members.sublist(0, index),
-      ...members.sublist(index + 1),
-    ];
-  }
 
   /// The browsing-slice group key: the active backend keeps its raw
   /// workspace ids (persisted expansion overrides from the
@@ -393,9 +258,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// session, else the cwd basename (search-result context rows). The
   /// result list is active-backend scoped.
   String _workspaceLabel(SessionSummary session, AppLocalizations l10n) {
-    final workspace = _workspaceOf(session, widget.workspaces);
-    if (workspace != null) return workspace.title;
-    return _cwdBasename(session.cwd, l10n);
+    for (final workspace in widget.workspaces) {
+      if (workspace.sessionIds.contains(session.id)) return workspace.title;
+    }
+    return cwdBasename(session.cwd, l10n);
   }
 
   Future<void> _showNewSessionDialog() {
@@ -524,7 +390,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           padding: const EdgeInsets.only(top: 4, bottom: 16),
           children: [
             for (final session in widget.sessions.where(
-              (session) => _sessionVisibleOf(session, widget.selectedSessionId),
+              (session) => sessionVisible(session, widget.selectedSessionId),
             ))
               IconButton(
                 tooltip: session.displayTitle,
@@ -549,8 +415,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
 
   /// Wide/drawer form: the browsing region below the brand row — New
   /// session bar, section header, search capsule, then the tree or the
-  /// search-result list with the bottom continuation fade, and the
-  /// settings trigger pinned in the foot below it all.
+  /// search-result list with the bottom continuation fade.
   List<Widget> _buildWideChildren(BuildContext context, DeepSuiteColors ds) {
     final l10n = AppLocalizations.of(context)!;
     return [
@@ -575,7 +440,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               _buildSessionTree(
                 context,
                 ds,
-                _currentGroupKeyOf(
+                currentGroupKeyOf(
                   widget.sessions,
                   widget.workspaces,
                   widget.selectedSessionId,
@@ -608,58 +473,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           ],
         ),
       ),
-      _buildSettingsFooter(context, ds),
     ];
-  }
-
-  /// Web sidebar foot (`sidebar.settings` seat; ui-settings-general
-  /// chrome.tsx `TriggerContent` + SettingsRoot.module.css `.trigger`):
-  /// the bottom-pinned settings row — hairline divider, 44px touch
-  /// height, gear glyph, label, interactive-bg-hover fill. The web
-  /// drops the label in the collapsed rail column; both mobile forms
-  /// (wide pane and drawer) are wide enough for the one-word label,
-  /// so each shows icon + label. Tapping selects the Settings
-  /// destination through [appDestinationProvider].
-  Widget _buildSettingsFooter(BuildContext context, DeepSuiteColors ds) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Divider(height: 1, thickness: 1, color: ds.divider),
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            hoverColor: ds.interactiveBgHover,
-            highlightColor: ds.interactiveBgHover,
-            onTap: () => ref
-                .read(appDestinationProvider.notifier)
-                .select(AppDestination.settings),
-            child: SizedBox(
-              height: 44,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.settings_outlined,
-                      size: 18,
-                      color: ds.labelSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.destinationSettings,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   /// Web WorkspaceBrowser `SessionTree` (mobile form): the grouped
@@ -676,7 +490,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     if (slices != null && slices.length > 1) {
       return _buildBackendSections(context, ds);
     }
-    final groups = _deriveSessionGroupsOf(
+    final groups = deriveSessionGroups(
       widget.sessions,
       widget.workspaces,
       widget.selectedSessionId,
@@ -761,13 +575,13 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   ) {
     final l10n = AppLocalizations.of(context)!;
     final selectedSessionId = slice.active ? widget.selectedSessionId : null;
-    final groups = _deriveSessionGroupsOf(
+    final groups = deriveSessionGroups(
       slice.sessions,
       slice.workspaces,
       selectedSessionId,
       l10n,
     );
-    final currentGroupKey = _currentGroupKeyOf(
+    final currentGroupKey = currentGroupKeyOf(
       slice.sessions,
       slice.workspaces,
       selectedSessionId,
@@ -809,14 +623,14 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       for (final session in widget.sessions.where(
         (session) =>
             !session.blank &&
-            _sessionVisibleOf(session, widget.selectedSessionId),
+            sessionVisible(session, widget.selectedSessionId),
       ))
         session.id: session,
     };
     final rows = <Widget>[
       for (final result in widget.searchResults)
         if (sessionsById[result.sessionId] case final session?)
-          _SearchResultRow(
+          SessionSearchResultRow(
             session: session,
             snippet: result.snippet,
             workspaceLabel: _workspaceLabel(session, l10n),
@@ -868,33 +682,6 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   }
 }
 
-/// Web tree.ts `GroupNode` facts this sidebar renders: group key, display
-/// label, and the newest-first member rows.
-final class _SessionGroupData {
-  const _SessionGroupData({
-    required this.key,
-    required this.label,
-    required this.sessions,
-  });
-
-  /// Workspace id, or [_ungroupedKey] for the Ungrouped bucket.
-  final String key;
-  final String label;
-  final List<SessionSummary> sessions;
-}
-
-/// Web tree.ts `byRecency`: newest update first, session id as the
-/// deterministic tiebreak.
-List<SessionSummary> _sortedByRecency(Iterable<SessionSummary> sessions) {
-  final ordered = sessions.toList()
-    ..sort((a, b) {
-      final delta = b.updatedAtEpochMs - a.updatedAtEpochMs;
-      if (delta != 0) return delta;
-      return a.id.compareTo(b.id);
-    });
-  return ordered;
-}
-
 /// Decodes [_groupOverridesKey]: the store's JSON round-trip yields
 /// `Map<String, dynamic>`, so members are checked, not cast wholesale —
 /// a malformed entry drops out, never throws.
@@ -914,39 +701,6 @@ List<String> _decodeOverflowExpanded(Object? raw) {
     for (final item in raw)
       if (item is String) item,
   ];
-}
-
-/// Web tree.ts `workspaceLabel`: the cwd basename, or the Ungrouped label
-/// when there is no path to name.
-String _cwdBasename(String? cwd, AppLocalizations l10n) {
-  if (cwd == null || cwd.isEmpty) return l10n.ungroupedLabel;
-  final segments = cwd.split(RegExp(r'[/\\]+'));
-  for (final segment in segments.reversed) {
-    if (segment.isNotEmpty) return segment;
-  }
-  return cwd;
-}
-
-/// Web tree.ts `relativeTime` plus the en dictionary: the compact trailing
-/// label for session rows ("now"/"5min"/"3h"/"2d"/"4mo"/"1y").
-String _relativeTimeLabel(
-  int updatedAtEpochMs,
-  int nowEpochMs,
-  AppLocalizations l10n,
-) {
-  const minuteMs = 60 * 1000;
-  const hourMs = 60 * minuteMs;
-  const dayMs = 24 * hourMs;
-  final diff = nowEpochMs - updatedAtEpochMs;
-  final elapsed = diff < 0 ? 0 : diff;
-  return switch (elapsed) {
-    < minuteMs => l10n.relativeTimeNow,
-    < hourMs => l10n.relativeTimeMinutes(elapsed ~/ minuteMs),
-    < dayMs => l10n.relativeTimeHours(elapsed ~/ hourMs),
-    < 30 * dayMs => l10n.relativeTimeDays(elapsed ~/ dayMs),
-    < 365 * dayMs => l10n.relativeTimeMonths(elapsed ~/ (30 * dayMs)),
-    _ => l10n.relativeTimeYears(elapsed ~/ (365 * dayMs)),
-  };
 }
 
 /// Web WorkspaceBrowser `.sectionHeader` (Workspaces-tab idiom): the
@@ -1214,7 +968,7 @@ class _GroupSection extends StatelessWidget {
     required this.onSelectSession,
   });
 
-  final _SessionGroupData group;
+  final SessionGroupData group;
   final bool expanded;
   final bool overflowExpanded;
   final bool containsCurrent;
@@ -1228,9 +982,9 @@ class _GroupSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessions = group.sessions;
     final visibleCount =
-        overflowExpanded || sessions.length <= _collapsedSessionLimit
+        overflowExpanded || sessions.length <= kCollapsedSessionLimit
         ? sessions.length
-        : _collapsedSessionLimit;
+        : kCollapsedSessionLimit;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1245,7 +999,7 @@ class _GroupSection extends StatelessWidget {
           const SizedBox(height: 2),
           for (var i = 0; i < visibleCount; i++) ...[
             if (i > 0) const SizedBox(height: 2),
-            _SessionRow(
+            SessionTreeRow(
               session: sessions[i],
               selected: sessions[i].id == selectedSessionId,
               nowEpochMs: nowEpochMs,
@@ -1254,9 +1008,9 @@ class _GroupSection extends StatelessWidget {
                   : () => onSelectSession(sessions[i].id),
             ),
           ],
-          if (sessions.length > _collapsedSessionLimit) ...[
+          if (sessions.length > kCollapsedSessionLimit) ...[
             const SizedBox(height: 2),
-            _OverflowRow(
+            SessionOverflowRow(
               expanded: overflowExpanded,
               totalCount: sessions.length,
               onTap: onToggleOverflow,
@@ -1336,304 +1090,6 @@ class _GroupHeaderRow extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Web Rows.tsx `SessionNodeItem` (mobile form): a 44px touch row with
-/// the 16px status slot, the running state dot, the title, and the compact
-/// relative time; the selected row keeps the sidebar nav-item treatment
-/// (active fill + brand accent edge).
-class _SessionRow extends StatelessWidget {
-  const _SessionRow({
-    required this.session,
-    required this.selected,
-    required this.nowEpochMs,
-    required this.onSelect,
-  });
-
-  final SessionSummary session;
-  final bool selected;
-  final int nowEpochMs;
-  final VoidCallback? onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
-    final theme = Theme.of(context);
-    // Web `displayTitle`: blank rows show the New Session label.
-    final title = session.blank ? l10n.newSession : session.displayTitle;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? ds.sidebarNavItemActive : null,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.sidebarNavItemHover,
-        onTap: onSelect,
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              if (selected)
-                VerticalDivider(
-                  thickness: 3,
-                  width: 3,
-                  color: ds.sidebarNavItemActiveAccent,
-                ),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
-                      children: [
-                        // Web `.slot`: the fixed status seat keeps titles
-                        // aligned whether or not a dot shows.
-                        SizedBox(
-                          width: 16,
-                          child: session.running
-                              ? const _RunningDot(size: 8)
-                              : null,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                        // Web rule: a blank provisional row carries no
-                        // timestamp — nothing has happened in it yet.
-                        if (!session.blank) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            _relativeTimeLabel(
-                              session.updatedAtEpochMs,
-                              nowEpochMs,
-                              l10n,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: ds.labelTertiary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Web WorkspaceBrowser `.sessionOverflowButton`: the local overflow
-/// control under a group (28px on the web, a 44px touch row here),
-/// aligned under the session titles.
-class _OverflowRow extends StatelessWidget {
-  const _OverflowRow({
-    required this.expanded,
-    required this.totalCount,
-    required this.onTap,
-  });
-
-  final bool expanded;
-  final int totalCount;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: SizedBox(
-          height: 44,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 28),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                expanded ? l10n.showLess : l10n.showAll(totalCount),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 12, color: ds.labelTertiary),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Web Rows.tsx `SearchResultItem` (mobile form): a two-line result — the
-/// title with its status slot, then the workspace label and the content
-/// snippet at 12px; the selected row keeps the sidebar nav-item treatment.
-class _SearchResultRow extends StatelessWidget {
-  const _SearchResultRow({
-    required this.session,
-    required this.snippet,
-    required this.workspaceLabel,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final SessionSummary session;
-  final String snippet;
-  final String workspaceLabel;
-  final bool selected;
-  final VoidCallback onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
-    final theme = Theme.of(context);
-    final title = session.blank ? l10n.newSession : session.displayTitle;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? ds.sidebarNavItemActive : null,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.sidebarNavItemHover,
-        onTap: onSelect,
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              if (selected)
-                VerticalDivider(
-                  thickness: 3,
-                  width: 3,
-                  color: ds.sidebarNavItemActiveAccent,
-                ),
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              child: session.running
-                                  ? const _RunningDot(size: 8)
-                                  : null,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        // Web `.searchResultMeta`: workspace context then
-                        // the content excerpt, both single-line.
-                        Padding(
-                          padding: const EdgeInsets.only(left: 20),
-                          child: Row(
-                            children: [
-                              Flexible(
-                                flex: 2,
-                                child: Text(
-                                  workspaceLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color: ds.labelTertiary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  snippet,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color: ds.labelSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Web StateDot 'ongoing' (static form): deepseek-450 halo plus solid
-/// core, the blue running indicator on session rows.
-class _RunningDot extends StatelessWidget {
-  const _RunningDot({this.size = 10});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    const color = DeepSuiteStatic.deepseek450;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Center(
-            child: Container(
-              width: size * 0.6,
-              height: size * 0.6,
-              decoration: const BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

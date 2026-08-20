@@ -2,6 +2,7 @@
 library;
 
 import 'package:domain/model/directory.dart';
+import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,30 +42,57 @@ const _twoWorkspaces = [
   ),
 ];
 
+const _sessions = <SessionSummary>[
+  SessionSummary(
+    id: 's1',
+    title: 'alpha session',
+    blank: false,
+    updatedAtEpochMs: 2000,
+    cwd: '/tmp/one',
+  ),
+  SessionSummary(
+    id: 's2',
+    title: 'beta session',
+    blank: false,
+    updatedAtEpochMs: 1000,
+    cwd: '/tmp/one',
+  ),
+];
+
 Future<void> _pump(
   WidgetTester tester,
   WorkspaceUiState uiState,
-  List<WorkspaceAction> actions,
-) {
+  List<WorkspaceAction> actions, {
+  String? selectedSessionId,
+  List<String>? openedSessions,
+}) {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     l10nApp(
-      home: WorkspaceScreen(uiState: uiState, onAction: actions.add),
+      home: WorkspaceScreen(
+        uiState: uiState,
+        onAction: actions.add,
+        selectedSessionId: selectedSessionId,
+        onSelectSession: openedSessions?.add,
+      ),
     ),
   );
 }
 
 void main() {
-  testWidgets('rows expand to details; new-session + menu verbs dispatch', (
+  testWidgets('groups expand to session rows; verbs dispatch', (
     tester,
   ) async {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
-      const WorkspaceUiState(workspaces: _twoWorkspaces),
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+      ),
       actions,
     );
 
@@ -75,11 +103,11 @@ void main() {
     expect(find.text('one'), findsOneWidget);
     expect(find.text('two'), findsOneWidget);
 
-    // Expanding a row reveals the path and session count (web hover-card).
+    // Expanding a group reveals its session rows (web session tree).
     await tester.tap(find.text('one'));
     await tester.pump();
-    expect(find.text('/tmp/one'), findsOneWidget);
-    expect(find.text('2 sessions'), findsOneWidget);
+    expect(find.text('alpha session'), findsOneWidget);
+    expect(find.text('beta session'), findsOneWidget);
 
     // The row's + starts a session in that workspace (web rowActions).
     await tester.tap(find.byTooltip('New session in one'));
@@ -99,8 +127,19 @@ void main() {
     expect(actions, contains(const MoveWorkspaceDownAction('w1')));
   });
 
-  testWidgets('search capsule filters workspaces client-side', (tester) async {
-    await _pump(tester, const WorkspaceUiState(workspaces: _twoWorkspaces), []);
+  testWidgets('search dispatches the session query and renders results', (
+    tester,
+  ) async {
+    final actions = <WorkspaceAction>[];
+    await _pump(
+      tester,
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+        searchResults: [SessionSearchResult(sessionId: 's2', snippet: 'hit')],
+      ),
+      actions,
+    );
 
     await tester.tap(find.byTooltip('Search'));
     await tester.pump();
@@ -109,11 +148,21 @@ void main() {
           widget is TextField &&
           widget.decoration?.hintText == 'Search workspaces...',
     );
-    await tester.enterText(field, 'two');
+    await tester.enterText(field, 'beta');
     await tester.pump();
-    expect(find.text('one'), findsNothing);
-    // The surviving row (the query echo in the capsule matches too).
-    expect(find.text('two'), findsWidgets);
+    expect(actions, contains(const SearchSessionsAction('beta')));
+
+    // The flat result list replaces the tree: the matched session row
+    // carries its workspace context ('one') in the meta line, while the
+    // other group header and the unmatched session row are gone.
+    expect(find.text('beta session'), findsOneWidget);
+    expect(find.text('alpha session'), findsNothing);
+    expect(find.text('two'), findsNothing);
+    // Clearing the query clears the search and restores the tree.
+    await tester.enterText(field, '');
+    await tester.pump();
+    expect(actions, contains(const SearchSessionsAction('')));
+    expect(find.text('one'), findsOneWidget);
   });
 
   testWidgets('add-workspace opens the directory browser', (tester) async {
@@ -246,6 +295,94 @@ void main() {
     await tester.pump();
     expect(actions, contains(const CreateWorkspaceAction('/home/user')));
     expect(actions, contains(const CloseDirectoryBrowser()));
+  });
+
+  testWidgets('session rows select through and highlight', (tester) async {
+    final opened = <String>[];
+    await _pump(
+      tester,
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+      ),
+      [],
+      selectedSessionId: 's1',
+      openedSessions: opened,
+    );
+
+    // The current session's group is force-expanded (sidebar rule) and
+    // its row carries the selected treatment — a re-tap is a no-op.
+    expect(find.text('alpha session'), findsOneWidget);
+    await tester.tap(find.text('beta session'));
+    await tester.pump();
+    expect(opened, ['s2']);
+    // The selected row does not re-select.
+    await tester.tap(find.text('alpha session'));
+    await tester.pump();
+    expect(opened, ['s2']);
+  });
+
+  testWidgets('groups over the limit fold behind the overflow control', (
+    tester,
+  ) async {
+    final many = <SessionSummary>[
+      for (var i = 1; i <= 7; i++)
+        SessionSummary(
+          id: 's$i',
+          title: 'session $i',
+          blank: false,
+          updatedAtEpochMs: 1000 * i,
+          cwd: '/tmp/one',
+        ),
+    ];
+    final workspace = WorkspaceSummary(
+      workspaceId: 'w1',
+      path: '/tmp/one',
+      title: 'one',
+      sessionIds: [for (var i = 1; i <= 7; i++) 's$i'],
+    );
+    await _pump(
+      tester,
+      WorkspaceUiState(workspaces: [workspace], sessions: many),
+      [],
+      selectedSessionId: 's1',
+    );
+
+    // The collapsed limit leaves five rows plus the overflow control.
+    expect(find.text('session 7'), findsNothing);
+    expect(find.text('Show all 7'), findsOneWidget);
+    await tester.tap(find.text('Show all 7'));
+    await tester.pump();
+    expect(find.text('session 7'), findsOneWidget);
+    expect(find.text('Show less'), findsOneWidget);
+  });
+
+  testWidgets('sessions outside every workspace trail in Ungrouped', (
+    tester,
+  ) async {
+    final sessions = <SessionSummary>[
+      const SessionSummary(
+        id: 'loose',
+        title: 'loose session',
+        blank: false,
+        updatedAtEpochMs: 3000,
+        cwd: '/elsewhere',
+      ),
+      ..._sessions,
+    ];
+    await _pump(
+      tester,
+      WorkspaceUiState(workspaces: _twoWorkspaces, sessions: sessions),
+      [],
+      selectedSessionId: 's1',
+    );
+
+    expect(find.text('Ungrouped'), findsOneWidget);
+    // The ungrouped bucket folds by default; expanding reveals the row.
+    expect(find.text('loose session'), findsNothing);
+    await tester.tap(find.text('Ungrouped'));
+    await tester.pump();
+    expect(find.text('loose session'), findsOneWidget);
   });
 
   testWidgets('browser shows loading and failure placeholders', (tester) async {

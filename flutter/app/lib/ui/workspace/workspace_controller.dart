@@ -20,11 +20,13 @@ class WorkspaceController {
         _publish();
       }),
     );
-    // Session summaries never enter the UI state; they only feed the
-    // blank-session reuse rule behind StartSessionInWorkspace.
+    // Session summaries feed the blank-session reuse rule behind
+    // StartSessionInWorkspace and the browsing tree's session rows (web
+    // WorkspaceBrowser renders the session tree under each group).
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
+        _publish();
       }),
     );
   }
@@ -35,6 +37,8 @@ class WorkspaceController {
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
+  List<SessionSearchResult> _searchResults =
+      const <SessionSearchResult>[];
   List<SessionSummary> _sessions = const <SessionSummary>[];
   bool _isLoading = false;
   String? _errorMessage;
@@ -55,6 +59,8 @@ class WorkspaceController {
   void _publish() {
     _state.value = WorkspaceUiState(
       workspaces: _workspaces,
+      sessions: _sessions,
+      searchResults: _searchResults,
       isLoading: _isLoading,
       errorMessage: _errorMessage,
       directoryListing: _directoryListing,
@@ -80,7 +86,9 @@ class WorkspaceController {
       case MoveWorkspaceDownAction():
         _move(action.workspaceId, up: false);
       case StartSessionInWorkspace():
-        _startSessionInWorkspace(action.workspaceId);
+        unawaited(startSessionInWorkspace(action.workspaceId));
+      case SearchSessionsAction():
+        _searchSessions(action.query);
       case RefreshWorkspacesAction():
         _refresh();
       case DismissWorkspaceError():
@@ -95,6 +103,24 @@ class WorkspaceController {
       case CreateDirectoryAction():
         _createDirectory(action.parentPath, action.name);
     }
+  }
+
+  /// Web WorkspaceBrowser search: an empty query clears the results
+  /// (the tree returns); otherwise `session.search` answers the flat
+  /// result list.
+  void _searchSessions(String query) {
+    if (query.trim().isEmpty) {
+      _searchResults = const <SessionSearchResult>[];
+      _publish();
+      return;
+    }
+    unawaited(() async {
+      final results = await _runCatchingForUi(
+        () => _repository.searchSessions(query),
+      );
+      _searchResults = results ?? const <SessionSearchResult>[];
+      _publish();
+    }());
   }
 
   /// Reorder through `workspace.insertBefore`: moving up anchors on the
@@ -128,33 +154,35 @@ class WorkspaceController {
   /// Web WorkspaceBrowser `startSession(workspaceId)`: a workspace's blank
   /// session is its provisional New Session row, so reuse it before
   /// minting another; the resolved session is then opened (subscribed).
-  void _startSessionInWorkspace(String workspaceId) {
-    unawaited(() async {
-      final workspace = _workspaceById(workspaceId);
-      String? sessionId;
-      if (workspace != null) {
-        for (final session in _sessions) {
-          if (session.blank &&
-              session.cwd == workspace.path &&
-              workspace.sessionIds.contains(session.id)) {
-            sessionId = session.id;
-            break;
-          }
+  /// Returns the resolved session id (null on failure) so the
+  /// dispatching surface can navigate to the conversation — the web's
+  /// `startSession` ends in `sessions.open`.
+  Future<String?> startSessionInWorkspace(String workspaceId) async {
+    final workspace = _workspaceById(workspaceId);
+    String? sessionId;
+    if (workspace != null) {
+      for (final session in _sessions) {
+        if (session.blank &&
+            session.cwd == workspace.path &&
+            workspace.sessionIds.contains(session.id)) {
+          sessionId = session.id;
+          break;
         }
       }
-      if (sessionId == null) {
-        final created = await _runCatchingForUi(
-          () => _repository.createSession(
-            CreateSessionRequest(workspaceId: workspaceId),
-          ),
-        );
-        sessionId = created?.id;
-      }
-      final resolved = sessionId;
-      if (resolved != null) {
-        await _runCatchingForUi(() => _repository.openSession(resolved));
-      }
-    }());
+    }
+    if (sessionId == null) {
+      final created = await _runCatchingForUi(
+        () => _repository.createSession(
+          CreateSessionRequest(workspaceId: workspaceId),
+        ),
+      );
+      sessionId = created?.id;
+    }
+    final resolved = sessionId;
+    if (resolved != null) {
+      await _runCatchingForUi(() => _repository.openSession(resolved));
+    }
+    return resolved;
   }
 
   WorkspaceSummary? _workspaceById(String workspaceId) {
