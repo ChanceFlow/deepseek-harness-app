@@ -241,6 +241,58 @@ void main() {
     expect(actions, contains(const DeleteWorkspaceAction('w1')));
   });
 
+  testWidgets('archive workspace confirms then dispatches the batch', (
+    tester,
+  ) async {
+    final actions = <WorkspaceAction>[];
+    await _pump(
+      tester,
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+      ),
+      actions,
+    );
+
+    await tester.tap(find.byTooltip('Workspace actions for one'));
+    await tester.pumpAndSettle();
+    expect(find.text('Archive workspace'), findsOneWidget);
+    await tester.tap(find.text('Archive workspace'));
+    await tester.pumpAndSettle();
+    // The confirm names the workspace and the destructive-free copy.
+    expect(find.textContaining('one'), findsWidgets);
+    expect(
+      find.textContaining('sessions disappear from all grouping surfaces'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    await tester.pumpAndSettle();
+    expect(actions, contains(const ArchiveWorkspaceAction('w1')));
+  });
+
+  testWidgets('session rows archive through the per-row verb', (tester) async {
+    final actions = <WorkspaceAction>[];
+    await _pump(
+      tester,
+      const WorkspaceUiState(
+        workspaces: _twoWorkspaces,
+        sessions: _sessions,
+      ),
+      actions,
+    );
+
+    // Expand the group to reveal the session rows and their archive seat.
+    await tester.tap(find.text('one'));
+    await tester.pump();
+    expect(find.byTooltip('Archive session'), findsNWidgets(2));
+
+    // The per-row verb commits without a dialog (web archive semantics).
+    await tester.tap(find.byTooltip('Archive session').first);
+    await tester.pump();
+    expect(actions, contains(const ArchiveSessionAction('s1')));
+  });
+
   testWidgets('directory browser navigates, filters hidden, creates folders', (
     tester,
   ) async {

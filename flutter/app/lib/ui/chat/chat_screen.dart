@@ -13,7 +13,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
@@ -242,17 +241,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// The active backend's label for the app-bar subtitle; null while
-  /// only one backend is configured (nothing to disambiguate).
-  String? _activeBackendLabel() {
-    final slices = widget.backendSlices;
-    if (slices == null || slices.length <= 1) return null;
-    for (final slice in slices) {
-      if (slice.active) return slice.backend.label;
-    }
-    return null;
-  }
-
   /// Session-scoped tool pages (web embeds them into conversation context;
   /// mobile pushes them as full routes with the current session preloaded).
   void _openSessionTool(Widget Function(String? sessionId) page) {
@@ -304,24 +292,6 @@ class _ChatScreenState extends State<ChatScreen> {
         .where((item) => item.id == sessionId)
         .firstOrNull;
     final title = session?.displayTitle ?? l10n.appTitle;
-    final connection = uiState.connection;
-    final hostVersion = connection.hostDescription?.version ?? '';
-    // Multi-backend form: the subtitle names WHICH host this surface
-    // presents before its connection line (single-backend builds keep
-    // the bare connection line — the host is unambiguous there).
-    final activeBackendLabel = _activeBackendLabel();
-    final connectionLine = switch (connection.phase) {
-      ConnectionPhase.connected =>
-        hostVersion.isEmpty
-            ? l10n.appBarConnected
-            : l10n.appBarConnectedWithVersion(hostVersion),
-      ConnectionPhase.connecting => l10n.appBarConnecting,
-      ConnectionPhase.reconnecting => l10n.appBarReconnecting,
-      ConnectionPhase.disconnected => l10n.appBarDisconnected,
-    };
-    final subtitle = activeBackendLabel == null
-        ? connectionLine
-        : '$activeBackendLabel · $connectionLine';
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
@@ -347,21 +317,6 @@ class _ChatScreenState extends State<ChatScreen> {
           onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
         ),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(16),
-        child: SizedBox(
-          width: double.infinity,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              subtitle,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -477,7 +432,6 @@ class _ChatScreenState extends State<ChatScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                ConnectionBanner(uiState: uiState),
                 Expanded(
                   child: ChatPanel(
                     uiState: uiState,
@@ -498,36 +452,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class ConnectionBanner extends StatelessWidget {
-  const ConnectionBanner({super.key, required this.uiState});
-
-  final ChatUiState uiState;
-
-  @override
-  Widget build(BuildContext context) {
-    final connection = uiState.connection;
-    final hostVersion = connection.hostDescription?.version ?? '';
-    final l10n = AppLocalizations.of(context)!;
-    final text = switch (connection.phase) {
-      ConnectionPhase.connected => l10n.connectionBannerConnected(hostVersion),
-      ConnectionPhase.connecting => l10n.connectionBannerConnecting,
-      ConnectionPhase.reconnecting => l10n.connectionBannerReconnecting,
-      ConnectionPhase.disconnected => l10n.connectionBannerDisconnected,
-    };
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Text(
-          text,
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-      ),
     );
   }
 }
@@ -997,31 +921,37 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
-    return uiState.timeline.isEmpty
-        ? EmptyHero(
-            workspaces: uiState.workspaces,
-            currentWorkspaceLabel: _workspaceLabel(session?.cwd),
-            onPickWorkspace: (workspaceId) {
-              // The staged preset rides the creation; the stage is spent
-              // on first use (web seat semantics), so the next new
-              // session opens on the default again.
-              final preset = _stagedPreset;
-              widget.onAction(
-                CreateSessionInWorkspace(workspaceId, agentPreset: preset),
-              );
-              if (preset != null) {
-                setState(() => _stagedPreset = null);
-              }
-            },
-            presetRoster: uiState.agentPresets,
-            currentPresetId: stagedPresetId(
-              roster: uiState.agentPresets,
-              staged: _stagedPreset,
-              selectedSession: session,
-            ),
-            onPickPreset: (presetId) => _pickPreset(session, presetId),
-          )
-        : widget.outline
+    if (uiState.timeline.isEmpty) {
+      if (uiState.isTimelineLoading) {
+        // First load of the selected conversation: never read the wait as
+        // an empty session. A centered loader mirrors the subagent pane.
+        return const Center(child: CircularProgressIndicator());
+      }
+      return EmptyHero(
+        workspaces: uiState.workspaces,
+        currentWorkspaceLabel: _workspaceLabel(session?.cwd),
+        onPickWorkspace: (workspaceId) {
+          // The staged preset rides the creation; the stage is spent
+          // on first use (web seat semantics), so the next new
+          // session opens on the default again.
+          final preset = _stagedPreset;
+          widget.onAction(
+            CreateSessionInWorkspace(workspaceId, agentPreset: preset),
+          );
+          if (preset != null) {
+            setState(() => _stagedPreset = null);
+          }
+        },
+        presetRoster: uiState.agentPresets,
+        currentPresetId: stagedPresetId(
+          roster: uiState.agentPresets,
+          staged: _stagedPreset,
+          selectedSession: session,
+        ),
+        onPickPreset: (presetId) => _pickPreset(session, presetId),
+      );
+    }
+    return widget.outline
         ? OutlineTimeline(
             timeline: uiState.timeline,
             collapsedTurns: _collapsedTurns,
@@ -3455,24 +3385,6 @@ class _ComposerBarState extends State<ComposerBar> {
     widget.sessionState?.writeDraft(_draftController.text);
   }
 
-  /// Insert one newline at the caret (a selection range is replaced),
-  /// leaving the caret after it — the explicit soft-keyboard form of the
-  /// web Shift+Enter gesture.
-  void _insertNewline() {
-    final value = _draftController.value;
-    final selection = value.selection;
-    final text = value.text;
-    final start = selection.isValid ? selection.start : text.length;
-    final end = selection.isValid ? selection.end : text.length;
-    _draftController.value = value.copyWith(
-      text: text.replaceRange(start, end, '\n'),
-      selection: TextSelection.collapsed(offset: start + 1),
-      composing: TextRange.empty,
-    );
-    _persistDraft();
-    setState(() {});
-  }
-
   Future<void> _pickImages() async {
     final l10n = AppLocalizations.of(context)!;
     final picked = await ImagePicker().pickMultiImage();
@@ -3531,9 +3443,8 @@ class _ComposerBarState extends State<ComposerBar> {
             maxLines: 8,
             // Web sends on Enter and newlines on Shift+Enter; soft
             // keyboards have no reliable Shift+Enter, so the keyboard
-            // action key inserts the newline and the dedicated button
-            // makes the gesture discoverable. Sending rides the send
-            // button only.
+            // action key inserts the newline and the send button is the
+            // only submit gesture.
             textInputAction: TextInputAction.newline,
             onChanged: (_) {
               _persistDraft();
@@ -3593,85 +3504,103 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
-          Row(
+          // Mobile composer: a hairline rule separates the draft surface
+          // from the control row so the two affordance levels read
+          // distinctly on narrow phones.
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 2),
+            child: Divider(height: 1, thickness: 1, color: ds.divider),
+          ),
+          // Web InputBar controls regrouped for touch: input tools and
+          // contextual seats form the left cluster, the occupancy ring
+          // and primary control the right. Wrap drops the primary
+          // cluster to its own right-aligned run when a narrow phone
+          // cannot fit both on one line.
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            runAlignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _PlusButton(
-                enabled: widget.enabled,
-                onPickImages: attachAllowed ? _pickImages : null,
-                skills: widget.skills,
-                onInsertCommand: (name) {
-                  _draftController.text = '/$name ';
-                  setState(() {});
-                },
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PlusButton(
+                    enabled: widget.enabled,
+                    onPickImages: attachAllowed ? _pickImages : null,
+                    skills: widget.skills,
+                    onInsertCommand: (name) {
+                      _draftController.text = '/$name ';
+                      setState(() {});
+                    },
+                  ),
+                  // Web trailing group: the model seat precedes the
+                  // access seat in the tools cluster.
+                  if (widget.onSelectModel != null) ...[
+                    const SizedBox(width: 12),
+                    ModelSelect(
+                      models: widget.models,
+                      locked: !widget.enabled,
+                      onSelect: widget.onSelectModel!,
+                      onRefresh: widget.onRefreshModels ?? () {},
+                    ),
+                  ],
+                  // Web .modes order: the access seat precedes the plan
+                  // pill.
+                  if (widget.permissions case final permissions?) ...[
+                    const SizedBox(width: 12),
+                    PermissionSelectChip(
+                      value: permissions,
+                      locked: !widget.enabled,
+                      onAction: widget.onAction,
+                    ),
+                  ],
+                  // Web conversation.input.plan seat: the warn pill
+                  // renders only while the plan target is active and
+                  // exits via `/plan off`.
+                  PlanChip(
+                    plan: widget.plan,
+                    locked: !widget.enabled,
+                    onExit: () =>
+                        widget.onAction(const SendPrompt('/plan off')),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              DsCircleButton(
-                tooltip: l10n.newLine,
-                enabled: widget.enabled,
-                onTap: _insertNewline,
-                // Web .add family: the glyph rides label-primary.
-                child: Icon(
-                  Icons.subdirectory_arrow_left,
-                  size: 14,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Web .modes order: the access seat precedes the plan pill.
-              if (widget.permissions case final permissions?)
-                PermissionSelectChip(
-                  value: permissions,
-                  locked: !widget.enabled,
-                  onAction: widget.onAction,
-                ),
-              // Web conversation.input.plan seat: the warn pill renders only
-              // while the plan target is active and exits via `/plan off`.
-              PlanChip(
-                plan: widget.plan,
-                locked: !widget.enabled,
-                onExit: () => widget.onAction(const SendPrompt('/plan off')),
-              ),
-              const Spacer(),
-              // Web trailing group (gap 12): model seat, context ring,
-              // primary control.
-              if (widget.onSelectModel != null) ...[
-                ModelSelect(
-                  models: widget.models,
-                  locked: !widget.enabled,
-                  onSelect: widget.onSelectModel!,
-                  onRefresh: widget.onRefreshModels ?? () {},
-                ),
-                const SizedBox(width: 12),
-              ],
-              ContextRing(
-                pressure: widget.contextPressure,
-                breakdown: widget.contextBreakdown,
-              ),
-              // Web keeps Stop primary while a turn runs and lets
-              // keyboard Enter queue/steer; soft keyboards have no
-              // reliable Enter-as-send, so an explicit send control
-              // appears beside Stop whenever a draft is ready. Its
-              // delivery mode follows the busy-Enter preference.
-              if (widget.running &&
-                  widget.enabled &&
-                  !widget.isSending &&
-                  _canSend()) ...[
-                const SizedBox(width: 12),
-                _PrimarySendButton(
-                  running: false,
-                  sending: false,
-                  enabled: true,
-                  onSend: _send,
-                ),
-              ],
-              const SizedBox(width: 12),
-              _PrimarySendButton(
-                // Web primary: Send, or Stop while the turn runs.
-                running: widget.running,
-                sending: widget.isSending,
-                enabled: widget.enabled && _canSend(),
-                onStop: widget.onStop,
-                onSend: _send,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ContextRing(
+                    pressure: widget.contextPressure,
+                    breakdown: widget.contextBreakdown,
+                  ),
+                  const SizedBox(width: 12),
+                  // Web keeps Stop primary while a turn runs and lets
+                  // keyboard Enter queue/steer; soft keyboards have no
+                  // reliable Enter-as-send, so an explicit send control
+                  // appears beside Stop whenever a draft is ready. Its
+                  // delivery mode follows the busy-Enter preference.
+                  if (widget.running &&
+                      widget.enabled &&
+                      !widget.isSending &&
+                      _canSend()) ...[
+                    _PrimarySendButton(
+                      running: false,
+                      sending: false,
+                      enabled: true,
+                      onSend: _send,
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  _PrimarySendButton(
+                    // Web primary: Send, or Stop while the turn runs.
+                    running: widget.running,
+                    sending: widget.isSending,
+                    enabled: widget.enabled && _canSend(),
+                    onStop: widget.onStop,
+                    onSend: _send,
+                  ),
+                ],
               ),
             ],
           ),
@@ -4117,7 +4046,8 @@ class _CommandRow extends StatelessWidget {
 /// (selector fill, tertiary glyph) while the draft is empty — no idle
 /// blue — and takes the info fill with a static-white glyph only when
 /// actionable: the up arrow while sendable, the stop square while the
-/// turn runs.
+/// turn runs. The 40px tap target around the 34px visual keeps the
+/// primary gesture thumb-sized on touch screens.
 class _PrimarySendButton extends StatelessWidget {
   const _PrimarySendButton({
     required this.running,
@@ -4154,23 +4084,29 @@ class _PrimarySendButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: active ? (running ? onStop : onSend) : null,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: running
-                // Stop glyph: 10x10 rounded-3 square.
-                ? Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: glyph,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  )
-                // Send glyph: the 16px up arrow.
-                : Icon(Icons.arrow_upward, size: 16, color: glyph),
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Center(
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: running
+                    // Stop glyph: 10x10 rounded-3 square.
+                    ? Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: glyph,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      )
+                    // Send glyph: the 16px up arrow.
+                    : Icon(Icons.arrow_upward, size: 16, color: glyph),
+              ),
+            ),
           ),
         ),
       ),

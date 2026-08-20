@@ -1,6 +1,8 @@
 /// Composer circle trigger — the web InputBar control family (`.add`):
 /// a 28px circle on the selector fill whose hover swaps to the solid
-/// interactive fill.
+/// interactive fill. The 40px tap target around the 28px visual keeps
+/// the control thumb-sized on touch screens (the web's 28px target is
+/// mouse-oriented).
 library;
 
 import 'package:flutter/material.dart';
@@ -42,15 +44,27 @@ class _DsCircleButtonState extends State<DsCircleButton> {
         child: Opacity(
           opacity: widget.enabled ? 1 : 0.5,
           child: Material(
-            color: _hovering ? ds.interactiveBgHoverSolid : ds.specificSelector,
+            color: Colors.transparent,
             shape: const CircleBorder(),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: widget.enabled ? widget.onTap : null,
               child: SizedBox(
-                width: 28,
-                height: 28,
-                child: Center(child: widget.child),
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: _hovering
+                          ? ds.interactiveBgHoverSolid
+                          : ds.specificSelector,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(child: widget.child),
+                  ),
+                ),
               ),
             ),
           ),

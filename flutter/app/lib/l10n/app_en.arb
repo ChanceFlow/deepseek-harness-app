@@ -499,15 +499,7 @@
   "parentUnavailableTitle": "This subagent is read-only for now",
   "oneShotRecordBody": "One-shot tasks do not accept follow-ups; review the full execution record here.",
   "parentUnavailableBody": "The parent session is offline; reopen it to continue sending messages.",
-  "appBarConnected": "connected",
-  "appBarConnectedWithVersion": "connected {version}",
-  "appBarConnecting": "connecting",
-  "appBarReconnecting": "reconnecting",
-  "appBarDisconnected": "disconnected",
-  "connectionBannerConnected": "connected {version}",
-  "connectionBannerConnecting": "connecting",
-  "connectionBannerReconnecting": "reconnecting",
-  "connectionBannerDisconnected": "disconnected",
+  "backendVersion": "v{version}",
   "outlineTooltip": "Outline",
   "subagentsTooltip": "Subagents",
   "renameSession": "Rename session",
@@ -515,6 +507,8 @@
   "archiveSession": "Archive session",
   "archiveSessionBody": "The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.",
   "archive": "Archive",
+  "archiveWorkspace": "Archive workspace",
+  "archiveWorkspaceConfirm": "Archive every session in “{name}”? The workspace and its session logs are kept; the sessions disappear from all grouping surfaces.",
   "expandAll": "Expand all",
   "planBadge": "Plan",
   "imagePlaceholderSuffix": " · {name}",
@@ -558,7 +552,6 @@
   "planPlaceholder": "describe your task to generate plan",
   "messagePlaceholder": "Message the agent",
   "removeImage": "Remove {name}",
-  "newLine": "New line",
   "delivery": "Delivery",
   "commandsTooltip": "Commands",
   "searchCommandsHint": "Search commands",
@@ -971,15 +964,7 @@
       }
     }
   },
-  "@appBarConnectedWithVersion": {
-    "description": "Localized screen copy.",
-    "placeholders": {
-      "version": {
-        "type": "String"
-      }
-    }
-  },
-  "@connectionBannerConnected": {
+  "@backendVersion": {
     "description": "Localized screen copy.",
     "placeholders": {
       "version": {

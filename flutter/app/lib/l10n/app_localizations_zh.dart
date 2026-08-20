@@ -897,35 +897,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get parentUnavailableBody => '父会话当前不在线，重新打开父会话后即可继续发送消息。';
 
   @override
-  String get appBarConnected => '已连接';
-
-  @override
-  String appBarConnectedWithVersion(String version) {
-    return '已连接 $version';
+  String backendVersion(String version) {
+    return 'v$version';
   }
-
-  @override
-  String get appBarConnecting => '连接中';
-
-  @override
-  String get appBarReconnecting => '重连中';
-
-  @override
-  String get appBarDisconnected => '已断开';
-
-  @override
-  String connectionBannerConnected(String version) {
-    return '已连接 $version';
-  }
-
-  @override
-  String get connectionBannerConnecting => '连接中';
-
-  @override
-  String get connectionBannerReconnecting => '重连中';
-
-  @override
-  String get connectionBannerDisconnected => '已断开';
 
   @override
   String get outlineTooltip => '大纲';
@@ -947,6 +921,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get archive => '归档';
+
+  @override
+  String get archiveWorkspace => '归档工作区';
+
+  @override
+  String archiveWorkspaceConfirm(Object name) {
+    return '归档“$name”下的所有会话？工作区与其会话日志保留；会话将从所有分组界面消失。';
+  }
 
   @override
   String get expandAll => '全部展开';
@@ -1097,9 +1079,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String removeImage(String name) {
     return '移除 $name';
   }
-
-  @override
-  String get newLine => '换行';
 
   @override
   String get delivery => '投递';

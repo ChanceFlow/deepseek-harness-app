@@ -11,9 +11,15 @@ final class TimelineWindow {
     this.items = const <TimelineItem>[],
     this.hasMoreOlder = false,
     this.isLoadingOlder = false,
+    this.isLoading = false,
   });
 
   final List<TimelineItem> items;
   final bool hasMoreOlder;
   final bool isLoadingOlder;
+
+  /// The session's first full load (or a reconnect resync) is in flight.
+  /// Distinguishes "nothing loaded yet" from "nothing to show": the UI
+  /// renders a loading indicator instead of an empty hero while true.
+  final bool isLoading;
 }

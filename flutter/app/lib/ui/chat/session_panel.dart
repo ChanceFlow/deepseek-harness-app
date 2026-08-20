@@ -490,11 +490,20 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     if (slices != null && slices.length > 1) {
       return _buildBackendSections(context, ds);
     }
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     final groups = deriveSessionGroups(
       widget.sessions,
       widget.workspaces,
       widget.selectedSessionId,
       l10n,
+      nowEpochMs: nowEpochMs,
+      // The sidebar is a switching surface: a workspace group with no
+      // visible sessions (all archived away, or never populated) is
+      // noise — it stays manageable in the Workspaces tab. Members ride
+      // the activity priority (selected, running, pending interaction,
+      // recent-24h, recency).
+      includeEmptyGroups: false,
+      priorityOrder: true,
     );
     if (groups.isEmpty) {
       // Web `.empty` (aligned with the row grid).
@@ -507,7 +516,6 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         ),
       );
     }
-    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     return ListView(
       padding: const EdgeInsets.only(bottom: 16),
       children: [
@@ -580,6 +588,9 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       slice.workspaces,
       selectedSessionId,
       l10n,
+      nowEpochMs: nowEpochMs,
+      includeEmptyGroups: false,
+      priorityOrder: true,
     );
     final currentGroupKey = currentGroupKeyOf(
       slice.sessions,

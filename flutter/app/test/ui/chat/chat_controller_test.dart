@@ -425,9 +425,16 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Stream<TimelineWindow> observeTimelineWindow(String sessionId) {
+    final source = windowSource?.call(sessionId);
+    if (source != null) return source;
     return observeTimeline(sessionId)
         .map((items) => TimelineWindow(items: List.unmodifiable(items)));
   }
+
+  /// Optional scripted timeline-window source; when set it replaces the
+  /// items-mapped window so tests can drive `isLoading`/`hasMoreOlder`
+  /// through the controller.
+  Stream<TimelineWindow>? Function(String sessionId)? windowSource;
 }
 
 void main() {
@@ -457,6 +464,32 @@ void main() {
       FakeChatRepository.initialSession.id,
     ]);
     expect(controller.state.timeline, hasLength(1));
+  });
+
+  test('timeline window loading flag threads into the UI state', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
+    repository.windowSource = (_) => windows.stream;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+    // Idle window: the chat body would render the empty hero.
+    expect(controller.state.isTimelineLoading, isFalse);
+
+    // In-flight first load: the chat body must render a loader, never the
+    // empty hero.
+    windows.value = const TimelineWindow(isLoading: true);
+    await pumpEventQueue();
+    expect(controller.state.isTimelineLoading, isTrue);
+
+    // Settled: back to idle.
+    windows.value = const TimelineWindow();
+    await pumpEventQueue();
+    expect(controller.state.isTimelineLoading, isFalse);
   });
 
   test('select session loads skill catalog once per session', () async {

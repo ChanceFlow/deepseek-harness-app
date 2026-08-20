@@ -114,8 +114,9 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// Registry-global pending-interaction mirror: session id -> the
   /// outstanding user-wait status (approval / plan-review / question).
   /// Fed from the raw approval/question frame stream BEFORE the per-session
-  /// fan-out, so sessions never instantiated in the app still light
-  /// notification detection (web SessionManager parity). Cleared per
+  /// fan-out, so sessions never instantiated in the app still light the
+  /// sidebar's amber dot and notification detection (web SessionManager
+  /// parity). Cleared per
   /// connection generation — the reopen replay re-adds still-pending
   /// requests.
   final StateStream<Map<String, SessionPendingInteraction>>
@@ -954,8 +955,9 @@ class HarnessRepositoryImpl implements ChatRepository {
         }
         // Registry-global pending-interaction fold: tracked for every
         // session, instantiated or not, before the per-session fan-out
-        // (web SessionManager parity — approval/plan-review alerts must
-        // fire for sessions never opened here). Stable keys make replays
+        // (web SessionManager parity — the sidebar's amber dot and
+        // approval/plan-review alerts must fire for sessions never opened
+        // here). Stable keys make replays
         // idempotent.
         _foldPendingFrame(frame);
         final sessionId = _frameSessionId(frame);
@@ -1332,6 +1334,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final state in _sessionStates.values) {
         state.prepareResync();
       }
+      // New connection generation: the reopen replay re-adds still-pending
+      // approval/question frames, so the old mirror is dropped first (web
+      // SessionManager parity).
+      _pendingBySession.clear();
+      _pendingInteractions.value = const <String, SessionPendingInteraction>{};
       try {
         await refreshSessions();
         await refreshWorkspaces();
@@ -1372,7 +1379,8 @@ class HarnessRepositoryImpl implements ChatRepository {
         break;
       }
     }
-    // Pending interactions for sessions that no longer exist are pruned
+    // A session dropped from the list cannot wait on the user anymore
+    // (pending interactions for absent sessions are pruned)
     // (web manager removes pending on session-removed).
     final liveIds = <String>{for (final session in listing) session.sessionId};
     var pendingChanged = false;
@@ -1721,6 +1729,7 @@ final class _SessionState {
   final Mutex _mutex = Mutex();
   TimelineReducer _reducer = TimelineReducer('');
   bool _ready = false;
+  bool _loading = false;
   bool _hasMoreOlder = false;
   bool _loadingOlder = false;
   List<JsonMap> _history = <JsonMap>[];
@@ -1732,32 +1741,41 @@ final class _SessionState {
   ) {
     return _mutex.synchronized(() async {
       if (_ready) return;
-      final page = await loader(null);
-      _history = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
-      _hasMoreOlder = page.hasMore;
-      _reducer = TimelineReducer(sessionId);
-      _reducer.reset(_history);
-      _contextFold.reset(_history);
-      _statsFold.reset(_history);
-      _framesAfterOpen = List.of(_pending);
-      for (final frame in _pending) {
-        _reducer.ingestFrame(frame);
-        if (wireType(frame.payload) == 'session/event') {
-          _contextFold.ingestEvent(frame.payload['event']);
-          _statsFold.ingestEvent(frame.payload['event']);
-        }
-      }
-      contextPressure.value = _contextFold.value;
-      contextBreakdown.value = _contextFold.breakdown;
-      sessionStats.value = _statsFold.value;
-      _pending = <ServerRequest>[];
-      _ready = true;
+      // Surface the first-load (or resync) wait to observers: an empty
+      // timeline that is still loading must not read as an empty session.
+      _loading = true;
       _publish();
+      try {
+        final page = await loader(null);
+        _history = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
+        _hasMoreOlder = page.hasMore;
+        _reducer = TimelineReducer(sessionId);
+        _reducer.reset(_history);
+        _contextFold.reset(_history);
+        _statsFold.reset(_history);
+        _framesAfterOpen = List.of(_pending);
+        for (final frame in _pending) {
+          _reducer.ingestFrame(frame);
+          if (wireType(frame.payload) == 'session/event') {
+            _contextFold.ingestEvent(frame.payload['event']);
+            _statsFold.ingestEvent(frame.payload['event']);
+          }
+        }
+        contextPressure.value = _contextFold.value;
+        contextBreakdown.value = _contextFold.breakdown;
+        sessionStats.value = _statsFold.value;
+        _pending = <ServerRequest>[];
+        _ready = true;
+      } finally {
+        _loading = false;
+        _publish();
+      }
     });
   }
 
   void prepareResync() {
     _ready = false;
+    _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
     _framesAfterOpen = <ServerRequest>[];
@@ -1839,6 +1857,7 @@ final class _SessionState {
       items: items,
       hasMoreOlder: _hasMoreOlder,
       isLoadingOlder: _loadingOlder,
+      isLoading: _loading,
     );
   }
 }

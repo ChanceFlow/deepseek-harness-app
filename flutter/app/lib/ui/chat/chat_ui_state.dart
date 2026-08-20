@@ -1,7 +1,6 @@
 /// Chat screen UI state and user intents (UDF).
 library;
 
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -21,13 +20,13 @@ import 'package:flutter/foundation.dart' show listEquals;
 
 final class ChatUiState {
   const ChatUiState({
-    this.connection = const ConnectionState(),
     this.sessions = const <SessionSummary>[],
     this.workspaces = const <WorkspaceSummary>[],
     this.selectedSessionId,
     this.timeline = const <TimelineItem>[],
     this.hasMoreOlder = false,
     this.isLoadingOlder = false,
+    this.isTimelineLoading = false,
     this.searchResults = const <SessionSearchResult>[],
     this.isSending = false,
     this.errorMessage,
@@ -48,13 +47,17 @@ final class ChatUiState {
     this.agentPresets,
   });
 
-  final ConnectionState connection;
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
   final String? selectedSessionId;
   final List<TimelineItem> timeline;
   final bool hasMoreOlder;
   final bool isLoadingOlder;
+
+  /// The selected session's first full timeline load (or a reconnect
+  /// resync) is in flight. While true with an empty [timeline], the chat
+  /// body renders a loading indicator instead of the empty hero.
+  final bool isTimelineLoading;
   final List<SessionSearchResult> searchResults;
   final bool isSending;
   final String? errorMessage;

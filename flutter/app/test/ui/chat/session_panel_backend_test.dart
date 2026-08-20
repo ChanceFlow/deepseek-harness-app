@@ -1,7 +1,7 @@
 /// Multi-backend sidebar tests: the ChatScreen sidebar groups sessions
 /// under per-backend headers, taps on another backend's rows route
-/// through the backend-aware callbacks, and the app-bar subtitle names
-/// the active backend. The registry-level switch rides ChatRoute with
+/// through the backend-aware callbacks, and the active marker follows
+/// the registry switch. The registry-level switch rides ChatRoute with
 /// the real providers (store, registry, per-backend controllers).
 library;
 
@@ -9,9 +9,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:domain/model/backend.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart';
-import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -93,10 +92,6 @@ ChatUiState _state({
   String? selectedSessionId,
 }) {
   return ChatUiState(
-    connection: const ConnectionState(
-      phase: ConnectionPhase.connected,
-      hostDescription: HostDescription(version: '1.2.3', cwd: '/tmp'),
-    ),
     sessions: sessions,
     selectedSessionId: selectedSessionId,
   );
@@ -318,22 +313,7 @@ void main() {
     expect(backendSessions, isEmpty);
   });
 
-  testWidgets('the app-bar subtitle names the active backend', (tester) async {
-    await _pumpSlices(
-      tester,
-      uiState: _state(
-        sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
-        ],
-      ),
-      actions: [],
-      backendSelections: [],
-      backendSessionSelections: [],
-    );
-    expect(find.text('Laptop · connected 1.2.3'), findsOneWidget);
-  });
-
-  testWidgets('a single backend keeps the bare connection subtitle', (
+  testWidgets('a single backend shows no app-bar strip or headers', (
     tester,
   ) async {
     await _pumpSlices(
@@ -357,8 +337,10 @@ void main() {
         ),
       ],
     );
-    expect(find.text('connected 1.2.3'), findsOneWidget);
-    // No backend headers in single-backend form.
+    // Connection status never rides the main surface (Settings shows
+    // it); a single backend is unambiguous, so no strip or headers.
+    expect(find.text('Laptop'), findsNothing);
+    expect(find.textContaining('connected'), findsNothing);
     expect(find.text('Active'), findsNothing);
     expect(find.text('Standby'), findsNothing);
   });
@@ -439,7 +421,6 @@ void main() {
     // Both backends' slices render with their live rosters.
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Build box'), findsOneWidget);
-    expect(find.text('Laptop · connected test'), findsOneWidget);
 
     // Expand the standby backend's Ungrouped group and tap its session.
     await tester.tap(find.text('Ungrouped').at(1));
@@ -447,9 +428,24 @@ void main() {
     await tester.tap(find.text('Beta on buildbox'));
     await tester.pumpAndSettle();
 
-    // The chat surface followed the registry switch: the app-bar names
-    // the now-active backend, and its session is the selected one.
-    expect(find.text('Build box · connected test'), findsOneWidget);
-    expect(find.text('Laptop · connected test'), findsNothing);
+    // The chat surface followed the registry switch: the Active marker
+    // moved to the now-active backend's header, and its session is the
+    // selected one.
+    final buildBoxRow = find.ancestor(
+      of: find.text('Build box'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    final laptopRow = find.ancestor(
+      of: find.text('Laptop'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Standby')),
+      findsOneWidget,
+    );
   });
 }

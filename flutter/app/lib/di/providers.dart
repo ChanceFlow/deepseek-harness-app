@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:domain/model/backend.dart';
+import 'package:domain/model/connection_state.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:harness_adapter/harness_adapter.dart';
 import 'package:network/dsh_event_socket.dart' show DshEventSocket;
@@ -152,6 +153,19 @@ final allBackendConnectionsProvider =
           ),
       };
     });
+
+/// One backend's live connection state — the manager's phase and host
+/// description (version, cwd) as a watchable stream. The Settings
+/// Backends rows read it to show the connected host's version; the
+/// keep-alive map above guarantees the member exists for every
+/// configured backend.
+final backendConnectionStateProvider =
+    StreamProvider.family.autoDispose<ConnectionState, String>((ref,
+        backendId) async* {
+  final manager = ref.watch(allBackendConnectionsProvider)[backendId];
+  if (manager == null) return;
+  yield* manager.state.stream;
+});
 
 /// The domain-facing repository per backend.
 final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository,
