@@ -1,16 +1,18 @@
 # DeepSeek Harness Android Client Spec (English Digest)
 
-Status: draft for MVP.
+Status: MVP closed on the legacy Kotlin stack; Flutter rewrite in progress
+(ADR-0001, ROADMAP.md).
 
 ## Goal
-Kotlin-native Android client for an existing `dsh web` backend.
+Flutter client for an existing `dsh web` backend.
 
 ## Non-Goals
-No WebView/React Native/Flutter/server-driven UI. No dsh backend changes. No auth in milestone 1.
+No WebView/React Native/server-driven UI. No dsh backend changes. No auth in milestone 1.
 
 ## Architecture
-`app -> core:domain -> core:harness-adapter -> core:network`.
-`core:harness-adapter` is the only module that knows dsh wire vocabulary.
+`app -> domain -> harness_adapter -> network` (pub workspace under `flutter/`;
+legacy Gradle modules frozen until parity).
+`harness_adapter` is the only package that knows dsh wire vocabulary.
 
 ## Wire Contract
 - Unary: `POST /api/<method>` with `client-request`, answer with `server-response`.

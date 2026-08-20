@@ -1,0 +1,11 @@
+# Flutter/Dart build artifacts
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+
+# Keep pubspec.lock committed (dependency drift gate, R8).
+# Local-only caches
+.fvm/

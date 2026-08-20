@@ -1,0 +1,48 @@
+# CI for deepseek-harness-android — runs the exhaustive gate aggregate.
+#
+# Requirements for the runner:
+#   - network access (fetches Flutter 3.47 via subosito/flutter-action and
+#     the reference submodule from this Gitea instance)
+#   - a runner image with Docker/act compatibility for `uses:` actions.
+# Air-gapped runners: replace the flutter step with a prebaked image that
+# has Flutter 3.47 stable and python3, then keep the `verify_all` step.
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Egress (Flutter SDK download, pub) goes through the LAN proxy from
+      # the repo variable EGRESS_PROXY; Gitea itself, the submodule URL
+      # (127.0.0.1:3000) and the runner cache server (runner:3899,
+      # used by actions/cache below) must bypass it.
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
+      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
+    steps:
+      - name: Checkout (with reference submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # flutter-action's `cache: true` persists BOTH the Flutter SDK and
+      # ~/.pub-cache through the runner's cache server (runner:3899,
+      # bypassed via NO_PROXY above) — no separate pub cache step needed.
+      - name: Set up Flutter 3.47 stable
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.0
+          channel: stable
+          cache: true
+
+      - name: Aggregate gates (analyze, tests, imports, tokens, docs)
+        run: python3 scripts/verify_all.py all

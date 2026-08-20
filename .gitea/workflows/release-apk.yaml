@@ -1,0 +1,151 @@
+# APK release pipeline — builds the signed release APK and publishes it to:
+#   1. the persistent download server at http://127.0.0.1:8899 (host dir
+#      mounted from vars.APK_WWW_DIR), always;
+#   2. a Gitea Release attachment, on v* tag pushes.
+# Runs on the prebaked `flutter-android` runner label built by
+# docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 + dependency
+# caches the image warms itself from the committed workspace — no SDK or
+# maven downloads per run). Gradle's build cache and pub cache are carried
+# across runs via actions/cache (runner cache server, runner:3899) so
+# repeat builds reuse compiled task outputs instead of recompiling.
+# Tooling contract lives in the process note
+# .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
+name: Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      dsh_base_url:
+        description: "DSH_BASE_URL baked into the APK"
+        default: "http://127.0.0.1:3080"
+        required: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    # act's default `sh` has no [[ ]]; the image ships bash.
+    shell: bash
+
+jobs:
+  build:
+    runs-on: flutter-android
+    container:
+      image: flutter-3.47-android:latest
+      options: -v ${{ vars.APK_WWW_DIR }}:/out
+    env:
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      # runner = the runner's cache server (actions/cache); it must
+      # bypass the proxy or restore/save dies on connection reset.
+      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
+      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Job containers are ephemeral: the image's baked dependency caches
+      # survive, but Gradle build-cache outputs (task-level compilation
+      # results) were lost with every container. Restore them here so
+      # repeat builds reuse compiled artifacts instead of recompiling.
+      - name: Restore Gradle & pub caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            /root/.gradle/caches
+            /root/.pub-cache
+          key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
+          restore-keys: gradle-v1-
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pub get (workspace)
+        working-directory: flutter
+        run: flutter pub get
+
+      - name: Analyze (fail before the slow build)
+        working-directory: flutter
+        run: flutter analyze
+
+      - name: Build signed release APK
+        working-directory: flutter/app
+        env:
+          DSH_KEYSTORE_FILE: /tmp/dsh-release.keystore
+          DSH_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          DSH_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DSH_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
+          flutter build apk --release \
+            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
+            --build-name="${{ steps.ver.outputs.version }}" \
+            --build-number="$GITHUB_RUN_NUMBER"
+          rm -f "$DSH_KEYSTORE_FILE"
+
+      - name: Stage artifact
+        id: stage
+        run: |
+          APK="dsh-android-${{ steps.ver.outputs.version }}.apk"
+          cp flutter/app/build/app/outputs/flutter-apk/app-release.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          echo "apk=$APK" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(cut -d' ' -f1 "$APK.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to download server (8899)
+        run: |
+          APK="${{ steps.stage.outputs.apk }}"
+          cp "$APK" "$APK.sha256" /out/
+          cp "$APK" /out/dsh-latest.apk
+          cp "$APK.sha256" /out/dsh-latest.apk.sha256
+          printf 'version=%s\nversionCode=%s\nsha256=%s\nbaseUrl=%s\nbuiltAt=%s\n' \
+            "${{ steps.ver.outputs.version }}" "$GITHUB_RUN_NUMBER" \
+            "${{ steps.stage.outputs.sha256 }}" \
+            "${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
+            "$(date -u +%FT%TZ)" > /out/LATEST.txt
+          # keep the newest 10 versioned APKs besides dsh-latest
+          ls -1t /out/dsh-android-*.apk 2>/dev/null | tail -n +11 | xargs -r rm -f
+          ls -1t /out/dsh-android-*.apk.sha256 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+      - name: Create Gitea release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          set -eu
+          APK="${{ steps.stage.outputs.apk }}"
+          python3 - "$GITHUB_REF_NAME" "${{ steps.ver.outputs.version }}" "$APK" \
+            "${{ steps.stage.outputs.sha256 }}" \
+            "${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" > /tmp/release.json <<'PY'
+          import json, sys
+          tag, ver, apk, sha, base_url = sys.argv[1:6]
+          body = (
+              f"Download: `{apk}` (or always-latest: http://127.0.0.1:8899/dsh-latest.apk)\n\n"
+              f"- versionName: `{ver}`\n- sha256: `{sha}`\n"
+              f"- DSH_BASE_URL: `{base_url}`"
+          )
+          print(json.dumps({"tag_name": tag, "name": f"DSH Android {ver}", "body": body}))
+          PY
+          API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          AUTH="Authorization: token $GITHUB_TOKEN"
+          REL_ID=$(curl -sf -X POST "$API/releases" -H "$AUTH" \
+            -H 'Content-Type: application/json' -d @/tmp/release.json \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          for f in "$APK" "$APK.sha256"; do
+            curl -sf -X POST "$API/releases/$REL_ID/assets?name=$f" -H "$AUTH" \
+              -F "attachment=@$f" >/dev/null
+          done
+          echo "release $GITHUB_REF_NAME created (id $REL_ID) with $APK"

@@ -1,0 +1,16 @@
+name: network
+description: Transport primitives - RPC envelopes, HTTP/WebSocket seams.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+dependencies:
+  http: ^1.2.0
+  web_socket_channel: ^3.0.0
+
+dev_dependencies:
+  test: ^1.24.0

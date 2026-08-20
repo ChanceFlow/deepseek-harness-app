@@ -1,38 +1,29 @@
 # DeepSeek Harness Android Client Spec
 
-Status: draft for MVP
-Target: Kotlin native Android client for an already running dsh web backend.
-Related code: `app/`, `core/domain/`, `core/network/`, `core/harness-adapter/`.
+Status: Flutter rewrite shipped (route A, [ADR-0001](adr-0001-flutter-rewrite.md);
+migration log in [ROADMAP.md](../ROADMAP.md)).
+Target: Flutter client for an already running dsh web backend.
+Related code: `flutter/app/`, `flutter/packages/domain/`,
+`flutter/packages/network/`, `flutter/packages/harness_adapter/`.
 
 ## 1. Goal
 
-Provide a native Kotlin/Jetpack Compose Android client that reproduces the
-core Web chat experience of DeepSeek Harness while keeping every dsh wire
-concept behind an anti-corruption layer.
+Provide a native Flutter client that reproduces the core Web chat experience
+of DeepSeek Harness while keeping every dsh wire concept behind an
+anti-corruption layer.
 
 ## 2. Non-Goals
 
-- No WebView UI, no React Native, no Flutter, no server-driven UI.
+- No WebView UI, no React Native, no server-driven UI.
 - No changes to the dsh backend in this phase.
 - No client-side agent/tool execution; the backend remains the only harness runtime.
 - No authentication layer in the first milestone; deployment hardening is external.
 
 ## 3. Architecture
 
-```text
-app                     Compose UI, ViewModel, Hilt DI
-  -> core:domain        neutral models + repository contract
-  -> core:harness-adapter   anti-corruption layer, dsh translation
-  -> core:network       OkHttp RPC + WebSocket transport
-```
-
-Dependency rules:
-
-- `app` may import `core:domain` and (for DI) the implementation modules.
-- `app` must never import dsh types such as `SessionEvent`, `MuxFrame`, `HostFrame`.
-- `core:domain` has no Android UI and no dsh types.
-- `core:harness-adapter` is the only module allowed to know dsh method names and event shapes.
-- `core:network` knows transport envelopes, HTTP paths, and WebSocket mechanics only.
+Module boundaries and dependency rules are owned by
+[README §Module boundaries](../README.md#module-boundaries) and enforced by
+`scripts/check_dart_imports.py`. The wire contract below is this spec's subject.
 
 ## 4. Wire Contract
 
@@ -294,3 +285,27 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - `session/jobs` mux frames fold into `TimelineItem.Jobs`.
 - Job identity is backend-issued `id`; kind/status/detail/label stay display-only.
 - Jobs are live snapshots, not durable session events; history replay does not reconstruct them.
+
+## 15. Agent Presets & Permissions
+
+- `agentPreset.list` (not loopback-pinned) decodes the roster: entries
+  (`id`, `trust system|user`, `isDefault`, optional `name`/`description`/
+  `broken`) plus `authorable` and `hasDocument`. A bad `trust` value or a
+  missing required field fails loud.
+- `agentPreset.select` switches a blank session's preset and returns the
+  echoed id; host refusals (`agent-preset-locked`, `agent-preset-not-found`,
+  `agent-preset-invalid`, `agent-preset-read-only`) surface as
+  `DshBusinessException` with the host code.
+- The forwarded owner event `agent-preset/selected` (a `host/remote-event`
+  frame with `args [sessionId, agentPreset]`) folds the session summary's
+  `agentPreset` in place. Other forwarded events are ignored — the
+  allowlist is open and host-owned.
+- The `permissions` session projection (mux `session/projection`, key
+  `permissions`) decodes the permission select (`options` of
+  `value`/`name`/optional `description`, plus `currentValue`) onto
+  `observePermissions`. A `null`-valued or malformed frame yields null —
+  the same hidden state as a host composing no permission service.
+  Unknown projection keys are ignored (the key set is open).
+- `agentPreset.read`/`copy`/`openDocument`/`remove` are loopback-pinned and
+  stay uncovered: a mobile client cannot manage the roster, only read it
+  and switch blank sessions.
