@@ -34,16 +34,9 @@ jobs:
         with:
           submodules: recursive
 
-      # Pub deps (~/.pub-cache) survive runs; keyed on the lockfile so a
-      # dependency bump saves a fresh entry while older ones still restore
-      # via the prefix fallback.
-      - name: Restore pub cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache
-          key: pub-v1-${{ hashFiles('flutter/pubspec.lock') }}
-          restore-keys: pub-v1-
-
+      # flutter-action's `cache: true` persists BOTH the Flutter SDK and
+      # ~/.pub-cache through the runner's cache server (runner:3899,
+      # bypassed via NO_PROXY above) — no separate pub cache step needed.
       - name: Set up Flutter 3.47 stable
         uses: subosito/flutter-action@v2
         with:
