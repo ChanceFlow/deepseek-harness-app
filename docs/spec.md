@@ -320,6 +320,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   receive the text as ordinary content). A matched command returns the
   settled execution (`commandId`, `result.kind` `success|error`,
   optional `text`); an unmatched name returns ok with no value slot.
+  The `images` arg carries base64-encoded composer uploads
+  (`{mediaType, data, name?}` in submission order); the host admission
+  settles an error result when the command does not declare image
+  acceptance (`plan` and `goal` do).
 - The chat controller routes a submitted line whose leading token names
   a roster host command through `commands/execute` (args-tolerant when
   the command advertises an input hint, bare-only otherwise — the web
@@ -327,7 +331,11 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   fall back to the ordinary prompt channel. A dispatch failure
   (transport abort, business error) does not: the line surfaces as the
   chat error banner instead — re-sending it would hand the model the
-  literal command text.
+  literal command text. A submission carrying images refuses, in the
+  composer before anything is sent, when the line dispatches as a
+  command that does not accept them (web envelope policy: the draft and
+  images stay in place); an accepting command dispatches with the
+  images, and an error result keeps them for correction.
 - `commands/list` stays uncovered: the roster's names/descriptions/hints
   are mirrored statically (`command_roster.dart`); fetching the live
   catalog is deferred.

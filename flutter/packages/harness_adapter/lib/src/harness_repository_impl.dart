@@ -384,15 +384,27 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<CommandExecution?> executeCommand(String sessionId, String line) async {
+  Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images,
+  ) async {
     // The typert remote envelope: the args carry the addressed agent (a
-    // session id — sessions are agent-backed), the complete line, and the
-    // images slot (the mobile composer sends none with commands).
+    // session id — sessions are agent-backed), the complete line, and
+    // the base64-encoded composer images in submission order (the host
+    // admission enforces the command's image-acceptance flag).
     final result = await _call(_commandsExecute, _commandsExecute, {
       'args': <String, Object?>{
         'agentId': sessionId,
         'line': line,
-        'images': const <Object?>[],
+        'images': <Object?>[
+          for (final image in images)
+            <String, Object?>{
+              'mediaType': image.mediaType,
+              'data': image.base64Data,
+              if (image.name != null) 'name': image.name,
+            },
+        ],
       },
     });
     if (!result.ok) {

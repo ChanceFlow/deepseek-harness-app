@@ -1173,6 +1173,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commandFeedbackDescription => 'record feedback about this session';
 
   @override
+  String commandImagesUnsupported(String command) {
+    return '/$command does not accept image attachments; remove them first';
+  }
+
+  @override
   String get parentSession => 'Parent session';
 
   @override

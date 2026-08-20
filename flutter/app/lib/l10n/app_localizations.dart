@@ -2059,6 +2059,12 @@ abstract class AppLocalizations {
   /// **'record feedback about this session'**
   String get commandFeedbackDescription;
 
+  /// Composer refusal for a submission carrying images bound for a host command that does not accept them.
+  ///
+  /// In en, this message translates to:
+  /// **'/{command} does not accept image attachments; remove them first'**
+  String commandImagesUnsupported(String command);
+
   /// No description provided for @parentSession.
   ///
   /// In en, this message translates to:

@@ -1146,6 +1146,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commandFeedbackDescription => '记录关于本会话的反馈';
 
   @override
+  String commandImagesUnsupported(String command) {
+    return '/$command 不接受图片附件，请先移除图片';
+  }
+
+  @override
   String get parentSession => '父会话';
 
   @override

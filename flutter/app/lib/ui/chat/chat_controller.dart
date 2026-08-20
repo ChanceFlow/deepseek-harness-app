@@ -270,6 +270,9 @@ class ChatController {
       case ImagePickError():
         _errorMessage = action.message;
         _publish();
+      case CommandImageRefusal():
+        _errorMessage = action.message;
+        _publish();
       case SelectAgentPreset():
         _selectAgentPreset(action);
     }
@@ -450,9 +453,9 @@ class ChatController {
     // Input-hinted commands take args; bare-only commands (no hint)
     // execute only without args; skills and unknown names fall through
     // to the prompt channel (the model serves them).
-    final commandLine = _hostCommandLineFor(action.text.trim());
+    final commandLine = hostCommandLineFor(action.text.trim());
     if (commandLine != null) {
-      unawaited(_executeHostCommand(sessionId, commandLine));
+      unawaited(_executeHostCommand(sessionId, commandLine, images));
       return;
     }
     unawaited(() async {
@@ -481,36 +484,24 @@ class ChatController {
     }());
   }
 
-  /// The host-command line a submit routes through `commands/execute`,
-  /// or null when the text is not a host command (web `matchEnter`
-  /// decision table on the roster's live stand-in).
-  String? _hostCommandLineFor(String text) {
-    if (!text.startsWith('/')) return null;
-    final boundary = text.indexOf(RegExp(r'[\t\n\r ]'));
-    final token = boundary == -1 ? text : text.substring(0, boundary);
-    final name = token.substring(1);
-    if (name.isEmpty) return null;
-    for (final command in kHostCommandNames) {
-      if (command.name != name) continue;
-      // A bare-only command (no input hint) with args rides the prompt
-      // channel (web: `if (!bare) return undefined`).
-      if (command.hint == null && boundary != -1) return null;
-      return text;
-    }
-    return null;
-  }
-
-  /// Executes one slash-command line. An unmatched name (null execution)
+  /// Executes one slash-command line. The images ride the command's
+  /// admission (a command that does not declare image acceptance
+  /// settles as an error result). An unmatched name (null execution)
   /// falls back to the ordinary prompt send — the web live-directory
   /// miss; an error result keeps the pending images and surfaces the
-  /// command's text; success clears them (the state projections — plan
-  /// chip, goal bar — carry the feedback). A dispatch failure (transport
-  /// abort, business error) never re-routes the line to the prompt
-  /// channel: the roster already adjudicated it as a host command, and
-  /// the web's `execute()` reports such failures to the composer notice
-  /// instead of submitting the line — re-sending it would hand the model
-  /// the literal command text.
-  Future<void> _executeHostCommand(String sessionId, String line) async {
+  /// command's text (the web keeps the submission for correction);
+  /// success clears them (the state projections — plan chip, goal bar —
+  /// carry the feedback). A dispatch failure (transport abort, business
+  /// error) never re-routes the line to the prompt channel: the roster
+  /// already adjudicated it as a host command, and the web's `execute()`
+  /// reports such failures to the composer notice instead of submitting
+  /// the line — re-sending it would hand the model the literal command
+  /// text.
+  Future<void> _executeHostCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images,
+  ) async {
     _isSending = true;
     _publish();
     try {
@@ -518,7 +509,7 @@ class ChatController {
       _commandFailed = false;
       final CommandExecution? execution;
       try {
-        execution = await _repository.executeCommand(sessionId, line);
+        execution = await _repository.executeCommand(sessionId, line, images);
       } catch (error) {
         _errorMessage = error.toString();
         return;

@@ -157,8 +157,16 @@ class FakeChatRepository implements ChatRepository {
   /// business error) — the fake throws instead of returning.
   final commandFailures = <String>{};
 
+  /// Images handed to each command dispatch, keyed by the submitted line.
+  final commandDispatchImages = <String, List<PendingImage>>{};
+
   @override
-  Future<CommandExecution?> executeCommand(String sessionId, String line) {
+  Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images,
+  ) {
+    commandDispatchImages[line] = images;
     if (commandFailures.contains(line)) {
       throw UnsupportedError('commands/execute: connection aborted');
     }
@@ -982,6 +990,70 @@ void main() {
     expect(repository.sentMessages, isEmpty);
   });
 
+  test('a command dispatch carries the composer images', () async {
+    final repository = FakeChatRepository();
+    repository.commandExecutions['/goal Ship the MVP'] = const CommandExecution(
+      commandId: 'cmd-11',
+      kind: CommandOutcomeKind.success,
+      text: 'Goal created',
+    );
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    const image = PendingImage(
+      id: 'img-1',
+      mediaType: 'image/png',
+      base64Data: 'aGVsbG8=',
+      name: 'mockup.png',
+    );
+    controller.onAction(const ImagesLoaded(<PendingImage>[image]));
+    await pumpEventQueue();
+    expect(controller.state.pendingImages, isNotEmpty);
+
+    controller.onAction(const SendPrompt('/goal Ship the MVP'));
+    await pumpEventQueue();
+
+    // The image rode the command's admission, and success consumed it.
+    expect(repository.commandDispatchImages['/goal Ship the MVP'],
+        const <PendingImage>[image]);
+    expect(controller.state.pendingImages, isEmpty);
+    expect(repository.sentMessages, isEmpty);
+  });
+
+  test('an error result keeps the images that rode the dispatch', () async {
+    final repository = FakeChatRepository();
+    repository.commandExecutions['/goal pause'] = const CommandExecution(
+      commandId: 'cmd-12',
+      kind: CommandOutcomeKind.error,
+      text: 'Image attachments only accompany a goal objective: '
+          '/goal <objective> or /goal edit <objective>.',
+    );
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    const image = PendingImage(
+      id: 'img-2',
+      mediaType: 'image/png',
+      base64Data: 'aGVsbG8=',
+    );
+    controller.onAction(const ImagesLoaded(<PendingImage>[image]));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/goal pause'));
+    await pumpEventQueue();
+
+    // The web keeps the submission (images) for correction when a
+    // command that carried images settles as an error.
+    expect(controller.state.pendingImages, const <PendingImage>[image]);
+    expect(controller.state.errorMessage, contains('Image attachments'));
+  });
+
   test('ClearGoal deletes the goal from any phase', () async {
     final repository = _GoalRecordingRepository();
     final controller = ChatController(repository);
@@ -1277,7 +1349,11 @@ class _GoalRecordingRepository extends FakeChatRepository {
   final executedCommands = <String>[];
 
   @override
-  Future<CommandExecution?> executeCommand(String sessionId, String line) {
+  Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images,
+  ) {
     executedCommands.add(line);
     return Future<CommandExecution?>.value(
       const CommandExecution(

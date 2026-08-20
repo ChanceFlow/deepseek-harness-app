@@ -326,6 +326,16 @@
   "commandCompactDescription": "压缩较早的会话历史",
   "commandPermissionDescription": "切换权限预设（沙箱模式 + 审批策略）",
   "commandFeedbackDescription": "记录关于本会话的反馈",
+  "commandImagesUnsupported": "/{command} 不接受图片附件，请先移除图片",
+  "@commandImagesUnsupported": {
+    "description": "Composer refusal for a submission carrying images bound for a host command that does not accept them.",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "compact"
+      }
+    }
+  },
   "parentSession": "父会话",
   "addWorkspace": "添加工作区",
   "searchTooltip": "搜索",

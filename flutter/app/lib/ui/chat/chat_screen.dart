@@ -3037,6 +3037,22 @@ class _ComposerBarState extends State<ComposerBar> {
       widget.pendingImages.isNotEmpty;
 
   void _send([String? text]) {
+    // Web envelope policy: an enter submission carrying images resolves
+    // only through a command declaring image acceptance. Refuse before
+    // anything is consumed — the draft and the images stay in place and
+    // nothing executes.
+    if (widget.pendingImages.isNotEmpty) {
+      final refused = hostCommandImageRefusal(_draftController.text.trim());
+      if (refused != null) {
+        widget.onAction(
+          CommandImageRefusal(
+            AppLocalizations.of(context)!
+                .commandImagesUnsupported(refused),
+          ),
+        );
+        return;
+      }
+    }
     widget.onSend(_draftController.text);
     _draftController.clear();
     // A sent draft is consumed: persist the cleared marker so a remount
