@@ -240,4 +240,65 @@ void main() {
     expect(find.text('session 3'), findsOneWidget);
     expect(find.text('Show less'), findsOneWidget);
   });
+
+  testWidgets('the search seat is an M3 SearchBar with the capsule flow', (
+    tester,
+  ) async {
+    final queries = <String>[];
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer(
+      overrides: [
+        localStateStoreProvider.overrideWith(
+          (ref) async => _store(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: l10nApp(
+          home: Scaffold(
+            body: SessionPanel(
+              inDrawer: false,
+              sessions: _sessions,
+              workspaces: _workspaces,
+              searchResults: const <SessionSearchResult>[],
+              selectedSessionId: 's1',
+              onSelectSession: (_) {},
+              onCreateSession: (_) {},
+              onSearchSessions: queries.add,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Hidden until the header toggle expands it.
+    expect(find.byType(SearchBar), findsNothing);
+    await tester.tap(find.byTooltip('Search sessions'));
+    await tester.pumpAndSettle();
+
+    // The expanded seat is a native M3 SearchBar with the capsule's
+    // interaction: typing dispatches the query, the trailing close
+    // clears and collapses.
+    expect(find.byType(SearchBar), findsOneWidget);
+    await tester.enterText(find.byType(SearchBar), 'needle');
+    await tester.pump();
+    expect(queries, contains('needle'));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SearchBar),
+        matching: find.byIcon(Icons.close),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SearchBar), findsNothing);
+    expect(queries.last, isEmpty);
+  });
 }

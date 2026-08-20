@@ -177,6 +177,47 @@ void main() {
     );
   });
 
+  testWidgets('composer controls are native components', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+      actions,
+    );
+    await tester.pump();
+
+    // Empty draft: the send seat is a disabled FAB (idle, no draft) and
+    // the ➕ tool is a standard IconButton.
+    final idleFab = tester.widget<FloatingActionButton>(
+      find.descendant(
+        of: find.byTooltip('Send'),
+        matching: find.byType(FloatingActionButton),
+      ),
+    );
+    expect(idleFab.onPressed, isNull);
+    expect(find.byIcon(Icons.add), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byIcon(Icons.add),
+        matching: find.byType(IconButton),
+      ),
+      findsOneWidget,
+    );
+
+    // A ready draft arms the FAB (hero disabled so sibling send/stop
+    // FABs never collide).
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.pump();
+    final readyFab = tester.widget<FloatingActionButton>(
+      find.descendant(
+        of: find.byTooltip('Send'),
+        matching: find.byType(FloatingActionButton),
+      ),
+    );
+    expect(readyFab.onPressed, isNotNull);
+    expect(readyFab.heroTag, isNull);
+  });
+
   testWidgets('saved draft restores on mount and swaps per session', (
     tester,
   ) async {
