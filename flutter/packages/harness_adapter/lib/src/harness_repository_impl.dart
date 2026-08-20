@@ -1563,6 +1563,7 @@ final class _SessionState {
   final Mutex _mutex = Mutex();
   TimelineReducer _reducer = TimelineReducer('');
   bool _ready = false;
+  bool _loading = false;
   bool _hasMoreOlder = false;
   bool _loadingOlder = false;
   List<JsonMap> _history = <JsonMap>[];
@@ -1574,32 +1575,41 @@ final class _SessionState {
   ) {
     return _mutex.synchronized(() async {
       if (_ready) return;
-      final page = await loader(null);
-      _history = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
-      _hasMoreOlder = page.hasMore;
-      _reducer = TimelineReducer(sessionId);
-      _reducer.reset(_history);
-      _contextFold.reset(_history);
-      _statsFold.reset(_history);
-      _framesAfterOpen = List.of(_pending);
-      for (final frame in _pending) {
-        _reducer.ingestFrame(frame);
-        if (wireType(frame.payload) == 'session/event') {
-          _contextFold.ingestEvent(frame.payload['event']);
-          _statsFold.ingestEvent(frame.payload['event']);
-        }
-      }
-      contextPressure.value = _contextFold.value;
-      contextBreakdown.value = _contextFold.breakdown;
-      sessionStats.value = _statsFold.value;
-      _pending = <ServerRequest>[];
-      _ready = true;
+      // Surface the first-load (or resync) wait to observers: an empty
+      // timeline that is still loading must not read as an empty session.
+      _loading = true;
       _publish();
+      try {
+        final page = await loader(null);
+        _history = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
+        _hasMoreOlder = page.hasMore;
+        _reducer = TimelineReducer(sessionId);
+        _reducer.reset(_history);
+        _contextFold.reset(_history);
+        _statsFold.reset(_history);
+        _framesAfterOpen = List.of(_pending);
+        for (final frame in _pending) {
+          _reducer.ingestFrame(frame);
+          if (wireType(frame.payload) == 'session/event') {
+            _contextFold.ingestEvent(frame.payload['event']);
+            _statsFold.ingestEvent(frame.payload['event']);
+          }
+        }
+        contextPressure.value = _contextFold.value;
+        contextBreakdown.value = _contextFold.breakdown;
+        sessionStats.value = _statsFold.value;
+        _pending = <ServerRequest>[];
+        _ready = true;
+      } finally {
+        _loading = false;
+        _publish();
+      }
     });
   }
 
   void prepareResync() {
     _ready = false;
+    _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
     _framesAfterOpen = <ServerRequest>[];
@@ -1681,6 +1691,7 @@ final class _SessionState {
       items: items,
       hasMoreOlder: _hasMoreOlder,
       isLoadingOlder: _loadingOlder,
+      isLoading: _loading,
     );
   }
 }

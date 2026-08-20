@@ -11,6 +11,7 @@ import 'package:domain/model/settings.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
@@ -439,6 +440,70 @@ void main() {
     expect(message.value.role, MessageRole.assistant);
     expect(message.value.text, 'hello from fake host');
     expect(message.value.streaming, isFalse);
+  });
+
+  test('initial timeline load publishes a loading window then settles', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-1',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final windows = <TimelineWindow>[];
+    final sub = repository
+        .observeTimelineWindow('session-1')
+        .listen(windows.add);
+    addTearDown(() => sub.cancel());
+
+    await repository.openSession('session-1');
+    // Broadcast StateStream delivery is microtask-scheduled; flush so the
+    // window stream has observed the in-flight and settled emissions.
+    await pumpEventQueue();
+
+    // Seed (empty, idle) → in-flight first load → settled empty window.
+    // The in-flight flag is what lets the UI render a loader instead of
+    // the empty hero while the conversation's history is fetched.
+    expect(windows.map((window) => window.isLoading).toList(), <bool>[
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  test('failed initial timeline load clears the loading window', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-1',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    rpc.failNextCall('session.history', 'bad-response');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final windows = <TimelineWindow>[];
+    final sub = repository
+        .observeTimelineWindow('session-1')
+        .listen(windows.add);
+    addTearDown(() => sub.cancel());
+
+    // The failure is swallowed by openSession; the window must still drop
+    // its in-flight flag so the UI never hangs on a perpetual spinner.
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    expect(windows.map((window) => window.isLoading).toList(), <bool>[
+      false,
+      true,
+      false,
+    ]);
   });
 
   test('queue edit serializes text content block', () async {

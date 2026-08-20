@@ -997,31 +997,37 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
-    return uiState.timeline.isEmpty
-        ? EmptyHero(
-            workspaces: uiState.workspaces,
-            currentWorkspaceLabel: _workspaceLabel(session?.cwd),
-            onPickWorkspace: (workspaceId) {
-              // The staged preset rides the creation; the stage is spent
-              // on first use (web seat semantics), so the next new
-              // session opens on the default again.
-              final preset = _stagedPreset;
-              widget.onAction(
-                CreateSessionInWorkspace(workspaceId, agentPreset: preset),
-              );
-              if (preset != null) {
-                setState(() => _stagedPreset = null);
-              }
-            },
-            presetRoster: uiState.agentPresets,
-            currentPresetId: stagedPresetId(
-              roster: uiState.agentPresets,
-              staged: _stagedPreset,
-              selectedSession: session,
-            ),
-            onPickPreset: (presetId) => _pickPreset(session, presetId),
-          )
-        : widget.outline
+    if (uiState.timeline.isEmpty) {
+      if (uiState.isTimelineLoading) {
+        // First load of the selected conversation: never read the wait as
+        // an empty session. A centered loader mirrors the subagent pane.
+        return const Center(child: CircularProgressIndicator());
+      }
+      return EmptyHero(
+        workspaces: uiState.workspaces,
+        currentWorkspaceLabel: _workspaceLabel(session?.cwd),
+        onPickWorkspace: (workspaceId) {
+          // The staged preset rides the creation; the stage is spent
+          // on first use (web seat semantics), so the next new
+          // session opens on the default again.
+          final preset = _stagedPreset;
+          widget.onAction(
+            CreateSessionInWorkspace(workspaceId, agentPreset: preset),
+          );
+          if (preset != null) {
+            setState(() => _stagedPreset = null);
+          }
+        },
+        presetRoster: uiState.agentPresets,
+        currentPresetId: stagedPresetId(
+          roster: uiState.agentPresets,
+          staged: _stagedPreset,
+          selectedSession: session,
+        ),
+        onPickPreset: (presetId) => _pickPreset(session, presetId),
+      );
+    }
+    return widget.outline
         ? OutlineTimeline(
             timeline: uiState.timeline,
             collapsedTurns: _collapsedTurns,

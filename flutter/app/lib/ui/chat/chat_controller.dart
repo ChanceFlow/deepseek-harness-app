@@ -143,6 +143,7 @@ class ChatController {
       timeline: _timelineWindow.items,
       hasMoreOlder: _timelineWindow.hasMoreOlder,
       isLoadingOlder: _timelineWindow.isLoadingOlder,
+      isTimelineLoading: _timelineWindow.isLoading,
       searchResults: _searchResults,
       isSending: _isSending,
       errorMessage: _errorMessage,

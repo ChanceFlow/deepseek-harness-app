@@ -28,6 +28,7 @@ final class ChatUiState {
     this.timeline = const <TimelineItem>[],
     this.hasMoreOlder = false,
     this.isLoadingOlder = false,
+    this.isTimelineLoading = false,
     this.searchResults = const <SessionSearchResult>[],
     this.isSending = false,
     this.errorMessage,
@@ -55,6 +56,11 @@ final class ChatUiState {
   final List<TimelineItem> timeline;
   final bool hasMoreOlder;
   final bool isLoadingOlder;
+
+  /// The selected session's first full timeline load (or a reconnect
+  /// resync) is in flight. While true with an empty [timeline], the chat
+  /// body renders a loading indicator instead of the empty hero.
+  final bool isTimelineLoading;
   final List<SessionSearchResult> searchResults;
   final bool isSending;
   final String? errorMessage;
