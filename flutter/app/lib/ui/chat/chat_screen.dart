@@ -13,7 +13,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
@@ -242,17 +241,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// The active backend's label for the app-bar subtitle; null while
-  /// only one backend is configured (nothing to disambiguate).
-  String? _activeBackendLabel() {
-    final slices = widget.backendSlices;
-    if (slices == null || slices.length <= 1) return null;
-    for (final slice in slices) {
-      if (slice.active) return slice.backend.label;
-    }
-    return null;
-  }
-
   /// Session-scoped tool pages (web embeds them into conversation context;
   /// mobile pushes them as full routes with the current session preloaded).
   void _openSessionTool(Widget Function(String? sessionId) page) {
@@ -304,24 +292,6 @@ class _ChatScreenState extends State<ChatScreen> {
         .where((item) => item.id == sessionId)
         .firstOrNull;
     final title = session?.displayTitle ?? l10n.appTitle;
-    final connection = uiState.connection;
-    final hostVersion = connection.hostDescription?.version ?? '';
-    // Multi-backend form: the subtitle names WHICH host this surface
-    // presents before its connection line (single-backend builds keep
-    // the bare connection line — the host is unambiguous there).
-    final activeBackendLabel = _activeBackendLabel();
-    final connectionLine = switch (connection.phase) {
-      ConnectionPhase.connected =>
-        hostVersion.isEmpty
-            ? l10n.appBarConnected
-            : l10n.appBarConnectedWithVersion(hostVersion),
-      ConnectionPhase.connecting => l10n.appBarConnecting,
-      ConnectionPhase.reconnecting => l10n.appBarReconnecting,
-      ConnectionPhase.disconnected => l10n.appBarDisconnected,
-    };
-    final subtitle = activeBackendLabel == null
-        ? connectionLine
-        : '$activeBackendLabel · $connectionLine';
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
@@ -347,21 +317,6 @@ class _ChatScreenState extends State<ChatScreen> {
           onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
         ),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(16),
-        child: SizedBox(
-          width: double.infinity,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              subtitle,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -477,7 +432,6 @@ class _ChatScreenState extends State<ChatScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                ConnectionBanner(uiState: uiState),
                 Expanded(
                   child: ChatPanel(
                     uiState: uiState,
@@ -498,36 +452,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class ConnectionBanner extends StatelessWidget {
-  const ConnectionBanner({super.key, required this.uiState});
-
-  final ChatUiState uiState;
-
-  @override
-  Widget build(BuildContext context) {
-    final connection = uiState.connection;
-    final hostVersion = connection.hostDescription?.version ?? '';
-    final l10n = AppLocalizations.of(context)!;
-    final text = switch (connection.phase) {
-      ConnectionPhase.connected => l10n.connectionBannerConnected(hostVersion),
-      ConnectionPhase.connecting => l10n.connectionBannerConnecting,
-      ConnectionPhase.reconnecting => l10n.connectionBannerReconnecting,
-      ConnectionPhase.disconnected => l10n.connectionBannerDisconnected,
-    };
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Text(
-          text,
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-      ),
     );
   }
 }

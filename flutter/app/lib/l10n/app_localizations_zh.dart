@@ -897,35 +897,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get parentUnavailableBody => '父会话当前不在线，重新打开父会话后即可继续发送消息。';
 
   @override
-  String get appBarConnected => '已连接';
-
-  @override
-  String appBarConnectedWithVersion(String version) {
-    return '已连接 $version';
+  String backendVersion(String version) {
+    return 'v$version';
   }
-
-  @override
-  String get appBarConnecting => '连接中';
-
-  @override
-  String get appBarReconnecting => '重连中';
-
-  @override
-  String get appBarDisconnected => '已断开';
-
-  @override
-  String connectionBannerConnected(String version) {
-    return '已连接 $version';
-  }
-
-  @override
-  String get connectionBannerConnecting => '连接中';
-
-  @override
-  String get connectionBannerReconnecting => '重连中';
-
-  @override
-  String get connectionBannerDisconnected => '已断开';
 
   @override
   String get outlineTooltip => '大纲';

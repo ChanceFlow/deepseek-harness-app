@@ -11,7 +11,6 @@ import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
-import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -55,7 +54,6 @@ class ChatController {
   );
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
-  ConnectionState _connection = const ConnectionState();
   List<SessionSummary> _sessions = const <SessionSummary>[];
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
   ImageLimits _imageLimits = const ImageLimits();
@@ -136,7 +134,6 @@ class ChatController {
         .where((session) => !session.blank || session.id == _selectedSessionId)
         .toList();
     _state.value = ChatUiState(
-      connection: _connection,
       sessions: visibleSessions,
       workspaces: _workspaces,
       selectedSessionId: _selectedSessionId,
@@ -181,12 +178,6 @@ class ChatController {
   }
 
   void _subscribeBaselines() {
-    _subs.add(
-      _repository.observeConnectionState().listen((connection) {
-        _connection = connection;
-        _publish();
-      }),
-    );
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;

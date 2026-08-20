@@ -787,11 +787,14 @@ void main() {
     // Both configured rows with their endpoints; the active one badged.
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Build box'), findsOneWidget);
-    expect(find.text('10.0.2.2:3080'), findsOneWidget);
-    expect(find.text('10.0.2.2:3081'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('Standby'), findsOneWidget);
     expect(find.text('Add backend'), findsOneWidget);
+
+    // The connected host's version rides the endpoint line (the fake
+    // host.describe answers version 'test').
+    expect(find.text('10.0.2.2:3080 · vtest'), findsOneWidget);
+    expect(find.text('10.0.2.2:3081 · vtest'), findsOneWidget);
 
     // Tapping the standby row selects it: the badges swap (the chat
     // surface follows the registry's active id).
@@ -837,10 +840,12 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.pumpAndSettle();
 
-    // The sheet closed and the new row renders.
+    // The sheet closed and the new row renders (the endpoint line may
+    // or may not carry the connected version yet — it appears once the
+    // new backend's handshake completes).
     expect(find.text('Label'), findsNothing);
     expect(find.text('CI host'), findsOneWidget);
-    expect(find.text('10.0.2.2:3082'), findsOneWidget);
+    expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
   });
 
   testWidgets('edit sheet repoints a backend and states removal guards', (
@@ -863,8 +868,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
-    expect(find.text('10.0.2.2:3082'), findsOneWidget);
-    expect(find.text('10.0.2.2:3081'), findsNothing);
+    expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
+    expect(find.textContaining('10.0.2.2:3081'), findsNothing);
 
     // The active backend's editor states the guard instead of a dead
     // remove control.
