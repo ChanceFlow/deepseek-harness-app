@@ -46,6 +46,17 @@ stay.
   forced off, transparent fill, the capsule's `borderL2` side and r10
   shape, and `BoxConstraints.tightFor(height: 36)` keep the compact
   capsule footprint; `autoFocus` keeps the keyboard opening on expand.
+- **Composer context-occupancy ring → determinate
+  `CircularProgressIndicator`**: the hand-drawn `_RingPainter`
+  (CustomPaint, 14px ring, 2px stroke) is deleted; the native component
+  renders the same secondary arc on the outline-variant track at the
+  same footprint and gains the component's progress semantics. The rest
+  of the timeline keeps its native-but-DeepSuite-styled form: message
+  bubbles and tool-flow cards are decorated Containers (chat surfaces
+  have no Material equivalent), status dots stay hand-drawn indicators
+  (halo + core has no Material counterpart), TurnGroupHeader already
+  uses `OutlinedButton`, and running/ok/error tool glyphs already use
+  `CircularProgressIndicator`/`Icon`.
 - **Theme**: `DshTheme` gains a `floatingActionButtonTheme` — brand
   background/foreground, 40px `smallSizeConstraints`, light elevations,
   `disabledElevation: 0` — so any un-styled FAB defaults to the brand
@@ -72,15 +83,17 @@ stay.
 
 ## Consequences
 
-`circle_button.dart` and the `_RingPainter` custom painter in
-`todo_panel.dart` are deleted; composer, dock, and sidebar controls are
-standard Material widgets styled with DeepSuite tokens. The composer card
-and dock strips grow slightly on the tool seats (40px standard vs 28px
+`circle_button.dart`, the `_RingPainter` custom painter in
+`todo_panel.dart`, and the `_RingPainter` in `context_ring.dart` are
+deleted; composer, dock, sidebar, and context-ring controls are standard
+Material widgets styled with DeepSuite tokens. The composer card and
+dock strips grow slightly on the tool seats (40px standard vs 28px
 visuals) as the intended M3 footprint. Tests assert the native shapes:
 FAB-state transitions in `composer_bar_test.dart`, status glyph icons in
-`todo_panel_test.dart`, `SearchBar` flow in `session_panel_test.dart`, and
-the `IconButton` archive seat in `workspace_screen_test.dart`; existing
-tap-by-tooltip tests are untouched. Partially supersedes the
-custom-circle vocabulary in
+`todo_panel_test.dart`, `SearchBar` flow in `session_panel_test.dart`,
+the `IconButton` archive seat in `workspace_screen_test.dart`, and the
+determinate `CircularProgressIndicator` at the occupancy fraction in
+`context_ring_test.dart`; existing tap-by-tooltip tests are untouched.
+Partially supersedes the custom-circle vocabulary in
 [2026-08-20-composer-mobile-parity.md](2026-08-20-composer-mobile-parity.md)
 — its access/preset/draft decisions still stand.

@@ -8,8 +8,6 @@
 /// chrome).
 library;
 
-import 'dart:math' as math;
-
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
@@ -42,12 +40,18 @@ class ContextRing extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
         onTap: () => _openPanel(context, percent, used, window),
-        child: CustomPaint(
-          size: const Size(14, 14),
-          painter: _RingPainter(
-            occupancy: occupancy,
+        // Native occupancy ring: a determinate M3 progress indicator at
+        // the web meter's 14px footprint — same secondary arc on the
+        // outline-variant track, with the component's progress semantics
+        // in place of the hand-drawn painter.
+        child: SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            value: occupancy,
+            strokeWidth: 2,
             color: Theme.of(context).colorScheme.secondary,
-            track: Theme.of(context).colorScheme.outlineVariant,
+            backgroundColor: Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
       ),
@@ -135,40 +139,4 @@ class ContextRing extends StatelessWidget {
       },
     );
   }
-}
-
-class _RingPainter extends CustomPainter {
-  const _RingPainter({
-    required this.occupancy,
-    required this.color,
-    required this.track,
-  });
-
-  final double occupancy;
-  final Color color;
-  final Color track;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const stroke = 2.0;
-    final rect = Offset.zero & size;
-    final inset = rect.deflate(stroke / 2);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
-    canvas.drawArc(inset, 0, math.pi * 2, false, paint..color = track);
-    canvas.drawArc(
-      inset,
-      -math.pi / 2,
-      math.pi * 2 * occupancy,
-      false,
-      paint..color = color,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter oldDelegate) =>
-      oldDelegate.occupancy != occupancy ||
-      oldDelegate.color != color ||
-      oldDelegate.track != track;
 }
