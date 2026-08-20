@@ -234,9 +234,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     try {
       final store = await container.read(localStateStoreProvider.future);
-      if (mounted &&
-          widget.localState == null &&
-          _resolvedLocalState == null) {
+      if (mounted && widget.localState == null && _resolvedLocalState == null) {
         setState(() => _resolvedLocalState = StoreChatLocalState(store));
       }
     } catch (_) {
@@ -313,9 +311,10 @@ class _ChatScreenState extends State<ChatScreen> {
     // the bare connection line — the host is unambiguous there).
     final activeBackendLabel = _activeBackendLabel();
     final connectionLine = switch (connection.phase) {
-      ConnectionPhase.connected => hostVersion.isEmpty
-          ? l10n.appBarConnected
-          : l10n.appBarConnectedWithVersion(hostVersion),
+      ConnectionPhase.connected =>
+        hostVersion.isEmpty
+            ? l10n.appBarConnected
+            : l10n.appBarConnectedWithVersion(hostVersion),
       ConnectionPhase.connecting => l10n.appBarConnecting,
       ConnectionPhase.reconnecting => l10n.appBarReconnecting,
       ConnectionPhase.disconnected => l10n.appBarDisconnected,
@@ -514,8 +513,7 @@ class ConnectionBanner extends StatelessWidget {
     final hostVersion = connection.hostDescription?.version ?? '';
     final l10n = AppLocalizations.of(context)!;
     final text = switch (connection.phase) {
-      ConnectionPhase.connected =>
-        l10n.connectionBannerConnected(hostVersion),
+      ConnectionPhase.connected => l10n.connectionBannerConnected(hostVersion),
       ConnectionPhase.connecting => l10n.connectionBannerConnecting,
       ConnectionPhase.reconnecting => l10n.connectionBannerReconnecting,
       ConnectionPhase.disconnected => l10n.connectionBannerDisconnected,
@@ -828,17 +826,20 @@ class _ChatPanelState extends State<ChatPanel> {
     });
     if (_sessionActivelyRunning()) return;
     _restoreDecided = false;
-    sessionState.readReadOffset().then((offset) {
-      if (!mounted) return;
-      _restoredOffset = offset;
-      _restoreDecided = true;
-      // Content may already be laid out; the armed jump waits on us.
-      if (_needsInitialJump) _scheduleFollow();
-    }, onError: (_) {
-      if (!mounted) return;
-      _restoreDecided = true;
-      if (_needsInitialJump) _scheduleFollow();
-    });
+    sessionState.readReadOffset().then(
+      (offset) {
+        if (!mounted) return;
+        _restoredOffset = offset;
+        _restoreDecided = true;
+        // Content may already be laid out; the armed jump waits on us.
+        if (_needsInitialJump) _scheduleFollow();
+      },
+      onError: (_) {
+        if (!mounted) return;
+        _restoreDecided = true;
+        if (_needsInitialJump) _scheduleFollow();
+      },
+    );
   }
 
   /// Whether the selected session's turn is running or streaming: the
@@ -1422,11 +1423,7 @@ class _StreamingCaretState extends State<_StreamingCaret>
     final ds = dsOf(context);
     return FadeTransition(
       opacity: _blink,
-      child: Container(
-        width: 2,
-        height: 18,
-        color: ds.stateBusinessPrimary,
-      ),
+      child: Container(width: 2, height: 18, color: ds.stateBusinessPrimary),
     );
   }
 }
@@ -1535,8 +1532,9 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   Widget _placeholder(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
-    final nameSuffix =
-        ref.name == null ? '' : l10n.imagePlaceholderSuffix(ref.name);
+    final nameSuffix = ref.name == null
+        ? ''
+        : l10n.imagePlaceholderSuffix(ref.name);
     return Row(
       children: [
         Expanded(
@@ -2434,13 +2432,14 @@ class PlanReviewEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final approve = question.intent?.approve;
     final chosen = draft.selected.length == 1 ? draft.selected.first : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          question.header ?? 'Plan review',
+          question.header ?? l10n.planReview,
           style: theme.textTheme.labelLarge?.copyWith(
             color: theme.colorScheme.primary,
           ),
@@ -2540,6 +2539,7 @@ class QuestionItemEditor extends StatelessWidget {
       );
     }
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2550,7 +2550,7 @@ class QuestionItemEditor extends StatelessWidget {
           Text(detail, style: theme.textTheme.bodySmall),
         if (draft.skipped) ...[
           Text(
-            'Skipped',
+            l10n.skipped,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -2563,7 +2563,7 @@ class QuestionItemEditor extends StatelessWidget {
                 skipped: false,
               ),
             ),
-            child: const Text('Answer instead'),
+            child: Text(l10n.answerInstead),
           ),
         ] else ...[
           for (final option in question.options)
@@ -2610,8 +2610,8 @@ class QuestionItemEditor extends StatelessWidget {
                 ..selection = TextSelection.collapsed(
                   offset: draft.customText.length,
                 ),
-              decoration: const InputDecoration(
-                hintText: 'Type your answer',
+              decoration: InputDecoration(
+                hintText: l10n.typeYourAnswerHint,
                 isDense: true,
               ),
               onChanged: (text) => onDraftChange(
@@ -2632,7 +2632,7 @@ class QuestionItemEditor extends StatelessWidget {
                 skipped: true,
               ),
             ),
-            child: const Text('Skip'),
+            child: Text(l10n.skip),
           ),
         ],
       ],
@@ -2779,6 +2779,7 @@ class _ComposerBarState extends State<ComposerBar> {
   }
 
   Future<void> _pickImages() async {
+    final l10n = AppLocalizations.of(context)!;
     final picked = await ImagePicker().pickMultiImage();
     if (picked.isEmpty) return;
     final loaded = <PendingImage>[];
@@ -2788,7 +2789,7 @@ class _ComposerBarState extends State<ComposerBar> {
       try {
         final mediaType = file.mimeType ?? guessImageMediaType(file.path);
         if (mediaType == null) {
-          failure = 'unknown image type for $name';
+          failure = l10n.unknownImageType(name);
           continue;
         }
         final bytes = await file.readAsBytes();
@@ -2811,6 +2812,7 @@ class _ComposerBarState extends State<ComposerBar> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
@@ -2848,8 +2850,8 @@ class _ComposerBarState extends State<ComposerBar> {
               // Web swaps the placeholder while the plan target is active
               // (InputBar: planActive ? t('placeholder.plan') : ...).
               hintText: _planTarget
-                  ? 'describe your task to generate plan'
-                  : 'Message DeepSeek Harness',
+                  ? l10n.planPlaceholder
+                  : l10n.messagePlaceholder,
             ),
           ),
           if (widget.pendingImages.isNotEmpty)
@@ -2876,7 +2878,9 @@ class _ComposerBarState extends State<ComposerBar> {
                               onPressed: () =>
                                   widget.onAction(RemovePendingImage(image.id)),
                               icon: const Icon(Icons.close, size: 16),
-                              tooltip: 'Remove ${image.name ?? "attachment"}',
+                              tooltip: l10n.removeImage(
+                                image.name ?? 'attachment',
+                              ),
                             ),
                           ],
                         ),
@@ -2907,7 +2911,7 @@ class _ComposerBarState extends State<ComposerBar> {
               ),
               const SizedBox(width: 12),
               DsCircleButton(
-                tooltip: 'New line',
+                tooltip: l10n.newLine,
                 enabled: widget.enabled,
                 onTap: _insertNewline,
                 // Web .add family: the glyph rides label-primary.
@@ -3112,18 +3116,19 @@ class PopupMenuEntryShim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = effectiveMode == PromptMode.steer ? 'Steer' : 'Queue';
+    final l10n = AppLocalizations.of(context)!;
+    final label = effectiveMode == PromptMode.steer ? l10n.steer : l10n.queue;
     return PopupMenuButton<PromptMode>(
-      tooltip: 'Delivery',
+      tooltip: l10n.delivery,
       enabled: enabled,
       initialValue: effectiveMode,
       onSelected: onModeChange,
       itemBuilder: (context) => [
-        const PopupMenuItem(value: PromptMode.queue, child: Text('Queue')),
+        PopupMenuItem(value: PromptMode.queue, child: Text(l10n.queue)),
         PopupMenuItem(
           value: PromptMode.steer,
           enabled: running,
-          child: const Text('Steer'),
+          child: Text(l10n.steer),
         ),
       ],
       child: Padding(
@@ -3161,8 +3166,9 @@ class _PlusButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return DsCircleButton(
-      tooltip: 'Commands',
+      tooltip: l10n.commandsTooltip,
       enabled: enabled,
       onTap: () => _open(context),
       // Web .add: the glyph rides --dsw-alias-label-primary.
@@ -3241,12 +3247,13 @@ class _CommandSheetState extends State<_CommandSheet> {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     final query = _search.trim().toLowerCase();
     bool matches(String label, String detail) =>
         query.isEmpty ||
         label.toLowerCase().contains(query) ||
         detail.toLowerCase().contains(query);
-    final commands = kHostCommands
+    final commands = hostCommands(l10n)
         .where((command) => matches(command.name, command.description))
         .toList();
     final skills = widget.skills
@@ -3267,7 +3274,7 @@ class _CommandSheetState extends State<_CommandSheet> {
             style: Theme.of(context).textTheme.bodyMedium,
             decoration: InputDecoration(
               isDense: true,
-              hintText: 'Search commands',
+              hintText: l10n.searchCommandsHint,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: ds.borderInverted),
@@ -3296,7 +3303,7 @@ class _CommandSheetState extends State<_CommandSheet> {
                   ),
                   // PopupSelectView .status: the empty roster line.
                   child: Text(
-                    'No matching commands',
+                    l10n.noMatchingCommands,
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(color: ds.labelTertiary),
                   ),
@@ -3322,8 +3329,8 @@ class _CommandSheetState extends State<_CommandSheet> {
                     // paste/drop) — demoted below the command roster.
                     if (showAttach)
                       _CommandRow(
-                        label: 'Attach images',
-                        detail: 'Pick from gallery',
+                        label: l10n.attachImages,
+                        detail: l10n.pickFromGallery,
                         enabled: widget.canPickImages,
                         onTap: widget.onPickImagesNow,
                       ),
@@ -3418,6 +3425,7 @@ class _PrimarySendButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     final active = running
         ? onStop != null
         : enabled && !sending && onSend != null;
@@ -3425,10 +3433,10 @@ class _PrimarySendButton extends StatelessWidget {
     final glyph = active ? Colors.white : ds.labelTertiary;
     return Tooltip(
       message: running
-          ? 'Stop'
+          ? l10n.stopTooltip
           : sending
-          ? 'Sending'
-          : 'Send',
+          ? l10n.sending
+          : l10n.send,
       child: Material(
         color: Colors.transparent,
         shape: const CircleBorder(),
@@ -3582,11 +3590,12 @@ class TurnGroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final messages = items.whereType<TimelineMessage>().length;
     final tools = items.whereType<TimelineToolCall>().toList();
     final label = turn == null
-        ? 'Before first turn · $messages messages'
-        : 'Turn $turn · $messages messages · ${tools.length} tools';
+        ? l10n.beforeFirstTurnHeader(messages)
+        : l10n.turnHeader(messages, tools.length, turn);
 
     final statusByName = <String, List<ToolRunStatus>>{};
     for (final tool in tools) {
@@ -3667,10 +3676,8 @@ class TurnBoundaryRow extends StatelessWidget {
             const SizedBox(width: 10),
             Text(
               'Turn $turn',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: ds.labelCaption,
-                letterSpacing: 0.8,
-              ),
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: ds.labelCaption, letterSpacing: 0.8),
             ),
           ],
         ),
@@ -3690,6 +3697,7 @@ class CompactionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 24,
       child: Row(
@@ -3697,7 +3705,7 @@ class CompactionRow extends StatelessWidget {
           Icon(Icons.layers_outlined, size: 14, color: ds.labelSecondary),
           const SizedBox(width: 6),
           Text(
-            'Context compacted',
+            l10n.contextCompacted,
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: ds.labelPrimaryDimmed),
           ),
@@ -3712,7 +3720,7 @@ class CompactionRow extends StatelessWidget {
           ),
           Flexible(
             child: Text(
-              'Compacted $shadowedCount history items',
+              l10n.compactedHistoryCount(shadowedCount),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall
@@ -3746,6 +3754,7 @@ class _ContextInjectionRowState extends State<ContextInjectionRow> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final injection = widget.injection;
     final hasBody = injection.text.trim().isNotEmpty;
     return Column(
@@ -3761,7 +3770,9 @@ class _ContextInjectionRowState extends State<ContextInjectionRow> {
                 Icon(Icons.travel_explore, size: 14, color: ds.labelSecondary),
                 const SizedBox(width: 6),
                 Text(
-                  injection.isRecall ? 'Recall' : 'Context injection',
+                  injection.isRecall
+                      ? l10n.recallLabel
+                      : l10n.contextInjectionLabel,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: ds.labelPrimaryDimmed,
                   ),
@@ -3842,8 +3853,9 @@ class _RenameSessionDialogState extends State<_RenameSessionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Rename session'),
+      title: Text(l10n.renameSession),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -3852,14 +3864,14 @@ class _RenameSessionDialogState extends State<_RenameSessionDialog> {
       actions: [
         OutlinedButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () {
             widget.onSave(_controller.text);
             Navigator.of(context).pop();
           },
-          child: const Text('Save'),
+          child: Text(l10n.save),
         ),
       ],
     );

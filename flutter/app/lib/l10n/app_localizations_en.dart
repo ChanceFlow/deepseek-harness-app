@@ -67,7 +67,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get providersLabel => 'Providers';
 
   @override
-  String get noCurrentGoal => 'No current goal';
+  String get noCurrentGoal => 'No ongoing goal';
 
   @override
   String get goalObjectiveHint => 'Goal objective';
@@ -76,31 +76,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get maxGoalRoundsHint => 'Max goal rounds (optional)';
 
   @override
-  String get pause => 'Pause';
+  String get pause => 'Pause goal';
 
   @override
-  String get resume => 'Resume';
+  String get resume => 'Resume goal';
 
   @override
-  String get clear => 'Clear';
+  String get clear => 'Clear goal';
 
   @override
-  String get complete => 'Complete';
+  String get complete => 'Complete goal';
 
   @override
-  String get edit => 'Edit';
+  String get edit => 'Edit goal';
 
   @override
-  String get goalPhaseActive => 'ACTIVE';
+  String get goalPhaseActive => 'Ongoing Goal';
 
   @override
-  String get goalPhasePaused => 'PAUSED';
+  String get goalPhasePaused => 'Paused Goal';
 
   @override
-  String get goalPhaseBlocked => 'BLOCKED';
+  String get goalPhaseBlocked => 'Blocked Goal';
 
   @override
-  String get goalPhaseComplete => 'COMPLETE';
+  String get goalPhaseComplete => 'Completed Goal';
 
   @override
   String goalStatusLine(int max, String phase, int revision, int started) {
@@ -119,7 +119,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolsLabel => 'Tools';
 
   @override
-  String get conversationLabel => 'Conversation';
+  String get conversationLabel => 'Messages';
 
   @override
   String contextTokens(String used, String window) {
@@ -156,7 +156,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String todoCountActive(int count) {
-    return '$count active';
+    return '$count in progress';
   }
 
   @override
@@ -282,7 +282,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get effortLabel => 'Effort';
 
   @override
-  String get providerDefault => 'Provider default';
+  String get providerDefault => 'Default';
 
   @override
   String get presetStandardName => 'Standard mode';
@@ -438,12 +438,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String workspaceNameExists(String name) {
-    return 'A workspace named \"$name\" already exists.';
+    return 'A workspace named “$name” already exists.';
   }
 
   @override
   String deleteWorkspaceConfirm(String name, String ungroupedLabel) {
-    return 'This removes \"$name\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under $ungroupedLabel.';
+    return 'This removes “$name” from the workspace list. The folder and session logs will be kept. Its sessions will appear under $ungroupedLabel.';
   }
 
   @override
@@ -560,7 +560,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get busyPreferenceDescription =>
-      'Applies only while an agent is running.';
+      'Busy only; Cmd/Ctrl+Enter uses the other behavior';
 
   @override
   String get busyBehaviorQueue => 'Queue';
@@ -577,7 +577,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentPresetsIntro =>
-      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities.';
+      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.';
 
   @override
   String get presetGroupBuiltIn => 'Built-in';
@@ -1001,19 +1001,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get semanticsFailed => 'Failed';
 
   @override
-  String get inputLabel => 'IN';
+  String get inputLabel => 'Input';
 
   @override
-  String get outputLabel => 'OUT';
+  String get outputLabel => 'Output';
 
   @override
-  String get runStatusRunning => 'running...';
+  String get runStatusRunning => 'Running…';
 
   @override
-  String get runStatusDone => 'done';
+  String get runStatusDone => 'Done';
 
   @override
-  String get runStatusFailed => 'failed';
+  String get runStatusFailed => 'Failed';
 
   @override
   String get pauseGoal => 'Pause goal';
@@ -1045,7 +1045,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get saveQueuedMessage => 'Save queued message';
 
   @override
-  String get cancelEdit => 'Cancel edit';
+  String get cancelEdit => 'Cancel editing';
 
   @override
   String get steer => 'Steer';
@@ -1083,7 +1083,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planPlaceholder => 'describe your task to generate plan';
 
   @override
-  String get messagePlaceholder => 'Message DeepSeek Harness';
+  String get messagePlaceholder => 'Message the agent';
 
   @override
   String removeImage(String name) {
@@ -1130,12 +1130,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contextCompacted => 'Context compacted';
 
   @override
-  String compactedHistoryCount(int count) {
-    return 'Compacted $count history items';
+  String compactedHistoryCount(int count, Object tokens) {
+    return 'Compacted $count history items (~$tokens tokens)';
   }
 
   @override
-  String get recallLabel => 'Recall';
+  String get recallLabel => 'Session recall';
 
   @override
   String get contextInjectionLabel => 'Context injection';
@@ -1174,4 +1174,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get parentSession => 'Parent session';
+
+  @override
+  String get addWorkspace => 'Add workspace';
+
+  @override
+  String get searchTooltip => 'Search';
+
+  @override
+  String get namespaceReadOnlyHint =>
+      'Host is read-only on this connection; namespace edits are unavailable.';
 }

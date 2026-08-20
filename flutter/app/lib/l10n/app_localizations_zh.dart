@@ -67,7 +67,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get providersLabel => '提供方';
 
   @override
-  String get noCurrentGoal => '暂无目标';
+  String get noCurrentGoal => '暂无进行中的目标';
 
   @override
   String get goalObjectiveHint => '目标描述';
@@ -76,31 +76,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get maxGoalRoundsHint => '最大轮数（可选）';
 
   @override
-  String get pause => '暂停';
+  String get pause => '暂停目标';
 
   @override
-  String get resume => '继续';
+  String get resume => '恢复目标';
 
   @override
-  String get clear => '清除';
+  String get clear => '清除目标';
 
   @override
-  String get complete => '完成';
+  String get complete => '完成目标';
 
   @override
-  String get edit => '编辑';
+  String get edit => '编辑目标';
 
   @override
-  String get goalPhaseActive => '进行中';
+  String get goalPhaseActive => '进行中的目标';
 
   @override
-  String get goalPhasePaused => '已暂停';
+  String get goalPhasePaused => '已暂停的目标';
 
   @override
-  String get goalPhaseBlocked => '受阻';
+  String get goalPhaseBlocked => '受阻的目标';
 
   @override
-  String get goalPhaseComplete => '已完成';
+  String get goalPhaseComplete => '已完成的目标';
 
   @override
   String goalStatusLine(int max, String phase, int revision, int started) {
@@ -109,7 +109,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String contextUsedPercent(int percent) {
-    return '已用上下文 $percent%';
+    return '上下文已用 $percent%';
   }
 
   @override
@@ -119,7 +119,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolsLabel => '工具';
 
   @override
-  String get conversationLabel => '会话';
+  String get conversationLabel => '对话消息';
 
   @override
   String contextTokens(String used, String window) {
@@ -127,10 +127,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get heroHeadline => '探索未知';
+  String get heroHeadline => '探索未至之境';
 
   @override
-  String get heroPreview => '预览';
+  String get heroPreview => '预览版';
 
   @override
   String get heroChooseWorkspace => '选择工作区';
@@ -156,7 +156,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String todoCountActive(int count) {
-    return '进行中 $count';
+    return '$count 进行中';
   }
 
   @override
@@ -193,7 +193,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get jobStatusRunning => '运行中';
 
   @override
-  String get jobStatusStopping => '停止中';
+  String get jobStatusStopping => '正在停止';
 
   @override
   String get jobStatusCompleted => '已完成';
@@ -202,7 +202,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get jobStatusKilled => '已取消';
 
   @override
-  String get jobStatusFailed => '失败';
+  String get jobStatusFailed => '已失败';
 
   @override
   String jobDurationHoursMinutes(int hours, int minutes) {
@@ -235,7 +235,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String toolRequestsPrivileged(String tool) {
-    return '工具 $tool 请求特权执行';
+    return '工具 $tool 请求越权执行';
   }
 
   @override
@@ -245,10 +245,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get allowOnce => '允许一次';
 
   @override
-  String get agentPresetLabel => '智能体预设';
+  String get agentPresetLabel => 'Agent 预设';
 
   @override
-  String get agentPresetTooltip => '为即将开始的会话选择智能体预设';
+  String get agentPresetTooltip => '即将开始的这个会话所用的 Agent 预设';
 
   @override
   String get accessModeLabel => '访问模式';
@@ -262,14 +262,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fullAccessOption => '完全访问';
 
   @override
-  String get enableFullAccessTitle => '启用完全访问？';
+  String get enableFullAccessTitle => '确认启用 Full access？';
 
   @override
   String get fullAccessRisks =>
-      '完全访问会减少确认步骤，让智能体直接执行更多操作，包括敏感操作、文件修改或外部命令。请仅在信任当前任务时使用。';
+      '启用 Full access 后，agent 将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。';
 
   @override
-  String get acknowledgeRisks => '我了解风险，希望继续';
+  String get acknowledgeRisks => '我已了解风险，并愿意继续';
 
   @override
   String get enableFullAccess => '启用完全访问';
@@ -278,38 +278,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelLabel => '模型';
 
   @override
-  String get effortLabel => '强度';
+  String get effortLabel => '推理等级';
 
   @override
-  String get providerDefault => '提供方默认';
+  String get providerDefault => 'Default';
 
   @override
   String get presetStandardName => '标准模式';
 
   @override
   String get presetStandardDescription =>
-      '具备文件编辑、shell、文件与网络搜索、技能、规划、目标、子代理与工作流的完整编码智能体。';
+      '功能完整的编码 Agent，支持文件编辑、Shell、文件与网页检索、Skills、计划、目标、子代理和工作流。';
 
   @override
-  String get presetCodeName => '代码模式';
+  String get presetCodeName => 'PTC 模式';
 
   @override
   String get presetCodeDescription =>
-      '拥有标准模式的全部能力，并通过代码模式 SDK 暴露工具，让模型可在单个 TypeScript 程序中组合多步操作。';
+      '具备标准模式的全部能力，并通过 Code Mode SDK 呈现工具，让模型用一个 TypeScript 程序组合多步操作。';
 
   @override
   String get presetMinimalName => '极简模式';
 
   @override
   String get presetMinimalDescription =>
-      '仅含持久 bash 与 str_replace_editor 两种工具的编码智能体。';
+      '仅提供持久 bash 与 str_replace_editor 的双工具编码 Agent。';
 
   @override
-  String get presetCordisName => '创作模式';
+  String get presetCordisName => '创造模式';
 
   @override
   String get presetCordisDescription =>
-      '专为创建自定义智能体预设而设计，具备标准模式全部能力，另加运行时检查、插件实验与预设编写指引。';
+      '用于创建自定义 Agent preset：具备标准模式的全部能力，并提供运行时检查、插件实验和 preset 创作指导。';
 
   @override
   String get toolSearchTitle => '搜索';
@@ -348,11 +348,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolPwshTitle => 'Pwsh';
 
   @override
-  String get toolUpdateTodoTitle => '更新待办列表';
+  String get toolUpdateTodoTitle => '更新任务清单';
 
   @override
   String toolTodoPlanCompleted(int done, int total) {
-    return '已完成 $done/$total';
+    return '$done/$total 已完成';
   }
 
   @override
@@ -437,12 +437,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String workspaceNameExists(String name) {
-    return '名为 \"$name\" 的工作区已存在。';
+    return '已存在名为“$name”的工作区。';
   }
 
   @override
   String deleteWorkspaceConfirm(String name, String ungroupedLabel) {
-    return '这将从工作区列表中移除 \"$name\"。文件夹与会话日志将保留。其会话将出现在$ungroupedLabel下。';
+    return '将把“$name”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“$ungroupedLabel”下。';
   }
 
   @override
@@ -476,7 +476,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavBackends => '后端';
 
   @override
-  String get settingsNavGeneral => '常规';
+  String get settingsNavGeneral => '通用设置';
 
   @override
   String get settingsNavModels => '模型';
@@ -485,7 +485,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavPlugins => '插件';
 
   @override
-  String get settingsNavAgentPresets => '智能体预设';
+  String get settingsNavAgentPresets => 'Agent 预设';
 
   @override
   String get settingsNavCredentials => '凭据';
@@ -549,26 +549,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalIntro => '新会话默认项与主机设置平面。';
 
   @override
-  String get busyPreferenceLabel => '繁忙时的行为';
+  String get busyPreferenceLabel => '繁忙时 Enter 键行为';
 
   @override
-  String get busyPreferenceDescription => '仅在智能体运行期间生效。';
+  String get busyPreferenceDescription => '仅在智能体运行时生效；Cmd/Ctrl+Enter 使用另一行为';
 
   @override
-  String get busyBehaviorQueue => '排队';
+  String get busyBehaviorQueue => '排队发送';
 
   @override
-  String get busyBehaviorSteer => '转向';
+  String get busyBehaviorSteer => '插话发送';
 
   @override
   String get agentPresetPreferenceLabel => '智能体预设';
 
   @override
-  String get agentPresetPreferenceDescription =>
-      '适用于从现在起启动的会话。运行中的会话保持其启动时的预设。';
+  String get agentPresetPreferenceDescription => '对此后新建的会话生效。运行中的会话保持它开始时的预设。';
 
   @override
-  String get agentPresetsIntro => '预设是一个会话的智能体运行的插件组合——其工具、提示词与能力。';
+  String get agentPresetsIntro =>
+      '预设即一个会话的 Agent 所运行的插件组装 —— 它的工具、提示词与能力。复制一份既有预设改成自己的，或用「创造模式」让 Agent 帮你创建。';
 
   @override
   String get presetGroupBuiltIn => '内置';
@@ -586,7 +586,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get presetBrokenBadge => '加载失败';
 
   @override
-  String get presetInUseBadge => '使用中';
+  String get presetInUseBadge => '当前使用';
 
   @override
   String get pluginsIntro => '配置并检查此部署中安装的插件。';
@@ -760,10 +760,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ungroupedLabel => '未分组';
 
   @override
-  String get openSidebar => '展开侧栏';
+  String get openSidebar => '打开侧边栏';
 
   @override
-  String get collapseSidebar => '收起侧栏';
+  String get collapseSidebar => '收起侧边栏';
 
   @override
   String get newSession => '新会话';
@@ -867,34 +867,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modeOneShot => '一次性';
 
   @override
-  String get modeContinuable => '可续接';
+  String get modeContinuable => '可继续';
 
   @override
-  String get activityRunning => '运行中';
+  String get activityRunning => '正在运行';
 
   @override
-  String get activityNotRunning => '未运行';
+  String get activityNotRunning => '当前未运行';
 
   @override
-  String get diagnosticCorrupt => '会话记录已损坏';
+  String get diagnosticCorrupt => '会话记录损坏';
 
   @override
-  String get diagnosticUnsupported => '不支持的子代理记录版本';
+  String get diagnosticUnsupported => '子代理记录版本不受支持';
 
   @override
-  String get diagnosticUnavailable => '会话记录暂时不可用';
+  String get diagnosticUnavailable => '会话记录暂不可用';
 
   @override
   String get oneShotRecordTitle => '一次性子代理记录';
 
   @override
-  String get parentUnavailableTitle => '此子代理当前为只读';
+  String get parentUnavailableTitle => '此子代理暂时只读';
 
   @override
   String get oneShotRecordBody => '一次性任务不接受后续消息；请在此查看完整执行记录。';
 
   @override
-  String get parentUnavailableBody => '父会话已离线；重新打开它即可继续发送消息。';
+  String get parentUnavailableBody => '父会话当前不在线，重新打开父会话后即可继续发送消息。';
 
   @override
   String get appBarConnected => '已连接';
@@ -976,7 +976,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get semanticsFailed => '失败';
 
   @override
-  String get inputLabel => '入参';
+  String get inputLabel => '输入';
 
   @override
   String get outputLabel => '输出';
@@ -985,7 +985,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get runStatusRunning => '运行中…';
 
   @override
-  String get runStatusDone => '完成';
+  String get runStatusDone => '已完成';
 
   @override
   String get runStatusFailed => '失败';
@@ -1023,10 +1023,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cancelEdit => '取消编辑';
 
   @override
-  String get steer => '转向';
+  String get steer => '插话发送';
 
   @override
-  String get removeQueuedMessage => '移除排队消息';
+  String get removeQueuedMessage => '删除排队消息';
 
   @override
   String approveTool(String tool) {
@@ -1040,7 +1040,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get answer => '回答';
 
   @override
-  String get planReview => '方案评审';
+  String get planReview => '计划待审';
 
   @override
   String get skipped => '已跳过';
@@ -1049,16 +1049,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get answerInstead => '改为回答';
 
   @override
-  String get typeYourAnswerHint => '输入你的回答';
+  String get typeYourAnswerHint => '输入你的答案';
 
   @override
-  String get skip => '跳过';
+  String get skip => '跳过本题';
 
   @override
-  String get planPlaceholder => '描述你的任务以生成方案';
+  String get planPlaceholder => '描述你的任务以生成计划';
 
   @override
-  String get messagePlaceholder => '给 DeepSeek Harness 发消息';
+  String get messagePlaceholder => '给智能体发消息';
 
   @override
   String removeImage(String name) {
@@ -1105,12 +1105,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contextCompacted => '上下文已压缩';
 
   @override
-  String compactedHistoryCount(int count) {
-    return '已压缩 $count 条历史';
+  String compactedHistoryCount(int count, Object tokens) {
+    return '已压缩 $count 条历史记录（约 $tokens tokens）';
   }
 
   @override
-  String get recallLabel => '召回';
+  String get recallLabel => '跨会话召回';
 
   @override
   String get contextInjectionLabel => '上下文注入';
@@ -1125,7 +1125,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatGoalPhaseBlocked => '受阻';
 
   @override
-  String get queue => '排队';
+  String get queue => '排队发送';
 
   @override
   String get thinkLabel => '思考';
@@ -1147,4 +1147,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get parentSession => '父会话';
+
+  @override
+  String get addWorkspace => '添加工作区';
+
+  @override
+  String get searchTooltip => '搜索';
+
+  @override
+  String get namespaceReadOnlyHint => '此连接上的主机为只读；命名空间编辑不可用。';
 }

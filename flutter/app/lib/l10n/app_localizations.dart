@@ -215,7 +215,7 @@ abstract class AppLocalizations {
   /// Empty state when no goal is active.
   ///
   /// In en, this message translates to:
-  /// **'No current goal'**
+  /// **'No ongoing goal'**
   String get noCurrentGoal;
 
   /// Hint and edit-field label for the goal objective text.
@@ -233,55 +233,55 @@ abstract class AppLocalizations {
   /// Pause an active goal.
   ///
   /// In en, this message translates to:
-  /// **'Pause'**
+  /// **'Pause goal'**
   String get pause;
 
   /// Resume a paused goal.
   ///
   /// In en, this message translates to:
-  /// **'Resume'**
+  /// **'Resume goal'**
   String get resume;
 
   /// Clear a goal.
   ///
   /// In en, this message translates to:
-  /// **'Clear'**
+  /// **'Clear goal'**
   String get clear;
 
   /// Complete a goal.
   ///
   /// In en, this message translates to:
-  /// **'Complete'**
+  /// **'Complete goal'**
   String get complete;
 
   /// Edit a goal.
   ///
   /// In en, this message translates to:
-  /// **'Edit'**
+  /// **'Edit goal'**
   String get edit;
 
   /// Goal phase label, active.
   ///
   /// In en, this message translates to:
-  /// **'ACTIVE'**
+  /// **'Ongoing Goal'**
   String get goalPhaseActive;
 
   /// Goal phase label, paused.
   ///
   /// In en, this message translates to:
-  /// **'PAUSED'**
+  /// **'Paused Goal'**
   String get goalPhasePaused;
 
   /// Goal phase label, blocked.
   ///
   /// In en, this message translates to:
-  /// **'BLOCKED'**
+  /// **'Blocked Goal'**
   String get goalPhaseBlocked;
 
   /// Goal phase label, complete.
   ///
   /// In en, this message translates to:
-  /// **'COMPLETE'**
+  /// **'Completed Goal'**
   String get goalPhaseComplete;
 
   /// Localized screen copy.
@@ -311,7 +311,7 @@ abstract class AppLocalizations {
   /// Context composition legend, conversation row.
   ///
   /// In en, this message translates to:
-  /// **'Conversation'**
+  /// **'Messages'**
   String get conversationLabel;
 
   /// Localized screen copy.
@@ -371,7 +371,7 @@ abstract class AppLocalizations {
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'{count} active'**
+  /// **'{count} in progress'**
   String todoCountActive(int count);
 
   /// Localized screen copy.
@@ -557,7 +557,7 @@ abstract class AppLocalizations {
   /// Effort option meaning the provider's default effort.
   ///
   /// In en, this message translates to:
-  /// **'Provider default'**
+  /// **'Default'**
   String get providerDefault;
 
   /// Built-in agent preset display name.
@@ -791,13 +791,13 @@ abstract class AppLocalizations {
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'A workspace named \"{name}\" already exists.'**
+  /// **'A workspace named “{name}” already exists.'**
   String workspaceNameExists(String name);
 
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'This removes \"{name}\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.'**
+  /// **'This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.'**
   String deleteWorkspaceConfirm(String name, String ungroupedLabel);
 
   /// Localized screen copy.
@@ -977,7 +977,7 @@ abstract class AppLocalizations {
   /// No description provided for @busyPreferenceDescription.
   ///
   /// In en, this message translates to:
-  /// **'Applies only while an agent is running.'**
+  /// **'Busy only; Cmd/Ctrl+Enter uses the other behavior'**
   String get busyPreferenceDescription;
 
   /// No description provided for @busyBehaviorQueue.
@@ -1007,7 +1007,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentPresetsIntro.
   ///
   /// In en, this message translates to:
-  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities.'**
+  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.'**
   String get agentPresetsIntro;
 
   /// No description provided for @presetGroupBuiltIn.
@@ -1762,31 +1762,31 @@ abstract class AppLocalizations {
   /// No description provided for @inputLabel.
   ///
   /// In en, this message translates to:
-  /// **'IN'**
+  /// **'Input'**
   String get inputLabel;
 
   /// No description provided for @outputLabel.
   ///
   /// In en, this message translates to:
-  /// **'OUT'**
+  /// **'Output'**
   String get outputLabel;
 
   /// No description provided for @runStatusRunning.
   ///
   /// In en, this message translates to:
-  /// **'running...'**
+  /// **'Running…'**
   String get runStatusRunning;
 
   /// No description provided for @runStatusDone.
   ///
   /// In en, this message translates to:
-  /// **'done'**
+  /// **'Done'**
   String get runStatusDone;
 
   /// No description provided for @runStatusFailed.
   ///
   /// In en, this message translates to:
-  /// **'failed'**
+  /// **'Failed'**
   String get runStatusFailed;
 
   /// No description provided for @pauseGoal.
@@ -1834,7 +1834,7 @@ abstract class AppLocalizations {
   /// No description provided for @cancelEdit.
   ///
   /// In en, this message translates to:
-  /// **'Cancel edit'**
+  /// **'Cancel editing'**
   String get cancelEdit;
 
   /// No description provided for @steer.
@@ -1906,7 +1906,7 @@ abstract class AppLocalizations {
   /// No description provided for @messagePlaceholder.
   ///
   /// In en, this message translates to:
-  /// **'Message DeepSeek Harness'**
+  /// **'Message the agent'**
   String get messagePlaceholder;
 
   /// Localized screen copy.
@@ -1984,13 +1984,13 @@ abstract class AppLocalizations {
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'Compacted {count} history items'**
-  String compactedHistoryCount(int count);
+  /// **'Compacted {count} history items (~{tokens} tokens)'**
+  String compactedHistoryCount(int count, Object tokens);
 
   /// No description provided for @recallLabel.
   ///
   /// In en, this message translates to:
-  /// **'Recall'**
+  /// **'Session recall'**
   String get recallLabel;
 
   /// No description provided for @contextInjectionLabel.
@@ -2064,6 +2064,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Parent session'**
   String get parentSession;
+
+  /// No description provided for @addWorkspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Add workspace'**
+  String get addWorkspace;
+
+  /// No description provided for @searchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTooltip;
+
+  /// No description provided for @namespaceReadOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Host is read-only on this connection; namespace edits are unavailable.'**
+  String get namespaceReadOnlyHint;
 }
 
 class _AppLocalizationsDelegate

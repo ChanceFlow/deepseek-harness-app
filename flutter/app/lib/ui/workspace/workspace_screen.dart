@@ -124,9 +124,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                   decoration: BoxDecoration(
                     color: active ? ds.sidebarNavItemActive : null,
-                    border: Border(
-                      bottom: BorderSide(color: ds.divider),
-                    ),
+                    border: Border(bottom: BorderSide(color: ds.divider)),
                   ),
                   child: Row(
                     children: [
@@ -330,7 +328,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           Scaffold(
             // Web: the browser region lives on the sidebar fill.
             backgroundColor: ds.sidebarFill,
-            body: SafeArea(child: _browsingRegionBody(context, ds, uiState, workspaces, query)),
+            body: SafeArea(
+              child: _browsingRegionBody(
+                context,
+                ds,
+                uiState,
+                workspaces,
+                query,
+              ),
+            ),
           ),
         if (uiState.directoryBrowserOpen) ...[
           // Web Modal mask: rgba(0,0,0,0.24); tapping it closes.
@@ -382,7 +388,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     List<WorkspaceSummary> workspaces,
     String query,
   ) {
-    return Material(color: ds.sidebarFill, child: _browsingRegionBody(context, ds, uiState, workspaces, query));
+    return Material(
+      color: ds.sidebarFill,
+      child: _browsingRegionBody(context, ds, uiState, workspaces, query),
+    );
   }
 
   Widget _browsingRegionBody(
@@ -480,6 +489,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
       child: SizedBox(
@@ -496,14 +506,14 @@ class _SectionHeader extends StatelessWidget {
               ),
             ),
             _HeaderIconButton(
-              tooltip: 'Search',
+              tooltip: l10n.searchTooltip,
               icon: Icons.search,
               active: searchActive,
               onTap: onToggleSearch,
             ),
             const SizedBox(width: 4),
             _HeaderIconButton(
-              tooltip: 'Add workspace',
+              tooltip: l10n.addWorkspace,
               icon: Icons.create_new_folder_outlined,
               onTap: onAdd,
             ),
@@ -1325,7 +1335,7 @@ class _DeleteWorkspaceDialog extends StatelessWidget {
         ),
       ],
       child: Text(
-        l10n.deleteWorkspaceConfirm(workspace.title),
+        l10n.deleteWorkspaceConfirm(workspace.title, l10n.ungroupedLabel),
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),

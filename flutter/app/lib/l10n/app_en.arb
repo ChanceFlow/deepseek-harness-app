@@ -72,7 +72,7 @@
   "@providersLabel": {
     "description": "Section label naming model providers."
   },
-  "noCurrentGoal": "No current goal",
+  "noCurrentGoal": "No ongoing goal",
   "@noCurrentGoal": {
     "description": "Empty state when no goal is active."
   },
@@ -84,39 +84,39 @@
   "@maxGoalRoundsHint": {
     "description": "Hint for the optional max-rounds field."
   },
-  "pause": "Pause",
+  "pause": "Pause goal",
   "@pause": {
     "description": "Pause an active goal."
   },
-  "resume": "Resume",
+  "resume": "Resume goal",
   "@resume": {
     "description": "Resume a paused goal."
   },
-  "clear": "Clear",
+  "clear": "Clear goal",
   "@clear": {
     "description": "Clear a goal."
   },
-  "complete": "Complete",
+  "complete": "Complete goal",
   "@complete": {
     "description": "Complete a goal."
   },
-  "edit": "Edit",
+  "edit": "Edit goal",
   "@edit": {
     "description": "Edit a goal."
   },
-  "goalPhaseActive": "ACTIVE",
+  "goalPhaseActive": "Ongoing Goal",
   "@goalPhaseActive": {
     "description": "Goal phase label, active."
   },
-  "goalPhasePaused": "PAUSED",
+  "goalPhasePaused": "Paused Goal",
   "@goalPhasePaused": {
     "description": "Goal phase label, paused."
   },
-  "goalPhaseBlocked": "BLOCKED",
+  "goalPhaseBlocked": "Blocked Goal",
   "@goalPhaseBlocked": {
     "description": "Goal phase label, blocked."
   },
-  "goalPhaseComplete": "COMPLETE",
+  "goalPhaseComplete": "Completed Goal",
   "@goalPhaseComplete": {
     "description": "Goal phase label, complete."
   },
@@ -130,7 +130,7 @@
   "@toolsLabel": {
     "description": "Context composition legend, tools row."
   },
-  "conversationLabel": "Conversation",
+  "conversationLabel": "Messages",
   "@conversationLabel": {
     "description": "Context composition legend, conversation row."
   },
@@ -161,7 +161,7 @@
     "description": "Plan-strip header label."
   },
   "todoCountDone": "{count} completed",
-  "todoCountActive": "{count} active",
+  "todoCountActive": "{count} in progress",
   "todoCountPending": "{count} pending",
   "backgroundJobsTitle": "Background jobs",
   "@backgroundJobsTitle": {
@@ -255,7 +255,7 @@
   "@effortLabel": {
     "description": "Reasoning-effort seat label and sheet menu row."
   },
-  "providerDefault": "Provider default",
+  "providerDefault": "Default",
   "@providerDefault": {
     "description": "Effort option meaning the provider's default effort."
   },
@@ -360,8 +360,8 @@
   "casRevisionLine": "CAS revision {revision}; host validates against the schema",
   "newSessionInWorkspace": "New session in {title}",
   "workspaceActionsFor": "Workspace actions for {title}",
-  "workspaceNameExists": "A workspace named \"{name}\" already exists.",
-  "deleteWorkspaceConfirm": "This removes \"{name}\" from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.",
+  "workspaceNameExists": "A workspace named “{name}” already exists.",
+  "deleteWorkspaceConfirm": "This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under {ungroupedLabel}.",
   "newFolderIn": "New folder in \"{parent}\"",
   "secretsSetCount": "{count, plural, =1{1 secret set} other{{count} secrets set}}",
   "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
@@ -391,12 +391,12 @@
   "noneValue": "None",
   "generalIntro": "New-session defaults and the host settings plane.",
   "busyPreferenceLabel": "Enter behavior while busy",
-  "busyPreferenceDescription": "Applies only while an agent is running.",
+  "busyPreferenceDescription": "Busy only; Cmd/Ctrl+Enter uses the other behavior",
   "busyBehaviorQueue": "Queue",
   "busyBehaviorSteer": "Steer",
   "agentPresetPreferenceLabel": "Agent preset",
   "agentPresetPreferenceDescription": "Applies to sessions you start from now on. Running sessions keep the preset they began with.",
-  "agentPresetsIntro": "A preset is the plugin composition one session''s agent runs — its tools, prompt, and capabilities.",
+  "agentPresetsIntro": "A preset is the plugin composition one session''s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.",
   "presetGroupBuiltIn": "Built-in",
   "presetGroupCustom": "Custom",
   "presetsFooter": "Presets are authored on the host: copy, edit, and delete them from the desktop settings.",
@@ -521,11 +521,11 @@
   "imageLoadingPlaceholder": "image {width}×{height} ({bytes} bytes){suffix}",
   "semanticsRunning": "Running",
   "semanticsFailed": "Failed",
-  "inputLabel": "IN",
-  "outputLabel": "OUT",
-  "runStatusRunning": "running...",
-  "runStatusDone": "done",
-  "runStatusFailed": "failed",
+  "inputLabel": "Input",
+  "outputLabel": "Output",
+  "runStatusRunning": "Running…",
+  "runStatusDone": "Done",
+  "runStatusFailed": "Failed",
   "pauseGoal": "Pause goal",
   "resumeGoal": "Resume goal",
   "clearGoal": "Clear goal",
@@ -533,7 +533,7 @@
   "queuedMessagesCount": "{count, plural, =1{1 queued message} other{{count} queued messages}}",
   "editQueuedMessageHint": "Edit queued message",
   "saveQueuedMessage": "Save queued message",
-  "cancelEdit": "Cancel edit",
+  "cancelEdit": "Cancel editing",
   "steer": "Steer",
   "removeQueuedMessage": "Remove queued message",
   "approveTool": "Approve tool: {tool}",
@@ -545,7 +545,7 @@
   "typeYourAnswerHint": "Type your answer",
   "skip": "Skip",
   "planPlaceholder": "describe your task to generate plan",
-  "messagePlaceholder": "Message DeepSeek Harness",
+  "messagePlaceholder": "Message the agent",
   "removeImage": "Remove {name}",
   "newLine": "New line",
   "delivery": "Delivery",
@@ -558,8 +558,8 @@
   "beforeFirstTurnHeader": "Before first turn · {count} messages",
   "turnHeader": "Turn {turn} · {count} messages · {toolCount} tools",
   "contextCompacted": "Context compacted",
-  "compactedHistoryCount": "Compacted {count} history items",
-  "recallLabel": "Recall",
+  "compactedHistoryCount": "Compacted {count} history items (~{tokens} tokens)",
+  "recallLabel": "Session recall",
   "contextInjectionLabel": "Context injection",
   "chatGoalPhaseActive": "Active",
   "chatGoalPhasePaused": "Paused",
@@ -1053,5 +1053,8 @@
       }
     }
   },
-  "parentSession": "Parent session"
+  "parentSession": "Parent session",
+  "addWorkspace": "Add workspace",
+  "searchTooltip": "Search",
+  "namespaceReadOnlyHint": "Host is read-only on this connection; namespace edits are unavailable."
 }

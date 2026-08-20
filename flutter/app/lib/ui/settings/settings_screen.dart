@@ -70,7 +70,14 @@ class SettingsRoute extends ConsumerWidget {
 /// registry decides which host every other page even describes, and it
 /// stays reachable when that host is not), Credentials last (the web
 /// manages secrets inside the Models provider editors).
-enum _SettingsSection { backends, general, models, plugins, presets, credentials }
+enum _SettingsSection {
+  backends,
+  general,
+  models,
+  plugins,
+  presets,
+  credentials,
+}
 
 String _sectionLabel(_SettingsSection section, AppLocalizations l10n) =>
     switch (section) {
@@ -119,8 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (uiState.errorMessage case final String error)
               _ErrorBanner(
                 message: error,
-                onDismiss: () =>
-                    widget.onAction(const DismissSettingsError()),
+                onDismiss: () => widget.onAction(const DismissSettingsError()),
               ),
             // Web surfaces write/refresh state on the controls; the mobile
             // tab keeps one slim activity line above the content column.
@@ -140,8 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _SettingsSectionNav(
                     section: _section,
-                    onSelect: (next) =>
-                        setState(() => _section = next),
+                    onSelect: (next) => setState(() => _section = next),
                   ),
                   Expanded(
                     child: IndexedStack(
@@ -225,10 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 /// horizontal capsule row: one 36px capsule per section on the selector
 /// vocabulary, the active one on the module fill.
 class _SettingsSectionNav extends StatelessWidget {
-  const _SettingsSectionNav({
-    required this.section,
-    required this.onSelect,
-  });
+  const _SettingsSectionNav({required this.section, required this.onSelect});
 
   final _SettingsSection section;
   final ValueChanged<_SettingsSection> onSelect;
@@ -367,8 +369,7 @@ class _BackendsPage extends ConsumerWidget {
     ref.watch(allBackendConnectionsProvider);
     final registry = ref.watch(backendRegistryStateProvider);
     return registry.when(
-      loading: () =>
-          const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => Center(child: Text(error.toString())),
       data: (state) => _BackendsList(state: state, ref: ref),
     );
@@ -396,23 +397,20 @@ class _BackendsList extends StatelessWidget {
         // loud on the state); the next successful mutation clears it.
         if (state.errorMessage case final String message)
           _RegistryErrorLine(message: message),
-        ..._divided(
-          ds,
-          [
-            for (final backend in state.backends)
-              _BackendRow(
-                backend: backend,
-                active: backend.id == state.activeId,
-                onAction: (action) => _dispatchBackendAction(ref, action),
-                onEdit: () => _openBackendSheet(
-                  context,
-                  ref,
-                  backend,
-                  removeBlockedReason: _removeBlockedReason(state, backend, l10n),
-                ),
+        ..._divided(ds, [
+          for (final backend in state.backends)
+            _BackendRow(
+              backend: backend,
+              active: backend.id == state.activeId,
+              onAction: (action) => _dispatchBackendAction(ref, action),
+              onEdit: () => _openBackendSheet(
+                context,
+                ref,
+                backend,
+                removeBlockedReason: _removeBlockedReason(state, backend, l10n),
               ),
-          ],
-        ),
+            ),
+        ]),
         const SizedBox(height: 12),
         // Web empty-column convention: the trailing affordance is a
         // capsule on the selector vocabulary.
@@ -479,17 +477,11 @@ Future<void> _openBackendSheet(
             removeBlockedReason: backend == null ? null : removeBlockedReason,
             onSave: (label, baseUrl) {
               if (backend == null) {
-                _dispatchBackendAction(
-                  ref,
-                  AddBackend(label, baseUrl),
-                );
+                _dispatchBackendAction(ref, AddBackend(label, baseUrl));
                 return;
               }
               if (label != backend.label) {
-                _dispatchBackendAction(
-                  ref,
-                  RenameBackend(backend.id, label),
-                );
+                _dispatchBackendAction(ref, RenameBackend(backend.id, label));
               }
               if (baseUrl != backend.baseUri.toString()) {
                 _dispatchBackendAction(
@@ -500,10 +492,7 @@ Future<void> _openBackendSheet(
             },
             onRemove: backend == null || removeBlockedReason != null
                 ? null
-                : () => _dispatchBackendAction(
-                    ref,
-                    RemoveBackend(backend.id),
-                  ),
+                : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
           ),
         ),
       );
@@ -564,7 +553,10 @@ class _BackendRow extends StatelessWidget {
               if (active)
                 _StateBadge(configured: true, label: l10n.backendStatusActive)
               else
-                _StateBadge(configured: false, label: l10n.backendStatusStandby),
+                _StateBadge(
+                  configured: false,
+                  label: l10n.backendStatusStandby,
+                ),
               const SizedBox(width: 4),
               _CircleAction(
                 icon: Icons.edit_outlined,
@@ -653,11 +645,7 @@ class _HostPageGate extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.cloud_off_outlined,
-              size: 24,
-              color: ds.labelTertiary,
-            ),
+            Icon(Icons.cloud_off_outlined, size: 24, color: ds.labelTertiary),
             const SizedBox(height: 12),
             Text(
               l10n.hostSettingsUnavailable,
@@ -769,17 +757,11 @@ class _EnterBehaviorRow extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             l10n.busyPreferenceDescription,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: ds.labelTertiary,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
           ),
           const SizedBox(height: 10),
           if (controller == null)
-            _enterBehaviorCapsules(
-              context,
-              BusyEnterBehavior.queue,
-              null,
-            )
+            _enterBehaviorCapsules(context, BusyEnterBehavior.queue, null)
           else
             StreamBuilder<BusyEnterBehavior>(
               stream: controller.uiState,
@@ -860,7 +842,10 @@ class _AgentPresetRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(l10n.agentPresetLabel, style: theme.textTheme.bodyMedium),
+                    Text(
+                      l10n.agentPresetLabel,
+                      style: theme.textTheme.bodyMedium,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       l10n.agentPresetPreferenceDescription,
@@ -918,7 +903,10 @@ class _AgentPresetRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(l10n.agentPresetLabel, style: theme.textTheme.titleMedium),
+                  Text(
+                    l10n.agentPresetLabel,
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final option in options)
                     Material(
@@ -941,11 +929,7 @@ class _AgentPresetRow extends StatelessWidget {
                                 ),
                               ),
                               if (option.id == currentId)
-                                Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: ds.accent,
-                                ),
+                                Icon(Icons.check, size: 16, color: ds.accent),
                             ],
                           ),
                         ),
@@ -969,10 +953,7 @@ class _AgentPresetRow extends StatelessWidget {
 /// unloaded roster renders nothing but that footnote (web rule: a
 /// deployment that composes no presets has nothing to manage).
 class _AgentPresetsPage extends StatelessWidget {
-  const _AgentPresetsPage({
-    required this.roster,
-    required this.onAction,
-  });
+  const _AgentPresetsPage({required this.roster, required this.onAction});
 
   final AgentPresetRoster? roster;
   final void Function(SettingsAction) onAction;
@@ -1033,11 +1014,7 @@ class _AgentPresetsPage extends StatelessWidget {
 /// border, the 'Failed to load' badge, and the discovery reason, with
 /// its body disabled.
 class _PresetCard extends StatelessWidget {
-  const _PresetCard({
-    super.key,
-    required this.entry,
-    required this.onAction,
-  });
+  const _PresetCard({super.key, required this.entry, required this.onAction});
 
   final AgentPresetEntry entry;
   final void Function(SettingsAction) onAction;
@@ -1051,8 +1028,8 @@ class _PresetCard extends StatelessWidget {
     final active = entry.isDefault;
     // Web rule: the card offers the full description on hover when the
     // 4-line clamp cut it; an unpublished description says so.
-    final description = agentPresetDisplayDescription(entry, l10n) ??
-        l10n.noDescription;
+    final description =
+        agentPresetDisplayDescription(entry, l10n) ?? l10n.noDescription;
     return AnimatedContainer(
       duration: kDsDuration,
       curve: Curves.easeInOut,
@@ -1090,10 +1067,7 @@ class _PresetCard extends StatelessWidget {
                     ),
                     if (broken) ...[
                       const SizedBox(width: 8),
-                      _PresetBadge(
-                        label: l10n.presetBrokenBadge,
-                        filled: true,
-                      ),
+                      _PresetBadge(label: l10n.presetBrokenBadge, filled: true),
                     ],
                     if (entry.trust == AgentPresetTrust.user) ...[
                       const SizedBox(width: 8),
@@ -1102,7 +1076,10 @@ class _PresetCard extends StatelessWidget {
                     if (active) ...[
                       const SizedBox(width: 8),
                       const Spacer(),
-                      _PresetBadge(label: l10n.presetInUseBadge, inverted: true),
+                      _PresetBadge(
+                        label: l10n.presetInUseBadge,
+                        inverted: true,
+                      ),
                     ],
                   ],
                 ),
@@ -1221,9 +1198,7 @@ class _PluginsPage extends StatelessWidget {
         if (snapshot.namespaces.isEmpty)
           Text(
             l10n.noPluginSettings,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: ds.labelTertiary,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
           ),
         for (var i = 0; i < snapshot.namespaces.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
@@ -1268,10 +1243,7 @@ class _ModelsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        _SectionHeader(
-          title: l10n.settingsNavModels,
-          intro: l10n.modelsIntro,
-        ),
+        _SectionHeader(title: l10n.settingsNavModels, intro: l10n.modelsIntro),
         if (!writable)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -1381,10 +1353,7 @@ class _DeepSeekCard extends StatelessWidget {
               border: Border.all(color: dsOf(sheetContext).borderInverted),
               boxShadow: kDsShadowLv3,
             ),
-            child: _CredentialSheet(
-              credential: credential,
-              onAction: onAction,
-            ),
+            child: _CredentialSheet(credential: credential, onAction: onAction),
           ),
         );
       },
@@ -1428,17 +1397,14 @@ class _CredentialsPage extends StatelessWidget {
         if (credentials.isEmpty)
           Text(l10n.noCredentialsReferenced, style: tertiary)
         else
-          ..._divided(
-            ds,
-            [
-              for (final credential in credentials)
-                _CredentialRow(
-                  key: ValueKey(credential.ref),
-                  credential: credential,
-                  onAction: onAction,
-                ),
-            ],
-          ),
+          ..._divided(ds, [
+            for (final credential in credentials)
+              _CredentialRow(
+                key: ValueKey(credential.ref),
+                credential: credential,
+                onAction: onAction,
+              ),
+          ]),
       ],
     );
   }
@@ -1633,6 +1599,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final namespace = widget.namespace;
     return AnimatedContainer(
       duration: kDsDuration,
@@ -1662,7 +1629,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
                           Text(namespace.ns, style: theme.textTheme.titleSmall),
                           const SizedBox(height: 4),
                           Text(
-                            _namespaceMeta(namespace),
+                            _namespaceMeta(namespace, l10n),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: ds.labelTertiary,
                             ),
@@ -1697,6 +1664,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
   Widget _buildBody(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.only(bottom: 12),
@@ -1708,8 +1676,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
           : Padding(
               padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
               child: Text(
-                'Host is read-only on this connection; '
-                'namespace edits are unavailable.',
+                l10n.namespaceReadOnlyHint,
                 style: theme.textTheme.bodySmall?.copyWith(color: ds.warnLabel),
               ),
             ),
@@ -1721,6 +1688,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
   Widget _buildEditor(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
@@ -1731,12 +1699,12 @@ class _NamespaceCardState extends State<_NamespaceCard> {
             runSpacing: 8,
             children: [
               _ModeButton(
-                label: 'Patch key',
+                label: l10n.patchKey,
                 selected: !_replaceMode,
                 onTap: () => setState(() => _replaceMode = false),
               ),
               _ModeButton(
-                label: 'Replace section',
+                label: l10n.replaceSection,
                 selected: _replaceMode,
                 onTap: () => setState(() => _replaceMode = true),
               ),
@@ -1744,7 +1712,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
           ),
           const SizedBox(height: 12),
           if (!_replaceMode) ...[
-            const _FieldLabel('Top-level key'),
+            _FieldLabel(l10n.topLevelKey),
             const SizedBox(height: 6),
             TextField(
               controller: _keyController,
@@ -1753,25 +1721,22 @@ class _NamespaceCardState extends State<_NamespaceCard> {
             ),
             const SizedBox(height: 12),
           ],
-          _FieldLabel(
-            _replaceMode ? 'Whole user-layer JSON object' : 'JSON value',
-          ),
+          _FieldLabel(_replaceMode ? l10n.wholeUserLayerJson : l10n.jsonValue),
           const SizedBox(height: 6),
           TextField(
             controller: _valueController,
             decoration: _dsInputDecoration(
               context,
               hint: _replaceMode
-                  ? '{ "key": value }'
-                  : 'true / 42 / "text" / {…}',
+                  ? l10n.jsonKeyValueExampleHint
+                  : l10n.jsonValueExampleHint,
             ),
             maxLines: _replaceMode ? 4 : 1,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
           Text(
-            'CAS revision ${widget.namespace.revision}; '
-            'host validates against the schema',
+            l10n.casRevisionLine(widget.namespace.revision),
             style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
           ),
           const SizedBox(height: 12),
@@ -1785,13 +1750,13 @@ class _NamespaceCardState extends State<_NamespaceCard> {
                   setState(() {});
                 },
                 style: _outlineCapsule(context),
-                child: const Text('Discard'),
+                child: Text(l10n.discard),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _canSave && !widget.busy ? _save : null,
                 style: _filledCapsule(context),
-                child: const Text('Save'),
+                child: Text(l10n.save),
               ),
             ],
           ),
@@ -1807,11 +1772,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
 /// capsule disabled (settings-nav and mode capsules never use it; the
 /// busy-Enter fallback does while its store is unavailable).
 class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.label,
-    required this.selected,
-    this.onTap,
-  });
+  const _ModeButton({required this.label, required this.selected, this.onTap});
 
   final String label;
   final bool selected;
@@ -1946,6 +1907,7 @@ class _CredentialRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1963,7 +1925,7 @@ class _CredentialRow extends StatelessWidget {
                     Text(credential.ref, style: theme.textTheme.bodyMedium),
                     const SizedBox(height: 4),
                     Text(
-                      _credentialMeta(credential),
+                      _credentialMeta(credential, l10n),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: ds.labelTertiary,
                       ),
@@ -2027,6 +1989,7 @@ class _StateBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ds = dsOf(context);
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -2034,7 +1997,7 @@ class _StateBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        label ?? (configured ? 'Configured' : 'Not set'),
+        label ?? (configured ? l10n.stateConfigured : l10n.stateNotSet),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: configured ? ds.labelSecondary : ds.labelTertiary,
         ),
@@ -2069,6 +2032,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final credential = widget.credential;
     return SafeArea(
       top: false,
@@ -2080,7 +2044,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
             children: [
               Expanded(
                 child: Text(
-                  'Store ${credential.ref}',
+                  l10n.storeCredentialTitle(credential.ref),
                   style: theme.textTheme.titleMedium,
                 ),
               ),
@@ -2089,7 +2053,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            _credentialMeta(credential),
+            _credentialMeta(credential, l10n),
             style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
           ),
           const SizedBox(height: 12),
@@ -2097,8 +2061,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
             _buildEditor(context)
           else
             Text(
-              'Read-only on this connection; the stored value cannot be '
-              'changed from this client.',
+              l10n.credentialReadOnlyHint,
               style: theme.textTheme.bodySmall?.copyWith(color: ds.warnLabel),
             ),
           const SizedBox(height: 12),
@@ -2111,13 +2074,13 @@ class _CredentialSheetState extends State<_CredentialSheet> {
                     Navigator.of(context).pop();
                   },
                   style: _dangerCapsule(context),
-                  child: const Text('Unset'),
+                  child: Text(l10n.unset),
                 ),
               const Spacer(),
               OutlinedButton(
                 onPressed: () => Navigator.of(context).pop(),
                 style: _outlineCapsule(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               if (credential.writable) ...[
                 const SizedBox(width: 8),
@@ -2136,7 +2099,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
                           }
                         : null,
                     style: _filledCapsule(context),
-                    child: const Text('Save'),
+                    child: Text(l10n.save),
                   ),
                 ),
               ],
@@ -2150,20 +2113,21 @@ class _CredentialSheetState extends State<_CredentialSheet> {
   Widget _buildEditor(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _FieldLabel('Secret value'),
+        _FieldLabel(l10n.secretValueLabel),
         const SizedBox(height: 6),
         TextField(
           controller: _valueController,
           autofocus: true,
           obscureText: true,
-          decoration: _dsInputDecoration(context, hint: 'secret value'),
+          decoration: _dsInputDecoration(context, hint: l10n.secretValueHint),
         ),
         const SizedBox(height: 8),
         Text(
-          'Stored on the host; the value never rides a response.',
+          l10n.secretValueHintLine,
           style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
         ),
       ],
@@ -2238,6 +2202,7 @@ class _BackendSheetState extends State<_BackendSheet> {
   Widget build(BuildContext context) {
     final ds = dsOf(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final editing = widget.backend != null;
     final urlValid = _validUrl(_urlController.text);
     return SafeArea(
@@ -2247,23 +2212,23 @@ class _BackendSheetState extends State<_BackendSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            editing ? 'Edit backend' : 'Add backend',
+            editing ? l10n.editBackend : l10n.addBackend,
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          const _FieldLabel('Label'),
+          _FieldLabel(l10n.backendLabel),
           const SizedBox(height: 6),
           TextField(
             controller: _labelController,
             autofocus: !editing,
             decoration: _dsInputDecoration(
               context,
-              hint: 'Laptop host, build box, …',
+              hint: l10n.backendLabelHint,
             ),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
-          const _FieldLabel('Base URL'),
+          _FieldLabel(l10n.backendBaseUrlLabel),
           const SizedBox(height: 6),
           TextField(
             controller: _urlController,
@@ -2271,15 +2236,13 @@ class _BackendSheetState extends State<_BackendSheet> {
             autocorrect: false,
             decoration: _dsInputDecoration(
               context,
-              hint: 'http://10.0.2.2:3080',
+              hint: l10n.backendBaseUrlHint,
             ),
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
           Text(
-            urlValid
-                ? 'RPC and event paths derive from this base.'
-                : 'http or https with a host, e.g. http://10.0.2.2:3080',
+            urlValid ? l10n.baseUrlDerivationHint : l10n.baseUrlValidHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: urlValid ? ds.labelTertiary : theme.colorScheme.error,
             ),
@@ -2298,7 +2261,7 @@ class _BackendSheetState extends State<_BackendSheet> {
                           child: TextButton(
                             onPressed: widget.onRemove,
                             style: _dangerCapsule(context),
-                            child: const Text('Remove'),
+                            child: Text(l10n.remove),
                           ),
                         )
                       : Padding(
@@ -2316,7 +2279,7 @@ class _BackendSheetState extends State<_BackendSheet> {
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 style: _outlineCapsule(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               const SizedBox(width: 8),
               FilledButton(
@@ -2330,7 +2293,7 @@ class _BackendSheetState extends State<_BackendSheet> {
                       }
                     : null,
                 style: _filledCapsule(context),
-                child: Text(editing ? 'Save' : 'Add'),
+                child: Text(editing ? l10n.save : l10n.add),
               ),
             ],
           ),
@@ -2382,15 +2345,20 @@ class _CircleAction extends StatelessWidget {
 }
 
 /// Summary columns mirrored from the settings.describe wire view.
-String _namespaceMeta(SettingsNamespace namespace) => [
-  'applies: ${namespace.applies.name}',
-  'revision: ${namespace.revision}',
-  if (namespace.hasUserLayer) 'user layer',
-  if (namespace.secretCount > 0) '${namespace.secretCount} secrets set',
+String _namespaceMeta(SettingsNamespace namespace, AppLocalizations l10n) => [
+  l10n.namespaceMetaApplies(namespace.applies.name),
+  l10n.namespaceMetaRevision(namespace.revision),
+  if (namespace.hasUserLayer) l10n.userLayerLabel,
+  if (namespace.secretCount > 0) l10n.secretsSetCount(namespace.secretCount),
 ].join(' · ');
 
-String _credentialMeta(CredentialStatus credential) => [
-  credential.configured ? 'configured' : 'not configured',
-  if (credential.source case final String source) 'source: $source',
-  credential.writable ? 'writable' : 'read-only',
+String _credentialMeta(CredentialStatus credential, AppLocalizations l10n) => [
+  credential.configured
+      ? l10n.credentialMetaConfigured
+      : l10n.credentialMetaNotConfigured,
+  if (credential.source case final String source)
+    l10n.credentialMetaSource(source),
+  credential.writable
+      ? l10n.credentialMetaWritable
+      : l10n.credentialMetaReadOnly,
 ].join(' · ');
