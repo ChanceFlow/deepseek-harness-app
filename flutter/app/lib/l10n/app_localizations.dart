@@ -1981,12 +1981,6 @@ abstract class AppLocalizations {
   /// **'Remove {name}'**
   String removeImage(String name);
 
-  /// No description provided for @newLine.
-  ///
-  /// In en, this message translates to:
-  /// **'New line'**
-  String get newLine;
-
   /// No description provided for @delivery.
   ///
   /// In en, this message translates to:

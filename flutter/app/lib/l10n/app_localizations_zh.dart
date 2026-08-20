@@ -1099,9 +1099,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get newLine => '换行';
-
-  @override
   String get delivery => '投递';
 
   @override

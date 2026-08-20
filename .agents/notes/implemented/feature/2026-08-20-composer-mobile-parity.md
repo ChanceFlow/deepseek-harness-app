@@ -13,16 +13,18 @@ expansion states were lost on every remount or session switch.
 
 ## Decision
 
-**Newline gesture (deliberate web deviation).** The draft field's
-keyboard action is `TextInputAction.newline` (maxLines 8) and an
-explicit 28px circle button beside the ➕ inserts `\n` at the caret
-through `controller.value` (a selection range is replaced; the caret
-lands after the newline). Sending rides the send button only. While a
-turn runs, Stop keeps the web's primary seat and a second send control
-appears whenever a draft is ready; its delivery mode follows the
-persisted `chat.busyEnterBehavior` preference ('queue' default |
-'steer') — the mobile stand-in for the web's plain-Enter
-`ComposerSubmissionPolicy.resolve`.
+**Newline gesture (superseded — see
+[2026-08-20-composer-mobile-toolbar.md](2026-08-20-composer-mobile-toolbar.md)).**
+The draft field's keyboard action was `TextInputAction.newline`
+(maxLines 8) and an explicit 28px circle button beside the ➕ inserted
+`\n` at the caret through `controller.value` (a selection range is
+replaced; the caret lands after the newline). The mobile toolbar note
+removes that button: the keyboard return key is the newline gesture and
+the send button the only submit path. While a turn runs, Stop keeps the
+web's primary seat and a second send control appears whenever a draft is
+ready; its delivery mode follows the persisted `chat.busyEnterBehavior`
+preference ('queue' default | 'steer') — the mobile stand-in for the
+web's plain-Enter `ComposerSubmissionPolicy.resolve`.
 
 **Access chip** (`ui/chat/permission_select.dart`, port of the web
 PermissionSelect seat): a pill in the composer's tools row showing the

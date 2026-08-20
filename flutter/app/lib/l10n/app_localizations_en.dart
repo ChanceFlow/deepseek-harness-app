@@ -1125,9 +1125,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get newLine => 'New line';
-
-  @override
   String get delivery => 'Delivery';
 
   @override

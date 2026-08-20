@@ -313,7 +313,6 @@
   "planPlaceholder": "描述你的任务以生成计划",
   "messagePlaceholder": "给智能体发消息",
   "removeImage": "移除 {name}",
-  "newLine": "换行",
   "delivery": "投递",
   "commandsTooltip": "命令",
   "searchCommandsHint": "搜索命令",

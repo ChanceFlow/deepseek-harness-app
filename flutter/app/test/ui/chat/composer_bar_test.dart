@@ -1,6 +1,6 @@
-/// Composer mobile-parity tests — newline gesture, send-while-running
-/// delivery mode, and draft persistence, all driven through the real
-/// ChatScreen entry path.
+/// Composer mobile-parity tests — the keyboard newline gesture,
+/// send-while-running delivery mode, and draft persistence, all driven
+/// through the real ChatScreen entry path.
 library;
 
 import 'dart:io';
@@ -69,35 +69,6 @@ void main() {
     // An empty draft is the cleared marker: the key goes away.
     await session.writeDraft('');
     expect(await session.readDraft(), isNull);
-  });
-
-  testWidgets('newline button inserts a newline at the caret', (tester) async {
-    final actions = <ChatAction>[];
-    await _pump(
-      tester,
-      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
-      actions,
-    );
-
-    await tester.enterText(find.byType(TextField), 'ab');
-    final editable = tester.widget<EditableText>(find.byType(EditableText));
-    // Caret between the two characters: the button must not collapse it
-    // to the end.
-    editable.controller.value = editable.controller.value.copyWith(
-      selection: const TextSelection.collapsed(offset: 1),
-    );
-
-    await tester.tap(find.byTooltip('New line'));
-    await tester.pump();
-
-    final value = tester
-        .widget<EditableText>(find.byType(EditableText))
-        .controller
-        .value;
-    expect(value.text, 'a\nb');
-    expect(value.selection.baseOffset, 2);
-    // The newline is an edit, not a submit.
-    expect(actions, isEmpty);
   });
 
   testWidgets('keyboard action key does not submit the draft', (tester) async {
