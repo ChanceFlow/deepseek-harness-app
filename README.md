@@ -35,6 +35,7 @@ flutter/app                        Flutter UI (six screens, markdown renderer).
 flutter/packages/domain            Neutral UI-facing models: ChatMessage, Session, TimelineItem.
 flutter/packages/harness_adapter   The ONLY package that understands dsh wire protocol.
 flutter/packages/network           Transport primitives: RPC envelopes, HTTP/WebSocket seams.
+flutter/packages/dev               Debug-build crash capture (ring log buffer, crash marker, restart detection, intake reporter).
 ```
 
 Dependency direction:

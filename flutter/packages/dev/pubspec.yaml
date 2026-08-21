@@ -1,0 +1,23 @@
+name: dev
+description: Debug-build crash capture — ring log buffer, crash marker, restart detection, intake reporter. Compiled in on debug builds only.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  test: ^1.24.0
+
+flutter:
+  uses-material-design: false

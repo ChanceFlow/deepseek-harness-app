@@ -9,3 +9,4 @@ workspace:
   - packages/domain
   - packages/network
   - packages/harness_adapter
+  - packages/dev
