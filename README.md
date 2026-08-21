@@ -43,6 +43,7 @@ Dependency direction:
 ```text
 app -> domain
 app -> assembly wiring (lib/di — the only file allowed to touch network/harness_adapter types)
+app -> dev (debug tooling; dev depends on no repo package, so there is no reverse edge)
 harness_adapter -> domain
 harness_adapter -> network
 ```
@@ -102,9 +103,9 @@ how to refresh them.
 
 ## Development
 
-The canonical command list — analyze, tests, the import gate, the design-token
+The canonical command list — analyze, tests, the import gate, the launcher-icon
 drift gate, and the aggregate verification gate — lives in
-[AGENTS.md §Commands](AGENTS.md#commands). Flutter 3.47 stable is expected on
+[AGENTS.md §Commands](AGENTS.md#commands). Flutter 3.47.1 stable is expected on
 PATH (`export PATH="$HOME/tools/flutter-3.47.1/bin:$PATH"`).
 
 Run on a device/emulator (`cd flutter/app` for `flutter run` commands):
@@ -117,8 +118,8 @@ flutter run --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
 The default base URL is `http://10.0.2.2:3080` (Android emulator loopback);
 override with `--dart-define=DSH_BASE_URL=http://192.168.1.10:3080`.
 
-Debug builds additionally report telemetry (logs, events, metrics,
-frame-rate) and crashes to a self-hosted SigNoz instance over OTLP/HTTP
+Debug builds and prerelease release APKs report telemetry (logs, events,
+metrics, frame-rate) and crashes to a self-hosted SigNoz instance over OTLP/HTTP
 (`http://10.0.2.2:4318` by default; override `DSH_DEBUG_OTLP_URL` with a
 LAN address for real devices). Report the exact source commit so SigNoz
 can pin the source of every signal:
@@ -165,8 +166,8 @@ the APK and its `.sha256` attached.
 
 Naming follows SemVer 2.0: release tags are `v<semver>`
 (`v0.1.0`, prereleases `v0.1.0-alpha.1` / `-beta.2` / `-rc.1`), the APK
-is `dsh-android-<versionName>.apk`, and manual dispatch builds the
-rolling dev prerelease under the `dev` tag
+is `dsh-android-<versionName>.apk`, and every `master` push — plus manual
+dispatch — republishes the rolling dev prerelease under the `dev` tag
 (`/releases/tag/dev` — always the newest `master` build). A dev build's
 versionName is the latest stable `v*` tag with its patch bumped plus an
 `-alpha.<run>` suffix (v0.0.2 → `0.0.3-alpha.50`); every release is
@@ -184,8 +185,12 @@ still debug-signs.
 
 `python3 scripts/verify_all.py` is the aggregate gate: `flutter analyze`,
 the full test suite (real-host e2e self-skips without `DSH_E2E_URL`), the
-import gate, the design-token drift gate, and the documentation gates.
-CI runs it on every push; its output is the live verification status.
+import gate, the launcher-icon drift gate, and the documentation gates. CI
+runs it as two parallel jobs — `docs` (python only) and `code` (Flutter) —
+on every push and pull request, and both are required before a merge; its
+output is the live verification status. Local work runs the narrowest tool
+for the change instead ([docs/testing.md](docs/testing.md) §Select evidence
+by surface).
 
 Deferred beyond parity, matching [docs/spec.md](docs/spec.md):
 schema-driven settings forms, secret-slot writes, session-drag ordering,
