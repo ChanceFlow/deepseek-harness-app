@@ -33,22 +33,26 @@ the environment contradicts them. These tiers are that environment.
 | Unit | Pure Dart: domain models, markdown parser, folds | Every change touching them |
 | Widget | Real widget trees per screen, controller-fed | Every `flutter/app` UI change |
 | Adapter fixture | Recorded wire JSON through real decoders | Every `harness_adapter` change |
-| Real-host e2e | Live `dsh web` host via `DSH_E2_URL`, asserts observable session state | Opt-in, provider-affecting changes |
+| Debug tooling | `packages/dev` signals through the real OTel SDK with an in-memory exporter | Every telemetry, crash, or frame-stats change |
+| Real-host e2e | Live `dsh web` host via `DSH_E2E_URL`, asserts observable session state | Opt-in, provider-affecting changes |
 | Build smoke | `flutter build apk --debug` | Release-critical changes; not in the aggregate |
 
 ## Select evidence by surface
 
-Run the narrowest check that would fail for your regression; the full
-matrix belongs to `python3 scripts/verify_all.py` (all) at close-out and to
-CI:
+Run the narrowest tool that would fail for your regression. The exhaustive
+matrix is CI's job — [ci.yaml](../.gitea/workflows/ci.yaml) runs it as the
+`docs` and `code` jobs on every push and pull request:
 
-- Behavior of one module → its focused test file (`flutter test <path>`
-  from `flutter/`).
-- Anything model- or user-visible (theme tokens, rendered text, wire
-  coverage counts) → the owning test plus `verify_all.py docs` where a doc
-  states the contract.
-- Docs/instructions only → `python3 scripts/verify_all.py docs`.
-- Structural or cross-package change → the full aggregate.
+| Surface | Local tool |
+|---|---|
+| Behavior of one module | `flutter test <path>` from `flutter/` |
+| What a user sees | the screen's widget test, asserting the role the theme resolves ([flutter/app/AGENTS.md](../flutter/app/AGENTS.md)) |
+| Types after an edit | `flutter analyze <dir>` from `flutter/` |
+| Wire coverage, package boundaries | the adapter test file, then `python3 scripts/check_dart_imports.py` |
+| Docs, decision notes, skills | `python3 scripts/verify_all.py docs` — five gates, ~2s |
+
+A local `verify_all.py` with no group is for the rare structural change that
+touches every surface at once; everywhere else CI is the proof.
 
 ## Review bar
 

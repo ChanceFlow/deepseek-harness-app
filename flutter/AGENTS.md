@@ -6,10 +6,16 @@ mechanics live here.
 - **Workspace root owns the toolchain.** Run `flutter analyze` from
   `flutter/`; the workspace root has no `test/` of its own, so the full
   suite is `flutter test app/test packages/domain/test packages/network/test
-  packages/harness_adapter/test` from `flutter/` (bare `flutter test <pkg>`
-  covers one member). Pub workspace resolution and the shared
-  `analysis_options.yaml` apply at this level
+  packages/harness_adapter/test packages/dev/test` from `flutter/` (bare
+  `flutter test <pkg>` covers one member). Pub workspace resolution and the
+  shared `analysis_options.yaml` apply at this level
   ([analysis_options.yaml](analysis_options.yaml)).
+- **Each member's rules live in its own delta file.** UI and aesthetic:
+  [app/AGENTS.md](app/AGENTS.md); wire seam:
+  [packages/harness_adapter/AGENTS.md](packages/harness_adapter/AGENTS.md);
+  debug tooling: [packages/dev/AGENTS.md](packages/dev/AGENTS.md).
+  `packages/domain` and `packages/network` carry no delta — the root rules
+  and the import gate are their whole contract.
 - **All packages resolve through the workspace.** Member `pubspec.yaml` files
   declare workspace membership; dependency edits update
   [pubspec.lock](pubspec.lock) in the same change.

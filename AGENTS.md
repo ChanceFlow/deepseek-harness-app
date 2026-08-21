@@ -1,122 +1,151 @@
 # AGENTS.md — deepseek-harness-android
 
 Flutter client for DeepSeek Harness (dsh): a pub workspace under `flutter/`
-talking to an unmodified `dsh web` backend. Before touching the wire adapter,
-RPC coverage, or design tokens, read the homes linked below — each owns one
-subject; this file never restates them.
+talking to an unmodified `dsh web` backend. Standing orders only — each rule
+links the one home that owns its detail. Open that home before working its
+subject.
 
 ## Repository layout
 
 ```text
-AGENTS.md                     This file — standing orders (single instruction home)
-flutter/                      pub workspace root — run flutter analyze/test here
-flutter/app/                  UI: screens, controllers, markdown renderer, lib/di wiring
-flutter/packages/domain/      Neutral models (ChatMessage, Session, TimelineItem) — pure Dart
+flutter/                           pub workspace root — run flutter analyze/test here
+flutter/app/                       UI: screens, controllers, markdown renderer, l10n, lib/di wiring
+flutter/packages/domain/           Neutral models (ChatMessage, Session, TimelineItem) — pure Dart
 flutter/packages/harness_adapter/  The ONLY code that knows the dsh wire protocol
-flutter/packages/network/     Transport: RPC envelopes, HTTP/WebSocket seams
-scripts/                      Gates (verify_*.py, check_dart_imports.py) + generators
-docs/                         spec.md (wire contract + coverage), testing.md, prose-standard.md
-.agents/notes/                Decision records — the repo's memory (see its README)
-.agents/skills/               Project skills: vendored Flutter/Dart set + repo `dsh-*`
-reference/deepseek-harness/   Pinned submodule — the dsh source of truth (read-only)
-tasks/                        Human execution ledgers (plan/todo)
+flutter/packages/network/          Transport: RPC envelopes, HTTP/WebSocket seams
+flutter/packages/dev/              Debug-build tooling: telemetry, frame stats, crash capture
+scripts/                           Gates (verify_*.py) and generators; gates_manifest.json holds every ceiling
+.gitea/workflows/                  ci.yaml — the merge gate; release-apk.yaml — the only distribution channel
+reference/deepseek-harness/        Pinned submodule — the dsh wire source of truth (read-only)
+docs/                              spec.md (wire contract + coverage), testing.md, prose-standard.md
+.agents/notes/                     Decision records — the repo's memory
+.agents/skills/                    Workflow skills: vendored Flutter/Dart set + repo `dsh-*`
+tasks/                             Human execution ledgers (plan/todo)
 ```
 
 ## Commands
 
-All commands from repo root unless noted. Flutter 3.47 stable at
-`$HOME/tools/flutter-3.47.1/bin`.
+All commands from repo root unless noted. Flutter 3.47.1 stable lives at
+`$HOME/tools/flutter-3.47.1/bin`; a version bump carries the same string into
+`scripts/verify_all.py`, `.gitea/workflows/ci.yaml`, `docker/`, and this file
+in one change.
+
+Locally, reach for the narrowest tool that would fail for your change:
 
 ```sh
-python3 scripts/verify_all.py        # ALL gates — run before closing any task
-python3 scripts/verify_all.py docs   # doc/format gates only (seconds, no Flutter)
-cd flutter && flutter analyze        # static analysis — zero issues required
-cd flutter && flutter test app/test packages/domain/test packages/network/test packages/harness_adapter/test
-                                     # full suite (real-host e2e self-skips)
+cd flutter && flutter test app/test/ui/chat/chat_screen_test.dart   # one behavior
+cd flutter && flutter analyze app/lib/ui/chat                       # one directory
+python3 scripts/verify_all.py docs                                  # every doc gate, ~2s
+python3 scripts/check_dart_imports.py                               # the import boundary
 cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
 ```
 
-- Real-host e2e (needs a running dsh host): see
+CI owns the exhaustive run — `.gitea/workflows/ci.yaml` executes
+`verify_all.py docs` and `verify_all.py code` on every push and PR — so a
+local full aggregate before each commit buys a slower loop. Pick the tool by
+surface: [docs/testing.md](docs/testing.md) §Select evidence by surface;
+`python3 scripts/verify_all.py --list` names every gate, and
+[flutter/AGENTS.md](flutter/AGENTS.md) carries the whole-workspace suite
+command.
+
+- Real-host e2e needs a running dsh host and `DSH_E2E_URL`:
   [README §Opt-in real-host e2e](README.md#opt-in-real-host-e2e).
 - Wire-contract truth for any adapter change:
   [reference/README.md](reference/README.md) maps the submodule paths.
 
-## Branch workflow
+## Branch workflow and CI/CD
 
-`master` takes no direct task pushes — enforced by Gitea branch
-protection (direct pushes rejected; merges require the CI verify status
-green): one branch per task (`feat/…`, `fix/…`, `docs/…`), push, open a
-PR, let CI's verify aggregate gate it, then merge — the repo auto-deletes
-the merged branch (Gitea setting). Release tags (`v*`) ride `master`
-only. Cut every task branch in
-a fresh worktree off latest `master`
-(`git fetch origin && git worktree add -b <branch> ../dsha-<slug> origin/master`),
-never by switching branches in the shared checkout — concurrent tasks
-stay isolated and the main worktree keeps its state. Mechanics and API
+One branch per task, cut in a fresh worktree off latest `master`, so
+concurrent tasks stay isolated and the shared checkout keeps its state:
+
+```sh
+git fetch origin && git worktree add -b <branch> ../dsha-<slug> origin/master
+```
+
+Push, open a PR, merge once both required statuses are green; Gitea branch
+protection rejects a direct push to `master`. Worktree cleanup and API
 shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md) §3.
+
+- [ci.yaml](.gitea/workflows/ci.yaml) runs the aggregate as two parallel jobs
+  on every push and PR — `docs` (python only, seconds) and `code` (analyze,
+  full suite, import gate) — so a doc-only change settles on `docs` alone.
+- [release-apk.yaml](.gitea/workflows/release-apk.yaml) publishes: every
+  `master` push refreshes the rolling `dev` prerelease, a `v<semver>` tag cuts
+  the stable Release, and both attach a signed APK to the Releases page
+  ([README §APK releases](README.md#apk-releases)). Prerelease APKs report
+  telemetry; stable APKs compile it out.
 
 ## Conventions
 
 - **The import boundary is absolute.** `app` (outside `lib/di/`) and `domain`
-  never import `harness_adapter`/`network` or any dsh type (`SessionEvent`,
-  `MuxFrame`, `HostFrame`); boundaries are owned by
+  speak `domain` types only; dsh types (`SessionEvent`, `MuxFrame`,
+  `HostFrame`) and the `harness_adapter`/`network` packages stay on their side
+  of it. Boundaries are owned by
   [README §Module boundaries](README.md#module-boundaries) and enforced by
   `python3 scripts/check_dart_imports.py` (part of `verify_all`).
-- **Wire truth is the reference submodule.** Never invent request/response
-  shapes; read them under `reference/deepseek-harness/` per
-  [reference/README.md](reference/README.md). Adapter-local rules:
+- **Wire truth is the reference submodule.** Read request/response shapes
+  under `reference/deepseek-harness/` per
+  [reference/README.md](reference/README.md) before encoding or decoding
+  anything. Adapter-local rules:
   [flutter/packages/harness_adapter/AGENTS.md](flutter/packages/harness_adapter/AGENTS.md);
-  the workflow for changing coverage: [`.agents/skills/dsh-wire-parity/`](.agents/skills/dsh-wire-parity/SKILL.md).
-- **No codegen.** DTOs are hand-written decoders with required-field
-  semantics; adding `freezed`/`json_serializable`/build_runner is a
-  rejected-alternative decision (see
-  [ADR-0001](docs/adr-0001-flutter-rewrite.md) and
+  the workflow for changing coverage:
+  [`.agents/skills/dsh-wire-parity/`](.agents/skills/dsh-wire-parity/SKILL.md).
+- **DTOs are hand-written decoders** with required-field semantics; reaching
+  for `freezed`, `json_serializable`, or build_runner reopens a rejected
+  decision ([ADR-0001](docs/adr-0001-flutter-rewrite.md),
   [docs/spec.md](docs/spec.md) §Non-Goals).
-- **Native Material 3, no ported web tokens.** UI colors/typography come
-  from stock M3 roles ([DshTheme](flutter/app/lib/ui/theme/theme.dart) —
-  `ColorScheme.fromSeed`); never reintroduce dsh-web design-platform
-  tokens or a `DeepSuiteColors`-style theme extension.
+- **The aesthetic is stock Material 3.** Component choice, the `ColorScheme`
+  role map, and the home for a color Material 3 has no role for are owned by
+  [flutter/app/AGENTS.md](flutter/app/AGENTS.md) — read it before touching a
+  widget's look.
+- **User-visible text is an ARB key** in both locales, added in the same
+  change ([flutter/app/AGENTS.md](flutter/app/AGENTS.md)).
+- **Telemetry is optional at every call site.** App code emits through
+  `DebugTelemetry.instance?` and behaves identically when it is null; who
+  actually reports is owned by
+  [flutter/packages/dev/AGENTS.md](flutter/packages/dev/AGENTS.md).
 - **Analyzer strictness is non-negotiable.** `strict-casts`,
-  `strict-inference`, `strict-raw-types` are on; fix code, never the options
-  ([flutter/analysis_options.yaml](flutter/analysis_options.yaml)).
-- **State is controllers with UDF streams, not per-screen Notifiers.** UI
-  spatial layout is owned by `app` alone; the adapter publishes facts, never
-  placement ([README §Goals](README.md#goals)).
+  `strict-inference`, `strict-raw-types` stay on; fix the code and keep the
+  options ([flutter/analysis_options.yaml](flutter/analysis_options.yaml)).
+- **State is controllers with UDF streams**, one per screen, rather than
+  per-screen Notifiers. UI spatial layout is owned by `app` alone; the adapter
+  publishes facts, never placement ([README §Goals](README.md#goals)).
 - **Every non-trivial change updates a decision note in the same change.**
   Non-trivial = behavior, architecture, cross-file contract, process/tooling,
   testing strategy, or an on-disk/wire format change. Format and lifecycle:
   [`.agents/notes/README.md`](.agents/notes/README.md); enforced by
   `verify_note_format` in `verify_all`.
-- **Prose states contracts, not history.** Comments, docs, and commit text
-  carry current behavior and failure modes; no "previously/now/we used to".
-  Standard: [docs/prose-standard.md](docs/prose-standard.md).
+- **Prose states current contracts.** Comments, docs, and commit text carry
+  live behavior and failure modes; the story of how it got there belongs to a
+  decision record. Standard: [docs/prose-standard.md](docs/prose-standard.md).
 - **Tests assert external state through real entry paths.** Widget trees are
-  real widgets; wire decoding goes through the real decoders; never assert a
-  self-report. Policy: [docs/testing.md](docs/testing.md).
+  real widgets; wire decoding goes through the real decoders. Policy:
+  [docs/testing.md](docs/testing.md).
 
 ## Defensive patterns
 
 - **Fail loud on malformed wire data.** Required-field decode throws with the
-  field name; never silently default a missing referent.
+  field name; a missing referent surfaces, never defaults silently.
 - **Switches on discriminants are exhaustive.** Closed unions (wire event
   types, timeline item kinds) end without a wildcard so a new variant fails
   compilation, not production.
 - **One async operation, one lifecycle owner.** Connection readiness,
-  cancellation, and disposal fold into `DshConnectionManager`; split only with
-  a settlement point.
+  cancellation, and disposal fold into `DshConnectionManager`; a split needs a
+  settlement point.
 
 ## Closing a task
 
-Run `python3 scripts/verify_all.py` (or the narrowest gate group that covers
-your change — [docs/testing.md](docs/testing.md) §Select evidence by surface),
-update the owning decision note, then commit. Full workflow:
+Run the narrow evidence for your surface, update the owning decision note,
+commit, and let CI's two jobs prove the rest on the PR. Full workflow:
 [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md).
 
 ## Editing these instructions
 
-This file is the single instruction home — no `CLAUDE.md`, no copies.
-Subtree `AGENTS.md` files carry only deltas. Word budgets live in
+This file is the single instruction home. Subtree `AGENTS.md` files carry
+deltas only: `flutter/` (workspace mechanics), `flutter/app/` (UI and
+aesthetic), `flutter/packages/harness_adapter/` (wire seam),
+`flutter/packages/dev/` (debug tooling). Word budgets live in
 [scripts/gates_manifest.json](scripts/gates_manifest.json) and are enforced by
-`verify_doc_budgets`; raise a ceiling only via a manifest diff plus a decision
-note saying why. Rules here must link their owning home; a rule without a home
-is a smell.
+`verify_doc_budgets`; raising a ceiling takes a manifest diff plus a decision
+note saying why. A rule here links its owning home; a rule without a home is a
+smell.

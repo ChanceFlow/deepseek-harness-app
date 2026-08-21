@@ -1,33 +1,53 @@
-# CI for deepseek-harness-android — runs the exhaustive gate aggregate.
+# CI for deepseek-harness-android — runs the gate aggregate as two parallel
+# jobs so a doc-only change fails in seconds instead of behind the Flutter
+# suite. Both are required statuses on `master`
+# (`CI / docs (pull_request)`, `CI / code (pull_request)`).
+#
+#   docs  python3 scripts/verify_all.py docs — python only; needs the
+#         reference submodule (the launcher-icon drift gate reads it)
+#   code  python3 scripts/verify_all.py code — flutter analyze, the full
+#         test suite, the import gate
 #
 # Requirements for the runner:
-#   - network access (fetches Flutter 3.47 via subosito/flutter-action and
+#   - network access (fetches Flutter 3.47.1 via subosito/flutter-action and
 #     the reference submodule from this Gitea instance)
 #   - a runner image with Docker/act compatibility for `uses:` actions.
 # Air-gapped runners: replace the flutter step with a prebaked image that
-# has Flutter 3.47 stable and python3, then keep the `verify_all` step.
+# has Flutter 3.47.1 stable and python3, then keep the verify step.
 name: CI
 
 on:
   push:
-    branches: ["*"]
+    branches: ["master"]
   pull_request:
   workflow_dispatch:
 
+env:
+  # Egress (Flutter SDK download, pub) goes through the LAN proxy from the
+  # repo variable EGRESS_PROXY; Gitea itself, the submodule URL (127.0.0.1:3000)
+  # and the runner cache server (runner:3899, used by actions/cache
+  # inside flutter-action) must bypass it.
+  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+  http_proxy: ${{ vars.EGRESS_PROXY }}
+  https_proxy: ${{ vars.EGRESS_PROXY }}
+  NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
+  no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
+
 jobs:
-  verify:
+  docs:
     runs-on: ubuntu-latest
-    env:
-      # Egress (Flutter SDK download, pub) goes through the LAN proxy from
-      # the repo variable EGRESS_PROXY; Gitea itself, the submodule URL
-      # (127.0.0.1:3000) and the runner cache server (runner:3899,
-      # used by actions/cache below) must bypass it.
-      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
-      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
-      http_proxy: ${{ vars.EGRESS_PROXY }}
-      https_proxy: ${{ vars.EGRESS_PROXY }}
-      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
-      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
+    steps:
+      - name: Checkout (with reference submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Doc gates (links, budgets, notes, skills, launcher icons)
+        run: python3 scripts/verify_all.py docs
+
+  code:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
@@ -37,12 +57,12 @@ jobs:
       # flutter-action's `cache: true` persists BOTH the Flutter SDK and
       # ~/.pub-cache through the runner's cache server (runner:3899,
       # bypassed via NO_PROXY above) — no separate pub cache step needed.
-      - name: Set up Flutter 3.47 stable
+      - name: Set up Flutter 3.47.1 stable
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.1
           channel: stable
           cache: true
 
-      - name: Aggregate gates (analyze, tests, imports, tokens, docs)
-        run: python3 scripts/verify_all.py all
+      - name: Code gates (analyze, tests, imports)
+        run: python3 scripts/verify_all.py code
