@@ -110,7 +110,11 @@ void main() {
       ),
       [],
     );
-    expect(find.text('proj'), findsOneWidget);
+    // The app bar names the workspace too; this asserts the hero's chip.
+    expect(
+      find.descendant(of: find.byType(EmptyHero), matching: find.text('proj')),
+      findsOneWidget,
+    );
     expect(find.text('Choose workspace'), findsNothing);
   });
 

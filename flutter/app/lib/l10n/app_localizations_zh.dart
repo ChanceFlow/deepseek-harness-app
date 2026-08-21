@@ -927,6 +927,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get subagentsTooltip => '子代理';
 
   @override
+  String get sessionMenuTooltip => '会话菜单';
+
+  @override
   String get renameSession => '重命名会话';
 
   @override

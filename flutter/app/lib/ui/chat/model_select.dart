@@ -11,6 +11,21 @@ import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
 
+/// The catalog's display name for the session's current model, falling back
+/// to the raw id while the catalog is unresolved; null when no model is
+/// selected.
+String? modelDisplayName(SessionModels? models) {
+  final current = models?.current;
+  if (current == null) return null;
+  for (final group in models?.groups ?? const <ModelProviderGroup>[]) {
+    if (group.id != current.provider) continue;
+    for (final model in group.models) {
+      if (model.id == current.model) return model.name;
+    }
+  }
+  return current.model;
+}
+
 class ModelSelect extends StatelessWidget {
   const ModelSelect({
     super.key,
@@ -25,20 +40,8 @@ class ModelSelect extends StatelessWidget {
   final void Function(ModelSelection selection) onSelect;
   final VoidCallback onRefresh;
 
-  ModelSelection? get _current => models?.current;
-
-  String _modelLabel(AppLocalizations l10n) {
-    final current = _current;
-    if (current == null) return l10n.modelLabel;
-    final groups = models?.groups ?? const <ModelProviderGroup>[];
-    for (final group in groups) {
-      if (group.id != current.provider) continue;
-      for (final model in group.models) {
-        if (model.id == current.model) return model.name;
-      }
-    }
-    return current.model;
-  }
+  String _modelLabel(AppLocalizations l10n) =>
+      modelDisplayName(models) ?? l10n.modelLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -399,17 +402,8 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     );
   }
 
-  String _modelLabelOf(ModelSelection? current, AppLocalizations l10n) {
-    if (current == null) return l10n.modelLabel;
-    final groups = widget.models?.groups ?? const <ModelProviderGroup>[];
-    for (final group in groups) {
-      if (group.id != current.provider) continue;
-      for (final model in group.models) {
-        if (model.id == current.model) return model.name;
-      }
-    }
-    return current.model;
-  }
+  String _modelLabelOf(ModelSelection? current, AppLocalizations l10n) =>
+      current == null ? l10n.modelLabel : modelDisplayName(widget.models)!;
 
   String _effortLabelOf(
     ModelSelection? current,

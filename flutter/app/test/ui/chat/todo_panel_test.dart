@@ -38,11 +38,9 @@ void main() {
       ),
     );
 
-    // Web progressLabel: zero-count segments drop out.
-    expect(
-      find.text('1 completed · 1 in progress · 1 pending'),
-      findsOneWidget,
-    );
+    // The strip speaks the tool row's plan summary: progress plus the item
+    // actually being worked, not a census of statuses.
+    expect(find.text('1/3 completed · ship the fix'), findsOneWidget);
     // The checklist stays behind the disclosure until tapped.
     expect(find.text('ship the fix'), findsNothing);
 
