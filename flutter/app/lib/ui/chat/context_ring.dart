@@ -12,8 +12,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
-import '../theme/deepsuite_tokens.dart';
 import 'stats_line.dart' show formatTokens;
 
 class ContextRing extends StatelessWidget {
@@ -64,14 +62,14 @@ class ContextRing extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        final ds = dsOf(dialogContext);
+        final scheme = Theme.of(dialogContext).colorScheme;
         final theme = Theme.of(dialogContext);
         final l10n = AppLocalizations.of(dialogContext)!;
         final rows = <(String, int, Color)>[
           (
             l10n.systemPromptLabel,
             breakdown?.systemTokens ?? 0,
-            DeepSuiteStatic.neutralBluish400,
+            scheme.outline,
           ),
           (
             l10n.toolsLabel,
@@ -81,15 +79,15 @@ class ContextRing extends StatelessWidget {
           (
             l10n.conversationLabel,
             breakdown?.messageTokens ?? 0,
-            DeepSuiteStatic.blue450,
+            scheme.primary,
           ),
         ];
         return Dialog(
           alignment: Alignment.bottomCenter,
-          backgroundColor: ds.menu,
+          backgroundColor: scheme.surfaceContainerHigh,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: ds.divider),
+            side: BorderSide(color: scheme.outlineVariant),
           ),
           child: SizedBox(
             width: 264,

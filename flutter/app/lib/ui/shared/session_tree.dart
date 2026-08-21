@@ -11,8 +11,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart' show dsOf, kDsShadowLv3;
-import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic;
+import '../theme/theme.dart';
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
 /// workspace before the local overflow control.
@@ -258,7 +257,7 @@ String relativeTimeLabel(
 /// Web Rows.tsx `SessionNodeItem` (mobile form): a 44px touch row with
 /// the status dot slot, the title, and the compact relative time — now a
 /// native [ListTile] carrying the sidebar nav-item treatment (active
-/// fill on selection, deepsuite hover) plus the M3 ripple, focus, and
+/// fill on selection, hover fill) plus the M3 ripple, focus, and
 /// selection semantics. Long-pressing a non-blank row opens the
 /// session-verb menu (web SessionNodeItem ⋮: rename / fork / archive)
 /// when any verb is provided — both the switching sidebar and the
@@ -317,8 +316,8 @@ class SessionTreeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     // Web `displayTitle`: blank rows show the New Session label.
     final title = session.blank ? l10n.newSession : session.displayTitle;
     final hasVerbs = !session.blank && _hasVerbs;
@@ -337,8 +336,8 @@ class SessionTreeRow extends StatelessWidget {
       // The web sidebar nav-item active fill (the 3px accent edge is a
       // web-only chrome the native tile drops; fill-only selection,
       // matching the timeline-native adoption).
-      selectedTileColor: ds.sidebarNavItemActive,
-      hoverColor: ds.sidebarNavItemHover,
+      selectedTileColor: scheme.secondaryContainer,
+      hoverColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: SizedBox(
         width: 16,
@@ -363,7 +362,7 @@ class SessionTreeRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: 12,
-                    color: ds.labelTertiary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 // The management surface's always-visible verbs seat
@@ -399,7 +398,7 @@ class _SessionVerbButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: l10n.sessionActionsFor(session.displayTitle),
       onPressed: onTap,
@@ -409,7 +408,7 @@ class _SessionVerbButton extends StatelessWidget {
       icon: Icon(
         Icons.more_horiz,
         size: 18,
-        color: ds.labelTertiary,
+        color: scheme.onSurfaceVariant,
       ),
     );
   }
@@ -427,17 +426,17 @@ class _SessionVerbsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: ds.menu,
+          color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ds.borderInverted),
-          boxShadow: kDsShadowLv3,
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: kM3ShadowElevation3,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -450,7 +449,7 @@ class _SessionVerbsSheet extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: ds.labelTertiary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -476,8 +475,8 @@ class _VerbRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Material(
       color: Colors.transparent,
       child: ListTile(
@@ -485,7 +484,7 @@ class _VerbRow extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         minTileHeight: 44,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-        leading: Icon(icon, size: 18, color: ds.labelTertiary),
+        leading: Icon(icon, size: 18, color: scheme.onSurfaceVariant),
         title: Text(
           label,
           maxLines: 1,
@@ -539,7 +538,7 @@ class DoneDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = dsOf(context).stateSuccessPrimary;
+    final color = Colors.green.shade600;
     return SizedBox(
       width: size,
       height: size,
@@ -577,7 +576,7 @@ class WarningDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = dsOf(context).warnPrimary;
+    final color = Theme.of(context).colorScheme.error;
     return SizedBox(
       width: size,
       height: size,
@@ -607,8 +606,8 @@ class WarningDot extends StatelessWidget {
 
 /// Web WorkspaceBrowser `.sessionOverflowButton`: the local overflow
 /// control under a group (28px on the web, a 44px touch row here) —
-/// now a native [TextButton] styled to the deepsuite tertiary label,
-/// aligned under the session titles.
+/// now a native [TextButton] styled to the tertiary label, aligned
+/// under the session titles.
 class SessionOverflowRow extends StatelessWidget {
   const SessionOverflowRow({
     super.key,
@@ -624,7 +623,7 @@ class SessionOverflowRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
@@ -632,7 +631,7 @@ class SessionOverflowRow extends StatelessWidget {
         child: TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(
-            foregroundColor: ds.labelTertiary,
+            foregroundColor: scheme.onSurfaceVariant,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             minimumSize: const Size(0, 44),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -679,8 +678,8 @@ class SessionSearchResultRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final title = session.blank ? l10n.newSession : session.displayTitle;
     return ListTile(
       dense: true,
@@ -691,8 +690,8 @@ class SessionSearchResultRow extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       selected: selected,
       tileColor: Colors.transparent,
-      selectedTileColor: ds.sidebarNavItemActive,
-      hoverColor: ds.sidebarNavItemHover,
+      selectedTileColor: scheme.secondaryContainer,
+      hoverColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: SizedBox(
         width: 16,
@@ -717,7 +716,7 @@ class SessionSearchResultRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -730,7 +729,7 @@ class SessionSearchResultRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -750,7 +749,7 @@ class RunningDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const color = DeepSuiteStatic.deepseek450;
+    final color = Theme.of(context).colorScheme.primary;
     return SizedBox(
       width: size,
       height: size,
@@ -766,7 +765,7 @@ class RunningDot extends StatelessWidget {
             child: Container(
               width: size * 0.6,
               height: size * 0.6,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
               ),

@@ -11,7 +11,6 @@ library;
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../ui/theme/deepsuite_extension.dart' show dsOf;
 import 'notification_events.dart';
 
 /// Resolves one event to its localized title/body pair.
@@ -62,7 +61,7 @@ class NotificationToast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final copy = notificationCopy(event, l10n);
     return Material(
       color: Colors.transparent,
@@ -70,7 +69,7 @@ class NotificationToast extends StatelessWidget {
         minimum: const EdgeInsets.fromLTRB(12, 8, 12, 0),
         child: Material(
           elevation: 6,
-          color: ds.menu,
+          color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -82,7 +81,7 @@ class NotificationToast extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(notificationIcon(event.kind), color: ds.brandText),
+                  Icon(notificationIcon(event.kind), color: scheme.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -101,7 +100,7 @@ class NotificationToast extends StatelessWidget {
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
-                              ?.copyWith(color: ds.labelSecondary),
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -110,7 +109,7 @@ class NotificationToast extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 18),
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                     tooltip: l10n.notificationDismissTooltip,
                     onPressed: onDismiss,
                   ),

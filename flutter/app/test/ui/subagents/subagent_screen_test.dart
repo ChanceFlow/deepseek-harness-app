@@ -18,7 +18,6 @@ import 'package:app/ui/chat/chat_screen.dart'
     show MessageRow, PlanChip, TimelineRow, ToolCallRow;
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
-import 'package:app/ui/theme/deepsuite_extension.dart';
 
 import '../../l10n_app.dart';
 
@@ -286,12 +285,15 @@ void main() {
     // Real chat rows, not the raw per-kind text switch.
     expect(find.byType(TimelineRow), findsNWidgets(2));
     expect(find.byType(MessageRow), findsOneWidget);
-    // The user message renders as the bubble (ds.bubble fill).
+    // The user message renders as the bubble (primaryContainer fill).
+    final bubbleColor = Theme.of(
+      tester.element(find.text('do the thing')),
+    ).colorScheme.primaryContainer;
     final bubble = find.byWidgetPredicate((widget) {
       if (widget is! Container) return false;
       final decoration = widget.decoration;
       return decoration is BoxDecoration &&
-          decoration.color == DeepSuiteColors.light().bubble;
+          decoration.color == bubbleColor;
     });
     expect(bubble, findsOneWidget);
     expect(find.byType(ToolCallRow), findsOneWidget);

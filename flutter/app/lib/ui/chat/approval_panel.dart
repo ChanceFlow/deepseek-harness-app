@@ -1,5 +1,5 @@
 /// Composer-takeover approval panel — port of the web ApprovalPanel
-/// (draft approval.png): the InputBar footprint swaps to an amber-bordered
+/// (draft approval.png): the InputBar footprint swaps to an error-tinted
 /// card with a "Waiting for approval" strip, the justification headline,
 /// and right-aligned Reject / Allow once actions.
 library;
@@ -8,7 +8,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
+import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
 class ApprovalPanel extends StatelessWidget {
@@ -23,15 +23,15 @@ class ApprovalPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
-        color: ds.inputMajor,
+        color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ds.warnSecondary),
-        boxShadow: kDsShadowLv2,
+        border: Border.all(color: scheme.errorContainer),
+        boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -41,7 +41,7 @@ class ApprovalPanel extends StatelessWidget {
           // Tinted full-width header band.
           Container(
             width: double.infinity,
-            color: ds.warnTertiary,
+            color: scheme.errorContainer,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
@@ -49,7 +49,7 @@ class ApprovalPanel extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: ds.warnPrimary,
+                    color: scheme.error,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -57,7 +57,7 @@ class ApprovalPanel extends StatelessWidget {
                 Text(
                   l10n.waitingForApproval,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: ds.warnPrimary,
+                    color: scheme.error,
                   ),
                 ),
               ],
@@ -76,7 +76,7 @@ class ApprovalPanel extends StatelessWidget {
                 Text(
                   l10n.toolRequestsPrivileged(request.toolName),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],

@@ -9,8 +9,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
-
 /// Web `progressLabel`: "·"-joined per-status counts; zero-count segments
 /// drop out as noise (a non-empty list keeps at least one).
 String todoProgressLabel(List<TodoItem> todos, AppLocalizations l10n) {
@@ -39,14 +37,14 @@ class _StatusGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final (icon, color) = switch (status) {
-      TodoStatus.completed => (Icons.check_circle, ds.accent),
+      TodoStatus.completed => (Icons.check_circle, scheme.primary),
       TodoStatus.inProgress => (
         Icons.radio_button_checked,
         Theme.of(context).colorScheme.onSurface,
       ),
-      TodoStatus.pending => (Icons.radio_button_unchecked, ds.labelCaption),
+      TodoStatus.pending => (Icons.radio_button_unchecked, scheme.outline),
     };
     return SizedBox(
       width: 16,
@@ -73,7 +71,7 @@ class _TodoPanelState extends State<TodoPanel> {
   @override
   Widget build(BuildContext context) {
     if (widget.todos.isEmpty) return const SizedBox.shrink();
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Padding(
@@ -81,12 +79,12 @@ class _TodoPanelState extends State<TodoPanel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: ds.tip,
+          color: scheme.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(
-            top: BorderSide(color: ds.divider),
-            left: BorderSide(color: ds.divider),
-            right: BorderSide(color: ds.divider),
+            top: BorderSide(color: scheme.outlineVariant),
+            left: BorderSide(color: scheme.outlineVariant),
+            right: BorderSide(color: scheme.outlineVariant),
           ),
         ),
         child: Column(
@@ -101,7 +99,11 @@ class _TodoPanelState extends State<TodoPanel> {
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
                     children: [
-                      Icon(Icons.checklist, size: 14, color: ds.labelSecondary),
+                      Icon(
+                        Icons.checklist,
+                        size: 14,
+                        color: scheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 6),
                       Text(l10n.todosLabel, style: theme.textTheme.bodySmall),
                       const SizedBox(width: 8),
@@ -111,7 +113,7 @@ class _TodoPanelState extends State<TodoPanel> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: ds.labelTertiary,
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -120,7 +122,7 @@ class _TodoPanelState extends State<TodoPanel> {
                             ? Icons.keyboard_arrow_up
                             : Icons.keyboard_arrow_down,
                         size: 14,
-                        color: ds.labelSecondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ],
                   ),
@@ -147,7 +149,7 @@ class _TodoPanelState extends State<TodoPanel> {
                                 item.content,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: item.status == TodoStatus.completed
-                                      ? ds.labelTertiary
+                                      ? scheme.onSurfaceVariant
                                       : null,
                                 ),
                               ),

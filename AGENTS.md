@@ -72,11 +72,10 @@ shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.
   rejected-alternative decision (see
   [ADR-0001](docs/adr-0001-flutter-rewrite.md) and
   [docs/spec.md](docs/spec.md) §Non-Goals).
-- **Design tokens are generated.** Never hand-edit
-  `flutter/app/lib/ui/theme/deepsuite_tokens.dart`; regenerate with
-  `python3 scripts/gen_deepsuite_tokens.py` — drift fails
-  `gen_deepsuite_tokens.py --check` in `verify_all`. Workflow:
-  [`.agents/skills/dsh-design-tokens/`](.agents/skills/dsh-design-tokens/SKILL.md).
+- **Native Material 3, no ported web tokens.** UI colors/typography come
+  from stock M3 roles ([DshTheme](flutter/app/lib/ui/theme/theme.dart) —
+  `ColorScheme.fromSeed`); never reintroduce dsh-web design-platform
+  tokens or a `DeepSuiteColors`-style theme extension.
 - **Analyzer strictness is non-negotiable.** `strict-casts`,
   `strict-inference`, `strict-raw-types` are on; fix code, never the options
   ([flutter/analysis_options.yaml](flutter/analysis_options.yaml)).

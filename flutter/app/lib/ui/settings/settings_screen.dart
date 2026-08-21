@@ -32,8 +32,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
-import '../theme/deepsuite_extension.dart';
-import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
+import '../theme/theme.dart';
 import 'busy_enter_preference.dart';
 import 'settings_backend_scope.dart';
 import 'settings_ui_state.dart';
@@ -117,6 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
     final described = uiState.snapshot;
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -135,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (described != null && uiState.isLoading)
               LinearProgressIndicator(
                 minHeight: 2,
-                color: dsOf(context).accent,
+                color: scheme.primary,
                 backgroundColor: Colors.transparent,
               ),
             // The nav and the page stack always mount: the Backends page
@@ -319,7 +319,7 @@ class _ScopeBar extends ConsumerWidget {
         .where((backend) => backend.id == scopedId)
         .firstOrNull;
     if (backend == null) return const SizedBox.shrink();
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
@@ -329,7 +329,7 @@ class _ScopeBar extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          hoverColor: ds.interactiveBgHover,
+          hoverColor: scheme.surfaceContainerHigh,
           onTap: () => _openScopePicker(context, ref),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -349,7 +349,7 @@ class _ScopeBar extends ConsumerWidget {
                       Text(
                         endpoint,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -363,7 +363,7 @@ class _ScopeBar extends ConsumerWidget {
                   ),
                 ],
                 const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+                Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
               ],
             ),
           ),
@@ -380,7 +380,7 @@ class _ScopeBar extends ConsumerWidget {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        final ds = dsOf(sheetContext);
+        final scheme = Theme.of(sheetContext).colorScheme;
         final theme = Theme.of(sheetContext);
         final l10n = AppLocalizations.of(sheetContext)!;
         final registry = ref
@@ -394,10 +394,10 @@ class _ScopeBar extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: ds.menu,
+              color: scheme.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: ds.borderInverted),
-              boxShadow: kDsShadowLv3,
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
             ),
             child: SafeArea(
               top: false,
@@ -413,13 +413,13 @@ class _ScopeBar extends ConsumerWidget {
                   Text(
                     l10n.settingsScopeHint,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: ds.labelTertiary,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 12),
                   if (pinned)
                     _ScopePickerRow(
-                      leading: Icon(Icons.autorenew, size: 18, color: ds.labelSecondary),
+                      leading: Icon(Icons.autorenew, size: 18, color: scheme.onSurfaceVariant),
                       title: l10n.settingsScopeFollowActive,
                       subtitle: null,
                       active: false,
@@ -477,14 +477,14 @@ class _ScopePickerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -502,7 +502,7 @@ class _ScopePickerRow extends StatelessWidget {
                       Text(
                         subtitle!,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -515,7 +515,7 @@ class _ScopePickerRow extends StatelessWidget {
               ],
               if (selected) ...[
                 const SizedBox(width: 8),
-                Icon(Icons.check, size: 18, color: ds.accent),
+                Icon(Icons.check, size: 18, color: scheme.primary),
               ],
             ],
           ),
@@ -617,7 +617,7 @@ class _BackendsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -630,7 +630,7 @@ class _BackendsList extends StatelessWidget {
         // loud on the state); the next successful mutation clears it.
         if (state.errorMessage case final String message)
           _RegistryErrorLine(message: message),
-        ..._divided(ds, [
+        ..._divided(scheme, [
           for (final backend in state.backends)
             _BackendRow(
               backend: backend,
@@ -695,15 +695,16 @@ Future<void> _openBackendSheet(
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+      final scheme = Theme.of(sheetContext).colorScheme;
       return Padding(
         padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
+            color: scheme.surfaceContainer,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
+            border: Border.all(color: scheme.outlineVariant),
+            boxShadow: kM3ShadowElevation3,
           ),
           child: _BackendSheet(
             backend: backend,
@@ -754,7 +755,7 @@ class _BackendRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final connection = ref
         .watch(backendConnectionStateProvider(backend.id))
@@ -768,7 +769,7 @@ class _BackendRow extends ConsumerWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: active ? null : () => onAction(SelectBackend(backend.id)),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -785,7 +786,7 @@ class _BackendRow extends ConsumerWidget {
                     Text(
                       subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: ds.labelTertiary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -878,7 +879,7 @@ class _HostPageGate extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     final theme = Theme.of(context);
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
@@ -887,7 +888,7 @@ class _HostPageGate extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 24, color: ds.labelTertiary),
+            Icon(Icons.cloud_off_outlined, size: 24, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
               l10n.hostSettingsUnavailable,
@@ -897,7 +898,7 @@ class _HostPageGate extends StatelessWidget {
             Text(
               l10n.hostSettingsUnavailableBody,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),
@@ -931,7 +932,7 @@ class _GeneralPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final rows = <Widget>[
       const _EnterBehaviorRow(),
@@ -964,7 +965,7 @@ class _GeneralPage extends StatelessWidget {
           title: l10n.settingsNavGeneral,
           intro: l10n.generalIntro,
         ),
-        ..._divided(ds, rows),
+        ..._divided(scheme, rows),
       ],
     );
   }
@@ -986,7 +987,7 @@ class _EnterBehaviorRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final controller = ref.watch(busyEnterPreferenceProvider).value;
@@ -999,7 +1000,7 @@ class _EnterBehaviorRow extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             l10n.busyPreferenceDescription,
-            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           if (controller == null)
@@ -1062,7 +1063,7 @@ class _AgentPresetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final options = _pickerOptions(roster);
@@ -1074,7 +1075,7 @@ class _AgentPresetRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: enabled ? () => _openPicker(context, options) : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1092,7 +1093,7 @@ class _AgentPresetRow extends StatelessWidget {
                     Text(
                       l10n.agentPresetPreferenceDescription,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: ds.labelTertiary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1102,11 +1103,11 @@ class _AgentPresetRow extends StatelessWidget {
               Text(
                 agentPresetDisplayName(current, l10n),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ds.labelSecondary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+              Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -1127,17 +1128,17 @@ class _AgentPresetRow extends StatelessWidget {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        final ds = dsOf(sheetContext);
+        final scheme = Theme.of(sheetContext).colorScheme;
         final theme = Theme.of(sheetContext);
         return Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: ds.menu,
+              color: scheme.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: ds.borderInverted),
-              boxShadow: kDsShadowLv3,
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
             ),
             child: SafeArea(
               top: false,
@@ -1155,7 +1156,7 @@ class _AgentPresetRow extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(8),
-                        hoverColor: ds.interactiveBgHover,
+                        hoverColor: scheme.surfaceContainerHigh,
                         onTap: () {
                           Navigator.of(sheetContext).pop();
                           onAction(SelectAgentPresetDefaultAction(option.id));
@@ -1171,7 +1172,7 @@ class _AgentPresetRow extends StatelessWidget {
                                 ),
                               ),
                               if (option.id == currentId)
-                                Icon(Icons.check, size: 16, color: ds.accent),
+                                Icon(Icons.check, size: 16, color: scheme.primary),
                             ],
                           ),
                         ),
@@ -1202,7 +1203,7 @@ class _AgentPresetsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final entries = roster?.entries ?? const <AgentPresetEntry>[];
@@ -1222,7 +1223,7 @@ class _AgentPresetsPage extends StatelessWidget {
               Text(
                 heading,
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: ds.labelTertiary,
+                  color: scheme.onSurfaceVariant,
                   letterSpacing: 0.6,
                 ),
               ),
@@ -1242,7 +1243,7 @@ class _AgentPresetsPage extends StatelessWidget {
         ],
         Text(
           l10n.presetsFooter,
-          style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
@@ -1263,7 +1264,7 @@ class _PresetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final broken = entry.broken != null;
@@ -1273,16 +1274,16 @@ class _PresetCard extends StatelessWidget {
     final description =
         agentPresetDisplayDescription(entry, l10n) ?? l10n.noDescription;
     return AnimatedContainer(
-      duration: kDsDuration,
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: active ? ds.bgLayer2 : ds.bgLayer3,
+        color: active ? scheme.surfaceContainerHigh : scheme.surfaceContainerHighest,
         border: Border.all(
           color: broken
               ? theme.colorScheme.error
               : active
               ? theme.colorScheme.onSurface
-              : ds.borderL2,
+              : scheme.outlineVariant,
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -1290,7 +1291,7 @@ class _PresetCard extends StatelessWidget {
         type: MaterialType.transparency,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          hoverColor: ds.interactiveBgHover,
+          hoverColor: scheme.surfaceContainerHigh,
           onTap: broken || active
               ? null
               : () => onAction(SelectAgentPresetDefaultAction(entry.id)),
@@ -1333,7 +1334,7 @@ class _PresetCard extends StatelessWidget {
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: ds.labelSecondary,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -1352,7 +1353,7 @@ class _PresetCard extends StatelessWidget {
                 Text(
                   entry.id,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: ds.labelCaption,
+                    color: scheme.outline,
                     fontFamily: 'monospace',
                   ),
                 ),
@@ -1382,26 +1383,26 @@ class _PresetBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final Color background;
     final Color foreground;
     if (filled) {
       background = theme.colorScheme.error;
-      foreground = ds.bgLayer3;
+      foreground = scheme.surfaceContainerHighest;
     } else if (inverted) {
       background = theme.colorScheme.onSurface;
-      foreground = ds.bgLayer3;
+      foreground = scheme.surfaceContainerHighest;
     } else {
       background = Colors.transparent;
-      foreground = ds.labelTertiary;
+      foreground = scheme.onSurfaceVariant;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
-        border: filled || inverted ? null : Border.all(color: ds.borderL2),
+        border: filled || inverted ? null : Border.all(color: scheme.outlineVariant),
       ),
       child: Text(
         label,
@@ -1427,7 +1428,7 @@ class _PluginsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return ListView(
@@ -1440,7 +1441,7 @@ class _PluginsPage extends StatelessWidget {
         if (snapshot.namespaces.isEmpty)
           Text(
             l10n.noPluginSettings,
-            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         for (var i = 0; i < snapshot.namespaces.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
@@ -1476,7 +1477,7 @@ class _ModelsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final deepSeek = credentials
@@ -1492,7 +1493,7 @@ class _ModelsPage extends StatelessWidget {
             child: Text(
               l10n.settingsReadOnlyNotice,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -1502,7 +1503,7 @@ class _ModelsPage extends StatelessWidget {
         ],
         Text(
           l10n.modelsFooter,
-          style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
@@ -1520,22 +1521,22 @@ class _DeepSeekCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return AnimatedContainer(
-      duration: kDsDuration,
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: ds.bgLayer3,
-        border: Border.all(color: ds.borderL2),
+        color: scheme.surfaceContainerHighest,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          hoverColor: ds.interactiveBgHover,
+          hoverColor: scheme.surfaceContainerHigh,
           onTap: () => _openSheet(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
@@ -1552,7 +1553,7 @@ class _DeepSeekCard extends StatelessWidget {
                             ? l10n.apiKeyConfigured
                             : l10n.apiKeyMissing,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1561,13 +1562,13 @@ class _DeepSeekCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _StatusDot(
                   color: credential.configured
-                      ? DeepSuiteStatic.green500
-                      : ds.warnPrimary,
+                      ? Colors.green.shade600
+                      : scheme.error,
                 ),
                 const SizedBox(width: 6),
                 _StateBadge(configured: credential.configured),
                 const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+                Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
               ],
             ),
           ),
@@ -1585,15 +1586,16 @@ class _DeepSeekCard extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+        final scheme = Theme.of(sheetContext).colorScheme;
         return Padding(
           padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: dsOf(sheetContext).menu,
+              color: scheme.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: dsOf(sheetContext).borderInverted),
-              boxShadow: kDsShadowLv3,
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
             ),
             child: _CredentialSheet(credential: credential, onAction: onAction),
           ),
@@ -1619,11 +1621,11 @@ class _CredentialsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final tertiary = theme.textTheme.bodySmall?.copyWith(
-      color: ds.labelTertiary,
+      color: scheme.onSurfaceVariant,
     );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -1639,7 +1641,7 @@ class _CredentialsPage extends StatelessWidget {
         if (credentials.isEmpty)
           Text(l10n.noCredentialsReferenced, style: tertiary)
         else
-          ..._divided(ds, [
+          ..._divided(scheme, [
             for (final credential in credentials)
               _CredentialRow(
                 key: ValueKey(credential.ref),
@@ -1662,7 +1664,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1674,7 +1676,7 @@ class _SectionHeader extends StatelessWidget {
           Text(
             intro,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: ds.labelTertiary,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1685,12 +1687,12 @@ class _SectionHeader extends StatelessWidget {
 
 /// Web GeneralSection: border-l2 hairline separators between rows, with
 /// the trailing separator stripped on the column's last row.
-List<Widget> _divided(DeepSuiteColors ds, List<Widget> rows) => [
+List<Widget> _divided(ColorScheme scheme, List<Widget> rows) => [
   for (var i = 0; i < rows.length; i++)
     if (i < rows.length - 1)
       DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: ds.borderL2)),
+          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
         ),
         child: rows[i],
       )
@@ -1717,8 +1719,8 @@ class _GeneralRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ds = dsOf(context);
-    final (dotColor, textColor) = _toneColors(ds, tone);
+    final scheme = Theme.of(context).colorScheme;
+    final (dotColor, textColor) = _toneColors(scheme, tone);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
@@ -1732,7 +1734,7 @@ class _GeneralRow extends StatelessWidget {
                 Text(
                   description,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: ds.labelTertiary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1756,11 +1758,11 @@ class _GeneralRow extends StatelessWidget {
 enum _FactTone { positive, warning, neutral }
 
 /// Dot and text colors for one row-value tone.
-(Color, Color) _toneColors(DeepSuiteColors ds, _FactTone tone) =>
+(Color, Color) _toneColors(ColorScheme scheme, _FactTone tone) =>
     switch (tone) {
-      _FactTone.positive => (DeepSuiteStatic.green500, ds.labelSecondary),
-      _FactTone.warning => (ds.warnPrimary, ds.warnLabel),
-      _FactTone.neutral => (ds.labelCaption, ds.labelTertiary),
+      _FactTone.positive => (Colors.green.shade600, scheme.onSurfaceVariant),
+      _FactTone.warning => (scheme.error, scheme.onErrorContainer),
+      _FactTone.neutral => (scheme.outline, scheme.onSurfaceVariant),
     };
 
 /// Web ModelsSection `.credentialDot`: an 8px solid state dot.
@@ -1839,16 +1841,16 @@ class _NamespaceCardState extends State<_NamespaceCard> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final namespace = widget.namespace;
     return AnimatedContainer(
-      duration: kDsDuration,
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: _open ? ds.bgLayer2 : ds.bgLayer3,
-        border: Border.all(color: ds.borderL2),
+        color: _open ? scheme.surfaceContainerHigh : scheme.surfaceContainerHighest,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
@@ -1858,7 +1860,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
           children: [
             InkWell(
               borderRadius: BorderRadius.circular(12),
-              hoverColor: ds.interactiveBgHover,
+              hoverColor: scheme.surfaceContainerHigh,
               onTap: () => setState(() => _open = !_open),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
@@ -1873,7 +1875,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
                           Text(
                             _namespaceMeta(namespace, l10n),
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: ds.labelTertiary,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -1882,12 +1884,12 @@ class _NamespaceCardState extends State<_NamespaceCard> {
                     const SizedBox(width: 8),
                     AnimatedRotation(
                       turns: _open ? 0.5 : 0,
-                      duration: kDsDuration,
+                      duration: const Duration(milliseconds: 200),
                       curve: Curves.easeInOut,
                       child: Icon(
                         Icons.keyboard_arrow_down,
                         size: 20,
-                        color: ds.labelTertiary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1904,14 +1906,14 @@ class _NamespaceCardState extends State<_NamespaceCard> {
   /// Web PluginCard `.body`: inset hairline top border over either the
   /// read-only notice or the staged edit form and its footer.
   Widget _buildBody(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: ds.borderL2)),
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       child: widget.writable
           ? _buildEditor(context)
@@ -1919,7 +1921,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
               padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
               child: Text(
                 l10n.namespaceReadOnlyHint,
-                style: theme.textTheme.bodySmall?.copyWith(color: ds.warnLabel),
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.onErrorContainer),
               ),
             ),
     );
@@ -1928,7 +1930,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
   /// The staged patch form: mode capsules (web selector vocabulary), the
   /// bordered 8px-radius inputs, the CAS caption, and the footer controls.
   Widget _buildEditor(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Padding(
@@ -1979,7 +1981,7 @@ class _NamespaceCardState extends State<_NamespaceCard> {
           const SizedBox(height: 8),
           Text(
             l10n.casRevisionLine(widget.namespace.revision),
-            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Row(
@@ -2022,13 +2024,13 @@ class _ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -2037,16 +2039,16 @@ class _ModeButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected ? ds.specificSelector : null,
+              color: selected ? scheme.primaryContainer : null,
               borderRadius: BorderRadius.circular(18),
-              border: selected ? null : Border.all(color: ds.borderL2),
+              border: selected ? null : Border.all(color: scheme.outlineVariant),
             ),
             child: Text(
               label,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: selected
                     ? theme.colorScheme.onSurface
-                    : ds.labelSecondary,
+                    : scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -2065,10 +2067,11 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Text(
       label,
       style: Theme.of(context).textTheme.labelMedium
-          ?.copyWith(color: dsOf(context).labelSecondary),
+          ?.copyWith(color: scheme.onSurfaceVariant),
     );
   }
 }
@@ -2077,22 +2080,22 @@ class _FieldLabel extends StatelessWidget {
 /// `.input`): an 8px-radius bordered field on the layer-1 fill with the
 /// brand-blue focus ring.
 InputDecoration _dsInputDecoration(BuildContext context, {String? hint}) {
-  final ds = dsOf(context);
   final theme = Theme.of(context);
+  final scheme = theme.colorScheme;
   final border = OutlineInputBorder(
     borderRadius: BorderRadius.circular(8),
-    borderSide: BorderSide(color: ds.borderL2),
+    borderSide: BorderSide(color: scheme.outlineVariant),
   );
   return InputDecoration(
     hintText: hint,
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(color: ds.labelTertiary),
+    hintStyle: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
     filled: true,
-    fillColor: ds.bgLayer1,
+    fillColor: scheme.surfaceContainerLow,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
     enabledBorder: border,
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: ds.accent),
+      borderSide: BorderSide(color: scheme.primary),
     ),
   );
 }
@@ -2111,13 +2114,13 @@ ButtonStyle _filledCapsule(BuildContext context) {
 }
 
 ButtonStyle _outlineCapsule(BuildContext context) {
-  final ds = dsOf(context);
+  final scheme = Theme.of(context).colorScheme;
   return OutlinedButton.styleFrom(
     minimumSize: const Size(64, 36),
     padding: const EdgeInsets.symmetric(horizontal: 14),
     shape: const StadiumBorder(),
-    foregroundColor: ds.labelSecondary,
-    side: BorderSide(color: ds.borderL2),
+    foregroundColor: scheme.onSurfaceVariant,
+    side: BorderSide(color: scheme.outlineVariant),
     textStyle: Theme.of(context).textTheme.bodyMedium,
   );
 }
@@ -2147,14 +2150,14 @@ class _CredentialRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: () => _openSheet(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -2169,7 +2172,7 @@ class _CredentialRow extends StatelessWidget {
                     Text(
                       _credentialMeta(credential, l10n),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: ds.labelTertiary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -2178,7 +2181,7 @@ class _CredentialRow extends StatelessWidget {
               const SizedBox(width: 8),
               _StateBadge(configured: credential.configured),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+              Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -2197,15 +2200,16 @@ class _CredentialRow extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+        final scheme = Theme.of(sheetContext).colorScheme;
         return Padding(
           padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: dsOf(sheetContext).menu,
+              color: scheme.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: dsOf(sheetContext).borderInverted),
-              boxShadow: kDsShadowLv3,
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
             ),
             child: _CredentialSheet(credential: credential, onAction: onAction),
           ),
@@ -2230,18 +2234,18 @@ class _StateBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: configured ? ds.specificSelector : null,
+        color: configured ? scheme.primaryContainer : null,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label ?? (configured ? l10n.stateConfigured : l10n.stateNotSet),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: configured ? ds.labelSecondary : ds.labelTertiary,
+          color: scheme.onSurfaceVariant,
         ),
       ),
     );
@@ -2272,7 +2276,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final credential = widget.credential;
@@ -2296,7 +2300,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
           const SizedBox(height: 4),
           Text(
             _credentialMeta(credential, l10n),
-            style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           if (credential.writable)
@@ -2304,7 +2308,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
           else
             Text(
               l10n.credentialReadOnlyHint,
-              style: theme.textTheme.bodySmall?.copyWith(color: ds.warnLabel),
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onErrorContainer),
             ),
           const SizedBox(height: 12),
           Row(
@@ -2353,7 +2357,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
   }
 
   Widget _buildEditor(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Column(
@@ -2370,7 +2374,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
         const SizedBox(height: 8),
         Text(
           l10n.secretValueHintLine,
-          style: theme.textTheme.bodySmall?.copyWith(color: ds.labelTertiary),
+          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
@@ -2442,7 +2446,7 @@ class _BackendSheetState extends State<_BackendSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final editing = widget.backend != null;
@@ -2486,7 +2490,7 @@ class _BackendSheetState extends State<_BackendSheet> {
           Text(
             urlValid ? l10n.baseUrlDerivationHint : l10n.baseUrlValidHint,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: urlValid ? ds.labelTertiary : theme.colorScheme.error,
+              color: urlValid ? scheme.onSurfaceVariant : theme.colorScheme.error,
             ),
           ),
           const SizedBox(height: 12),
@@ -2511,7 +2515,7 @@ class _BackendSheetState extends State<_BackendSheet> {
                           child: Text(
                             widget.removeBlockedReason ?? '',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: ds.labelTertiary,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -2563,13 +2567,14 @@ class _CircleAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           customBorder: const CircleBorder(),
-          hoverColor: dsOf(context).interactiveBgHover,
+          hoverColor: scheme.surfaceContainerHigh,
           onTap: onTap,
           child: SizedBox(
             width: 44,

@@ -27,8 +27,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../local_state/local_state_providers.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/session_tree.dart';
-import '../theme/deepsuite_extension.dart' show DeepSuiteColors, dsOf;
-import '../theme/deepsuite_tokens.dart' show kDsDuration;
 import 'brand_wordmark.dart';
 
 /// One backend's slice of the sidebar's browsing region: that host's
@@ -308,7 +306,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
 
   /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
   /// toggle collapses to the icon rail.
-  Widget _buildBrandRow(BuildContext context, DeepSuiteColors ds) {
+  Widget _buildBrandRow(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     final rail = !widget.inDrawer && _collapsedToRail;
     return SizedBox(
@@ -342,7 +340,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               icon: Icon(
                 rail ? Icons.menu : Icons.view_sidebar_outlined,
                 size: rail ? 22 : 16,
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
         ],
@@ -351,12 +349,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   }
 
   /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label —
-  /// now a native [OutlinedButton.icon] carrying the same deepsuite
-  /// surface tokens (elevated fill, l2 border, r12 shape) on the M3
-  /// button chrome. The sidebar keeps it above the browsing region (web
-  /// sidebar order); workspace management itself lives in the Workspaces
-  /// tab.
-  Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
+  /// now a native [OutlinedButton.icon] carrying the same elevated-fill,
+  /// l2-border, r12-shape treatment on the M3 button chrome. The sidebar
+  /// keeps it above the browsing region (web sidebar order); workspace
+  /// management itself lives in the Workspaces tab.
+  Widget _buildNewSessionButton(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
@@ -366,9 +363,9 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         child: OutlinedButton.icon(
           onPressed: _showNewSessionDialog,
           style: OutlinedButton.styleFrom(
-            backgroundColor: ds.buttonElevatedFill,
-            foregroundColor: ds.labelSecondary,
-            side: BorderSide(color: ds.borderL2),
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onSurfaceVariant,
+            side: BorderSide(color: scheme.outlineVariant),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -390,7 +387,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// top-down order — new session, then search (which expands the pane and
   /// lands in the box) — above the icon-per-session list. Rail avatars
   /// follow the same tree.ts `sessionVisible` rule as the grouped tree.
-  List<Widget> _buildRailChildren(BuildContext context, DeepSuiteColors ds) {
+  List<Widget> _buildRailChildren(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     return [
       IconButton(
@@ -401,7 +398,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         icon: Icon(
           Icons.chat_bubble_outline,
           size: 20,
-          color: ds.labelSecondary,
+          color: scheme.onSurfaceVariant,
         ),
       ),
       const SizedBox(height: 12),
@@ -410,7 +407,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
         padding: EdgeInsets.zero,
         onPressed: _openSearchFromRail,
-        icon: Icon(Icons.search, size: 20, color: ds.labelSecondary),
+        icon: Icon(Icons.search, size: 20, color: scheme.onSurfaceVariant),
       ),
       const SizedBox(height: 12),
       Expanded(
@@ -426,12 +423,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                 icon: CircleAvatar(
                   radius: 14,
                   backgroundColor: session.id == widget.selectedSessionId
-                      ? ds.sidebarNavItemActive
-                      : ds.sidebarNavItemHover,
+                      ? scheme.secondaryContainer
+                      : scheme.surfaceContainerHigh,
                   child: Text(
                     session.displayTitle.substring(0, 1),
                     style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(color: ds.labelSecondary),
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
               ),
@@ -444,10 +441,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// Wide/drawer form: the browsing region below the brand row — New
   /// session bar, section header, search capsule, then the tree or the
   /// search-result list with the bottom continuation fade.
-  List<Widget> _buildWideChildren(BuildContext context, DeepSuiteColors ds) {
+  List<Widget> _buildWideChildren(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     return [
-      _buildNewSessionButton(context, ds),
+      _buildNewSessionButton(context, scheme),
       _SectionHeader(
         title: l10n.destinationWorkspaces,
         searchActive: _searchActive,
@@ -467,7 +464,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             if (_queryController.text.trim().isEmpty)
               _buildSessionTree(
                 context,
-                ds,
+                scheme,
                 currentGroupKeyOf(
                   widget.sessions,
                   widget.workspaces,
@@ -475,7 +472,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                 ),
               )
             else
-              _buildSearchResults(context, ds),
+              _buildSearchResults(context, scheme),
             // Web WorkspaceBrowser `.fade`: bottom continuation hint
             // tracking the sidebar fill across themes.
             Positioned(
@@ -490,8 +487,8 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        ds.sidebarFill.withValues(alpha: 0),
-                        ds.sidebarFill,
+                        scheme.surfaceContainerLow.withValues(alpha: 0),
+                        scheme.surfaceContainerLow,
                       ],
                     ),
                   ),
@@ -510,13 +507,13 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// live-status header over its own workspace-grouped tree.
   Widget _buildSessionTree(
     BuildContext context,
-    DeepSuiteColors ds,
+    ColorScheme scheme,
     String? currentGroupKey,
   ) {
     final l10n = AppLocalizations.of(context)!;
     final slices = widget.backendSlices;
     if (slices != null && slices.length > 1) {
-      return _buildBackendSections(context, ds);
+      return _buildBackendSections(context, scheme);
     }
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     final groups = deriveSessionGroups(
@@ -540,7 +537,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         child: Text(
           l10n.noSessionsYet,
           style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(fontSize: 13, color: ds.labelTertiary),
+              ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
         ),
       );
     }
@@ -587,7 +584,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// own grouped tree. The active backend's group keys stay raw
   /// (persisted overrides compatible); others namespace under their
   /// backend id and default collapsed.
-  Widget _buildBackendSections(BuildContext context, DeepSuiteColors ds) {
+  Widget _buildBackendSections(BuildContext context, ColorScheme scheme) {
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     return ListView(
       padding: const EdgeInsets.only(bottom: 16),
@@ -606,7 +603,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           ),
           ..._sliceGroupSections(
             context,
-            ds,
+            scheme,
             widget.backendSlices![i],
             nowEpochMs,
           ),
@@ -620,7 +617,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// backend carries one), and backend-aware row taps.
   List<Widget> _sliceGroupSections(
     BuildContext context,
-    DeepSuiteColors ds,
+    ColorScheme scheme,
     BackendSessionSlice slice,
     int nowEpochMs,
   ) {
@@ -683,7 +680,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// the tree while a query is active; rows whose session summary has not
   /// landed stay hidden until the list catches up (web drops them the
   /// same way).
-  Widget _buildSearchResults(BuildContext context, DeepSuiteColors ds) {
+  Widget _buildSearchResults(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     // Web tree.ts `deriveSearchResults`: content matches render only for
     // visible non-blank summaries — subagent children never surface, and
@@ -714,7 +711,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           child: Text(
             l10n.noMatchingSessions,
             style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(fontSize: 13, color: ds.labelTertiary),
+                ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
         ),
       );
@@ -725,24 +722,24 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   @override
   Widget build(BuildContext context) {
     _seedBrowsingStateFromStore();
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final rail = !widget.inDrawer && _collapsedToRail;
     return AnimatedContainer(
-      duration: kDsDuration,
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       width: rail ? 56 : null,
-      color: ds.sidebarFill,
+      color: scheme.surfaceContainerLow,
       child: Material(
         color: Colors.transparent,
         child: Padding(
           padding: EdgeInsets.all(rail ? 4 : 8),
           child: Column(
             children: [
-              _buildBrandRow(context, ds),
+              _buildBrandRow(context, scheme),
               if (rail)
-                ..._buildRailChildren(context, ds)
+                ..._buildRailChildren(context, scheme)
               else
-                ..._buildWideChildren(context, ds),
+                ..._buildWideChildren(context, scheme),
             ],
           ),
         ),
@@ -790,7 +787,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
       child: SizedBox(
@@ -803,7 +800,7 @@ class _SectionHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(color: ds.labelTertiary),
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
             // Web WorkspaceBrowser `.iconButton`: the section's search
@@ -818,7 +815,7 @@ class _SectionHeader extends StatelessWidget {
                 size: 20,
                 color: searchActive
                     ? Theme.of(context).colorScheme.onSurface
-                    : ds.labelSecondary,
+                    : scheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -847,8 +844,8 @@ class _SearchCapsule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final textStyle = theme.textTheme.bodyMedium?.copyWith(fontSize: 13);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
@@ -863,7 +860,7 @@ class _SearchCapsule extends StatelessWidget {
         shadowColor: const WidgetStatePropertyAll(Colors.transparent),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
-        side: WidgetStatePropertyAll(BorderSide(color: ds.borderL2)),
+        side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -871,18 +868,18 @@ class _SearchCapsule extends StatelessWidget {
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 8),
         ),
-        leading: Icon(Icons.search, size: 16, color: ds.labelTertiary),
+        leading: Icon(Icons.search, size: 16, color: scheme.onSurfaceVariant),
         trailing: [
           IconButton(
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             onPressed: onCollapse,
-            icon: Icon(Icons.close, color: ds.labelSecondary),
+            icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
           ),
         ],
         textStyle: WidgetStatePropertyAll(textStyle),
         hintStyle: WidgetStatePropertyAll(
-          textStyle?.copyWith(color: ds.labelTertiary),
+          textStyle?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ),
     );
@@ -911,7 +908,7 @@ class _BackendSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final ds = dsOf(context);
+    final scheme = theme.colorScheme;
     final backend = slice.backend;
     return ListTile(
       dense: true,
@@ -921,7 +918,7 @@ class _BackendSectionHeader extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       selected: slice.active,
       tileColor: Colors.transparent,
-      selectedTileColor: ds.sidebarNavItemActive,
+      selectedTileColor: scheme.secondaryContainer,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: BackendConnectionDot(backendId: backend.id),
       title: Text(
@@ -934,18 +931,18 @@ class _BackendSectionHeader extends StatelessWidget {
         '${backend.baseUri.host}:${backend.baseUri.port}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelSmall?.copyWith(color: ds.labelTertiary),
+        style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
       ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: slice.active ? ds.specificSelector : null,
+          color: slice.active ? scheme.primaryContainer : null,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           slice.active ? l10n.backendStatusActive : l10n.backendStatusStandby,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: slice.active ? ds.labelSecondary : ds.labelTertiary,
+            color: slice.active ? scheme.onSurfaceVariant : scheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -957,7 +954,7 @@ class _BackendSectionHeader extends StatelessWidget {
 /// Web WorkspaceBrowser `.groupSection`: the group header plus its
 /// expanded session run (2px intra-group rhythm) and the local overflow
 /// control — now a native [ExpansionTile] with the M3 expansion
-/// animation, ripple, and semantics, themed to the deepsuite flat visual.
+/// animation, ripple, and semantics.
 ///
 /// The tile is controller-driven so the parent's browsing state (seeded
 /// from the local store, or the always-expanded current group) stays the
@@ -1028,8 +1025,8 @@ class _GroupSectionState extends State<_GroupSection> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final group = widget.group;
     final expanded = widget.expanded;
@@ -1054,7 +1051,7 @@ class _GroupSectionState extends State<_GroupSection> {
         size: 16,
         // Web `.slot .folder`: tertiary folder glyph (brand tint while
         // the group holds the selected session and is open).
-        color: expanded && widget.containsCurrent ? ds.accent : ds.labelTertiary,
+        color: expanded && widget.containsCurrent ? scheme.primary : scheme.onSurfaceVariant,
       ),
       // The session-count caption rides beside the label (the web's
       // single-line header), ahead of the M3 trailing chevron.
@@ -1075,7 +1072,7 @@ class _GroupSectionState extends State<_GroupSection> {
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: 12,
-              color: ds.labelTertiary,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],

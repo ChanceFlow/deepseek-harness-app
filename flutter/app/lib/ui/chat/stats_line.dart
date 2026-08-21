@@ -6,8 +6,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
-
 /// Compact token count: 517 / 12.2K / 1.2M (one decimal under 100).
 String formatTokens(int n) {
   String scaled(double v) => v >= 100
@@ -100,7 +98,7 @@ class StatsLine extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: dsOf(context).labelTertiary),
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );

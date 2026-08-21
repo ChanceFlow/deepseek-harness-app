@@ -9,7 +9,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
+import '../theme/theme.dart';
 
 class ModelSelect extends StatelessWidget {
   const ModelSelect({
@@ -43,7 +43,7 @@ class ModelSelect extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       // Long-press discloses the active model; the sheet carries the rest.
       tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
@@ -54,11 +54,11 @@ class ModelSelect extends StatelessWidget {
       // Native tool control, same family as the composer ➕: a standard
       // 40px M3 icon button on the selector fill.
       style: IconButton.styleFrom(
-        backgroundColor: ds.specificSelector,
+        backgroundColor: scheme.primaryContainer,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
-        disabledBackgroundColor: ds.specificSelector,
-        disabledForegroundColor: ds.labelTertiary,
-        hoverColor: ds.interactiveBgHoverSolid,
+        disabledBackgroundColor: scheme.primaryContainer,
+        disabledForegroundColor: scheme.onSurfaceVariant,
+        hoverColor: scheme.surfaceContainerHigh,
         shape: const CircleBorder(),
       ),
     );
@@ -70,31 +70,34 @@ class ModelSelect extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      // Menu-surface sheet (MenuDropdown family): menu fill, 12px radius,
-      // lv3 elevation, 4px inner padding.
+      // Menu-surface sheet (MenuDropdown family): surface fill, 12px
+      // radius, lv3 elevation, 4px inner padding.
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 520),
-            child: _ModelSelectSheet(
-              models: models,
-              onSelect: (selection) {
-                onSelect(selection);
-                root.pop();
-              },
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 520),
+              child: _ModelSelectSheet(
+                models: models,
+                onSelect: (selection) {
+                  onSelect(selection);
+                  root.pop();
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -197,7 +200,9 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                   child: Text(
                     group.name,
                     style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(color: dsOf(context).labelSecondary),
+                        ?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ),
                 for (final model in group.models)
@@ -285,7 +290,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
               Icon(
                 canBack ? Icons.arrow_back : Icons.tune,
                 size: 16,
-                color: dsOf(context).labelSecondary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 8),
               Text(title, style: Theme.of(context).textTheme.titleSmall),
@@ -325,13 +330,13 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                 value,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 12,
-                  color: dsOf(context).labelTertiary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               Icon(
                 Icons.chevron_right,
                 size: 16,
-                color: dsOf(context).labelTertiary,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -347,7 +352,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     String? detail,
     required VoidCallback onTap,
   }) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -376,7 +381,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(fontSize: 12, color: ds.labelTertiary),
+                            ?.copyWith(fontSize: 12, color: scheme.onSurfaceVariant),
                       ),
                   ],
                 ),

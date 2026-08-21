@@ -30,8 +30,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
 import '../chat/chat_screen.dart' show PlanChip, TimelineRow, timelineKey;
-import '../theme/deepsuite_extension.dart';
-import '../theme/deepsuite_tokens.dart';
+import '../theme/theme.dart';
 import 'subagent_ui_state.dart';
 
 class SubagentRoute extends ConsumerWidget {
@@ -111,29 +110,32 @@ class _SubagentScreenState extends State<SubagentScreen> {
       // Menu-surface sheet (MenuDropdown family — the model-select form):
       // menu fill, 12px radius, lv3 elevation, 4px inner padding.
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 520),
-            child: _ParentSessionSheet(
-              sessions: widget.uiState.sessions,
-              selectedParentId: widget.uiState.selectedParentId,
-              onSelect: (sessionId) {
-                widget.onAction(SelectParent(sessionId));
-                root.pop();
-              },
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 520),
+              child: _ParentSessionSheet(
+                sessions: widget.uiState.sessions,
+                selectedParentId: widget.uiState.selectedParentId,
+                onSelect: (sessionId) {
+                  widget.onAction(SelectParent(sessionId));
+                  root.pop();
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -247,7 +249,7 @@ class _CatalogView extends StatelessWidget {
               child: Text(
                 l10n.selectParentSession,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: dsOf(context).labelTertiary,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -257,7 +259,7 @@ class _CatalogView extends StatelessWidget {
               child: Text(
                 l10n.noSubagents,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: dsOf(context).labelTertiary,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -294,8 +296,8 @@ class _ParentSelectorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final selected = session;
     final title = selected == null
         ? l10n.selectParentSession
@@ -326,7 +328,7 @@ class _ParentSelectorRow extends StatelessWidget {
                     Text(
                       l10n.parentSession,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: ds.labelCaption,
+                        color: scheme.outline,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -335,13 +337,13 @@ class _ParentSelectorRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: selected == null ? ds.labelTertiary : null,
+                        color: selected == null ? scheme.onSurfaceVariant : null,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.expand_more, size: 18, color: ds.labelSecondary),
+              Icon(Icons.expand_more, size: 18, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -408,8 +410,8 @@ class _ParentSessionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onSelect,
@@ -435,7 +437,7 @@ class _ParentSessionRow extends StatelessWidget {
                 ),
               ),
               if (selected)
-                Icon(Icons.check, size: 16, color: ds.labelSecondary),
+                Icon(Icons.check, size: 16, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -560,8 +562,8 @@ class _CatalogEntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final label = entry.label ?? entry.id;
     final secondary = _secondaryLine(entry, summary, l10n);
     return Padding(
@@ -585,11 +587,11 @@ class _CatalogEntryRow extends StatelessWidget {
                         padding: const EdgeInsets.all(4),
                         child: AnimatedRotation(
                           turns: expanded ? 0.25 : 0,
-                          duration: kDsDuration,
+                          duration: const Duration(milliseconds: 200),
                           child: Icon(
                             Icons.chevron_right,
                             size: 18,
-                            color: ds.labelSecondary,
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -621,7 +623,7 @@ class _CatalogEntryRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                   ],
@@ -652,8 +654,8 @@ class _DiagnosticEntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final reason = _diagnosticReasonLabel(entry.reason, l10n);
     return Padding(
       padding: EdgeInsets.only(left: 12 + 16.0 * level),
@@ -676,7 +678,7 @@ class _DiagnosticEntryRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: ds.labelSecondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                     if (reason != null)
@@ -685,7 +687,7 @@ class _DiagnosticEntryRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                   ],
@@ -708,8 +710,8 @@ class _BranchLoadingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: EdgeInsets.only(left: 12 + 16.0 * level),
       child: SizedBox(
@@ -726,7 +728,7 @@ class _BranchLoadingRow extends StatelessWidget {
             Text(
               l10n.loadingSubagents,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -855,18 +857,18 @@ class _ReadOnlyQueueDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: ds.tip,
+        color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
         border: Border(
-          top: BorderSide(color: ds.divider),
-          left: BorderSide(color: ds.divider),
-          right: BorderSide(color: ds.divider),
+          top: BorderSide(color: scheme.outlineVariant),
+          left: BorderSide(color: scheme.outlineVariant),
+          right: BorderSide(color: scheme.outlineVariant),
         ),
       ),
       child: Column(
@@ -877,7 +879,7 @@ class _ReadOnlyQueueDock extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               child: Row(
                 children: [
-                  Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                  Icon(Icons.queue, size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -886,7 +888,7 @@ class _ReadOnlyQueueDock extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: 13,
-                        color: ds.labelPrimaryDimmed,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -910,15 +912,15 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: ds.tip,
+        color: scheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ds.divider),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -933,7 +935,7 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
           Text(
             _readOnlyBody(reason, l10n),
             style: theme.textTheme.bodySmall?.copyWith(
-              color: ds.labelSecondary,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ],
@@ -1056,10 +1058,11 @@ class SubagentStateDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = switch (state) {
-      SubagentDotState.ongoing => DeepSuiteStatic.deepseek450,
-      SubagentDotState.done => DeepSuiteStatic.green500,
-      SubagentDotState.error => Theme.of(context).colorScheme.error,
+      SubagentDotState.ongoing => scheme.primary,
+      SubagentDotState.done => Colors.green.shade600,
+      SubagentDotState.error => scheme.error,
     };
     return SizedBox(
       width: size,

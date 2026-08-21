@@ -3,8 +3,7 @@
 
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
-        verify_skills, gen_deepsuite_tokens --check,
-        gen_launcher_icons --check                        (seconds, no Flutter)
+        verify_skills, gen_launcher_icons --check            (seconds, no Flutter)
   code  flutter analyze, flutter test, check_dart_imports
   all   docs + code (default; what CI runs)
 
@@ -60,13 +59,6 @@ GATES: list[dict] = [
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/verify_skills.py"],
         "cwd": REPO,
-    },
-    {
-        "name": "design-token-drift",
-        "groups": ["docs"],
-        "cmd": [sys.executable, "scripts/gen_deepsuite_tokens.py", "--check"],
-        "cwd": REPO,
-        "requires": ("reference submodule", REFERENCE_PIN / ".git"),
     },
     {
         "name": "launcher-icon-drift",

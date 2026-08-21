@@ -9,8 +9,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/deepsuite_extension.dart';
-
 class MessageIconActions extends StatefulWidget {
   const MessageIconActions({
     super.key,
@@ -57,12 +55,12 @@ class _MessageIconActionsState extends State<MessageIconActions> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final clock = Text(
       _clock,
       style: Theme.of(context).textTheme.labelSmall
-          ?.copyWith(color: ds.labelTertiary),
+          ?.copyWith(color: scheme.onSurfaceVariant),
     );
     final copy = IconButton(
       visualDensity: VisualDensity.compact,
@@ -73,7 +71,7 @@ class _MessageIconActionsState extends State<MessageIconActions> {
       onPressed: _copy,
       icon: Icon(
         _copied ? Icons.check_outlined : Icons.copy_outlined,
-        color: ds.labelTertiary,
+        color: scheme.onSurfaceVariant,
       ),
     );
     return Row(
