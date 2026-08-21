@@ -24,6 +24,7 @@ import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
+import 'package:app/ui/shared/session_tree.dart';
 
 import '../../l10n_app.dart';
 
@@ -300,5 +301,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SearchBar), findsNothing);
     expect(queries.last, isEmpty);
+  });
+
+  testWidgets('the browsing chrome rides native Material components', (
+    tester,
+  ) async {
+    await _pumpPanel(tester);
+
+    // Group headers are native ExpansionTiles (one per workspace group:
+    // 'proj' current and 'other' folded).
+    expect(find.byType(ExpansionTile), findsNWidgets(2));
+
+    // The current group's session rows are native ListTiles — the
+    // selected session pinned first plus the four newest (the collapsed
+    // run of five before the overflow control).
+    expect(find.byType(ListTile), findsWidgets);
+    expect(find.byType(SessionTreeRow), findsNWidgets(5));
+
+    // New Session is a native button seat, and the section header's
+    // search toggle is a standard IconButton.
+    expect(find.byType(OutlinedButton), findsOneWidget);
+    expect(find.byTooltip('Search sessions'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(SessionPanel),
+        matching: find.byType(IconButton),
+      ),
+      findsWidgets,
+    );
   });
 }

@@ -241,8 +241,10 @@ void main() {
 
       // Expand the standby backend's Ungrouped group (second 'Ungrouped'
       // header — the sections render in registry order), then tap its row.
+      // The native ExpansionTile animates, so settle past it before the
+      // row is hit-testable.
       await tester.tap(find.text('Ungrouped').at(1));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.text('Beta on buildbox'), findsOneWidget);
       await tester.tap(find.text('Beta on buildbox'));
       await tester.pump();

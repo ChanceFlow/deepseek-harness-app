@@ -256,14 +256,16 @@ String relativeTimeLabel(
 }
 
 /// Web Rows.tsx `SessionNodeItem` (mobile form): a 44px touch row with
-/// the status dot slot, the title, and the compact relative time; the
-/// selected row keeps the sidebar nav-item treatment (active fill +
-/// accent edge). Long-pressing a non-blank row opens the session-verb
-/// menu (web SessionNodeItem ⋮: rename / fork / archive) when any verb
-/// is provided — both the switching sidebar and the Workspaces tab wire
-/// the verbs that belong to their surface. The management surface
-/// (Workspaces tab) additionally renders an always-visible ellipsis seat
-/// via [showVerbButton], keeping the verbs discoverable for touch.
+/// the status dot slot, the title, and the compact relative time — now a
+/// native [ListTile] carrying the sidebar nav-item treatment (active
+/// fill on selection, deepsuite hover) plus the M3 ripple, focus, and
+/// selection semantics. Long-pressing a non-blank row opens the
+/// session-verb menu (web SessionNodeItem ⋮: rename / fork / archive)
+/// when any verb is provided — both the switching sidebar and the
+/// Workspaces tab wire the verbs that belong to their surface. The
+/// management surface (Workspaces tab) additionally renders an
+/// always-visible ellipsis seat via [showVerbButton], keeping the verbs
+/// discoverable for touch.
 class SessionTreeRow extends StatelessWidget {
   const SessionTreeRow({
     super.key,
@@ -319,93 +321,72 @@ class SessionTreeRow extends StatelessWidget {
     final theme = Theme.of(context);
     // Web `displayTitle`: blank rows show the New Session label.
     final title = session.blank ? l10n.newSession : session.displayTitle;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? ds.sidebarNavItemActive : null,
-        borderRadius: BorderRadius.circular(8),
+    final hasVerbs = !session.blank && _hasVerbs;
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minTileHeight: 44,
+      // Web `.slot`: the fixed 16px status seat keeps titles aligned
+      // whether or not a dot shows; the narrow leading keeps the compact
+      // row density instead of the M3 40px minimum.
+      minLeadingWidth: 16,
+      horizontalTitleGap: 4,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      selected: selected,
+      tileColor: Colors.transparent,
+      // The web sidebar nav-item active fill (the 3px accent edge is a
+      // web-only chrome the native tile drops; fill-only selection,
+      // matching the timeline-native adoption).
+      selectedTileColor: ds.sidebarNavItemActive,
+      hoverColor: ds.sidebarNavItemHover,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      leading: SizedBox(
+        width: 16,
+        child: SessionStatusDot(session: session),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.sidebarNavItemHover,
-        onTap: onSelect,
-        onLongPress: !session.blank && _hasVerbs
-            ? () => _openMenu(context)
-            : null,
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              if (selected)
-                VerticalDivider(
-                  thickness: 3,
-                  width: 3,
-                  color: ds.sidebarNavItemActiveAccent,
-                ),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 4),
-                    child: Row(
-                      children: [
-                        // Web `.slot`: the fixed status seat keeps titles
-                        // aligned whether or not a dot shows.
-                        SizedBox(
-                          width: 16,
-                          child: SessionStatusDot(session: session),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                        // Web rule: a blank provisional row carries no
-                        // timestamp — nothing has happened in it yet.
-                        if (!session.blank) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            relativeTimeLabel(
-                              session.updatedAtEpochMs,
-                              nowEpochMs,
-                              l10n,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 12,
-                              color: ds.labelTertiary,
-                            ),
-                          ),
-                        ],
-                        // The management surface's always-visible verbs
-                        // seat (web ⋮): present only when the row carries
-                        // verbs and [showVerbButton] is set — the same
-                        // menu the long-press opens.
-                        if (showVerbButton && _hasVerbs && !session.blank) ...[
-                          const SizedBox(width: 4),
-                          _SessionVerbButton(
-                            session: session,
-                            onTap: () => _openMenu(context),
-                          ),
-                        ],
-                      ],
-                    ),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium,
+      ),
+      // Web rule: a blank provisional row carries no timestamp — nothing
+      // has happened in it yet — so its trailing seat stays empty.
+      trailing: session.blank
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  relativeTimeLabel(session.updatedAtEpochMs, nowEpochMs, l10n),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: ds.labelTertiary,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
+                // The management surface's always-visible verbs seat
+                // (web ⋮): present only when the row carries verbs and
+                // [showVerbButton] is set — the same menu the long-press
+                // opens.
+                if (showVerbButton && hasVerbs) ...[
+                  const SizedBox(width: 4),
+                  _SessionVerbButton(
+                    session: session,
+                    onTap: () => _openMenu(context),
+                  ),
+                ],
+              ],
+            ),
+      onTap: onSelect,
+      onLongPress: hasVerbs ? () => _openMenu(context) : null,
     );
   }
 }
 
 /// Web SessionNodeItem "⋮" seat — mobile form: an always-visible
-/// ellipsis that opens the session-verbs menu on tap.
+/// ellipsis [IconButton] that opens the session-verbs menu on tap.
 class _SessionVerbButton extends StatelessWidget {
   const _SessionVerbButton({
     required this.session,
@@ -419,26 +400,16 @@ class _SessionVerbButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
-    return SizedBox(
-      width: 32,
-      height: 44,
-      child: Tooltip(
-        message: l10n.sessionActionsFor(session.displayTitle),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            hoverColor: ds.interactiveBgHover,
-            onTap: onTap,
-            child: Center(
-              child: Icon(
-                Icons.more_horiz,
-                size: 16,
-                color: ds.labelTertiary,
-              ),
-            ),
-          ),
-        ),
+    return IconButton(
+      tooltip: l10n.sessionActionsFor(session.displayTitle),
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      padding: EdgeInsets.zero,
+      icon: Icon(
+        Icons.more_horiz,
+        size: 18,
+        color: ds.labelTertiary,
       ),
     );
   }
@@ -493,7 +464,9 @@ class _SessionVerbsSheet extends StatelessWidget {
 }
 
 /// Web Menu `.item`: min-h 44, r10, 14px label, 16px tertiary leading
-/// glyph; tapping pops the sheet and runs the verb.
+/// glyph — now a native [ListTile]; tapping pops the sheet and runs the
+/// verb. The transparent [Material] gives the tile an ink host (the sheet
+/// card behind it is a decorated container).
 class _VerbRow extends StatelessWidget {
   const _VerbRow({required this.icon, required this.label, required this.onTap});
 
@@ -507,31 +480,23 @@ class _VerbRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        hoverColor: ds.interactiveBgHover,
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 44,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        leading: Icon(icon, size: 18, color: ds.labelTertiary),
+        title: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         onTap: () {
           Navigator.of(context).pop();
           onTap();
         },
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: ds.labelTertiary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -641,7 +606,8 @@ class WarningDot extends StatelessWidget {
 }
 
 /// Web WorkspaceBrowser `.sessionOverflowButton`: the local overflow
-/// control under a group (28px on the web, a 44px touch row here),
+/// control under a group (28px on the web, a 44px touch row here) —
+/// now a native [TextButton] styled to the deepsuite tertiary label,
 /// aligned under the session titles.
 class SessionOverflowRow extends StatelessWidget {
   const SessionOverflowRow({
@@ -659,25 +625,30 @@ class SessionOverflowRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ds = dsOf(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: SizedBox(
-          height: 44,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 28),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                expanded ? l10n.showLess : l10n.showAll(totalCount),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(fontSize: 12, color: ds.labelTertiary),
-              ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 28),
+        child: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: ds.labelTertiary,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            minimumSize: const Size(0, 44),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+            textStyle: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(fontSize: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
+          ),
+          child: Text(
+            expanded ? l10n.showLess : l10n.showAll(totalCount),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -687,7 +658,8 @@ class SessionOverflowRow extends StatelessWidget {
 
 /// Web Rows.tsx `SearchResultItem` (mobile form): a two-line result — the
 /// title with its status slot, then the workspace label and the content
-/// snippet at 12px; the selected row keeps the sidebar nav-item treatment.
+/// snippet at 12px — now a native two-line [ListTile]; the selected row
+/// keeps the sidebar nav-item treatment.
 class SessionSearchResultRow extends StatelessWidget {
   const SessionSearchResultRow({
     super.key,
@@ -710,98 +682,61 @@ class SessionSearchResultRow extends StatelessWidget {
     final ds = dsOf(context);
     final theme = Theme.of(context);
     final title = session.blank ? l10n.newSession : session.displayTitle;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? ds.sidebarNavItemActive : null,
-        borderRadius: BorderRadius.circular(8),
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minTileHeight: 48,
+      minLeadingWidth: 16,
+      horizontalTitleGap: 4,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      selected: selected,
+      tileColor: Colors.transparent,
+      selectedTileColor: ds.sidebarNavItemActive,
+      hoverColor: ds.sidebarNavItemHover,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      leading: SizedBox(
+        width: 16,
+        child: session.running ? const RunningDot(size: 8) : null,
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.sidebarNavItemHover,
-        onTap: onSelect,
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              if (selected)
-                VerticalDivider(
-                  thickness: 3,
-                  width: 3,
-                  color: ds.sidebarNavItemActiveAccent,
-                ),
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              child: session.running
-                                  ? const RunningDot(size: 8)
-                                  : null,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                        // Web `.searchResultMeta`: workspace context then
-                        // the content excerpt, both single-line.
-                        Padding(
-                          padding: const EdgeInsets.only(left: 20),
-                          child: Row(
-                            children: [
-                              Flexible(
-                                flex: 2,
-                                child: Text(
-                                  workspaceLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color: ds.labelTertiary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  snippet,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontSize: 12,
-                                    color: ds.labelSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium,
+      ),
+      // Web `.searchResultMeta`: the workspace context then the content
+      // excerpt; the native subtitle auto-indents under the title, which
+      // is the web's `left: 20` inset.
+      subtitle: Row(
+        children: [
+          Flexible(
+            flex: 2,
+            child: Text(
+              workspaceLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 12,
+                color: ds.labelTertiary,
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 6),
+          Expanded(
+            flex: 3,
+            child: Text(
+              snippet,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 12,
+                color: ds.labelSecondary,
+              ),
+            ),
+          ),
+        ],
       ),
+      onTap: onSelect,
     );
   }
 }
