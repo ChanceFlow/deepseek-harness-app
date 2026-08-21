@@ -68,6 +68,9 @@ Audit any document against this before accepting it:
 
 ## Enforcement
 
-Mechanical parts are gates: markdown link resolution and word budgets run in
-`python3 scripts/verify_all.py docs`. The semantic parts — completeness,
-accuracy, placement — are covered by review applying this checklist.
+Mechanical parts are gates: `python3 scripts/verify_all.py docs` resolves
+every link and anchor, holds word budgets, and rejects prose that names a
+`DSH_*` variable, a Flutter version, or an ARB key that no source file backs
+— a wrong name reads exactly like a right one, so the gate carries what a
+reader cannot. The semantic parts — completeness, accuracy, placement — are
+covered by review applying this checklist.

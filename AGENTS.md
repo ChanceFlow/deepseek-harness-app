@@ -26,9 +26,10 @@ tasks/                             Human execution ledgers (plan/todo)
 ## Commands
 
 All commands from repo root unless noted. Flutter 3.47.1 stable lives at
-`$HOME/tools/flutter-3.47.1/bin`; a version bump carries the same string into
-`scripts/verify_all.py`, `.gitea/workflows/ci.yaml`, `docker/`, and this file
-in one change.
+`$HOME/tools/flutter-3.47.1/bin`. [ci.yaml](.gitea/workflows/ci.yaml) is the
+pin's source: a bump lands there, and `verify_toolchain_pin` fails every home
+in [scripts/gates_manifest.json](scripts/gates_manifest.json) still carrying
+the old string.
 
 Locally, reach for the narrowest tool that would fail for your change:
 
@@ -80,9 +81,10 @@ shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.
 - **The import boundary is absolute.** `app` (outside `lib/di/`) and `domain`
   speak `domain` types only; dsh types (`SessionEvent`, `MuxFrame`,
   `HostFrame`) and the `harness_adapter`/`network` packages stay on their side
-  of it. Boundaries are owned by
+  of it, and `packages/dev` stays a leaf on `flutter` plus its OTel SDK.
+  Boundaries are owned by
   [README §Module boundaries](README.md#module-boundaries) and enforced by
-  `python3 scripts/check_dart_imports.py` (part of `verify_all`).
+  `python3 scripts/check_dart_imports.py`.
 - **Wire truth is the reference submodule.** Read request/response shapes
   under `reference/deepseek-harness/` per
   [reference/README.md](reference/README.md) before encoding or decoding
@@ -99,7 +101,8 @@ shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.
   [flutter/app/AGENTS.md](flutter/app/AGENTS.md) — read it before touching a
   widget's look.
 - **User-visible text is an ARB key** in both locales, added in the same
-  change ([flutter/app/AGENTS.md](flutter/app/AGENTS.md)).
+  change ([flutter/app/AGENTS.md](flutter/app/AGENTS.md)); `verify_i18n_arb`
+  fails a key that reaches one locale only.
 - **Telemetry is optional at every call site.** App code emits through
   `DebugTelemetry.instance?` and behaves identically when it is null; who
   actually reports is owned by

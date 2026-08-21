@@ -3,7 +3,8 @@
 
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
-        verify_skills, gen_launcher_icons --check            (seconds, no Flutter)
+        verify_skills, verify_env_names, verify_toolchain_pin,
+        verify_i18n_arb, gen_launcher_icons --check          (seconds, no Flutter)
   code  flutter analyze, flutter test, check_dart_imports
   all   docs + code (default)
 
@@ -63,6 +64,24 @@ GATES: list[dict] = [
         "cwd": REPO,
     },
     {
+        "name": "env-names",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_env_names.py"],
+        "cwd": REPO,
+    },
+    {
+        "name": "toolchain-pin",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_toolchain_pin.py"],
+        "cwd": REPO,
+    },
+    {
+        "name": "i18n-arb",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_i18n_arb.py"],
+        "cwd": REPO,
+    },
+    {
         "name": "launcher-icon-drift",
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/gen_launcher_icons.py", "--check"],
@@ -86,6 +105,7 @@ GATES: list[dict] = [
             "packages/domain/test",
             "packages/network/test",
             "packages/harness_adapter/test",
+            "packages/dev/test",
         ],
         "cwd": FLUTTER_ROOT,
         "timeout": 1800,

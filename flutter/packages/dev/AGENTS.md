@@ -31,7 +31,8 @@ toward observability.
   swaps require no client payload changes beyond the endpoint.
 - **Zero internal coupling.** This package must not import `domain`,
   `network`, or `harness_adapter`; it depends on `flutter` and
-  `dartastic_opentelemetry` only. The app feeds build provenance through
+  `dartastic_opentelemetry` only, and `scripts/check_dart_imports.py` fails
+  the build if that changes. The app feeds build provenance through
   dart-defines (`config.dart`), never through the domain model.
 - **Telemetry must never break the app.** All facade emit paths, marker
   writes, and bootstrap init failures are swallowed (best-effort by
