@@ -67,9 +67,11 @@ class DebugToolBootstrap {
   String get _device => deviceProvider?.call() ?? 'android';
   String get _sessionId => sessionIdProvider?.call() ?? '';
 
-  /// Idempotent. Returns false when in release mode (hooks refused).
+  /// Idempotent. Returns false in release mode when telemetry is disabled
+  /// at compile time ([kDebugTelemetryEnabled] false — stable releases);
+  /// prerelease release builds and debug builds install.
   bool start({bool trackFrames = true}) {
-    if (kReleaseMode || _installed) return false;
+    if ((kReleaseMode && !kDebugTelemetryEnabled) || _installed) return false;
     _reportPendingCrash();
     _installHooks();
     if (trackFrames) {
@@ -154,7 +156,10 @@ Future<DebugToolBootstrap?> initDebugTelemetry({
   String Function()? deviceProvider,
   String Function()? sessionIdProvider,
 }) async {
-  if (kReleaseMode) return null;
+  // Release mode stays silent when telemetry is compiled out
+  // ([kDebugTelemetryEnabled] false — stable releases); debug builds and
+  // prerelease release builds report.
+  if (kReleaseMode && !kDebugTelemetryEnabled) return null;
   try {
     final telemetry = await DebugTelemetry.initialize(settings);
     if (telemetry == null) return null;

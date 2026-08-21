@@ -63,11 +63,24 @@ intake 代码全删),崩溃与遥测统一走 OTLP/HTTP 到自托管 SigNoz。
 ## Consequences
 
 - debug 构建:log/event/metric/帧率/崩溃全部 OTLP→SigNoz(默认
-  `10.0.2.2:4318`),崩溃标记文件照旧在 app documents 目录;release
-  构建零残留(kDebugMode const 分支 + `kReleaseMode` 拒绝安装)。
+  `10.0.2.2:4318`),崩溃标记文件照旧在 app documents 目录。
+- **门闸语义(pre-release 上报,stable 编译期零残留)**:遥测门闸是
+  编译期常量 `kDebugTelemetryEnabled`
+  (`bool.fromEnvironment('DSH_TELEMETRY_ENABLED')`),release 模式下
+  `kReleaseMode && !kDebugTelemetryEnabled` 在 AOT 编译期折叠成
+  `return`,整条遥测链(OTel SDK、crash marker、帧率、事件)被
+  tree-shake 出 stable 二进制(实测 60.1MB→57.7MB,特征字符串 0)。
+  `main()`/`initDebugTelemetry`/`FrameTracker.start` 三处门闸同源。
+  发布 workflow 用与 `gen_release_notes.py` 相同的 `_PRERELEASE` 正则
+  (`-(alpha|beta|rc|dev)[.]?[0-9]*$`)按 versionName 判定并传
+  `DSH_TELEMETRY_ENABLED`(正式 tag `0.1.0`→false;`0.0.3-alpha.N`/
+  `0.1.0-alpha.1`→true)。代码里不跑正则(运行时无法编译期折叠):
+  版本号判定在 workflow 完成,注入编译期布尔。忘了传定义则默认
+  `true`,行为朝"上报"侧偏(可观测性优先,本地
+  `flutter build apk --release` 不带定义时因此带遥测)。
 - `packages/dev` 依赖变为 flutter + dartastic_opentelemetry(app 侧
   path_provider 传目录);intake 相关的 dart-define 全删,新增
-  `DSH_DEBUG_OTLP_URL`。
+  `DSH_DEBUG_OTLP_URL`、`DSH_APP_VERSION`、`DSH_TELEMETRY_ENABLED`。
 - SigNoz 需在 dev 机跑起来(compose 在 ~/services/,不入库);OTLP
   端口 4318。遥测失败全部静默降级,不影响 app。
 - 已知取舍:dartastic 社区小(25★),若 fork 出问题,备选是手写最小
@@ -77,7 +90,8 @@ intake 代码全删),崩溃与遥测统一走 OTLP/HTTP 到自托管 SigNoz。
   session 状态(与旧笔记同取舍)。
 - **业务打点接入**:`ChatController` 关键路径(会话选择/创建/派生、
   发消息成功与失败、host 命令执行与错误、取消回合、审批/问答、搜索)
-  通过 `DebugTelemetry.instance?`(null-safe,release 为 no-op)发射
+  通过 `DebugTelemetry.instance?`(null-safe;stable release 为
+  no-op,prerelease release 与 debug 上报)发射
   `event`/`count`;错误统一走 `_runCatchingForUi` 漏斗发 `chat.error`。
   打点测试用 dartastic `testing.dart` 的 in-memory harness 驱动真实
   controller 断言事件出现(`app/test/ui/chat/chat_controller_telemetry_test.dart`;
