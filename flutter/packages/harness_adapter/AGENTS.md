@@ -17,7 +17,7 @@ understands the dsh wire protocol; everything here protects that seam.
 - **Method names live in one registry.** RPC method strings are declared in
   [rpc_map.dart](lib/src/rpc_map.dart); adding coverage means adding there,
   a DTO in `wire_json.dart`, and the reducer/stat fold if events flow —
-  procedure: [dsh-wire-parity skill](../../../.agents/skills/dsh-wire-parity/SKILL.md).
+  procedure: [wire truth reference](../../../reference/README.md).
 - **Translation state is a pure fold.** `timeline_reducer.dart` and the stat
   folds are pure functions from wire events to `domain` timeline state; no
   Flutter imports (the [import gate](../../../scripts/check_dart_imports.py)

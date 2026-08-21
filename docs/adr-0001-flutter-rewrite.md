@@ -33,8 +33,8 @@ PLAN 第 1 节、docs/spec.md Non-Goals）三处明文"无 RN/Flutter"。
    `http` + `web_socket_channel`；`freezed` + `json_serializable`；
    markdown 解析器直译为纯 Dart（**不采用** discontinued 的 `flutter_markdown`），
    渲染层自绘 Widget；`--dart-define=DSH_BASE_URL=…` 注入 base URL。
-6. 进度以 [ROADMAP.md](../ROADMAP.md) 为唯一看板（PLAN.md 降级为 legacy 历史
-   基线）；阶段推进门禁见 ROADMAP 第 3 节。
+6. 进度以版本里程碑与 [docs/spec.md](spec.md) 为事实来源；阶段推进门禁见 CI 与
+   验证门禁。
 
 ## 被放弃的约束及理由
 
