@@ -23,6 +23,10 @@ paths = [
     '''scripts/scan_leaks.py''',
     '''scripts/gitleaks.toml''',
     '''scripts/git-hooks/''',
+    # Machine-generated dependency manifest: package content hashes are
+    # legitimate 64-hex strings that collide with the FB page-token
+    # pattern in gitleaks' default ruleset.
+    '''flutter/pubspec.lock''',
 ]
 
 [[rules]]
