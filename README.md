@@ -117,6 +117,18 @@ flutter run --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
 The default base URL is `http://10.0.2.2:3080` (Android emulator loopback);
 override with `--dart-define=DSH_BASE_URL=http://192.168.1.10:3080`.
 
+Debug builds additionally report crashes to the pi-crash-intake server
+(`http://10.0.2.2:9876` by default; override `PICRASH_INTAKE_URL`). Report the
+exact source commit so the intake's self-fix loop can pin it:
+
+```sh
+flutter run --dart-define=DSH_SOURCE_COMMIT=$(git rev-parse HEAD)
+```
+
+Without `DSH_SOURCE_COMMIT` the bundle reports `unknown` and the fix stage is
+skipped server-side. Other build-provenance defines: `DSH_SOURCE_REPO`,
+`DSH_APP_VERSION`, `DSH_BUILD_NUMBER` (defaults are well-formed but generic).
+
 A local dev server can be reached with:
 
 ```sh
