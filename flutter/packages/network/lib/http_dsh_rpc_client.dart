@@ -2,20 +2,33 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' show HttpClient;
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart' show IOClient;
 
 import 'dsh_exceptions.dart';
 import 'dsh_rpc_client.dart';
 import 'rpc_envelope.dart';
 
+/// Bound on TCP/TLS connection establishment only — never a request deadline
+/// (long-running RPCs like compaction stay unconstrained).
+const Duration kDshRpcConnectTimeout = Duration(seconds: 10);
+
 final class HttpDshRpcClient implements DshRpcClient {
-  HttpDshRpcClient(this._baseUrl, {http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+  HttpDshRpcClient(
+    this._baseUrl, {
+    http.Client? httpClient,
+    this.connectTimeout = kDshRpcConnectTimeout,
+  }) : _httpClient = httpClient ??
+           IOClient(HttpClient()..connectionTimeout = connectTimeout);
 
   final Uri _baseUrl;
   final http.Client _httpClient;
+
+  /// See [kDshRpcConnectTimeout].
+  final Duration connectTimeout;
 
   static const _headers = <String, String>{
     'Content-Type': 'application/json; charset=utf-8',

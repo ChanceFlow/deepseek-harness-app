@@ -75,6 +75,11 @@ Two downlink-only WebSocket streams are required:
 - `method` equals the frame payload `type`, e.g. `session/event`.
 - Client messages on these sockets are protocol violations; the host closes 1008.
 - GET on either path without an upgrade returns 426.
+- The client offers `permessage-deflate` on the upgrade handshake; the host
+  decides whether it negotiates. The client sends no keep-alive pings
+  (dart:io 3.13's `pingInterval` can close healthy sockets with goingAway)
+  and a cancelled downlink closes with a 2 s bound instead of waiting on the
+  peer's close frame.
 
 ### 4.3 Interactive frames
 
