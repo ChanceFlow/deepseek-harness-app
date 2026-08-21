@@ -357,6 +357,79 @@ void main() {
     expect(marker.shadowedCount, 4);
   });
 
+  // Wire shapes transcribed from the running host's command system
+  // (dsh-commands typert host: `command/run` {commandId, name, args?,
+  // source}, `command/done` {commandId, kind, text?}) — recorded live
+  // from a `/compact` dispatch.
+  test('command/run + command/done fold into one resolved card', () {
+    final history = <JsonMap>[
+      event(1, 'command/run', <String, Object?>{
+        'commandId': 'cmd-1',
+        'name': 'compact',
+        'args': '',
+        'source': <String, Object?>{'kind': 'user'},
+      }),
+      event(2, 'command/done', <String, Object?>{
+        'commandId': 'cmd-1',
+        'kind': 'success',
+        'text': 'Compacted 120 history items (~79154 tokens).',
+        'sourceEventSeq': 3,
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final card = reducer.snapshot().single as TimelineCommand;
+    expect(card.commandId, 'cmd-1');
+    expect(card.name, 'compact');
+    expect(card.args, '');
+    expect(card.status, CommandRunStatus.success);
+    expect(card.text, 'Compacted 120 history items (~79154 tokens).');
+  });
+
+  test('an aborted command resolves as failed with the abort text', () {
+    final history = <JsonMap>[
+      event(1, 'command/run', <String, Object?>{
+        'commandId': 'cmd-2',
+        'name': 'compact',
+        'args': '',
+        'source': <String, Object?>{'kind': 'user'},
+      }),
+      event(2, 'command/done', <String, Object?>{
+        'commandId': 'cmd-2',
+        'kind': 'error',
+        'text': 'This operation was aborted',
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final card = reducer.snapshot().single as TimelineCommand;
+    expect(card.status, CommandRunStatus.failed);
+    expect(card.text, 'This operation was aborted');
+  });
+
+  test('a done without its run in the window appends the settled card', () {
+    final history = <JsonMap>[
+      // The run predates the replay window; only the done is folded.
+      event(1, 'command/done', <String, Object?>{
+        'commandId': 'cmd-3',
+        'kind': 'error',
+        'text': 'This operation was aborted',
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final card = reducer.snapshot().single as TimelineCommand;
+    expect(card.name, 'unknown');
+    expect(card.status, CommandRunStatus.failed);
+    expect(card.text, 'This operation was aborted');
+  });
+
   // Fixtures transcribed from the reference classifier
   // (ui-conversation conversation-nodes/message.ts: `source.kind !==
   // 'user'` → context node) and the provenance projection

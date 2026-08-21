@@ -145,6 +145,8 @@ Raw dsh session events are folded by `TimelineReducer` into neutral items.
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
 | `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries |
+| `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
+| `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
 
 Text extraction handles `text` blocks and nested `tool-result` content.
 
@@ -354,6 +356,14 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   command that does not accept them (web envelope policy: the draft and
   images stay in place); an accepting command dispatches with the
   images, and an error result keeps them for correction.
+- A bare-only command (no input hint — today only `compact`) dispatches
+  detached: the composer never holds its sending state while the host
+  runs the command for as long as the HTTP request survives (the host
+  aborts a command when its request connection drops). The outcome
+  renders as the timeline command card folded from the `command/run` +
+  `command/done` events, not a held sending state; only an immediate
+  failure — a transport abort or an admission error that never entered a
+  handler — surfaces in the chat error banner.
 - `commands/list` stays uncovered: the roster's names/descriptions/hints
   are mirrored statically (`command_roster.dart`); fetching the live
   catalog is deferred.

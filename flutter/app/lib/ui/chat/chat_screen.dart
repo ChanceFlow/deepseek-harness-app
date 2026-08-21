@@ -1376,6 +1376,7 @@ class TimelineRow extends StatelessWidget {
       TimelineCompaction(:final shadowedCount) => CompactionRow(
         shadowedCount: shadowedCount,
       ),
+      TimelineCommand() => CommandRow(command: item as TimelineCommand),
       TimelineContextInjection() => ContextInjectionRow(
         injection: item as TimelineContextInjection,
       ),
@@ -4305,6 +4306,7 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
   TimelineTurnBoundary(:final turn) => 'turn:$turn',
   TimelineCompaction(:final id) => 'compaction:$id',
+  TimelineCommand(:final commandId, :final status) => 'command:$commandId:$status',
   TimelineContextInjection(:final id) => 'context:$id',
   TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
   TimelineApprovalRequest(:final requestId) => 'approval:$requestId',
@@ -4556,6 +4558,85 @@ class CompactionRow extends StatelessWidget {
                   ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Host slash-command card — port of the web command flow node. The run
+/// append renders the command name with a running indicator; the done
+/// event resolves it with the host's own result text (success in the
+/// label tone, an error like "This operation was aborted" in the error
+/// tone). No UI copy is composed here: the name and text are host facts.
+class CommandRow extends StatelessWidget {
+  const CommandRow({super.key, required this.command});
+
+  final TimelineCommand command;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final status = command.status;
+    final running = status == CommandRunStatus.running;
+    final failed = status == CommandRunStatus.failed;
+    final text = command.text;
+    return SizedBox(
+      height: 24,
+      child: Row(
+        children: [
+          if (running)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: scheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Icon(
+              failed ? Icons.error_outline : Icons.check_circle_outline,
+              size: 14,
+              color: failed ? scheme.error : scheme.primary,
+            ),
+          const SizedBox(width: 6),
+          Text(
+            '/${command.name}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: failed
+                  ? scheme.error
+                  : running
+                  ? scheme.onSurfaceVariant
+                  : scheme.onSurface,
+            ),
+          ),
+          if (text != null && text.isNotEmpty) ...[
+            Container(
+              width: 2,
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: scheme.outline,
+                shape: BoxShape.circle,
+              ),
+            ),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: failed
+                      ? scheme.error
+                      : running
+                      ? scheme.onSurfaceVariant
+                      : scheme.onSurface,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

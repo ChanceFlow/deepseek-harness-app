@@ -101,3 +101,22 @@ String? hostCommandImageRefusal(String text) {
   }
   return null;
 }
+
+/// Whether [text] dispatches as a bare-only host command — one whose
+/// registry entry advertises no input hint (today only `compact`). The
+/// web routes bare commands through a detached execute: the composer is
+/// freed immediately and the outcome arrives as a timeline flow node,
+/// never a held sending state. Input-hinted commands (`plan`, `goal`,
+/// `permission`, `feedback`) stay attached: their submissions settle
+/// fast and keep the draft-for-correction semantics.
+bool hostCommandIsBare(String text) {
+  final line = hostCommandLineFor(text);
+  if (line == null) return false;
+  final boundary = line.indexOf(RegExp(r'[\t\n\r ]'));
+  final token = boundary == -1 ? line : line.substring(0, boundary);
+  final name = token.substring(1);
+  for (final command in kHostCommandNames) {
+    if (command.name == name) return command.hint == null;
+  }
+  return false;
+}

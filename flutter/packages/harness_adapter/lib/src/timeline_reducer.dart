@@ -122,6 +122,10 @@ class TimelineReducer {
         _appendTurnStart(event);
       case 'compaction/summary':
         _appendCompaction(event);
+      case 'command/run':
+        _appendCommandRun(event);
+      case 'command/done':
+        _resolveCommandDone(event);
       case 'user/message':
         _appendUserMessage(event);
       case 'assistant/message':
@@ -151,6 +155,63 @@ class TimelineReducer {
     _items.add(
       TimelineCompaction(id: 'compaction:$_lastSeq', shadowedCount: shadowed),
     );
+  }
+
+  /// Opens the command card (wire `command/run`: `{commandId, name, args?,
+  /// source}` — a direct log-only append, no turn wraps it).
+  void _appendCommandRun(JsonMap event) {
+    final data = _eventData(event);
+    final commandId = wireString(data, 'commandId');
+    if (commandId == null) return;
+    _upsertCommand(
+      TimelineCommand(
+        commandId: commandId,
+        name: wireString(data, 'name') ?? 'unknown',
+        args: wireString(data, 'args'),
+        status: CommandRunStatus.running,
+      ),
+    );
+  }
+
+  /// Resolves the card in place by `commandId` (wire `command/done`:
+  /// `{commandId, kind: 'success'|'error', text?}`). A done whose run fell
+  /// outside the folded window (e.g. the command started before replay)
+  /// appends the settled card rather than losing the outcome.
+  void _resolveCommandDone(JsonMap event) {
+    final data = _eventData(event);
+    final commandId = wireString(data, 'commandId');
+    if (commandId == null) return;
+    final kind = wireString(data, 'kind');
+    final existing = _commandAt(commandId);
+    _upsertCommand(
+      TimelineCommand(
+        commandId: commandId,
+        name: existing?.name ?? 'unknown',
+        args: existing?.args,
+        status: kind == 'success'
+            ? CommandRunStatus.success
+            : CommandRunStatus.failed,
+        text: wireString(data, 'text'),
+      ),
+    );
+  }
+
+  void _upsertCommand(TimelineCommand item) {
+    for (var i = 0; i < _items.length; i++) {
+      final current = _items[i];
+      if (current is TimelineCommand && current.commandId == item.commandId) {
+        _items[i] = item;
+        return;
+      }
+    }
+    _items.add(item);
+  }
+
+  TimelineCommand? _commandAt(String commandId) {
+    for (final item in _items) {
+      if (item is TimelineCommand && item.commandId == commandId) return item;
+    }
+    return null;
   }
 
   void _appendUserMessage(JsonMap event) {

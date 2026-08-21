@@ -67,9 +67,11 @@ tests pin the two surviving paths.
   the failure contract alone fixes the observable defect.
 - **Detached execution for bare commands** (web `runDetached`: free the
   composer immediately, render the outcome from the `command/run`/
-  `command/done` timeline events): deferred — the timeline does not yet
-  render command lifecycle cards, and the error banner carries the
-  failure until it does.
+  `command/done` timeline events): implemented
+  ([compact-detached-command-lifecycle](2026-08-22-compact-detached-command-lifecycle.md)) —
+  bare-only commands dispatch detached and the timeline folds the
+  lifecycle into command cards; the error banner now carries only an
+  immediate transport/admission failure, never a mid-run abort.
 - **Removing the null→prompt fallback entirely** (treat every miss as
   an error, like the web's execute-level unmatched notice): rejected —
   the app's roster is static while the host registry is preset-scoped;
@@ -81,5 +83,7 @@ tests pin the two surviving paths.
 A network failure mid-command now leaves the line unsent (error banner,
 images kept) instead of leaking command text into the model's context;
 the user retries when the connection recovers. Slow commands (a
-full-session compaction can run over a minute) hold the sending state
-until settlement — acceptable while outcomes stay banner-surfaced.
+full-session compaction can run over a minute) no longer hold the
+sending state: bare commands dispatch detached and their outcome renders
+as the timeline command card
+([compact-detached-command-lifecycle](2026-08-22-compact-detached-command-lifecycle.md)).
