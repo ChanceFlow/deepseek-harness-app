@@ -35,20 +35,22 @@ import '../shared/backend_connection_dot.dart';
 import '../theme/deepsuite_extension.dart';
 import '../theme/deepsuite_tokens.dart' show DeepSuiteStatic, kDsDuration;
 import 'busy_enter_preference.dart';
+import 'settings_backend_scope.dart';
 import 'settings_ui_state.dart';
 
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.backendId});
 
   /// The backend whose HOST settings this surface presents; null uses
-  /// the active backend. The Backends section is device-local and always
+  /// the settings scope (which follows the active backend until the
+  /// user pins one). The Backends section is device-local and always
   /// shows.
   final String? backendId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final resolved =
-        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
+    final String resolved =
+        backendId ?? ref.watch(settingsBackendScopeProvider);
     if (resolved.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -144,6 +146,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // The host-settings scope: which backend the pages below
+                  // describe. Multi-backend only — a single backend is
+                  // unambiguous. The bar is device-local, so it renders
+                  // even when the scoped host is unreachable (pinning a
+                  // reachable backend is the way out of that dead end).
+                  const _ScopeBar(),
                   _SettingsSectionNav(
                     section: _section,
                     onSelect: (next) => setState(() => _section = next),
@@ -287,6 +295,231 @@ class _SettingsHeader extends StatelessWidget {
             onTap: onRefresh,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The host-settings scope bar: which backend's settings the pages
+/// below describe. Renders only when more than one backend is
+/// configured (a single backend is unambiguous); the row is the picker
+/// trigger — tapping it opens the backend-scope sheet, which pins a
+/// scope independent of the chat-active backend.
+class _ScopeBar extends ConsumerWidget {
+  const _ScopeBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final registry = ref.watch(backendRegistryStateProvider).value;
+    if (registry == null || registry.backends.length <= 1) {
+      return const SizedBox.shrink();
+    }
+    final scopedId = ref.watch(settingsBackendScopeProvider);
+    final backend = registry.backends
+        .where((backend) => backend.id == scopedId)
+        .firstOrNull;
+    if (backend == null) return const SizedBox.shrink();
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: ds.interactiveBgHover,
+          onTap: () => _openScopePicker(context, ref),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                BackendConnectionDot(backendId: scopedId),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.settingsScopeLabel(backend.label),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        endpoint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ds.labelTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (backend.id == registry.activeId) ...[
+                  const SizedBox(width: 8),
+                  _StateBadge(
+                    configured: true,
+                    label: l10n.backendStatusActive,
+                  ),
+                ],
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 20, color: ds.labelTertiary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Opens the scope picker: the menu-surface sheet listing every
+  /// configured backend (the current scope checked, the chat-active one
+  /// badged) plus the follow-active entry while a scope is pinned.
+  Future<void> _openScopePicker(BuildContext context, WidgetRef ref) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final ds = dsOf(sheetContext);
+        final theme = Theme.of(sheetContext);
+        final l10n = AppLocalizations.of(sheetContext)!;
+        final registry = ref
+            .read(backendRegistryStateProvider)
+            .value ??
+            const BackendRegistryState();
+        final scopedId = ref.read(settingsBackendScopeProvider);
+        final pinned = ref.read(settingsBackendScopeProvider.notifier).isPinned;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: ds.menu,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ds.borderInverted),
+              boxShadow: kDsShadowLv3,
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.settingsScopeTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.settingsScopeHint,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: ds.labelTertiary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (pinned)
+                    _ScopePickerRow(
+                      leading: Icon(Icons.autorenew, size: 18, color: ds.labelSecondary),
+                      title: l10n.settingsScopeFollowActive,
+                      subtitle: null,
+                      active: false,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        ref
+                            .read(settingsBackendScopeProvider.notifier)
+                            .followActive();
+                      },
+                    ),
+                  for (final backend in registry.backends)
+                    _ScopePickerRow(
+                      leading: BackendConnectionDot(backendId: backend.id),
+                      title: backend.label,
+                      subtitle: '${backend.baseUri.host}:${backend.baseUri.port}',
+                      active: backend.id == registry.activeId,
+                      selected: backend.id == scopedId,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        ref
+                            .read(settingsBackendScopeProvider.notifier)
+                            .select(backend.id);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One scope-picker row: the live dot, label over endpoint, the chat
+/// Active mark, and the check on the current scope.
+class _ScopePickerRow extends StatelessWidget {
+  const _ScopePickerRow({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.active,
+    required this.onTap,
+    this.selected = false,
+  });
+
+  final Widget leading;
+  final String title;
+  final String? subtitle;
+  final bool active;
+
+  /// Whether this row is the currently scoped backend.
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: ds.interactiveBgHover,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              leading,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.bodyMedium),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ds.labelTertiary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 8),
+                _StateBadge(configured: true, label: l10n.backendStatusActive),
+              ],
+              if (selected) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.check, size: 18, color: ds.accent),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

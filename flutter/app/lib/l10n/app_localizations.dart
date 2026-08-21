@@ -860,6 +860,30 @@ abstract class AppLocalizations {
   /// **'Credentials'**
   String get settingsNavCredentials;
 
+  /// The backend whose host settings the Settings pages describe.
+  ///
+  /// In en, this message translates to:
+  /// **'Configuring: {label}'**
+  String settingsScopeLabel(String label);
+
+  /// No description provided for @settingsScopeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings backend'**
+  String get settingsScopeTitle;
+
+  /// No description provided for @settingsScopeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Which backend the host-settings pages describe - independent of the active chat backend.'**
+  String get settingsScopeHint;
+
+  /// No description provided for @settingsScopeFollowActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the active backend'**
+  String get settingsScopeFollowActive;
+
   /// No description provided for @settingsLoopbackHint.
   ///
   /// In en, this message translates to:
