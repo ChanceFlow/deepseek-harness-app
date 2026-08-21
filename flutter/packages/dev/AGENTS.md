@@ -1,31 +1,45 @@
-# AGENTS.md — packages/dev (debug crash capture)
+# AGENTS.md — packages/dev (debug-build tooling)
 
 Supplements the [root conventions](../../../AGENTS.md#conventions) and the
-[workspace file](../../AGENTS.md). This package is the debug-build crash
-capture chain: ring log buffer, crash marker, restart detection, intake
-reporter. It is wired ONLY on debug builds (`kDebugMode` gate in
+[workspace file](../../AGENTS.md). This package is the debug-build tooling
+home: telemetry facade (log / event / metric), frame-rate tracking, and the
+crash capture chain (ring log buffer, crash marker, restart detection,
+fatal-log reporting). It is wired ONLY on debug builds (`kDebugMode` gate in
 `app/lib/main.dart`); release builds never execute it.
 
 ## Contract and boundaries
 
-- **Wire shape is the intake contract.** The JSON payload mirrors
-  `src/triage-context.ts` (CrashBundle) in the pi-crash-intake repository
-  one-to-one — `app/version/build/platform/device/dshBaseUrl/sessionId` +
-  `source{repo,commit}` + `crash{type,message,stackFrames,occurredAt}` +
-  `logs`. Change the shape only together with the intake server; the
-  contract test (`../test/crash_bundle_test.dart`) pins every key.
+- **Transport is OTLP/HTTP to SigNoz.** All signals ride the OpenTelemetry
+  SDK (`dartastic_opentelemetry`, Apache-2.0 — the official
+  `opentelemetry_otlp` package does not resolve on Dart 3, see the telemetry
+  decision note). The endpoint arrives via `DSH_DEBUG_OTLP_URL` (app
+  `config.dart`; default `http://10.0.2.2:4318` — the emulator's route to
+  the host's SigNoz; LAN address for real devices).
+- **No fixed wire contract with any external server.** The crash marker is
+  a self-contained record (`CrashRecord` JSON) with no server-side schema;
+  crashes and telemetry go to SigNoz as OTel log records / metrics. Backend
+  swaps require no client payload changes beyond the endpoint.
 - **Zero internal coupling.** This package must not import `domain`,
-  `network`, or `harness_adapter`; it only depends on `flutter`, `http`,
-  `path_provider`. The app feeds it build provenance through dart-defines
-  (`config.dart`), never through the domain model.
-- **Capture must never break the app.** Marker writes, reporter calls, and
-  bootstrap init failures are all swallowed (best-effort by design). The
-  dying-process case is why the marker is written SYNCHRONOUSLY.
+  `network`, or `harness_adapter`; it depends on `flutter` and
+  `dartastic_opentelemetry` only. The app feeds build provenance through
+  dart-defines (`config.dart`), never through the domain model.
+- **Telemetry must never break the app.** All facade emit paths, marker
+  writes, and bootstrap init failures are swallowed (best-effort by
+  design). The dying-process case is why the marker is written
+  SYNCHRONOUSLY; the OTel emit at capture time is a best-effort bonus on top
+  of the durable marker.
 - **Hooks chain, never replace.** `FlutterError.onError` and
   `PlatformDispatcher.instance.onError` must delegate to the previous
   handler after capturing; the app's own error behavior is unchanged.
 - **Compile-time injection only.** Build provenance
   (`DSH_SOURCE_COMMIT`/`DSH_APP_VERSION`/...) arrives via
-  `String.fromEnvironment`; there is no runtime settings channel. A build
-  without `DSH_SOURCE_COMMIT` reports `unknown` and the intake skips the
-  self-fix stage.
+  `String.fromEnvironment` and becomes OTel resource attributes; there is
+  no runtime settings channel. A build without `DSH_SOURCE_COMMIT` reports
+  `unknown` — SigNoz just cannot pin the source.
+- **Frame tracking uses the framework's own timings stream.**
+  `WidgetsBinding.addTimingsCallback` feeds `app.frame.total_ms`
+  (histogram), `app.frame.jank_total` (counter, > 16.7 ms), and
+  `app.frame.fps` (gauge); no third-party instrumentation.
+- **Facade methods are the app's only surface** (`DebugTelemetry`:
+  `log`/`event`/`count`/`record`/`setGauge`/`reportCrash`), with a
+  `TelemetrySettings.enabled` master switch and a per-second event rate cap.

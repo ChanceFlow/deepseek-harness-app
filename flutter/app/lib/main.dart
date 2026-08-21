@@ -14,8 +14,8 @@ import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
 import 'ui/theme/theme.dart';
 
-/// Debug-only crash capture bootstrap; null in release or when unavailable.
-DevCrashBootstrap? crashBootstrap;
+/// Debug-build telemetry bootstrap; null in release or when unavailable.
+DebugToolBootstrap? debugBootstrap;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +24,7 @@ Future<void> main() async {
   // override so the provider consumers share the exact initialized instance.
   final notifier = SystemNotifier();
   await notifier.initialize();
-  _initCrashCapture();
+  _initDebugTools();
   runApp(
     ProviderScope(
       overrides: [systemNotifierProvider.overrideWithValue(notifier)],
@@ -33,9 +33,11 @@ Future<void> main() async {
   );
 }
 
-/// Wire the crash capture chain on debug builds only. Failure here must
-/// never prevent the app from starting: capture is best-effort by design.
-void _initCrashCapture() {
+/// Wire debug telemetry on debug builds only: OTLP export to the SigNoz
+/// collector, crash hooks (marker + restart detection + fatal log record),
+/// and frame-rate tracking. Failure here must never prevent the app from
+/// starting: telemetry is best-effort by design.
+void _initDebugTools() {
   if (!kDebugMode) return;
   // flutter_test runs with kDebugMode=true but no platform plugins; skip so
   // widget tests keep importing main.dart without a real documents dir.
@@ -43,29 +45,36 @@ void _initCrashCapture() {
   try {
     final documents = getApplicationDocumentsDirectory();
     // Fire-and-forget directory lookup; bootstrap starts once it resolves.
-    documents.then((dir) {
-      crashBootstrap = DevCrashBootstrap(
-        buffer: LogBuffer(capacity: 300),
-        marker: CrashMarker(File('${dir.path}/${CrashMarker.markerName}')),
-        reporter: CrashReporter(
-          intakeUrl: Uri.parse(kPiCrashIntakeUrl),
+    documents.then((dir) async {
+      final bootstrap = await initDebugTelemetry(
+        settings: const TelemetrySettings(
+          endpoint: kDshDebugOtlpUrl,
+          serviceName: 'dsh-android',
+          serviceVersion: kDshAppVersion,
+          resourceAttributes: {
+            'build.number': kDshBuildNumber,
+            'source.repo': kDshSourceRepo,
+            'source.commit': kDshSourceCommit,
+          },
+          metricFlushInterval: Duration(seconds: 15),
         ),
-        build: const CrashBuildInfo(
-          app: 'dsh-android',
-          version: kDshAppVersion,
-          build: kDshBuildNumber,
-          platform: 'android',
-          sourceRepo: kDshSourceRepo,
-          sourceCommit: kDshSourceCommit,
-        ),
+        markerDirectory: dir,
         dshBaseUrl: kDshBaseUrl,
-      )..start();
+      );
+      debugBootstrap = bootstrap;
+      if (bootstrap != null) {
+        bootstrap.telemetry.event('app.start', attributes: {
+          'version': kDshAppVersion,
+          'build': kDshBuildNumber,
+          'source.commit': kDshSourceCommit,
+        });
+      }
     }).catchError((Object _) {
-      // No documents dir (plugin missing) — disable capture silently.
-      crashBootstrap = null;
+      // No documents dir (plugin missing) — disable telemetry silently.
+      debugBootstrap = null;
     });
   } catch (_) {
-    crashBootstrap = null;
+    debugBootstrap = null;
   }
 }
 
