@@ -2359,6 +2359,52 @@ void main() {
       );
     }
 
+    testWidgets('the phone bar carries the session context and an overflow', (
+      tester,
+    ) async {
+      final actions = <ChatAction>[];
+      await pumpCompact(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'dock budget',
+              blank: false,
+              cwd: '/home/user/Projects/dsha',
+            ),
+          ],
+          selectedSessionId: 's1',
+        ),
+        actions,
+      );
+
+      // The drawer's session list carries the same strings; these assert
+      // the bar.
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('dock budget'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.text('dsha')),
+        findsOneWidget,
+      );
+      // Six icon seats do not fit beside a session name: the verbs fold
+      // into the overflow, and only the outline keeps a seat.
+      expect(find.byTooltip('Outline'), findsOneWidget);
+      expect(find.byTooltip('Rename session'), findsNothing);
+      expect(find.byTooltip('Archive session'), findsNothing);
+
+      await tester.tap(find.byTooltip('Session menu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Rename session'), findsOneWidget);
+      expect(find.text('Fork session'), findsOneWidget);
+      expect(find.text('Archive session'), findsOneWidget);
+    });
+
     testWidgets('session panel hides behind the drawer on narrow screens', (
       tester,
     ) async {
@@ -2376,13 +2422,21 @@ void main() {
 
       // No stacked 160px strip: the panel content is offstage in the drawer.
       expect(find.byTooltip('Search sessions'), findsNothing);
-      expect(find.text('DSH Mobile'), findsOneWidget);
+      // The phone bar names the session, not the product.
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.text('Alpha')),
+        findsOneWidget,
+      );
+      expect(find.text('DSH Mobile'), findsNothing);
 
       await tester.tap(find.byTooltip('Open navigation menu'));
       await tester.pumpAndSettle();
       expect(find.text('New session'), findsOneWidget);
       expect(find.byTooltip('Search sessions'), findsOneWidget);
-      expect(find.text('Alpha'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(Drawer), matching: find.text('Alpha')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('selecting a session closes the drawer and dispatches', (
@@ -2465,6 +2519,52 @@ void main() {
       );
       expect(find.byTooltip('Search sessions'), findsOneWidget);
       expect(find.byTooltip('Open navigation menu'), findsNothing);
+      // A wide bar has room for every verb; nothing hides in an overflow.
+      expect(find.byTooltip('Rename session'), findsOneWidget);
+      expect(find.byTooltip('Session menu'), findsNothing);
+    });
+  });
+
+  group('sessionContextLine', () {
+    const models = SessionModels(
+      current: ModelSelection(provider: 'deepseek', model: 'glm-x'),
+      routable: true,
+      groups: [
+        ModelProviderGroup(
+          id: 'deepseek',
+          name: 'DeepSeek',
+          models: [ModelCatalogModel(id: 'glm-x', name: 'GLM X')],
+        ),
+      ],
+    );
+
+    test('joins the workspace and the answering model', () {
+      expect(
+        sessionContextLine(
+          const SessionSummary(id: 's1', title: 'dock budget', cwd: '/x/dsha'),
+          models,
+        ),
+        'dsha · GLM X',
+      );
+    });
+
+    test('an untitled session drops the workspace its title already names', () {
+      // displayTitle falls back to the cwd basename; repeating it under
+      // itself says nothing.
+      expect(
+        sessionContextLine(
+          const SessionSummary(id: 's1', cwd: '/x/dsha'),
+          models,
+        ),
+        'GLM X',
+      );
+    });
+
+    test('no facts means no second line', () {
+      expect(
+        sessionContextLine(const SessionSummary(id: 's1'), null),
+        isNull,
+      );
     });
   });
 }

@@ -1670,6 +1670,12 @@ abstract class AppLocalizations {
   /// **'Subagents'**
   String get subagentsTooltip;
 
+  /// Tooltip for the phone app bar overflow menu holding the session verbs.
+  ///
+  /// In en, this message translates to:
+  /// **'Session menu'**
+  String get sessionMenuTooltip;
+
   /// No description provided for @renameSession.
   ///
   /// In en, this message translates to:

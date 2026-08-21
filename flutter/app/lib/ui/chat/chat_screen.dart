@@ -331,18 +331,43 @@ class _ChatScreenState extends State<ChatScreen> {
     required bool compact,
   }) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
     final sessionId = uiState.selectedSessionId;
     final session = uiState.sessions
         .where((item) => item.id == sessionId)
         .firstOrNull;
     final title = session?.displayTitle ?? l10n.appTitle;
+    final contextLine = sessionContextLine(session, uiState.models);
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Flexible(child: Text(title)),
+          Flexible(
+            child: contextLine == null
+                ? Text(title, maxLines: 1, overflow: TextOverflow.ellipsis)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      Text(
+                        contextLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           const SizedBox(width: 8),
           AgentPresetHeaderLabel(
             session: uiState.sessions
@@ -359,6 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
           outline: _outline,
           onToggleOutline: () => setState(() => _outline = !_outline),
           onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
+          compact: compact,
         ),
       ],
     );
@@ -368,7 +394,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
     final onAction = widget.onAction;
-    final l10n = AppLocalizations.of(context)!;
     return LayoutBuilder(
       builder: (context, constraints) {
         final useTwoPanes = constraints.maxWidth >= 720;
@@ -434,21 +459,7 @@ class _ChatScreenState extends State<ChatScreen> {
         // Compact: the session panel lives in a drawer (web's narrow
         // viewport overlay-sidebar semantics), not a stacked strip.
         return Scaffold(
-          appBar: AppBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(l10n.appTitle),
-                const SizedBox(width: 8),
-                AgentPresetHeaderLabel(
-                  session: uiState.sessions
-                      .where((item) => item.id == uiState.selectedSessionId)
-                      .firstOrNull,
-                  roster: uiState.agentPresets,
-                ),
-              ],
-            ),
-          ),
+          appBar: _chatAppBar(context, uiState, onAction, compact: true),
           drawer: Drawer(
             width: 320,
             child: SafeArea(
@@ -508,6 +519,28 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+/// The app bar's second line: the workspace this session runs in and the
+/// model answering in it, "·"-joined. The workspace drops out when the
+/// title already names it — an untitled session falls back to its cwd
+/// basename, and repeating it under itself says nothing. Null when neither
+/// fact is known, which is the signal to render a single-line title.
+String? sessionContextLine(SessionSummary? session, SessionModels? models) {
+  final parts = <String>[];
+  final titled = session?.title?.trim().isNotEmpty ?? false;
+  final cwd = session?.cwd;
+  if (titled && cwd != null) {
+    final segments = cwd.split(RegExp(r'[/\\]'));
+    for (final segment in segments.reversed) {
+      if (segment.trim().isEmpty) continue;
+      parts.add(segment);
+      break;
+    }
+  }
+  final model = modelDisplayName(models);
+  if (model != null) parts.add(model);
+  return parts.isEmpty ? null : parts.join(' · ');
+}
+
 /// Icon actions for the chat header (web header-action form).
 class ChatHeaderActions extends StatelessWidget {
   const ChatHeaderActions({
@@ -517,12 +550,18 @@ class ChatHeaderActions extends StatelessWidget {
     required this.onToggleOutline,
     required this.outline,
     this.onOpenSubagents,
+    this.compact = false,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final VoidCallback onToggleOutline;
   final bool outline;
+
+  /// Phone bars carry the two glanceable seats — running jobs and the
+  /// outline — and fold the session verbs into an overflow menu; a 400dp
+  /// bar cannot spend six icon seats and still name the session.
+  final bool compact;
 
   /// Web SubagentCatalogAction seat: opens the subagent catalog for this
   /// session.
@@ -573,6 +612,7 @@ class ChatHeaderActions extends StatelessWidget {
     final selectedSession = uiState.sessions
         .where((session) => session.id == sessionId)
         .firstOrNull;
+    final archivable = selectedSession?.blank != true;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -584,33 +624,90 @@ class ChatHeaderActions extends StatelessWidget {
           icon: const Icon(Icons.view_list_outlined),
           selectedIcon: const Icon(Icons.view_list),
         ),
-        if (onOpenSubagents != null)
+        if (compact)
+          PopupMenuButton<_SessionVerb>(
+            tooltip: l10n.sessionMenuTooltip,
+            icon: const Icon(Icons.more_vert),
+            onSelected: (verb) {
+              switch (verb) {
+                case _SessionVerb.subagents:
+                  onOpenSubagents?.call();
+                case _SessionVerb.rename:
+                  _rename(context, sessionId);
+                case _SessionVerb.fork:
+                  onAction(ForkSession(sessionId));
+                case _SessionVerb.archive:
+                  _archive(context, sessionId);
+              }
+            },
+            itemBuilder: (context) => [
+              if (onOpenSubagents != null)
+                PopupMenuItem(
+                  value: _SessionVerb.subagents,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.account_tree_outlined),
+                    title: Text(l10n.subagentsTooltip),
+                  ),
+                ),
+              PopupMenuItem(
+                value: _SessionVerb.rename,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.edit_outlined),
+                  title: Text(l10n.renameSession),
+                ),
+              ),
+              PopupMenuItem(
+                value: _SessionVerb.fork,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.call_split_outlined),
+                  title: Text(l10n.forkSession),
+                ),
+              ),
+              PopupMenuItem(
+                value: _SessionVerb.archive,
+                enabled: archivable,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  enabled: archivable,
+                  leading: const Icon(Icons.archive_outlined),
+                  title: Text(l10n.archiveSession),
+                ),
+              ),
+            ],
+          )
+        else ...[
+          if (onOpenSubagents != null)
+            IconButton(
+              tooltip: l10n.subagentsTooltip,
+              onPressed: onOpenSubagents,
+              icon: const Icon(Icons.account_tree_outlined),
+            ),
           IconButton(
-            tooltip: l10n.subagentsTooltip,
-            onPressed: onOpenSubagents,
-            icon: const Icon(Icons.account_tree_outlined),
+            tooltip: l10n.renameSession,
+            onPressed: () => _rename(context, sessionId),
+            icon: const Icon(Icons.edit_outlined),
           ),
-        IconButton(
-          tooltip: l10n.renameSession,
-          onPressed: () => _rename(context, sessionId),
-          icon: const Icon(Icons.edit_outlined),
-        ),
-        IconButton(
-          tooltip: l10n.forkSession,
-          onPressed: () => onAction(ForkSession(sessionId)),
-          icon: const Icon(Icons.call_split_outlined),
-        ),
-        IconButton(
-          tooltip: l10n.archiveSession,
-          onPressed: selectedSession?.blank == true
-              ? null
-              : () => _archive(context, sessionId),
-          icon: const Icon(Icons.archive_outlined),
-        ),
+          IconButton(
+            tooltip: l10n.forkSession,
+            onPressed: () => onAction(ForkSession(sessionId)),
+            icon: const Icon(Icons.call_split_outlined),
+          ),
+          IconButton(
+            tooltip: l10n.archiveSession,
+            onPressed: archivable ? () => _archive(context, sessionId) : null,
+            icon: const Icon(Icons.archive_outlined),
+          ),
+        ],
       ],
     );
   }
 }
+
+/// Session verbs the phone bar keeps behind its overflow menu.
+enum _SessionVerb { subagents, rename, fork, archive }
 
 class ChatPanel extends StatefulWidget {
   const ChatPanel({

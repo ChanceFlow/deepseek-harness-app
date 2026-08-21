@@ -9,21 +9,20 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
 
-/// Web `progressLabel`: "·"-joined per-status counts; zero-count segments
-/// drop out as noise (a non-empty list keeps at least one).
-String todoProgressLabel(List<TodoItem> todos, AppLocalizations l10n) {
+/// The collapsed strip's line: the plan-summary rule the `todo_write` tool
+/// row already speaks (`plan-summary.ts`) — "done/total completed" plus the
+/// running item. Mid-run the open question is which item is being worked,
+/// and per-status counts answer a question nobody asked.
+String todoPlanLabel(List<TodoItem> todos, AppLocalizations l10n) {
   final done = todos
       .where((item) => item.status == TodoStatus.completed)
       .length;
+  final head = l10n.toolTodoPlanCompleted(done, todos.length);
   final active = todos
       .where((item) => item.status == TodoStatus.inProgress)
-      .length;
-  final pending = todos.length - done - active;
-  return [
-    if (done > 0) l10n.todoCountDone(done),
-    if (active > 0) l10n.todoCountActive(active),
-    if (pending > 0) l10n.todoCountPending(pending),
-  ].join(' · ');
+      .map((item) => item.content.trim())
+      .where((content) => content.isNotEmpty);
+  return active.isEmpty ? head : '$head · ${active.first}';
 }
 
 /// One status glyph: a standard Material icon on the figma 14×14
@@ -109,7 +108,7 @@ class _TodoPanelState extends State<TodoPanel> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          todoProgressLabel(widget.todos, l10n),
+                          todoPlanLabel(widget.todos, l10n),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(

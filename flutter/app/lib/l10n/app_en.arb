@@ -507,6 +507,10 @@
   "backendVersion": "v{version}",
   "outlineTooltip": "Outline",
   "subagentsTooltip": "Subagents",
+  "sessionMenuTooltip": "Session menu",
+  "@sessionMenuTooltip": {
+    "description": "Tooltip for the phone app bar overflow menu holding the session verbs."
+  },
   "renameSession": "Rename session",
   "forkSession": "Fork session",
   "archiveSession": "Archive session",

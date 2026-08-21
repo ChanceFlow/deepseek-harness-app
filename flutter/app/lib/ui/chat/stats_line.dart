@@ -39,15 +39,43 @@ String formatTokensPerSecond(double tps) {
       : (tenths / 10).toString();
 }
 
+/// Longest "·"-joined prefix of [groups] that paints inside [maxWidth].
+///
+/// The strip drops whole facts rather than clipping a word: a number cut
+/// mid-digit costs a line and tells the reader nothing. The first group
+/// always survives — a one-fact strip that overflows still ellipsizes.
+String fitStatsGroups(
+  List<String> groups,
+  TextStyle? style,
+  double maxWidth,
+  TextScaler textScaler,
+) {
+  if (groups.isEmpty) return '';
+  var fitted = groups.first;
+  for (var count = 2; count <= groups.length; count++) {
+    final candidate = groups.take(count).join(' · ');
+    final painter = TextPainter(
+      text: TextSpan(text: candidate, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+      maxLines: 1,
+    )..layout();
+    if (painter.width > maxWidth) break;
+    fitted = candidate;
+  }
+  return fitted;
+}
+
 class StatsLine extends StatelessWidget {
   const StatsLine({super.key, required this.stats});
 
   final SessionWindowStats stats;
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+  /// Facts in the order a phone should spend width on: how far the session
+  /// has run, what it cost, then the timings a phone reader rarely acts on.
+  List<String> _groups(AppLocalizations l10n) {
     final groups = <String>[];
+    final durationGroups = <String>[];
     if (stats.steps > 0) {
       groups.add(l10n.statsTurnsSteps(stats.steps, stats.turns));
       final durations = <String>[];
@@ -59,7 +87,7 @@ class StatsLine extends StatelessWidget {
           l10n.statsToolDuration(formatDuration(stats.toolMs)),
         );
       }
-      if (durations.isNotEmpty) groups.add(durations.join(' · '));
+      if (durations.isNotEmpty) durationGroups.add(durations.join(' · '));
       final speeds = <String>[];
       if (stats.ttftSteps > 0) {
         speeds.add(
@@ -77,29 +105,48 @@ class StatsLine extends StatelessWidget {
           ),
         );
       }
-      if (speeds.isNotEmpty) groups.add(speeds.join(' · '));
+      if (speeds.isNotEmpty) durationGroups.add(speeds.join(' · '));
     }
     if (stats.billedInputTokens > 0 || stats.outputTokens > 0) {
-      final cacheHit = stats.cacheHitPercent;
-      if (cacheHit != null) groups.add(l10n.statsCacheHit(cacheHit));
       groups.add(
         '${l10n.statsInputTokens(formatTokens(stats.billedInputTokens))} · '
         '${l10n.statsOutputTokens(formatTokens(stats.outputTokens))}',
       );
+      final cacheHit = stats.cacheHitPercent;
+      if (cacheHit != null) groups.add(l10n.statsCacheHit(cacheHit));
     }
+    return groups..addAll(durationGroups);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final groups = _groups(l10n);
     if (groups.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 4, bottom: 2),
-        child: Text(
-          groups.join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
+    final style = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2, left: 8, right: 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            width: double.infinity,
+            child: Text(
+              fitStatsGroups(
+                groups,
+                style,
+                constraints.maxWidth,
+                MediaQuery.textScalerOf(context),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: style,
+            ),
+          );
+        },
       ),
     );
   }

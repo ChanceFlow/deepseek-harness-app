@@ -262,6 +262,7 @@
   "backendVersion": "v{version}",
   "outlineTooltip": "大纲",
   "subagentsTooltip": "子代理",
+  "sessionMenuTooltip": "会话菜单",
   "renameSession": "重命名会话",
   "forkSession": "派生会话",
   "archiveSession": "归档会话",

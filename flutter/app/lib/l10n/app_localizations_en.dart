@@ -952,6 +952,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get subagentsTooltip => 'Subagents';
 
   @override
+  String get sessionMenuTooltip => 'Session menu';
+
+  @override
   String get renameSession => 'Rename session';
 
   @override
