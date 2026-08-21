@@ -25,7 +25,7 @@ tasks/                        Human execution ledgers (plan/todo)
 ## Commands
 
 All commands from repo root unless noted. Flutter 3.47 stable at
-`$HOME/tools/flutter-3.47.0/bin`.
+`$HOME/tools/flutter-3.47.1/bin`.
 
 ```sh
 python3 scripts/verify_all.py        # ALL gates — run before closing any task

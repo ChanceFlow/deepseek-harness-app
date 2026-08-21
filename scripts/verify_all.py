@@ -27,7 +27,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 FLUTTER_ROOT = REPO / "flutter"
 REFERENCE_PIN = REPO / "reference" / "deepseek-harness"
-FLUTTER_BIN = Path.home() / "tools" / "flutter-3.47.0" / "bin"
+FLUTTER_BIN = Path.home() / "tools" / "flutter-3.47.1" / "bin"
 
 
 def ensure_flutter_on_path() -> None:
