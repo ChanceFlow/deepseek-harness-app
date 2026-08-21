@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Dart import gate for the Flutter workspace.
 
-Mirrors the legacy Kotlin import gate: the anti-corruption boundary must
-stay intact after the rewrite.
+Holds the anti-corruption boundary: one direction of dependency, and dsh
+wire types stay behind the adapter.
 
 Rules:
   - domain           imports nothing outside dart:* (pure Dart, zero Flutter)
   - network          may not import domain / harness_adapter / app / flutter
   - harness_adapter  may import domain + network, never app / flutter
+  - dev              may import flutter; never domain / network /
+                     harness_adapter / app — debug tooling observes, and a
+                     product type reaching it would ship in the app's graph
   - app              may import domain; only app/lib/di/** (assembly wiring)
                      may import harness_adapter
 
@@ -17,6 +20,7 @@ Exit code 0 = CLEAN, 1 = violations found.
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 FLUTTER_ROOT = Path(__file__).resolve().parent.parent / "flutter"
@@ -26,6 +30,7 @@ FORBIDDEN: dict[str, set[str]] = {
     "domain": {"package:flutter/", "package:harness_adapter/", "package:network/", "package:app/"},
     "network": {"package:flutter/", "package:harness_adapter/", "package:domain/", "package:app/"},
     "harness_adapter": {"package:flutter/", "package:app/"},
+    "dev": {"package:harness_adapter/", "package:network/", "package:domain/", "package:app/"},
 }
 
 
@@ -80,7 +85,7 @@ def _is_di(path: Path) -> bool:
     return "lib" in path.parts and "di" in path.parts
 
 
-def _imports(path: Path):
+def _imports(path: Path) -> Iterator[tuple[int, str]]:
     with path.open(encoding="utf-8") as handle:
         for number, line in enumerate(handle, start=1):
             stripped = line.strip()

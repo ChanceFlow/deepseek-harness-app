@@ -37,5 +37,35 @@
   "skills": {
     "root": ".agents/skills",
     "min_description_chars": 30
+  },
+  "env_names": {
+    "pattern": "DSH_[A-Z0-9_]+",
+    "source_exclude": [
+      "reference/**",
+      "docker/act-runner-data/**",
+      "scripts/verify_env_names.py"
+    ],
+    "exceptions": {
+      "DSH_E2U": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design",
+      "DSH_E2_URL": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design"
+    }
+  },
+  "toolchain": {
+    "source": ".gitea/workflows/ci.yaml",
+    "pattern": "flutter-version:\\s*['\"]?(\\d+\\.\\d+\\.\\d+)",
+    "occurrence_pattern": "(?i)flutter[-_ ]v?(\\d+\\.\\d+\\.\\d+)",
+    "homes": [
+      "AGENTS.md",
+      "README.md",
+      "scripts/verify_all.py",
+      "docker/build-image.sh",
+      ".agents/skills/dsh-close-out/SKILL.md"
+    ]
+  },
+  "i18n": {
+    "arb": [
+      "flutter/app/lib/l10n/app_en.arb",
+      "flutter/app/lib/l10n/app_zh.arb"
+    ]
   }
 }

@@ -49,7 +49,8 @@ Every surface reads as a stock Android app.
 - **`lib/di/` is the only code that sees adapter or network types** (root
   import-boundary rule, enforced by `scripts/check_dart_imports.py`).
 - **Every user-visible string is an ARB key** in `lib/l10n/app_en.arb` and
-  `app_zh.arb`, both edited in the same change; the generated
+  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares the
+  key sets and the placeholder names); the generated
   `app_localizations*.dart` files are committed
   ([the i18n note](../../.agents/notes/implemented/feature/2026-08-20-bilingual-i18n-zh-en.md)).
 - **Telemetry stays optional at the call site.**
