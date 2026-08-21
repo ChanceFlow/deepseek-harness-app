@@ -10,9 +10,11 @@
 # official dsh commit, then runs the leak gates (tree + every history blob)
 # and the doc gates, and force-pushes master + tags.
 #
-# The pipeline itself is the completion gate: any leak-sweep or doc-gate
-# failure aborts the push. Flutter analyze/tests are NOT re-run here —
-# ci.yaml already ran them on the exact SHA being published.
+# The pipeline itself is the completion gate: leak sweeps, doc gates AND
+# the full Flutter suite (heavy CI — owner decision 2026-08-21) all run
+# independently on the generated artifact; any failure aborts the push.
+# The publish path never trusts ci.yaml's result, even for the same SHA —
+# public exposure gets its own complete verification.
 #
 # Commit hashes differ between Gitea and GitHub by design (model B);
 # content stays synchronized. Runs on every master push; the flow never
@@ -55,12 +57,22 @@ jobs:
           chmod +x "$HOME/bin/gitleaks"
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
-      - name: Build public repo (filter + leak sweeps + doc gates)
+      - name: Set up Flutter 3.47.1 stable (heavy CI — full suite on the final artifact)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.1
+          channel: stable
+          cache: true
+
+      - name: Build public repo (filter + leak sweeps + doc gates + FULL suite)
         run: |
-          # The pipeline clones its source internally; in CI pass the local
-          # checkout as the source (it is already on the target SHA).
+          # Heavy CI by owner decision: the publish path independently re-runs
+          # the complete verification (analyze + all tests + import gate +
+          # leak sweeps + doc gates) on the generated artifact — it never
+          # trusts ci.yaml's result, even for the same SHA. Any failure aborts
+          # the push; this is the second full gate before public exposure.
           bash publish-prep/prepare_public_repo.sh \
-            --mode=filter --agents=subset --no-flutter-check \
+            --mode=filter --agents=subset \
             --src="$(pwd)" \
             --out=/tmp/publish 2>&1 | tee /tmp/publish.log || {
               echo "::error::pipeline failed — see /tmp/publish.log"
