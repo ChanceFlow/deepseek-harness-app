@@ -1,4 +1,4 @@
 [submodule "reference/deepseek-harness"]
 	path = reference/deepseek-harness
-	url = https://github.com/deepseek-ai/deepseek-harness.git
+	url = http://127.0.0.1:3000/ChanceFlow/deepseek-harness.git
 	branch = master
