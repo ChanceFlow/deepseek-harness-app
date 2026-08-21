@@ -38,9 +38,11 @@ docker/
 docs/mockups/
 docs/notes/
 docs/flutter-migration-analysis.md
-.agents/notes/implemented/process/
+.agents/notes/implemented/process/*
+!.agents/notes/implemented/process/2026-08-21-shared-history-publish.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/
+publish-prep/
 .agents/notes/proposed/
 publish-prep/PUBLISH-PLAN.md

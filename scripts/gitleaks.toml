@@ -16,15 +16,13 @@ useDefault = true
 
 # The detector files carry the pattern vocabulary they detect; exempting the
 # scanner itself is standard practice (gitleaks' own default config does the
-# same for its rules files).
+# same for its rules files). Rule literals below use character classes so
+# the one-time history rewrite cannot rewrite the detector's own rules.
 [allowlist]
 paths = [
     '''scripts/scan_leaks.py''',
     '''scripts/gitleaks.toml''',
     '''scripts/git-hooks/''',
-    '''publish-prep/public/replace-text.txt''',
-    '''publish-prep/public/identity.map''',
-    '''publish-prep/public/message_callback.py''',
 ]
 
 [[rules]]
@@ -40,12 +38,12 @@ regex = '''http://10\.10\.\d+\.\d+:\d+'''
 [[rules]]
 id = "dsha-act-runner"
 description = "ACT runner (internal CI) naming"
-regex = '''runner'''
+regex = '''act[_]runner'''
 
 [[rules]]
 id = "dsha-lan-proxy-var"
 description = "LAN proxy variable naming"
-regex = '''EGRESS_PROXY'''
+regex = '''LAN[_]PROXY'''
 
 [[rules]]
 id = "dsha-personal-mailbox"
@@ -60,7 +58,7 @@ regex = '''@10\.10\.0\.1'''
 [[rules]]
 id = "dsha-personal-abs-path"
 description = "Absolute personal path in fixtures"
-regex = '''/home/user'''
+regex = '''/home/ch[a]nce'''
 
 [[rules]]
 id = "dsha-deepseek-api-key"
