@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/widgets.dart';
 import 'package:flutter/scheduler.dart' show FrameTiming;
 
+import 'build_info.dart' show kDebugTelemetryEnabled;
 import 'frame_stats.dart';
 import 'telemetry.dart';
 
@@ -35,10 +36,10 @@ class FrameTracker {
   bool get isStarted => _started;
 
   /// Register the timings callback and start the per-second fps gauge
-  /// timer. No-op in release mode (this package only runs on debug builds
-  /// anyway).
+  /// timer. No-op in release mode when telemetry is compiled out (stable
+  /// releases); debug and prerelease release builds still track.
   void start() {
-    if (_started || kReleaseMode) return;
+    if (_started || (kReleaseMode && !kDebugTelemetryEnabled)) return;
     _started = true;
     WidgetsBinding.instance.addTimingsCallback(_onTimings);
     _timer = Timer.periodic(

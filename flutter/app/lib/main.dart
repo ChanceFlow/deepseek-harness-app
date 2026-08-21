@@ -33,12 +33,18 @@ Future<void> main() async {
   );
 }
 
-/// Wire debug telemetry on debug builds only: OTLP export to the SigNoz
-/// collector, crash hooks (marker + restart detection + fatal log record),
-/// and frame-rate tracking. Failure here must never prevent the app from
-/// starting: telemetry is best-effort by design.
+/// Wire debug telemetry on debug builds and prerelease release builds only:
+/// OTLP export to the SigNoz collector, crash hooks (marker + restart
+/// detection + fatal log record), and frame-rate tracking. Stable release
+/// versions are compiled out entirely (zero residue). Failure here must
+/// never prevent the app from starting: telemetry is best-effort by design.
 void _initDebugTools() {
-  if (!kDebugMode) return;
+  // Debug builds always report; release builds report only when the release
+  // pipeline enabled telemetry (`DSH_TELEMETRY_ENABLED=true` for prerelease
+  // versions). Both flags are compile-time constants, so a stable release
+  // folds this to `return` and the AOT compiler tree-shakes the whole
+  // telemetry chain out of the binary.
+  if (kReleaseMode && !kDebugTelemetryEnabled) return;
   // flutter_test runs with kDebugMode=true but no platform plugins; skip so
   // widget tests keep importing main.dart without a real documents dir.
   if (Platform.environment.containsKey('FLUTTER_TEST')) return;

@@ -91,8 +91,8 @@ jobs:
         id: ver
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "channel=release" >> "$GITHUB_OUTPUT"
+            VERSION="${GITHUB_REF_NAME#v}"
+            CHANNEL=release
           else
             git fetch --tags --quiet origin || true
             # Latest stable v* tag (prerelease suffixes sort below their
@@ -101,9 +101,21 @@ jobs:
               | grep -vE -- '-(alpha|beta|rc|dev)[.]?[0-9]*$' | head -1)
             LATEST=${LATEST:-v0.0.0}
             IFS=. read -r MAJ MIN PAT <<< "${LATEST#v}"
-            echo "version=$MAJ.$MIN.$((PAT + 1))-alpha.$GITHUB_RUN_NUMBER" \
-              >> "$GITHUB_OUTPUT"
-            echo "channel=dev" >> "$GITHUB_OUTPUT"
+            VERSION="$MAJ.$MIN.$((PAT + 1))-alpha.$GITHUB_RUN_NUMBER"
+            CHANNEL=dev
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          # Telemetry rides the version channel (the same _PRERELEASE
+          # classifier as scripts/gen_release_notes.py): prerelease
+          # versions report, stable versions are compiled out
+          # (DSH_TELEMETRY_ENABLED=false folds the gate at compile time,
+          # so the AOT build tree-shakes the telemetry chain to zero
+          # residue in stable APKs).
+          if grep -qE -- '-(alpha|beta|rc|dev)[.]?[0-9]*$' <<< "$VERSION"; then
+            echo "telemetry=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "telemetry=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Pub get (workspace)
@@ -125,6 +137,8 @@ jobs:
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
           flutter build apk --release \
             --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
+            --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
+            --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \
             --build-name="${{ steps.ver.outputs.version }}" \
             --build-number="$GITHUB_RUN_NUMBER"
           rm -f "$DSH_KEYSTORE_FILE"
