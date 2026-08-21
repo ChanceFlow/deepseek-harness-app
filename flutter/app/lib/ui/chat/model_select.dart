@@ -55,12 +55,12 @@ class ModelSelect extends StatelessWidget {
       // uses) — not a sparkle.
       icon: const Icon(Icons.tune, size: 22),
       // Native tool control, same family as the composer ➕: a standard
-      // 40px M3 icon button on the selector fill.
+      // 40px M3 icon button drawn straight on the dock. The control row
+      // fills exactly one seat — send — so a filled tool would read as a
+      // second primary.
       style: IconButton.styleFrom(
-        backgroundColor: scheme.primaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        disabledBackgroundColor: scheme.primaryContainer,
-        disabledForegroundColor: scheme.onSurfaceVariant,
+        foregroundColor: scheme.onSurfaceVariant,
+        disabledForegroundColor: scheme.outline,
         hoverColor: scheme.surfaceContainerHigh,
         shape: const CircleBorder(),
       ),

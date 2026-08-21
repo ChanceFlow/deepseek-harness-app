@@ -7,7 +7,6 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
@@ -24,6 +23,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
@@ -336,8 +336,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final session = uiState.sessions
         .where((item) => item.id == sessionId)
         .firstOrNull;
-    final title = session?.displayTitle ?? l10n.appTitle;
-    final contextLine = sessionContextLine(session, uiState.models);
+    // A blank session has no identity to report, and its workspace is
+    // already the hero's subject: naming it twice on one screen is the
+    // duplication the bar was redesigned to end.
+    final title = session == null || session.blank
+        ? l10n.appTitle
+        : session.displayTitle;
+    final contextLine = session != null && session.blank
+        ? null
+        : sessionContextLine(session, uiState.models);
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
@@ -1178,9 +1185,9 @@ class _ChatPanelState extends State<ChatPanel> {
         : ListView.separated(
             controller: _timelineScroll,
             itemCount: _timelineItems.length,
-            // Web ChatView: one 16px rhythm everywhere through the column
-            // gap.
-            separatorBuilder: (_, _) => const SizedBox(height: 16),
+            separatorBuilder: (_, index) => SizedBox(
+              height: _gapAfter(_timelineItems[index], _timelineItems[index + 1]),
+            ),
             itemBuilder: (context, index) {
               final item = _timelineItems[index];
               return TimelineRow(
@@ -1192,6 +1199,20 @@ class _ChatPanelState extends State<ChatPanel> {
               );
             },
           );
+  }
+
+  /// Vertical rhythm between two transcript rows. A run of steps is one
+  /// paragraph and closes up; a message opens a new one. Equal gaps
+  /// everywhere read as a list of unrelated lines, which is what the
+  /// transcript stopped looking like a conversation.
+  static double _gapAfter(TimelineItem above, TimelineItem below) {
+    const double step = 6;
+    const double block = 16;
+    const double turn = 24;
+    if (below is TimelineTurnBoundary) return turn;
+    final bool aboveIsStep = above is! TimelineMessage;
+    final bool belowIsStep = below is! TimelineMessage;
+    return aboveIsStep && belowIsStep ? step : block;
   }
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
@@ -1298,38 +1319,47 @@ class _ChatPanelState extends State<ChatPanel> {
               ],
             ),
           ),
+          // The session's counters are the transcript's footer, not dock
+          // chrome: they caption the conversation above the input surface
+          // rather than wedge between two of its strips.
+          if (_pendingApproval == null)
+            StatsLine(stats: uiState.sessionStats),
           // Web input-dock order 0: the plan strip before the goal and
           // queue entries. While an approval is pending the ApprovalPanel
-          // takes the composer seat, so the todo/goal/stats chrome stands
-          // down — the decision moment keeps the transcript room instead of
-          // stacking chrome above it.
-          if (_pendingApproval == null) ...[
-            TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-            GoalBarStrip(
-              goal: uiState.goal,
-              onAction: widget.onAction,
-              onOpen: widget.onOpenGoal,
-            ),
-            StatsLine(stats: uiState.sessionStats),
-          ],
-          if (_pendingApproval case final approval?)
-            ApprovalPanel(request: approval, onAction: widget.onAction)
-          else if (uiState.timeline.whereType<TimelineQueue>().any(
-            (dock) => dock.items.isNotEmpty,
-          ))
-            QueueDock(
-              items: [
-                for (final dock in uiState.timeline.whereType<TimelineQueue>())
-                  ...dock.items,
+          // takes the composer seat, so the todo/goal chrome stands down —
+          // the decision moment keeps the transcript room instead of
+          // stacking chrome above it. Every strip shares one raised
+          // surface; the parts divide with hairlines, never with borders
+          // of their own.
+          _InputDock(
+            children: [
+              if (_pendingApproval == null) ...[
+                TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
+                GoalBarStrip(
+                  goal: uiState.goal,
+                  onAction: widget.onAction,
+                  onOpen: widget.onOpenGoal,
+                ),
               ],
-              running: isSessionRunning,
-              onAction: widget.onAction,
-            ),
-          if (_pendingApproval == null)
-            Row(
-              children: [
-                Expanded(
-                  child: ComposerBar(
+              if (_pendingApproval case final approval?)
+                ApprovalPanel(request: approval, onAction: widget.onAction)
+              else if (uiState.timeline.whereType<TimelineQueue>().any(
+                (dock) => dock.items.isNotEmpty,
+              ))
+                QueueDock(
+                  items: [
+                    for (final dock
+                        in uiState.timeline.whereType<TimelineQueue>())
+                      ...dock.items,
+                  ],
+                  running: isSessionRunning,
+                  onAction: widget.onAction,
+                ),
+              if (_pendingApproval == null)
+                Row(
+                  children: [
+                    Expanded(
+                      child: ComposerBar(
                     onStop: selectedSessionId == null
                         ? null
                         : () => widget.onAction(const CancelTurnAction()),
@@ -1353,15 +1383,46 @@ class _ChatPanelState extends State<ChatPanel> {
                     // running turn; inside it the persisted busy-Enter
                     // preference decides (the send button is the only
                     // submit gesture on a soft keyboard).
-                    onSend: (text) => widget.onAction(
-                      SendPrompt(text, mode: _promptModeFor(isSessionRunning)),
+                        onSend: (text) => widget.onAction(
+                          SendPrompt(
+                            text,
+                            mode: _promptModeFor(isSessionRunning),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// The input dock: one raised surface carrying every strip that sits
+/// between the transcript and the thumb — plan, goal, queue, composer.
+/// Each strip used to draw its own border and radius, which stacked three
+/// nested boxes at the screen's busiest edge; the surface belongs to the
+/// dock, and the strips divide with hairlines.
+class _InputDock extends StatelessWidget {
+  const _InputDock({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(kShapeDock),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: kM3ShadowElevation1,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
@@ -1531,10 +1592,11 @@ class MessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     if (message.role == MessageRole.user) {
-      // figma User_Bubble 659:38813 — right-aligned r22 bubble, 82% cap.
+      // The reader's own words: a quiet container, right-aligned at 82%,
+      // with the tail corner tightened so the bubble points at its author.
+      // No action row rides under it — long-press copies, and the reply's
+      // row already dates the turn.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -1545,25 +1607,7 @@ class MessageRow extends StatelessWidget {
               child: FractionallySizedBox(
                 widthFactor: 0.82,
                 alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: message.text.isEmpty
-                      ? const SizedBox.shrink()
-                      : Text(
-                          message.text,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            height: 24 / 16,
-                          ),
-                        ),
-                ),
+                child: _UserBubble(text: message.text),
               ),
             ),
           ),
@@ -1578,12 +1622,6 @@ class MessageRow extends StatelessWidget {
               width: 12,
               height: 12,
               child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else if (message.text.isNotEmpty)
-            MessageIconActions(
-              text: message.text,
-              timeEpochMs: message.createdAtEpochMs,
-              clockAtStart: true,
             ),
         ],
       );
@@ -1619,6 +1657,54 @@ class MessageRow extends StatelessWidget {
             clockAtStart: false,
           ),
       ],
+    );
+  }
+}
+
+/// The reader's message container: a neutral fill (the transcript's one
+/// saturated seat is the send button), the shape scale's card radius, and
+/// a tightened tail corner. Long-press copies the text — the gesture every
+/// mobile transcript carries — so the bubble needs no chrome of its own.
+class _UserBubble extends StatelessWidget {
+  const _UserBubble({required this.text});
+
+  final String text;
+
+  Future<void> _copy(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(ClipboardData(text: text));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.copiedTooltip),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1400),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: theme.colorScheme.secondaryContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(kShapeDock),
+          topRight: Radius.circular(kShapeDock),
+          bottomLeft: Radius.circular(kShapeDock),
+          bottomRight: Radius.circular(kShapeChip),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onLongPress: () => _copy(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(text, style: theme.textTheme.bodyMedium),
+        ),
+      ),
     );
   }
 }
@@ -1911,22 +1997,18 @@ class _ToolCallRowState extends State<ToolCallRow>
                           color: scheme.onSurfaceVariant,
                         )
                       : _leading(context, model.state),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
+                  // Type carries the semantics: the verb is a label, the
+                  // payload is data. Monospace on the payload also keeps
+                  // paths and patterns legible at a glance.
                   Text(
                     model.title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontFamily: 'monospace',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
                     ),
                   ),
-                  Container(
-                    width: 2,
-                    height: 2,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: scheme.outline,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       // Web ToolRow: the summary is args-derived; the
@@ -1936,7 +2018,8 @@ class _ToolCallRowState extends State<ToolCallRow>
                           : model.summary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
                         color: failed
                             ? theme.colorScheme.error
                             : scheme.onSurfaceVariant,
@@ -3680,18 +3763,15 @@ class _ComposerBarState extends State<ComposerBar> {
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
-    // figma Input 75:8208 — floating capsule card: textarea on top, action
-    // row below, primary actions bottom-right.
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: scheme.outlineVariant),
-        boxShadow: kM3ShadowElevation1,
-      ),
+    // Textarea on top, action row below, primary actions bottom-right.
+    // The surface underneath belongs to the dock: drawing a second card
+    // here is what made the input edge read as a box inside a box.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       child: Column(
+        // The control row spans the dock so its two clusters can sit at
+        // opposite edges; centered controls read as an accident.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
             controller: _draftController,
@@ -3764,13 +3844,10 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
-          // Mobile composer: a hairline rule separates the draft surface
-          // from the control row so the two affordance levels read
-          // distinctly on narrow phones.
-          Padding(
-            padding: const EdgeInsets.only(top: 6, bottom: 2),
-            child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-          ),
+          // Space, not a rule, separates the draft from the control row:
+          // the dock already spends one hairline on the plan strip, and a
+          // second inside the same card reads as ruling for its own sake.
+          const SizedBox(height: 8),
           // Web InputBar controls regrouped for touch: input tools and
           // contextual seats form the left cluster, the occupancy ring
           // and primary control the right. Wrap drops the primary
@@ -4073,14 +4150,11 @@ class _PlusButton extends StatelessWidget {
       tooltip: l10n.commandsTooltip,
       onPressed: enabled ? () => _open(context) : null,
       icon: const Icon(Icons.add, size: 22),
-      // Native tool control: a standard 40px M3 icon button on the
-      // selector fill, solid interactive fill on hover (the web `.add`
-      // family's visual kept on the component's surface).
+      // Native tool control: a standard 40px M3 icon button drawn straight
+      // on the dock surface, with the interactive fill kept for hover.
       style: IconButton.styleFrom(
-        backgroundColor: scheme.surfaceContainerLow,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        disabledBackgroundColor: scheme.surfaceContainerLow,
-        disabledForegroundColor: scheme.onSurfaceVariant,
+        foregroundColor: scheme.onSurfaceVariant,
+        disabledForegroundColor: scheme.outline,
         hoverColor: scheme.surfaceContainerHigh,
         shape: const CircleBorder(),
       ),

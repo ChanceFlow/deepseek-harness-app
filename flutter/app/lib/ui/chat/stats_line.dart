@@ -128,7 +128,9 @@ class StatsLine extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2, left: 8, right: 8),
+      // Caption spacing: the line belongs to the transcript above it, not
+      // to the dock it sits on top of.
+      padding: const EdgeInsets.only(top: 2, bottom: 8, left: 8, right: 8),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(

@@ -2307,7 +2307,9 @@ void main() {
   ) async {
     final actions = <ChatAction>[];
     final items = <TimelineItem>[
-      for (var turn = 1; turn <= 8; turn++) ...[
+      // Enough turns to overflow the viewport: the FAB is a scroll-position
+      // affordance, so the fixture has to out-measure the transcript pane.
+      for (var turn = 1; turn <= 16; turn++) ...[
         TimelineTurnBoundary(turn),
         TimelineMessage(
           ChatMessage(

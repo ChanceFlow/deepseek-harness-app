@@ -46,7 +46,8 @@ class EmptyHero extends StatelessWidget {
         // figma 313:14109 — soft brand ellipse behind the headline.
         Positioned.fill(
           child: IgnorePointer(
-            child: Center(
+            child: Align(
+              alignment: const Alignment(0, 0.55),
               child: AspectRatio(
                 aspectRatio: 1051 / 468,
                 child: DecoratedBox(
@@ -65,7 +66,11 @@ class EmptyHero extends StatelessWidget {
             ),
           ),
         ),
-        Center(
+        // The hero sits low, near the composer it is asking the reader to
+        // use: the transcript grows upward from there, so the first
+        // message lands where the headline was.
+        Align(
+          alignment: const Alignment(0, 0.55),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

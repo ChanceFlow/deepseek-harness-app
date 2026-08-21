@@ -285,16 +285,14 @@ void main() {
     // Real chat rows, not the raw per-kind text switch.
     expect(find.byType(TimelineRow), findsNWidgets(2));
     expect(find.byType(MessageRow), findsOneWidget);
-    // The user message renders as the bubble (primaryContainer fill).
+    // The user message renders as the transcript bubble, tinted with the
+    // scheme's secondary container rather than painted flat.
     final bubbleColor = Theme.of(
       tester.element(find.text('do the thing')),
-    ).colorScheme.primaryContainer;
-    final bubble = find.byWidgetPredicate((widget) {
-      if (widget is! Container) return false;
-      final decoration = widget.decoration;
-      return decoration is BoxDecoration &&
-          decoration.color == bubbleColor;
-    });
+    ).colorScheme.secondaryContainer;
+    final bubble = find.byWidgetPredicate(
+      (widget) => widget is Material && widget.color == bubbleColor,
+    );
     expect(bubble, findsOneWidget);
     expect(find.byType(ToolCallRow), findsOneWidget);
     expect(find.text('Bash'), findsOneWidget);

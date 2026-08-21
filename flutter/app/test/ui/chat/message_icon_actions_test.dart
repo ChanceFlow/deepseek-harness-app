@@ -80,11 +80,28 @@ void main() {
     expect(find.byTooltip('Copy'), findsOneWidget);
   });
 
-  testWidgets('user rows render actions too (clock first)', (tester) async {
+  testWidgets('the reader own bubble spends no row on chrome', (tester) async {
     await _pump(tester, [TimelineMessage(_message(role: MessageRole.user))]);
-    final actions = tester.widget<MessageIconActions>(
-      find.byType(MessageIconActions),
+    expect(find.byType(MessageIconActions), findsNothing);
+  });
+
+  testWidgets('long-pressing the bubble copies its text', (tester) async {
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map<Object?, Object?>)['text']! as String);
+        }
+        return null;
+      },
     );
-    expect(actions.clockAtStart, isTrue);
+    await _pump(tester, [TimelineMessage(_message(role: MessageRole.user))]);
+    await tester.longPress(find.text('copy me'));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(copied, ['copy me']);
+    // The write is silent otherwise: the snack bar is the only receipt.
+    await tester.pump();
+    expect(find.text('Copied'), findsOneWidget);
   });
 }

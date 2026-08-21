@@ -96,29 +96,25 @@ class _ReasoningRowState extends State<ReasoningRow>
                     size: 14,
                     color: scheme.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
+                  // Same grid as a tool row — glyph, weighted label, then
+                  // the payload — so a step reads as a step whether the
+                  // agent was thinking or calling.
                   Text(
                     l10n.thinkLabel,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
                     ),
                   ),
                   if (!_expanded) ...[
-                    Container(
-                      width: 2,
-                      height: 2,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: scheme.outline,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _summary,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),

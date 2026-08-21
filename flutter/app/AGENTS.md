@@ -20,13 +20,14 @@ Every surface reads as a stock Android app.
 
 | Intent | Role |
 |---|---|
-| Page background, scaffold | `surface` |
+| Page background, transcript, scaffold | `surface` |
+| Chrome around the page: app bar, input dock | `surfaceContainer` |
 | Grouped or raised surface, menu, sheet | `surfaceContainerLow/High/Highest` |
 | Primary text, icons | `onSurface` |
 | Secondary text, metadata, inactive glyph | `onSurfaceVariant` |
 | Divider, hairline border | `outlineVariant`, `outline` |
 | Accent, selection, active state | `primary`, `primaryContainer` |
-| User bubble | `primaryContainer` / `onPrimaryContainer` |
+| User bubble | `secondaryContainer` / `onSecondaryContainer` |
 | Failure, destructive, warning | `error`, `errorContainer` |
 | Modal scrim | `scrim` |
 | Success, completed state | `success` (the one non-role color, see below) |
@@ -39,9 +40,15 @@ Every surface reads as a stock Android app.
   `verify_theme_native` rejects a `Color(0x…)`, a `Colors.<name>`, or a
   `ThemeExtension` anywhere under `lib/` outside that file, so the map is the
   only way through.
-- **Motion, elevation, and shape are framework defaults.** The M3 durations
-  and `Theme` shapes carry animation and geometry; a bespoke curve or radius
-  is a per-change decision with a reason, not a house style.
+- **Two tones separate content from chrome.** The transcript sits on
+  `surface`; the frames around it share `surfaceContainer`, which is why the
+  bar needs no rule and the input dock needs no border stack. One filled seat
+  per control row — the primary action — keeps the accent meaningful.
+- **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
+  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius is a
+  decision with a reason, not a number typed at a call site.
+- **Motion and elevation are framework defaults.** The M3 durations carry
+  animation; a bespoke curve is a per-change decision with a reason.
 
 ## Structure and state
 

@@ -62,11 +62,15 @@ class _MessageIconActionsState extends State<MessageIconActions> {
       style: Theme.of(context).textTheme.labelSmall
           ?.copyWith(color: scheme.onSurfaceVariant),
     );
+    // The glyph keeps a 32px seat: small enough that the footer reads as
+    // a caption on the message rather than a control bar, large enough to
+    // hit. The row hugs the text it belongs to — a 16px gap above would
+    // orphan it between two messages.
     final copy = IconButton(
       visualDensity: VisualDensity.compact,
-      iconSize: 14,
-      padding: const EdgeInsets.all(4),
-      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      iconSize: 16,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
       tooltip: _copied ? l10n.copiedTooltip : l10n.copyTooltip,
       onPressed: _copy,
       icon: Icon(
@@ -74,13 +78,16 @@ class _MessageIconActionsState extends State<MessageIconActions> {
         color: scheme.onSurfaceVariant,
       ),
     );
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.clockAtStart) ...[clock, const SizedBox(width: 6)],
-        copy,
-        if (!widget.clockAtStart) ...[const SizedBox(width: 6), clock],
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.clockAtStart) ...[clock, const SizedBox(width: 4)],
+          copy,
+          if (!widget.clockAtStart) ...[const SizedBox(width: 4), clock],
+        ],
+      ),
     );
   }
 }
