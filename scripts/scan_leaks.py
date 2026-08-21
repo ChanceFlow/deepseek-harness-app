@@ -66,7 +66,15 @@ PUBLIC_EXTRA = re.compile(
 SKIP_DIRS = {".git", "reference", "publish-prep", "build", ".dart_tool", ".gradle"}
 # Detector files carry the patterns they detect — standard practice is to
 # exempt the scanner itself (gitleaks allowlists its own config too).
-SKIP_FILES = {"scripts/scan_leaks.py", "scripts/gitleaks.toml"}
+SKIP_FILES = {
+    "scripts/scan_leaks.py",
+    "scripts/gitleaks.toml",
+    # cleanse tooling: the vocabulary files carry the patterns they
+    # replace — that is their function, not a leak.
+    "publish-prep/public/replace-text.txt",
+    "publish-prep/public/identity.map",
+    "publish-prep/public/message_callback.py",
+}
 
 
 def scan_text(text: str, mode: str) -> list[tuple[str, str]]:

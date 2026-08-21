@@ -22,6 +22,9 @@ paths = [
     '''scripts/scan_leaks.py''',
     '''scripts/gitleaks.toml''',
     '''scripts/git-hooks/''',
+    '''publish-prep/public/replace-text.txt''',
+    '''publish-prep/public/identity.map''',
+    '''publish-prep/public/message_callback.py''',
 ]
 
 [[rules]]

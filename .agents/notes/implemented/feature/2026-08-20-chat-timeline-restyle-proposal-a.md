@@ -13,8 +13,7 @@ payload carried no perceptual hierarchy.
 ## Decision
 
 Timeline-only restyle (composer, app bar, and dock widgets are untouched)
-shipped as proposal A of the three-skin prototype
-[chat-message-style-proposals.html](../../../../docs/mockups/chat-message-style-proposals.html):
+shipped as proposal A of a three-skin prototype:
 
 - Flow rhythm is one 16px gap between timeline items (web ChatView column
   gap), replacing the 8px separator.

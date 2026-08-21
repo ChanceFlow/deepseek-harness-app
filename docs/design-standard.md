@@ -89,4 +89,4 @@ pumps the real screens at phone size and puts this pass beside the last
 one on a page a human can open. The shots prove nothing on their own —
 they are how the eye gets its turn, after the tests hold the rules.
 Procedure and traps:
-[`.agents/skills/dsh-design-review/`](../.agents/skills/dsh-design-review/SKILL.md).
+[scripts/render_design.py](../scripts/render_design.py).

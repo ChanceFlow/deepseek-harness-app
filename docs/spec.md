@@ -1,7 +1,7 @@
 # DeepSeek Harness Android Client Spec
 
 Status: Flutter rewrite shipped (route A, [ADR-0001](adr-0001-flutter-rewrite.md);
-migration log in [ROADMAP.md](../ROADMAP.md)).
+(ADR-0001).
 Target: Flutter client for an already running dsh web backend.
 Related code: `flutter/app/`, `flutter/packages/domain/`,
 `flutter/packages/network/`, `flutter/packages/harness_adapter/`.
