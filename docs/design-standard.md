@@ -80,3 +80,13 @@ under `flutter/app/lib/` outside `theme.dart`, so the role map is the only
 way through. Widget tests assert colors by role under both brightnesses, so
 a hard-coded value fails one of them. The rest — whether a change earns its
 pixels — is review holding a diff against the five facts above.
+
+## Looking at it
+
+Rules 1 and 4 are claims about a rendered screen, so a change to one is
+settled by rendering it. `python3 scripts/render_design.py --publish`
+pumps the real screens at phone size and puts this pass beside the last
+one on a page a human can open. The shots prove nothing on their own —
+they are how the eye gets its turn, after the tests hold the rules.
+Procedure and traps:
+[`.agents/skills/dsh-design-review/`](../.agents/skills/dsh-design-review/SKILL.md).

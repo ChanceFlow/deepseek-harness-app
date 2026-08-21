@@ -1,0 +1,250 @@
+/// Design review renderer: pumps the real screens at phone size and writes
+/// one PNG per state under `test/design/shots/`.
+///
+/// These are outputs, not baselines. `scripts/render_design.py` always
+/// passes `--update-goldens`, so nothing here can fail on a pixel; the
+/// review happens on the published page, by eye.
+///
+/// Only that script runs them: the shots need host fonts and their PNGs
+/// are gitignored, so anywhere else — a plain `flutter test`, CI — they
+/// skip. The switch is an environment variable rather than a tag in
+/// `dart_test.yaml`, because that file is read only when the runner starts
+/// inside `flutter/app/`, and the suite runs from `flutter/`.
+///
+/// Procedure, and the traps that cost a render:
+/// [.agents/skills/dsh-design-review](../../../../.agents/skills/dsh-design-review/SKILL.md).
+@Tags(<String>['design'])
+library;
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:app/config.dart';
+import 'package:app/di/providers.dart';
+import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/theme/theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'design_fixtures.dart';
+
+/// Pixel size of the rendered device: a 360×844dp phone at 2x.
+const Size _kPhone = Size(720, 1688);
+const double _kDevicePixelRatio = 2.0;
+
+/// Set by `scripts/render_design.py`; unset everywhere else.
+final String? _skip = Platform.environment['DSH_DESIGN_SHOTS'] == '1'
+    ? null
+    : 'design shots: python3 scripts/render_design.py';
+
+/// What a shot does after the screen settles, when the state alone cannot
+/// express it — opening the drawer, holding a bubble.
+typedef ShotAction = Future<void> Function(WidgetTester tester);
+
+final class DesignShot {
+  const DesignShot({
+    required this.name,
+    required this.state,
+    this.act,
+    this.dark = true,
+  });
+
+  final String name;
+  final ChatUiState state;
+  final ShotAction? act;
+
+  /// Whether the dark twin renders too. A state whose defect is layout
+  /// rather than tone renders once and stays cheap to review.
+  final bool dark;
+}
+
+final List<DesignShot> shots = <DesignShot>[
+  DesignShot(name: 'transcript', state: busyState()),
+  DesignShot(name: 'prose', state: proseState()),
+  DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),
+  DesignShot(name: 'empty', state: emptyState(), dark: false),
+  DesignShot(
+    name: 'drawer',
+    state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'message-menu',
+    state: busyState(),
+    dark: false,
+    act: (tester) async {
+      await tester.longPress(find.text(kBubbleUnderTest));
+      await settle(tester);
+    },
+  ),
+];
+
+/// A running session animates forever, so `pumpAndSettle` never returns.
+/// Every wait in this harness is a bounded pump instead.
+Future<void> settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+class _FakeRpc implements DshRpcClient {
+  @override
+  Future<RpcResult> call(String endpoint, String method, JsonMap payload) async {
+    return RpcResult(ok: true, value: <String, Object?>{});
+  }
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {}
+}
+
+class _SilentSocket implements DshEventSocket {
+  final StreamController<ServerRequest> _frames =
+      StreamController<ServerRequest>.broadcast();
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    onOpen?.call();
+    return _frames.stream;
+  }
+}
+
+/// Whether a Han face was found this run. Without one the Chinese half of
+/// the UI renders as empty rectangles, which reads as a layout bug that
+/// isn't there — so the harness says so rather than letting the reviewer
+/// discover it in the PNG.
+bool _cjkLoaded = false;
+
+/// Test fonts default to a blank box face: without these loads every glyph
+/// renders as a rectangle and every icon as an empty square.
+Future<void> _loadFonts() async {
+  final root = Platform.environment['FLUTTER_ROOT'];
+  if (root == null) {
+    fail('FLUTTER_ROOT is unset — run through scripts/render_design.py');
+  }
+  final assets = '$root/bin/cache/artifacts/material_fonts';
+  await _load('Roboto', <String>[
+    '$assets/Roboto-Regular.ttf',
+    '$assets/Roboto-Medium.ttf',
+    '$assets/Roboto-Bold.ttf',
+  ]);
+  await _load('MaterialIcons', <String>['$assets/MaterialIcons-Regular.otf']);
+  // Payload type asks for a monospace family by name; any installed face
+  // renders the same shape decision, so the first hit wins.
+  await _load('monospace', <String>[
+    '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+    '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
+  ], first: true);
+  final home = Platform.environment['HOME'] ?? '';
+  _cjkLoaded = await _load('NotoSansCJK', <String>[
+    '$home/.cache/dsh-design/fonts/NotoSansSC.ttf',
+    '$home/.local/share/fonts/NotoSansSC.ttf',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+  ], first: true);
+  if (!_cjkLoaded) {
+    stderr.writeln(
+      'design shots: no CJK font — Chinese renders as boxes. '
+      'Fix: python3 scripts/render_design.py --fetch-fonts',
+    );
+  }
+}
+
+/// Loads every path that exists, or only the first when [first] is set
+/// (a family that wants one face, not a weight set). Returns whether any
+/// face was found.
+Future<bool> _load(
+  String family,
+  List<String> paths, {
+  bool first = false,
+}) async {
+  final found = paths.where((path) => File(path).existsSync());
+  if (found.isEmpty) return false;
+  final loader = FontLoader(family);
+  for (final path in first ? found.take(1) : found) {
+    loader.addFont(
+      File(path).readAsBytes().then((bytes) => ByteData.view(bytes.buffer)),
+    );
+  }
+  await loader.load();
+  return true;
+}
+
+/// The loaded faces carry real names, so the theme's null family — which
+/// resolves to the test's box face — is pointed at Roboto, with Han
+/// behind it the way a device's fallback chain would sit.
+ThemeData _withRealFonts(ThemeData base) {
+  final fallback = _cjkLoaded ? <String>['NotoSansCJK'] : null;
+  return base.copyWith(
+    textTheme: base.textTheme.apply(
+      fontFamily: 'Roboto',
+      fontFamilyFallback: fallback,
+    ),
+    primaryTextTheme: base.primaryTextTheme.apply(
+      fontFamily: 'Roboto',
+      fontFamilyFallback: fallback,
+    ),
+  );
+}
+
+Future<void> _render(WidgetTester tester, DesignShot shot, ThemeData theme) async {
+  tester.view.physicalSize = _kPhone;
+  tester.view.devicePixelRatio = _kDevicePixelRatio;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        dshRpcClientProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(
+          Uri.parse(kDshBaseUrl),
+        ).overrideWithValue(_SilentSocket()),
+      ],
+      child: MaterialApp(
+        // The banner is chrome the reviewer did not ask about.
+        debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: _withRealFonts(theme),
+        home: ChatScreen(uiState: shot.state, onAction: (_) {}),
+      ),
+    ),
+  );
+  await settle(tester);
+  await shot.act?.call(tester);
+}
+
+void main() {
+  // The group carries the skip so the reason reaches the reader who ran
+  // the suite and wondered where the shots went.
+  group('design shots', () {
+    setUpAll(_loadFonts);
+
+    for (final shot in shots) {
+      testWidgets('${shot.name} light', (tester) async {
+        await _render(tester, shot, DshTheme.light());
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile('shots/${shot.name}_light.png'),
+        );
+      });
+
+      if (!shot.dark) continue;
+      testWidgets('${shot.name} dark', (tester) async {
+        await _render(tester, shot, DshTheme.dark());
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile('shots/${shot.name}_dark.png'),
+        );
+      });
+    }
+  }, skip: _skip);
+}
