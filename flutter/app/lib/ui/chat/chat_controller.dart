@@ -437,7 +437,12 @@ class ChatController {
     // to the prompt channel (the model serves them).
     final commandLine = hostCommandLineFor(action.text.trim());
     if (commandLine != null) {
-      unawaited(_executeHostCommand(sessionId, commandLine, images));
+      unawaited(_executeHostCommand(
+        sessionId,
+        commandLine,
+        images,
+        detached: hostCommandIsBare(action.text.trim()),
+      ));
       return;
     }
     final prompt = action.text.trim();
@@ -493,13 +498,31 @@ class ChatController {
   /// reports such failures to the composer notice instead of submitting
   /// the line — re-sending it would hand the model the literal command
   /// text.
+  ///
+  /// A [detached] dispatch (a bare-only command like `/compact` — web
+  /// `runDetached`) never holds the composer's sending state: the
+  /// command runs server-side for as long as its HTTP request survives,
+  /// and the outcome renders as the timeline command card folded from
+  /// `command/run` + `command/done`. Only an immediate failure — a
+  /// transport abort or an admission error that never entered a handler —
+  /// surfaces in the error strip; the line is not re-sent either way.
+  ///
+  /// A detached dispatch also retries its transport once (see
+  /// `ChatRepository.executeCommand`): the host aborts a command the
+  /// moment its HTTP request dies, so a socket drop mid-compaction
+  /// leaves the session untouched and a fresh-connection re-dispatch is
+  /// a clean re-run. The first attempt's aborted `command/done` still
+  /// folds into its card; the retry's success folds into a second one.
   Future<void> _executeHostCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) async {
-    _isSending = true;
-    _publish();
+    List<PendingImage> images, {
+    bool detached = false,
+  }) async {
+    if (!detached) {
+      _isSending = true;
+      _publish();
+    }
     _telemetry?.count('chat.command.execute');
     _telemetry?.event('chat.command.execute', attributes: {
       'sessionId': sessionId,
@@ -510,9 +533,20 @@ class ChatController {
       _commandFailed = false;
       final CommandExecution? execution;
       try {
-        execution = await _repository.executeCommand(sessionId, line, images);
+        execution = await _repository.executeCommand(
+          sessionId,
+          line,
+          images,
+          retryOnTransportAbort: detached,
+        );
       } catch (error) {
         _errorMessage = error.toString();
+        // A detached dispatch never holds the composer, but an immediate
+        // transport/admission failure still surfaces in the error strip —
+        // there is no `command/done` to fold into a command card.
+        if (detached) {
+          _publish();
+        }
         _telemetry?.event('chat.command.error', attributes: {
           'sessionId': sessionId,
           'command': line,
@@ -545,8 +579,10 @@ class ChatController {
       }
       _pendingImages = const <PendingImage>[];
     } finally {
-      _isSending = false;
-      _publish();
+      if (!detached) {
+        _isSending = false;
+        _publish();
+      }
     }
   }
 

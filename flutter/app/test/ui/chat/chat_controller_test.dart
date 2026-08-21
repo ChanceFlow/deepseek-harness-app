@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
@@ -165,8 +167,9 @@ class FakeChatRepository implements ChatRepository {
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) {
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
     commandDispatchImages[line] = images;
     if (commandFailures.contains(line)) {
       throw UnsupportedError('commands/execute: connection aborted');
@@ -1045,6 +1048,35 @@ void main() {
     expect(repository.sentMessages, isEmpty);
   });
 
+  test('a bare command dispatches detached and never holds the composer',
+      () async {
+    final repository = _DetachedDispatchRepository();
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('s1'));
+    await pumpEventQueue();
+
+    // `/compact` is a bare-only command (no input hint): the web routes it
+    // through runDetached — the composer stays free while the host runs
+    // the compaction for tens of seconds, and the outcome arrives as the
+    // timeline command card, not a held sending state.
+    controller.onAction(const SendPrompt('/compact'));
+    await pumpEventQueue();
+    expect(repository.dispatched, ['/compact']);
+    expect(controller.state.isSending, isFalse);
+
+    // The hinted `/permission` command stays attached: the composer holds
+    // the sending state until its (fast) submission settles.
+    controller.onAction(const SendPrompt('/permission read-only'));
+    await pumpEventQueue();
+    expect(repository.dispatched, ['/compact', '/permission read-only']);
+    expect(controller.state.isSending, isTrue);
+    repository.releaseAll();
+    await pumpEventQueue();
+    expect(controller.state.isSending, isFalse);
+  });
+
   test('a command dispatch carries the composer images', () async {
     final repository = FakeChatRepository();
     repository.commandExecutions['/goal Ship the MVP'] = const CommandExecution(
@@ -1354,8 +1386,9 @@ class _GoalRecordingRepository extends FakeChatRepository {
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) {
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
     executedCommands.add(line);
     return Future<CommandExecution?>.value(
       const CommandExecution(
@@ -1363,6 +1396,48 @@ class _GoalRecordingRepository extends FakeChatRepository {
         kind: CommandOutcomeKind.success,
       ),
     );
+  }
+}
+
+/// Completer-gated command dispatch for the detached-dispatch test: records
+/// the submitted lines and holds each execution open until [releaseAll].
+///
+/// The generic `FakeChatRepository.executeCommand` resolves immediately, so
+/// the detached vs. attached distinction — whether the composer's sending
+/// state is ever held — is unobservable through it. This fake gates the
+/// returned future so the test can assert that `/compact` stays free while
+/// its execution is still in flight, then release it.
+class _DetachedDispatchRepository extends FakeChatRepository {
+  /// Lines handed to `commands/execute`, in submission order.
+  final dispatched = <String>[];
+
+  final _pending = <String, Completer<CommandExecution?>>{};
+
+  @override
+  Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
+    dispatched.add(line);
+    final completer = Completer<CommandExecution?>();
+    _pending[line] = completer;
+    return completer.future;
+  }
+
+  /// Completes every in-flight execution as a success.
+  void releaseAll() {
+    final pending = List.of(_pending.values);
+    _pending.clear();
+    for (final completer in pending) {
+      completer.complete(
+        const CommandExecution(
+          commandId: 'cmd-9',
+          kind: CommandOutcomeKind.success,
+        ),
+      );
+    }
   }
 }
 

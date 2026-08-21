@@ -9,6 +9,10 @@ import 'session.dart';
 
 enum ToolRunStatus { running, completed, failed }
 
+/// Lifecycle of a host command folded from its `command/run` +
+/// `command/done` pair (web's persistent flow node).
+enum CommandRunStatus { running, success, failed }
+
 /// Sealed timeline item union. Subclasses keep the `Timeline*` prefix so
 /// library consumers never see bare `Message`/`Error` names.
 sealed class TimelineItem {
@@ -59,6 +63,47 @@ final class TimelineCompaction extends TimelineItem {
 
   @override
   int get hashCode => Object.hash('compaction', id, shadowedCount);
+}
+
+/// One host slash command from its logged `command/run` + `command/done`
+/// pair. The run append opens the card; the done event resolves it in
+/// place by [commandId] — success surfaces the host's result text, an
+/// error the command's text (e.g. "This operation was aborted" when the
+/// initiating connection dropped). Cards are direct log appends: no turn
+/// wraps them, so they land in the group current at their run.
+final class TimelineCommand extends TimelineItem {
+  const TimelineCommand({
+    required this.commandId,
+    required this.name,
+    this.args,
+    this.status = CommandRunStatus.running,
+    this.text,
+  });
+
+  final String commandId;
+  final String name;
+  final String? args;
+  final CommandRunStatus status;
+  final String? text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TimelineCommand &&
+      other.commandId == commandId &&
+      other.name == name &&
+      other.args == args &&
+      other.status == status &&
+      other.text == text;
+
+  @override
+  int get hashCode => Object.hash(
+    'command',
+    commandId,
+    name,
+    args,
+    status,
+    text,
+  );
 }
 
 /// Non-user context injected into model history (web ContextMessageNode):

@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
@@ -436,8 +437,46 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
   }
 
+  /// Retry budget for a detached command whose first dispatch died on the
+  /// socket. The host aborts a command the moment its HTTP request ends, so
+  /// an in-flight transport drop never settles a result — the retry is a
+  /// clean re-run on a fresh connection, never a duplicate.
+  static const int _commandMaxAttempts = 2;
+
+  /// Pause before re-dispatching so the torn-down socket fully drains on
+  /// both ends before the fresh connection is established.
+  static const Duration _commandRetryBackoff = Duration(seconds: 1);
+
+  /// Whether [error] is a mid-flight transport drop: a
+  /// [DshTransportException] whose cause is a socket failure. package:http
+  /// surfaces its own socket wraps through the same `SocketException` type,
+  /// and `dart:io` raises the raw one; an HTTP-status or envelope-level
+  /// failure (cause null) is a completed exchange and is never retried.
+  static bool _isTransportDrop(Object error) =>
+      error is DshTransportException && error.cause is SocketException;
+
   @override
   Future<CommandExecution?> executeCommand(
+    String sessionId,
+    String line,
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        return await _executeCommandOnce(sessionId, line, images);
+      } catch (error) {
+        if (attempt >= _commandMaxAttempts ||
+            !retryOnTransportAbort ||
+            !_isTransportDrop(error)) {
+          rethrow;
+        }
+        await Future<void>.delayed(_commandRetryBackoff);
+      }
+    }
+  }
+
+  Future<CommandExecution?> _executeCommandOnce(
     String sessionId,
     String line,
     List<PendingImage> images,

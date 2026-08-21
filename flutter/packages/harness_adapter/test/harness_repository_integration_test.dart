@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
@@ -121,6 +122,20 @@ class HarnessFakeRpc implements DshRpcClient {
 
   final Map<String, String> _failures = <String, String>{};
 
+  /// Scripted mid-flight transport drops for the next [count]
+  /// `commands/execute` calls: each throws a [DshTransportException]
+  /// wrapping [cause] (a socket error by default, exactly as a real
+  /// connection abort surfaces through the RPC client before any response
+  /// bytes arrive). Scoped to the one retryable endpoint so repository
+  /// construction (host.describe, session.list, …) never consumes them.
+  int _transportDropsRemaining = 0;
+  Object? _transportDropCause;
+
+  void dropNextTransportCalls(int count, {Object? cause}) {
+    _transportDropsRemaining = count;
+    _transportDropCause = cause;
+  }
+
   /// Scripted commands/execute value slot: a recorded execution shape, or
   /// null for the unmatched miss (the host answers ok with no value).
   JsonMap? commandValue = <String, Object?>{
@@ -139,6 +154,13 @@ class HarnessFakeRpc implements DshRpcClient {
   ) async {
     _calls[endpoint] = callCountFor(endpoint) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
+    if (endpoint == 'commands/execute' && _transportDropsRemaining > 0) {
+      _transportDropsRemaining--;
+      throw DshTransportException(
+        'transport failure for $endpoint',
+        _transportDropCause ?? const SocketException('Software caused connection abort'),
+      );
+    }
     if (_failures.remove(endpoint) case final code?) {
       return RpcResult(
         ok: false,
@@ -761,6 +783,102 @@ void main() {
       repository.executeCommand('session-1', '/plan', const <PendingImage>[]),
       throwsFormatException,
     );
+  });
+
+  test('executeCommand retries once on a mid-flight transport drop', () async {
+    final rpc = HarnessFakeRpc()..dropNextTransportCalls(1);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final execution = await repository.executeCommand(
+      'session-1',
+      '/compact',
+      const <PendingImage>[],
+      retryOnTransportAbort: true,
+    );
+
+    expect(execution, isNotNull);
+    expect(execution!.commandId, 'cmd-e487ba23-1');
+    // The dropped first attempt plus the fresh-connection retry.
+    expect(rpc.callCountFor('commands/execute'), 2);
+  });
+
+  test('executeCommand does not retry without the opt-in flag', () async {
+    final rpc = HarnessFakeRpc()..dropNextTransportCalls(1);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand(
+        'session-1',
+        '/compact',
+        const <PendingImage>[],
+      ),
+      throwsA(
+        isA<DshTransportException>().having(
+          (error) => error.cause,
+          'cause',
+          isA<SocketException>(),
+        ),
+      ),
+    );
+    expect(rpc.callCountFor('commands/execute'), 1);
+  });
+
+  test('executeCommand does not retry a business failure', () async {
+    final rpc = HarnessFakeRpc()..failNextCall('commands/execute', 'admission');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand(
+        'session-1',
+        '/compact',
+        const <PendingImage>[],
+        retryOnTransportAbort: true,
+      ),
+      throwsA(isA<DshBusinessException>()),
+    );
+    expect(rpc.callCountFor('commands/execute'), 1);
+  });
+
+  test('executeCommand does not retry a non-socket transport error', () async {
+    // A transport failure whose cause is not a socket drop (HTTP status,
+    // envelope decode) is a completed exchange: the line is never
+    // re-dispatched, even with the opt-in flag set.
+    final rpc = HarnessFakeRpc()
+      ..dropNextTransportCalls(1, cause: const FormatException('bad envelope'));
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand(
+        'session-1',
+        '/compact',
+        const <PendingImage>[],
+        retryOnTransportAbort: true,
+      ),
+      throwsA(isA<DshTransportException>()),
+    );
+    expect(rpc.callCountFor('commands/execute'), 1);
+  });
+
+  test('executeCommand rethrows after exhausting the retry budget', () async {
+    final rpc = HarnessFakeRpc()..dropNextTransportCalls(2);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.executeCommand(
+        'session-1',
+        '/compact',
+        const <PendingImage>[],
+        retryOnTransportAbort: true,
+      ),
+      throwsA(isA<DshTransportException>()),
+    );
+    // Both attempts dropped: the original plus its single retry.
+    expect(rpc.callCountFor('commands/execute'), 2);
   });
 
   test('directory listing maps host wire shape', () async {

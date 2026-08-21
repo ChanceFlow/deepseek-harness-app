@@ -33,7 +33,10 @@ The network package owns its transport profile explicitly:
 - No request deadline is added anywhere: a full compaction can legitimately
   run over a minute
   ([command-dispatch-failure](../bug-fix/2026-08-20-command-dispatch-failure-prompt-fallback.md)
-  records that axis and the web remote path applies none either).
+  records that axis and the web remote path applies none either). A
+  phone-path drop mid-compaction is compensated client-side by a
+  one-shot retry on a fresh connection for detached bare commands
+  ([compact-detached-command-lifecycle](../bug-fix/2026-08-22-compact-detached-command-lifecycle.md)).
 - No keep-alive pings: dart:io 3.13's `WebSocket.pingInterval` is
   unreliable in this environment — probes with identical semantics flip
   between healthy and `goingAway`-closed based on unrelated code (a

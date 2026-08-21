@@ -570,6 +570,57 @@ void main() {
     );
   });
 
+  testWidgets('command rows render the lifecycle in the timeline', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineCommand(
+            commandId: 'cmd-run',
+            name: 'compact',
+            status: CommandRunStatus.running,
+          ),
+          TimelineCommand(
+            commandId: 'cmd-ok',
+            name: 'goal',
+            text: 'Compacted 120 history items (~79154 tokens).',
+            status: CommandRunStatus.success,
+          ),
+          TimelineCommand(
+            commandId: 'cmd-bad',
+            name: 'compact',
+            text: 'This operation was aborted',
+            status: CommandRunStatus.failed,
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // The bare command name rides the row as `/name`; the running row shows
+    // the activity affordance (its text is still pending).
+    expect(find.text('/compact'), findsNWidgets(2));
+    expect(find.text('/goal'), findsOneWidget);
+    // Success/outcome text renders as host-authored copy.
+    expect(
+      find.text('Compacted 120 history items (~79154 tokens).'),
+      findsOneWidget,
+    );
+    // A failed command keeps its abort text, tinted with the error scheme.
+    expect(find.text('This operation was aborted'), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+    // The running row has no settled icon and no text.
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
   testWidgets('approval without reason falls back to the escalation title', (
     tester,
   ) async {
