@@ -255,15 +255,20 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   nothing for an Android client to reproduce — the deferred line retires.
   Skill authoring likewise stays host/filesystem-side; the client surface is
   the `/` candidate source.
-- **Markdown rendering is a minimal pure-Kotlin slice.** Message bodies parse
-  into blocks (fenced code with language label, headings 1-6, bullet lists
-  nested to two rendered levels, block quotes, GFM pipe tables, paragraphs)
-  and inline runs (code, bold, italic, links); an unterminated fence renders
-  as an open `code (streaming)` block so streaming bodies stay readable.
-  Links are clickable spans opening through the platform URI handler; tables
-  render equal-weight columns on a tonal surface. The parser is plain
-  JVM-tested Kotlin in `:app`; colors/fonts/shapes live in the Compose layer
-  only.
+- **Markdown rendering is a minimal in-app slice.** Message bodies parse into
+  blocks (fenced code with language label, headings 1-6, bullet and ordered
+  lists nested to two rendered levels, block quotes, GFM pipe tables,
+  paragraphs) and inline runs (code, bold, italic, links). A single newline
+  inside a block is a soft wrap that folds — to a space between Latin
+  characters, to nothing where either side is wide (CJK), and to a kept
+  break after two trailing spaces or a backslash — so a body wrapped at 80
+  columns reflows to the phone's width; an indented line continues the list
+  item above it. An unterminated fence renders as an open, `streaming`-
+  labelled block so partial bodies stay readable. Links are clickable spans
+  opening through the platform URI handler; a code block carries its own
+  copy action, and every body is selectable. The parser is plain Dart under
+  `app/lib/ui/chat/markdown/`; colors, fonts, and shapes live in the widget
+  layer only ([docs/design-standard.md](design-standard.md)).
 - **Queue edit UI is a previewable dialog.** Editing a queued text item opens
   `QueueEditDialog` (Save no-ops on blank text, matching the Web composer
   constraint); non-text queued items keep the edit action disabled.

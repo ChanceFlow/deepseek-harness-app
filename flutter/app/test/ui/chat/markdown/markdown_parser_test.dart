@@ -24,6 +24,76 @@ void main() {
     ]);
   });
 
+  test('a source wrap inside a paragraph folds to one space', () {
+    final blocks = MarkdownParser.parse(
+      'the dock stacks four strips\nabove the composer',
+    );
+
+    expect((blocks.single as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('the dock stacks four strips above the composer'),
+    ]);
+  });
+
+  test('a wrap between wide characters folds without a space', () {
+    final blocks = MarkdownParser.parse('先把输入区封顶,\n再看待办条');
+
+    expect((blocks.single as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('先把输入区封顶,再看待办条'),
+    ]);
+  });
+
+  test('two trailing spaces or a backslash keep the break', () {
+    final spaces = MarkdownParser.parse('first  \nsecond');
+    expect((spaces.single as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('first\nsecond'),
+    ]);
+
+    final slash = MarkdownParser.parse('first\\\nsecond');
+    expect((slash.single as ParagraphBlock).inlines, <MarkdownInline>[
+      const TextInline('first\nsecond'),
+    ]);
+  });
+
+  test('numbered lines group into one ordered list', () {
+    final blocks = MarkdownParser.parse(
+      '1. first **item**\n2) second item\n\nafter',
+    );
+
+    final list = blocks[0] as OrderedListBlock;
+    expect(list.items, hasLength(2));
+    expect(list.items[0].number, 1);
+    expect(list.items[0].inlines, <MarkdownInline>[
+      const TextInline('first '),
+      const BoldInline(<MarkdownInline>[TextInline('item')]),
+    ]);
+    // The source's own numbers ride through: a list that starts at 2 is
+    // not renumbered.
+    expect(list.items[1].number, 2);
+    expect(blocks[1], isA<ParagraphBlock>());
+  });
+
+  test('an indented line continues the item above it', () {
+    final blocks = MarkdownParser.parse(
+      '- a long item\n  wrapped by the source\n- second',
+    );
+
+    final list = blocks.single as BulletListBlock;
+    expect(list.items, hasLength(2));
+    expect(list.items[0].inlines, <MarkdownInline>[
+      const TextInline('a long item wrapped by the source'),
+    ]);
+    expect(list.items[1].inlines, <MarkdownInline>[
+      const TextInline('second'),
+    ]);
+  });
+
+  test('switching marker kind closes the list before it', () {
+    final blocks = MarkdownParser.parse('- bullet\n1. numbered');
+
+    expect(blocks[0], isA<BulletListBlock>());
+    expect(blocks[1], isA<OrderedListBlock>());
+  });
+
   test('fenced code block keeps language and body', () {
     final blocks = MarkdownParser.parse(
       'before\n\n```kotlin\nval a = 1\nval b = 2\n```\nafter',
@@ -137,7 +207,7 @@ void main() {
     expect(quote.inlines, <MarkdownInline>[
       const TextInline('quoted '),
       const BoldInline(<MarkdownInline>[TextInline('strong')]),
-      const TextInline('\nsecond line'),
+      const TextInline(' second line'),
     ]);
     expect((blocks[1] as ParagraphBlock).inlines, <MarkdownInline>[
       const TextInline('after'),
@@ -190,7 +260,7 @@ void main() {
     final blocks = MarkdownParser.parse('a | b\nc | d');
 
     final paragraph = blocks.single as ParagraphBlock;
-    expect((paragraph.inlines.single as TextInline).text, 'a | b\nc | d');
+    expect((paragraph.inlines.single as TextInline).text, 'a | b c | d');
   });
 
   test('short table rows render with missing cells', () {

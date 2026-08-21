@@ -193,6 +193,10 @@
   "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
   "jobDurationSeconds": "{seconds}s",
   "copyTooltip": "Copy",
+  "codeStreamingLabel": "streaming",
+  "@codeStreamingLabel": {
+    "description": "Code block label while the fence has not closed yet."
+  },
   "forkFromHere": "Fork from here",
   "@forkFromHere": {
     "description": "Message verb: cut a new session at this message (session.fork atSeq)."

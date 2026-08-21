@@ -59,6 +59,7 @@
   "jobDurationMinutesSeconds": "{minutes}分{seconds}秒",
   "jobDurationSeconds": "{seconds}秒",
   "copyTooltip": "复制",
+  "codeStreamingLabel": "接收中",
   "forkFromHere": "从这里分叉",
   "copiedTooltip": "已复制",
   "waitingForApproval": "等待审批",

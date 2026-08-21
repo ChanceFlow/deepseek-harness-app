@@ -223,6 +223,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copyTooltip => '复制';
 
   @override
+  String get codeStreamingLabel => '接收中';
+
+  @override
   String get forkFromHere => '从这里分叉';
 
   @override
