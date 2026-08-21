@@ -1,7 +1,9 @@
 {
   "comment": "Single manifest for the doc gates. Ceilings, includes, and exceptions live ONLY here; raising a ceiling requires a manifest diff plus a decision note (see AGENTS.md 'Editing these instructions').",
   "docs": {
-    "include": ["**/*.md"],
+    "include": [
+      "**/*.md"
+    ],
     "exclude": [
       "reference/deepseek-harness/**",
       "**/.dart_tool/**",
@@ -26,12 +28,20 @@
     "flutter/packages/dev/AGENTS.md": 600,
     ".agents/notes/README.md": 600,
     "docs/prose-standard.md": 600,
+    "docs/design-standard.md": 900,
     "docs/testing.md": 600
   },
   "agents_md_discovery": "**/AGENTS.md",
   "notes": {
     "root": ".agents/notes",
-    "classes": ["feature", "bug-fix", "simplification", "architecture", "process", "testing"],
+    "classes": [
+      "feature",
+      "bug-fix",
+      "simplification",
+      "architecture",
+      "process",
+      "testing"
+    ],
     "max_words": 800
   },
   "skills": {
@@ -64,8 +74,12 @@
   },
   "theme": {
     "root": "flutter/app/lib",
-    "exempt": ["flutter/app/lib/ui/theme/theme.dart"],
-    "allow": ["Colors.transparent"]
+    "exempt": [
+      "flutter/app/lib/ui/theme/theme.dart"
+    ],
+    "allow": [
+      "Colors.transparent"
+    ]
   },
   "i18n": {
     "arb": [

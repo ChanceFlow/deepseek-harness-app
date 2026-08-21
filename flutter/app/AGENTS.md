@@ -6,15 +6,16 @@ every spatial decision: the adapter publishes facts, `app` places them.
 
 ## Stock Material 3 is the aesthetic
 
-Every surface reads as a stock Android app.
+Every surface reads as a stock Android app. Why these values and how to
+derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 
 - **Reach for the framework component before drawing one.** Rows, groups,
   menus, dialogs, and controls ride `ListTile`, `ExpansionTile`,
   `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
   `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
-  `CustomPainter` carries its reason in the change's decision note; the
-  standing exceptions are the markdown renderer, the outline timeline's turn
-  folding, and the brand fish logo.
+  `CustomPainter` carries its reason in a decision note; the standing
+  exceptions are the markdown renderer, the outline timeline's turn folding,
+  and the brand fish logo.
 - **Colors come from `ColorScheme` roles.**
   `Theme.of(context).colorScheme` is the source:
 
@@ -40,13 +41,12 @@ Every surface reads as a stock Android app.
   `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
   `ThemeExtension` under `lib/` outside that file.
 - **Two tones separate content from chrome.** The transcript sits on
-  `surface`; the frames around it share `surfaceContainer`, which is why the
-  bar needs no rule and the input dock needs no border stack. One filled seat
-  per surface — the primary action — keeps the accent meaningful.
+  `surface`, every frame around it on `surfaceContainer`. One filled seat per
+  surface: the primary action.
 - **Space divides; a rule is a decision.** An `ExpansionTile` takes
-  `Border()` for both shapes — its default rules itself off top and bottom.
-  A row is as tall as its line: shrink the ambient icon size instead of
-  wearing the 24px chevron, and give one-line rows `height: 1.2`.
+  `Border()` for both shapes. A row is as tall as its line: shrink the
+  ambient icon size rather than wear the 24px chevron; one-line rows take
+  `height: 1.2`.
 - **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
   `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
   reason, not a number typed at a call site.
