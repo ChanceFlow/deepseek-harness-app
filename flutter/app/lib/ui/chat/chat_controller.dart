@@ -28,6 +28,7 @@ import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
+import 'package:dev/dev.dart' show DebugTelemetry;
 
 import '../state_stream.dart';
 import 'command_roster.dart';
@@ -46,6 +47,10 @@ class ChatController {
   }
 
   final ChatRepository _repository;
+
+  /// Debug telemetry facade; null in release or when uninitialized, so
+  /// every instrumentation site is a no-op outside debug builds.
+  DebugTelemetry? get _telemetry => DebugTelemetry.instance;
 
   final AppStateStream<ChatUiState> _state = AppStateStream<ChatUiState>(
     const ChatUiState(),
@@ -261,6 +266,8 @@ class ChatController {
     _loadModels(sessionId);
     _publish();
     unawaited(_runCatchingForUi(() => _repository.openSession(sessionId)));
+    _telemetry?.count('chat.session.select');
+    _telemetry?.event('chat.session.select', attributes: {'sessionId': sessionId});
   }
 
   /// Re-subscribes the selected-session timeline and plan streams (the
@@ -433,6 +440,14 @@ class ChatController {
       unawaited(_executeHostCommand(sessionId, commandLine, images));
       return;
     }
+    final prompt = action.text.trim();
+    _telemetry?.count('chat.message.send');
+    _telemetry?.event('chat.message.send', attributes: {
+      'sessionId': sessionId,
+      'mode': action.mode.name,
+      'textLength': prompt.length,
+      'images': images.length,
+    });
     unawaited(() async {
       _isSending = true;
       _publish();
@@ -441,7 +456,7 @@ class ChatController {
           await _repository.sendMessage(
             SendMessageRequest(
               sessionId: sessionId,
-              text: action.text.trim(),
+              text: prompt,
               mode: action.mode,
               images: images,
             ),
@@ -451,6 +466,12 @@ class ChatController {
         // Keep drafts only on failure, mirroring the text composer.
         if (sent != null) {
           _pendingImages = const <PendingImage>[];
+        } else {
+          _telemetry?.count('chat.message.send_failed');
+          _telemetry?.event('chat.message.send_failed', attributes: {
+            'sessionId': sessionId,
+            'mode': action.mode.name,
+          });
         }
       } finally {
         _isSending = false;
@@ -479,6 +500,11 @@ class ChatController {
   ) async {
     _isSending = true;
     _publish();
+    _telemetry?.count('chat.command.execute');
+    _telemetry?.event('chat.command.execute', attributes: {
+      'sessionId': sessionId,
+      'command': line,
+    });
     try {
       _errorMessage = null;
       _commandFailed = false;
@@ -487,6 +513,11 @@ class ChatController {
         execution = await _repository.executeCommand(sessionId, line, images);
       } catch (error) {
         _errorMessage = error.toString();
+        _telemetry?.event('chat.command.error', attributes: {
+          'sessionId': sessionId,
+          'command': line,
+          'error': error.toString(),
+        });
         return;
       }
       if (execution == null) {
@@ -505,6 +536,11 @@ class ChatController {
       if (execution.kind == CommandOutcomeKind.error) {
         _errorMessage = execution.text;
         _commandFailed = execution.text == null;
+        _telemetry?.event('chat.command.error', attributes: {
+          'sessionId': sessionId,
+          'command': line,
+          'result': execution.text ?? '',
+        });
         return;
       }
       _pendingImages = const <PendingImage>[];
@@ -666,6 +702,8 @@ class ChatController {
   void _cancelTurn() {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
+    _telemetry?.count('chat.turn.cancel');
+    _telemetry?.event('chat.turn.cancel', attributes: {'sessionId': sessionId});
     unawaited(_runCatchingForUi(() => _repository.cancelTurn(sessionId)));
   }
 
@@ -692,6 +730,12 @@ class ChatController {
       _bindSelected(resolved);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
+      _telemetry?.count('chat.session.create');
+      _telemetry?.event('chat.session.create', attributes: {
+        'sessionId': resolved,
+        'workspaceId': workspaceId ?? '',
+        'agentPreset': agentPreset ?? '',
+      });
       // A reused blank session was created without the staged preset;
       // the blank-session switch carries it (web stage semantics: the
       // stage reaches a session that is still blank, created or reused).
@@ -728,6 +772,11 @@ class ChatController {
   void _respondApproval(RespondApproval action) {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
+    _telemetry?.count('chat.approval.respond');
+    _telemetry?.event('chat.approval.respond', attributes: {
+      'sessionId': sessionId,
+      'allowed': action.allowed,
+    });
     unawaited(
       _runCatchingForUi(
         () => _repository.respondToApproval(
@@ -745,6 +794,11 @@ class ChatController {
   void _answerQuestion(AnswerQuestionAction action) {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
+    _telemetry?.count('chat.question.answer');
+    _telemetry?.event('chat.question.answer', attributes: {
+      'sessionId': sessionId,
+      'answers': action.answers.length,
+    });
     unawaited(
       _runCatchingForUi(
         () => _repository.answerQuestions(
@@ -771,6 +825,7 @@ class ChatController {
       _publish();
       return;
     }
+    _telemetry?.count('chat.session.search');
     unawaited(() async {
       final results = await _runCatchingForUi(
         () => _repository.searchSessions(query),
@@ -791,6 +846,11 @@ class ChatController {
       _bindSelected(forked.id);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(forked.id));
+      _telemetry?.count('chat.session.fork');
+      _telemetry?.event('chat.session.fork', attributes: {
+        'fromSessionId': sessionId,
+        'sessionId': forked.id,
+      });
     }());
   }
 
@@ -823,6 +883,11 @@ class ChatController {
     } catch (error) {
       _errorMessage = error.toString();
       _publish();
+      _telemetry?.count('chat.error');
+      _telemetry?.event('chat.error', attributes: {
+        'type': error.runtimeType.toString(),
+        'message': error.toString(),
+      });
       return null;
     }
   }

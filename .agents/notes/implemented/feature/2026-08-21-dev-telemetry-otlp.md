@@ -75,3 +75,10 @@ intake 代码全删),崩溃与遥测统一走 OTLP/HTTP 到自托管 SigNoz。
   的 metrics/logs 信号仍带实验性标记,当前行为经测试固定。
 - `device`/`sessionId` 仍走 bootstrap 注入填空值,未接设备信息插件与
   session 状态(与旧笔记同取舍)。
+- **业务打点接入**:`ChatController` 关键路径(会话选择/创建/派生、
+  发消息成功与失败、host 命令执行与错误、取消回合、审批/问答、搜索)
+  通过 `DebugTelemetry.instance?`(null-safe,release 为 no-op)发射
+  `event`/`count`;错误统一走 `_runCatchingForUi` 漏斗发 `chat.error`。
+  打点测试用 dartastic `testing.dart` 的 in-memory harness 驱动真实
+  controller 断言事件出现(`app/test/ui/chat/chat_controller_telemetry_test.dart`;
+  app dev_dependencies 显式声明 dartastic,仅测试用)。
