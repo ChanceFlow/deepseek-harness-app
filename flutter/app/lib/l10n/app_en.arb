@@ -193,6 +193,10 @@
   "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
   "jobDurationSeconds": "{seconds}s",
   "copyTooltip": "Copy",
+  "forkFromHere": "Fork from here",
+  "@forkFromHere": {
+    "description": "Message verb: cut a new session at this message (session.fork atSeq)."
+  },
   "@copyTooltip": {
     "description": "Copy-message icon tooltip."
   },

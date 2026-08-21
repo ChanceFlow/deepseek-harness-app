@@ -21,7 +21,7 @@ Every surface reads as a stock Android app.
 | Intent | Role |
 |---|---|
 | Page background, transcript, scaffold | `surface` |
-| Chrome around the page: app bar, input dock | `surfaceContainer` |
+| Chrome around the page: app bar, input dock, drawer | `surfaceContainer` |
 | Grouped or raised surface, menu, sheet | `surfaceContainerLow/High/Highest` |
 | Primary text, icons | `onSurface` |
 | Secondary text, metadata, inactive glyph | `onSurfaceVariant` |
@@ -35,20 +35,23 @@ Every surface reads as a stock Android app.
 
 - **`theme.dart` is the home for a color Material 3 has no role for.** It
   holds the elevation shadow constants and the `DshSchemeColors` extension,
-  which is why a call site writes `scheme.success` rather than a green. A new
-  non-role color is declared there and gains a row above in the same change.
-  `verify_theme_native` rejects a `Color(0x…)`, a `Colors.<name>`, or a
-  `ThemeExtension` anywhere under `lib/` outside that file, so the map is the
-  only way through.
+  so a call site writes `scheme.success`, not a green. A new non-role color
+  is declared there and gains a row above in the same change;
+  `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
+  `ThemeExtension` under `lib/` outside that file.
 - **Two tones separate content from chrome.** The transcript sits on
   `surface`; the frames around it share `surfaceContainer`, which is why the
   bar needs no rule and the input dock needs no border stack. One filled seat
-  per control row — the primary action — keeps the accent meaningful.
+  per surface — the primary action — keeps the accent meaningful.
+- **Space divides; a rule is a decision.** An `ExpansionTile` takes
+  `Border()` for both shapes — its default rules itself off top and bottom.
+  A row is as tall as its line: shrink the ambient icon size instead of
+  wearing the 24px chevron, and give one-line rows `height: 1.2`.
 - **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
-  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius is a
-  decision with a reason, not a number typed at a call site.
-- **Motion and elevation are framework defaults.** The M3 durations carry
-  animation; a bespoke curve is a per-change decision with a reason.
+  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
+  reason, not a number typed at a call site.
+- **Motion and elevation are framework defaults.** A bespoke curve is a
+  per-change decision with a reason.
 
 ## Structure and state
 
@@ -58,9 +61,9 @@ Every surface reads as a stock Android app.
 - **`lib/di/` is the only code that sees adapter or network types** (root
   import-boundary rule, enforced by `scripts/check_dart_imports.py`).
 - **Every user-visible string is an ARB key** in `lib/l10n/app_en.arb` and
-  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares the
-  key sets and the placeholder names); the generated
-  `app_localizations*.dart` files are committed
+  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares key
+  sets and placeholder names); the generated `app_localizations*.dart` are
+  committed
   ([the i18n note](../../.agents/notes/implemented/feature/2026-08-20-bilingual-i18n-zh-en.md)).
 - **Telemetry stays optional at the call site.**
   `DebugTelemetry.instance?.event(...)` — the screen behaves identically when
@@ -69,9 +72,8 @@ Every surface reads as a stock Android app.
 ## Evidence
 
 Widget tests pump the real tree with a real controller and assert what a user
-would see: the found widget type, its text, the color read back from the
-theme's role ([docs/testing.md](../../docs/testing.md)). A color assertion
-pumps the same surface under both `DshTheme.light()` and `DshTheme.dark()`
-(`l10nApp(theme: …)`, then a pump past the theme lerp) and compares against
-that theme's role — a hard-coded color passes one brightness and fails the
-other. Tests mirror `lib/` paths under `test/`.
+would see: widget type, text, the color read back from the theme's role
+([docs/testing.md](../../docs/testing.md)). A color assertion pumps the same
+surface under both `DshTheme.light()` and `DshTheme.dark()` (`l10nApp(theme:
+…)`, then a pump past the theme lerp) — a hard-coded color passes one
+brightness and fails the other. Tests mirror `lib/` paths under `test/`.

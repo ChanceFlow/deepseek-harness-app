@@ -139,9 +139,8 @@ class ChatRoute extends ConsumerWidget {
             },
             // Web SessionNodeItem session verbs (sidebar long-press):
             // dispatch on whichever backend owns the row.
-            dispatchSessionAction: (backendId, action) => ref
-                .read(chatControllerProvider(backendId))
-                .onAction(action),
+            dispatchSessionAction: (backendId, action) =>
+                ref.read(chatControllerProvider(backendId)).onAction(action),
           ),
           error: (error, _) =>
               Scaffold(body: Center(child: Text(error.toString()))),
@@ -309,19 +308,13 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Web SessionNodeItem "Fork session" (sidebar long-press verb):
   /// commits directly on the owning backend's controller.
   void _dispatchForkSession(String backendId, String sessionId) {
-    widget.dispatchSessionAction?.call(
-      backendId,
-      ForkSession(sessionId),
-    );
+    widget.dispatchSessionAction?.call(backendId, ForkSession(sessionId));
   }
 
   /// Web SessionNodeItem "Archive session" (sidebar long-press verb):
   /// commits directly (reference archive is non-destructive).
   void _dispatchArchiveSession(String backendId, String sessionId) {
-    widget.dispatchSessionAction?.call(
-      backendId,
-      ArchiveSession(sessionId),
-    );
+    widget.dispatchSessionAction?.call(backendId, ArchiveSession(sessionId));
   }
 
   PreferredSizeWidget _chatAppBar(
@@ -469,6 +462,10 @@ class _ChatScreenState extends State<ChatScreen> {
           appBar: _chatAppBar(context, uiState, onAction, compact: true),
           drawer: Drawer(
             width: 320,
+            // Chrome tone: the drawer is the same frame family as the bar
+            // and the dock, so it takes their surface rather than the
+            // stock drawer's own step.
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
             child: SafeArea(
               child: SessionPanel(
                 inDrawer: true,
@@ -907,7 +904,8 @@ class _ChatPanelState extends State<ChatPanel> {
     if (_timelineScroll.hasClients) {
       final position = _timelineScroll.position;
       if (position.hasContentDimensions) {
-        visible = position.maxScrollExtent > 0 &&
+        visible =
+            position.maxScrollExtent > 0 &&
             position.maxScrollExtent - position.pixels > kFollowThreshold;
       }
     }
@@ -1186,7 +1184,10 @@ class _ChatPanelState extends State<ChatPanel> {
             controller: _timelineScroll,
             itemCount: _timelineItems.length,
             separatorBuilder: (_, index) => SizedBox(
-              height: _gapAfter(_timelineItems[index], _timelineItems[index + 1]),
+              height: _gapAfter(
+                _timelineItems[index],
+                _timelineItems[index + 1],
+              ),
             ),
             itemBuilder: (context, index) {
               final item = _timelineItems[index];
@@ -1250,7 +1251,10 @@ class _ChatPanelState extends State<ChatPanel> {
     final isSessionRunning = selectedSession?.running ?? false;
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      // No inset at the top: the transcript runs to the bar and slides
+      // under it. A gap there is a blank strip that also clips the first
+      // row mid-line, which reads as a rendering fault.
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
         children: [
           if (uiState.errorMessage case final error?) ...[
@@ -1269,24 +1273,20 @@ class _ChatPanelState extends State<ChatPanel> {
           for (final rejection in uiState.imageRejections)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                switch (rejection) {
-                  UnsupportedImageType(:final name, :final mediaType) =>
-                    l10n.imageRejectionUnsupported(
-                      name ?? l10n.attachmentName,
-                      mediaType,
-                    ),
-                  ImageTooLarge(:final name, :final maxBytes) =>
-                    l10n.imageRejectionTooLarge(
-                      name ?? l10n.attachmentName,
-                      maxBytes,
-                    ),
-                  NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
-                },
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+              child: Text(switch (rejection) {
+                UnsupportedImageType(:final name, :final mediaType) =>
+                  l10n.imageRejectionUnsupported(
+                    name ?? l10n.attachmentName,
+                    mediaType,
+                  ),
+                ImageTooLarge(:final name, :final maxBytes) =>
+                  l10n.imageRejectionTooLarge(
+                    name ?? l10n.attachmentName,
+                    maxBytes,
+                  ),
+                NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
+              }, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
-          const SizedBox(height: 4),
           if (widget.outline && _collapsedTurns.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -1308,12 +1308,11 @@ class _ChatPanelState extends State<ChatPanel> {
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) => FadeTransition(
                       opacity: animation,
-                      child: ScaleTransition(
-                        scale: animation,
-                        child: child,
-                      ),
+                      child: ScaleTransition(scale: animation, child: child),
                     ),
-                    child: _showJumpToBottom ? _jumpToBottomFab() : const SizedBox.shrink(),
+                    child: _showJumpToBottom
+                        ? _jumpToBottomFab()
+                        : const SizedBox.shrink(),
                   ),
                 ),
               ],
@@ -1322,8 +1321,7 @@ class _ChatPanelState extends State<ChatPanel> {
           // The session's counters are the transcript's footer, not dock
           // chrome: they caption the conversation above the input surface
           // rather than wedge between two of its strips.
-          if (_pendingApproval == null)
-            StatsLine(stats: uiState.sessionStats),
+          if (_pendingApproval == null) StatsLine(stats: uiState.sessionStats),
           // Web input-dock order 0: the plan strip before the goal and
           // queue entries. While an approval is pending the ApprovalPanel
           // takes the composer seat, so the todo/goal chrome stands down —
@@ -1360,29 +1358,30 @@ class _ChatPanelState extends State<ChatPanel> {
                   children: [
                     Expanded(
                       child: ComposerBar(
-                    onStop: selectedSessionId == null
-                        ? null
-                        : () => widget.onAction(const CancelTurnAction()),
-                    enabled: selectedSessionId != null && !uiState.isSending,
-                    isSending: uiState.isSending,
-                    running: isSessionRunning,
-                    plan: uiState.plan,
-                    models: widget.models,
-                    onSelectModel: widget.onSelectModel,
-                    onRefreshModels: widget.onRefreshModels,
-                    pendingImages: uiState.pendingImages,
-                    imageLimits: uiState.imageLimits,
-                    skills: uiState.skills,
-                    contextPressure: uiState.contextPressure,
-                    contextBreakdown: uiState.contextBreakdown,
-                    onAction: widget.onAction,
-                    sessionId: selectedSessionId,
-                    sessionState: _sessionState,
-                    permissions: uiState.permissions,
-                    // Web ComposerSubmissionPolicy: queue outside a
-                    // running turn; inside it the persisted busy-Enter
-                    // preference decides (the send button is the only
-                    // submit gesture on a soft keyboard).
+                        onStop: selectedSessionId == null
+                            ? null
+                            : () => widget.onAction(const CancelTurnAction()),
+                        enabled:
+                            selectedSessionId != null && !uiState.isSending,
+                        isSending: uiState.isSending,
+                        running: isSessionRunning,
+                        plan: uiState.plan,
+                        models: widget.models,
+                        onSelectModel: widget.onSelectModel,
+                        onRefreshModels: widget.onRefreshModels,
+                        pendingImages: uiState.pendingImages,
+                        imageLimits: uiState.imageLimits,
+                        skills: uiState.skills,
+                        contextPressure: uiState.contextPressure,
+                        contextBreakdown: uiState.contextBreakdown,
+                        onAction: widget.onAction,
+                        sessionId: selectedSessionId,
+                        sessionState: _sessionState,
+                        permissions: uiState.permissions,
+                        // Web ComposerSubmissionPolicy: queue outside a
+                        // running turn; inside it the persisted busy-Enter
+                        // preference decides (the send button is the only
+                        // submit gesture on a soft keyboard).
                         onSend: (text) => widget.onAction(
                           SendPrompt(
                             text,
@@ -1534,6 +1533,11 @@ class TimelineRow extends StatelessWidget {
       TimelineMessage(:final value) => MessageRow(
         message: value,
         loadAttachment: loadAttachment,
+        onFork: value.seq == null
+            ? null
+            : () => onAction(
+                ForkSession(value.sessionId, atSeq: value.seq),
+              ),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction(:final shadowedCount) => CompactionRow(
@@ -1562,19 +1566,16 @@ class TimelineRow extends StatelessWidget {
       TimelineJobs() => const SizedBox.shrink(),
       TimelineError(:final message, :final code) => SizedBox(
         width: double.infinity,
-        child: Text(
-          switch (code) {
-            'error' => l10n.turnFailed(
-              message.isEmpty ? l10n.unknownModelFailure : message,
-            ),
-            'aborted' => l10n.turnStopped,
-            'interrupted' => l10n.turnInterrupted,
-            'blocked' => l10n.turnBlocked,
-            'max-tokens' => l10n.turnMaxTokens,
-            _ => message,
-          },
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
+        child: Text(switch (code) {
+          'error' => l10n.turnFailed(
+            message.isEmpty ? l10n.unknownModelFailure : message,
+          ),
+          'aborted' => l10n.turnStopped,
+          'interrupted' => l10n.turnInterrupted,
+          'blocked' => l10n.turnBlocked,
+          'max-tokens' => l10n.turnMaxTokens,
+          _ => message,
+        }, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ),
     };
   }
@@ -1585,10 +1586,16 @@ class MessageRow extends StatelessWidget {
     super.key,
     required this.message,
     required this.loadAttachment,
+    this.onFork,
   });
 
   final ChatMessage message;
   final AttachmentLoader loadAttachment;
+
+  /// Cuts a new session at this message (host: the end of the turn that
+  /// contains it). Null while the message carries no logged position —
+  /// a locally composed row has nothing to anchor.
+  final VoidCallback? onFork;
 
   @override
   Widget build(BuildContext context) {
@@ -1607,7 +1614,7 @@ class MessageRow extends StatelessWidget {
               child: FractionallySizedBox(
                 widthFactor: 0.82,
                 alignment: Alignment.centerRight,
-                child: _UserBubble(text: message.text),
+                child: _UserBubble(text: message.text, onFork: onFork),
               ),
             ),
           ),
@@ -1655,6 +1662,7 @@ class MessageRow extends StatelessWidget {
             text: message.text,
             timeEpochMs: message.createdAtEpochMs,
             clockAtStart: false,
+            onFork: onFork,
           ),
       ],
     );
@@ -1665,10 +1673,24 @@ class MessageRow extends StatelessWidget {
 /// saturated seat is the send button), the shape scale's card radius, and
 /// a tightened tail corner. Long-press copies the text — the gesture every
 /// mobile transcript carries — so the bubble needs no chrome of its own.
-class _UserBubble extends StatelessWidget {
-  const _UserBubble({required this.text});
+class _UserBubble extends StatefulWidget {
+  const _UserBubble({required this.text, this.onFork});
 
   final String text;
+  final VoidCallback? onFork;
+
+  @override
+  State<_UserBubble> createState() => _UserBubbleState();
+}
+
+class _UserBubbleState extends State<_UserBubble> {
+  /// Where the finger went down: [InkWell] reports the position on tap-down
+  /// and the long press that follows carries none, so the menu anchors to
+  /// the remembered point.
+  Offset _pressed = Offset.zero;
+
+  String get text => widget.text;
+  VoidCallback? get onFork => widget.onFork;
 
   Future<void> _copy(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -1681,6 +1703,51 @@ class _UserBubble extends StatelessWidget {
         duration: const Duration(milliseconds: 1400),
       ),
     );
+  }
+
+  /// The bubble's verbs, at the press point: copy always, fork when the
+  /// message has a logged position to cut at.
+  Future<void> _openMenu(BuildContext context, Offset globalPosition) async {
+    final l10n = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final verb = await showMenu<_BubbleVerb>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & Size.zero,
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<_BubbleVerb>(
+          value: _BubbleVerb.copy,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.copy_outlined, size: 18),
+            title: Text(l10n.copyTooltip),
+          ),
+        ),
+        if (onFork != null)
+          PopupMenuItem<_BubbleVerb>(
+            value: _BubbleVerb.fork,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alt_route, size: 18),
+              title: Text(l10n.forkFromHere),
+            ),
+          ),
+      ],
+    );
+    if (!context.mounted) return;
+    switch (verb) {
+      case _BubbleVerb.copy:
+        await _copy(context);
+      case _BubbleVerb.fork:
+        onFork?.call();
+      case null:
+        break;
+    }
   }
 
   @override
@@ -1699,7 +1766,9 @@ class _UserBubble extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onLongPress: () => _copy(context),
+        onTapDown: (TapDownDetails details) =>
+            _pressed = details.globalPosition,
+        onLongPress: () => _openMenu(context, _pressed),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Text(text, style: theme.textTheme.bodyMedium),
@@ -1708,6 +1777,8 @@ class _UserBubble extends StatelessWidget {
     );
   }
 }
+
+enum _BubbleVerb { copy, fork }
 
 /// Streaming assistant tail: a 2×18 business-blue caret blinking at 1s,
 /// the flat-flow stand-in for the web turn-status line.
@@ -1852,9 +1923,7 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
     final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
     final name = ref.name;
-    final nameSuffix = name == null
-        ? ''
-        : l10n.imagePlaceholderSuffix(name);
+    final nameSuffix = name == null ? '' : l10n.imagePlaceholderSuffix(name);
     return Row(
       children: [
         Expanded(
@@ -1963,119 +2032,130 @@ class _ToolCallRowState extends State<ToolCallRow>
           : failed
           ? l10n.semanticsFailed
           : null,
-      child: ExpansionTile(
-        controller: _tileController,
-        // No payload means a non-interactive row: the native tile drops
-        // its ripple and trailing arrow the same way the web row is inert.
-        enabled: hasDetails,
-        showTrailingIcon: hasDetails,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 28,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        onExpansionChanged: (expanded) {
-          if (hasDetails) {
-            widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
-          }
-        },
-        title: ClipRect(
-          child: SweepHighlight(
-            controller: running && !MediaQuery.disableAnimationsOf(context)
-                ? _sweep
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                children: [
-                  // A product row may carry its own glyph (the todo
-                  // checklist); otherwise the state-colored variant
-                  // chrome.
-                  model.leading != null
-                      ? Icon(
-                          model.leading,
-                          size: 14,
-                          color: scheme.onSurfaceVariant,
-                        )
-                      : _leading(context, model.state),
-                  const SizedBox(width: 8),
-                  // Type carries the semantics: the verb is a label, the
-                  // payload is data. Monospace on the payload also keeps
-                  // paths and patterns legible at a glance.
-                  Text(
-                    model.title,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      // Web ToolRow: the summary is args-derived; the
-                      // settled result text never reaches this slot.
-                      failed && model.errorSummary != null
-                          ? model.errorSummary!
-                          : model.summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontFamily: 'monospace',
-                        color: failed
-                            ? theme.colorScheme.error
-                            : scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  // The todo parallel-active count rides a
-                  // non-shrinking suffix beside the truncatable text.
-                  if (model.summarySuffix case final suffix?) ...[
-                    const SizedBox(width: 4),
+      // A step is one line of text, so the row is one line tall. The
+      // tile's stock trailing chevron is a 24px glyph that sets the row
+      // height on its own; shrinking the ambient icon size brings it back
+      // in scale with the 14px status glyph and keeps the rotation.
+      child: IconTheme.merge(
+        data: const IconThemeData(size: 18),
+        child: ExpansionTile(
+          controller: _tileController,
+          // No payload means a non-interactive row: the native tile drops
+          // its ripple and trailing arrow the same way the web row is inert.
+          enabled: hasDetails,
+          showTrailingIcon: hasDetails,
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          minTileHeight: 30,
+          // An expanded tile rules itself off top and bottom by default;
+          // the transcript's steps divide with space.
+          shape: const Border(),
+          collapsedShape: const Border(),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+          onExpansionChanged: (expanded) {
+            if (hasDetails) {
+              widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
+            }
+          },
+          title: ClipRect(
+            child: SweepHighlight(
+              controller: running && !MediaQuery.disableAnimationsOf(context)
+                  ? _sweep
+                  : null,
+              child: Padding(
+                padding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    // A product row may carry its own glyph (the todo
+                    // checklist); otherwise the state-colored variant
+                    // chrome.
+                    model.leading != null
+                        ? Icon(
+                            model.leading,
+                            size: 14,
+                            color: scheme.onSurfaceVariant,
+                          )
+                        : _leading(context, model.state),
+                    const SizedBox(width: 8),
+                    // Type carries the semantics: the verb is a label, the
+                    // payload is data. Monospace on the payload also keeps
+                    // paths and patterns legible at a glance.
                     Text(
-                      suffix,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      model.title,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        // Web ToolRow: the summary is args-derived; the
+                        // settled result text never reaches this slot.
+                        failed && model.errorSummary != null
+                            ? model.errorSummary!
+                            : model.summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          color: failed
+                              ? theme.colorScheme.error
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    // The todo parallel-active count rides a
+                    // non-shrinking suffix beside the truncatable text.
+                    if (model.summarySuffix case final suffix?) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        suffix,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
+          // The theme's childrenPadding (left 20) carries the web IN/OUT
+          // card's inset; the card keeps only its top gap.
+          children: [
+            if (hasDetails)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (model.body case final body?)
+                      _ioSection(context, l10n.inputLabel, body, failed: false),
+                    if (model.body != null && model.output != null)
+                      Container(
+                        height: 1,
+                        color: scheme.outlineVariant,
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                    if (model.output case final output?)
+                      _ioSection(
+                        context,
+                        l10n.outputLabel,
+                        output,
+                        failed: failed,
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ),
-        // The theme's childrenPadding (left 20) carries the web IN/OUT
-        // card's inset; the card keeps only its top gap.
-        children: [
-          if (hasDetails)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 4),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: scheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (model.body case final body?)
-                    _ioSection(context, l10n.inputLabel, body, failed: false),
-                  if (model.body != null && model.output != null)
-                    Container(
-                      height: 1,
-                      color: scheme.outlineVariant,
-                      margin: const EdgeInsets.symmetric(horizontal: 14),
-                    ),
-                  if (model.output case final output?)
-                    _ioSection(
-                      context,
-                      l10n.outputLabel,
-                      output,
-                      failed: failed,
-                    ),
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -2107,7 +2187,9 @@ class _ToolCallRowState extends State<ToolCallRow>
             child: Text(
               payload,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: failed ? theme.colorScheme.error : scheme.onSurfaceVariant,
+                color: failed
+                    ? theme.colorScheme.error
+                    : scheme.onSurfaceVariant,
                 fontFamily: 'monospace',
               ),
             ),
@@ -2311,7 +2393,11 @@ class _QueueDockState extends State<QueueDock> {
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                     child: Row(
                       children: [
-                        Icon(Icons.queue, size: 14, color: scheme.onSurfaceVariant),
+                        Icon(
+                          Icons.queue,
+                          size: 14,
+                          color: scheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -2462,11 +2548,15 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                             hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: scheme.outlineVariant),
+                              borderSide: BorderSide(
+                                color: scheme.outlineVariant,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: scheme.outlineVariant),
+                              borderSide: BorderSide(
+                                color: scheme.outlineVariant,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
@@ -2567,7 +2657,9 @@ class _QueueAction extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 28, height: 28),
       style: IconButton.styleFrom(
         foregroundColor: scheme.onSurfaceVariant,
-        disabledForegroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.45),
+        disabledForegroundColor: scheme.onSurfaceVariant.withValues(
+          alpha: 0.45,
+        ),
         hoverColor: scheme.surfaceContainerHigh,
       ),
     );
@@ -2687,9 +2779,8 @@ class _QuestionRowState extends State<QuestionRow> {
       }),
       onNext: _continue,
       onSkip: _skip,
-      onDismiss: () => widget.onAction(
-        DismissQuestionAction(requestId: request.requestId),
-      ),
+      onDismiss: () =>
+          widget.onAction(DismissQuestionAction(requestId: request.requestId)),
     );
   }
 
@@ -2727,7 +2818,9 @@ class _QuestionRowState extends State<QuestionRow> {
     final question = widget.request.questions[_index];
     final draft = _drafts[question.id] ?? const QuestionDraft();
     if (draft.selected.isEmpty && draft.customText.trim().isEmpty) {
-      setState(() => _error = AppLocalizations.of(context)!.questionErrorUnanswered);
+      setState(
+        () => _error = AppLocalizations.of(context)!.questionErrorUnanswered,
+      );
       return;
     }
     if (_index < widget.request.questions.length - 1) {
@@ -2811,7 +2904,7 @@ class _QuestionRowState extends State<QuestionRow> {
 /// intent, carries the plan as its detail, and stays a binary single choice
 /// (at most one option besides approve, never multi-select).
 ({String id, String question, String plan, String approve, String? decline})?
-    _planReviewOf(List<QuestionItem> questions) {
+_planReviewOf(List<QuestionItem> questions) {
   if (questions.length != 1) return null;
   final question = questions.single;
   final intent = question.intent;
@@ -2820,8 +2913,9 @@ class _QuestionRowState extends State<QuestionRow> {
   if (question.options.length > 2) return null;
   final approve = intent!.approve;
   if (approve == null || !question.options.contains(approve)) return null;
-  final decline =
-      question.options.where((option) => option != approve).firstOrNull;
+  final decline = question.options
+      .where((option) => option != approve)
+      .firstOrNull;
   return (
     id: question.id,
     question: question.question,
@@ -2895,10 +2989,7 @@ class _QuestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _QuestionCardHeader(
-            question: question,
-            onDismiss: onDismiss,
-          ),
+          _QuestionCardHeader(question: question, onDismiss: onDismiss),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
             child: Column(
@@ -2932,8 +3023,7 @@ class _QuestionCard extends StatelessWidget {
                               question: question,
                               option: option,
                               selected: draft.selected.contains(option),
-                              onChanged: () =>
-                                  onChoose(question.id, option),
+                              onChanged: () => onChoose(question.id, option),
                             ),
                         ],
                       ),
@@ -2973,10 +3063,7 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _QuestionCardHeader extends StatelessWidget {
-  const _QuestionCardHeader({
-    required this.question,
-    required this.onDismiss,
-  });
+  const _QuestionCardHeader({required this.question, required this.onDismiss});
 
   final QuestionItem question;
   final VoidCallback onDismiss;
@@ -3145,18 +3232,12 @@ class _QuestionCheckbox extends StatelessWidget {
           decoration: BoxDecoration(
             color: checked ? scheme.onSurface : Colors.transparent,
             border: Border.all(
-              color: checked
-                  ? scheme.onSurface
-                  : scheme.outlineVariant,
+              color: checked ? scheme.onSurface : scheme.outlineVariant,
             ),
             borderRadius: BorderRadius.circular(4),
           ),
           child: checked
-              ? Icon(
-                  Icons.check,
-                  size: 12,
-                  color: scheme.onSurface,
-                )
+              ? Icon(Icons.check, size: 12, color: scheme.onSurface)
               : null,
         ),
       ),
@@ -3206,9 +3287,7 @@ class _CustomAnswerRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final active = draft.customText.trim().isNotEmpty;
     final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(
-        offset: draft.customText.length,
-      );
+      ..selection = TextSelection.collapsed(offset: draft.customText.length);
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
@@ -3224,7 +3303,11 @@ class _CustomAnswerRow extends StatelessWidget {
             _QuestionCheckbox(checked: active)
           else
             _QuestionNumberChip(
-              child: Icon(Icons.edit_outlined, size: 14, color: scheme.onSurfaceVariant),
+              child: Icon(
+                Icons.edit_outlined,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -3247,8 +3330,9 @@ class _CustomAnswerRow extends StatelessWidget {
               ),
               onChanged: (text) => onDraftChange(
                 QuestionDraft(
-                  selected:
-                      question.multiSelect ? draft.selected : const <String>{},
+                  selected: question.multiSelect
+                      ? draft.selected
+                      : const <String>{},
                   customText: text,
                 ),
               ),
@@ -3278,9 +3362,7 @@ class _CustomAnswerField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(
-        offset: draft.customText.length,
-      );
+      ..selection = TextSelection.collapsed(offset: draft.customText.length);
     return TextField(
       controller: controller,
       minLines: 2,
@@ -3301,9 +3383,7 @@ class _CustomAnswerField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
       ),
       style: TextStyle(
@@ -3312,10 +3392,7 @@ class _CustomAnswerField extends StatelessWidget {
         height: 24 / 14,
       ),
       onChanged: (text) => onDraftChange(
-        QuestionDraft(
-          selected: const <String>{},
-          customText: text,
-        ),
+        QuestionDraft(selected: const <String>{}, customText: text),
       ),
     );
   }
@@ -3397,14 +3474,13 @@ class _QuestionCardFooter extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              OutlinedButton(
-                onPressed: onSkip,
-                child: Text(l10n.skip),
-              ),
+              OutlinedButton(onPressed: onSkip, child: Text(l10n.skip)),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: answered ? onNext : null,
-                child: Text(isLast ? l10n.questionSubmit : l10n.questionSubmitNext),
+                child: Text(
+                  isLast ? l10n.questionSubmit : l10n.questionSubmitNext,
+                ),
               ),
             ],
           ),
@@ -3461,7 +3537,9 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
               child: Icon(
                 widget.icon,
                 size: 16,
-                color: widget.enabled ? scheme.onSurfaceVariant : scheme.outline,
+                color: widget.enabled
+                    ? scheme.onSurfaceVariant
+                    : scheme.outline,
               ),
             ),
           ),
@@ -3488,7 +3566,8 @@ class _PlanReviewCard extends StatelessWidget {
     String plan,
     String approve,
     String? decline,
-  }) review;
+  })
+  review;
   final void Function(ChatAction) onAction;
 
   @override
@@ -3500,10 +3579,7 @@ class _PlanReviewCard extends StatelessWidget {
         AnswerQuestionAction(
           requestId: requestId,
           answers: [
-            QuestionAnswer(
-              questionId: review.id,
-              selectedOptions: [label],
-            ),
+            QuestionAnswer(questionId: review.id, selectedOptions: [label]),
           ],
         ),
       );
@@ -3558,9 +3634,8 @@ class _PlanReviewCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 TextButton(
-                  onPressed: () => onAction(
-                    DismissQuestionAction(requestId: requestId),
-                  ),
+                  onPressed: () =>
+                      onAction(DismissQuestionAction(requestId: requestId)),
                   style: TextButton.styleFrom(
                     foregroundColor: scheme.onSurfaceVariant,
                   ),
@@ -3967,8 +4042,7 @@ class _ComposerBarState extends State<ComposerBar> {
       if (refused != null) {
         widget.onAction(
           CommandImageRefusal(
-            AppLocalizations.of(context)!
-                .commandImagesUnsupported(refused),
+            AppLocalizations.of(context)!.commandImagesUnsupported(refused),
           ),
         );
         return;
@@ -4373,8 +4447,10 @@ class _CommandRow extends StatelessWidget {
                     text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -4487,7 +4563,8 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
   TimelineTurnBoundary(:final turn) => 'turn:$turn',
   TimelineCompaction(:final id) => 'compaction:$id',
-  TimelineCommand(:final commandId, :final status) => 'command:$commandId:$status',
+  TimelineCommand(:final commandId, :final status) =>
+    'command:$commandId:$status',
   TimelineContextInjection(:final id) => 'context:$id',
   TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
   TimelineApprovalRequest(:final requestId) => 'approval:$requestId',

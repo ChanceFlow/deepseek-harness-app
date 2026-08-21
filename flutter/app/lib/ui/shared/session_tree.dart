@@ -347,7 +347,9 @@ class SessionTreeRow extends StatelessWidget {
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium,
+        // The body scale is set for transcript prose; a one-line row takes
+        // the same size on a tighter leading.
+        style: theme.textTheme.bodyMedium?.copyWith(height: 1.2),
       ),
       // Web rule: a blank provisional row carries no timestamp — nothing
       // has happened in it yet — so its trailing seat stays empty.
@@ -701,7 +703,9 @@ class SessionSearchResultRow extends StatelessWidget {
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium,
+        // The body scale is set for transcript prose; a one-line row takes
+        // the same size on a tighter leading.
+        style: theme.textTheme.bodyMedium?.copyWith(height: 1.2),
       ),
       // Web `.searchResultMeta`: the workspace context then the content
       // excerpt; the native subtitle auto-indents under the title, which

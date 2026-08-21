@@ -320,7 +320,7 @@ void main() {
 
     // New Session is a native button seat, and the section header's
     // search toggle is a standard IconButton.
-    expect(find.byType(OutlinedButton), findsOneWidget);
+    expect(find.byType(FilledButton), findsOneWidget);
     expect(find.byTooltip('Search sessions'), findsOneWidget);
     expect(
       find.descendant(
@@ -336,17 +336,24 @@ void main() {
   ) async {
     await _pumpPanel(tester);
 
-    final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
-    final scheme = Theme.of(
-      tester.element(find.byType(OutlinedButton)),
-    ).colorScheme;
-    expect(
-      button.style!.backgroundColor!.resolve(<WidgetState>{}),
-      scheme.primary,
+    // Stock filled seat: the contrast pair comes from the scheme through
+    // the framework's own defaults, not from a style override.
+    final context = tester.element(find.byType(FilledButton));
+    final scheme = Theme.of(context).colorScheme;
+    final style = FilledButton.styleFrom().merge(
+      tester.widget<FilledButton>(find.byType(FilledButton)).style ??
+          const ButtonStyle(),
     );
-    expect(
-      button.style!.foregroundColor!.resolve(<WidgetState>{}),
-      scheme.onPrimary,
+    expect(style.backgroundColor?.resolve(<WidgetState>{}), isNull);
+    final material = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(FilledButton),
+            matching: find.byType(Material),
+          )
+          .first,
     );
+    expect(material.color, scheme.primary);
+    expect(material.textStyle?.color, scheme.onPrimary);
   });
 }

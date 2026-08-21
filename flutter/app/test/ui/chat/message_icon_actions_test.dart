@@ -17,6 +17,7 @@ import '../../l10n_app.dart';
 ChatMessage _message({
   MessageRole role = MessageRole.assistant,
   bool streaming = false,
+  int? seq = 7,
 }) {
   return ChatMessage(
     id: role == MessageRole.user ? 'u1' : 'm1',
@@ -25,10 +26,15 @@ ChatMessage _message({
     text: 'copy me',
     streaming: streaming,
     createdAtEpochMs: 1723996800000, // 2024-08-18T16:00:00Z
+    seq: seq,
   );
 }
 
-Future<void> _pump(WidgetTester tester, List<TimelineItem> timeline) {
+Future<void> _pump(
+  WidgetTester tester,
+  List<TimelineItem> timeline, [
+  List<ChatAction>? actions,
+]) {
   tester.view.physicalSize = const Size(800, 1280);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -44,7 +50,7 @@ Future<void> _pump(WidgetTester tester, List<TimelineItem> timeline) {
             selectedSessionId: 's1',
             timeline: timeline,
           ),
-          onAction: (_) {},
+          onAction: (action) => actions?.add(action),
         ),
       ),
     ),
@@ -85,23 +91,50 @@ void main() {
     expect(find.byType(MessageIconActions), findsNothing);
   });
 
-  testWidgets('long-pressing the bubble copies its text', (tester) async {
+  testWidgets('long-pressing the bubble discloses copy and fork', (
+    tester,
+  ) async {
     final copied = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (call) async {
         if (call.method == 'Clipboard.setData') {
-          copied.add((call.arguments as Map<Object?, Object?>)['text']! as String);
+          copied.add(
+            (call.arguments as Map<Object?, Object?>)['text']! as String,
+          );
         }
         return null;
       },
     );
     await _pump(tester, [TimelineMessage(_message(role: MessageRole.user))]);
     await tester.longPress(find.text('copy me'));
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    expect(find.text('Fork from here'), findsOneWidget);
+
+    await tester.tap(find.text('Copy'));
+    await tester.pumpAndSettle();
     expect(copied, ['copy me']);
     // The write is silent otherwise: the snack bar is the only receipt.
-    await tester.pump();
     expect(find.text('Copied'), findsOneWidget);
+  });
+
+  testWidgets('a message with no logged position offers no fork', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      TimelineMessage(_message(role: MessageRole.user, seq: null)),
+    ]);
+    await tester.longPress(find.text('copy me'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Fork from here'), findsNothing);
+  });
+
+  testWidgets('the reply footer forks at the message seq', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(tester, [TimelineMessage(_message(seq: 42))], actions);
+    await tester.tap(find.byTooltip('Fork from here'));
+    await tester.pump();
+    expect(actions, [const ForkSession('s1', atSeq: 42)]);
   });
 }

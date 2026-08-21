@@ -74,68 +74,75 @@ class _ReasoningRowState extends State<ReasoningRow>
     final l10n = AppLocalizations.of(context)!;
     return Semantics(
       label: widget.running ? l10n.semanticsRunning : null,
-      child: ExpansionTile(
-        // Native expansion mirrors into _expanded so the collapsed
-        // summary hides once the body opens (web disclosure contract).
-        onExpansionChanged: (expanded) =>
-            setState(() => _expanded = expanded),
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 24,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-        childrenPadding: const EdgeInsets.only(left: 22),
-        title: ClipRect(
-          child: SweepHighlight(
-            controller: widget.running && !reduced ? _sweep : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.psychology_outlined,
-                    size: 14,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 8),
-                  // Same grid as a tool row — glyph, weighted label, then
-                  // the payload — so a step reads as a step whether the
-                  // agent was thinking or calling.
-                  Text(
-                    l10n.thinkLabel,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
+      // One line of text, one line of row — the stock 24px chevron would
+      // otherwise set the height (see the tool row).
+      child: IconTheme.merge(
+        data: const IconThemeData(size: 18),
+        child: ExpansionTile(
+          // Native expansion mirrors into _expanded so the collapsed
+          // summary hides once the body opens (web disclosure contract).
+          onExpansionChanged: (expanded) =>
+              setState(() => _expanded = expanded),
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          minTileHeight: 30,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+          childrenPadding: const EdgeInsets.only(left: 22),
+          title: ClipRect(
+            child: SweepHighlight(
+              controller: widget.running && !reduced ? _sweep : null,
+              child: Padding(
+                padding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.psychology_outlined,
+                      size: 14,
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (!_expanded) ...[
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
+                    // Same grid as a tool row — glyph, weighted label, then
+                    // the payload — so a step reads as a step whether the
+                    // agent was thinking or calling.
+                    Text(
+                      l10n.thinkLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
                       ),
                     ),
+                    if (!_expanded) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                widget.text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              widget.text,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

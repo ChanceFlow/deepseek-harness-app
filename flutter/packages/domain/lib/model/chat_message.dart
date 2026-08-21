@@ -18,6 +18,7 @@ final class ChatMessage {
     this.streaming = false,
     this.createdAtEpochMs = 0,
     this.images = const <AttachmentRef>[],
+    this.seq,
   });
 
   final String id;
@@ -31,6 +32,12 @@ final class ChatMessage {
   /// Durable image references carried by this message's content blocks.
   final List<AttachmentRef> images;
 
+  /// Position of this message in the session's event log — the anchor a
+  /// fork cuts at (the host resolves it to the end of the turn that
+  /// contains it). Null for a message the client composed locally, which
+  /// has no logged position to fork from.
+  final int? seq;
+
   @override
   bool operator ==(Object other) =>
       other is ChatMessage &&
@@ -41,6 +48,7 @@ final class ChatMessage {
       other.reasoning == reasoning &&
       other.streaming == streaming &&
       other.createdAtEpochMs == createdAtEpochMs &&
+      other.seq == seq &&
       _listEquals(other.images, images);
 
   @override
@@ -53,6 +61,7 @@ final class ChatMessage {
     streaming,
     createdAtEpochMs,
     Object.hashAll(images),
+    seq,
   );
 }
 

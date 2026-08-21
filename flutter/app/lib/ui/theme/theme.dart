@@ -82,6 +82,12 @@ class DshTheme {
       ),
       popupMenuTheme: PopupMenuThemeData(
         elevation: 3,
+        // The framework's stock shadow is opaque black at full strength,
+        // which reads as a hard outline around a small menu; the panel
+        // lifts on the same soft shadow the dock uses.
+        shadowColor: scheme.shadow.withValues(alpha: 0.28),
+        color: scheme.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kShapeCard),
         ),
