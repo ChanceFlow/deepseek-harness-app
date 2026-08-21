@@ -26,9 +26,9 @@ favicon glyph as the launcher icon:
   `package:app/*` imports) and `applicationId` stays
   `com.deepseek.harness.app` — neither is user-visible identity.
 
-Icon, generated from `reference/deepseek-harness/website/public/favicon.svg`
-(the blue `#4D6BFE` glyph — the website favicon, the canonical icon of the
-dsh visual identity):
+Icon, generated from `reference/deepseek-harness/apps/web/public/favicon.svg`
+(the black `#000` glyph — the dsh web product favicon, the canonical mark
+of the dsh visual identity):
 
 - **Legacy launcher icons** (`ic_launcher.png` per density): transparent
   canvas, glyph at 80% of canvas, centered; 48/72/96/144/192 px.
@@ -37,11 +37,12 @@ dsh visual identity):
   glyph (`ic_launcher_foreground.png`) at 60% of canvas inside the 66/108
   safe zone; 108/162/216/324/432 px. White plate keeps the glyph visible
   under launcher masks.
-- Rasterization pipeline (kept out of repo, reproducible): resvg-js renders
-  the favicon path at 1024 px; sharp composites glyph → canvas → downscales
-  per density. sharp's composite-then-resize chain is bypassed (it validates
-  overlay against the *resized* size and errors); composite first, store an
-  intermediate buffer, then downscale.
+- Rasterization pipeline: `scripts/gen_launcher_icons.py` — a stdlib-only
+  Python generator. It parses the favicon's M/C/Z path, flattens the
+  beziers, scanline-fills with the SVG nonzero winding rule at 4x
+  supersampling, box-downsamples, and writes the PNGs above.
+  `--check` exits 1 on drift versus the committed PNGs; `verify_all` runs
+  it as the `launcher-icon-drift` gate.
 
 `chat_screen_test.dart` assertion `find.text('DeepSeek Harness')` → `'DSH
 Mobile'`, matching the real `appTitle` stream.
@@ -60,7 +61,7 @@ Mobile'`, matching the real `appTitle` stream.
   launchers crop legacy PNGs; the adaptive set is the current Android
   standard and keeps the glyph inside the mask safe zone.
 - **Icon on a brand-blue background.** Rejected: the favicon identity is a
-  blue glyph on light/transparent; a white plate preserves that look while
+  black glyph on light/transparent; a white plate preserves that look while
   staying mask-safe.
 
 ## Consequences
@@ -70,8 +71,9 @@ Mobile'`, matching the real `appTitle` stream.
   API levels.
 - The `.agents/notes` and README still name the backend product
   "DeepSeek Harness"; only the client display identity changed.
-- Future icon regens need no Node tooling committed to the repo — the
-  source SVG stays the single icon truth in `reference/`; the pipeline
-  above reproduces the PNGs on demand.
+- Future icon regens run `scripts/gen_launcher_icons.py` — no Node tooling,
+  no network; the source SVG stays the single icon truth in `reference/`,
+  and its `--check` mode is the `launcher-icon-drift` gate inside
+  `verify_all`.
 - `values/colors.xml` is now committed alongside `styles.xml`; the adaptive
   XML is the API 26+ entry, legacy PNGs remain for older devices.
