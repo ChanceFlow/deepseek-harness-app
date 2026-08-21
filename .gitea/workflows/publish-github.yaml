@@ -1,0 +1,90 @@
+# Publish to GitHub — regenerate the clean public history after main CI
+# lands and push it to the GitHub source repo (ChanceFlow/dsh-flutter-client).
+#
+# Model B sync (decision 2026-08-21): Gitea stays the private development
+# home (original history, internal tooling intact); GitHub carries the
+# sanitized export. The pipeline (publish-prep/prepare_public_repo.sh)
+# rebuilds the clean history in a throwaway clone: identity rewritten to
+# ChanceFlow <user@example.com>, commit messages scrubbed, private
+# paths pruned (tasks/, .gitea/, docker/...), submodule re-pinned to the
+# official dsh commit, then runs the leak gates (tree + every history blob)
+# and the doc gates, and force-pushes master + tags.
+#
+# The pipeline itself is the completion gate: any leak-sweep or doc-gate
+# failure aborts the push. Flutter analyze/tests are NOT re-run here —
+# ci.yaml already ran them on the exact SHA being published.
+#
+# Commit hashes differ between Gitea and GitHub by design (model B);
+# content stays synchronized. Runs on every master push; the flow never
+# re-triggers itself (pushes go to github.com, not back to this repo).
+#
+# Runner needs: network (curl gitleaks + git-filter-repo),
+# secrets.GH_PUBLISH_TOKEN (repo scope on ChanceFlow/dsh-flutter-client).
+name: Publish GitHub
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools (git-filter-repo, gitleaks)
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/git-filter-repo" \
+            https://raw.githubusercontent.com/newren/git-filter-repo/v2.47.0/git-filter-repo
+          chmod +x "$HOME/bin/git-filter-repo"
+          curl -fsSL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C "$HOME/bin" gitleaks
+          chmod +x "$HOME/bin/gitleaks"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build public repo (filter + leak sweeps + doc gates)
+        run: |
+          # The pipeline clones its source internally; in CI pass the local
+          # checkout as the source (it is already on the target SHA).
+          bash publish-prep/prepare_public_repo.sh \
+            --mode=filter --agents=subset --no-flutter-check \
+            --src="$(pwd)" \
+            --out=/tmp/publish 2>&1 | tee /tmp/publish.log || {
+              echo "::error::pipeline failed — see /tmp/publish.log"
+              exit 1
+            }
+          echo "PUBLIC_REPO=/tmp/publish/public-repo" >> "$GITHUB_ENV"
+          echo "PUBLIC_HEAD=$(git -C /tmp/publish/public-repo rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Push to GitHub (force — every publish regenerates the sanitized history)
+        env:
+          TARGET: https://ChanceFlow:${{ secrets.GH_PUBLISH_TOKEN }}@github.com/ChanceFlow/dsh-flutter-client.git
+        run: |
+          cd "$PUBLIC_REPO"
+          git remote add origin "$TARGET"
+          git push --force origin master:master
+          git push --force origin 'refs/tags/*:refs/tags/*' || true
+          echo "pushed master + tags @ $PUBLIC_HEAD to ChanceFlow/dsh-flutter-client"
+
+      - name: Verify published clone (third-party view)
+        run: |
+          rm -rf /tmp/verify
+          git clone --recurse-submodules "file://$PUBLIC_REPO" /tmp/verify
+          cd /tmp/verify && python3 scripts/verify_all.py docs || {
+            echo "::error::published clone fails doc gates"
+            exit 1
+          }
+          echo "published clone verified"
