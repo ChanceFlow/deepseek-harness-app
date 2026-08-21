@@ -785,10 +785,27 @@ void main() {
     await pumpBackends(tester);
 
     // Both configured rows with their endpoints; the active one badged.
+    // The badge assertions scope to the rows: the scope bar (visible
+    // with two backends) carries its own Active mark for the scoped
+    // backend, which rides the same registry.
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Build box'), findsOneWidget);
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('Standby'), findsOneWidget);
+    final laptopRow = find.ancestor(
+      of: find.text('Laptop'),
+      matching: find.byType(InkWell),
+    );
+    final buildBoxRow = find.ancestor(
+      of: find.text('Build box'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Standby')),
+      findsOneWidget,
+    );
     expect(find.text('Add backend'), findsOneWidget);
 
     // The connected host's version rides the endpoint line (the fake
@@ -800,12 +817,12 @@ void main() {
     // surface follows the registry's active id).
     await tester.tap(find.text('Build box'));
     await tester.pumpAndSettle();
-    final buildBoxRow = find.ancestor(
+    final activeBuildBoxRow = find.ancestor(
       of: find.text('Build box'),
       matching: find.byType(InkWell),
     );
     expect(
-      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      find.descendant(of: activeBuildBoxRow, matching: find.text('Active')),
       findsOneWidget,
     );
     expect(
@@ -818,6 +835,134 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('scope bar pins a backend independent of the chat-active one', (
+    tester,
+  ) async {
+    await pumpBackends(tester);
+
+    // Following the chat-active backend: the bar names Laptop and the
+    // picker has no follow entry while nothing is pinned.
+    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Configuring: Build box'), findsNothing);
+    await tester.tap(find.text('Configuring: Laptop'));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings backend'), findsOneWidget);
+    expect(find.text('Follow the active backend'), findsNothing);
+    expect(find.text('Laptop').hitTestable(), findsOneWidget);
+    expect(find.text('Build box').hitTestable(), findsOneWidget);
+
+    // Pin Build box: the bar follows the pin, not the chat-active id.
+    await tester.tap(find.text('Build box').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Configuring: Build box'), findsOneWidget);
+    expect(find.text('Configuring: Laptop'), findsNothing);
+
+    // Chat-active switches neither move the pinned bar.
+    await tester.tap(find.text('Build box'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laptop'));
+    await tester.pumpAndSettle();
+    expect(find.text('Configuring: Build box'), findsOneWidget);
+
+    // While pinned the picker offers follow-active; choosing it snaps
+    // the scope back to the chat-active backend.
+    await tester.tap(find.text('Configuring: Build box'));
+    await tester.pumpAndSettle();
+    expect(find.text('Follow the active backend'), findsOneWidget);
+    await tester.tap(find.text('Follow the active backend'));
+    await tester.pumpAndSettle();
+    expect(find.text('Configuring: Laptop'), findsOneWidget);
+  });
+
+  testWidgets('a single configured backend hides the scope bar', (
+    tester,
+  ) async {
+    await pumpBackends(
+      tester,
+      document:
+          '{"backends": [{"id": "default", "label": "Laptop", '
+          '"baseUrl": "http://10.0.2.2:3080"}], "activeId": "default"}',
+    );
+
+    // Nothing to disambiguate: the bar (and its picker trigger) is
+    // absent, and the row-level surface is unchanged.
+    expect(find.text('Configuring: Laptop'), findsNothing);
+    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+  });
+
+  testWidgets('SettingsRoute rebinds the described host to the scoped backend', (
+    tester,
+  ) async {
+    // The route rides the real registry chain; only the repositories
+    // are faked, each backend describing a different writability so the
+    // rebind is observable on the General page.
+    final laptop = _RecordingSettingsRepository(
+      snapshot: _snapshot,
+      roster: _roster,
+    );
+    final buildBox = _RecordingSettingsRepository(
+      snapshot: const SettingsSnapshot(
+        writable: false,
+        hasDocument: false,
+        namespaces: [],
+        credentialRefs: [],
+      ),
+      roster: const AgentPresetRoster(),
+    );
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendStoreProvider.overrideWith(
+            (ref) async => _backendStore(document: twoBackendsDoc),
+          ),
+          chatRepositoryProvider('default').overrideWithValue(laptop),
+          chatRepositoryProvider('b1').overrideWithValue(buildBox),
+          for (final uri in [
+            Uri.parse(kDshBaseUrl),
+            Uri.parse('http://10.0.2.2:3081'),
+          ]) ...[
+            dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
+            dshEventSocketProvider(uri).overrideWithValue(_QuietSocket()),
+          ],
+          localStateStoreProvider.overrideWith(
+            (ref) async => LocalStateStore(_storeFile()),
+          ),
+        ],
+        child: l10nApp(home: const SettingsRoute()),
+      ),
+    );
+    await _letRegistryLoad(tester);
+    await tester.pumpAndSettle();
+
+    // Following the chat-active backend: Laptop's snapshot drives the
+    // host pages.
+    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Writable'), findsOneWidget);
+
+    // Pin Build box on the scope bar: the host pages rebind to its
+    // snapshot (read-only), independent of the chat-active backend.
+    await tester.tap(find.text('Configuring: Laptop'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Build box').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Configuring: Build box'), findsOneWidget);
+    expect(find.text('Read-only'), findsOneWidget);
+    expect(find.text('Writable'), findsNothing);
+
+    // Re-follow: the pages describe the chat-active backend again.
+    await tester.tap(find.text('Configuring: Build box'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Follow the active backend'));
+    await tester.pumpAndSettle();
+    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Writable'), findsOneWidget);
   });
 
   testWidgets('add backend flow appends through the registry', (tester) async {

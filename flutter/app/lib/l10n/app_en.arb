@@ -372,6 +372,10 @@
   "settingsNavPlugins": "Plugins",
   "settingsNavAgentPresets": "Agent presets",
   "settingsNavCredentials": "Credentials",
+  "settingsScopeLabel": "Configuring: {label}",
+  "settingsScopeTitle": "Settings backend",
+  "settingsScopeHint": "Which backend the host-settings pages describe - independent of the active chat backend.",
+  "settingsScopeFollowActive": "Follow the active backend",
   "settingsLoopbackHint": "settings/credentials are loopback-only on the host; connect via adb reverse",
   "backendsIntro": "Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.",
   "addBackend": "Add backend",
@@ -823,6 +827,14 @@
     "description": "Localized screen copy.",
     "placeholders": {
       "ref": {
+        "type": "String"
+      }
+    }
+  },
+  "@settingsScopeLabel": {
+    "description": "The backend whose host settings the Settings pages describe.",
+    "placeholders": {
+      "label": {
         "type": "String"
       }
     }

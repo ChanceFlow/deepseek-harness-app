@@ -497,6 +497,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNavCredentials => 'Credentials';
 
   @override
+  String settingsScopeLabel(String label) {
+    return 'Configuring: $label';
+  }
+
+  @override
+  String get settingsScopeTitle => 'Settings backend';
+
+  @override
+  String get settingsScopeHint =>
+      'Which backend the host-settings pages describe - independent of the active chat backend.';
+
+  @override
+  String get settingsScopeFollowActive => 'Follow the active backend';
+
+  @override
   String get settingsLoopbackHint =>
       'settings/credentials are loopback-only on the host; connect via adb reverse';
 

@@ -496,6 +496,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavCredentials => '凭据';
 
   @override
+  String settingsScopeLabel(String label) {
+    return '正在配置:$label';
+  }
+
+  @override
+  String get settingsScopeTitle => '设置后端';
+
+  @override
+  String get settingsScopeHint => '这些页面描述哪个后端的主机设置——独立于活动聊天后端。';
+
+  @override
+  String get settingsScopeFollowActive => '跟随活动后端';
+
+  @override
   String get settingsLoopbackHint =>
       'settings/credentials 仅在宿主机回环可用；请通过 adb reverse 连接';
 
