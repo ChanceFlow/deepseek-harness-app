@@ -136,7 +136,9 @@ class FishLogo extends StatelessWidget {
     return CustomPaint(
       size: Size(width, height),
       painter: _FishPainter(
-        color ?? DefaultTextStyle.of(context).style.color ?? Colors.black,
+        color ??
+            DefaultTextStyle.of(context).style.color ??
+            Theme.of(context).colorScheme.onSurface,
       ),
     );
   }

@@ -1945,7 +1945,7 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
         );
       case ToolRowState.ok:
-        return Icon(Icons.check, size: 14, color: Colors.green.shade600);
+        return Icon(Icons.check, size: 14, color: scheme.success);
       case ToolRowState.error:
         return Icon(
           Icons.close,

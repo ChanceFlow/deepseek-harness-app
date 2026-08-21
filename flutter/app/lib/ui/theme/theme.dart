@@ -6,6 +6,18 @@ library;
 
 import 'package:flutter/material.dart';
 
+/// Colors Material 3 ships no role for. This extension is their one home: a
+/// call site reads `scheme.success` rather than naming a green, and a new
+/// entry is added here or argued down to an existing role.
+extension DshSchemeColors on ColorScheme {
+  /// Success green. M3 carries `error` but no success counterpart; the light
+  /// value is Material green 600, the dark one green 300 for legibility on
+  /// dark surfaces.
+  Color get success => brightness == Brightness.light
+      ? const Color(0xFF43A047)
+      : const Color(0xFF81C784);
+}
+
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
 const List<BoxShadow> kM3ShadowElevation1 = [
   BoxShadow(offset: Offset(0, 1), blurRadius: 2, color: Color(0x33000000)),

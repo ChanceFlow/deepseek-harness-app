@@ -455,12 +455,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
           ),
         if (uiState.directoryBrowserOpen) ...[
-          // Web Modal mask: rgba(0,0,0,0.24); tapping it closes.
+          // Modal mask over the browser sheet; tapping it closes.
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => widget.onAction(const CloseDirectoryBrowser()),
-              child: ColoredBox(color: Colors.black.withValues(alpha: 0.24)),
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.scrim.withValues(
+                  alpha: 0.24,
+                ),
+              ),
             ),
           ),
           Positioned(

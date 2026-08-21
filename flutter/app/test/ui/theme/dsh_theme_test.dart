@@ -52,6 +52,17 @@ void main() {
     }
   });
 
+  test('success is a scheme role and tracks brightness', () {
+    final light = DshTheme.light().colorScheme;
+    final dark = DshTheme.dark().colorScheme;
+    expect(light.success, isNot(equals(dark.success)));
+    // The dark value is the lighter green: legible on a dark surface.
+    expect(
+      dark.success.computeLuminance(),
+      greaterThan(light.success.computeLuminance()),
+    );
+  });
+
   test('no deepsuite theme extension is attached', () {
     expect(DshTheme.light().extensions, isEmpty);
     expect(DshTheme.dark().extensions, isEmpty);

@@ -1561,9 +1561,7 @@ class _DeepSeekCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 _StatusDot(
-                  color: credential.configured
-                      ? Colors.green.shade600
-                      : scheme.error,
+                  color: credential.configured ? scheme.success : scheme.error,
                 ),
                 const SizedBox(width: 6),
                 _StateBadge(configured: credential.configured),
@@ -1760,7 +1758,7 @@ enum _FactTone { positive, warning, neutral }
 /// Dot and text colors for one row-value tone.
 (Color, Color) _toneColors(ColorScheme scheme, _FactTone tone) =>
     switch (tone) {
-      _FactTone.positive => (Colors.green.shade600, scheme.onSurfaceVariant),
+      _FactTone.positive => (scheme.success, scheme.onSurfaceVariant),
       _FactTone.warning => (scheme.error, scheme.onErrorContainer),
       _FactTone.neutral => (scheme.outline, scheme.onSurfaceVariant),
     };

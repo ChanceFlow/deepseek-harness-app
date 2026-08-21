@@ -1061,7 +1061,7 @@ class SubagentStateDot extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = switch (state) {
       SubagentDotState.ongoing => scheme.primary,
-      SubagentDotState.done => Colors.green.shade600,
+      SubagentDotState.done => scheme.success,
       SubagentDotState.error => scheme.error,
     };
     return SizedBox(
