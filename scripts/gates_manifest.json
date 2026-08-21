@@ -1,90 +1,92 @@
 {
-  "comment": "Single manifest for the doc gates. Ceilings, includes, and exceptions live ONLY here; raising a ceiling requires a manifest diff plus a decision note (see AGENTS.md 'Editing these instructions').",
-  "docs": {
-    "include": [
-      "**/*.md"
-    ],
-    "exclude": [
-      "reference/deepseek-harness/**",
-      "**/.dart_tool/**",
-      "**/build/**",
-      "**/.gradle/**",
-      "PLAN.md",
-      "ROADMAP.md",
-      "tasks/**",
-      "docs/notes/**",
-      ".agents/skills/**"
-    ],
-    "extra_include": [
-      ".agents/skills/README.md",
-      ".agents/skills/dsh-*/**/*.md"
-    ]
-  },
-  "budgets": {
-    "AGENTS.md": 1600,
-    "flutter/AGENTS.md": 600,
-    "flutter/app/AGENTS.md": 600,
-    "flutter/packages/harness_adapter/AGENTS.md": 600,
-    "flutter/packages/dev/AGENTS.md": 600,
-    ".agents/notes/README.md": 600,
-    "docs/prose-standard.md": 600,
-    "docs/design-standard.md": 900,
-    "docs/testing.md": 600
-  },
-  "agents_md_discovery": "**/AGENTS.md",
-  "notes": {
-    "root": ".agents/notes",
-    "classes": [
-      "feature",
-      "bug-fix",
-      "simplification",
-      "architecture",
-      "process",
-      "testing"
-    ],
-    "max_words": 800
-  },
-  "skills": {
-    "root": ".agents/skills",
-    "min_description_chars": 30
-  },
-  "env_names": {
-    "pattern": "DSH_[A-Z0-9_]+",
-    "source_exclude": [
-      "reference/**",
-      "docker/act-runner-data/**",
-      "scripts/verify_env_names.py"
-    ],
-    "exceptions": {
-      "DSH_E2U": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design",
-      "DSH_E2_URL": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design"
-    }
-  },
-  "toolchain": {
-    "source": ".gitea/workflows/ci.yaml",
-    "pattern": "flutter-version:\\s*['\"]?(\\d+\\.\\d+\\.\\d+)",
-    "occurrence_pattern": "(?i)flutter[-_ ]v?(\\d+\\.\\d+\\.\\d+)",
-    "homes": [
-      "AGENTS.md",
-      "README.md",
-      "scripts/verify_all.py",
-      "docker/build-image.sh",
-      ".agents/skills/dsh-close-out/SKILL.md"
-    ]
-  },
-  "theme": {
-    "root": "flutter/app/lib",
-    "exempt": [
-      "flutter/app/lib/ui/theme/theme.dart"
-    ],
-    "allow": [
-      "Colors.transparent"
-    ]
-  },
-  "i18n": {
-    "arb": [
-      "flutter/app/lib/l10n/app_en.arb",
-      "flutter/app/lib/l10n/app_zh.arb"
-    ]
+ "comment": "Single manifest for the doc gates. Ceilings, includes, and exceptions live ONLY here; raising a ceiling requires a manifest diff plus a decision note (see AGENTS.md 'Editing these instructions').",
+ "docs": {
+  "include": [
+   "**/*.md"
+  ],
+  "exclude": [
+   "reference/deepseek-harness/**",
+   "**/.dart_tool/**",
+   "**/build/**",
+   "**/.gradle/**",
+   "PLAN.md",
+   "ROADMAP.md",
+   "tasks/**",
+   "docs/notes/**",
+   ".agents/skills/**",
+   "publish-prep/**"
+  ],
+  "extra_include": [
+   ".agents/skills/README.md",
+   ".agents/skills/dsh-*/**/*.md"
+  ]
+ },
+ "budgets": {
+  "AGENTS.md": 1600,
+  "flutter/AGENTS.md": 600,
+  "flutter/app/AGENTS.md": 600,
+  "flutter/packages/harness_adapter/AGENTS.md": 600,
+  "flutter/packages/dev/AGENTS.md": 600,
+  ".agents/notes/README.md": 600,
+  "docs/prose-standard.md": 600,
+  "docs/design-standard.md": 900,
+  "docs/testing.md": 600,
+  "publish-prep/public/root/AGENTS.md": 1600
+ },
+ "agents_md_discovery": "**/AGENTS.md",
+ "notes": {
+  "root": ".agents/notes",
+  "classes": [
+   "feature",
+   "bug-fix",
+   "simplification",
+   "architecture",
+   "process",
+   "testing"
+  ],
+  "max_words": 800
+ },
+ "skills": {
+  "root": ".agents/skills",
+  "min_description_chars": 30
+ },
+ "env_names": {
+  "pattern": "DSH_[A-Z0-9_]+",
+  "source_exclude": [
+   "reference/**",
+   "docker/act-runner-data/**",
+   "scripts/verify_env_names.py"
+  ],
+  "exceptions": {
+   "DSH_E2U": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design",
+   "DSH_E2_URL": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design"
   }
+ },
+ "toolchain": {
+  "source": ".gitea/workflows/ci.yaml",
+  "pattern": "flutter-version:\\s*['\"]?(\\d+\\.\\d+\\.\\d+)",
+  "occurrence_pattern": "(?i)flutter[-_ ]v?(\\d+\\.\\d+\\.\\d+)",
+  "homes": [
+   "AGENTS.md",
+   "README.md",
+   "scripts/verify_all.py",
+   "docker/build-image.sh",
+   ".agents/skills/dsh-close-out/SKILL.md"
+  ]
+ },
+ "theme": {
+  "root": "flutter/app/lib",
+  "exempt": [
+   "flutter/app/lib/ui/theme/theme.dart"
+  ],
+  "allow": [
+   "Colors.transparent"
+  ]
+ },
+ "i18n": {
+  "arb": [
+   "flutter/app/lib/l10n/app_en.arb",
+   "flutter/app/lib/l10n/app_zh.arb"
+  ]
+ }
 }
