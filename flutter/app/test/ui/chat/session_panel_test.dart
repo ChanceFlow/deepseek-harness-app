@@ -330,4 +330,23 @@ void main() {
       findsWidgets,
     );
   });
+
+  testWidgets('the new session button ink rides the primary contrast pair', (
+    tester,
+  ) async {
+    await _pumpPanel(tester);
+
+    final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
+    final scheme = Theme.of(
+      tester.element(find.byType(OutlinedButton)),
+    ).colorScheme;
+    expect(
+      button.style!.backgroundColor!.resolve(<WidgetState>{}),
+      scheme.primary,
+    );
+    expect(
+      button.style!.foregroundColor!.resolve(<WidgetState>{}),
+      scheme.onPrimary,
+    );
+  });
 }

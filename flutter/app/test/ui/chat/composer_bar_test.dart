@@ -443,4 +443,37 @@ void main() {
     expect(find.text('inside turn one'), findsOneWidget);
     expect(localState.values[chatCollapsedTurnsKey('s1')], isEmpty);
   });
+
+  testWidgets('primary send FAB ink rides the M3 contrast pair', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+      actions,
+    );
+
+    final sendFab = find.descendant(
+      of: find.byTooltip('Send'),
+      matching: find.byType(FloatingActionButton),
+    );
+    final scheme = Theme.of(tester.element(sendFab)).colorScheme;
+
+    // Idle (empty draft): the neutral selector fill with a tertiary
+    // glyph — the composer's no-idle-blue rule.
+    final idle = tester.widget<FloatingActionButton>(sendFab);
+    expect(idle.backgroundColor, scheme.surfaceContainerLow);
+    expect(idle.foregroundColor, scheme.onSurfaceVariant);
+    expect(idle.onPressed, isNull);
+
+    // Actionable: primaryContainer fill with its onPrimaryContainer
+    // glyph — the theme's contrast pair, never a hardcoded white.
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.pump();
+    final actionable = tester.widget<FloatingActionButton>(sendFab);
+    expect(actionable.backgroundColor, scheme.primaryContainer);
+    expect(actionable.foregroundColor, scheme.onPrimaryContainer);
+    expect(actionable.onPressed, isNotNull);
+  });
 }
