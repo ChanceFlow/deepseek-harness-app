@@ -104,7 +104,7 @@ how to refresh them.
 The canonical command list — analyze, tests, the import gate, the design-token
 drift gate, and the aggregate verification gate — lives in
 [AGENTS.md §Commands](AGENTS.md#commands). Flutter 3.47 stable is expected on
-PATH (`export PATH="$HOME/tools/flutter-3.47.0/bin:$PATH"`).
+PATH (`export PATH="$HOME/tools/flutter-3.47.1/bin:$PATH"`).
 
 Run on a device/emulator (`cd flutter/app` for `flutter run` commands):
 
