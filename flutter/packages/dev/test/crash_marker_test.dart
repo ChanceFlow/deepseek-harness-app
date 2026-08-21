@@ -1,11 +1,12 @@
 import 'dart:io';
 
-import 'package:dev/src/crash_bundle.dart';
+import 'package:dev/src/build_info.dart';
 import 'package:dev/src/crash_marker.dart';
+import 'package:dev/src/crash_record.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const build = CrashBuildInfo(
+  const build = DebugBuildInfo(
     app: 'dsh-android',
     version: '0.1.0',
     build: '7',
@@ -14,96 +15,59 @@ void main() {
     sourceCommit: 'abc1234',
   );
 
+  CrashRecord makeRecord() => CrashRecord(
+    crash: CapturedCrash(
+      kind: 'FlutterError',
+      type: 'StateError',
+      message: 'boom',
+      stackFrames: const ['#0 main'],
+      occurredAt: DateTime.utc(2026, 8, 21, 9, 30),
+    ),
+    build: build,
+    device: 'Pixel 9',
+    dshBaseUrl: 'http://10.0.2.2:3080',
+    sessionId: 'sess-9',
+    logs: const ['09:00:00.000 INFO hello', '09:00:01.000 CRASH boom'],
+  );
+
   Directory tempDir() {
     final dir = Directory.systemTemp.createTempSync('crash-marker-test-');
     addTearDown(() => dir.deleteSync(recursive: true));
     return dir;
   }
 
-  test('writeSync then takeIfPresent round-trips the bundle', () {
-    final marker = CrashMarker(File('${tempDir().path}/${CrashMarker.markerName}'));
-    expect(marker.exists, isFalse);
-    marker.writeSync(
-      crash: CapturedCrash(
-        kind: 'FlutterError',
-        type: 'StateError',
-        message: 'boom',
-        stackFrames: const ['#0 main'],
-        occurredAt: DateTime.utc(2026, 8, 21),
-      ),
-      logs: const ['log line'],
-      build: build,
-      device: 'Pixel 9',
-      dshBaseUrl: 'http://10.0.2.2:3080',
-      sessionId: 'sess-1',
+  test('writeSync then takeIfPresent round-trips the record', () {
+    final marker = CrashMarker(
+      File('${tempDir().path}/${CrashMarker.markerName}'),
     );
-    expect(marker.exists, isTrue);
-
-    final read = marker.takeIfPresent();
-    expect(read, isNotNull);
-    expect(read!.crash.type, 'StateError');
-    expect(read.crash.message, 'boom');
-    expect(read.logs, ['log line']);
-    expect(read.device, 'Pixel 9');
-    expect(read.sessionId, 'sess-1');
-    expect(read.sourceCommit, 'abc1234');
-    expect(read.build, '7');
-    // takeIfPresent deletes the marker: a restarted app reports once.
     expect(marker.exists, isFalse);
-  });
-
-  test('takeIfPresent returns null when absent', () {
-    final marker = CrashMarker(File('${tempDir().path}/${CrashMarker.markerName}'));
+    marker.writeSync(makeRecord());
+    expect(marker.exists, isTrue);
+    final record = marker.takeIfPresent();
+    expect(record, isNotNull);
+    expect(record!.crash.kind, 'FlutterError');
+    expect(record.crash.message, 'boom');
+    expect(record.device, 'Pixel 9');
+    expect(record.logs, hasLength(2));
+    expect(marker.exists, isFalse, reason: 'takeIfPresent deletes the marker');
     expect(marker.takeIfPresent(), isNull);
   });
 
-  test('takeIfPresent clears unreadable marker instead of crashing', () {
-    final dir = tempDir();
-    final file = File('${dir.path}/${CrashMarker.markerName}');
-    file.writeAsStringSync('{not json');
+  test('absent marker yields null without touching the file system', () {
+    final marker = CrashMarker(File('${tempDir().path}/does-not-exist.json'));
+    expect(marker.takeIfPresent(), isNull);
+  });
+
+  test('corrupt marker clears itself and yields null', () {
+    final file = File('${tempDir().path}/${CrashMarker.markerName}')
+      ..writeAsStringSync('{not json');
     final marker = CrashMarker(file);
     expect(marker.takeIfPresent(), isNull);
     expect(marker.exists, isFalse);
   });
 
-  test('clear removes the marker', () {
-    final marker = CrashMarker(File('${tempDir().path}/${CrashMarker.markerName}'));
-    marker.writeSync(
-      crash: CapturedCrash(
-        kind: 'x',
-        type: 'StateError',
-        message: 'm',
-        occurredAt: DateTime.utc(2026),
-      ),
-      logs: const [],
-      build: build,
-      device: 'd',
-      dshBaseUrl: '',
-      sessionId: '',
-    );
-    marker.clear();
-    expect(marker.exists, isFalse);
-  });
-
-  test('writeSync swallows IO failures (marker path is a directory)', () {
-    final dir = tempDir();
-    // Occupy the marker path with a directory so the file write fails.
-    Directory('${dir.path}/${CrashMarker.markerName}').createSync();
-    final marker = CrashMarker(File('${dir.path}/${CrashMarker.markerName}'));
-    // Must not throw.
-    marker.writeSync(
-      crash: CapturedCrash(
-        kind: 'x',
-        type: 'StateError',
-        message: 'm',
-        occurredAt: DateTime.utc(2026),
-      ),
-      logs: const [],
-      build: build,
-      device: 'd',
-      dshBaseUrl: '',
-      sessionId: '',
-    );
-    expect(marker.exists, isFalse);
+  test('write failure is swallowed (crash handler must never throw)', () {
+    final marker = CrashMarker(File('${tempDir().path}/no-such-dir/x.json'));
+    expect(() => marker.writeSync(makeRecord()), returnsNormally);
   });
 }

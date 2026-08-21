@@ -47,7 +47,7 @@ class LogBuffer {
   }
 }
 
-/// Formats [line] with the log style the intake triage expects: a readable
+/// Formats [line] with the crash-marker log style: a readable
 /// clock prefix (`HH:mm:ss.SSS`) plus the caller's own level tag.
 String formatLogLine(String level, String message, {DateTime? at}) {
   final t = at ?? DateTime.now();

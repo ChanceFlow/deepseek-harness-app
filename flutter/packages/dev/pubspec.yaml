@@ -1,5 +1,5 @@
 name: dev
-description: Debug-build crash capture — ring log buffer, crash marker, restart detection, intake reporter. Compiled in on debug builds only.
+description: Debug-build tooling — ring log buffer, crash marker, restart detection, telemetry facade (log/event/metric), frame timing, OTLP export to SigNoz. Compiled in on debug builds only.
 version: 0.1.0
 publish_to: none
 
@@ -11,8 +11,7 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0
-  path_provider: ^2.1.5
+  dartastic_opentelemetry: ^0.9.8
 
 dev_dependencies:
   flutter_test:
