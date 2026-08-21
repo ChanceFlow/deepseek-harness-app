@@ -14,6 +14,7 @@ import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/todo.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1423,6 +1424,87 @@ void main() {
     await tester.tap(find.byTooltip('Clear goal'));
     await tester.pump();
     expect(actions, contains(const ClearGoal()));
+  });
+
+  testWidgets('a pending approval suppresses the todo/goal dock chrome', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    const sessions = [
+      SessionSummary(id: 's1', title: 'Alpha', blank: false),
+    ];
+    const goal = GoalProjection(
+      goal: GoalSnapshot(
+        id: 'g1',
+        revision: 1,
+        objective: 'Ship the MVP',
+        phase: GoalPhase.active,
+        maxGoalRounds: 10,
+      ),
+      roundsStarted: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    const todos = [
+      TodoItem(content: 'step one', status: TodoStatus.inProgress),
+    ];
+
+    // No approval: the plan strip and the goal bar ride the dock.
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: sessions,
+        selectedSessionId: 's1',
+        goal: goal,
+        todos: todos,
+      ),
+      actions,
+    );
+    expect(find.text('To-dos'), findsOneWidget);
+    expect(find.text('Ship the MVP'), findsOneWidget);
+
+    // Approval pending: the takeover panel is the moment, so the chrome
+    // stands down and the transcript keeps the room.
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: sessions,
+        selectedSessionId: 's1',
+        goal: goal,
+        todos: todos,
+        timeline: [
+          TimelineApprovalRequest(
+            requestId: 'rpc-1',
+            sessionId: 's1',
+            approvalId: 'a-1',
+            toolName: 'bash',
+            reason: 'Would run a command',
+          ),
+        ],
+      ),
+      actions,
+    );
+    expect(find.text('Waiting for approval'), findsOneWidget);
+    expect(find.text('To-dos'), findsNothing);
+    expect(find.text('Ship the MVP'), findsNothing);
+  });
+
+  testWidgets('the composer field caps at four visible lines', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    // Past four lines the draft scrolls inside the field — the dock
+    // cannot grow tall enough to squeeze the transcript off-screen.
+    expect(tester.widget<TextField>(find.byType(TextField).last).maxLines, 4);
   });
 
   testWidgets('jobs pill opens the ordered sheet with durations', (

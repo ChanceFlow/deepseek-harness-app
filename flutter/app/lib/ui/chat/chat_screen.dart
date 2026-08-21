@@ -1202,14 +1202,19 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
           ),
           // Web input-dock order 0: the plan strip before the goal and
-          // queue entries.
-          TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-          GoalBarStrip(
-            goal: uiState.goal,
-            onAction: widget.onAction,
-            onOpen: widget.onOpenGoal,
-          ),
-          StatsLine(stats: uiState.sessionStats),
+          // queue entries. While an approval is pending the ApprovalPanel
+          // takes the composer seat, so the todo/goal/stats chrome stands
+          // down — the decision moment keeps the transcript room instead of
+          // stacking chrome above it.
+          if (_pendingApproval == null) ...[
+            TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
+            GoalBarStrip(
+              goal: uiState.goal,
+              onAction: widget.onAction,
+              onOpen: widget.onOpenGoal,
+            ),
+            StatsLine(stats: uiState.sessionStats),
+          ],
           if (_pendingApproval case final approval?)
             ApprovalPanel(request: approval, onAction: widget.onAction)
           else if (uiState.timeline.whereType<TimelineQueue>().any(
@@ -3595,7 +3600,10 @@ class _ComposerBarState extends State<ComposerBar> {
             controller: _draftController,
             enabled: widget.enabled,
             minLines: 1,
-            maxLines: 8,
+            // Four-line cap: past it the field scrolls internally, so a
+            // long draft cannot grow the dock tall enough to squeeze the
+            // transcript off-screen on a phone.
+            maxLines: 4,
             // Web sends on Enter and newlines on Shift+Enter; soft
             // keyboards have no reliable Shift+Enter, so the keyboard
             // action key inserts the newline and the send button is the
