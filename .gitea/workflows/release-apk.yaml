@@ -1,5 +1,9 @@
 # APK release pipeline — builds the signed release APK and publishes it
-# as a Gitea Release attachment (the only distribution channel).
+# as a Gitea Release attachment (the primary distribution channel), then
+# mirrors the artifact to the public GitHub shadow repo
+# (ChanceFlow/dsh-flutter-client, docs + releases only). The GitHub release
+# body is sanitized by contract: no Gitea URLs, no PR links, no DSH_BASE_URL
+# (its internal LAN default would leak the LAN address), no commit field.
 #
 # Naming standard (industry / SemVer 2.0):
 #   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
@@ -239,3 +243,64 @@ jobs:
               -F "attachment=@$f" >/dev/null
           done
           echo "release $TAG created (id $REL_ID) with $APK"
+
+      - name: Publish GitHub shadow Release (mirror)
+        env:
+          GH_PUB_TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
+        run: |
+          set -u
+          if [[ -z "$GH_PUB_TOKEN" ]]; then
+            echo "::warning::GH_PUBLISH_TOKEN not set - skipping GitHub shadow release"
+            exit 0
+          fi
+          APK="${{ steps.stage.outputs.apk }}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          CHANNEL="${{ steps.ver.outputs.channel }}"
+          API="https://api.github.com/repos/ChanceFlow/dsh-flutter-client"
+          AUTH="Authorization: token $GH_PUB_TOKEN"
+
+          if [[ "$CHANNEL" == "release" ]]; then
+            TAG="$GITHUB_REF_NAME"
+            PRE=false
+          else
+            TAG="dev"
+            PRE=true
+            OLD_ID=$(curl -sf "$API/releases/tags/dev" -H "$AUTH" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' || true)
+            [[ -n "${OLD_ID:-}" ]] && curl -sf -X DELETE "$API/releases/$OLD_ID" -H "$AUTH" >/dev/null || true
+            curl -sf -X DELETE "$API/git/refs/tags/dev" -H "$AUTH" >/dev/null || true
+          fi
+
+          # Sanitized body (see header comment): version metadata + hash only.
+          python3 - "$TAG" "dsh-flutter-client $VERSION" "$PRE" "$VERSION" "$GITHUB_RUN_NUMBER" \
+            "$APK" "${{ steps.stage.outputs.sha256 }}" > /tmp/gh-release.json <<'PY'
+          import json, sys
+          tag, name, pre, ver, run, apk, sha = sys.argv[1:8]
+          meta = (
+              f"- versionName: `{ver}`\n"
+              f"- versionCode: `{run}`\n"
+              f"- sha256: `{sha}`\n"
+          )
+          intro = (
+              "Rolling dev channel - always the latest `master` build; "
+              "this artifact supersedes any earlier dev build.\n"
+              if pre == "true" else
+              "Stable release - changelog lives on the internal release "
+              "channel; this mirror carries the artifact only.\n"
+          )
+          print(json.dumps({"tag_name": tag, "name": name, "body": intro + meta, "prerelease": pre == "true"}))
+          PY
+
+          REL_ID=$(curl -sf -X POST "$API/releases" -H "$AUTH" \
+            -H 'Content-Type: application/json' -d @/tmp/gh-release.json \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])') || {
+              echo "::warning::GitHub shadow release creation failed - Gitea release is already published"
+              exit 0
+            }
+          for f in "$APK" "$APK.sha256"; do
+            NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$f")
+            curl -sf -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
+              --data-binary "@$f" "$API/releases/$REL_ID/assets?name=$NAME" >/dev/null \
+              || echo "::warning::GitHub asset upload failed for $f"
+          done
+          echo "github shadow release $TAG created (id $REL_ID)"
