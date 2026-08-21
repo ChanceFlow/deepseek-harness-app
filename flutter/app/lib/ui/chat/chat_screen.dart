@@ -4209,9 +4209,10 @@ class _CommandRow extends StatelessWidget {
 
 /// Primary control, commercial-app form: a 34px circle that stays NEUTRAL
 /// (selector fill, tertiary glyph) while the draft is empty — no idle
-/// blue — and takes the info fill with a static-white glyph only when
-/// actionable: the up arrow while sendable, the stop square while the
-/// turn runs. The 40px tap target around the 34px visual keeps the
+/// blue — and takes the primaryContainer fill with its onPrimaryContainer
+/// glyph only when actionable: the up arrow while sendable, the stop
+/// square while the turn runs. Ink rides the M3 contrast pair, never a
+/// hardcoded white. The 40px tap target around the 34px visual keeps the
 /// primary gesture thumb-sized on touch screens.
 class _PrimarySendButton extends StatelessWidget {
   const _PrimarySendButton({
@@ -4236,18 +4237,19 @@ class _PrimarySendButton extends StatelessWidget {
         ? onStop != null
         : enabled && !sending && onSend != null;
     final fill = active ? scheme.primaryContainer : scheme.surfaceContainerLow;
-    final glyph = active ? Colors.white : scheme.onSurfaceVariant;
+    final glyph = active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
     return Tooltip(
       message: running
           ? l10n.stopTooltip
           : sending
           ? l10n.sending
           : l10n.send,
-      // Native primary submit: an M3 small FAB. Brand fill when
-      // actionable; the neutral selector fill with a tertiary glyph when
-      // idle — the composer's "no idle blue" rule carried into the
-      // component. heroTag is disabled so sibling send/stop FABs do not
-      // fight over the shared hero.
+      // Native primary submit: an M3 small FAB. primaryContainer fill
+      // with its onPrimaryContainer glyph when actionable; the neutral
+      // selector fill with a tertiary glyph when idle — the composer's
+      // "no idle blue" rule carried into the component. heroTag is
+      // disabled so sibling send/stop FABs do not fight over the shared
+      // hero.
       child: FloatingActionButton.small(
         heroTag: null,
         shape: const CircleBorder(),

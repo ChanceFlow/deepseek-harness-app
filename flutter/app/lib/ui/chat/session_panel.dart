@@ -364,7 +364,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onPressed: _showNewSessionDialog,
           style: OutlinedButton.styleFrom(
             backgroundColor: scheme.primary,
-            foregroundColor: scheme.onSurfaceVariant,
+            foregroundColor: scheme.onPrimary,
             side: BorderSide(color: scheme.outlineVariant),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
