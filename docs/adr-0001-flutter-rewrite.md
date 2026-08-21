@@ -2,7 +2,7 @@
 
 - 状态：Accepted
 - 日期：2026-08-18（迁移 Round 1，分支 `flutter-rewrite`）
-- 决策依据：[docs/flutter-migration-analysis.md](flutter-migration-analysis.md)
+- 决策依据：仓库改版前的迁移分析（未随本仓库公开）
 
 ## 背景
 

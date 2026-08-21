@@ -69,9 +69,7 @@
   "homes": [
    "AGENTS.md",
    "README.md",
-   "scripts/verify_all.py",
-   "docker/build-image.sh",
-   ".agents/skills/dsh-close-out/SKILL.md"
+   "scripts/verify_all.py"
   ]
  },
  "theme": {

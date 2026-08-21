@@ -55,7 +55,7 @@ A local `verify_all.py` with no group is for the rare structural change that
 touches every surface at once; everywhere else CI is the proof.
 
 A rendered screenshot is not on this table. The design shots
-([`.agents/skills/dsh-design-review/`](../.agents/skills/dsh-design-review/SKILL.md))
+([scripts/render_design.py](../scripts/render_design.py))
 are how a human agrees with a look, and they run outside every suite;
 whatever the change promises still needs a widget test that fails without
 it.
