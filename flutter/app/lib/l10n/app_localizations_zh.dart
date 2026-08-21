@@ -1263,4 +1263,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => '关闭通知';
+
+  @override
+  String get jumpToBottomTooltip => '跳到底部';
 }

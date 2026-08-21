@@ -1296,4 +1296,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => 'Dismiss notification';
+
+  @override
+  String get jumpToBottomTooltip => 'Jump to bottom';
 }

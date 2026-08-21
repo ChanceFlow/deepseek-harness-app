@@ -2031,6 +2031,182 @@ void main() {
     expect(position().pixels, position().maxScrollExtent);
   });
 
+  testWidgets('jump-to-bottom FAB appears away from the bottom and jumps back', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    String tail(int lines) => List<String>.generate(
+      lines,
+      (i) => 'jump line $i keeps growing',
+    ).join('\n');
+    ChatUiState stateFor(String assistantText) => ChatUiState(
+      sessions: const [
+        SessionSummary(id: 's1', title: 'Alpha', blank: false),
+      ],
+      selectedSessionId: 's1',
+      timeline: [
+        const TimelineTurnBoundary(1),
+        const TimelineMessage(
+          ChatMessage(
+            id: 'um1',
+            sessionId: 's1',
+            role: MessageRole.user,
+            text: 'go',
+          ),
+        ),
+        TimelineMessage(
+          ChatMessage(
+            id: 'm2',
+            sessionId: 's1',
+            role: MessageRole.assistant,
+            text: assistantText,
+            streaming: false,
+          ),
+        ),
+      ],
+    );
+    Widget host(ChatUiState ui) => ProviderScope(
+      child: l10nApp(
+        home: ChatScreen(uiState: ui, onAction: (_) {}),
+      ),
+    );
+
+    Finder timelineList() => find.descendant(
+      of: find.byType(ChatPanel),
+      matching: find.byType(ListView),
+    );
+    ScrollPosition position() => tester
+        .state<ScrollableState>(
+          find
+              .descendant(of: timelineList(), matching: find.byType(Scrollable))
+              .first,
+        )
+        .position;
+    Finder fab() => find.byTooltip('Jump to bottom');
+
+    // First mount lands at the bottom: the FAB stays folded.
+    await tester.pumpWidget(host(stateFor(tail(80))));
+    await tester.pumpAndSettle();
+    expect(position().pixels, position().maxScrollExtent);
+    expect(fab(), findsNothing);
+
+    // The reader leaves the bottom: the FAB appears.
+    await tester.drag(timelineList(), const Offset(0, 400));
+    await tester.pumpAndSettle();
+    expect(position().maxScrollExtent - position().pixels, greaterThan(24));
+    expect(fab(), findsOneWidget);
+    // The FAB sits at the timeline's bottom-right corner.
+    expect(
+      tester.getBottomRight(fab()).dx,
+      lessThan(tester.getBottomRight(timelineList()).dx),
+    );
+
+    // Tap: glide back to the bottom and the FAB folds again.
+    await tester.tap(fab());
+    await tester.pumpAndSettle();
+    expect(position().pixels, position().maxScrollExtent);
+    expect(fab(), findsNothing);
+
+    // Scrolling within the follow threshold of the bottom keeps it hidden.
+    await tester.drag(timelineList(), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(fab(), findsOneWidget);
+    await tester.drag(timelineList(), const Offset(0, -280));
+    await tester.pumpAndSettle();
+    // 300 - 280 = 20px from the bottom: inside the 24px threshold.
+    expect(position().maxScrollExtent - position().pixels, lessThanOrEqualTo(24));
+    expect(fab(), findsNothing);
+  });
+
+  testWidgets('jump-to-bottom FAB stays hidden on a short timeline', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pump(
+      tester,
+      _state(
+        sessions: const [SessionSummary(id: 's1', title: 'Alpha')],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineTurnBoundary(1),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'go',
+            ),
+          ),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm2',
+              sessionId: 's1',
+              role: MessageRole.assistant,
+              text: 'short answer',
+            ),
+          ),
+        ],
+      ),
+      <ChatAction>[],
+    );
+    await tester.pumpAndSettle();
+    // Content fits the viewport: nothing to jump to, the FAB never shows
+    // even after the reader tries to scroll.
+    expect(find.byTooltip('Jump to bottom'), findsNothing);
+    await tester.drag(
+      find.descendant(of: find.byType(ChatPanel), matching: find.byType(ListView)),
+      const Offset(0, 300),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Jump to bottom'), findsNothing);
+  });
+
+  testWidgets('jump-to-bottom FAB does not appear in outline mode', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    final items = <TimelineItem>[
+      for (var turn = 1; turn <= 8; turn++) ...[
+        TimelineTurnBoundary(turn),
+        TimelineMessage(
+          ChatMessage(
+            id: 'm$turn',
+            sessionId: 's1',
+            role: MessageRole.user,
+            text: 'prompt $turn',
+          ),
+        ),
+      ],
+    ];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [SessionSummary(id: 's1', title: 'Alpha')],
+        selectedSessionId: 's1',
+        timeline: items,
+      ),
+      actions,
+    );
+    expect(find.byTooltip('Jump to bottom'), findsNothing);
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pumpAndSettle();
+    // The outline is its own skim surface: no jump-to-bottom affordance.
+    expect(find.byTooltip('Jump to bottom'), findsNothing);
+    // Closing the outline remounts the list at the top: the FAB offers the
+    // one-click way back to the newest content.
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Jump to bottom'), findsOneWidget);
+  });
+
   group('compact drawer layout', () {
     Future<void> pumpCompact(
       WidgetTester tester,

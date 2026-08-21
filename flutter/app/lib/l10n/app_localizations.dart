@@ -2268,6 +2268,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss notification'**
   String get notificationDismissTooltip;
+
+  /// Tooltip for the floating button that scrolls the timeline to its newest message.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to bottom'**
+  String get jumpToBottomTooltip;
 }
 
 class _AppLocalizationsDelegate

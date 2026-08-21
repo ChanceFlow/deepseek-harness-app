@@ -58,7 +58,8 @@ import 'todo_panel.dart';
 import 'tool_row_model.dart';
 import '../theme/deepsuite_extension.dart'
     show DeepSuiteColors, dsOf, kDsShadowLv2, kDsShadowLv3;
-import '../theme/deepsuite_tokens.dart' show kDsDuration, kFontFamilyMonospace;
+import '../theme/deepsuite_tokens.dart'
+    show kDsDuration, kDsDurationSlow, kFontFamilyMonospace;
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
@@ -661,6 +662,9 @@ class _ChatPanelState extends State<ChatPanel> {
   String? _lastFollowSignature;
   String? _lastTrailingUserKey;
 
+  /// The reader sits away from the bottom and the jump-to-bottom FAB shows.
+  bool _showJumpToBottom = false;
+
   /// Session-scoped persistence view of the selected session.
   ChatSessionLocalState? _sessionState;
 
@@ -708,10 +712,21 @@ class _ChatPanelState extends State<ChatPanel> {
       _readOffsetSave = null;
       _collapsedTurns = const <int>{};
       _pinned = true;
+      _showJumpToBottom = false;
       _lastFollowSignature = null;
       _lastTrailingUserKey = null;
       _bindSession();
       _scheduleFollow();
+      return;
+    }
+    // The outline is its own skim surface; the jump button's visibility
+    // must not linger over it, and the list that remounts when outline
+    // closes starts at the top (nothing pins it yet). Re-derive after the
+    // frame so whichever body is live reports its true position.
+    if (oldWidget.outline != widget.outline) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncJumpToBottomButton();
+      });
       return;
     }
     if (widget.outline) return;
@@ -778,6 +793,51 @@ class _ChatPanelState extends State<ChatPanel> {
     if (!position.hasContentDimensions) return;
     _pinned = position.maxScrollExtent - position.pixels <= kFollowThreshold;
     _scheduleReadOffsetSave(position.pixels);
+    _syncJumpToBottomButton();
+  }
+
+  /// The jump-to-bottom FAB is visible only when the reader is away from
+  /// the bottom (beyond the follow threshold) of a scrollable timeline.
+  /// Driven scrolls never re-evaluate this — the owning jump/follow paths
+  /// pin first and the listener is depth-guarded, so they sync after the
+  /// glide instead (the FAB must not hold stale visibility mid-glide).
+  void _syncJumpToBottomButton() {
+    var visible = false;
+    if (_timelineScroll.hasClients) {
+      final position = _timelineScroll.position;
+      if (position.hasContentDimensions) {
+        visible = position.maxScrollExtent > 0 &&
+            position.maxScrollExtent - position.pixels > kFollowThreshold;
+      }
+    }
+    if (visible == _showJumpToBottom) return;
+    setState(() => _showJumpToBottom = visible);
+  }
+
+  /// One-click glide to the newest timeline content. The reader's own
+  /// scroll listener is depth-guarded so the driven glide neither unpins
+  /// nor records a mid-glide reading offset; the destination is pinned,
+  /// which also folds the button away once the glide settles.
+  Future<void> _jumpToBottom() async {
+    if (!_timelineScroll.hasClients) return;
+    final position = _timelineScroll.position;
+    if (!position.hasContentDimensions) return;
+    final target = position.maxScrollExtent;
+    if (target <= 0) return;
+    _followDepth++;
+    _pinned = true;
+    try {
+      await _timelineScroll.animateTo(
+        target,
+        duration: kDsDurationSlow,
+        curve: Curves.easeOutCubic,
+      );
+    } finally {
+      if (mounted) {
+        _followDepth--;
+        _syncJumpToBottomButton();
+      }
+    }
   }
 
   /// Bind the selected session's persistence view, restore its collapsed
@@ -920,6 +980,9 @@ class _ChatPanelState extends State<ChatPanel> {
       }
     } finally {
       _followDepth--;
+      // Driven glides land at (or restore to) a settled position; fold or
+      // raise the jump button to match it.
+      if (mounted) _syncJumpToBottomButton();
     }
   }
 
@@ -1037,6 +1100,30 @@ class _ChatPanelState extends State<ChatPanel> {
           );
   }
 
+  /// The jump-to-bottom affordance: a native Material small FAB in the
+  /// neutral selector fill (the composer's idle circle convention), so it
+  /// never competes with the brand-filled send/stop seat. heroTag is off
+  /// so sibling FABs cannot fight over the shared hero on route changes.
+  Widget _jumpToBottomFab() {
+    final ds = dsOf(context);
+    return Tooltip(
+      message: AppLocalizations.of(context)!.jumpToBottomTooltip,
+      child: FloatingActionButton.small(
+        heroTag: null,
+        shape: const CircleBorder(),
+        backgroundColor: ds.specificSelector,
+        foregroundColor: ds.labelSecondary,
+        elevation: 2,
+        highlightElevation: 3,
+        hoverElevation: 3,
+        focusElevation: 3,
+        disabledElevation: 0,
+        onPressed: _jumpToBottom,
+        child: const Icon(Icons.arrow_downward, size: 22),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -1093,7 +1180,30 @@ class _ChatPanelState extends State<ChatPanel> {
                 child: Text(l10n.expandAll),
               ),
             ),
-          Expanded(child: _timelineBody(uiState, selectedSession)),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(child: _timelineBody(uiState, selectedSession)),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: AnimatedSwitcher(
+                    duration: kDsDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: animation,
+                        child: child,
+                      ),
+                    ),
+                    child: _showJumpToBottom ? _jumpToBottomFab() : const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ),
+          ),
           // Web input-dock order 0: the plan strip before the goal and
           // queue entries.
           TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
