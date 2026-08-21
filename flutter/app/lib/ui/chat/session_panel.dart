@@ -348,35 +348,21 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     );
   }
 
-  /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label —
-  /// now a native [OutlinedButton.icon] carrying the same elevated-fill,
-  /// l2-border, r12-shape treatment on the M3 button chrome. The sidebar
-  /// keeps it above the browsing region (web sidebar order); workspace
-  /// management itself lives in the Workspaces tab.
+  /// The sidebar's primary action, above the browsing region (web sidebar
+  /// order); workspace management itself lives in the Workspaces tab. A
+  /// stock [FilledButton.icon] carries it: the panel's one filled seat, in
+  /// the framework's own height and shape rather than a bordered slab.
   Widget _buildNewSessionButton(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: SizedBox(
         width: double.infinity,
-        height: 38,
-        child: OutlinedButton.icon(
+        child: FilledButton.icon(
           onPressed: _showNewSessionDialog,
-          style: OutlinedButton.styleFrom(
-            backgroundColor: scheme.primary,
-            foregroundColor: scheme.onPrimary,
-            side: BorderSide(color: scheme.outlineVariant),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: EdgeInsets.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: Theme.of(context)
-                .textTheme
-                .labelMedium
-                ?.copyWith(fontWeight: FontWeight.w500),
-          ),
-          icon: const Icon(Icons.chat_bubble_outline, size: 14),
+          // Not a bare plus: the composer's ➕ already owns that glyph on
+          // the same screen, and these are different verbs.
+          icon: const Icon(Icons.add_comment_outlined, size: 18),
           label: Text(l10n.newSession),
         ),
       ),
@@ -789,9 +775,9 @@ class _SectionHeader extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
+      padding: const EdgeInsets.fromLTRB(12, 0, 4, 2),
       child: SizedBox(
-        height: 44,
+        height: 36,
         child: Row(
           children: [
             Expanded(
@@ -799,8 +785,12 @@ class _SectionHeader extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                // A list section label, not a heading: small, tracked, and
+                // quiet enough that the session titles stay the content.
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  letterSpacing: 0.4,
+                ),
               ),
             ),
             // Web WorkspaceBrowser `.iconButton`: the section's search
@@ -1042,7 +1032,11 @@ class _GroupSectionState extends State<_GroupSection> {
       initiallyExpanded: expanded,
       dense: true,
       visualDensity: VisualDensity.compact,
-      minTileHeight: 44,
+      minTileHeight: 40,
+      // The stock tile rules its expanded self off top and bottom; the
+      // panel separates groups with space, not with two full-width lines.
+      shape: const Border(),
+      collapsedShape: const Border(),
       // The current group never folds: its header is inert (no tap), the
       // native tile stays expanded.
       enabled: !widget.containsCurrent,
@@ -1062,7 +1056,7 @@ class _GroupSectionState extends State<_GroupSection> {
               group.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall,
+              style: theme.textTheme.labelLarge?.copyWith(height: 1.2),
             ),
           ),
           const SizedBox(width: 6),
@@ -1070,8 +1064,7 @@ class _GroupSectionState extends State<_GroupSection> {
             l10n.sessionCount(sessions.length),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontSize: 12,
+            style: theme.textTheme.labelSmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
           ),

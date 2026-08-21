@@ -305,6 +305,34 @@ void main() {
     expect(image.name, 'shot.png');
   });
 
+  test('messages carry their log position as the fork anchor', () {
+    final history = <JsonMap>[
+      event(11, 'user/message', <String, Object?>{
+        'id': 'user-1',
+        'source': <String, Object?>{'kind': 'user'},
+        'content': <Object?>[textBlock('ask')],
+      }),
+      event(12, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'assistant-1',
+          'content': <Object?>[textBlock('answer')],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final seqs = reducer
+        .snapshot()
+        .whereType<TimelineMessage>()
+        .map((item) => item.value.seq)
+        .toList();
+    expect(seqs, <int>[11, 12]);
+  });
+
   test('turn start events become boundaries and dedupe per turn', () {
     final history = <JsonMap>[
       event(1, 'turn/start', <String, Object?>{'turn': 1}),

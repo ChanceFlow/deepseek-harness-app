@@ -237,6 +237,7 @@ class TimelineReducer {
           text: _extractText(data),
           createdAtEpochMs: wireLong(event, 'time'),
           images: _extractImages(data),
+          seq: _lastSeq,
         ),
       ),
     );
@@ -310,6 +311,7 @@ class TimelineReducer {
         reasoning: _extractReasoning(message),
         createdAtEpochMs: wireLong(event, 'time'),
         images: _extractImages(message),
+        seq: _lastSeq,
       ),
     );
 
@@ -363,6 +365,7 @@ class TimelineReducer {
         streaming: true,
         createdAtEpochMs: value.createdAtEpochMs,
         images: value.images,
+        seq: value.seq,
       ),
     );
   }
@@ -382,6 +385,7 @@ class TimelineReducer {
           text: '',
           streaming: true,
           createdAtEpochMs: wireLong(event, 'time'),
+          seq: _lastSeq,
         ),
       ),
     );
@@ -402,6 +406,7 @@ class TimelineReducer {
             streaming: false,
             createdAtEpochMs: value.createdAtEpochMs,
             images: value.images,
+            seq: value.seq,
           ),
         );
       }

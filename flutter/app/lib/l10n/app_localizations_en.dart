@@ -223,6 +223,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copyTooltip => 'Copy';
 
   @override
+  String get codeStreamingLabel => 'streaming';
+
+  @override
+  String get forkFromHere => 'Fork from here';
+
+  @override
   String get copiedTooltip => 'Copied';
 
   @override

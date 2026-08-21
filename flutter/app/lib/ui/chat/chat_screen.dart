@@ -7,7 +7,6 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
@@ -24,6 +23,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
@@ -139,9 +139,8 @@ class ChatRoute extends ConsumerWidget {
             },
             // Web SessionNodeItem session verbs (sidebar long-press):
             // dispatch on whichever backend owns the row.
-            dispatchSessionAction: (backendId, action) => ref
-                .read(chatControllerProvider(backendId))
-                .onAction(action),
+            dispatchSessionAction: (backendId, action) =>
+                ref.read(chatControllerProvider(backendId)).onAction(action),
           ),
           error: (error, _) =>
               Scaffold(body: Center(child: Text(error.toString()))),
@@ -309,19 +308,13 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Web SessionNodeItem "Fork session" (sidebar long-press verb):
   /// commits directly on the owning backend's controller.
   void _dispatchForkSession(String backendId, String sessionId) {
-    widget.dispatchSessionAction?.call(
-      backendId,
-      ForkSession(sessionId),
-    );
+    widget.dispatchSessionAction?.call(backendId, ForkSession(sessionId));
   }
 
   /// Web SessionNodeItem "Archive session" (sidebar long-press verb):
   /// commits directly (reference archive is non-destructive).
   void _dispatchArchiveSession(String backendId, String sessionId) {
-    widget.dispatchSessionAction?.call(
-      backendId,
-      ArchiveSession(sessionId),
-    );
+    widget.dispatchSessionAction?.call(backendId, ArchiveSession(sessionId));
   }
 
   PreferredSizeWidget _chatAppBar(
@@ -336,8 +329,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final session = uiState.sessions
         .where((item) => item.id == sessionId)
         .firstOrNull;
-    final title = session?.displayTitle ?? l10n.appTitle;
-    final contextLine = sessionContextLine(session, uiState.models);
+    // A blank session has no identity to report, and its workspace is
+    // already the hero's subject: naming it twice on one screen is the
+    // duplication the bar was redesigned to end.
+    final title = session == null || session.blank
+        ? l10n.appTitle
+        : session.displayTitle;
+    final contextLine = session != null && session.blank
+        ? null
+        : sessionContextLine(session, uiState.models);
     return AppBar(
       // Web's third preset surface: the read-only label naming the
       // preset this session runs, beside the title.
@@ -462,6 +462,10 @@ class _ChatScreenState extends State<ChatScreen> {
           appBar: _chatAppBar(context, uiState, onAction, compact: true),
           drawer: Drawer(
             width: 320,
+            // Chrome tone: the drawer is the same frame family as the bar
+            // and the dock, so it takes their surface rather than the
+            // stock drawer's own step.
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
             child: SafeArea(
               child: SessionPanel(
                 inDrawer: true,
@@ -900,7 +904,8 @@ class _ChatPanelState extends State<ChatPanel> {
     if (_timelineScroll.hasClients) {
       final position = _timelineScroll.position;
       if (position.hasContentDimensions) {
-        visible = position.maxScrollExtent > 0 &&
+        visible =
+            position.maxScrollExtent > 0 &&
             position.maxScrollExtent - position.pixels > kFollowThreshold;
       }
     }
@@ -1178,9 +1183,12 @@ class _ChatPanelState extends State<ChatPanel> {
         : ListView.separated(
             controller: _timelineScroll,
             itemCount: _timelineItems.length,
-            // Web ChatView: one 16px rhythm everywhere through the column
-            // gap.
-            separatorBuilder: (_, _) => const SizedBox(height: 16),
+            separatorBuilder: (_, index) => SizedBox(
+              height: _gapAfter(
+                _timelineItems[index],
+                _timelineItems[index + 1],
+              ),
+            ),
             itemBuilder: (context, index) {
               final item = _timelineItems[index];
               return TimelineRow(
@@ -1192,6 +1200,20 @@ class _ChatPanelState extends State<ChatPanel> {
               );
             },
           );
+  }
+
+  /// Vertical rhythm between two transcript rows. A run of steps is one
+  /// paragraph and closes up; a message opens a new one. Equal gaps
+  /// everywhere read as a list of unrelated lines, which is what the
+  /// transcript stopped looking like a conversation.
+  static double _gapAfter(TimelineItem above, TimelineItem below) {
+    const double step = 6;
+    const double block = 16;
+    const double turn = 24;
+    if (below is TimelineTurnBoundary) return turn;
+    final bool aboveIsStep = above is! TimelineMessage;
+    final bool belowIsStep = below is! TimelineMessage;
+    return aboveIsStep && belowIsStep ? step : block;
   }
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
@@ -1229,7 +1251,10 @@ class _ChatPanelState extends State<ChatPanel> {
     final isSessionRunning = selectedSession?.running ?? false;
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      // No inset at the top: the transcript runs to the bar and slides
+      // under it. A gap there is a blank strip that also clips the first
+      // row mid-line, which reads as a rendering fault.
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
         children: [
           if (uiState.errorMessage case final error?) ...[
@@ -1248,24 +1273,20 @@ class _ChatPanelState extends State<ChatPanel> {
           for (final rejection in uiState.imageRejections)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                switch (rejection) {
-                  UnsupportedImageType(:final name, :final mediaType) =>
-                    l10n.imageRejectionUnsupported(
-                      name ?? l10n.attachmentName,
-                      mediaType,
-                    ),
-                  ImageTooLarge(:final name, :final maxBytes) =>
-                    l10n.imageRejectionTooLarge(
-                      name ?? l10n.attachmentName,
-                      maxBytes,
-                    ),
-                  NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
-                },
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+              child: Text(switch (rejection) {
+                UnsupportedImageType(:final name, :final mediaType) =>
+                  l10n.imageRejectionUnsupported(
+                    name ?? l10n.attachmentName,
+                    mediaType,
+                  ),
+                ImageTooLarge(:final name, :final maxBytes) =>
+                  l10n.imageRejectionTooLarge(
+                    name ?? l10n.attachmentName,
+                    maxBytes,
+                  ),
+                NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
+              }, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
-          const SizedBox(height: 4),
           if (widget.outline && _collapsedTurns.isNotEmpty)
             Align(
               alignment: Alignment.centerLeft,
@@ -1287,81 +1308,120 @@ class _ChatPanelState extends State<ChatPanel> {
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) => FadeTransition(
                       opacity: animation,
-                      child: ScaleTransition(
-                        scale: animation,
-                        child: child,
-                      ),
+                      child: ScaleTransition(scale: animation, child: child),
                     ),
-                    child: _showJumpToBottom ? _jumpToBottomFab() : const SizedBox.shrink(),
+                    child: _showJumpToBottom
+                        ? _jumpToBottomFab()
+                        : const SizedBox.shrink(),
                   ),
                 ),
               ],
             ),
           ),
+          // The session's counters are the transcript's footer, not dock
+          // chrome: they caption the conversation above the input surface
+          // rather than wedge between two of its strips.
+          if (_pendingApproval == null) StatsLine(stats: uiState.sessionStats),
           // Web input-dock order 0: the plan strip before the goal and
           // queue entries. While an approval is pending the ApprovalPanel
-          // takes the composer seat, so the todo/goal/stats chrome stands
-          // down — the decision moment keeps the transcript room instead of
-          // stacking chrome above it.
-          if (_pendingApproval == null) ...[
-            TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-            GoalBarStrip(
-              goal: uiState.goal,
-              onAction: widget.onAction,
-              onOpen: widget.onOpenGoal,
-            ),
-            StatsLine(stats: uiState.sessionStats),
-          ],
-          if (_pendingApproval case final approval?)
-            ApprovalPanel(request: approval, onAction: widget.onAction)
-          else if (uiState.timeline.whereType<TimelineQueue>().any(
-            (dock) => dock.items.isNotEmpty,
-          ))
-            QueueDock(
-              items: [
-                for (final dock in uiState.timeline.whereType<TimelineQueue>())
-                  ...dock.items,
-              ],
-              running: isSessionRunning,
-              onAction: widget.onAction,
-            ),
-          if (_pendingApproval == null)
-            Row(
-              children: [
-                Expanded(
-                  child: ComposerBar(
-                    onStop: selectedSessionId == null
-                        ? null
-                        : () => widget.onAction(const CancelTurnAction()),
-                    enabled: selectedSessionId != null && !uiState.isSending,
-                    isSending: uiState.isSending,
-                    running: isSessionRunning,
-                    plan: uiState.plan,
-                    models: widget.models,
-                    onSelectModel: widget.onSelectModel,
-                    onRefreshModels: widget.onRefreshModels,
-                    pendingImages: uiState.pendingImages,
-                    imageLimits: uiState.imageLimits,
-                    skills: uiState.skills,
-                    contextPressure: uiState.contextPressure,
-                    contextBreakdown: uiState.contextBreakdown,
-                    onAction: widget.onAction,
-                    sessionId: selectedSessionId,
-                    sessionState: _sessionState,
-                    permissions: uiState.permissions,
-                    // Web ComposerSubmissionPolicy: queue outside a
-                    // running turn; inside it the persisted busy-Enter
-                    // preference decides (the send button is the only
-                    // submit gesture on a soft keyboard).
-                    onSend: (text) => widget.onAction(
-                      SendPrompt(text, mode: _promptModeFor(isSessionRunning)),
-                    ),
-                  ),
+          // takes the composer seat, so the todo/goal chrome stands down —
+          // the decision moment keeps the transcript room instead of
+          // stacking chrome above it. Every strip shares one raised
+          // surface; the parts divide with hairlines, never with borders
+          // of their own.
+          _InputDock(
+            children: [
+              if (_pendingApproval == null) ...[
+                TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
+                GoalBarStrip(
+                  goal: uiState.goal,
+                  onAction: widget.onAction,
+                  onOpen: widget.onOpenGoal,
                 ),
               ],
-            ),
+              if (_pendingApproval case final approval?)
+                ApprovalPanel(request: approval, onAction: widget.onAction)
+              else if (uiState.timeline.whereType<TimelineQueue>().any(
+                (dock) => dock.items.isNotEmpty,
+              ))
+                QueueDock(
+                  items: [
+                    for (final dock
+                        in uiState.timeline.whereType<TimelineQueue>())
+                      ...dock.items,
+                  ],
+                  running: isSessionRunning,
+                  onAction: widget.onAction,
+                ),
+              if (_pendingApproval == null)
+                Row(
+                  children: [
+                    Expanded(
+                      child: ComposerBar(
+                        onStop: selectedSessionId == null
+                            ? null
+                            : () => widget.onAction(const CancelTurnAction()),
+                        enabled:
+                            selectedSessionId != null && !uiState.isSending,
+                        isSending: uiState.isSending,
+                        running: isSessionRunning,
+                        plan: uiState.plan,
+                        models: widget.models,
+                        onSelectModel: widget.onSelectModel,
+                        onRefreshModels: widget.onRefreshModels,
+                        pendingImages: uiState.pendingImages,
+                        imageLimits: uiState.imageLimits,
+                        skills: uiState.skills,
+                        contextPressure: uiState.contextPressure,
+                        contextBreakdown: uiState.contextBreakdown,
+                        onAction: widget.onAction,
+                        sessionId: selectedSessionId,
+                        sessionState: _sessionState,
+                        permissions: uiState.permissions,
+                        // Web ComposerSubmissionPolicy: queue outside a
+                        // running turn; inside it the persisted busy-Enter
+                        // preference decides (the send button is the only
+                        // submit gesture on a soft keyboard).
+                        onSend: (text) => widget.onAction(
+                          SendPrompt(
+                            text,
+                            mode: _promptModeFor(isSessionRunning),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// The input dock: one raised surface carrying every strip that sits
+/// between the transcript and the thumb — plan, goal, queue, composer.
+/// Each strip used to draw its own border and radius, which stacked three
+/// nested boxes at the screen's busiest edge; the surface belongs to the
+/// dock, and the strips divide with hairlines.
+class _InputDock extends StatelessWidget {
+  const _InputDock({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(kShapeDock),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: kM3ShadowElevation1,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
@@ -1473,6 +1533,11 @@ class TimelineRow extends StatelessWidget {
       TimelineMessage(:final value) => MessageRow(
         message: value,
         loadAttachment: loadAttachment,
+        onFork: value.seq == null
+            ? null
+            : () => onAction(
+                ForkSession(value.sessionId, atSeq: value.seq),
+              ),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction(:final shadowedCount) => CompactionRow(
@@ -1501,19 +1566,16 @@ class TimelineRow extends StatelessWidget {
       TimelineJobs() => const SizedBox.shrink(),
       TimelineError(:final message, :final code) => SizedBox(
         width: double.infinity,
-        child: Text(
-          switch (code) {
-            'error' => l10n.turnFailed(
-              message.isEmpty ? l10n.unknownModelFailure : message,
-            ),
-            'aborted' => l10n.turnStopped,
-            'interrupted' => l10n.turnInterrupted,
-            'blocked' => l10n.turnBlocked,
-            'max-tokens' => l10n.turnMaxTokens,
-            _ => message,
-          },
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
+        child: Text(switch (code) {
+          'error' => l10n.turnFailed(
+            message.isEmpty ? l10n.unknownModelFailure : message,
+          ),
+          'aborted' => l10n.turnStopped,
+          'interrupted' => l10n.turnInterrupted,
+          'blocked' => l10n.turnBlocked,
+          'max-tokens' => l10n.turnMaxTokens,
+          _ => message,
+        }, style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ),
     };
   }
@@ -1524,17 +1586,24 @@ class MessageRow extends StatelessWidget {
     super.key,
     required this.message,
     required this.loadAttachment,
+    this.onFork,
   });
 
   final ChatMessage message;
   final AttachmentLoader loadAttachment;
 
+  /// Cuts a new session at this message (host: the end of the turn that
+  /// contains it). Null while the message carries no logged position —
+  /// a locally composed row has nothing to anchor.
+  final VoidCallback? onFork;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     if (message.role == MessageRole.user) {
-      // figma User_Bubble 659:38813 — right-aligned r22 bubble, 82% cap.
+      // The reader's own words: a quiet container, right-aligned at 82%,
+      // with the tail corner tightened so the bubble points at its author.
+      // No action row rides under it — long-press copies, and the reply's
+      // row already dates the turn.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -1545,25 +1614,7 @@ class MessageRow extends StatelessWidget {
               child: FractionallySizedBox(
                 widthFactor: 0.82,
                 alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: message.text.isEmpty
-                      ? const SizedBox.shrink()
-                      : Text(
-                          message.text,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface,
-                            height: 24 / 16,
-                          ),
-                        ),
-                ),
+                child: _UserBubble(text: message.text, onFork: onFork),
               ),
             ),
           ),
@@ -1578,12 +1629,6 @@ class MessageRow extends StatelessWidget {
               width: 12,
               height: 12,
               child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else if (message.text.isNotEmpty)
-            MessageIconActions(
-              text: message.text,
-              timeEpochMs: message.createdAtEpochMs,
-              clockAtStart: true,
             ),
         ],
       );
@@ -1617,11 +1662,123 @@ class MessageRow extends StatelessWidget {
             text: message.text,
             timeEpochMs: message.createdAtEpochMs,
             clockAtStart: false,
+            onFork: onFork,
           ),
       ],
     );
   }
 }
+
+/// The reader's message container: a neutral fill (the transcript's one
+/// saturated seat is the send button), the shape scale's card radius, and
+/// a tightened tail corner. Long-press copies the text — the gesture every
+/// mobile transcript carries — so the bubble needs no chrome of its own.
+class _UserBubble extends StatefulWidget {
+  const _UserBubble({required this.text, this.onFork});
+
+  final String text;
+  final VoidCallback? onFork;
+
+  @override
+  State<_UserBubble> createState() => _UserBubbleState();
+}
+
+class _UserBubbleState extends State<_UserBubble> {
+  /// Where the finger went down: [InkWell] reports the position on tap-down
+  /// and the long press that follows carries none, so the menu anchors to
+  /// the remembered point.
+  Offset _pressed = Offset.zero;
+
+  String get text => widget.text;
+  VoidCallback? get onFork => widget.onFork;
+
+  Future<void> _copy(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(ClipboardData(text: text));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.copiedTooltip),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1400),
+      ),
+    );
+  }
+
+  /// The bubble's verbs, at the press point: copy always, fork when the
+  /// message has a logged position to cut at.
+  Future<void> _openMenu(BuildContext context, Offset globalPosition) async {
+    final l10n = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final verb = await showMenu<_BubbleVerb>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & Size.zero,
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem<_BubbleVerb>(
+          value: _BubbleVerb.copy,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.copy_outlined, size: 18),
+            title: Text(l10n.copyTooltip),
+          ),
+        ),
+        if (onFork != null)
+          PopupMenuItem<_BubbleVerb>(
+            value: _BubbleVerb.fork,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alt_route, size: 18),
+              title: Text(l10n.forkFromHere),
+            ),
+          ),
+      ],
+    );
+    if (!context.mounted) return;
+    switch (verb) {
+      case _BubbleVerb.copy:
+        await _copy(context);
+      case _BubbleVerb.fork:
+        onFork?.call();
+      case null:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: theme.colorScheme.secondaryContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(kShapeDock),
+          topRight: Radius.circular(kShapeDock),
+          bottomLeft: Radius.circular(kShapeDock),
+          bottomRight: Radius.circular(kShapeChip),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTapDown: (TapDownDetails details) =>
+            _pressed = details.globalPosition,
+        onLongPress: () => _openMenu(context, _pressed),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Text(text, style: theme.textTheme.bodyMedium),
+        ),
+      ),
+    );
+  }
+}
+
+enum _BubbleVerb { copy, fork }
 
 /// Streaming assistant tail: a 2×18 business-blue caret blinking at 1s,
 /// the flat-flow stand-in for the web turn-status line.
@@ -1766,9 +1923,7 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
     final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
     final name = ref.name;
-    final nameSuffix = name == null
-        ? ''
-        : l10n.imagePlaceholderSuffix(name);
+    final nameSuffix = name == null ? '' : l10n.imagePlaceholderSuffix(name);
     return Row(
       children: [
         Expanded(
@@ -1877,122 +2032,130 @@ class _ToolCallRowState extends State<ToolCallRow>
           : failed
           ? l10n.semanticsFailed
           : null,
-      child: ExpansionTile(
-        controller: _tileController,
-        // No payload means a non-interactive row: the native tile drops
-        // its ripple and trailing arrow the same way the web row is inert.
-        enabled: hasDetails,
-        showTrailingIcon: hasDetails,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 28,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        onExpansionChanged: (expanded) {
-          if (hasDetails) {
-            widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
-          }
-        },
-        title: ClipRect(
-          child: SweepHighlight(
-            controller: running && !MediaQuery.disableAnimationsOf(context)
-                ? _sweep
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                children: [
-                  // A product row may carry its own glyph (the todo
-                  // checklist); otherwise the state-colored variant
-                  // chrome.
-                  model.leading != null
-                      ? Icon(
-                          model.leading,
-                          size: 14,
-                          color: scheme.onSurfaceVariant,
-                        )
-                      : _leading(context, model.state),
-                  const SizedBox(width: 6),
-                  Text(
-                    model.title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  Container(
-                    width: 2,
-                    height: 2,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: scheme.outline,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      // Web ToolRow: the summary is args-derived; the
-                      // settled result text never reaches this slot.
-                      failed && model.errorSummary != null
-                          ? model.errorSummary!
-                          : model.summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: failed
-                            ? theme.colorScheme.error
-                            : scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  // The todo parallel-active count rides a
-                  // non-shrinking suffix beside the truncatable text.
-                  if (model.summarySuffix case final suffix?) ...[
-                    const SizedBox(width: 4),
+      // A step is one line of text, so the row is one line tall. The
+      // tile's stock trailing chevron is a 24px glyph that sets the row
+      // height on its own; shrinking the ambient icon size brings it back
+      // in scale with the 14px status glyph and keeps the rotation.
+      child: IconTheme.merge(
+        data: const IconThemeData(size: 18),
+        child: ExpansionTile(
+          controller: _tileController,
+          // No payload means a non-interactive row: the native tile drops
+          // its ripple and trailing arrow the same way the web row is inert.
+          enabled: hasDetails,
+          showTrailingIcon: hasDetails,
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          minTileHeight: 30,
+          // An expanded tile rules itself off top and bottom by default;
+          // the transcript's steps divide with space.
+          shape: const Border(),
+          collapsedShape: const Border(),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+          onExpansionChanged: (expanded) {
+            if (hasDetails) {
+              widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
+            }
+          },
+          title: ClipRect(
+            child: SweepHighlight(
+              controller: running && !MediaQuery.disableAnimationsOf(context)
+                  ? _sweep
+                  : null,
+              child: Padding(
+                padding: EdgeInsets.zero,
+                child: Row(
+                  children: [
+                    // A product row may carry its own glyph (the todo
+                    // checklist); otherwise the state-colored variant
+                    // chrome.
+                    model.leading != null
+                        ? Icon(
+                            model.leading,
+                            size: 14,
+                            color: scheme.onSurfaceVariant,
+                          )
+                        : _leading(context, model.state),
+                    const SizedBox(width: 8),
+                    // Type carries the semantics: the verb is a label, the
+                    // payload is data. Monospace on the payload also keeps
+                    // paths and patterns legible at a glance.
                     Text(
-                      suffix,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                      model.title,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        // Web ToolRow: the summary is args-derived; the
+                        // settled result text never reaches this slot.
+                        failed && model.errorSummary != null
+                            ? model.errorSummary!
+                            : model.summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          color: failed
+                              ? theme.colorScheme.error
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    // The todo parallel-active count rides a
+                    // non-shrinking suffix beside the truncatable text.
+                    if (model.summarySuffix case final suffix?) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        suffix,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
+          // The theme's childrenPadding (left 20) carries the web IN/OUT
+          // card's inset; the card keeps only its top gap.
+          children: [
+            if (hasDetails)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: scheme.outlineVariant),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (model.body case final body?)
+                      _ioSection(context, l10n.inputLabel, body, failed: false),
+                    if (model.body != null && model.output != null)
+                      Container(
+                        height: 1,
+                        color: scheme.outlineVariant,
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                    if (model.output case final output?)
+                      _ioSection(
+                        context,
+                        l10n.outputLabel,
+                        output,
+                        failed: failed,
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ),
-        // The theme's childrenPadding (left 20) carries the web IN/OUT
-        // card's inset; the card keeps only its top gap.
-        children: [
-          if (hasDetails)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 4),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: scheme.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (model.body case final body?)
-                    _ioSection(context, l10n.inputLabel, body, failed: false),
-                  if (model.body != null && model.output != null)
-                    Container(
-                      height: 1,
-                      color: scheme.outlineVariant,
-                      margin: const EdgeInsets.symmetric(horizontal: 14),
-                    ),
-                  if (model.output case final output?)
-                    _ioSection(
-                      context,
-                      l10n.outputLabel,
-                      output,
-                      failed: failed,
-                    ),
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -2024,7 +2187,9 @@ class _ToolCallRowState extends State<ToolCallRow>
             child: Text(
               payload,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: failed ? theme.colorScheme.error : scheme.onSurfaceVariant,
+                color: failed
+                    ? theme.colorScheme.error
+                    : scheme.onSurfaceVariant,
                 fontFamily: 'monospace',
               ),
             ),
@@ -2228,7 +2393,11 @@ class _QueueDockState extends State<QueueDock> {
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                     child: Row(
                       children: [
-                        Icon(Icons.queue, size: 14, color: scheme.onSurfaceVariant),
+                        Icon(
+                          Icons.queue,
+                          size: 14,
+                          color: scheme.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -2379,11 +2548,15 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                             hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: scheme.outlineVariant),
+                              borderSide: BorderSide(
+                                color: scheme.outlineVariant,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: scheme.outlineVariant),
+                              borderSide: BorderSide(
+                                color: scheme.outlineVariant,
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
@@ -2484,7 +2657,9 @@ class _QueueAction extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 28, height: 28),
       style: IconButton.styleFrom(
         foregroundColor: scheme.onSurfaceVariant,
-        disabledForegroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.45),
+        disabledForegroundColor: scheme.onSurfaceVariant.withValues(
+          alpha: 0.45,
+        ),
         hoverColor: scheme.surfaceContainerHigh,
       ),
     );
@@ -2604,9 +2779,8 @@ class _QuestionRowState extends State<QuestionRow> {
       }),
       onNext: _continue,
       onSkip: _skip,
-      onDismiss: () => widget.onAction(
-        DismissQuestionAction(requestId: request.requestId),
-      ),
+      onDismiss: () =>
+          widget.onAction(DismissQuestionAction(requestId: request.requestId)),
     );
   }
 
@@ -2644,7 +2818,9 @@ class _QuestionRowState extends State<QuestionRow> {
     final question = widget.request.questions[_index];
     final draft = _drafts[question.id] ?? const QuestionDraft();
     if (draft.selected.isEmpty && draft.customText.trim().isEmpty) {
-      setState(() => _error = AppLocalizations.of(context)!.questionErrorUnanswered);
+      setState(
+        () => _error = AppLocalizations.of(context)!.questionErrorUnanswered,
+      );
       return;
     }
     if (_index < widget.request.questions.length - 1) {
@@ -2728,7 +2904,7 @@ class _QuestionRowState extends State<QuestionRow> {
 /// intent, carries the plan as its detail, and stays a binary single choice
 /// (at most one option besides approve, never multi-select).
 ({String id, String question, String plan, String approve, String? decline})?
-    _planReviewOf(List<QuestionItem> questions) {
+_planReviewOf(List<QuestionItem> questions) {
   if (questions.length != 1) return null;
   final question = questions.single;
   final intent = question.intent;
@@ -2737,8 +2913,9 @@ class _QuestionRowState extends State<QuestionRow> {
   if (question.options.length > 2) return null;
   final approve = intent!.approve;
   if (approve == null || !question.options.contains(approve)) return null;
-  final decline =
-      question.options.where((option) => option != approve).firstOrNull;
+  final decline = question.options
+      .where((option) => option != approve)
+      .firstOrNull;
   return (
     id: question.id,
     question: question.question,
@@ -2812,10 +2989,7 @@ class _QuestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _QuestionCardHeader(
-            question: question,
-            onDismiss: onDismiss,
-          ),
+          _QuestionCardHeader(question: question, onDismiss: onDismiss),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
             child: Column(
@@ -2849,8 +3023,7 @@ class _QuestionCard extends StatelessWidget {
                               question: question,
                               option: option,
                               selected: draft.selected.contains(option),
-                              onChanged: () =>
-                                  onChoose(question.id, option),
+                              onChanged: () => onChoose(question.id, option),
                             ),
                         ],
                       ),
@@ -2890,10 +3063,7 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _QuestionCardHeader extends StatelessWidget {
-  const _QuestionCardHeader({
-    required this.question,
-    required this.onDismiss,
-  });
+  const _QuestionCardHeader({required this.question, required this.onDismiss});
 
   final QuestionItem question;
   final VoidCallback onDismiss;
@@ -3062,18 +3232,12 @@ class _QuestionCheckbox extends StatelessWidget {
           decoration: BoxDecoration(
             color: checked ? scheme.onSurface : Colors.transparent,
             border: Border.all(
-              color: checked
-                  ? scheme.onSurface
-                  : scheme.outlineVariant,
+              color: checked ? scheme.onSurface : scheme.outlineVariant,
             ),
             borderRadius: BorderRadius.circular(4),
           ),
           child: checked
-              ? Icon(
-                  Icons.check,
-                  size: 12,
-                  color: scheme.onSurface,
-                )
+              ? Icon(Icons.check, size: 12, color: scheme.onSurface)
               : null,
         ),
       ),
@@ -3123,9 +3287,7 @@ class _CustomAnswerRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final active = draft.customText.trim().isNotEmpty;
     final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(
-        offset: draft.customText.length,
-      );
+      ..selection = TextSelection.collapsed(offset: draft.customText.length);
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
@@ -3141,7 +3303,11 @@ class _CustomAnswerRow extends StatelessWidget {
             _QuestionCheckbox(checked: active)
           else
             _QuestionNumberChip(
-              child: Icon(Icons.edit_outlined, size: 14, color: scheme.onSurfaceVariant),
+              child: Icon(
+                Icons.edit_outlined,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -3164,8 +3330,9 @@ class _CustomAnswerRow extends StatelessWidget {
               ),
               onChanged: (text) => onDraftChange(
                 QuestionDraft(
-                  selected:
-                      question.multiSelect ? draft.selected : const <String>{},
+                  selected: question.multiSelect
+                      ? draft.selected
+                      : const <String>{},
                   customText: text,
                 ),
               ),
@@ -3195,9 +3362,7 @@ class _CustomAnswerField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(
-        offset: draft.customText.length,
-      );
+      ..selection = TextSelection.collapsed(offset: draft.customText.length);
     return TextField(
       controller: controller,
       minLines: 2,
@@ -3218,9 +3383,7 @@ class _CustomAnswerField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
       ),
       style: TextStyle(
@@ -3229,10 +3392,7 @@ class _CustomAnswerField extends StatelessWidget {
         height: 24 / 14,
       ),
       onChanged: (text) => onDraftChange(
-        QuestionDraft(
-          selected: const <String>{},
-          customText: text,
-        ),
+        QuestionDraft(selected: const <String>{}, customText: text),
       ),
     );
   }
@@ -3314,14 +3474,13 @@ class _QuestionCardFooter extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              OutlinedButton(
-                onPressed: onSkip,
-                child: Text(l10n.skip),
-              ),
+              OutlinedButton(onPressed: onSkip, child: Text(l10n.skip)),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: answered ? onNext : null,
-                child: Text(isLast ? l10n.questionSubmit : l10n.questionSubmitNext),
+                child: Text(
+                  isLast ? l10n.questionSubmit : l10n.questionSubmitNext,
+                ),
               ),
             ],
           ),
@@ -3378,7 +3537,9 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
               child: Icon(
                 widget.icon,
                 size: 16,
-                color: widget.enabled ? scheme.onSurfaceVariant : scheme.outline,
+                color: widget.enabled
+                    ? scheme.onSurfaceVariant
+                    : scheme.outline,
               ),
             ),
           ),
@@ -3405,7 +3566,8 @@ class _PlanReviewCard extends StatelessWidget {
     String plan,
     String approve,
     String? decline,
-  }) review;
+  })
+  review;
   final void Function(ChatAction) onAction;
 
   @override
@@ -3417,10 +3579,7 @@ class _PlanReviewCard extends StatelessWidget {
         AnswerQuestionAction(
           requestId: requestId,
           answers: [
-            QuestionAnswer(
-              questionId: review.id,
-              selectedOptions: [label],
-            ),
+            QuestionAnswer(questionId: review.id, selectedOptions: [label]),
           ],
         ),
       );
@@ -3475,9 +3634,8 @@ class _PlanReviewCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 TextButton(
-                  onPressed: () => onAction(
-                    DismissQuestionAction(requestId: requestId),
-                  ),
+                  onPressed: () =>
+                      onAction(DismissQuestionAction(requestId: requestId)),
                   style: TextButton.styleFrom(
                     foregroundColor: scheme.onSurfaceVariant,
                   ),
@@ -3680,18 +3838,15 @@ class _ComposerBarState extends State<ComposerBar> {
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
-    // figma Input 75:8208 — floating capsule card: textarea on top, action
-    // row below, primary actions bottom-right.
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: scheme.outlineVariant),
-        boxShadow: kM3ShadowElevation1,
-      ),
+    // Textarea on top, action row below, primary actions bottom-right.
+    // The surface underneath belongs to the dock: drawing a second card
+    // here is what made the input edge read as a box inside a box.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       child: Column(
+        // The control row spans the dock so its two clusters can sit at
+        // opposite edges; centered controls read as an accident.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
             controller: _draftController,
@@ -3764,13 +3919,10 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
-          // Mobile composer: a hairline rule separates the draft surface
-          // from the control row so the two affordance levels read
-          // distinctly on narrow phones.
-          Padding(
-            padding: const EdgeInsets.only(top: 6, bottom: 2),
-            child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
-          ),
+          // Space, not a rule, separates the draft from the control row:
+          // the dock already spends one hairline on the plan strip, and a
+          // second inside the same card reads as ruling for its own sake.
+          const SizedBox(height: 8),
           // Web InputBar controls regrouped for touch: input tools and
           // contextual seats form the left cluster, the occupancy ring
           // and primary control the right. Wrap drops the primary
@@ -3890,8 +4042,7 @@ class _ComposerBarState extends State<ComposerBar> {
       if (refused != null) {
         widget.onAction(
           CommandImageRefusal(
-            AppLocalizations.of(context)!
-                .commandImagesUnsupported(refused),
+            AppLocalizations.of(context)!.commandImagesUnsupported(refused),
           ),
         );
         return;
@@ -4073,14 +4224,11 @@ class _PlusButton extends StatelessWidget {
       tooltip: l10n.commandsTooltip,
       onPressed: enabled ? () => _open(context) : null,
       icon: const Icon(Icons.add, size: 22),
-      // Native tool control: a standard 40px M3 icon button on the
-      // selector fill, solid interactive fill on hover (the web `.add`
-      // family's visual kept on the component's surface).
+      // Native tool control: a standard 40px M3 icon button drawn straight
+      // on the dock surface, with the interactive fill kept for hover.
       style: IconButton.styleFrom(
-        backgroundColor: scheme.surfaceContainerLow,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        disabledBackgroundColor: scheme.surfaceContainerLow,
-        disabledForegroundColor: scheme.onSurfaceVariant,
+        foregroundColor: scheme.onSurfaceVariant,
+        disabledForegroundColor: scheme.outline,
         hoverColor: scheme.surfaceContainerHigh,
         shape: const CircleBorder(),
       ),
@@ -4299,8 +4447,10 @@ class _CommandRow extends StatelessWidget {
                     text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -4413,7 +4563,8 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
   TimelineTurnBoundary(:final turn) => 'turn:$turn',
   TimelineCompaction(:final id) => 'compaction:$id',
-  TimelineCommand(:final commandId, :final status) => 'command:$commandId:$status',
+  TimelineCommand(:final commandId, :final status) =>
+    'command:$commandId:$status',
   TimelineContextInjection(:final id) => 'context:$id',
   TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
   TimelineApprovalRequest(:final requestId) => 'approval:$requestId',

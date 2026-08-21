@@ -22,3 +22,6 @@ app/src/main/assets/server.properties
 # Python tooling (scripts/ gates)
 __pycache__/
 *.pyc
+
+# Design shots are renders to look at, republished every pass
+flutter/app/test/design/shots/

@@ -1,10 +1,11 @@
 /// Minimal markdown vocabulary for assistant/user message bodies.
 ///
-/// Scope mirrors the Android MVP slice: fenced code blocks, headings,
-/// bullet lists, block quotes, GFM pipe tables, and paragraphs with inline
-/// code, bold, italic, links, and GFM bare-URL autolinks. The parser is
-/// pure Dart so plain tests pin its behavior; the widget layer owns every
-/// style decision.
+/// Scope: fenced code blocks, headings, bullet and ordered lists, block
+/// quotes, GFM pipe tables, and paragraphs with inline code, bold, italic,
+/// links, and GFM bare-URL autolinks. A single newline inside a block is a
+/// soft wrap and folds away, so a body wrapped at 80 columns reflows to the
+/// phone's column width. The parser is pure Dart so plain tests pin its
+/// behavior; the widget layer owns every style decision.
 library;
 
 import 'dart:convert';
@@ -80,6 +81,43 @@ final class BulletListBlock extends MarkdownBlock {
   @override
   bool operator ==(Object other) =>
       other is BulletListBlock && _listEquals(other.items, items);
+
+  @override
+  int get hashCode => Object.hashAll(items);
+}
+
+/// One numbered row. [number] is the marker the source wrote, so a list
+/// that starts at 3 renders from 3; the renderer never renumbers.
+final class OrderedEntry {
+  const OrderedEntry({
+    required this.inlines,
+    required this.depth,
+    required this.number,
+  });
+
+  final List<MarkdownInline> inlines;
+  final int depth;
+  final int number;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OrderedEntry &&
+      other.depth == depth &&
+      other.number == number &&
+      _listEquals(other.inlines, inlines);
+
+  @override
+  int get hashCode => Object.hash(depth, number, Object.hashAll(inlines));
+}
+
+final class OrderedListBlock extends MarkdownBlock {
+  const OrderedListBlock({required this.items});
+
+  final List<OrderedEntry> items;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OrderedListBlock && _listEquals(other.items, items);
 
   @override
   int get hashCode => Object.hashAll(items);
@@ -203,6 +241,7 @@ abstract final class MarkdownParser {
 
   static final RegExp _fence = RegExp(r'^(`{3,})\s*([A-Za-z0-9_+-]*)\s*$');
   static final RegExp _bullet = RegExp(r'^(\s*)[*-] (\S.*)$');
+  static final RegExp _ordered = RegExp(r'^(\s*)(\d{1,9})[.)] (\S.*)$');
   static final RegExp _heading = RegExp(r'^(#{1,6}) (.*)$');
   static final RegExp _quote = RegExp(r'^>\s?(.*)$');
   static final RegExp _delimiterCell = RegExp(r'^:?-+:?$');
@@ -215,18 +254,46 @@ abstract final class MarkdownParser {
 
     var paragraph = <String>[];
     var bullets = <BulletEntry>[];
+    var ordered = <OrderedEntry>[];
+    // Raw source of the item currently open, so an indented continuation
+    // line folds into it before its inlines are parsed.
+    var itemLines = <String>[];
 
     void flushParagraph() {
       if (paragraph.isNotEmpty) {
-        blocks.add(ParagraphBlock(inlines: parseInlines(paragraph.join('\n'))));
+        blocks.add(ParagraphBlock(inlines: parseInlines(foldLines(paragraph))));
         paragraph = <String>[];
       }
     }
 
+    void closeItem() {
+      if (itemLines.isEmpty) return;
+      final inlines = parseInlines(foldLines(itemLines));
+      if (bullets.isNotEmpty) {
+        final open = bullets.removeLast();
+        bullets.add(BulletEntry(inlines: inlines, depth: open.depth));
+      } else if (ordered.isNotEmpty) {
+        final open = ordered.removeLast();
+        ordered.add(
+          OrderedEntry(
+            inlines: inlines,
+            depth: open.depth,
+            number: open.number,
+          ),
+        );
+      }
+      itemLines = <String>[];
+    }
+
     void flushBullets() {
+      closeItem();
       if (bullets.isNotEmpty) {
         blocks.add(BulletListBlock(items: List.of(bullets)));
         bullets = <BulletEntry>[];
+      }
+      if (ordered.isNotEmpty) {
+        blocks.add(OrderedListBlock(items: List.of(ordered)));
+        ordered = <OrderedEntry>[];
       }
     }
 
@@ -296,7 +363,7 @@ abstract final class MarkdownParser {
           quoted.add(nextQuote.group(1)!);
           index++;
         }
-        blocks.add(BlockQuoteBlock(inlines: parseInlines(quoted.join('\n'))));
+        blocks.add(BlockQuoteBlock(inlines: parseInlines(foldLines(quoted))));
         continue;
       }
 
@@ -317,26 +384,113 @@ abstract final class MarkdownParser {
       final bulletMatch = _bullet.firstMatch(line);
       if (bulletMatch != null) {
         flushParagraph();
+        if (ordered.isNotEmpty) flushBullets();
+        closeItem();
         final indent = ' '.allMatches(bulletMatch.group(1)!).length;
         bullets.add(
           BulletEntry(
-            inlines: parseInlines(bulletMatch.group(2)!),
+            inlines: const <MarkdownInline>[],
             depth: (indent ~/ 2) > maxBulletDepth
                 ? maxBulletDepth
                 : indent ~/ 2,
           ),
         );
+        itemLines.add(bulletMatch.group(2)!);
+        index++;
+        continue;
+      }
+
+      final orderedMatch = _ordered.firstMatch(line);
+      if (orderedMatch != null) {
+        flushParagraph();
+        if (bullets.isNotEmpty) flushBullets();
+        closeItem();
+        final indent = ' '.allMatches(orderedMatch.group(1)!).length;
+        ordered.add(
+          OrderedEntry(
+            inlines: const <MarkdownInline>[],
+            depth: (indent ~/ 2) > maxBulletDepth
+                ? maxBulletDepth
+                : indent ~/ 2,
+            number: int.parse(orderedMatch.group(2)!),
+          ),
+        );
+        itemLines.add(orderedMatch.group(3)!);
+        index++;
+        continue;
+      }
+
+      // An indented line under an open item is that item's own wrapped
+      // text, not a new paragraph: source wrapping must not split a list.
+      if (itemLines.isNotEmpty && line.startsWith('  ')) {
+        itemLines.add(line.trimLeft());
         index++;
         continue;
       }
 
       flushBullets();
-      paragraph.add(line.trimRight());
+      paragraph.add(line);
       index++;
     }
     flushParagraph();
     flushBullets();
     return blocks;
+  }
+
+  /// Folds the source lines of one block into its text. A single newline is
+  /// a soft wrap the author's editor made, so it joins with a space — or
+  /// with nothing between two wide (CJK) characters, where a space would be
+  /// a visible defect. A line ending in two spaces or a backslash keeps its
+  /// break.
+  static String foldLines(List<String> lines) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < lines.length; i++) {
+      final raw = lines[i];
+      var body = raw.trimRight();
+      final hardBreak = raw.endsWith('  ') || body.endsWith(r'\');
+      if (body.endsWith(r'\')) body = body.substring(0, body.length - 1);
+      if (i > 0) {
+        final previous = buffer.isEmpty ? '' : buffer.toString();
+        if (previous.endsWith('\n')) {
+          // The previous line already wrote its break.
+        } else if (previous.isEmpty ||
+            body.isEmpty ||
+            _joinsWithoutSpace(previous, body)) {
+          // Two wide characters meet: no space between them.
+        } else {
+          buffer.write(' ');
+        }
+      }
+      buffer.write(body);
+      if (hardBreak && i < lines.length - 1) buffer.write('\n');
+    }
+    return buffer.toString();
+  }
+
+  /// True when either side of a folded line boundary is a wide character.
+  /// CJK ideographs, kana, and hangul carry no inter-word space, and a
+  /// space injected at the wrap point is visible in a way it never is
+  /// between Latin words. One wide side is enough: CJK prose routinely
+  /// runs half-width punctuation, so `封顶,` ending a line must still join
+  /// its successor tight.
+  static bool _joinsWithoutSpace(String previous, String next) {
+    if (previous.isEmpty || next.isEmpty) return false;
+    return _isWide(previous.runes.last) || _isWide(next.runes.first);
+  }
+
+  static bool _isWide(int rune) {
+    return (rune >= 0x1100 && rune <= 0x11FF) ||
+        (rune >= 0x2E80 && rune <= 0x303F) ||
+        (rune >= 0x3040 && rune <= 0x33FF) ||
+        (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0x4E00 && rune <= 0x9FFF) ||
+        (rune >= 0xA960 && rune <= 0xA97F) ||
+        (rune >= 0xAC00 && rune <= 0xD7FF) ||
+        (rune >= 0xF900 && rune <= 0xFAFF) ||
+        (rune >= 0xFE10 && rune <= 0xFE6F) ||
+        (rune >= 0xFF00 && rune <= 0xFF60) ||
+        (rune >= 0xFFE0 && rune <= 0xFFE6) ||
+        (rune >= 0x20000 && rune <= 0x3FFFD);
   }
 
   /// Bare-URL autolink rules follow the dsh web reference's GFM

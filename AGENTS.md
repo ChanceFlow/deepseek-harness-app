@@ -17,7 +17,7 @@ flutter/packages/dev/              Debug-build tooling: telemetry, frame stats, 
 scripts/                           Gates (verify_*.py) and generators; gates_manifest.json holds every ceiling
 .gitea/workflows/                  ci.yaml — the merge gate; release-apk.yaml — the only distribution channel
 reference/deepseek-harness/        Pinned submodule — the dsh wire source of truth (read-only)
-docs/                              spec.md (wire contract + coverage), testing.md, prose-standard.md
+docs/                              spec.md (wire contract + coverage), design-standard.md, testing.md, prose-standard.md
 .agents/notes/                     Decision records — the repo's memory
 .agents/skills/                    Workflow skills: vendored Flutter/Dart set + repo `dsh-*`
 tasks/                             Human execution ledgers (plan/todo)
@@ -38,6 +38,7 @@ cd flutter && flutter test app/test/ui/chat/chat_screen_test.dart   # one behavi
 cd flutter && flutter analyze app/lib/ui/chat                       # one directory
 python3 scripts/verify_all.py docs                                  # every doc gate, ~2s
 python3 scripts/check_dart_imports.py                               # the import boundary
+python3 scripts/render_design.py --publish                          # screens as PNGs, to look at
 cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
 ```
 
@@ -104,7 +105,8 @@ post-merge fast-forward, and API shortcuts:
 - **The aesthetic is stock Material 3.** Component choice, the `ColorScheme`
   role map, and the home for a color Material 3 has no role for are owned by
   [flutter/app/AGENTS.md](flutter/app/AGENTS.md) — read it before touching a
-  widget's look.
+  widget's look, and [docs/design-standard.md](docs/design-standard.md) for
+  the facts those values derive from.
 - **User-visible text is an ARB key** in both locales, added in the same
   change ([flutter/app/AGENTS.md](flutter/app/AGENTS.md)); `verify_i18n_arb`
   fails a key that reaches one locale only.

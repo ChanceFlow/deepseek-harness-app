@@ -452,6 +452,18 @@ abstract class AppLocalizations {
   /// **'Copy'**
   String get copyTooltip;
 
+  /// Code block label while the fence has not closed yet.
+  ///
+  /// In en, this message translates to:
+  /// **'streaming'**
+  String get codeStreamingLabel;
+
+  /// Message verb: cut a new session at this message (session.fork atSeq).
+  ///
+  /// In en, this message translates to:
+  /// **'Fork from here'**
+  String get forkFromHere;
+
   /// Copy-message icon tooltip after a successful copy.
   ///
   /// In en, this message translates to:

@@ -73,19 +73,15 @@ class _TodoPanelState extends State<TodoPanel> {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-          border: Border(
-            top: BorderSide(color: scheme.outlineVariant),
-            left: BorderSide(color: scheme.outlineVariant),
-            right: BorderSide(color: scheme.outlineVariant),
-          ),
-        ),
+    // A strip of the dock, not a card: the surface and the outer radius
+    // belong to the dock, and a hairline is all that separates the plan
+    // from the composer under it.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

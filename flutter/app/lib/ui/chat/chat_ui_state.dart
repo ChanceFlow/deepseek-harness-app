@@ -315,16 +315,23 @@ final class ArchiveSession extends ChatAction {
 }
 
 final class ForkSession extends ChatAction {
-  const ForkSession(this.sessionId);
+  const ForkSession(this.sessionId, {this.atSeq});
 
   final String sessionId;
 
-  @override
-  bool operator ==(Object other) =>
-      other is ForkSession && other.sessionId == sessionId;
+  /// Log position the cut anchors to: the host forks at the end of the
+  /// turn containing it, so a message's own seq forks after that whole
+  /// exchange. Null cuts at the source's last completed turn.
+  final int? atSeq;
 
   @override
-  int get hashCode => sessionId.hashCode;
+  bool operator ==(Object other) =>
+      other is ForkSession &&
+      other.sessionId == sessionId &&
+      other.atSeq == atSeq;
+
+  @override
+  int get hashCode => Object.hash(sessionId, atSeq);
 }
 
 final class UpdateQueueAction extends ChatAction {

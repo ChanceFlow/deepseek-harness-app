@@ -231,7 +231,7 @@ class ChatController {
           );
         }
       case ForkSession():
-        _forkSession(action.sessionId);
+        _forkSession(action.sessionId, action.atSeq);
       case UpdateQueueAction():
         _updateQueue(action.itemId, action.kind, action.text);
       case ImagesLoaded():
@@ -871,10 +871,10 @@ class ChatController {
     }());
   }
 
-  void _forkSession(String sessionId) {
+  void _forkSession(String sessionId, int? atSeq) {
     unawaited(() async {
       final forked = await _runCatchingForUi(
-        () => _repository.forkSession(sessionId),
+        () => _repository.forkSession(sessionId, atSeq: atSeq),
       );
       if (forked == null) return;
       _selectedSessionId = forked.id;

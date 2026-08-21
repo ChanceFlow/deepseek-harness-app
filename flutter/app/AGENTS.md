@@ -6,27 +6,29 @@ every spatial decision: the adapter publishes facts, `app` places them.
 
 ## Stock Material 3 is the aesthetic
 
-Every surface reads as a stock Android app.
+Every surface reads as a stock Android app. Why these values and how to
+derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 
 - **Reach for the framework component before drawing one.** Rows, groups,
   menus, dialogs, and controls ride `ListTile`, `ExpansionTile`,
   `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
   `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
-  `CustomPainter` carries its reason in the change's decision note; the
-  standing exceptions are the markdown renderer, the outline timeline's turn
-  folding, and the brand fish logo.
+  `CustomPainter` carries its reason in a decision note; the standing
+  exceptions are the markdown renderer, the outline timeline's turn folding,
+  and the brand fish logo.
 - **Colors come from `ColorScheme` roles.**
   `Theme.of(context).colorScheme` is the source:
 
 | Intent | Role |
 |---|---|
-| Page background, scaffold | `surface` |
+| Page background, transcript, scaffold | `surface` |
+| Chrome around the page: app bar, input dock, drawer | `surfaceContainer` |
 | Grouped or raised surface, menu, sheet | `surfaceContainerLow/High/Highest` |
 | Primary text, icons | `onSurface` |
 | Secondary text, metadata, inactive glyph | `onSurfaceVariant` |
 | Divider, hairline border | `outlineVariant`, `outline` |
 | Accent, selection, active state | `primary`, `primaryContainer` |
-| User bubble | `primaryContainer` / `onPrimaryContainer` |
+| User bubble | `secondaryContainer` / `onSecondaryContainer` |
 | Failure, destructive, warning | `error`, `errorContainer` |
 | Modal scrim | `scrim` |
 | Success, completed state | `success` (the one non-role color, see below) |
@@ -34,14 +36,22 @@ Every surface reads as a stock Android app.
 
 - **`theme.dart` is the home for a color Material 3 has no role for.** It
   holds the elevation shadow constants and the `DshSchemeColors` extension,
-  which is why a call site writes `scheme.success` rather than a green. A new
-  non-role color is declared there and gains a row above in the same change.
-  `verify_theme_native` rejects a `Color(0x…)`, a `Colors.<name>`, or a
-  `ThemeExtension` anywhere under `lib/` outside that file, so the map is the
-  only way through.
-- **Motion, elevation, and shape are framework defaults.** The M3 durations
-  and `Theme` shapes carry animation and geometry; a bespoke curve or radius
-  is a per-change decision with a reason, not a house style.
+  so a call site writes `scheme.success`, not a green. A new non-role color
+  is declared there and gains a row above in the same change;
+  `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
+  `ThemeExtension` under `lib/` outside that file.
+- **Two tones separate content from chrome.** The transcript sits on
+  `surface`, every frame around it on `surfaceContainer`. One filled seat per
+  surface: the primary action.
+- **Space divides; a rule is a decision.** An `ExpansionTile` takes
+  `Border()` for both shapes. A row is as tall as its line: shrink the
+  ambient icon size rather than wear the 24px chevron; one-line rows take
+  `height: 1.2`.
+- **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
+  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
+  reason, not a number typed at a call site.
+- **Motion and elevation are framework defaults.** A bespoke curve is a
+  per-change decision with a reason.
 
 ## Structure and state
 
@@ -51,9 +61,9 @@ Every surface reads as a stock Android app.
 - **`lib/di/` is the only code that sees adapter or network types** (root
   import-boundary rule, enforced by `scripts/check_dart_imports.py`).
 - **Every user-visible string is an ARB key** in `lib/l10n/app_en.arb` and
-  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares the
-  key sets and the placeholder names); the generated
-  `app_localizations*.dart` files are committed
+  `app_zh.arb`, both edited in the same change (`verify_i18n_arb` compares key
+  sets and placeholder names); the generated `app_localizations*.dart` are
+  committed
   ([the i18n note](../../.agents/notes/implemented/feature/2026-08-20-bilingual-i18n-zh-en.md)).
 - **Telemetry stays optional at the call site.**
   `DebugTelemetry.instance?.event(...)` — the screen behaves identically when
@@ -62,9 +72,8 @@ Every surface reads as a stock Android app.
 ## Evidence
 
 Widget tests pump the real tree with a real controller and assert what a user
-would see: the found widget type, its text, the color read back from the
-theme's role ([docs/testing.md](../../docs/testing.md)). A color assertion
-pumps the same surface under both `DshTheme.light()` and `DshTheme.dark()`
-(`l10nApp(theme: …)`, then a pump past the theme lerp) and compares against
-that theme's role — a hard-coded color passes one brightness and fails the
-other. Tests mirror `lib/` paths under `test/`.
+would see: widget type, text, the color read back from the theme's role
+([docs/testing.md](../../docs/testing.md)). A color assertion pumps the same
+surface under both `DshTheme.light()` and `DshTheme.dark()` (`l10nApp(theme:
+…)`, then a pump past the theme lerp) — a hard-coded color passes one
+brightness and fails the other. Tests mirror `lib/` paths under `test/`.

@@ -54,6 +54,12 @@ matrix is CI's job — [ci.yaml](../.gitea/workflows/ci.yaml) runs it as the
 A local `verify_all.py` with no group is for the rare structural change that
 touches every surface at once; everywhere else CI is the proof.
 
+A rendered screenshot is not on this table. The design shots
+([`.agents/skills/dsh-design-review/`](../.agents/skills/dsh-design-review/SKILL.md))
+are how a human agrees with a look, and they run outside every suite;
+whatever the change promises still needs a widget test that fails without
+it.
+
 ## Review bar
 
 A test passes review when deleting the code under test makes it fail —
