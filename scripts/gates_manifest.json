@@ -22,6 +22,7 @@
     "AGENTS.md": 1600,
     "flutter/AGENTS.md": 600,
     "flutter/packages/harness_adapter/AGENTS.md": 600,
+    "flutter/packages/dev/AGENTS.md": 600,
     ".agents/notes/README.md": 600,
     "docs/prose-standard.md": 600,
     "docs/testing.md": 600
