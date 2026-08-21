@@ -56,10 +56,7 @@ import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'tool_row_model.dart';
-import '../theme/deepsuite_extension.dart'
-    show DeepSuiteColors, dsOf, kDsShadowLv2, kDsShadowLv3;
-import '../theme/deepsuite_tokens.dart'
-    show kDsDuration, kDsDurationSlow, kFontFamilyMonospace;
+import '../theme/theme.dart';
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
@@ -385,7 +382,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Row(
                       children: [
                         AnimatedContainer(
-                          duration: kDsDuration,
+                          duration: const Duration(milliseconds: 200),
                           curve: Curves.easeInOut,
                           width: _rail ? 56 : 320,
                           child: SessionPanel(
@@ -829,7 +826,7 @@ class _ChatPanelState extends State<ChatPanel> {
     try {
       await _timelineScroll.animateTo(
         target,
-        duration: kDsDurationSlow,
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
       );
     } finally {
@@ -1105,14 +1102,14 @@ class _ChatPanelState extends State<ChatPanel> {
   /// never competes with the brand-filled send/stop seat. heroTag is off
   /// so sibling FABs cannot fight over the shared hero on route changes.
   Widget _jumpToBottomFab() {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: AppLocalizations.of(context)!.jumpToBottomTooltip,
       child: FloatingActionButton.small(
         heroTag: null,
         shape: const CircleBorder(),
-        backgroundColor: ds.specificSelector,
-        foregroundColor: ds.labelSecondary,
+        backgroundColor: scheme.surfaceContainerLow,
+        foregroundColor: scheme.onSurfaceVariant,
         elevation: 2,
         highlightElevation: 3,
         hoverElevation: 3,
@@ -1188,7 +1185,7 @@ class _ChatPanelState extends State<ChatPanel> {
                   right: 8,
                   bottom: 8,
                   child: AnimatedSwitcher(
-                    duration: kDsDuration,
+                    duration: const Duration(milliseconds: 200),
                     switchInCurve: Curves.easeOutCubic,
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) => FadeTransition(
@@ -1299,9 +1296,9 @@ class _PlanChipState extends State<PlanChip> {
     final target = plan.pending ? !plan.active : plan.active;
     if (!target) return const SizedBox.shrink();
 
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     // Web .chip:hover — the label deepens toward warn-primary.
-    final label = _hovering ? ds.warnPrimary : ds.warnLabel;
+    final label = _hovering ? scheme.error : scheme.onErrorContainer;
     return MouseRegion(
       cursor: widget.locked
           ? SystemMouseCursors.basic
@@ -1319,7 +1316,7 @@ class _PlanChipState extends State<PlanChip> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: ds.warnTertiary,
+                color: scheme.errorContainer,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
@@ -1432,7 +1429,7 @@ class MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ds = dsOf(context);
+    final scheme = theme.colorScheme;
     if (message.role == MessageRole.user) {
       // figma User_Bubble 659:38813 — right-aligned r22 bubble, 82% cap.
       return Column(
@@ -1451,7 +1448,7 @@ class MessageRow extends StatelessWidget {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: ds.bubble,
+                    color: scheme.primaryContainer,
                     borderRadius: BorderRadius.circular(22),
                   ),
                   child: message.text.isEmpty
@@ -1553,10 +1550,10 @@ class _StreamingCaretState extends State<_StreamingCaret>
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return FadeTransition(
       opacity: _blink,
-      child: Container(width: 2, height: 18, color: ds.stateBusinessPrimary),
+      child: Container(width: 2, height: 18, color: scheme.primary),
     );
   }
 }
@@ -1763,8 +1760,8 @@ class _ToolCallRowState extends State<ToolCallRow>
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final call = widget.call;
     final model = deriveToolRowModel(call, l10n);
@@ -1808,14 +1805,14 @@ class _ToolCallRowState extends State<ToolCallRow>
                       ? Icon(
                           model.leading,
                           size: 14,
-                          color: ds.labelSecondary,
+                          color: scheme.onSurfaceVariant,
                         )
                       : _leading(context, model.state),
                   const SizedBox(width: 6),
                   Text(
                     model.title,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      fontFamily: kFontFamilyMonospace,
+                      fontFamily: 'monospace',
                     ),
                   ),
                   Container(
@@ -1823,7 +1820,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                     height: 2,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
-                      color: ds.labelCaption,
+                      color: scheme.outline,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -1839,7 +1836,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: failed
                             ? theme.colorScheme.error
-                            : ds.labelTertiary,
+                            : scheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -1850,7 +1847,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                     Text(
                       suffix,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: ds.labelSecondary,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1867,9 +1864,9 @@ class _ToolCallRowState extends State<ToolCallRow>
               width: double.infinity,
               margin: const EdgeInsets.only(top: 4),
               decoration: BoxDecoration(
-                color: ds.markdownCodeBlock,
+                color: scheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ds.divider),
+                border: Border.all(color: scheme.outlineVariant),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1879,7 +1876,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                   if (model.body != null && model.output != null)
                     Container(
                       height: 1,
-                      color: ds.borderL2,
+                      color: scheme.outlineVariant,
                       margin: const EdgeInsets.symmetric(horizontal: 14),
                     ),
                   if (model.output case final output?)
@@ -1905,8 +1902,8 @@ class _ToolCallRowState extends State<ToolCallRow>
     String payload, {
     required bool failed,
   }) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
@@ -1915,7 +1912,7 @@ class _ToolCallRowState extends State<ToolCallRow>
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: ds.labelCaption,
+              color: scheme.outline,
               letterSpacing: 1,
             ),
           ),
@@ -1924,8 +1921,8 @@ class _ToolCallRowState extends State<ToolCallRow>
             child: Text(
               payload,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: failed ? theme.colorScheme.error : ds.labelSecondary,
-                fontFamily: kFontFamilyMonospace,
+                color: failed ? theme.colorScheme.error : scheme.onSurfaceVariant,
+                fontFamily: 'monospace',
               ),
             ),
           ),
@@ -1935,7 +1932,7 @@ class _ToolCallRowState extends State<ToolCallRow>
   }
 
   Widget _leading(BuildContext context, ToolRowState state) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     switch (state) {
       case ToolRowState.running:
         return SizedBox(
@@ -1943,11 +1940,11 @@ class _ToolCallRowState extends State<ToolCallRow>
           height: 12,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: ds.stateBusinessPrimary,
+            color: scheme.primary,
           ),
         );
       case ToolRowState.ok:
-        return Icon(Icons.check, size: 14, color: ds.stateSuccessPrimary);
+        return Icon(Icons.check, size: 14, color: Colors.green.shade600);
       case ToolRowState.error:
         return Icon(
           Icons.close,
@@ -1983,8 +1980,8 @@ class GoalBarStrip extends StatelessWidget {
     if (projection == null) return const SizedBox.shrink();
     final snapshot = projection.goal;
     if (snapshot.phase == GoalPhase.complete) return const SizedBox.shrink();
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final phaseLabel = switch (snapshot.phase) {
       GoalPhase.active => l10n.chatGoalPhaseActive,
@@ -1997,12 +1994,12 @@ class GoalBarStrip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: ds.tip,
+          color: scheme.surfaceContainerHigh,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(
-            top: BorderSide(color: ds.divider),
-            left: BorderSide(color: ds.divider),
-            right: BorderSide(color: ds.divider),
+            top: BorderSide(color: scheme.outlineVariant),
+            left: BorderSide(color: scheme.outlineVariant),
+            right: BorderSide(color: scheme.outlineVariant),
           ),
         ),
         child: Row(
@@ -2012,7 +2009,7 @@ class GoalBarStrip extends StatelessWidget {
               style: theme.textTheme.labelSmall?.copyWith(
                 color: snapshot.phase == GoalPhase.active
                     ? theme.colorScheme.secondary
-                    : ds.labelSecondary,
+                    : scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(width: 8),
@@ -2035,7 +2032,7 @@ class GoalBarStrip extends StatelessWidget {
                 snapshot.phase == GoalPhase.active
                     ? Icons.pause_outlined
                     : Icons.play_arrow_outlined,
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
             // Web GoalBar ships the trash action beside pause/resume —
@@ -2048,7 +2045,7 @@ class GoalBarStrip extends StatelessWidget {
               icon: Icon(
                 Icons.delete_outline,
                 size: 14,
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
             if (onOpen != null)
@@ -2057,7 +2054,7 @@ class GoalBarStrip extends StatelessWidget {
                 iconSize: 14,
                 tooltip: l10n.openGoal,
                 onPressed: onOpen,
-                icon: Icon(Icons.chevron_right, color: ds.labelSecondary),
+                icon: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
               ),
           ],
         ),
@@ -2097,7 +2094,7 @@ class _QueueDockState extends State<QueueDock> {
         .where((item) => item.placement == QueuePlacement.queued)
         .toList();
     if (queue.isEmpty) return const SizedBox.shrink();
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     // Interaction reopens the list; an emptied queue recollapses (web
     // effect).
@@ -2105,12 +2102,12 @@ class _QueueDockState extends State<QueueDock> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: ds.tip,
+        color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
         border: Border(
-          top: BorderSide(color: ds.divider),
-          left: BorderSide(color: ds.divider),
-          right: BorderSide(color: ds.divider),
+          top: BorderSide(color: scheme.outlineVariant),
+          left: BorderSide(color: scheme.outlineVariant),
+          right: BorderSide(color: scheme.outlineVariant),
         ),
       ),
       child: Column(
@@ -2128,7 +2125,7 @@ class _QueueDockState extends State<QueueDock> {
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                     child: Row(
                       children: [
-                        Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                        Icon(Icons.queue, size: 14, color: scheme.onSurfaceVariant),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -2147,7 +2144,7 @@ class _QueueDockState extends State<QueueDock> {
                               ? Icons.keyboard_arrow_down
                               : Icons.keyboard_arrow_up,
                           size: 14,
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ],
                     ),
@@ -2243,14 +2240,14 @@ class _QueueItemRowState extends State<_QueueItemRow> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final item = widget.item;
     return Container(
       decoration: BoxDecoration(
         border: widget.separated
-            ? Border(top: BorderSide(color: ds.divider))
+            ? Border(top: BorderSide(color: scheme.outlineVariant))
             : null,
       ),
       child: SizedBox(
@@ -2260,7 +2257,7 @@ class _QueueItemRowState extends State<_QueueItemRow> {
           child: Row(
             children: [
               if (widget.leadIcon) ...[
-                Icon(Icons.queue, size: 14, color: ds.labelTertiary),
+                Icon(Icons.queue, size: 14, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 10),
               ],
               Expanded(
@@ -2279,15 +2276,15 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                             hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: ds.borderL2),
+                              borderSide: BorderSide(color: scheme.outlineVariant),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: ds.borderL2),
+                              borderSide: BorderSide(color: scheme.outlineVariant),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: ds.accent),
+                              borderSide: BorderSide(color: scheme.primary),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -2301,7 +2298,7 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontSize: 13,
-                          color: ds.labelPrimaryDimmed,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
               ),
@@ -2375,7 +2372,7 @@ class _QueueAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: tooltip,
       onPressed: enabled ? onTap : null,
@@ -2383,9 +2380,9 @@ class _QueueAction extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints.tightFor(width: 28, height: 28),
       style: IconButton.styleFrom(
-        foregroundColor: ds.labelTertiary,
-        disabledForegroundColor: ds.labelTertiary.withValues(alpha: 0.45),
-        hoverColor: ds.interactiveBgHover,
+        foregroundColor: scheme.onSurfaceVariant,
+        disabledForegroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.45),
+        hoverColor: scheme.surfaceContainerHigh,
       ),
     );
   }
@@ -2694,7 +2691,7 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final question = questions[index];
     final draft = drafts[question.id] ?? const QuestionDraft();
     final hasOptions = question.options.isNotEmpty;
@@ -2703,10 +2700,10 @@ class _QuestionCard extends StatelessWidget {
     final isLast = index == questions.length - 1;
     return Container(
       decoration: BoxDecoration(
-        color: ds.inputMajor,
-        border: Border.all(color: ds.borderThin),
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: kDsShadowLv2,
+        boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -2800,8 +2797,8 @@ class _QuestionCardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
       child: Row(
@@ -2817,7 +2814,7 @@ class _QuestionCardHeader extends StatelessWidget {
                     child: Text(
                       header,
                       style: TextStyle(
-                        color: ds.labelTertiary,
+                        color: scheme.onSurfaceVariant,
                         fontSize: 11,
                         height: 16 / 11,
                       ),
@@ -2847,9 +2844,8 @@ class _QuestionCardHeader extends StatelessWidget {
 /// One selectable option row (web `.option`): a native indicator seat
 /// (RadioListTile under the card's RadioGroup for single-select,
 /// CheckboxListTile for multi-select), the display label with the
-/// recommended badge, and the asker's description. The deepsuite visual
-/// rides the ListTile/Radio/Checkbox themes; the row fill and indicator
-/// replace the hand-drawn number chip and checkbox.
+/// recommended badge, and the asker's description. The native
+/// ListTile/Radio/Checkbox themes carry the row fill and indicator.
 class _QuestionOptionTile extends StatelessWidget {
   const _QuestionOptionTile({
     required this.question,
@@ -2866,6 +2862,7 @@ class _QuestionOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final display = _parseRecommendedLabel(option);
     Widget? subtitle;
     if (question.optionDescriptions[option] case final String description) {
@@ -2874,7 +2871,7 @@ class _QuestionOptionTile extends StatelessWidget {
         style: theme.textTheme.bodyMedium?.copyWith(
           fontSize: 14,
           height: 24 / 14,
-          color: dsOf(context).labelTertiary,
+          color: scheme.onSurfaceVariant,
         ),
       );
     }
@@ -2895,13 +2892,13 @@ class _QuestionOptionTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
-              color: dsOf(context).sidebarNavItemActiveAccent,
+              color: scheme.secondaryContainer,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               AppLocalizations.of(context)!.questionRecommended,
               style: TextStyle(
-                color: dsOf(context).buttonInfoFill,
+                color: scheme.primaryContainer,
                 fontSize: 11,
                 height: 18 / 11,
                 fontWeight: FontWeight.w600,
@@ -2945,14 +2942,13 @@ class _QuestionOptionTile extends StatelessWidget {
 /// the 20px indicator seat, filled with the label-primary color and a
 /// foreground check when checked.
 class _QuestionCheckbox extends StatelessWidget {
-  const _QuestionCheckbox({required this.checked, required this.ds});
+  const _QuestionCheckbox({required this.checked});
 
   final bool checked;
-  final DeepSuiteColors ds;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 20,
       height: 20,
@@ -2961,11 +2957,11 @@ class _QuestionCheckbox extends StatelessWidget {
           width: 14,
           height: 14,
           decoration: BoxDecoration(
-            color: checked ? theme.colorScheme.onSurface : Colors.transparent,
+            color: checked ? scheme.onSurface : Colors.transparent,
             border: Border.all(
               color: checked
-                  ? theme.colorScheme.onSurface
-                  : ds.borderL4,
+                  ? scheme.onSurface
+                  : scheme.outlineVariant,
             ),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -2973,7 +2969,7 @@ class _QuestionCheckbox extends StatelessWidget {
               ? Icon(
                   Icons.check,
                   size: 12,
-                  color: ds.labelPrimaryForeground,
+                  color: scheme.onSurface,
                 )
               : null,
         ),
@@ -2995,7 +2991,7 @@ class _QuestionNumberChip extends StatelessWidget {
       width: 20,
       height: 20,
       decoration: BoxDecoration(
-        color: dsOf(context).bgOverlay,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(6),
       ),
       alignment: Alignment.center,
@@ -3021,7 +3017,7 @@ class _CustomAnswerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final active = draft.customText.trim().isNotEmpty;
     final controller = TextEditingController(text: draft.customText)
       ..selection = TextSelection.collapsed(
@@ -3030,19 +3026,19 @@ class _CustomAnswerRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
-        color: active ? ds.interactiveBgHover : Colors.transparent,
+        color: active ? scheme.surfaceContainerHigh : Colors.transparent,
         border: Border.all(
-          color: active ? ds.borderL2 : Colors.transparent,
+          color: active ? scheme.outlineVariant : Colors.transparent,
         ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           if (question.multiSelect)
-            _QuestionCheckbox(checked: active, ds: ds)
+            _QuestionCheckbox(checked: active)
           else
             _QuestionNumberChip(
-              child: Icon(Icons.edit_outlined, size: 14, color: ds.labelSecondary),
+              child: Icon(Icons.edit_outlined, size: 14, color: scheme.onSurfaceVariant),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -3053,7 +3049,7 @@ class _CustomAnswerRow extends StatelessWidget {
                 border: InputBorder.none,
                 hintText: AppLocalizations.of(context)!.typeYourAnswerHint,
                 hintStyle: TextStyle(
-                  color: ds.labelCaption,
+                  color: scheme.outline,
                   fontSize: 14,
                   height: 24 / 14,
                 ),
@@ -3094,7 +3090,7 @@ class _CustomAnswerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final controller = TextEditingController(text: draft.customText)
       ..selection = TextSelection.collapsed(
         offset: draft.customText.length,
@@ -3106,16 +3102,16 @@ class _CustomAnswerField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: AppLocalizations.of(context)!.typeYourAnswerHint,
         hintStyle: TextStyle(
-          color: ds.labelCaption,
+          color: scheme.outline,
           fontSize: 14,
           height: 24 / 14,
         ),
         filled: true,
-        fillColor: ds.bgModulePlatform,
+        fillColor: scheme.surfaceContainerHigh,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: ds.borderL2),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -3164,7 +3160,7 @@ class _QuestionCardFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 10, 10),
@@ -3184,7 +3180,7 @@ class _QuestionCardFooter extends StatelessWidget {
                 child: Text(
                   '${index + 1} / $total',
                   style: TextStyle(
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -3256,7 +3252,7 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: widget.tooltip,
       child: MouseRegion(
@@ -3267,7 +3263,7 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
         onExit: (_) => setState(() => _hovering = false),
         child: Material(
           color: _hovering && widget.enabled
-              ? ds.interactiveBgHover
+              ? scheme.surfaceContainerHigh
               : Colors.transparent,
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
@@ -3279,7 +3275,7 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
               child: Icon(
                 widget.icon,
                 size: 16,
-                color: widget.enabled ? ds.labelTertiary : ds.labelCaption,
+                color: widget.enabled ? scheme.onSurfaceVariant : scheme.outline,
               ),
             ),
           ),
@@ -3311,7 +3307,7 @@ class _PlanReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     void decide(String label) {
       onAction(
@@ -3329,17 +3325,17 @@ class _PlanReviewCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: ds.inputMajor,
-        border: Border.all(color: ds.warnSecondary),
+        color: scheme.surfaceContainerLow,
+        border: Border.all(color: scheme.errorContainer),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: kDsShadowLv2,
+        boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            color: ds.warnTertiary,
+            color: scheme.errorContainer,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
@@ -3347,7 +3343,7 @@ class _PlanReviewCard extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: ds.warnPrimary,
+                    color: scheme.error,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -3355,7 +3351,7 @@ class _PlanReviewCard extends StatelessWidget {
                 Text(
                   l10n.planReview,
                   style: TextStyle(
-                    color: ds.warnPrimary,
+                    color: scheme.error,
                     fontSize: 13,
                     height: 18 / 13,
                   ),
@@ -3380,7 +3376,7 @@ class _PlanReviewCard extends StatelessWidget {
                     DismissQuestionAction(requestId: requestId),
                   ),
                   style: TextButton.styleFrom(
-                    foregroundColor: ds.labelSecondary,
+                    foregroundColor: scheme.onSurfaceVariant,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -3583,14 +3579,14 @@ class _ComposerBarState extends State<ComposerBar> {
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
     // figma Input 75:8208 — floating capsule card: textarea on top, action
     // row below, primary actions bottom-right.
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
       decoration: BoxDecoration(
-        color: ds.inputMajor,
+        color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: ds.borderThin),
-        boxShadow: kDsShadowLv2,
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: kM3ShadowElevation1,
       ),
       child: Column(
         children: [
@@ -3667,7 +3663,7 @@ class _ComposerBarState extends State<ComposerBar> {
           // distinctly on narrow phones.
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 2),
-            child: Divider(height: 1, thickness: 1, color: ds.divider),
+            child: Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
           ),
           // Web InputBar controls regrouped for touch: input tools and
           // contextual seats form the left cluster, the occupancy ring
@@ -3836,12 +3832,13 @@ class SlashSkillCandidates extends StatelessWidget {
         .toList();
     if (candidates.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: dsOf(context).bgLayer1,
+          color: scheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Padding(
@@ -3965,7 +3962,7 @@ class _PlusButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: l10n.commandsTooltip,
       onPressed: enabled ? () => _open(context) : null,
@@ -3974,11 +3971,11 @@ class _PlusButton extends StatelessWidget {
       // selector fill, solid interactive fill on hover (the web `.add`
       // family's visual kept on the component's surface).
       style: IconButton.styleFrom(
-        backgroundColor: ds.specificSelector,
+        backgroundColor: scheme.surfaceContainerLow,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
-        disabledBackgroundColor: ds.specificSelector,
-        disabledForegroundColor: ds.labelTertiary,
-        hoverColor: ds.interactiveBgHoverSolid,
+        disabledBackgroundColor: scheme.surfaceContainerLow,
+        disabledForegroundColor: scheme.onSurfaceVariant,
+        hoverColor: scheme.surfaceContainerHigh,
         shape: const CircleBorder(),
       ),
     );
@@ -3991,33 +3988,36 @@ class _PlusButton extends StatelessWidget {
       // Menu-surface sheet (PopupSelectView .card): menu fill, 12px radius,
       // lv3 elevation, 4px inner padding.
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 440),
-            child: _CommandSheet(
-              canPickImages: onPickImages != null,
-              skills: skills,
-              onInsertCommand: (name) {
-                Navigator.of(sheetContext).pop();
-                onInsertCommand(name);
-              },
-              onPickImagesNow: () {
-                Navigator.of(sheetContext).pop();
-                onPickImages?.call();
-              },
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 440),
+              child: _CommandSheet(
+                canPickImages: onPickImages != null,
+                skills: skills,
+                onInsertCommand: (name) {
+                  Navigator.of(sheetContext).pop();
+                  onInsertCommand(name);
+                },
+                onPickImagesNow: () {
+                  Navigator.of(sheetContext).pop();
+                  onPickImages?.call();
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -4050,7 +4050,7 @@ class _CommandSheetState extends State<_CommandSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final query = _search.trim().toLowerCase();
     bool matches(String label, String detail) =>
@@ -4081,15 +4081,15 @@ class _CommandSheetState extends State<_CommandSheet> {
               hintText: l10n.searchCommandsHint,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: ds.borderInverted),
+                borderSide: BorderSide(color: scheme.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: ds.borderInverted),
+                borderSide: BorderSide(color: scheme.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: ds.borderInverted),
+                borderSide: BorderSide(color: scheme.outlineVariant),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 8,
@@ -4109,7 +4109,7 @@ class _CommandSheetState extends State<_CommandSheet> {
                   child: Text(
                     l10n.noMatchingCommands,
                     style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: ds.labelTertiary),
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 )
               : ListView(
@@ -4163,7 +4163,7 @@ class _CommandRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -4182,7 +4182,7 @@ class _CommandRow extends StatelessWidget {
                     fontSize: 13,
                     color: enabled
                         ? Theme.of(context).colorScheme.onSurface
-                        : ds.labelTertiary,
+                        : scheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -4194,7 +4194,7 @@ class _CommandRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(fontSize: 12, color: ds.labelTertiary),
+                        ?.copyWith(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
                 ),
               ],
@@ -4229,13 +4229,13 @@ class _PrimarySendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final active = running
         ? onStop != null
         : enabled && !sending && onSend != null;
-    final fill = active ? ds.buttonInfoFill : ds.specificSelector;
-    final glyph = active ? Colors.white : ds.labelTertiary;
+    final fill = active ? scheme.primaryContainer : scheme.surfaceContainerLow;
+    final glyph = active ? Colors.white : scheme.onSurfaceVariant;
     return Tooltip(
       message: running
           ? l10n.stopTooltip
@@ -4493,7 +4493,7 @@ class TurnBoundaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -4501,12 +4501,12 @@ class TurnBoundaryRow extends StatelessWidget {
         height: 20,
         child: Row(
           children: [
-            Container(width: 14, height: 1, color: ds.borderL2),
+            Container(width: 14, height: 1, color: scheme.outlineVariant),
             const SizedBox(width: 10),
             Text(
               l10n.turnNumberLabel(turn),
               style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: ds.labelCaption, letterSpacing: 0.8),
+                  ?.copyWith(color: scheme.outline, letterSpacing: 0.8),
             ),
           ],
         ),
@@ -4525,25 +4525,25 @@ class CompactionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return SizedBox(
       height: 24,
       child: Row(
         children: [
-          Icon(Icons.layers_outlined, size: 14, color: ds.labelSecondary),
+          Icon(Icons.layers_outlined, size: 14, color: scheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
             l10n.contextCompacted,
             style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: ds.labelPrimaryDimmed),
+                ?.copyWith(color: scheme.onSurfaceVariant),
           ),
           Container(
             width: 2,
             height: 2,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: ds.labelCaption,
+              color: scheme.outline,
               shape: BoxShape.circle,
             ),
           ),
@@ -4553,7 +4553,7 @@ class CompactionRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: ds.labelTertiary),
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -4574,8 +4574,8 @@ class ContextInjectionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final injection = this.injection;
     final hasBody = injection.text.trim().isNotEmpty;
@@ -4590,12 +4590,12 @@ class ContextInjectionRow extends StatelessWidget {
       tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
       title: Row(
         children: [
-          Icon(Icons.travel_explore, size: 14, color: ds.labelSecondary),
+          Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
             injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: ds.labelPrimaryDimmed,
+              color: scheme.onSurfaceVariant,
             ),
           ),
           if (injection.producerLabel case final label?) ...[
@@ -4604,7 +4604,7 @@ class ContextInjectionRow extends StatelessWidget {
               height: 2,
               margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: ds.labelCaption,
+                color: scheme.outline,
                 shape: BoxShape.circle,
               ),
             ),
@@ -4614,7 +4614,7 @@ class ContextInjectionRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ds.labelSecondary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -4627,7 +4627,7 @@ class ContextInjectionRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: ds.labelTertiary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),

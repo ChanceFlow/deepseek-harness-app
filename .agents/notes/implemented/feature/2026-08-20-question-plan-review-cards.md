@@ -41,10 +41,12 @@ existing question wire channel:
   question RPC, resolving the asker's call as cancelled (the web
   `PendingQuestion.cancel()` path; the host folds `question/resolved` with
   outcome `cancelled`).
-- **Tokens.** `DeepSuiteColors` exposes `bgOverlay`, `borderL4`,
-  `labelPrimaryForeground`, and `bgModulePlatform` (all pre-existing raw
-  values in the generated token file — no generator change). Copy lives in
-  ARB: `questionPrev/Next/Cancel/Recommended/ErrorIncomplete/
+- **Colors ride native M3 roles.** The option-number chip uses
+  `surfaceContainerHighest`, the checkbox stroke `outlineVariant` with an
+  `onSurface` check, and the optionless question textarea
+  `surfaceContainerHigh` (post-2026-08-21 native-M3 removal; no custom
+  tokens). Copy lives in ARB:
+  `questionPrev/Next/Cancel/Recommended/ErrorIncomplete/
   ErrorUnanswered/Submit/SubmitNext` and `planApprove/Decline/Discuss`.
 
 ## Alternatives considered

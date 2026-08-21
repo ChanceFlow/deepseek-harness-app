@@ -9,9 +9,6 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
-import '../theme/deepsuite_tokens.dart';
-
 /// A job the registry still holds open (its duration ticks).
 bool _isLive(JobView job) =>
     job.status == JobStatus.running || job.status == JobStatus.stopping;
@@ -65,7 +62,7 @@ class JobListAction extends StatelessWidget {
     final countLabel = liveCount > 0
         ? l10n.jobCountRunning(count)
         : l10n.jobCount(count);
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(24),
       onTap: () => _open(context),
@@ -85,10 +82,10 @@ class JobListAction extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium
-                    ?.copyWith(color: ds.labelTertiary),
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
-            Icon(Icons.keyboard_arrow_down, size: 14, color: ds.labelCaption),
+            Icon(Icons.keyboard_arrow_down, size: 14, color: scheme.outline),
           ],
         ),
       ),
@@ -137,7 +134,7 @@ class _JobsSheetState extends State<_JobsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final rows = orderedJobs(widget.jobs);
@@ -187,14 +184,14 @@ class _JobsSheetState extends State<_JobsSheet> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: ds.labelSecondary,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               formatJobDuration(_elapsedMs(job), l10n),
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: ds.labelTertiary,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -237,11 +234,12 @@ class _StateDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final color = switch (state) {
-      _DotState.ongoing => DeepSuiteStatic.deepseek450,
-      _DotState.done => DeepSuiteStatic.green500,
-      _DotState.warning => dsOf(context).warnPrimary,
-      _DotState.error => Theme.of(context).colorScheme.error,
+      _DotState.ongoing => scheme.primary,
+      _DotState.done => Colors.green.shade600,
+      _DotState.warning => scheme.error,
+      _DotState.error => scheme.error,
     };
     return SizedBox(
       width: size,

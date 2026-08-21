@@ -12,9 +12,7 @@ import 'package:domain/model/session.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
-import '../theme/deepsuite_extension.dart'
-    show dsOf, kDsShadowLv3;
-import '../theme/deepsuite_tokens.dart' show kFontFamilyMonospace;
+import '../theme/theme.dart';
 
 /// The roster a picker may offer: every entry that can compose a
 /// session (broken ones cannot — offering one would only defer the
@@ -74,7 +72,7 @@ class AgentPresetSeat extends StatelessWidget {
     if (roster == null || options.isEmpty || current == null) {
       return const SizedBox.shrink();
     }
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Tooltip(
@@ -87,9 +85,9 @@ class AgentPresetSeat extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: ds.bgLayer1,
+              color: scheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: ds.divider),
+              border: Border.all(color: scheme.outlineVariant),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -97,7 +95,7 @@ class AgentPresetSeat extends StatelessWidget {
                 Icon(
                   Icons.smart_toy_outlined,
                   size: 16,
-                  color: ds.labelSecondary,
+                  color: scheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -105,14 +103,14 @@ class AgentPresetSeat extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: 4),
                 Icon(
                   Icons.keyboard_arrow_down,
                   size: 12,
-                  color: ds.labelSecondary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ],
             ),
@@ -126,32 +124,35 @@ class AgentPresetSeat extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      // Menu-surface sheet (ModelSelect vocabulary): menu fill, 12px
+      // Menu-surface sheet (ModelSelect vocabulary): surface fill, 12px
       // radius, lv3 elevation, 4px inner padding.
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 440),
-            child: _PresetSheet(
-              options: options,
-              currentId: currentId,
-              onSelect: (presetId) {
-                Navigator.of(sheetContext).pop();
-                onSelect(presetId);
-              },
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 440),
+              child: _PresetSheet(
+                options: options,
+                currentId: currentId,
+                onSelect: (presetId) {
+                  Navigator.of(sheetContext).pop();
+                  onSelect(presetId);
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -171,7 +172,7 @@ class _PresetSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Column(
@@ -229,7 +230,7 @@ class _PresetSheet extends StatelessWidget {
                                           vertical: 1,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: ds.bgLayer2,
+                                          color: scheme.surfaceContainerHigh,
                                           borderRadius: BorderRadius.circular(
                                             6,
                                           ),
@@ -238,7 +239,9 @@ class _PresetSheet extends StatelessWidget {
                                           l10n.defaultBadge,
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                                    color: ds.labelSecondary,
+                                                    color:
+                                                        scheme
+                                                            .onSurfaceVariant,
                                                   ),
                                         ),
                                       ),
@@ -256,7 +259,7 @@ class _PresetSheet extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       fontSize: 12,
-                                      color: ds.labelTertiary,
+                                      color: scheme.onSurfaceVariant,
                                     ),
                                   ),
                               ],
@@ -309,7 +312,7 @@ class AgentPresetHeaderLabel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: dsOf(context).bgLayer2,
+        color: theme.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -318,7 +321,7 @@ class AgentPresetHeaderLabel extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
-          fontFamily: kFontFamilyMonospace,
+          fontFamily: 'monospace',
         ),
       ),
     );

@@ -3,14 +3,13 @@
 /// Collapsed: icon + "Think" title + first/latest-line summary; expanded:
 /// the full reasoning body. The streaming tail shows a sweeping highlight.
 /// Expansion rides the native [ExpansionTile] (M3 animation, ripple, and
-/// expand/collapse semantics) themed to the deepsuite flat visual; the
-/// title row keeps the web chrome and the sweep.
+/// expand/collapse semantics); the title row keeps the disclosure chrome
+/// and the sweep.
 library;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
 import 'sweep_highlight.dart';
 
 class ReasoningRow extends StatefulWidget {
@@ -69,9 +68,9 @@ class _ReasoningRowState extends State<ReasoningRow>
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
-    final reduced = MediaQuery.disableAnimationsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final reduced = MediaQuery.disableAnimationsOf(context);
     final l10n = AppLocalizations.of(context)!;
     return Semantics(
       label: widget.running ? l10n.semanticsRunning : null,
@@ -95,13 +94,13 @@ class _ReasoningRowState extends State<ReasoningRow>
                   Icon(
                     Icons.psychology_outlined,
                     size: 14,
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     l10n.thinkLabel,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: ds.labelSecondary,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   if (!_expanded) ...[
@@ -110,7 +109,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                       height: 2,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: ds.labelCaption,
+                        color: scheme.outline,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -120,7 +119,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: ds.labelTertiary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -136,7 +135,7 @@ class _ReasoningRowState extends State<ReasoningRow>
             child: Text(
               widget.text,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),

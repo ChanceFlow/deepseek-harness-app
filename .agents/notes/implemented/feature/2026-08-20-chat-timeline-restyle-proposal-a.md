@@ -31,9 +31,10 @@ shipped as proposal A of the three-skin prototype
   business-blue caret (`_StreamingCaret`); empty-text streaming keeps the
   small circular loader.
 
-`DeepSuiteColors` exposes `markdownCodeBlock`, `stateSuccessPrimary`, and
-`stateBusinessPrimary`; all values pre-exist in the generated token file —
-the restyle adds zero new color values.
+Tool IN/OUT cards ride the `surfaceContainerLow` surface with r12 corners,
+`IN`/`OUT` gutter labels and a hairline `outlineVariant` divider; failed
+output keeps the `error` ink (post-2026-08-21 native-M3 removal — all
+colors come from stock ColorScheme roles, no custom tokens).
 
 ## Alternatives considered
 

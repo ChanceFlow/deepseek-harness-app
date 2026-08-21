@@ -1,87 +1,69 @@
-/// DshTheme construction tests — Material roles + extension carry the
-/// deepsuite alias values.
+/// DshTheme construction tests — native Material 3 scheme from a blue
+/// seed, stock M3 component roles.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:app/ui/theme/deepsuite_extension.dart';
-import 'package:app/ui/theme/deepsuite_tokens.dart';
 import 'package:app/ui/theme/theme.dart';
 
 void main() {
-  test('light scheme uses the ink brand and canvas band', () {
+  test('light scheme derives from the blue seed', () {
     final theme = DshTheme.light();
     final scheme = theme.colorScheme;
     expect(scheme.brightness, Brightness.light);
-    expect(scheme.primary, DeepSuiteLight.aliasBrandPrimary);
-    expect(scheme.primary, DeepSuiteStatic.neutralBluish1000);
-    expect(scheme.onPrimary, DeepSuiteStatic.neutralBluish00);
-    expect(scheme.surface, DeepSuiteStatic.neutralBluish00);
-    expect(scheme.surfaceContainerHighest, DeepSuiteLight.aliasBgLayer2);
-    expect(scheme.error, DeepSuiteStatic.red600);
+    expect(scheme.surface, isNotNull);
+    expect(scheme.onSurface, isNotNull);
+    expect(scheme.primary, isNotNull);
+    expect(scheme.onPrimary, isNotNull);
     expect(theme.scaffoldBackgroundColor, scheme.surface);
   });
 
-  test('dark scheme uses the inverted ink brand and dark canvas', () {
+  test('dark scheme derives from the blue seed', () {
     final theme = DshTheme.dark();
     final scheme = theme.colorScheme;
     expect(scheme.brightness, Brightness.dark);
-    expect(scheme.primary, DeepSuiteStatic.neutralBluish50);
-    expect(scheme.onPrimary, DeepSuiteStatic.neutralBluish1000);
-    expect(scheme.surface, DeepSuiteStatic.neutralBluish950);
-    expect(scheme.surfaceContainerHighest, DeepSuiteDark.aliasBgLayer2);
-    expect(scheme.onSurfaceVariant, DeepSuiteDark.aliasLabelSecondary);
+    expect(scheme.surface, isNotNull);
+    expect(scheme.onSurface, isNotNull);
+    expect(scheme.primary, isNotNull);
+    expect(scheme.onPrimary, isNotNull);
+    expect(theme.scaffoldBackgroundColor, scheme.surface);
   });
 
-  test('DeepSeek-blue accent rides the secondary role per theme', () {
-    expect(DshTheme.light().colorScheme.secondary, DeepSuiteStatic.deepseek500);
-    expect(DshTheme.dark().colorScheme.secondary, DeepSuiteStatic.deepseek450);
+  test('light and dark primary differ in polarity', () {
+    final light = DshTheme.light().colorScheme;
+    final dark = DshTheme.dark().colorScheme;
+    expect(light.primary, isNot(equals(dark.primary)));
+    expect(light.surface, isNot(equals(dark.surface)));
   });
 
-  test('DeepSuiteColors extension is attached to both themes', () {
-    final light = DshTheme.light().extension<DeepSuiteColors>();
-    final dark = DshTheme.dark().extension<DeepSuiteColors>();
-    expect(light, isNotNull);
-    expect(dark, isNotNull);
-    expect(light!.sidebarFill, DeepSuiteLight.specificSidebarFill);
-    expect(dark!.sidebarFill, DeepSuiteDark.specificSidebarFill);
-    expect(
-      light.sidebarNavItemActive,
-      isNot(equals(dark.sidebarNavItemActive)),
-    );
-    expect(light.accent, DeepSuiteStatic.deepseek500);
-    expect(dark.accent, DeepSuiteStatic.deepseek450);
-    expect(light.bgLayer1, isNot(equals(dark.bgLayer1)));
-  });
-
-  test('title roles carry the Figma-510-equivalent weight', () {
+  test('stock M3 component roles are present on both themes', () {
     for (final theme in [DshTheme.light(), DshTheme.dark()]) {
-      expect(theme.textTheme.titleLarge?.fontWeight, FontWeight.w500);
-      expect(theme.textTheme.titleMedium?.fontWeight, FontWeight.w500);
-      expect(theme.textTheme.titleSmall?.fontWeight, FontWeight.w500);
+      final scheme = theme.colorScheme;
+      expect(scheme.surfaceContainerLow, isNotNull);
+      expect(scheme.surfaceContainerHigh, isNotNull);
+      expect(scheme.surfaceContainerHighest, isNotNull);
+      expect(scheme.onSurfaceVariant, isNotNull);
+      expect(scheme.outline, isNotNull);
+      expect(scheme.outlineVariant, isNotNull);
+      expect(scheme.primaryContainer, isNotNull);
+      expect(scheme.secondaryContainer, isNotNull);
+      expect(scheme.errorContainer, isNotNull);
     }
   });
 
-  test('composer card tokens ride the extension', () {
-    final light = DshTheme.light().extension<DeepSuiteColors>()!;
-    final dark = DshTheme.dark().extension<DeepSuiteColors>()!;
-    expect(light.inputMajor, DeepSuiteLight.specificInputMajor);
-    expect(dark.inputMajor, DeepSuiteDark.specificInputMajor);
-    expect(light.borderThin, DeepSuiteLight.aliasBorderL2DarkmodeThin);
-    expect(dark.borderThin, DeepSuiteDark.aliasBorderL2DarkmodeThin);
-    expect(kDsShadowLv2, hasLength(2));
-    expect(light.tip, DeepSuiteLight.specificTip);
-    expect(dark.tip, DeepSuiteDark.specificTip);
-    expect(light.bubble, DeepSuiteLight.specificBubble);
-    expect(dark.bubble, DeepSuiteDark.specificBubble);
+  test('no deepsuite theme extension is attached', () {
+    expect(DshTheme.light().extensions, isEmpty);
+    expect(DshTheme.dark().extensions, isEmpty);
   });
 
-  test('extension lerp reaches the other theme at t=1', () {
-    final light = DshTheme.light().extension<DeepSuiteColors>()!;
-    final dark = DshTheme.dark().extension<DeepSuiteColors>()!;
-    expect(light.lerp(dark, 1).sidebarFill, dark.sidebarFill);
-    expect(dark.lerp(light, 1).accent, light.accent);
+  test('composer small FAB keeps a compact footprint', () {
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      expect(
+        theme.floatingActionButtonTheme.smallSizeConstraints,
+        const BoxConstraints.tightFor(width: 40, height: 40),
+      );
+    }
   });
 
   test('Material widgets resolve against the themed roles', () {

@@ -11,8 +11,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart'
-    show dsOf, kDsShadowLv3;
+import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
 /// The one preset the host gates behind acknowledgement.
@@ -92,31 +91,34 @@ class PermissionSelectChip extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      // Menu-surface sheet (ModelSelect vocabulary): menu fill, 12px
+      // Menu-surface sheet (ModelSelect vocabulary): surface fill, 12px
       // radius, lv3 elevation, 4px inner padding.
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: dsOf(sheetContext).menu,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: dsOf(sheetContext).borderInverted),
-            boxShadow: kDsShadowLv3,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 360),
-            child: _PermissionSheet(
-              value: value,
-              onPick: (preset) {
-                Navigator.of(sheetContext).pop();
-                _choose(sheetContext, preset);
-              },
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: _PermissionSheet(
+                value: value,
+                onPick: (preset) {
+                  Navigator.of(sheetContext).pop();
+                  _choose(sheetContext, preset);
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -145,7 +147,7 @@ class PermissionSelectChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final enabled = !locked && !_readOnly;
@@ -163,7 +165,7 @@ class PermissionSelectChip extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: ds.bgLayer1,
+                color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
@@ -172,7 +174,7 @@ class PermissionSelectChip extends StatelessWidget {
                   Icon(
                     permissionGlyph(_currentValue),
                     size: 14,
-                    color: ds.labelSecondary,
+                    color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -182,14 +184,14 @@ class PermissionSelectChip extends StatelessWidget {
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: ds.labelSecondary,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(width: 2),
                   Icon(
                     Icons.keyboard_arrow_down,
                     size: 12,
-                    color: ds.labelCaption,
+                    color: scheme.outline,
                   ),
                 ],
               ),
@@ -211,7 +213,7 @@ class _PermissionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     // Web drops `custom` from the menu — it is a derived state, not a
@@ -247,7 +249,7 @@ class _PermissionSheet extends StatelessWidget {
                           Icon(
                             permissionGlyph(option.value),
                             size: 16,
-                            color: ds.labelSecondary,
+                            color: scheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -270,7 +272,7 @@ class _PermissionSheet extends StatelessWidget {
                                     style: theme.textTheme.bodySmall
                                         ?.copyWith(
                                           fontSize: 12,
-                                          color: ds.labelTertiary,
+                                          color: scheme.onSurfaceVariant,
                                         ),
                                   ),
                               ],

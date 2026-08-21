@@ -7,7 +7,6 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/deepsuite_extension.dart';
 import 'fish_logo.dart';
 import 'preset_seat.dart';
 
@@ -39,7 +38,7 @@ class EmptyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     return Stack(
@@ -88,13 +87,13 @@ class EmptyHero extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: ds.bgLayer2,
+                        color: scheme.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         l10n.heroPreview,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: ds.labelSecondary,
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -144,7 +143,7 @@ class WorkspaceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final resolvedLabel = label ?? l10n.heroChooseWorkspace;
@@ -161,9 +160,9 @@ class WorkspaceChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: ds.bgLayer1,
+          color: scheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: ds.divider),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -173,17 +172,21 @@ class WorkspaceChip extends StatelessWidget {
                   ? Icons.folder_outlined
                   : Icons.folder_open_outlined,
               size: 16,
-              color: ds.labelSecondary,
+              color: scheme.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
             Text(
               resolvedLabel,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, size: 12, color: ds.labelSecondary),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 12,
+              color: scheme.onSurfaceVariant,
+            ),
           ],
         ),
       ),

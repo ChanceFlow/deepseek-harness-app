@@ -1,7 +1,7 @@
-/// The deepsuite `dsh-reasoning-row-sweep` / `dsh-tool-row-sweep` pattern:
-/// a soft glare band gliding across a row while work streams. Shared by
-/// ReasoningRow and ToolCallRow; pass a null controller to disable (also
-/// disabled under reduced motion by the callers).
+/// The reasoning/tool-row sweep pattern: a soft glare band gliding across
+/// a row while work streams. Shared by ReasoningRow and ToolCallRow; pass a
+/// null controller to disable (also disabled under reduced motion by the
+/// callers).
 library;
 
 import 'package:flutter/material.dart';

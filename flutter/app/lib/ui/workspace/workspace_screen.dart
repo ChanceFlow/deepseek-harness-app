@@ -26,7 +26,7 @@ import '../../di/providers.dart';
 import '../root/app_destination.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/session_tree.dart';
-import '../theme/deepsuite_extension.dart';
+import '../theme/theme.dart';
 import 'workspace_ui_state.dart';
 
 class WorkspaceRoute extends ConsumerWidget {
@@ -71,9 +71,9 @@ class _BackendAggregateScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: ds.sidebarFill,
+      backgroundColor: scheme.surfaceContainerLow,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
@@ -119,8 +119,8 @@ class _BackendWorkspaceSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final controller = ref.watch(workspaceControllerProvider(backend.id));
     final l10n = AppLocalizations.of(context)!;
     // The chat surface's selection rides the active backend's slice only
@@ -147,8 +147,8 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                   decoration: BoxDecoration(
-                    color: active ? ds.sidebarNavItemActive : null,
-                    border: Border(bottom: BorderSide(color: ds.divider)),
+                    color: active ? scheme.secondaryContainer : null,
+                    border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
                   ),
                   child: Row(
                     children: [
@@ -169,7 +169,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: ds.labelTertiary,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -182,13 +182,13 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: ds.specificSelector,
+                            color: scheme.primaryContainer,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
                             l10n.backendStatusActive,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: ds.labelSecondary,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -377,10 +377,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// replaces the tree while a query is active.
   Widget _searchResults(
     BuildContext context,
-    DeepSuiteColors ds,
     WorkspaceUiState uiState,
   ) {
     final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
     final sessionsById = <String, SessionSummary>{
       for (final session in uiState.sessions.where(
         (session) =>
@@ -406,7 +406,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           child: Text(
             l10n.noMatchingSessions,
             style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(fontSize: 13, color: ds.labelTertiary),
+                ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
           ),
         ),
       );
@@ -440,18 +440,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   @override
   Widget build(BuildContext context) {
     final uiState = widget.uiState;
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final query = _searchController.text.trim();
     return Stack(
       children: [
         if (widget.embedded)
-          _browsingRegion(context, ds, uiState, query)
+          _browsingRegion(context, uiState, query)
         else
           Scaffold(
             // Web: the browser region lives on the sidebar fill.
-            backgroundColor: ds.sidebarFill,
+            backgroundColor: scheme.surfaceContainerLow,
             body: SafeArea(
-              child: _browsingRegionBody(context, ds, uiState, query),
+              child: _browsingRegionBody(context, uiState, query),
             ),
           ),
         if (uiState.directoryBrowserOpen) ...[
@@ -500,23 +500,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// embedded aggregate form shrink-wraps it onto the outer scroll.
   Widget _browsingRegion(
     BuildContext context,
-    DeepSuiteColors ds,
     WorkspaceUiState uiState,
     String query,
   ) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: ds.sidebarFill,
-      child: _browsingRegionBody(context, ds, uiState, query),
+      color: scheme.surfaceContainerLow,
+      child: _browsingRegionBody(context, uiState, query),
     );
   }
 
   Widget _browsingRegionBody(
     BuildContext context,
-    DeepSuiteColors ds,
     WorkspaceUiState uiState,
     String query,
   ) {
     final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
     final hasQuery = query.isNotEmpty;
     final tree = _WorkspaceTree(
       sessions: uiState.sessions,
@@ -544,7 +544,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           widget.onAction(ArchiveSessionAction(sessionId)),
       shrinkWrap: widget.embedded,
     );
-    final results = hasQuery ? _searchResults(context, ds, uiState) : tree;
+    final results = hasQuery ? _searchResults(context, uiState) : tree;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: widget.embedded ? MainAxisSize.min : MainAxisSize.max,
@@ -594,8 +594,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            ds.sidebarFill.withValues(alpha: 0),
-                            ds.sidebarFill,
+                            scheme.surfaceContainerLow.withValues(alpha: 0),
+                            scheme.surfaceContainerLow,
                           ],
                         ),
                       ),
@@ -628,7 +628,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 12, 4),
@@ -642,7 +642,7 @@ class _SectionHeader extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(color: ds.labelTertiary),
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
             _HeaderIconButton(
@@ -681,7 +681,7 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 44,
       height: 44,
@@ -691,7 +691,7 @@ class _HeaderIconButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(22),
-            hoverColor: ds.interactiveBgHover,
+            hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
             child: Center(
               child: Icon(
@@ -699,7 +699,7 @@ class _HeaderIconButton extends StatelessWidget {
                 size: 20,
                 color: active
                     ? Theme.of(context).colorScheme.onSurface
-                    : ds.labelSecondary,
+                    : scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -724,8 +724,8 @@ class _SearchCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
@@ -733,13 +733,13 @@ class _SearchCapsule extends StatelessWidget {
         height: 36,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: ds.borderL2),
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Row(
           children: [
             Padding(
               padding: const EdgeInsets.only(left: 10),
-              child: Icon(Icons.search, size: 14, color: ds.labelTertiary),
+              child: Icon(Icons.search, size: 14, color: scheme.onSurfaceVariant),
             ),
             Expanded(
               child: TextField(
@@ -752,7 +752,7 @@ class _SearchCapsule extends StatelessWidget {
                   hintText: l10n.searchWorkspacesHint,
                   hintStyle: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: 13,
-                    color: ds.labelTertiary,
+                    color: scheme.onSurfaceVariant,
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 6),
                 ),
@@ -766,13 +766,13 @@ class _SearchCapsule extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
-                  hoverColor: ds.interactiveBgHover,
+                  hoverColor: scheme.surfaceContainerHigh,
                   onTap: onCollapse,
                   child: Center(
                     child: Icon(
                       Icons.close,
                       size: 14,
-                      color: ds.labelSecondary,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -797,7 +797,7 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ds = dsOf(context);
+    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
       child: Row(
@@ -818,10 +818,10 @@ class _ErrorBanner extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
-                hoverColor: ds.interactiveBgHover,
+                hoverColor: scheme.surfaceContainerHigh,
                 onTap: onDismiss,
                 child: Center(
-                  child: Icon(Icons.close, size: 14, color: ds.labelSecondary),
+                  child: Icon(Icons.close, size: 14, color: scheme.onSurfaceVariant),
                 ),
               ),
             ),
@@ -874,7 +874,7 @@ class _WorkspaceTree extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
     final groups = deriveSessionGroups(
@@ -891,7 +891,7 @@ class _WorkspaceTree extends StatelessWidget {
         child: Text(
           l10n.noWorkspacesYet,
           style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(fontSize: 13, color: ds.labelTertiary),
+              ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
         ),
       );
     }
@@ -1057,27 +1057,27 @@ class _UngroupedHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: onToggle,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: expanded ? ds.interactiveBgHover : null,
+            color: expanded ? scheme.surfaceContainerHigh : null,
           ),
           child: Row(
             children: [
               Icon(
                 expanded ? Icons.folder_open : Icons.folder_outlined,
                 size: 16,
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -1117,21 +1117,21 @@ class _WorkspaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: () => onToggle(workspace.workspaceId),
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: expanded ? ds.interactiveBgHover : null,
+            color: expanded ? scheme.surfaceContainerHigh : null,
           ),
           child: Row(
             children: [
@@ -1140,7 +1140,7 @@ class _WorkspaceRow extends StatelessWidget {
               Icon(
                 expanded ? Icons.folder_open : Icons.folder_outlined,
                 size: 16,
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -1185,7 +1185,7 @@ class _RowIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 44,
       height: 44,
@@ -1195,9 +1195,9 @@ class _RowIconButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(22),
-            hoverColor: ds.interactiveBgHover,
+            hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
-            child: Center(child: Icon(icon, size: 18, color: ds.labelTertiary)),
+            child: Center(child: Icon(icon, size: 18, color: scheme.onSurfaceVariant)),
           ),
         ),
       ),
@@ -1227,17 +1227,17 @@ class _WorkspaceActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: ds.menu,
+          color: scheme.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ds.borderInverted),
-          boxShadow: kDsShadowLv3,
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: kM3ShadowElevation3,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1307,8 +1307,8 @@ class _MenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final error = theme.colorScheme.error;
     final ink = isDanger ? error : theme.colorScheme.onSurface;
     final row = Material(
@@ -1317,14 +1317,14 @@ class _MenuRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         hoverColor: isDanger
             ? error.withValues(alpha: 0.05)
-            : ds.interactiveBgHover,
+            : scheme.surfaceContainerHigh,
         onTap: enabled ? onTap : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: 44),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: isDanger ? error : ds.labelTertiary),
+              Icon(icon, size: 18, color: isDanger ? error : scheme.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1352,10 +1352,11 @@ class _MenuSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       height: 1,
       margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-      color: dsOf(context).divider,
+      color: scheme.outlineVariant,
     );
   }
 }
@@ -1376,8 +1377,8 @@ class _DsModalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
@@ -1385,10 +1386,10 @@ class _DsModalCard extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 380),
         padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
         decoration: BoxDecoration(
-          color: ds.bgLayer2,
+          color: scheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: ds.borderInverted),
-          boxShadow: kDsShadowLv3,
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: kM3ShadowElevation3,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1444,15 +1445,15 @@ class _DsTextInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(22),
-      borderSide: BorderSide(color: ds.borderL2),
+      borderSide: BorderSide(color: scheme.outlineVariant),
     );
     final focusedBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(22),
-      borderSide: BorderSide(color: ds.accent),
+      borderSide: BorderSide(color: scheme.primary),
     );
     return TextField(
       controller: controller,
@@ -1461,7 +1462,7 @@ class _DsTextInput extends StatelessWidget {
       decoration: InputDecoration(
         isDense: true,
         hintText: hintText,
-        hintStyle: theme.textTheme.bodyMedium?.copyWith(color: ds.labelCaption),
+        hintStyle: theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 11,
@@ -1855,17 +1856,17 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     final media = MediaQuery.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       constraints: BoxConstraints(maxHeight: media.size.height * 0.85),
       decoration: BoxDecoration(
         // Web Modal card family: layer-2 fill, r24, lv3 shadow.
-        color: ds.bgLayer2,
+        color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: ds.borderInverted),
-        boxShadow: kDsShadowLv3,
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: kM3ShadowElevation3,
       ),
       child: Material(
         color: Colors.transparent,
@@ -1886,8 +1887,8 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     final crumbs = listing == null
@@ -1956,14 +1957,14 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
             ),
           ),
         // Web `.header` bottom rule (border-l3 family).
-        Container(height: 1, color: ds.borderL2),
+        Container(height: 1, color: scheme.outlineVariant),
       ],
     );
   }
 
   Widget _buildBody(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     if (listing == null) {
@@ -1995,7 +1996,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
               l10n.noFolders,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: 13,
-                color: ds.labelTertiary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -2010,7 +2011,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
             child: Text(
               l10n.tooManyFoldersHint,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: ds.labelSecondary,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -2019,13 +2020,13 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
   }
 
   Widget _buildFooter(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final listing = widget.listing;
     return Container(
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: ds.borderL2)),
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -2059,7 +2060,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                           fontWeight: FontWeight.w500,
                           color: _showHidden
                               ? theme.colorScheme.onSurface
-                              : ds.labelSecondary,
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                       if (_showHidden) ...[
@@ -2116,13 +2117,13 @@ class _CrumbSeat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (leadingDivider)
-          Icon(Icons.chevron_right, size: 12, color: ds.labelTertiary),
+          Icon(Icons.chevron_right, size: 12, color: scheme.onSurfaceVariant),
         InkWell(
           borderRadius: BorderRadius.circular(6),
           onTap: () => onNavigate(crumb.path),
@@ -2137,7 +2138,7 @@ class _CrumbSeat extends StatelessWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: ds.labelTertiary,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -2162,12 +2163,12 @@ class _PathEditorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: ds.borderL2),
+      borderSide: BorderSide(color: scheme.outlineVariant),
     );
     return TextField(
       controller: controller,
@@ -2178,19 +2179,19 @@ class _PathEditorRow extends StatelessWidget {
         hintText: l10n.pathLabel,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           fontSize: 13,
-          color: ds.labelTertiary,
+          color: scheme.onSurfaceVariant,
         ),
         prefixIcon: Icon(
           Icons.edit_outlined,
           size: 14,
-          color: ds.labelTertiary,
+          color: scheme.onSurfaceVariant,
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 36),
         suffixIcon: onCancel == null
             ? null
             : InkWell(
                 onTap: onCancel,
-                child: Icon(Icons.close, size: 14, color: ds.labelSecondary),
+                child: Icon(Icons.close, size: 14, color: scheme.onSurfaceVariant),
               ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -2200,7 +2201,7 @@ class _PathEditorRow extends StatelessWidget {
         enabledBorder: border,
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: ds.accent),
+          borderSide: BorderSide(color: scheme.primary),
         ),
       ),
       onSubmitted: onSubmit,
@@ -2218,20 +2219,20 @@ class _DirectoryEntryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
+        hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              Icon(Icons.folder_outlined, size: 16, color: ds.labelSecondary),
+              Icon(Icons.folder_outlined, size: 16, color: scheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -2244,7 +2245,7 @@ class _DirectoryEntryRow extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, size: 14, color: ds.labelTertiary),
+              Icon(Icons.chevron_right, size: 14, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -2270,7 +2271,7 @@ class _SheetIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ds = dsOf(context);
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 44,
       height: 44,
@@ -2280,10 +2281,10 @@ class _SheetIconButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(22),
-            hoverColor: ds.interactiveBgHover,
+            hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
             child: Center(
-              child: Icon(icon, size: iconSize, color: ds.labelSecondary),
+              child: Icon(icon, size: iconSize, color: scheme.onSurfaceVariant),
             ),
           ),
         ),

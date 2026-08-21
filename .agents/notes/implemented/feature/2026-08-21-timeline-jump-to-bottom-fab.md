@@ -33,17 +33,18 @@ newest content on tap.
   jump affordance belongs). The scroll listener is `_followDepth`-guarded, so
   driven glides never re-evaluate it mid-glide.
 - **The tap glide is a driven scroll.** `_jumpToBottom` pins (`_pinned =
-  true`) under the follow-depth guard, glides with `kDsDurationSlow`
-  easeOutCubic, and rescinds the guard + re-syncs in `finally` — the glide
-  neither unpins the view nor records a mid-glide reading position.
+  true`) under the follow-depth guard, glides over
+  `Duration(milliseconds: 300)` easeOutCubic, and rescinds the guard +
+  re-syncs in `finally` — the glide neither unpins the view nor records a
+  mid-glide reading position.
 - **Native styling rides the repo's native-component contract.** The FAB is
   `FloatingActionButton.small` with `heroTag: null` (sibling send/stop FABs
-  must not fight over the shared hero), the neutral `specificSelector` fill
-  with a `labelSecondary` arrow-down glyph so it never competes with the
-  brand-filled composer seat, elevation 2, and the
+  must not fight over the shared hero), the neutral `surfaceContainerLow`
+  fill with an `onSurfaceVariant` arrow-down glyph so it never competes with
+  the brand-filled composer seat, elevation 2, and the
   `jumpToBottomTooltip` l10n key (en "Jump to bottom" / zh "跳到底部").
-  Appear/disappear transitions use the page motion token (`kDsDuration`)
-  through `AnimatedSwitcher` fade+scale.
+  Appear/disappear transitions use the M3 page motion duration
+  (`Duration(milliseconds: 200)`) through `AnimatedSwitcher` fade+scale.
 
 ## Alternatives considered
 
