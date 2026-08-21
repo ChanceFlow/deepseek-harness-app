@@ -56,16 +56,21 @@ command.
 
 ## Branch workflow and CI/CD
 
-One branch per task, cut in a fresh worktree off latest `master`, so
-concurrent tasks stay isolated and the shared checkout keeps its state:
+The main checkout holds latest `master` and nothing else — no task branch, no
+edit, no commit. It is the tree to read when the question is what shipped, so
+it fast-forwards after every merge and answers `git status` with a clean
+working tree.
+
+Every change is one branch in its own worktree, cut off latest `master`:
 
 ```sh
 git fetch origin && git worktree add -b <branch> ../dsha-<slug> origin/master
 ```
 
 Push, open a PR, merge once both required statuses are green; Gitea branch
-protection rejects a direct push to `master`. Worktree cleanup and API
-shortcuts: [`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md) §3.
+protection rejects a direct push to `master`. Worktree cleanup, the
+post-merge fast-forward, and API shortcuts:
+[`.agents/skills/dsh-close-out/`](.agents/skills/dsh-close-out/SKILL.md) §3.
 
 - [ci.yaml](.gitea/workflows/ci.yaml) runs the aggregate as two parallel jobs
   on every push and PR — `docs` (python only, seconds) and `code` (analyze,

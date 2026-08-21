@@ -18,3 +18,7 @@ captures/
 
 # Local server config
 app/src/main/assets/server.properties
+
+# Python tooling (scripts/ gates)
+__pycache__/
+*.pyc
