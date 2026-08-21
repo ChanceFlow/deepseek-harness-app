@@ -7,6 +7,7 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/ui/theme/theme.dart';
 import 'package:app/ui/workspace/workspace_screen.dart';
 import 'package:app/ui/workspace/workspace_ui_state.dart';
 
@@ -65,6 +66,7 @@ Future<void> _pump(
   List<WorkspaceAction> actions, {
   String? selectedSessionId,
   List<String>? openedSessions,
+  ThemeData? theme,
 }) {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -72,6 +74,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     l10nApp(
+      theme: theme,
       home: WorkspaceScreen(
         uiState: uiState,
         onAction: actions.add,
@@ -393,6 +396,38 @@ void main() {
     await tester.pump();
     expect(actions, contains(const CreateWorkspaceAction('/home/user')));
     expect(actions, contains(const CloseDirectoryBrowser()));
+  });
+
+  testWidgets('directory browser scrim rides the theme scrim role', (
+    tester,
+  ) async {
+    final actions = <WorkspaceAction>[];
+    // Pump under both brightnesses: a hardcoded color passes one mode and
+    // fails the other; the scrim role reads back equal in each.
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      await _pump(
+        tester,
+        const WorkspaceUiState(
+          directoryBrowserOpen: true,
+          directoryListing: _homeListing,
+        ),
+        actions,
+        theme: theme,
+      );
+      await tester.pumpAndSettle();
+
+      final scheme = Theme.of(
+        tester.element(find.text('Select Workspace Directory')),
+      ).colorScheme;
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is ColoredBox &&
+              widget.color == scheme.scrim.withValues(alpha: 0.54),
+        ),
+        findsOneWidget,
+      );
+    }
   });
 
   testWidgets('session rows select through and highlight', (tester) async {

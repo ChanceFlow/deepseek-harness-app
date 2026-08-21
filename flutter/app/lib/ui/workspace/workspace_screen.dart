@@ -455,15 +455,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             ),
           ),
         if (uiState.directoryBrowserOpen) ...[
-          // Modal mask over the browser sheet; tapping it closes.
+          // Modal scrim: the ColorScheme `scrim` role at the platform
+          // barrier alpha (the stock Colors.black54), theme-aware in both
+          // modes; tapping it closes the browser.
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => widget.onAction(const CloseDirectoryBrowser()),
               child: ColoredBox(
-                color: Theme.of(context).colorScheme.scrim.withValues(
-                  alpha: 0.24,
-                ),
+                color: scheme.scrim.withValues(alpha: 0.54),
               ),
             ),
           ),
