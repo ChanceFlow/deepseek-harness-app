@@ -369,5 +369,6 @@
   "approvalChannelDescription": "会话等待你审批权限请求时通知。",
   "planReviewChannel": "plan 审阅",
   "planReviewChannelDescription": "会话等待你审阅 plan 时通知。",
-  "notificationDismissTooltip": "关闭通知"
+  "notificationDismissTooltip": "关闭通知",
+  "jumpToBottomTooltip": "跳到底部"
 }
