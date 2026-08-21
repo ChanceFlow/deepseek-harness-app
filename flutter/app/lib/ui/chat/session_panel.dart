@@ -350,41 +350,37 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     );
   }
 
-  /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label.
-  /// The sidebar keeps it above the browsing region (web sidebar order);
-  /// workspace management itself lives in the Workspaces tab.
+  /// Web `.newSession`: 38px, border l2, r12, elevated fill, icon + label —
+  /// now a native [OutlinedButton.icon] carrying the same deepsuite
+  /// surface tokens (elevated fill, l2 border, r12 shape) on the M3
+  /// button chrome. The sidebar keeps it above the browsing region (web
+  /// sidebar order); workspace management itself lives in the Workspaces
+  /// tab.
   Widget _buildNewSessionButton(BuildContext context, DeepSuiteColors ds) {
     final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: _showNewSessionDialog,
-        child: Container(
-          height: 38,
-          width: double.infinity,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: ds.borderL2),
-            borderRadius: BorderRadius.circular(12),
-            color: ds.buttonElevatedFill,
+      child: SizedBox(
+        width: double.infinity,
+        height: 38,
+        child: OutlinedButton.icon(
+          onPressed: _showNewSessionDialog,
+          style: OutlinedButton.styleFrom(
+            backgroundColor: ds.buttonElevatedFill,
+            foregroundColor: ds.labelSecondary,
+            side: BorderSide(color: ds.borderL2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(fontWeight: FontWeight.w500),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.chat_bubble_outline,
-                size: 14,
-                color: ds.labelSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                l10n.newSession,
-                style: Theme.of(context).textTheme.labelMedium
-                    ?.copyWith(fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
+          icon: const Icon(Icons.chat_bubble_outline, size: 14),
+          label: Text(l10n.newSession),
         ),
       ),
     );
@@ -810,58 +806,22 @@ class _SectionHeader extends StatelessWidget {
                     ?.copyWith(color: ds.labelTertiary),
               ),
             ),
-            _HeaderIconButton(
+            // Web WorkspaceBrowser `.iconButton`: the section's search
+            // seat as a standard M3 IconButton (label-secondary ink;
+            // on-surface ink while the capsule is engaged).
+            IconButton(
               tooltip: l10n.searchSessions,
-              icon: Icons.search,
-              active: searchActive,
-              onTap: onToggleSearch,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Web WorkspaceBrowser `.iconButton`: circular hover-lit icon seat
-/// (label-secondary ink; primary ink while its control is engaged).
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onTap,
-    this.active = false,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final ds = dsOf(context);
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: Tooltip(
-        message: tooltip,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            hoverColor: ds.interactiveBgHover,
-            onTap: onTap,
-            child: Center(
-              child: Icon(
-                icon,
+              onPressed: onToggleSearch,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.search,
                 size: 20,
-                color: active
+                color: searchActive
                     ? Theme.of(context).colorScheme.onSurface
                     : ds.labelSecondary,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -929,13 +889,12 @@ class _SearchCapsule extends StatelessWidget {
   }
 }
 
-/// Web WorkspaceBrowser `.groupSection`: the group header row plus its
-/// expanded session run (2px intra-group rhythm) and the local overflow
-/// control.
 /// One backend's section header in the multi-backend browsing region:
 /// the live connection dot, the backend label over `host:port`, and
 /// the Active marker — the same vocabulary as the Workspaces tab's
-/// backend headers. Tapping a non-active header selects that backend.
+/// backend headers — now a native [ListTile] carrying the sidebar
+/// nav-item active fill on the active backend. Tapping a non-active
+/// header selects that backend.
 class _BackendSectionHeader extends StatelessWidget {
   const _BackendSectionHeader({
     required this.slice,
@@ -954,65 +913,63 @@ class _BackendSectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final ds = dsOf(context);
     final backend = slice.backend;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onSelectBackend,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-          decoration: BoxDecoration(
-            color: slice.active ? ds.sidebarNavItemActive : null,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              BackendConnectionDot(backendId: backend.id),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      backend.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium,
-                    ),
-                    Text(
-                      '${backend.baseUri.host}:${backend.baseUri.port}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: ds.labelTertiary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: slice.active ? ds.specificSelector : null,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  slice.active
-                      ? l10n.backendStatusActive
-                      : l10n.backendStatusStandby,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: slice.active ? ds.labelSecondary : ds.labelTertiary,
-                  ),
-                ),
-              ),
-            ],
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minLeadingWidth: 24,
+      horizontalTitleGap: 8,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      selected: slice.active,
+      tileColor: Colors.transparent,
+      selectedTileColor: ds.sidebarNavItemActive,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      leading: BackendConnectionDot(backendId: backend.id),
+      title: Text(
+        backend.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelMedium,
+      ),
+      subtitle: Text(
+        '${backend.baseUri.host}:${backend.baseUri.port}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(color: ds.labelTertiary),
+      ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: slice.active ? ds.specificSelector : null,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          slice.active ? l10n.backendStatusActive : l10n.backendStatusStandby,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: slice.active ? ds.labelSecondary : ds.labelTertiary,
           ),
         ),
       ),
+      onTap: onSelectBackend,
     );
   }
 }
 
-class _GroupSection extends StatelessWidget {
+/// Web WorkspaceBrowser `.groupSection`: the group header plus its
+/// expanded session run (2px intra-group rhythm) and the local overflow
+/// control — now a native [ExpansionTile] with the M3 expansion
+/// animation, ripple, and semantics, themed to the deepsuite flat visual.
+///
+/// The tile is controller-driven so the parent's browsing state (seeded
+/// from the local store, or the always-expanded current group) stays the
+/// single source of truth: [didUpdateWidget] syncs an external
+/// [expanded] change through the [ExpansibleController], and the
+/// onExpansionChanged guard only reports a user tap (a value that
+/// differs from the last-rendered [expanded]) to the parent — a
+/// programmatic sync never writes a browsing override. The current group
+/// (holds the active session) never folds: its header is inert
+/// (`enabled: false` with the disabled ink overridden so it is not
+/// visually dimmed).
+class _GroupSection extends StatefulWidget {
   const _GroupSection({
     required this.group,
     required this.expanded,
@@ -1044,128 +1001,140 @@ class _GroupSection extends StatelessWidget {
   final void Function(String sessionId)? onArchiveSession;
 
   @override
+  State<_GroupSection> createState() => _GroupSectionState();
+}
+
+class _GroupSectionState extends State<_GroupSection> {
+  late final ExpansibleController _controller = ExpansibleController();
+
+  @override
+  void didUpdateWidget(covariant _GroupSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.expanded == oldWidget.expanded) return;
+    // An external browsing-state change (store seed, or the group
+    // becoming / ceasing to be current) drives the native tile.
+    if (widget.expanded) {
+      if (!_controller.isExpanded) _controller.expand();
+    } else if (_controller.isExpanded) {
+      _controller.collapse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final ds = dsOf(context);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final group = widget.group;
+    final expanded = widget.expanded;
     final sessions = group.sessions;
     final visibleCount =
-        overflowExpanded || sessions.length <= kCollapsedSessionLimit
+        widget.overflowExpanded || sessions.length <= kCollapsedSessionLimit
         ? sessions.length
         : kCollapsedSessionLimit;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+
+    final tile = ExpansionTile(
+      key: ValueKey('sidebar-group-${group.key}'),
+      controller: _controller,
+      initiallyExpanded: expanded,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minTileHeight: 44,
+      // The current group never folds: its header is inert (no tap), the
+      // native tile stays expanded.
+      enabled: !widget.containsCurrent,
+      leading: Icon(
+        expanded ? Icons.folder_open : Icons.folder_outlined,
+        size: 16,
+        // Web `.slot .folder`: tertiary folder glyph (brand tint while
+        // the group holds the selected session and is open).
+        color: expanded && widget.containsCurrent ? ds.accent : ds.labelTertiary,
+      ),
+      // The session-count caption rides beside the label (the web's
+      // single-line header), ahead of the M3 trailing chevron.
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              group.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            l10n.sessionCount(sessions.length),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 12,
+              color: ds.labelTertiary,
+            ),
+          ),
+        ],
+      ),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+      childrenPadding: const EdgeInsets.only(top: 2, bottom: 2),
+      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+      onExpansionChanged: (value) {
+        // Programmatic syncs (seed / current-group change) already equal
+        // the rendered [expanded]; only a user tap differs and routes to
+        // the parent's browsing toggle.
+        if (value == widget.expanded) return;
+        widget.onToggle();
+      },
       children: [
-        _GroupHeaderRow(
-          label: group.label,
-          sessionCount: sessions.length,
-          expanded: expanded,
-          folderActive: expanded && containsCurrent,
-          onToggle: onToggle,
-        ),
         if (expanded) ...[
-          const SizedBox(height: 2),
           for (var i = 0; i < visibleCount; i++) ...[
             if (i > 0) const SizedBox(height: 2),
             SessionTreeRow(
               session: sessions[i],
-              selected: sessions[i].id == selectedSessionId,
-              nowEpochMs: nowEpochMs,
-              onSelect: sessions[i].id == selectedSessionId
+              selected: sessions[i].id == widget.selectedSessionId,
+              nowEpochMs: widget.nowEpochMs,
+              onSelect: sessions[i].id == widget.selectedSessionId
                   ? null
-                  : () => onSelectSession(sessions[i].id),
-              onRename: onRenameSession == null
+                  : () => widget.onSelectSession(sessions[i].id),
+              onRename: widget.onRenameSession == null
                   ? null
-                  : () => onRenameSession!(sessions[i].id),
-              onFork: onForkSession == null
+                  : () => widget.onRenameSession!(sessions[i].id),
+              onFork: widget.onForkSession == null
                   ? null
-                  : () => onForkSession!(sessions[i].id),
-              onArchive: onArchiveSession == null
+                  : () => widget.onForkSession!(sessions[i].id),
+              onArchive: widget.onArchiveSession == null
                   ? null
-                  : () => onArchiveSession!(sessions[i].id),
+                  : () => widget.onArchiveSession!(sessions[i].id),
             ),
           ],
           if (sessions.length > kCollapsedSessionLimit) ...[
             const SizedBox(height: 2),
             SessionOverflowRow(
-              expanded: overflowExpanded,
+              expanded: widget.overflowExpanded,
               totalCount: sessions.length,
-              onTap: onToggleOverflow,
+              onTap: widget.onToggleOverflow,
             ),
           ],
         ],
       ],
     );
-  }
-}
 
-/// Web Rows.tsx `ProjectRowItem` (Workspaces-tab row idiom): folder glyph
-/// that opens with the group, title, session-count caption; the expanded
-/// row keeps the hover fill. Workspace rename/delete stay in the
-/// Workspaces tab — the sidebar row only toggles expansion.
-class _GroupHeaderRow extends StatelessWidget {
-  const _GroupHeaderRow({
-    required this.label,
-    required this.sessionCount,
-    required this.expanded,
-    required this.folderActive,
-    required this.onToggle,
-  });
-
-  final String label;
-  final int sessionCount;
-  final bool expanded;
-  final bool folderActive;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final ds = dsOf(context);
-    final theme = Theme.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: ds.interactiveBgHover,
-        onTap: onToggle,
-        child: Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: expanded ? ds.interactiveBgHover : null,
-          ),
-          child: Row(
-            children: [
-              // Web `.slot .folder`: tertiary folder glyph (brand tint
-              // while the group holds the selected session and is open).
-              Icon(
-                expanded ? Icons.folder_open : Icons.folder_outlined,
-                size: 16,
-                color: folderActive ? ds.accent : ds.labelTertiary,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                l10n.sessionCount(sessionCount),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  color: ds.labelTertiary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    // An inert current-group header must not render dimmed: ListTile's
+    // disabled ink follows ThemeData.disabledColor, so the scoped theme
+    // points it back at the normal on-surface ink. The leading folder
+    // glyph keeps its explicit accent/tertiary color regardless.
+    if (widget.containsCurrent) {
+      return Theme(
+        data: theme.copyWith(disabledColor: theme.colorScheme.onSurface),
+        child: tile,
+      );
+    }
+    return tile;
   }
 }
 
