@@ -1,0 +1,154 @@
+# APK release pipeline — builds the signed release APK on a GitHub-hosted
+# runner and publishes it as a GitHub Release attachment.
+#
+# Naming standard (industry / SemVer 2.0):
+#   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
+#                                            v0.1.0-beta.2, v0.1.0-rc.1
+#   - versionName:     tag sans v           0.1.0, 0.1.0-alpha.1
+#   - dev builds:      <next>-alpha.<run>   push to master OR
+#                                            workflow_dispatch, where <next>
+#                                            is the latest STABLE v* tag with
+#                                            its patch bumped (v0.0.2 -> 0.0.3)
+#   - artifacts:       dsh-android-<versionName>.apk (+ .sha256 sidecar)
+#   - release titles:  DSH Android <versionName>
+#   - dev channel:     rolling prerelease on the tag `dev` (no `v` prefix —
+#     deliberately outside the `v*` tag trigger); every dev build replaces
+#     it, so /releases/tag/dev always serves the newest master build.
+#   - release bodies:  "What's Changed" changelog (merged PR titles since
+#     the previous stable v* tag) followed by the artifact metadata block.
+#
+# Signing secrets (repository secrets, same contract as the old pipeline):
+#   ANDROID_KEYSTORE_B64  base64 of the release keystore
+#   ANDROID_KEYSTORE_PASSWORD  ANDROID_KEY_ALIAS  ANDROID_KEY_PASSWORD
+name: Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      dsh_base_url:
+        description: "DSH_BASE_URL baked into the APK"
+        default: "http://10.0.2.2:3080"
+        required: false
+  push:
+    tags: ["v*"]
+    branches: ["master"]
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The resolve step reads the latest stable v* tag to derive the
+          # next alpha version; a shallow clone has none.
+          fetch-depth: 0
+
+      - name: Set up Flutter 3.47.1 stable
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.1
+          channel: stable
+          cache: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            CHANNEL=release
+          else
+            git fetch --tags --quiet origin || true
+            # Latest stable v* tag (prerelease suffixes sort below their
+            # base; drop them), patch-bumped as the alpha baseline.
+            LATEST=$(git tag -l 'v*' --sort=-v:refname \
+              | grep -vE -- '-(alpha|beta|rc|dev)[.]?[0-9]*$' | head -1)
+            LATEST=${LATEST:-v0.0.0}
+            IFS=. read -r MAJ MIN PAT <<< "${LATEST#v}"
+            VERSION="$MAJ.$MIN.$((PAT + 1))-alpha.$GITHUB_RUN_NUMBER"
+            CHANNEL=dev
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          # Telemetry rides the version channel (the same _PRERELEASE
+          # classifier as scripts/gen_release_notes.py): prerelease
+          # versions report, stable versions are compiled out
+          # (DSH_TELEMETRY_ENABLED=false folds the gate at compile time,
+          # so the AOT build tree-shakes the telemetry chain to zero
+          # residue in stable APKs).
+          if grep -qE -- '-(alpha|beta|rc|dev)[.]?[0-9]*$' <<< "$VERSION"; then
+            echo "telemetry=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "telemetry=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pub get (workspace)
+        working-directory: flutter
+        run: flutter pub get
+
+      - name: Analyze (fail before the slow build)
+        working-directory: flutter
+        run: flutter analyze
+
+      - name: Build signed release APK
+        working-directory: flutter/app
+        env:
+          DSH_KEYSTORE_FILE: ${{ runner.temp }}/dsh-release.keystore
+          DSH_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          DSH_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          DSH_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
+          flutter build apk --release \
+            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://10.0.2.2:3080' }}" \
+            --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
+            --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \
+            --build-name="${{ steps.ver.outputs.version }}" \
+            --build-number="$GITHUB_RUN_NUMBER"
+          rm -f "$DSH_KEYSTORE_FILE"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          EXCLUDE=""
+          [[ "${{ steps.ver.outputs.channel }}" == "release" ]] && EXCLUDE="$GITHUB_REF_NAME"
+          python3 scripts/gen_release_notes.py \
+            --repo . \
+            --head "$GITHUB_SHA" \
+            --exclude-tag "$EXCLUDE" \
+            --base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            > "$RUNNER_TEMP/changelog.md"
+          echo "--- generated changelog ---"
+          cat "$RUNNER_TEMP/changelog.md"
+
+      - name: Stage artifact
+        run: |
+          APK=flutter/app/build/app/outputs/flutter-apk/app-release.apk
+          NAME="dsh-android-${{ steps.ver.outputs.version }}.apk"
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          cp "$APK" "$RUNNER_TEMP/artifacts/$NAME"
+          (cd "$RUNNER_TEMP/artifacts" && sha256sum "$NAME" > "$NAME.sha256")
+          echo "artifact=$RUNNER_TEMP/artifacts/$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.channel == 'release' && github.ref_name || 'dev' }}
+          name: DSH Android ${{ steps.ver.outputs.version }}
+          body_path: ${{ runner.temp }}/changelog.md
+          files: ${{ runner.temp }}/artifacts/*
+          update_existing: true          # rolling dev prerelease replaces itself
+          prerelease: ${{ steps.ver.outputs.channel != 'release' }}

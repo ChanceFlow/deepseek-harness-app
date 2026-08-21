@@ -15,7 +15,7 @@ the page shows this pass against the last one. Run it once per pass,
 before the first publish of that pass; a second run would compare the pass
 against itself.
 
-Publish target: $DSH_DESIGN_WWW (default ~/services/gitea/apk-www/design),
+Publish target: $DSH_DESIGN_WWW (default $HOME/public_html/dsh-design),
 served at $DSH_DESIGN_URL (default http://127.0.0.1:8899/design/).
 
 The harness skips itself unless this script sets $DSH_DESIGN_SHOTS, so a
@@ -39,7 +39,7 @@ TEST_DIR = Path("app/test/design")
 SHOTS = FLUTTER_DIR / "app" / "test" / "design" / "shots"
 CATALOG = FLUTTER_DIR / "app" / "test" / "design" / "design_shots_test.dart"
 
-DEFAULT_WWW = Path.home() / "services" / "gitea" / "apk-www" / "design"
+DEFAULT_WWW = Path.home() / "public_html" / "dsh-design"
 DEFAULT_URL = "http://127.0.0.1:8899/design/"
 
 # Widget tests get no font fallback chain, so a host with no Han face

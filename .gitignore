@@ -25,3 +25,22 @@ __pycache__/
 
 # Design shots are renders to look at, republished every pass
 flutter/app/test/design/shots/
+
+# Internal-only working files — stay on the machine, never committed.
+# Decision 2026-08-21: Gitea and GitHub share ONE cleaned history, so
+# private working files are gitignored rather than committed. (publish-prep/
+# stays tracked — the publish workflow needs it on master.)
+tasks/
+PLAN.md
+ROADMAP.md
+docker/
+.cursor/
+docs/mockups/
+docs/notes/
+docs/flutter-migration-analysis.md
+.agents/notes/implemented/process/
+.agents/skills/dsh-close-out/
+.agents/skills/dsh-design-review/
+.agents/skills/dsh-wire-parity/
+.agents/notes/proposed/
+publish-prep/PUBLISH-PLAN.md

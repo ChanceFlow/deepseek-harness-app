@@ -31,7 +31,7 @@
 # docker/build-image.sh (Flutter 3.47 + Android SDK + JDK 17 + dependency
 # caches the image warms itself from the committed workspace — no SDK or
 # maven downloads per run). Gradle's build cache and pub cache are carried
-# across runs via actions/cache (runner cache server, runner:3899) so
+# across runs via actions/cache (the runner's cache service) so
 # repeat builds reuse compiled task outputs instead of recompiling.
 # Tooling contract lives in the process note
 # .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
@@ -42,7 +42,7 @@ on:
     inputs:
       dsh_base_url:
         description: "DSH_BASE_URL baked into the APK"
-        default: "http://127.0.0.1:3080"
+        default: "http://10.0.2.2:3080"
         required: false
   push:
     tags: ["v*"]
@@ -66,10 +66,10 @@ jobs:
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
-      # runner = the runner's cache server (actions/cache); it must
-      # bypass the proxy or restore/save dies on connection reset.
-      NO_PROXY: gitea,localhost,127.0.0.1,127.0.0.1,runner
-      no_proxy: gitea,localhost,127.0.0.1,127.0.0.1,runner
+      # the runner's cache service (actions/cache) must bypass the proxy
+      # or restore/save dies on connection reset.
+      NO_PROXY: gitea,localhost,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -140,7 +140,7 @@ jobs:
         run: |
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
           flutter build apk --release \
-            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
+            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://10.0.2.2:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
             --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \
             --build-name="${{ steps.ver.outputs.version }}" \
@@ -178,7 +178,7 @@ jobs:
           APK="${{ steps.stage.outputs.apk }}"
           VERSION="${{ steps.ver.outputs.version }}"
           CHANNEL="${{ steps.ver.outputs.channel }}"
-          BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}"
+          BASE_URL="${{ inputs.dsh_base_url || 'http://10.0.2.2:3080' }}"
           API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
           AUTH="Authorization: token $GITHUB_TOKEN"
 
