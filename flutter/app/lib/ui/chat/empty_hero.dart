@@ -43,8 +43,8 @@ class EmptyHero extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Stack(
       children: [
-        // figma 313:14109 — soft blue ellipse behind the headline.
-        const Positioned.fill(
+        // figma 313:14109 — soft brand ellipse behind the headline.
+        Positioned.fill(
           child: IgnorePointer(
             child: Center(
               child: AspectRatio(
@@ -54,7 +54,10 @@ class EmptyHero extends StatelessWidget {
                     // Wide ellipse approximation via a scaled radial fill.
                     shape: BoxShape.rectangle,
                     gradient: RadialGradient(
-                      colors: [Color(0x146187D8), Color(0x006187D8)],
+                      colors: [
+                        scheme.primary.withValues(alpha: 0.08),
+                        scheme.primary.withValues(alpha: 0),
+                      ],
                     ),
                   ),
                 ),

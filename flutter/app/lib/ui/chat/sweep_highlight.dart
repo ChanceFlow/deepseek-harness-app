@@ -28,11 +28,16 @@ class SweepHighlight extends StatelessWidget {
           shaderCallback: (bounds) {
             final t = controller.value;
             final center = bounds.width * (t * 1.3 - 0.15);
-            return const LinearGradient(
+            final glare = Theme.of(context).colorScheme.onSurface;
+            return LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [Color(0x00000000), Color(0x33888888), Color(0x00000000)],
-              stops: [0.0, 0.55, 1.0],
+              colors: [
+                glare.withValues(alpha: 0),
+                glare.withValues(alpha: 0.20),
+                glare.withValues(alpha: 0),
+              ],
+              stops: const [0.0, 0.55, 1.0],
             ).createShader(
               Rect.fromCenter(
                 center: Offset(center, bounds.height / 2),

@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/shared/session_tree.dart';
+import 'package:app/ui/theme/theme.dart';
 
 import '../../l10n_app.dart';
 
@@ -195,6 +196,30 @@ void main() {
       expect(find.byType(DoneDot), findsOneWidget);
       expect(find.byType(WarningDot), findsNothing);
       expect(find.byType(RunningDot), findsNothing);
+    });
+
+    testWidgets('the done dot paints whichever success the theme carries', (
+      tester,
+    ) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        await tester.pumpWidget(
+          l10nApp(theme: theme, home: const Scaffold(body: DoneDot())),
+        );
+        // MaterialApp lerps between themes; land on the new one.
+        await tester.pump(const Duration(milliseconds: 400));
+        final core = tester.widget<Container>(
+          find
+              .descendant(
+                of: find.byType(DoneDot),
+                matching: find.byType(Container),
+              )
+              .last,
+        );
+        expect(
+          (core.decoration! as BoxDecoration).color,
+          theme.colorScheme.success,
+        );
+      }
     });
   });
 }

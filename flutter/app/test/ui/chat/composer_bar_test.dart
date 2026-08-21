@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
+import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_local_state_fake.dart';
@@ -32,6 +33,7 @@ Future<void> _pump(
   ChatUiState uiState,
   List<ChatAction> actions, {
   FakeChatLocalState? localState,
+  ThemeData? theme,
 }) {
   tester.view.physicalSize = const Size(800, 1280);
   tester.view.devicePixelRatio = 1.0;
@@ -40,6 +42,7 @@ Future<void> _pump(
   return tester.pumpWidget(
     ProviderScope(
       child: l10nApp(
+        theme: theme,
         home: ChatScreen(
           uiState: uiState,
           onAction: actions.add,
@@ -84,6 +87,33 @@ void main() {
     await tester.pump();
 
     expect(actions.whereType<SendPrompt>(), isEmpty);
+  });
+
+  testWidgets('an actionable send FAB inks with the container it fills on', (
+    tester,
+  ) async {
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      await _pump(
+        tester,
+        const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+        <ChatAction>[],
+        theme: theme,
+      );
+      // MaterialApp lerps between themes; land on the new one.
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.enterText(find.byType(TextField), 'hello');
+      await tester.pump();
+
+      final fab = tester.widget<FloatingActionButton>(
+        find.descendant(
+          of: find.byTooltip('Send'),
+          matching: find.byType(FloatingActionButton),
+        ),
+      );
+      final scheme = theme.colorScheme;
+      expect(fab.backgroundColor, scheme.primaryContainer);
+      expect(fab.foregroundColor, scheme.onPrimaryContainer);
+    }
   });
 
   testWidgets('send button sends, clears, and clears the saved draft', (

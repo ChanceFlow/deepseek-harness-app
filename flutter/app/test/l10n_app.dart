@@ -13,7 +13,11 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 /// MaterialApp carrying the app's localization delegates and locales,
 /// with [home] as the pumped surface.
-Widget l10nApp({required Widget home}) {
+///
+/// Pass [theme] to pump a surface under a specific [ColorScheme]: a test that
+/// pumps the same widget under two themes and reads the painted color back
+/// fails the moment the widget names a color instead of a role.
+Widget l10nApp({required Widget home, ThemeData? theme}) {
   return MaterialApp(
     localizationsDelegates: const [
       AppLocalizations.delegate,
@@ -22,6 +26,7 @@ Widget l10nApp({required Widget home}) {
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: AppLocalizations.supportedLocales,
+    theme: theme,
     home: home,
   );
 }

@@ -4,7 +4,8 @@
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
         verify_skills, verify_env_names, verify_toolchain_pin,
-        verify_i18n_arb, gen_launcher_icons --check          (seconds, no Flutter)
+        verify_i18n_arb, verify_theme_native,
+        gen_launcher_icons --check                           (seconds, no Flutter)
   code  flutter analyze, flutter test, check_dart_imports
   all   docs + code (default)
 
@@ -79,6 +80,12 @@ GATES: list[dict] = [
         "name": "i18n-arb",
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/verify_i18n_arb.py"],
+        "cwd": REPO,
+    },
+    {
+        "name": "theme-native",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_theme_native.py"],
         "cwd": REPO,
     },
     {

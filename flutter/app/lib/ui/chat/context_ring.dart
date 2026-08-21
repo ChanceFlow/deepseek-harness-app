@@ -71,11 +71,7 @@ class ContextRing extends StatelessWidget {
             breakdown?.systemTokens ?? 0,
             scheme.outline,
           ),
-          (
-            l10n.toolsLabel,
-            breakdown?.toolsTokens ?? 0,
-            const Color(0xffA78BFA),
-          ), // violet-400 literal, as the web
+          (l10n.toolsLabel, breakdown?.toolsTokens ?? 0, scheme.tertiary),
           (
             l10n.conversationLabel,
             breakdown?.messageTokens ?? 0,

@@ -6,6 +6,7 @@ library;
 import 'dart:async';
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/theme/theme.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 
@@ -237,7 +238,7 @@ class _StateDot extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = switch (state) {
       _DotState.ongoing => scheme.primary,
-      _DotState.done => Colors.green.shade600,
+      _DotState.done => scheme.success,
       _DotState.warning => scheme.error,
       _DotState.error => scheme.error,
     };

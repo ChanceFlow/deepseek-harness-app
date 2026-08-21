@@ -538,7 +538,7 @@ class DoneDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Colors.green.shade600;
+    final color = Theme.of(context).colorScheme.success;
     return SizedBox(
       width: size,
       height: size,

@@ -1945,7 +1945,7 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
         );
       case ToolRowState.ok:
-        return Icon(Icons.check, size: 14, color: Colors.green.shade600);
+        return Icon(Icons.check, size: 14, color: scheme.success);
       case ToolRowState.error:
         return Icon(
           Icons.close,
@@ -4236,7 +4236,7 @@ class _PrimarySendButton extends StatelessWidget {
         ? onStop != null
         : enabled && !sending && onSend != null;
     final fill = active ? scheme.primaryContainer : scheme.surfaceContainerLow;
-    final glyph = active ? Colors.white : scheme.onSurfaceVariant;
+    final glyph = active ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
     return Tooltip(
       message: running
           ? l10n.stopTooltip
