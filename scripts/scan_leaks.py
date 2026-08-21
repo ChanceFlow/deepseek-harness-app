@@ -58,9 +58,12 @@ PUBLIC_EXTRA = re.compile(
     # legacy signatures that must stay hidden — NOT the public identity
     # (ChanceFlow <user@example.com>) which is expected in author
     # and tagger fields by design.
+    # NOTE: the word "gitea" is NOT a signal — .gitea/ workflows ship in
+    # the public tree (the forge software is public knowledge); what stays
+    # secret is the internal addressing and identity below.
     r"10\.10\.0\.|runner|EGRESS_PROXY|/home/user|"
     r"gulugulu1103@qq\.com|chance@10\.10\.0\.1|"
-    r"@10\.10\.0\.1|[Gg]itea"
+    r"@10\.10\.0\.1"
 )
 
 SKIP_DIRS = {".git", "reference", "publish-prep", "build", ".dart_tool", ".gradle"}

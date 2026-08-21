@@ -30,8 +30,7 @@
   ".agents/notes/README.md": 600,
   "docs/prose-standard.md": 600,
   "docs/design-standard.md": 900,
-  "docs/testing.md": 600,
-  "publish-prep/public/root/AGENTS.md": 1600
+  "docs/testing.md": 600
  },
  "agents_md_discovery": "**/AGENTS.md",
  "notes": {
