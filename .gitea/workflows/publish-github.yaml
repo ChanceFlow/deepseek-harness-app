@@ -1,27 +1,21 @@
-# Publish to GitHub — regenerate the clean public history after main CI
-# lands and push it to the GitHub source repo (ChanceFlow/dsh-flutter-client).
+# Publish GitHub — mirror the SHARED history to the public repo
+# (ChanceFlow/dsh-flutter-client).
 #
-# Model B sync (decision 2026-08-21): Gitea stays the private development
-# home (original history, internal tooling intact); GitHub carries the
-# sanitized export. The pipeline (publish-prep/prepare_public_repo.sh)
-# rebuilds the clean history in a throwaway clone: identity rewritten to
-# ChanceFlow <user@example.com>, commit messages scrubbed, private
-# paths pruned (tasks/, .gitea/, docker/...), submodule re-pinned to the
-# official dsh commit, then runs the leak gates (tree + every history blob)
-# and the doc gates, and force-pushes master + tags.
+# Model A sync (owner decision 2026-08-21): Gitea and GitHub hold ONE
+# history with identical commit hashes. The tracked tree is public-clean
+# by construction (private working files are gitignored), the cleanse
+# (publish-prep/cleanse_history.sh) already rewrote the past, and every
+# commit passes the pre-commit/pre-push gitleaks hooks — so publishing is
+# a plain mirror: push master + tags, no regeneration, no force-rebuild.
+# The fast public-mode tree sweep below is a last line of defense that
+# aborts the mirror if something slipped past the hooks.
 #
-# The pipeline itself is the completion gate: leak sweeps, doc gates AND
-# the full Flutter suite (heavy CI — owner decision 2026-08-21) all run
-# independently on the generated artifact; any failure aborts the push.
-# The publish path never trusts ci.yaml's result, even for the same SHA —
-# public exposure gets its own complete verification.
+# First run also flips the GitHub default branch to master and deletes the
+# stale shadow-era "main" (idempotent afterwards).
 #
-# Commit hashes differ between Gitea and GitHub by design (model B);
-# content stays synchronized. Runs on every master push; the flow never
-# re-triggers itself (pushes go to github.com, not back to this repo).
-#
-# Runner needs: network (curl gitleaks + git-filter-repo),
-# secrets.GH_PUBLISH_TOKEN (repo scope on ChanceFlow/dsh-flutter-client).
+# Runner needs secrets.GH_PUBLISH_TOKEN (repo scope on
+# ChanceFlow/dsh-flutter-client) and the EGRESS_PROXY repo variable for
+# github.com/api.github.com egress.
 name: Publish GitHub
 
 on:
@@ -36,67 +30,49 @@ defaults:
   run:
     shell: bash
 
+env:
+  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+  http_proxy: ${{ vars.EGRESS_PROXY }}
+  https_proxy: ${{ vars.EGRESS_PROXY }}
+  NO_PROXY: gitea,localhost,127.0.0.1
+  no_proxy: gitea,localhost,127.0.0.1
+
 jobs:
-  publish:
+  mirror:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout (full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install tools (git-filter-repo, gitleaks)
+      - name: Last-line leak sweep (public mode, hard fail)
         run: |
-          mkdir -p "$HOME/bin"
-          curl -fsSL -o "$HOME/bin/git-filter-repo" \
-            https://raw.githubusercontent.com/newren/git-filter-repo/v2.47.0/git-filter-repo
-          chmod +x "$HOME/bin/git-filter-repo"
-          curl -fsSL -o /tmp/gitleaks.tar.gz \
-            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
-          tar -xzf /tmp/gitleaks.tar.gz -C "$HOME/bin" gitleaks
-          chmod +x "$HOME/bin/gitleaks"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
+          python3 scripts/scan_leaks.py --tree --mode=public \
+            || { echo "::error::leak sweep failed — mirror aborted"; exit 1; }
 
-      - name: Set up Flutter 3.47.1 stable (heavy CI — full suite on the final artifact)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.1
-          channel: stable
-          cache: true
-
-      - name: Build public repo (filter + leak sweeps + doc gates + FULL suite)
-        run: |
-          # Heavy CI by owner decision: the publish path independently re-runs
-          # the complete verification (analyze + all tests + import gate +
-          # leak sweeps + doc gates) on the generated artifact — it never
-          # trusts ci.yaml's result, even for the same SHA. Any failure aborts
-          # the push; this is the second full gate before public exposure.
-          bash publish-prep/prepare_public_repo.sh \
-            --mode=filter --agents=subset \
-            --src="$(pwd)" \
-            --out=/tmp/publish 2>&1 | tee /tmp/publish.log || {
-              echo "::error::pipeline failed — see /tmp/publish.log"
-              exit 1
-            }
-          echo "PUBLIC_REPO=/tmp/publish/public-repo" >> "$GITHUB_ENV"
-          echo "PUBLIC_HEAD=$(git -C /tmp/publish/public-repo rev-parse HEAD)" >> "$GITHUB_ENV"
-
-      - name: Push to GitHub (force — every publish regenerates the sanitized history)
+      - name: Mirror master + tags to GitHub
         env:
           TARGET: https://ChanceFlow:${{ secrets.GH_PUBLISH_TOKEN }}@github.com/ChanceFlow/dsh-flutter-client.git
         run: |
-          cd "$PUBLIC_REPO"
-          git remote add origin "$TARGET"
-          git push --force origin master:master
-          git push --force origin 'refs/tags/*:refs/tags/*' || true
-          echo "pushed master + tags @ $PUBLIC_HEAD to ChanceFlow/dsh-flutter-client"
+          git remote add github "$TARGET"
+          # --force: Gitea master is the source of truth; the mirror must
+          # always converge GitHub to exactly this history.
+          git push --force github master:master
+          git push --force github 'refs/tags/*:refs/tags/*' || true
+          echo "mirrored master + tags @ $(git rev-parse HEAD)"
 
-      - name: Verify published clone (third-party view)
+      - name: Flip default branch to master, drop stale shadow-era main
+        env:
+          TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
         run: |
-          rm -rf /tmp/verify
-          git clone --recurse-submodules "file://$PUBLIC_REPO" /tmp/verify
-          cd /tmp/verify && python3 scripts/verify_all.py docs || {
-            echo "::error::published clone fails doc gates"
-            exit 1
-          }
-          echo "published clone verified"
+          API="https://api.github.com/repos/ChanceFlow/dsh-flutter-client"
+          curl -fsS -X PATCH -H "Authorization: token $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$API" -d '{"default_branch":"master"}' >/dev/null \
+            && echo "default branch = master"
+          curl -fsS -X DELETE -H "Authorization: token $TOKEN" \
+            "$API/git/refs/heads/main" >/dev/null \
+            && echo "stale main deleted" \
+            || echo "main already gone"

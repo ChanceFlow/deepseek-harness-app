@@ -63,11 +63,6 @@ description = "Absolute personal path in fixtures"
 regex = '''/home/user'''
 
 [[rules]]
-id = "dsha-gitea-ref"
-description = "Gitea (internal forge) reference"
-regex = '''[Gg]itea'''
-
-[[rules]]
 id = "dsha-deepseek-api-key"
 description = "DeepSeek/OpenAI-style API key (deliberately absent from gitleaks' default rules)"
 regex = '''\bsk-[A-Za-z0-9]{24,}\b'''
