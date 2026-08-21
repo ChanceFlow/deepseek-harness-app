@@ -25,8 +25,20 @@ smaller word count that drops a failure mode is a defect, not an improvement.
 - **Concrete terms over metaphors.** Before writing "shape", "surface",
   "boundary", ask whether the exact noun (response fields, DTO decoder,
   WebSocket frames, the import gate) names the subject better.
-- **One physical line per paragraph.** Soft-wrap in the editor; keep diffs
-  and grep minimal. Code blocks, tables, and lists keep their formatting.
+- **Prompt the positive.** A prohibition drags the banned behavior into the
+  reader's context and half-reads as an instruction to do it. State the
+  target behavior instead ("DTOs are hand-written decoders"), and keep a ban
+  only as a guardrail beside its positive ("…; reaching for build_runner
+  reopens a rejected decision").
+- **Hard-wrap prose at 78 columns.** Every markdown file in the repo is
+  wrapped; break at spaces so link targets and inline code spans stay whole.
+  Code blocks and tables keep their own formatting and may run long.
+- **English for instructions, either language for records.** `AGENTS.md`
+  files, `docs/`, skills, and `///` comments are English — they sit beside
+  English APIs, lint names, and the reference submodule. Decision notes and
+  `tasks/` ledgers may be Chinese. User-visible strings are neither: they are
+  ARB keys carrying both locales
+  ([flutter/app/AGENTS.md](../flutter/app/AGENTS.md)).
 - **Emphasis is budgeted.** Bold marks only the clause that changes behavior;
   emphasis everywhere means emphasis nowhere.
 - **Address the agent as the reader.** Name the command, the file, the
@@ -49,6 +61,8 @@ Audit any document against this before accepting it:
 - Hand-restated inventories (file, package, or test lists) that the
   filesystem or a generator already owns.
 - Paragraph walls carrying several rules — split or demote to the owning home.
+- A line the agent already follows by default; it spends context and changes
+  nothing. Delete the sentence, not a few of its words.
 - Spec-speak in records of shipped decisions: "should", "shall", migration
   plans — an implemented record describes what *is*.
 

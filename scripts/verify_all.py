@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Aggregate gate runner — the one command that defines "done".
+"""Aggregate gate runner — CI's definition of "done".
 
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
         verify_skills, gen_launcher_icons --check            (seconds, no Flutter)
   code  flutter analyze, flutter test, check_dart_imports
-  all   docs + code (default; what CI runs)
+  all   docs + code (default)
 
 Usage:
   python3 scripts/verify_all.py [--list] [docs|code|all]
 
-Select the narrowest group that covers your change (docs/testing.md
-"Select evidence by surface"); run `all` before closing a task.
+.gitea/workflows/ci.yaml runs `docs` and `code` as two parallel jobs on every
+push and pull request, and both gate a merge. Locally, reach for the narrowest
+tool that would fail for your change (docs/testing.md "Select evidence by
+surface") — `all` is for a structural change that touches every surface.
 Exit code 0 = every gate green, 1 = at least one gate failed.
 """
 

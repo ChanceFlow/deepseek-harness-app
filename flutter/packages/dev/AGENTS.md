@@ -4,8 +4,18 @@ Supplements the [root conventions](../../../AGENTS.md#conventions) and the
 [workspace file](../../AGENTS.md). This package is the debug-build tooling
 home: telemetry facade (log / event / metric), frame-rate tracking, and the
 crash capture chain (ring log buffer, crash marker, restart detection,
-fatal-log reporting). It is wired ONLY on debug builds (`kDebugMode` gate in
-`app/lib/main.dart`); release builds never execute it.
+fatal-log reporting).
+
+## Who runs it
+
+One compile-time gate decides, in `app/lib/main.dart`: debug builds always
+report; a release build reports only when the release pipeline passed
+`--dart-define=DSH_TELEMETRY_ENABLED=true`, which it does for prerelease
+versions (`-alpha/-beta/-rc`). A stable release folds `kReleaseMode &&
+!kDebugTelemetryEnabled` to `return` and AOT tree-shakes the whole chain out
+of the APK. Widget tests skip the chain on `FLUTTER_TEST`. A local
+`flutter build apk --release` without the define reports — the gate errs
+toward observability.
 
 ## Contract and boundaries
 
