@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# pre-commit — block staged content that carries credentials or, in a
+# public clone, internal-infrastructure/personal signatures.
+#
+# Mode resolution (same rule as pre-push):
+#   - explicit override: git config leakscan.mode (secret|public|off)
+#   - otherwise public  if the primary remote URL contains "github.com"
+#   - otherwise secret  (internal repos: LAN addresses are legitimate)
+#
+# Enable with:  git config core.hooksPath scripts/git-hooks
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+
+mode=$(git config --get leakscan.mode || true)
+if [ -z "$mode" ]; then
+  remote=$(git remote get-url origin 2>/dev/null || true)
+  if [[ "$remote" == *github.com* ]]; then
+    mode=public
+  else
+    mode=secret
+  fi
+fi
+[ "$mode" = off ] && exit 0
+
+if ! python3 "$ROOT/scripts/scan_leaks.py" --staged --mode="$mode"; then
+  echo
+  echo "pre-commit: leak scan failed (mode=$mode)."
+  echo "  Real credentials are never allowed. In a public clone, internal"
+  echo "  infrastructure/personal signatures are blocked too."
+  echo "  Override for this clone: git config leakscan.mode off  (not recommended)"
+  exit 1
+fi
+exit 0

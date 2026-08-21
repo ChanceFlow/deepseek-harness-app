@@ -1,0 +1,65 @@
+# Gitleaks custom rules for deepseek-harness-android public gate.
+# Layered on the full default rule set (useDefault = true) so the scan is
+# both authoritative (150+ upstream secret fingerprints) and complete for
+# THIS repo's specific leak surface: internal LAN addresses, ACT runner
+# naming, proxy vars, personal mailbox fragments, absolute personal paths,
+# and Gitea references — the signatures that made the old "reject public"
+# decision (process/2026-08-21-gh-shadow-releases).
+#
+# Run from the repo root:
+#   gitleaks detect --source . --log-opts="--all" --config scripts/gitleaks.toml
+
+title = "deepseek-harness-android public leak rules"
+
+[extend]
+useDefault = true
+
+# The detector files carry the pattern vocabulary they detect; exempting the
+# scanner itself is standard practice (gitleaks' own default config does the
+# same for its rules files).
+[allowlist]
+paths = [
+    '''scripts/scan_leaks.py''',
+    '''scripts/gitleaks.toml''',
+    '''scripts/git-hooks/''',
+]
+
+[[rules]]
+id = "dsha-internal-lan-ip"
+description = "Internal LAN address (10.10.0.x)"
+regex = '''10\.10\.0\.\d{1,3}'''
+
+[[rules]]
+id = "dsha-lan-http-url"
+description = "Internal LAN URL (http://<lan>:port)"
+regex = '''http://10\.10\.\d+\.\d+:\d+'''
+
+[[rules]]
+id = "dsha-act-runner"
+description = "ACT runner (internal CI) naming"
+regex = '''runner'''
+
+[[rules]]
+id = "dsha-lan-proxy-var"
+description = "LAN proxy variable naming"
+regex = '''EGRESS_PROXY'''
+
+[[rules]]
+id = "dsha-personal-mailbox"
+description = "Legacy mailbox that must stay hidden (qq / internal host emails)"
+regex = '''gulugulu1103@qq\.com|chance@10\.10\.0\.1|@10\.10\.0\.1'''
+
+[[rules]]
+id = "dsha-host-internal-email"
+description = "Internal host email domain"
+regex = '''@10\.10\.0\.1'''
+
+[[rules]]
+id = "dsha-personal-abs-path"
+description = "Absolute personal path in fixtures"
+regex = '''/home/user'''
+
+[[rules]]
+id = "dsha-gitea-ref"
+description = "Gitea (internal forge) reference"
+regex = '''[Gg]itea'''
