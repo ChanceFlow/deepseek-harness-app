@@ -167,8 +167,9 @@ class FakeChatRepository implements ChatRepository {
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) {
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
     commandDispatchImages[line] = images;
     if (commandFailures.contains(line)) {
       throw UnsupportedError('commands/execute: connection aborted');
@@ -1385,8 +1386,9 @@ class _GoalRecordingRepository extends FakeChatRepository {
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) {
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
     executedCommands.add(line);
     return Future<CommandExecution?>.value(
       const CommandExecution(
@@ -1415,8 +1417,9 @@ class _DetachedDispatchRepository extends FakeChatRepository {
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  ) {
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  }) {
     dispatched.add(line);
     final completer = Completer<CommandExecution?>();
     _pending[line] = completer;

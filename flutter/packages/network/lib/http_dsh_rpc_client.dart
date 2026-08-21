@@ -16,25 +16,15 @@ import 'rpc_envelope.dart';
 /// (long-running RPCs like compaction stay unconstrained).
 const Duration kDshRpcConnectTimeout = Duration(seconds: 10);
 
-/// How long a connection may sit without any bytes before the platform
-/// closes it. The dart:io default (15 s) kills an in-flight RPC whose host
-/// spends the whole budget computing server-side — a full-session
-/// `/compact` runs 30+ seconds with no bytes crossing the socket before the
-/// response lands. This overrides the socket idle window only; it never
-/// imposes a request deadline.
-const Duration kDshRpcIdleTimeout = Duration(minutes: 5);
-
 final class HttpDshRpcClient implements DshRpcClient {
   HttpDshRpcClient(
     this._baseUrl, {
     http.Client? httpClient,
     this.connectTimeout = kDshRpcConnectTimeout,
-    this.idleTimeout = kDshRpcIdleTimeout,
   }) : _httpClient = httpClient ??
            IOClient(
              HttpClient()
-               ..connectionTimeout = connectTimeout
-               ..idleTimeout = idleTimeout,
+               ..connectionTimeout = connectTimeout,
            );
 
   final Uri _baseUrl;
@@ -42,9 +32,6 @@ final class HttpDshRpcClient implements DshRpcClient {
 
   /// See [kDshRpcConnectTimeout].
   final Duration connectTimeout;
-
-  /// See [kDshRpcIdleTimeout].
-  final Duration idleTimeout;
 
   static const _headers = <String, String>{
     'Content-Type': 'application/json; charset=utf-8',

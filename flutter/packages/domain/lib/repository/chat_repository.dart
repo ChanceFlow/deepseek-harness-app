@@ -129,11 +129,20 @@ abstract class ChatRepository {
   /// registered command for the line (an unmatched name is not an
   /// error — the caller falls back to the ordinary prompt channel, the
   /// web live-directory miss).
+  ///
+  /// When [retryOnTransportAbort] is set, a transport-level socket drop
+  /// before any response bytes re-dispatches the line once on a fresh
+  /// connection. The host aborts a command the moment its HTTP request
+  /// dies — an in-flight drop leaves no settled result — so a retry is a
+  /// clean re-run, not a duplicate. Only callers executing a benign,
+  /// re-runnable command (the detached bare commands) may set it; a
+  /// command that already had side effects would double-apply them.
   Future<CommandExecution?> executeCommand(
     String sessionId,
     String line,
-    List<PendingImage> images,
-  );
+    List<PendingImage> images, {
+    bool retryOnTransportAbort = false,
+  });
 
   /// Download one durable image; bytes are session-authorized.
   Future<AttachmentData> readAttachment(

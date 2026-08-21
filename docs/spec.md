@@ -364,6 +364,14 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `command/done` events, not a held sending state; only an immediate
   failure — a transport abort or an admission error that never entered a
   handler — surfaces in the chat error banner.
+- A detached bare dispatch re-runs its transport once on a mid-flight
+  socket drop: a `commands/execute` failure whose cause is a
+  `SocketException` re-dispatches on a fresh connection (the host
+  aborted the first attempt, so nothing settled and compaction is
+  idempotent). Attached arg-taking commands never retry, and a second
+  consecutive drop surfaces in the error banner. The first attempt's
+  aborted `command/done` and the retry's outcome each fold into their
+  own command cards.
 - `commands/list` stays uncovered: the roster's names/descriptions/hints
   are mirrored statically (`command_roster.dart`); fetching the live
   catalog is deferred.
