@@ -1726,7 +1726,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                           : model.summary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: failed
                             ? theme.colorScheme.error
                             : ds.labelTertiary,
@@ -1739,7 +1739,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                     const SizedBox(width: 4),
                     Text(
                       suffix,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: ds.labelSecondary,
                       ),
                     ),
@@ -4425,7 +4425,7 @@ class CompactionRow extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             l10n.contextCompacted,
-            style: Theme.of(context).textTheme.bodySmall
+            style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(color: ds.labelPrimaryDimmed),
           ),
           Container(
@@ -4442,7 +4442,7 @@ class CompactionRow extends StatelessWidget {
               l10n.compactedHistoryCount(shadowedCount),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: ds.labelTertiary),
             ),
           ),
@@ -4484,7 +4484,7 @@ class ContextInjectionRow extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: theme.textTheme.bodyMedium?.copyWith(
               color: ds.labelPrimaryDimmed,
             ),
           ),
@@ -4503,7 +4503,7 @@ class ContextInjectionRow extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: ds.labelSecondary,
                 ),
               ),
@@ -4516,7 +4516,7 @@ class ContextInjectionRow extends StatelessWidget {
                 summary,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: ds.labelTertiary,
                 ),
               ),

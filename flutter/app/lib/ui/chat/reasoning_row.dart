@@ -100,7 +100,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                   const SizedBox(width: 6),
                   Text(
                     l10n.thinkLabel,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: ds.labelSecondary,
                     ),
                   ),
@@ -119,7 +119,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                         _summary,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           color: ds.labelTertiary,
                         ),
                       ),
