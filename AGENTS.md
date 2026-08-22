@@ -1,4 +1,4 @@
-# AGENTS.md — deepseek-harness-android (public)
+# AGENTS.md — deepseek-harness-app (public)
 
 Flutter client for DeepSeek Harness (dsh): a pub workspace under `flutter/`
 talking to an unmodified `dsh web` backend pinned via the reference

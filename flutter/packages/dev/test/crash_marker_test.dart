@@ -11,7 +11,7 @@ void main() {
     version: '0.1.0',
     build: '7',
     platform: 'android',
-    sourceRepo: 'Chance/deepseek-harness-android',
+    sourceRepo: 'ChanceFlow/deepseek-harness-app',
     sourceCommit: 'abc1234',
   );
 
