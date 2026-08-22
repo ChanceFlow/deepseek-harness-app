@@ -40,6 +40,8 @@ docs/notes/
 docs/flutter-migration-analysis.md
 .agents/notes/implemented/process/*
 !.agents/notes/implemented/process/2026-08-21-shared-history-publish.md
+!.agents/notes/implemented/process/2026-08-22-commit-identity-guard.md
+!.agents/notes/implemented/process/2026-08-22-loopback-default-backend.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/

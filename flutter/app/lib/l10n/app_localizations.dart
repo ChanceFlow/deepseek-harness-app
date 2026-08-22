@@ -1253,7 +1253,7 @@ abstract class AppLocalizations {
   /// No description provided for @backendBaseUrlHint.
   ///
   /// In en, this message translates to:
-  /// **'http://10.0.2.2:3080'**
+  /// **'http://127.0.0.1:3080'**
   String get backendBaseUrlHint;
 
   /// No description provided for @baseUrlDerivationHint.
@@ -1265,7 +1265,7 @@ abstract class AppLocalizations {
   /// No description provided for @baseUrlValidHint.
   ///
   /// In en, this message translates to:
-  /// **'http or https with a host, e.g. http://10.0.2.2:3080'**
+  /// **'http or https with a host, e.g. http://127.0.0.1:3080'**
   String get baseUrlValidHint;
 
   /// No description provided for @remove.

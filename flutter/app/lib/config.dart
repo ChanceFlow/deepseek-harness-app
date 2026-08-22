@@ -1,14 +1,17 @@
 /// Build-time configuration injected via `--dart-define`.
 ///
 /// Mirrors the legacy `-PDSH_BASE_URL` Gradle property: pass
-/// `--dart-define=DSH_BASE_URL=http://192.168.1.10:3080` to override the
-/// emulator-loopback default.
+/// `--dart-define=DSH_BASE_URL=http://10.0.2.2:3080` to override the
+/// loopback default. The default is the device loopback because `dsh web`
+/// binds loopback-only by design (it rejects all-interfaces binding as a
+/// remote-code-execution hazard); a phone reaches the backend through a
+/// loopback forward such as `adb reverse tcp:3080 tcp:3080`.
 library;
 
 /// dsh backend base URL (unchanged legacy contract).
 const String kDshBaseUrl = String.fromEnvironment(
   'DSH_BASE_URL',
-  defaultValue: 'http://10.0.2.2:3080',
+  defaultValue: 'http://127.0.0.1:3080',
 );
 
 /// OTLP/HTTP collector base URL for debug telemetry (SigNoz otel receiver);
