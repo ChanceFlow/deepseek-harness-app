@@ -713,7 +713,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendBaseUrlLabel => 'Base URL';
 
   @override
-  String get backendBaseUrlHint => 'http://10.0.2.2:3080';
+  String get backendBaseUrlHint => 'http://127.0.0.1:3080';
 
   @override
   String get baseUrlDerivationHint =>
@@ -721,7 +721,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get baseUrlValidHint =>
-      'http or https with a host, e.g. http://10.0.2.2:3080';
+      'http or https with a host, e.g. http://127.0.0.1:3080';
 
   @override
   String get remove => 'Remove';

@@ -695,13 +695,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendBaseUrlLabel => '基础 URL';
 
   @override
-  String get backendBaseUrlHint => 'http://10.0.2.2:3080';
+  String get backendBaseUrlHint => 'http://127.0.0.1:3080';
 
   @override
   String get baseUrlDerivationHint => 'RPC 与事件路径由此基础 URL 派生。';
 
   @override
-  String get baseUrlValidHint => '带主机的 http 或 https，例如 http://10.0.2.2:3080';
+  String get baseUrlValidHint => '带主机的 http 或 https，例如 http://127.0.0.1:3080';
 
   @override
   String get remove => '移除';

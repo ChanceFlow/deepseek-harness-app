@@ -34,7 +34,7 @@ cd flutter && flutter test app/test/ui/chat/chat_screen_test.dart   # one behavi
 cd flutter && flutter analyze app/lib/ui/chat                       # one directory
 python3 scripts/verify_all.py docs                                  # every doc gate, ~2s
 python3 scripts/check_dart_imports.py                               # the import boundary
-cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
+cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://127.0.0.1:3080
 ```
 
 CI owns the exhaustive run — [.github/workflows/ci.yaml](.github/workflows/ci.yaml)

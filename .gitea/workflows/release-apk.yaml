@@ -3,8 +3,9 @@
 # mirrors the artifact to the public GitHub repo
 # (ChanceFlow/deepseek-harness-app — the shared-history public source).
 # The GitHub release body is sanitized by contract: no Gitea URLs, no PR
-# links, no DSH_BASE_URL (its internal LAN default would leak the LAN
-# address), no commit field.
+# links, no DSH_BASE_URL (a dispatch-supplied endpoint would publish the
+# operator's addressing; the loopback default is not release-facing
+# either), no commit field.
 #
 # Naming standard (industry / SemVer 2.0):
 #   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
@@ -43,7 +44,7 @@ on:
     inputs:
       dsh_base_url:
         description: "DSH_BASE_URL baked into the APK"
-        default: "http://10.0.2.2:3080"
+        default: "http://127.0.0.1:3080"
         required: false
   push:
     tags: ["v*"]
@@ -141,7 +142,7 @@ jobs:
         run: |
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
           flutter build apk --release \
-            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://10.0.2.2:3080' }}" \
+            --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
             --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \
             --build-name="${{ steps.ver.outputs.version }}" \
@@ -179,7 +180,7 @@ jobs:
           APK="${{ steps.stage.outputs.apk }}"
           VERSION="${{ steps.ver.outputs.version }}"
           CHANNEL="${{ steps.ver.outputs.channel }}"
-          BASE_URL="${{ inputs.dsh_base_url || 'http://10.0.2.2:3080' }}"
+          BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}"
           API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
           AUTH="Authorization: token $GITHUB_TOKEN"
 

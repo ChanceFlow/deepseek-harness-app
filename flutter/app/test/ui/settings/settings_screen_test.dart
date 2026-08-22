@@ -756,7 +756,7 @@ void main() {
             (ref) async => _backendStore(document: document),
           ),
           for (final uri in [
-            Uri.parse(kDshBaseUrl),
+            Uri.parse('http://10.0.2.2:3080'),
             Uri.parse('http://10.0.2.2:3081'),
             Uri.parse('http://10.0.2.2:3082'),
           ]) ...[
@@ -925,7 +925,7 @@ void main() {
           chatRepositoryProvider('default').overrideWithValue(laptop),
           chatRepositoryProvider('b1').overrideWithValue(buildBox),
           for (final uri in [
-            Uri.parse(kDshBaseUrl),
+            Uri.parse('http://10.0.2.2:3080'),
             Uri.parse('http://10.0.2.2:3081'),
           ]) ...[
             dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
