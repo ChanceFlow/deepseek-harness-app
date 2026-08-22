@@ -25,7 +25,7 @@ class DebugBuildInfo {
     this.version = '0.0.0-dev',
     this.build = '0',
     this.platform = 'android',
-    this.sourceRepo = 'Chance/deepseek-harness-android',
+    this.sourceRepo = 'ChanceFlow/deepseek-harness-app',
     this.sourceCommit = 'unknown',
   });
 
@@ -45,7 +45,7 @@ class DebugBuildInfo {
     platform: 'android',
     sourceRepo: String.fromEnvironment(
       'DSH_SOURCE_REPO',
-      defaultValue: 'Chance/deepseek-harness-android',
+      defaultValue: 'ChanceFlow/deepseek-harness-app',
     ),
     sourceCommit: String.fromEnvironment('DSH_SOURCE_COMMIT', defaultValue: 'unknown'),
   );

@@ -31,7 +31,7 @@ const String kDshSourceCommit = String.fromEnvironment(
 /// Source repo owning [kDshSourceCommit]; reported as a resource attribute.
 const String kDshSourceRepo = String.fromEnvironment(
   'DSH_SOURCE_REPO',
-  defaultValue: 'Chance/deepseek-harness-android',
+  defaultValue: 'ChanceFlow/deepseek-harness-app',
 );
 
 /// Human-readable app version reported in telemetry and crash records.

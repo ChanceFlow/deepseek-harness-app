@@ -1,4 +1,4 @@
-# CI for deepseek-harness-android — runs the gate aggregate as two parallel
+# CI for deepseek-harness-app — runs the gate aggregate as two parallel
 # jobs so a doc-only change fails in seconds instead of behind the Flutter
 # suite. Both are required statuses on `master`
 # (`CI / docs (pull_request)`, `CI / code (pull_request)`).

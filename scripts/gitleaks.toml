@@ -1,4 +1,4 @@
-# Gitleaks custom rules for deepseek-harness-android public gate.
+# Gitleaks custom rules for deepseek-harness-app public gate.
 # Layered on the full default rule set (useDefault = true) so the scan is
 # both authoritative (150+ upstream secret fingerprints) and complete for
 # THIS repo's specific leak surface: internal LAN addresses, ACT runner
@@ -9,7 +9,7 @@
 # Run from the repo root:
 #   gitleaks detect --source . --log-opts="--all" --config scripts/gitleaks.toml
 
-title = "deepseek-harness-android public leak rules"
+title = "deepseek-harness-app public leak rules"
 
 [extend]
 useDefault = true
