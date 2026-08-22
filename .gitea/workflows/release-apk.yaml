@@ -259,6 +259,10 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
           CHANNEL="${{ steps.ver.outputs.channel }}"
           API="https://api.github.com/repos/ChanceFlow/deepseek-harness-app"
+          # Release-asset uploads live on a different host than the REST API;
+          # POSTing an asset to api.github.com 404s, which is exactly the
+          # failure that left every shadow release without its APK.
+          UPLOADS="https://uploads.github.com/repos/ChanceFlow/deepseek-harness-app"
           AUTH="Authorization: token $GH_PUB_TOKEN"
 
           if [[ "$CHANNEL" == "release" ]]; then
@@ -301,8 +305,11 @@ jobs:
             }
           for f in "$APK" "$APK.sha256"; do
             NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$f")
+            # Hard fail on an upload miss: the whole point of the shadow
+            # release is the artifact, and a soft warning is exactly how the
+            # endpoint bug shipped empty releases for days unnoticed.
             curl -sf -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" \
-              --data-binary "@$f" "$API/releases/$REL_ID/assets?name=$NAME" >/dev/null \
-              || echo "::warning::GitHub asset upload failed for $f"
+              --data-binary "@$f" "$UPLOADS/releases/$REL_ID/assets?name=$NAME" >/dev/null \
+              || { echo "::error::GitHub asset upload failed for $f — release $REL_ID would publish without its artifact"; exit 1; }
           done
           echo "github shadow release $TAG created (id $REL_ID)"

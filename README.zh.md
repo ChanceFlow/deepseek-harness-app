@@ -125,12 +125,15 @@ DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/loc
 
 ## APK 发布
 
-发布 APK 由 GitHub Actions
-（[`.github/workflows/release-apk.yaml`](.github/workflows/release-apk.yaml)）构建，
-发布在 [发布页](../../releases) 上：每次 `master` 推送都会刷新滚动 `dev` 预发布版，
-`v<semver>` 标签切出稳定版，两者都附带签名 APK（发布密钥库，非调试密钥）和
-`.sha256` 校验文件。命名遵循 SemVer 2.0；每个发布正文都带自动生成的
-`## What's Changed` 变更日志。
+发布 APK 由内部 forge 流水线
+（[`.gitea/workflows/release-apk.yaml`](.gitea/workflows/release-apk.yaml)）构建，
+并镜像到 [发布页](../../releases)：每次 `master` 推送都会刷新滚动 `dev`
+预发布版，`v<semver>` 标签切出稳定版，两者都附带签名 APK（发布密钥库，
+非调试密钥）和 `.sha256` 校验文件。命名遵循 SemVer 2.0；内部发布正文带
+自动生成的 `## What's Changed` 变更日志，镜像到 GitHub 的发布则携带产物
+与版本元数据。GitHub 侧的同名工作流
+（[`.github/workflows/release-apk.yaml`](.github/workflows/release-apk.yaml)）
+在没有签名 secrets 时会跳过构建——本仓库是镜像，不是第二个构建渠道。
 
 ## 验证状态
 
