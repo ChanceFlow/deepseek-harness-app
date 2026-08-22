@@ -7,8 +7,18 @@
 # (publish-prep/cleanse_history.sh) already rewrote the past, and every
 # commit passes the pre-commit/pre-push gitleaks hooks — so publishing is
 # a plain mirror: push master + tags, no regeneration, no force-rebuild.
-# The fast public-mode tree sweep below is a last line of defense that
-# aborts the mirror if something slipped past the hooks.
+# The leak sweeps below (tree + full history) are a last line of defense
+# that abort the mirror if something slipped past the hooks.
+#
+# Sync hardening (2026-08-22):
+# - Master is pushed fast-forward on normal merges; a NON-FAST-FORWARD
+#   (history rewrite) is blocked unless `confirm_rewrite` is passed on
+#   workflow_dispatch — a silent rewrite of the public history must be a
+#   human decision.
+# - Tags converge exactly: `--prune` deletes GitHub tags that Gitea
+#   dropped, so deletions propagate instead of lingering forever.
+# - Any mirror failure opens a Gitea issue so a stale GitHub repo is
+#   never silent.
 #
 # First run also flips the GitHub default branch to master and deletes the
 # stale shadow-era "main" (idempotent afterwards).
@@ -22,9 +32,15 @@ on:
   push:
     branches: ["master"]
   workflow_dispatch:
+    inputs:
+      confirm_rewrite:
+        description: "Allow a NON-FAST-FORWARD force push (history rewrite). Normally stays false; set true only to deliberately rewrite the public history."
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  issues: write
 
 defaults:
   run:
@@ -47,20 +63,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Last-line leak sweep (public mode, hard fail)
+      - name: Last-line leak sweep (tree + full history, public mode, hard fail)
         run: |
           python3 scripts/scan_leaks.py --tree --mode=public \
-            || { echo "::error::leak sweep failed — mirror aborted"; exit 1; }
+            || { echo "::error::leak sweep (tree) failed — mirror aborted"; exit 1; }
+          python3 scripts/scan_leaks.py --all-blobs --mode=public \
+            || { echo "::error::leak sweep (full history) failed — mirror aborted"; exit 1; }
 
       - name: Mirror master + tags to GitHub
         env:
           TARGET: https://ChanceFlow:${{ secrets.GH_PUBLISH_TOKEN }}@github.com/ChanceFlow/deepseek-harness-app.git
+          CONFIRM_REWRITE: ${{ github.event.inputs.confirm_rewrite || 'false' }}
         run: |
+          set -euo pipefail
           git remote add github "$TARGET"
-          # --force: Gitea master is the source of truth; the mirror must
-          # always converge GitHub to exactly this history.
-          git push --force github master:master
-          git push --force github 'refs/tags/*:refs/tags/*' || true
+          # Fetch GitHub master for the fast-forward check (public repo, no auth).
+          git fetch --quiet github master 2>/dev/null || true
+
+          LOCAL_HEAD=$(git rev-parse HEAD)
+          GH_HEAD=$(git rev-parse -q --verify refs/remotes/github/master || true)
+
+          if [[ -n "$GH_HEAD" && "$GH_HEAD" == "$LOCAL_HEAD" ]]; then
+            echo "master already in sync @ $LOCAL_HEAD"
+          elif [[ -z "$GH_HEAD" ]] || git merge-base --is-ancestor "$GH_HEAD" "$LOCAL_HEAD"; then
+            echo "master fast-forward: $GH_HEAD -> $LOCAL_HEAD"
+            git push github master:master
+          else
+            echo "::error::NON-FAST-FORWARD: GitHub master ($GH_HEAD) is not an ancestor of local master ($LOCAL_HEAD)."
+            if [[ "$CONFIRM_REWRITE" == "true" ]]; then
+              echo "history rewrite CONFIRMED — force pushing to GitHub"
+              git push --force github master:master
+            else
+              echo "::error::rewriting the public history needs human confirmation — rerun with confirm_rewrite=true"
+              exit 1
+            fi
+          fi
+
+          # Tags converge exactly: force-push updates existing, --prune
+          # deletes GitHub tags that were dropped on Gitea.
+          git push --force --prune github 'refs/tags/*:refs/tags/*'
           echo "mirrored master + tags @ $(git rev-parse HEAD)"
 
       - name: Flip default branch to master, drop stale shadow-era main
@@ -76,3 +117,16 @@ jobs:
             "$API/git/refs/heads/main" >/dev/null \
             && echo "stale main deleted" \
             || echo "main already gone"
+
+      - name: Alert on mirror failure
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues"
+          TITLE="GitHub mirror failed — public repo may be stale"
+          BODY="The **Publish GitHub** workflow failed on $GITHUB_REF_NAME@$(git rev-parse --short HEAD). GitHub is not guaranteed to match Gitea until a green mirror run.\n\nRun: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          curl -fsS -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$API" -d "{\"title\": \"$TITLE\", \"body\": \"$BODY\"}" \
+            || echo "::warning::alert issue creation failed"

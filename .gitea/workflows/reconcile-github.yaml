@@ -1,0 +1,93 @@
+# Reconcile GitHub — periodic drift check between Gitea and the public
+# mirror, independent of the event-driven Publish GitHub workflow.
+#
+# The mirror (publish-github.yaml) only runs on a Gitea master push; if a
+# mirror run fails, the public repo silently stays stale until the next
+# push. This job closes that gap: on a schedule (and on demand) it
+# compares master and the full tag set against GitHub and opens a Gitea
+# issue — and fails the run — on any drift. It also re-runs the full
+# history leak sweep, so a leak that somehow entered history is caught
+# even if no push happens.
+#
+# Reading GitHub needs no token (public repo); writing the alert issue
+# uses the runner's auto-provided GITHUB_TOKEN.
+name: Reconcile GitHub
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+  http_proxy: ${{ vars.EGRESS_PROXY }}
+  https_proxy: ${{ vars.EGRESS_PROXY }}
+  NO_PROXY: gitea,localhost,127.0.0.1
+  no_proxy: gitea,localhost,127.0.0.1
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Full-history leak sweep (periodic, public mode)
+        run: |
+          python3 scripts/scan_leaks.py --all-blobs --mode=public \
+            || { echo "::error::leak sweep (full history) failed"; exit 1; }
+
+      - name: Compare master + tags with GitHub
+        id: drift
+        run: |
+          set -euo pipefail
+          DRIFT=""
+          LOCAL_HEAD=$(git rev-parse HEAD)
+          GH_HEAD=$(git ls-remote https://github.com/ChanceFlow/deepseek-harness-app.git refs/heads/master | cut -f1 || true)
+          if [[ -z "$GH_HEAD" ]]; then
+            DRIFT="${DRIFT}\n- GitHub master missing (repo absent?)"
+          elif [[ "$GH_HEAD" != "$LOCAL_HEAD" ]]; then
+            DRIFT="${DRIFT}\n- master differs: Gitea=$LOCAL_HEAD GitHub=$GH_HEAD"
+          fi
+
+          LOCAL_TAGS=$(git tag | sort)
+          GH_TAGS=$(git ls-remote --tags https://github.com/ChanceFlow/deepseek-harness-app.git | awk '{print $2}' | sed 's|refs/tags/||; s|\^\{\}$||' | sort -u)
+          MISSING=$(comm -23 <(echo "$LOCAL_TAGS") <(echo "$GH_TAGS"))
+          EXTRA=$(comm -13 <(echo "$LOCAL_TAGS") <(echo "$GH_TAGS"))
+          [[ -n "$MISSING" ]] && DRIFT="${DRIFT}\n- GitHub missing tags: $(echo "$MISSING" | tr '\n' ' ')"
+          [[ -n "$EXTRA" ]] && DRIFT="${DRIFT}\n- GitHub extra tags: $(echo "$EXTRA" | tr '\n' ' ')"
+
+          if [[ -n "$DRIFT" ]]; then
+            echo "drift detected:"
+            echo -e "$DRIFT"
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "in sync: master + $(echo "$LOCAL_TAGS" | grep -c .) tag(s) match GitHub"
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open alert issue on drift
+        if: steps.drift.outputs.drift == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues"
+          TITLE="GitHub mirror drift detected (reconcile)"
+          BODY="The periodic reconcile found the public mirror out of sync with Gitea — the event-driven mirror did not converge. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          curl -fsS -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$API" -d "{\"title\": \"$TITLE\", \"body\": \"$BODY\"}" \
+            || echo "::warning::alert issue creation failed"
+          echo "::error::GitHub mirror drifted — open issue above; fix the mirror before it silently desyncs further"
+          exit 1
