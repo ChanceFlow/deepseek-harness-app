@@ -1,13 +1,35 @@
 #!/usr/bin/env bash
-# pre-commit — authoritative leak gate on the STAGED diff only, using this
-# repo's gitleaks config (default ruleset + the repo-specific signatures +
-# allowlists). The shared history must always be public-clean, so the full
-# config applies to every commit, on either forge.
+# pre-commit — two gates for the shared published history:
+# 1. Identity guard: every commit's author AND committer must be exactly
+#    ChanceFlow <user@example.com>. Any deviation (misconfigured
+#    clone, other account, stray committer env) publishes to both forges
+#    and forces another history rewrite.
+# 2. Leak gate: authoritative gitleaks scan of the STAGED diff only, using
+#    this repo's gitleaks config (default ruleset + the repo-specific
+#    signatures + allowlists). The shared history must always be
+#    public-clean, so the full config applies to every commit, on either
+#    forge.
 #
-# Escape hatch for exceptional local experiments:
+# Escape hatches for exceptional local experiments:
+#   git config identity.guard off
 #   git config leakscan.mode off
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
+
+if [ "$(git config --get identity.guard || true)" != off ]; then
+  EXPECT_ID="ChanceFlow <user@example.com>"
+  author="${GIT_AUTHOR_NAME:-$(git config user.name || true)} <${GIT_AUTHOR_EMAIL:-$(git config user.email || true)}>"
+  committer="${GIT_COMMITTER_NAME:-$(git config user.name || true)} <${GIT_COMMITTER_EMAIL:-$(git config user.email || true)}>"
+  if [ "$author" != "$EXPECT_ID" ] || [ "$committer" != "$EXPECT_ID" ]; then
+    echo "pre-commit: identity guard — this history publishes under exactly one identity."
+    echo "  expected author and committer: $EXPECT_ID"
+    echo "  got author:    $author"
+    echo "  got committer: $committer"
+    echo "Fix: git config user.name 'ChanceFlow' && git config user.email user@example.com"
+    echo "(or 'git config identity.guard off' for an exceptional local experiment)"
+    exit 1
+  fi
+fi
 
 [ "$(git config --get leakscan.mode || true)" = off ] && exit 0
 
