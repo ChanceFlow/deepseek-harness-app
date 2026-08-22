@@ -17,12 +17,17 @@ public-clean by construction: private working files (task ledgers, plan
 docs, internal tooling) are gitignored locals that never enter git; the
 CI configurations of both forges are tracked and free of internal
 addressing; the reference submodule pins the official upstream commit.
-The past was rewritten exactly once — private paths pruned, author
-identity unified, internal addressing scrubbed from historical blobs —
-after a full backup (bundle, private-file archive, server-side mirror
-repo). Going forward a workflow mirrors master and tags to the public
-forge on every merge, and the pre-commit/pre-push hooks run gitleaks on
-staged and pushed changes, so the two forges stay byte-identical and
+The past was rewritten in two passes, each preceded by a full backup
+(bundle, private-file archive, server-side mirror repo). The first pass
+pruned private paths, unified author identities, and scrubbed internal
+addressing from historical blobs. The second pass re-unified the
+committer identity of forge-created merge commits — a forge stamps its
+account's primary email onto merges, so the account now holds only the
+public identity — and dropped the forge-generated `Reviewed-on:`
+trailers that carried internal URLs. Going forward a workflow mirrors
+master and tags to the public forge on every merge, and the
+pre-commit/pre-push hooks run gitleaks on staged and pushed changes plus
+an identity guard on commits, so the two forges stay byte-identical and
 fast-forwardable in both directions.
 
 ## Alternatives considered
