@@ -142,6 +142,19 @@ class HarnessRepositoryImpl implements ChatRepository {
     null,
   );
   final Map<String, _SessionState> _sessionStates = <String, _SessionState>{};
+  /// Session id -> answerable live frames that arrived before the session's
+  /// state was instantiated (web SessionManager `pendingBuffers` parity).
+  /// `question/requested`, `approval/requested` and `session/queue` never
+  /// land in session history — an open's backfill shows only the still-running
+  /// tool call — so a frame dropped here would render the question/approval
+  /// card forever absent while its tool spinner turns. Buffered frames are
+  /// replayed into the state when `_sessionStateFor` first creates it (they
+  /// enter `_pending` until `ensureLoaded`, which replays them after the
+  /// history reset — the same ordering as a frame arriving live). Matching
+  /// `* /resolved` frames compact the buffer so an already-answered request is
+  /// never replayed.
+  final Map<String, List<ServerRequest>> _pendingBuffers =
+      <String, List<ServerRequest>>{};
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
@@ -1035,7 +1048,15 @@ class HarnessRepositoryImpl implements ChatRepository {
         final sessionId = _frameSessionId(frame);
         if (sessionId == null) return;
         final state = _sessionStates[sessionId];
-        if (state == null) return;
+        if (state == null) {
+          // Web SessionManager parity: answerable live frames (approval/
+          // question requested, queue) that reach an uninstantiated session
+          // are buffered, not dropped — a later open replays them, so the
+          // question/approval card still renders even though the transcript
+          // backfill only carries the running tool call.
+          _bufferPendingFrame(sessionId, frame);
+          return;
+        }
         unawaited(state.handleFrame(frame));
       }),
     );
@@ -1428,6 +1449,21 @@ class HarnessRepositoryImpl implements ChatRepository {
       // SessionManager parity).
       _pendingBySession.clear();
       _pendingInteractions.value = const <String, SessionPendingInteraction>{};
+      // Same re-baseline for the frame buffer: the new generation replays a
+      // fresh queue snapshot, so a stale buffered `session/queue` must not
+      // survive (web `session/subscribed` truncates it there). Pending
+      // approval/question frames are re-pushed by the mux-open replay and
+      // re-buffered by `_bufferPendingFrame`.
+      for (final entry in _pendingBuffers.entries.toList()) {
+        final kept = entry.value
+            .where((frame) => wireString(frame.payload, 'type') != 'session/queue')
+            .toList();
+        if (kept.isEmpty) {
+          _pendingBuffers.remove(entry.key);
+        } else {
+          _pendingBuffers[entry.key] = kept;
+        }
+      }
       try {
         await refreshSessions();
         await refreshWorkspaces();
@@ -1732,8 +1768,69 @@ class HarnessRepositoryImpl implements ChatRepository {
     completed: completed ?? session.completed,
   );
 
-  _SessionState _sessionStateFor(String sessionId) =>
-      _sessionStates.putIfAbsent(sessionId, () => _SessionState(sessionId));
+  _SessionState _sessionStateFor(String sessionId) {
+    final existing = _sessionStates[sessionId];
+    if (existing != null) return existing;
+    final state = _SessionState(sessionId);
+    _sessionStates[sessionId] = state;
+    // Replay frames buffered before instantiation (web `pendingBuffers`
+    // replay on `get()`). While the state is not yet loaded, `handleFrame`
+    // parks them in `_pending`; `ensureLoaded` replays them after the history
+    // reset, so the buffered question/approval/queue lands in the reducer.
+    final buffered = _pendingBuffers.remove(sessionId);
+    if (buffered != null) {
+      for (final frame in buffered) {
+        unawaited(state.handleFrame(frame));
+      }
+    }
+    return state;
+  }
+
+  /// Web SessionManager `pendingBuffers` switch: answerable live frames for an
+  /// uninstantiated session are retained (compacting duplicates by their stable
+  /// key), their `* /resolved` frames remove the matching entry, and everything
+  /// else is dropped because an open backfills it from history.
+  void _bufferPendingFrame(String sessionId, ServerRequest frame) {
+    final payload = frame.payload;
+    switch (wireString(payload, 'type')) {
+      case 'approval/requested':
+      case 'question/requested':
+      case 'session/queue':
+        final buffer = _pendingBuffers.putIfAbsent(sessionId, () => <ServerRequest>[]);
+        final key = switch (wireString(payload, 'type')) {
+          'approval/requested' => 'a:${wireString(payload, 'approvalId')}',
+          'question/requested' => 'q:${frame.rpcId}',
+          _ => 'queue',
+        };
+        final prior = buffer.indexWhere((item) => _bufferedKey(item) == key);
+        if (prior == -1) {
+          buffer.add(frame);
+        } else {
+          buffer[prior] = frame;
+        }
+      case 'approval/resolved':
+      case 'question/resolved':
+        final key = wireString(payload, 'type') == 'approval/resolved'
+            ? 'a:${wireString(payload, 'approvalId')}'
+            : 'q:${wireString(payload, 'questionRpcId')}';
+        final buffer = _pendingBuffers[sessionId];
+        if (buffer == null) return;
+        buffer.removeWhere((item) => _bufferedKey(item) == key);
+        if (buffer.isEmpty) _pendingBuffers.remove(sessionId);
+    }
+  }
+
+  /// The stable buffer key of a buffered frame (`a:<approvalId>` /
+  /// `q:<rpcId>` / `queue`), mirroring `_itemKey` on the reducer side.
+  String? _bufferedKey(ServerRequest frame) {
+    final payload = frame.payload;
+    return switch (wireString(payload, 'type')) {
+      'approval/requested' => 'a:${wireString(payload, 'approvalId')}',
+      'question/requested' => 'q:${frame.rpcId}',
+      'session/queue' => 'queue',
+      _ => null,
+    };
+  }
 
   StateStream<GoalProjection?> _goalProjectionStateFor(String sessionId) =>
       _goalProjections.putIfAbsent(
