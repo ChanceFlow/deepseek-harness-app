@@ -62,7 +62,7 @@ jobs:
           fi
 
           LOCAL_TAGS=$(git tag | sort)
-          GH_TAGS=$(git ls-remote --tags https://github.com/ChanceFlow/deepseek-harness-app.git | awk '{print $2}' | sed 's|refs/tags/||; s|\^\{\}$||' | sort -u)
+          GH_TAGS=$(git ls-remote --tags https://github.com/ChanceFlow/deepseek-harness-app.git | awk '{print $2}' | sed 's|refs/tags/||; s/\^{}$//' | sort -u)
           MISSING=$(comm -23 <(echo "$LOCAL_TAGS") <(echo "$GH_TAGS"))
           EXTRA=$(comm -13 <(echo "$LOCAL_TAGS") <(echo "$GH_TAGS"))
           [[ -n "$MISSING" ]] && DRIFT="${DRIFT}\n- GitHub missing tags: $(echo "$MISSING" | tr '\n' ' ')"
