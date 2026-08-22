@@ -148,13 +148,18 @@ DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/loc
 
 ## APK releases
 
-Release APKs are built by GitHub Actions
+Release APKs are built by the internal forge pipeline
+([`.gitea/workflows/release-apk.yaml`](.gitea/workflows/release-apk.yaml))
+and mirrored to the [Releases page](../../releases): every `master`
+push refreshes the rolling `dev` prerelease, a `v<semver>` tag cuts
+the stable Release, and both attach a signed APK (release keystore,
+not the debug key) plus a `.sha256` sidecar. Naming follows SemVer
+2.0; the internal release body carries a generated `## What's
+Changed` changelog, and the mirrored GitHub release carries the
+artifact with version metadata. The GitHub-side copy of the workflow
 ([`.github/workflows/release-apk.yaml`](.github/workflows/release-apk.yaml))
-and published on the [Releases page](../../releases): every `master`
-push refreshes the rolling `dev` prerelease, a `v<semver>` tag cuts the
-stable Release, and both attach a signed APK (release keystore, not the
-debug key) plus a `.sha256` sidecar. Naming follows SemVer 2.0; every
-release body carries a generated `## What's Changed` changelog.
+skips its build unless signing secrets are present — this repo is the
+mirror, not a second build channel.
 
 ## Verification status
 

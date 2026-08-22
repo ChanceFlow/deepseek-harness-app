@@ -1,6 +1,17 @@
 # APK release pipeline — builds the signed release APK on a GitHub-hosted
 # runner and publishes it as a GitHub Release attachment.
 #
+# Distribution-channel gate (2026-08-22): this repo is the PUBLIC MIRROR of
+# the shared history; the internal forge is the single APK build channel and
+# attaches the artifacts to GitHub Releases as shadow releases (see
+# .gitea/workflows/release-apk.yaml). The signing secrets are therefore
+# intentionally absent here: without ANDROID_KEYSTORE_B64 the gate step
+# below skips the whole build green and prints where the artifacts come
+# from. Add the four signing secrets to this repo only if it should become
+# an independent build channel — and remove the shadow step on the internal
+# forge in the same change, or the two pipelines will fight over the `dev`
+# release.
+#
 # Naming standard (industry / SemVer 2.0):
 #   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
 #                                            v0.1.0-beta.2, v0.1.0-rc.1
@@ -44,7 +55,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Distribution channel gate
+        id: gate
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [[ -z "$KEYSTORE" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "This repo is the public mirror: APK releases are built by the"
+            echo "internal forge pipeline and attached to GitHub Releases as"
+            echo "shadow releases. The signing secrets are intentionally absent"
+            echo "here, so this job skips the build (see the workflow header)."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: steps.gate.outputs.build == 'true'
         uses: actions/checkout@v4
         with:
           # The resolve step reads the latest stable v* tag to derive the
@@ -52,6 +79,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Flutter 3.47.1 stable
+        if: steps.gate.outputs.build == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.1
@@ -59,12 +87,14 @@ jobs:
           cache: true
 
       - name: Set up JDK 17
+        if: steps.gate.outputs.build == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Resolve version
+        if: steps.gate.outputs.build == 'true'
         id: ver
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -96,14 +126,17 @@ jobs:
           fi
 
       - name: Pub get (workspace)
+        if: steps.gate.outputs.build == 'true'
         working-directory: flutter
         run: flutter pub get
 
       - name: Analyze (fail before the slow build)
+        if: steps.gate.outputs.build == 'true'
         working-directory: flutter
         run: flutter analyze
 
       - name: Build signed release APK
+        if: steps.gate.outputs.build == 'true'
         working-directory: flutter/app
         env:
           DSH_KEYSTORE_FILE: ${{ runner.temp }}/dsh-release.keystore
@@ -121,6 +154,7 @@ jobs:
           rm -f "$DSH_KEYSTORE_FILE"
 
       - name: Generate changelog
+        if: steps.gate.outputs.build == 'true'
         id: changelog
         run: |
           EXCLUDE=""
@@ -135,6 +169,7 @@ jobs:
           cat "$RUNNER_TEMP/changelog.md"
 
       - name: Stage artifact
+        if: steps.gate.outputs.build == 'true'
         run: |
           APK=flutter/app/build/app/outputs/flutter-apk/app-release.apk
           NAME="dsh-android-${{ steps.ver.outputs.version }}.apk"
@@ -144,6 +179,7 @@ jobs:
           echo "artifact=$RUNNER_TEMP/artifacts/$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Publish Release
+        if: steps.gate.outputs.build == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.channel == 'release' && github.ref_name || 'dev' }}
