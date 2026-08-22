@@ -45,18 +45,30 @@ npx @deepseek-ai/dsh web --port 3080
 
 ### 3. Point the app at it
 
-Release APKs ship with `DSH_BASE_URL=http://10.0.2.2:3080` baked in —
-the Android emulator's route to the host loopback. Pick the row that
-matches your setup:
+`dsh web` listens on loopback only — a deliberate upstream safety
+decision, because the agent executes code: `dsh web` refuses
+`--host 0.0.0.0` outright ("it would expose remote code execution to
+the network"). There is no LAN mode to aim a phone at, so release APKs
+ship with `http://127.0.0.1:3080` baked in and you reach the backend
+by forwarding that loopback port to the machine running dsh:
 
 | Setup | What to do |
 |---|---|
-| **Emulator** | Nothing — the baked-in default already reaches your host's loopback. |
-| **Phone over USB** | `adb reverse tcp:3080 tcp:3080` keeps the default URL valid. |
-| **Phone over LAN** | Build your own APK with `flutter build apk --dart-define=DSH_BASE_URL=http://<host-ip>:3080`, or run the [release workflow](.github/workflows/release-apk.yaml) with the `dsh_base_url` input. |
+| **Phone or emulator over USB** | `adb reverse tcp:3080 tcp:3080` — one command, then the app connects. |
+| **Emulator without adb** | Build your own APK with `--dart-define=DSH_BASE_URL=http://10.0.2.2:3080`, the emulator's own route to the host loopback. |
+| **Anything else you can reach** — a tunnel, a second machine | Add it as another backend right in the app — see [Multiple backends](#multiple-backends). |
 
 > The backend serves its settings plane to loopback connections only,
-> so on a phone that path runs through `adb reverse`.
+> so the in-app host-settings pages need the same forward.
+
+## Multiple backends
+
+One app, many dsh hosts: the settings page keeps a device-local
+registry of backends — add, rename, and switch between them at any
+time. Every configured backend stays live; the active one drives the
+chat. A fresh install seeds the registry with the build-time URL, so
+nothing changes until you add your second host — a laptop, a build
+box, a tunneled remote dsh.
 
 ## Feature surface
 
@@ -66,6 +78,8 @@ matches your setup:
   code, headings, lists, tables, clickable links), queue rows,
   approvals, questions, plan-review cards, background jobs, image
   attachments, skill candidates.
+- **Multiple backends** — keep several dsh hosts configured on this
+  device and switch which one drives the chat.
 - **Workspaces** — create from a path or the in-app host directory
   browser, rename, delete, manual reordering.
 - **Models** — provider groups, current selection, reasoning-effort
@@ -108,9 +122,15 @@ flutter/packages/dev               Debug-build tooling: telemetry, frame trackin
 
 ```sh
 git clone --recurse-submodules https://github.com/ChanceFlow/deepseek-harness-app.git
+adb reverse tcp:3080 tcp:3080    # device loopback 3080 -> the host's dsh
 cd flutter/app
-flutter run --dart-define=DSH_BASE_URL=http://10.0.2.2:3080
+flutter run
 ```
+
+The build-time default backend is `http://127.0.0.1:3080`; override it
+with `--dart-define=DSH_BASE_URL=...` (see
+[§Point the app at it](#3-point-the-app-at-it) for the emulator-only
+`10.0.2.2` route).
 
 The canonical command list and the aggregate verification gates live in
 [AGENTS.md §Commands](AGENTS.md#commands); Flutter 3.47.1 stable is
