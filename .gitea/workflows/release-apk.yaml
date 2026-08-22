@@ -1,9 +1,10 @@
 # APK release pipeline — builds the signed release APK and publishes it
 # as a Gitea Release attachment (the primary distribution channel), then
-# mirrors the artifact to the public GitHub shadow repo
-# (ChanceFlow/dsh-flutter-client, docs + releases only). The GitHub release
-# body is sanitized by contract: no Gitea URLs, no PR links, no DSH_BASE_URL
-# (its internal LAN default would leak the LAN address), no commit field.
+# mirrors the artifact to the public GitHub repo
+# (ChanceFlow/deepseek-harness-app — the shared-history public source).
+# The GitHub release body is sanitized by contract: no Gitea URLs, no PR
+# links, no DSH_BASE_URL (its internal LAN default would leak the LAN
+# address), no commit field.
 #
 # Naming standard (industry / SemVer 2.0):
 #   - release tags:    v<semver>            v0.1.0, v0.1.0-alpha.1,
@@ -256,7 +257,7 @@ jobs:
           APK="${{ steps.stage.outputs.apk }}"
           VERSION="${{ steps.ver.outputs.version }}"
           CHANNEL="${{ steps.ver.outputs.channel }}"
-          API="https://api.github.com/repos/ChanceFlow/dsh-flutter-client"
+          API="https://api.github.com/repos/ChanceFlow/deepseek-harness-app"
           AUTH="Authorization: token $GH_PUB_TOKEN"
 
           if [[ "$CHANNEL" == "release" ]]; then
@@ -272,7 +273,7 @@ jobs:
           fi
 
           # Sanitized body (see header comment): version metadata + hash only.
-          python3 - "$TAG" "dsh-flutter-client $VERSION" "$PRE" "$VERSION" "$GITHUB_RUN_NUMBER" \
+          python3 - "$TAG" "deepseek-harness-app $VERSION" "$PRE" "$VERSION" "$GITHUB_RUN_NUMBER" \
             "$APK" "${{ steps.stage.outputs.sha256 }}" > /tmp/gh-release.json <<'PY'
           import json, sys
           tag, name, pre, ver, run, apk, sha = sys.argv[1:8]

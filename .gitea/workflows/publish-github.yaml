@@ -1,5 +1,5 @@
 # Publish GitHub — mirror the SHARED history to the public repo
-# (ChanceFlow/dsh-flutter-client).
+# (ChanceFlow/deepseek-harness-app).
 #
 # Model A sync (owner decision 2026-08-21): Gitea and GitHub hold ONE
 # history with identical commit hashes. The tracked tree is public-clean
@@ -14,7 +14,7 @@
 # stale shadow-era "main" (idempotent afterwards).
 #
 # Runner needs secrets.GH_PUBLISH_TOKEN (repo scope on
-# ChanceFlow/dsh-flutter-client) and the EGRESS_PROXY repo variable for
+# ChanceFlow/deepseek-harness-app) and the EGRESS_PROXY repo variable for
 # github.com/api.github.com egress.
 name: Publish GitHub
 
@@ -54,7 +54,7 @@ jobs:
 
       - name: Mirror master + tags to GitHub
         env:
-          TARGET: https://ChanceFlow:${{ secrets.GH_PUBLISH_TOKEN }}@github.com/ChanceFlow/dsh-flutter-client.git
+          TARGET: https://ChanceFlow:${{ secrets.GH_PUBLISH_TOKEN }}@github.com/ChanceFlow/deepseek-harness-app.git
         run: |
           git remote add github "$TARGET"
           # --force: Gitea master is the source of truth; the mirror must
@@ -67,7 +67,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
         run: |
-          API="https://api.github.com/repos/ChanceFlow/dsh-flutter-client"
+          API="https://api.github.com/repos/ChanceFlow/deepseek-harness-app"
           curl -fsS -X PATCH -H "Authorization: token $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "$API" -d '{"default_branch":"master"}' >/dev/null \

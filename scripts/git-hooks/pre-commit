@@ -1,51 +1,21 @@
 #!/usr/bin/env bash
-# pre-commit — authoritative leak gate on the STAGED diff only.
+# pre-commit — authoritative leak gate on the STAGED diff only, using this
+# repo's gitleaks config (default ruleset + the repo-specific signatures +
+# allowlists). The shared history must always be public-clean, so the full
+# config applies to every commit, on either forge.
 #
-# The full history was already cleaned by the publish pipeline, so the hook
-# Requires gitleaks >= 8.18, < 8.30 (8.30.x had a broken staged scan; 8.18.4 verified).
-# only needs to guard what is being committed right now. Primary engine is
-# Gitleaks (the industry-standard detector):
-#   public  (github.com remote / leakscan.mode=public):  gitleaks protect
-#           --staged --config scripts/gitleaks.toml  — default rules PLUS the
-#           repo-specific internal-infra/personal patterns
-#   secret  (internal repos; LAN refs are legitimate there): gitleaks protect
-#           --staged with the built-in default rules (credentials only)
-# If gitleaks is not installed, fall back to scripts/scan_leaks.py --staged
-# in the same mode (same pattern vocabulary; a visible warning is printed).
-#
-# Override: git config leakscan.mode secret|public|off
-# Enable:   git config core.hooksPath scripts/git-hooks
+# Escape hatch for exceptional local experiments:
+#   git config leakscan.mode off
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 
-mode=$(git config --get leakscan.mode || true)
-if [ -z "$mode" ]; then
-  remote=$(git remote get-url origin 2>/dev/null || true)
-  if [[ "$remote" == *github.com* ]]; then
-    mode=public
-  else
-    mode=secret
-  fi
-fi
-[ "$mode" = off ] && exit 0
+[ "$(git config --get leakscan.mode || true)" = off ] && exit 0
 
 if command -v gitleaks >/dev/null 2>&1; then
-  if [ "$mode" = public ]; then
-    if [ -f "$ROOT/scripts/gitleaks.toml" ]; then
-      gitleaks protect --staged --config "$ROOT/scripts/gitleaks.toml" --no-banner \
-        || { echo; echo "pre-commit: gitleaks found leaks in the staged diff (public mode)."; echo "  Fix the findings above before committing."; exit 1; }
-    else
-      echo "pre-commit: WARNING scripts/gitleaks.toml missing — running default rules only"
-      gitleaks protect --staged --no-banner \
-        || { echo; echo "pre-commit: gitleaks found credentials in the staged diff."; echo "  Fix the findings above before committing."; exit 1; }
-    fi
-  else
-    gitleaks protect --staged --no-banner \
-      || { echo; echo "pre-commit: gitleaks found credentials in the staged diff."; echo "  Real credentials are never allowed. Fix the findings above."; exit 1; }
-  fi
+  gitleaks protect --staged --config "$ROOT/scripts/gitleaks.toml" --no-banner \
+    || { echo; echo "pre-commit: gitleaks found leaks in the staged diff — fix before committing."; exit 1; }
 else
-  # Fallback: same vocabulary, staged scope
-  python3 "$ROOT/scripts/scan_leaks.py" --staged --mode="$mode" \
-    || { echo; echo "pre-commit: leak scan failed (mode=$mode)."; echo "  Install gitleaks for the authoritative scan: see README."; exit 1; }
+  python3 "$ROOT/scripts/scan_leaks.py" --staged --mode=public \
+    || { echo; echo "pre-commit: leak scan failed (install gitleaks for the authoritative scan)."; exit 1; }
 fi
 exit 0
