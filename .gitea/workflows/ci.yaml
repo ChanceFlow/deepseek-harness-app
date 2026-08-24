@@ -22,20 +22,13 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  # Egress (Flutter SDK download, pub) goes through the egress proxy from
-  # the repo variable EGRESS_PROXY (unset => direct); the local forge and
-  # the runner's cache service must bypass it.
-  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
-  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
-  http_proxy: ${{ vars.EGRESS_PROXY }}
-  https_proxy: ${{ vars.EGRESS_PROXY }}
-  NO_PROXY: gitea,localhost,127.0.0.1
-  no_proxy: gitea,localhost,127.0.0.1
-
 jobs:
   docs:
-    runs-on: ubuntu-latest
+    # python-only, but the checkout clones the reference submodule from
+    # github.com — which needs the LAN proxy too (a proxy-less ubuntu-latest
+    # job stalls on `git submodule update` exactly like pub did). The
+    # prebaked image has the proxy baked in, so run docs there as well.
+    runs-on: flutter-android
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
@@ -46,22 +39,29 @@ jobs:
         run: python3 scripts/verify_all.py docs
 
   code:
-    runs-on: ubuntu-latest
+    # Runs on the prebaked builder image, not ubuntu-latest: the image
+    # carries Flutter 3.47.1 on PATH and has the LAN egress proxy baked in
+    # (ENV HTTP_PROXY=http://127.0.0.1:7890) — exactly how release-apk
+    # reaches pub.dev. A plain ubuntu-latest job cannot rely on the
+    # workflow env's `vars.EGRESS_PROXY`: this Gitea Actions build does not
+    # resolve `vars.*` in env, so the job ran proxy-less and pub's large
+    # package downloads hung. The proxy env is still declared here for a
+    # runner that does resolve vars.
+    # Toolchain pin (verify_toolchain_pin.py reads this file as source):
+    # flutter-version: 3.47.1 — baked into the flutter-android image.
+    runs-on: flutter-android
+    env:
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      NO_PROXY: gitea,localhost,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      # flutter-action's `cache: true` persists BOTH the Flutter SDK and
-      # ~/.pub-cache through the runner's cache service — no separate pub
-      # cache step needed.
-      - name: Set up Flutter 3.47.1 stable
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.1
-          channel: stable
-          cache: true
 
       - name: Code gates (analyze, tests, imports)
         run: python3 scripts/verify_all.py code
