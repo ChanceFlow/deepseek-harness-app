@@ -19,11 +19,15 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:app/backends/backend_store.dart';
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/local_state/local_state_providers.dart';
+import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,14 +52,26 @@ typedef ShotAction = Future<void> Function(WidgetTester tester);
 final class DesignShot {
   const DesignShot({
     required this.name,
-    required this.state,
+    this.state,
+    this.host,
     this.act,
     this.dark = true,
     this.locale,
   });
 
   final String name;
-  final ChatUiState state;
+
+  /// Chat fixture; renders [ChatScreen] when set.
+  final ChatUiState? state;
+
+  /// Full-tree builder for a non-chat surface (the settings tab): it
+  /// receives the harness theme (the light/dark twin) and builds its
+  /// own root ProviderScope + MaterialApp + screen — the same shape
+  /// the surface's widget tests pump, a root scope rather than a
+  /// nested one. Called inside the test, so temp files and teardowns
+  /// are safe to create here.
+  final Widget Function(ThemeData theme, Locale? locale)? host;
+
   final ShotAction? act;
 
   /// Whether the dark twin renders too. A state whose defect is layout
@@ -98,6 +114,36 @@ final List<DesignShot> shots = <DesignShot>[
     state: questionState(),
     locale: const Locale('zh'),
   ),
+  // Settings shots: the two-category surface (App / Host) on a
+  // two-host registry fixture. The default view (Host settings,
+  // General) and the registry page pair with the same-named before
+  // shots; the App category and its zh twin are new surfaces.
+  const DesignShot(
+    name: 'settings-general',
+    host: _settingsHost,
+    act: _loadRegistry,
+  ),
+  const DesignShot(
+    name: 'settings-hosts',
+    host: _settingsHost,
+    act: _openHostsPage,
+    dark: false,
+  ),
+  const DesignShot(
+    name: 'settings-app',
+    host: _settingsHost,
+    act: _openAppCategory,
+    dark: false,
+  ),
+  // The zh twin: the App category reads 应用设置 and the language
+  // row's capsules carry their own-language display names.
+  const DesignShot(
+    name: 'settings-app-zh',
+    host: _settingsHost,
+    locale: Locale('zh'),
+    act: _openAppCategoryZh,
+    dark: false,
+  ),
 ];
 
 /// A running session animates forever, so `pumpAndSettle` never returns.
@@ -110,6 +156,21 @@ Future<void> settle(WidgetTester tester) async {
 class _FakeRpc implements DshRpcClient {
   @override
   Future<RpcResult> call(String endpoint, String method, JsonMap payload) async {
+    if (endpoint == 'host.describe') {
+      // A valid description so the settings shots' connection
+      // handshakes reach CONNECTED (green dots, versioned rows).
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{
+          'version': '0.1.1',
+          'cwd': '/home/user/Projects/deepseek-harness-app',
+          'provider': 'deepseek',
+          'model': 'glm-x',
+          'attachedSessions': 1,
+          'canOpenPath': true,
+        },
+      );
+    }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 
@@ -207,31 +268,106 @@ ThemeData _withRealFonts(ThemeData base) {
   );
 }
 
+/// The settings shots' tree: a root ProviderScope over the settings
+/// screen, with a temp-backed registry seeded from the two-host
+/// document (scope bar + Hosts rows), a temp-backed shared store
+/// (preference rows), and quiet transport seams for every host URL
+/// the document names.
+Widget _settingsHost(ThemeData theme, Locale? locale) {
+  final registryDir = Directory.systemTemp.createTempSync(
+    'dsh-design-registry',
+  );
+  addTearDown(() => registryDir.deleteSync(recursive: true));
+  final registryFile = File('${registryDir.path}/backends.json');
+  registryFile.writeAsStringSync(kSettingsRegistryDoc);
+  final stateDir = Directory.systemTemp.createTempSync('dsh-design-state');
+  addTearDown(() => stateDir.deleteSync(recursive: true));
+  return ProviderScope(
+    overrides: [
+      backendStoreProvider.overrideWith(
+        (ref) async => BackendStore(registryFile, seedBaseUrl: kDshBaseUrl),
+      ),
+      localStateStoreProvider.overrideWith(
+        (ref) async =>
+            LocalStateStore(File('${stateDir.path}/local_state.json')),
+      ),
+      for (final uri in [
+        Uri.parse('http://10.0.2.2:3080'),
+        Uri.parse('http://10.0.2.2:3081'),
+      ]) ...[
+        dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(uri).overrideWithValue(_SilentSocket()),
+      ],
+    ],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: _withRealFonts(theme),
+      home: SettingsScreen(uiState: settingsUiState(), onAction: (_) {}),
+    ),
+  );
+}
+
+/// The registry loads through real dart:io, which only completes in a
+/// real-async zone: each runAsync round turns the event loop once and
+/// each pump flushes what it scheduled.
+Future<void> _loadRegistry(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+  }
+  await settle(tester);
+}
+
+Future<void> _openHostsPage(WidgetTester tester) async {
+  await _loadRegistry(tester);
+  await tester.tap(find.text('Hosts').hitTestable().first);
+  await settle(tester);
+}
+
+Future<void> _openAppCategory(WidgetTester tester) async {
+  await _loadRegistry(tester);
+  await tester.tap(find.text('App settings').hitTestable());
+  await settle(tester);
+}
+
+Future<void> _openAppCategoryZh(WidgetTester tester) async {
+  await _loadRegistry(tester);
+  await tester.tap(find.text('应用设置').hitTestable());
+  await settle(tester);
+}
+
 Future<void> _render(WidgetTester tester, DesignShot shot, ThemeData theme) async {
   tester.view.physicalSize = _kPhone;
   tester.view.devicePixelRatio = _kDevicePixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        dshRpcClientProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_FakeRpc()),
-        dshEventSocketProvider(
-          Uri.parse(kDshBaseUrl),
-        ).overrideWithValue(_SilentSocket()),
-      ],
-      child: MaterialApp(
-        // The banner is chrome the reviewer did not ask about.
-        debugShowCheckedModeBanner: false,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: shot.locale,
-        theme: _withRealFonts(theme),
-        home: ChatScreen(uiState: shot.state, onAction: (_) {}),
-      ),
-    ),
+    shot.host != null
+        ? shot.host!(theme, shot.locale)
+        : ProviderScope(
+            overrides: [
+              dshRpcClientProvider(
+                Uri.parse(kDshBaseUrl),
+              ).overrideWithValue(_FakeRpc()),
+              dshEventSocketProvider(
+                Uri.parse(kDshBaseUrl),
+              ).overrideWithValue(_SilentSocket()),
+            ],
+            child: MaterialApp(
+              // The banner is chrome the reviewer did not ask about.
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: shot.locale,
+              theme: _withRealFonts(theme),
+              home: ChatScreen(uiState: shot.state!, onAction: (_) {}),
+            ),
+          ),
   );
   await settle(tester);
   await shot.act?.call(tester);

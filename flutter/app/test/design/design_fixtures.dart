@@ -7,15 +7,18 @@
 /// is crowded.
 library;
 
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
+import 'package:domain/model/settings.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
 
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/settings/settings_ui_state.dart';
 
 /// Fixed clock so a re-render diffs on the design, not on the hour.
 const int kNow = 1755000000000;
@@ -359,3 +362,73 @@ ChatUiState questionState() {
     timeline: _questionTimeline,
   );
 }
+
+/// ── Settings shots ────────────────────────────────────────────────────────
+/// The Settings tab's two-category surface (App / Host) on a two-host
+/// registry: the shots exercise the real screen against the real
+/// registry chain, the only fakes being the transport seams.
+
+/// Two-host registry document: the scope bar and the Hosts page render
+/// their multi-host chrome.
+const String kSettingsRegistryDoc =
+    '{"backends": ['
+    '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+    '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
+    '], "activeId": "default"}';
+
+/// The described host snapshot for the General page's fact rows.
+const SettingsSnapshot kSettingsSnapshot = SettingsSnapshot(
+  writable: true,
+  hasDocument: true,
+  namespaces: [
+    SettingsNamespace(
+      ns: 'llm-deepseek',
+      applies: SettingsApplies.live,
+      revision: 3,
+      hasUserLayer: true,
+      secretCount: 1,
+    ),
+    SettingsNamespace(
+      ns: 'shell',
+      applies: SettingsApplies.restart,
+      revision: 0,
+      hasUserLayer: false,
+      secretCount: 0,
+    ),
+  ],
+  credentialRefs: ['DEEPSEEK_API_KEY'],
+);
+
+const List<CredentialStatus> kSettingsCredentials = <CredentialStatus>[
+  CredentialStatus(
+    ref: 'DEEPSEEK_API_KEY',
+    configured: true,
+    source: 'file',
+    writable: true,
+  ),
+];
+
+const AgentPresetRoster kSettingsRoster = AgentPresetRoster(
+  entries: [
+    AgentPresetEntry(
+      id: 'standard',
+      trust: AgentPresetTrust.system,
+      isDefault: true,
+      description: 'Full coding agent with file editing, shell, and search.',
+    ),
+    AgentPresetEntry(id: 'code', trust: AgentPresetTrust.system),
+    AgentPresetEntry(id: 'minimal', trust: AgentPresetTrust.system),
+    AgentPresetEntry(
+      id: 'my-agent',
+      trust: AgentPresetTrust.user,
+      name: 'My Agent',
+      broken: 'agent.cordis.yml not found',
+    ),
+  ],
+);
+
+SettingsUiState settingsUiState() => const SettingsUiState(
+  snapshot: kSettingsSnapshot,
+  credentials: kSettingsCredentials,
+  roster: kSettingsRoster,
+);

@@ -1,21 +1,28 @@
 /// Settings screen — Flutter port of the dsh web settings surface.
 ///
-/// Translates the web settings panel (ui-settings shell plus the
-/// ui-settings-general / -models / -plugins sections, ui-agent-preset,
-/// and the ui-conversation Enter row) onto a phone-width tab. The
-/// panel's content-column rhythm — 16/500 section titles over 14/22
-/// rows with 12/18 tertiary descriptions, border-l2 hairlines between
-/// rows, 12px-radius cards, capsule controls, 8px-radius inputs — is
-/// kept token-for-token (reference packages/client/ui-settings-* module
-/// css). The web's two-pane panel (nav rail + content column) collapses
-/// to a horizontal capsule nav over an IndexedStack of pages in the
-/// web nav's order — General, Models, Plugins, Agent presets — plus
-/// mobile-only pages: Backends (the device-local multi-host registry,
-/// which stays reachable even when the active host is not) and
-/// Credentials; IndexedStack preserves each section's scroll and entry
-/// state across switches. General facts render as value rows, the
-/// Enter-behavior and agent-preset defaults render as the web's
-/// interactive preference rows, presets render as the web's selectable
+/// The tab carries two kinds of settings, picked by the category
+/// capsules under the header: **App settings** — device-local
+/// preferences (interface language, busy-Enter behavior) persisted to
+/// the shared LocalStateStore, reachable with or without a host — and
+/// **Host settings** — the pages describing one configured host.
+///
+/// The host half translates the web settings panel (ui-settings shell
+/// plus the ui-settings-general / -models / -plugins sections,
+/// ui-agent-preset, and the ui-conversation Enter row) onto a
+/// phone-width tab. The panel's content-column rhythm — 16/500 section
+/// titles over 14/22 rows with 12/18 tertiary descriptions, border-l2
+/// hairlines between rows, 12px-radius cards, capsule controls,
+/// 8px-radius inputs — is kept token-for-token (reference
+/// packages/client/ui-settings-* module css). The web's two-pane panel
+/// (nav rail + content column) collapses to a horizontal capsule nav
+/// over an IndexedStack of pages in the web nav's order — General,
+/// Models, Plugins, Agent presets — plus mobile-only pages: Hosts (the
+/// device-local multi-host registry, which stays reachable even when
+/// the active host is not) and Credentials; IndexedStack preserves
+/// each section's scroll and entry state across switches (and, at the
+/// category level, across App/Host switches). General facts render as
+/// value rows, the agent-preset default renders as the web's
+/// interactive preference row, presets render as the web's selectable
 /// cards (read-only: authoring verbs are loopback-pinned), namespaces
 /// disclose in place under Plugins (web PluginCard), the DeepSeek
 /// API-key card rides Models, and the credential editor opens as a
@@ -34,6 +41,7 @@ import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
 import '../theme/theme.dart';
 import 'busy_enter_preference.dart';
+import 'locale_preference.dart';
 import 'settings_backend_scope.dart';
 import 'settings_ui_state.dart';
 
@@ -42,7 +50,7 @@ class SettingsRoute extends ConsumerWidget {
 
   /// The backend whose HOST settings this surface presents; null uses
   /// the settings scope (which follows the active backend until the
-  /// user pins one). The Backends section is device-local and always
+  /// user pins one). The Hosts section is device-local and always
   /// shows.
   final String? backendId;
 
@@ -65,9 +73,19 @@ class SettingsRoute extends ConsumerWidget {
   }
 }
 
-/// Phone-tab settings sections. The web nav order is general 0, models
-/// 10, plugins 15, agent-presets 20 (reference ui-settings nav); the
-/// mobile-only pages bracket it: Backends first (the device-local
+/// The two kinds of settings the tab carries: App (device-local
+/// preferences) and Host (the pages describing one configured host).
+enum _SettingsCategory { app, host }
+
+String _categoryLabel(_SettingsCategory category, AppLocalizations l10n) =>
+    switch (category) {
+      _SettingsCategory.app => l10n.settingsCategoryApp,
+      _SettingsCategory.host => l10n.settingsCategoryHost,
+    };
+
+/// Phone-tab host-settings sections. The web nav order is general 0,
+/// models 10, plugins 15, agent-presets 20 (reference ui-settings nav); the
+/// mobile-only pages bracket it: Hosts first (the device-local
 /// registry decides which host every other page even describes, and it
 /// stays reachable when that host is not), Credentials last (the web
 /// manages secrets inside the Models provider editors).
@@ -110,119 +128,42 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  _SettingsCategory _category = _SettingsCategory.host;
   _SettingsSection _section = _SettingsSection.general;
 
   @override
   Widget build(BuildContext context) {
-    final uiState = widget.uiState;
-    final described = uiState.snapshot;
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _SettingsHeader(
-              onRefresh: () => widget.onAction(const RefreshSettingsAction()),
+              // Refresh re-describes the host settings; the App page
+              // is device-local and carries nothing to refresh, so its
+              // category drops the control.
+              onRefresh: _category == _SettingsCategory.host
+                  ? () => widget.onAction(const RefreshSettingsAction())
+                  : null,
             ),
-            if (uiState.errorMessage case final String error)
-              _ErrorBanner(
-                message: error,
-                onDismiss: () => widget.onAction(const DismissSettingsError()),
-              ),
-            // Web surfaces write/refresh state on the controls; the mobile
-            // tab keeps one slim activity line above the content column.
-            if (described != null && uiState.isLoading)
-              LinearProgressIndicator(
-                minHeight: 2,
-                color: scheme.primary,
-                backgroundColor: Colors.transparent,
-              ),
-            // The nav and the page stack always mount: the Backends page
-            // is device-local, so it stays reachable when the active host
-            // is unreachable (fixing that host's URL is exactly the flow
-            // that must not dead-end).
+            _SettingsCategoryNav(
+              category: _category,
+              onSelect: (next) => setState(() => _category = next),
+            ),
+            // Both categories stay mounted (IndexedStack): each side's
+            // scroll and entry state survives the switch, as the
+            // section stack's does across section switches.
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: IndexedStack(
+                index: _category.index,
                 children: [
-                  // The host-settings scope: which backend the pages below
-                  // describe. Multi-backend only — a single backend is
-                  // unambiguous. The bar is device-local, so it renders
-                  // even when the scoped host is unreachable (pinning a
-                  // reachable backend is the way out of that dead end).
-                  const _ScopeBar(),
-                  _SettingsSectionNav(
+                  const _AppSettingsPage(),
+                  _HostSettingsArea(
+                    uiState: widget.uiState,
                     section: _section,
-                    onSelect: (next) => setState(() => _section = next),
-                  ),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _section.index,
-                      children: [
-                        const _BackendsPage(),
-                        _HostPageGate(
-                          snapshot: described,
-                          loading: uiState.isLoading,
-                          onOpenBackends: () => setState(
-                            () => _section = _SettingsSection.backends,
-                          ),
-                          page: (host) => _GeneralPage(
-                            snapshot: host,
-                            roster: uiState.roster,
-                            busy: uiState.isLoading,
-                            onAction: widget.onAction,
-                          ),
-                        ),
-                        _HostPageGate(
-                          snapshot: described,
-                          loading: uiState.isLoading,
-                          onOpenBackends: () => setState(
-                            () => _section = _SettingsSection.backends,
-                          ),
-                          page: (host) => _ModelsPage(
-                            writable: host.writable,
-                            credentials: uiState.credentials,
-                            onAction: widget.onAction,
-                          ),
-                        ),
-                        _HostPageGate(
-                          snapshot: described,
-                          loading: uiState.isLoading,
-                          onOpenBackends: () => setState(
-                            () => _section = _SettingsSection.backends,
-                          ),
-                          page: (host) => _PluginsPage(
-                            snapshot: host,
-                            busy: uiState.isLoading,
-                            onAction: widget.onAction,
-                          ),
-                        ),
-                        _HostPageGate(
-                          snapshot: described,
-                          loading: uiState.isLoading,
-                          onOpenBackends: () => setState(
-                            () => _section = _SettingsSection.backends,
-                          ),
-                          page: (_) => _AgentPresetsPage(
-                            roster: uiState.roster,
-                            onAction: widget.onAction,
-                          ),
-                        ),
-                        _HostPageGate(
-                          snapshot: described,
-                          loading: uiState.isLoading,
-                          onOpenBackends: () => setState(
-                            () => _section = _SettingsSection.backends,
-                          ),
-                          page: (_) => _CredentialsPage(
-                            credentials: uiState.credentials,
-                            credentialError: uiState.credentialError,
-                            onAction: widget.onAction,
-                          ),
-                        ),
-                      ],
-                    ),
+                    onSelectSection: (next) =>
+                        setState(() => _section = next),
+                    onAction: widget.onAction,
                   ),
                 ],
               ),
@@ -230,6 +171,270 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The category capsules — the tab's two kinds of settings. The same
+/// capsule vocabulary as the section nav; two capsules fit the phone
+/// width unscrolled, and the scroll view guards the enlarged-text case.
+class _SettingsCategoryNav extends StatelessWidget {
+  const _SettingsCategoryNav({
+    required this.category,
+    required this.onSelect,
+  });
+
+  final _SettingsCategory category;
+  final ValueChanged<_SettingsCategory> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return SizedBox(
+      height: 44,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            for (final candidate in _SettingsCategory.values) ...[
+              if (candidate != _SettingsCategory.values.first)
+                const SizedBox(width: 8),
+              _ModeButton(
+                label: _categoryLabel(candidate, l10n),
+                selected: candidate == category,
+                onTap: () => onSelect(candidate),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The Host-settings half: every page that describes one configured
+/// host, plus the scope bar and section nav that frame them. The host
+/// error banner and activity line live here — the App page is
+/// device-local and never carries host state.
+class _HostSettingsArea extends StatelessWidget {
+  const _HostSettingsArea({
+    required this.uiState,
+    required this.section,
+    required this.onSelectSection,
+    required this.onAction,
+  });
+
+  final SettingsUiState uiState;
+  final _SettingsSection section;
+  final ValueChanged<_SettingsSection> onSelectSection;
+  final void Function(SettingsAction) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final described = uiState.snapshot;
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (uiState.errorMessage case final String error)
+          _ErrorBanner(
+            message: error,
+            onDismiss: () => onAction(const DismissSettingsError()),
+          ),
+        // Web surfaces write/refresh state on the controls; the mobile
+        // tab keeps one slim activity line above the content column.
+        if (described != null && uiState.isLoading)
+          LinearProgressIndicator(
+            minHeight: 2,
+            color: scheme.primary,
+            backgroundColor: Colors.transparent,
+          ),
+        // The nav and the page stack always mount: the Hosts page is
+        // device-local, so it stays reachable when the scoped host is
+        // unreachable (fixing that host's URL is exactly the flow that
+        // must not dead-end).
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The host-settings scope: which host the pages below
+              // describe. Multi-host only — a single host is
+              // unambiguous. The bar is device-local, so it renders
+              // even when the scoped host is unreachable (pinning a
+              // reachable host is the way out of that dead end).
+              const _ScopeBar(),
+              _SettingsSectionNav(
+                section: section,
+                onSelect: onSelectSection,
+              ),
+              Expanded(
+                child: IndexedStack(
+                  index: section.index,
+                  children: [
+                    const _BackendsPage(),
+                    _HostPageGate(
+                      snapshot: described,
+                      loading: uiState.isLoading,
+                      onOpenBackends: () => onSelectSection(
+                        _SettingsSection.backends,
+                      ),
+                      page: (host) => _GeneralPage(
+                        snapshot: host,
+                        roster: uiState.roster,
+                        busy: uiState.isLoading,
+                        onAction: onAction,
+                      ),
+                    ),
+                    _HostPageGate(
+                      snapshot: described,
+                      loading: uiState.isLoading,
+                      onOpenBackends: () => onSelectSection(
+                        _SettingsSection.backends,
+                      ),
+                      page: (host) => _ModelsPage(
+                        writable: host.writable,
+                        credentials: uiState.credentials,
+                        onAction: onAction,
+                      ),
+                    ),
+                    _HostPageGate(
+                      snapshot: described,
+                      loading: uiState.isLoading,
+                      onOpenBackends: () => onSelectSection(
+                        _SettingsSection.backends,
+                      ),
+                      page: (host) => _PluginsPage(
+                        snapshot: host,
+                        busy: uiState.isLoading,
+                        onAction: onAction,
+                      ),
+                    ),
+                    _HostPageGate(
+                      snapshot: described,
+                      loading: uiState.isLoading,
+                      onOpenBackends: () => onSelectSection(
+                        _SettingsSection.backends,
+                      ),
+                      page: (_) => _AgentPresetsPage(
+                        roster: uiState.roster,
+                        onAction: onAction,
+                      ),
+                    ),
+                    _HostPageGate(
+                      snapshot: described,
+                      loading: uiState.isLoading,
+                      onOpenBackends: () => onSelectSection(
+                        _SettingsSection.backends,
+                      ),
+                      page: (_) => _CredentialsPage(
+                        credentials: uiState.credentials,
+                        credentialError: uiState.credentialError,
+                        onAction: onAction,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// App page — the device-local preferences. Nothing here reads host
+/// state: the rows persist through the shared LocalStateStore, so the
+/// page works with or without a configured, reachable host.
+class _AppSettingsPage extends StatelessWidget {
+  const _AppSettingsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        _SectionHeader(
+          title: l10n.settingsCategoryApp,
+          intro: l10n.appSettingsIntro,
+        ),
+        ..._divided(scheme, [
+          const _LanguageRow(),
+          const _EnterBehaviorRow(),
+        ]),
+      ],
+    );
+  }
+}
+
+/// Language preference row (web LanguageRow, on the app plane): the
+/// interface language as a capsule selector persisted to the shared
+/// LocalStateStore. The row renders with the system default while the
+/// store loads or refuses to load — the preference is device-local and
+/// never fails a page.
+class _LanguageRow extends ConsumerWidget {
+  const _LanguageRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final controller = ref.watch(localePreferenceProvider).value;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.languageLabel, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            l10n.languageDescription,
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          if (controller == null)
+            _languageCapsules(context, AppLocalePreference.system, null)
+          else
+            StreamBuilder<AppLocalePreference>(
+              stream: controller.uiState,
+              initialData: controller.state,
+              builder: (context, snapshot) => _languageCapsules(
+                context,
+                snapshot.data ?? AppLocalePreference.system,
+                controller.select,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The zh/en labels render in their own language (web locale display
+  /// names); the system entry is the only localized label.
+  Widget _languageCapsules(
+    BuildContext context,
+    AppLocalePreference current,
+    ValueChanged<AppLocalePreference>? onSelect,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return Wrap(
+      spacing: 8,
+      children: [
+        for (final option in AppLocalePreference.values)
+          _ModeButton(
+            label: switch (option) {
+              AppLocalePreference.system => l10n.languageOptionSystem,
+              AppLocalePreference.zh => l10n.languageOptionZh,
+              AppLocalePreference.en => l10n.languageOptionEn,
+            },
+            selected: option == current,
+            onTap: onSelect == null ? null : () => onSelect(option),
+          ),
+      ],
     );
   }
 }
@@ -270,11 +475,13 @@ class _SettingsSectionNav extends StatelessWidget {
 }
 
 /// Web panel header: the nav title 'Settings' (16/500) beside the header
-/// action chrome — a circular glyph button on interactive-bg-hover.
+/// action chrome — a circular glyph button on interactive-bg-hover. A
+/// null [onRefresh] drops the button (the App category has no host
+/// describe to re-run).
 class _SettingsHeader extends StatelessWidget {
   const _SettingsHeader({required this.onRefresh});
 
-  final VoidCallback onRefresh;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -289,22 +496,23 @@ class _SettingsHeader extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
-          _CircleAction(
-            icon: Icons.refresh,
-            tooltip: l10n.refresh,
-            onTap: onRefresh,
-          ),
+          if (onRefresh != null)
+            _CircleAction(
+              icon: Icons.refresh,
+              tooltip: l10n.refresh,
+              onTap: onRefresh!,
+            ),
         ],
       ),
     );
   }
 }
 
-/// The host-settings scope bar: which backend's settings the pages
-/// below describe. Renders only when more than one backend is
-/// configured (a single backend is unambiguous); the row is the picker
-/// trigger — tapping it opens the backend-scope sheet, which pins a
-/// scope independent of the chat-active backend.
+/// The host-settings scope bar: which host's settings the pages below
+/// describe. Renders only when more than one host is configured (a
+/// single host is unambiguous); the row is the picker trigger —
+/// tapping it opens the host-scope sheet, which pins a scope
+/// independent of the chat-active host.
 class _ScopeBar extends ConsumerWidget {
   const _ScopeBar();
 
@@ -373,7 +581,7 @@ class _ScopeBar extends ConsumerWidget {
   }
 
   /// Opens the scope picker: the menu-surface sheet listing every
-  /// configured backend (the current scope checked, the chat-active one
+  /// configured host (the current scope checked, the chat-active one
   /// badged) plus the follow-active entry while a scope is pinned.
   Future<void> _openScopePicker(BuildContext context, WidgetRef ref) {
     return showModalBottomSheet<void>(
@@ -586,10 +794,10 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-/// Backends page — the device-local multi-host registry (no web peer:
-/// the web client is compiled against one host). One row per configured
-/// backend with its LIVE connection dot; tapping a non-active row
-/// makes it the backend the chat surface presents. The edit sheet owns
+/// Hosts page — the device-local multi-host registry (no web peer: the
+/// web client is compiled against one host). One row per configured
+/// host with its LIVE connection dot; tapping a non-active row makes
+/// it the host the chat surface presents. The edit sheet owns
 /// add/rename/repoint/remove with the registry's guards surfaced
 /// inline.
 class _BackendsPage extends ConsumerWidget {
@@ -659,7 +867,7 @@ class _BackendsList extends StatelessWidget {
   }
 }
 
-/// Why a backend cannot be removed right now (the registry's guards,
+/// Why a host cannot be removed right now (the registry's guards,
 /// mirrored as visible UI instead of a dead button); null = removable.
 String? _removeBlockedReason(
   BackendRegistryState state,
@@ -734,9 +942,9 @@ Future<void> _openBackendSheet(
   );
 }
 
-/// One backend row: live connection dot, label over `host:port` (with
+/// One host row: live connection dot, label over `host:port` (with
 /// the connected host's version appended when one is known), the Active
-/// badge on the presented backend, and the edit affordance. Tapping a
+/// badge on the presented host, and the edit affordance. Tapping a
 /// non-active row selects it (the registry guards the rest).
 class _BackendRow extends ConsumerWidget {
   const _BackendRow({
@@ -914,9 +1122,11 @@ class _HostPageGate extends StatelessWidget {
   }
 }
 
-/// General page (web GeneralSection): the preference rows — busy-Enter
-/// (web EnterBehaviorRow) and the agent-preset default (web
-/// AgentPresetRow) — over the connection-fact rows.
+/// General page (web GeneralSection): the agent-preset default (web
+/// AgentPresetRow) over the connection-fact rows. The web's other
+/// General contributions live elsewhere on mobile: the language row
+/// is an App setting (device-local), and the busy-Enter row moved to
+/// the App page with it (the mobile preference persists on-device).
 class _GeneralPage extends StatelessWidget {
   const _GeneralPage({
     required this.snapshot,
@@ -935,7 +1145,6 @@ class _GeneralPage extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final rows = <Widget>[
-      const _EnterBehaviorRow(),
       // Web rule: the row exists only when the deployment composes at
       // least one preset — an empty roster has nothing to choose between.
       if (roster?.entries.isNotEmpty ?? false)
@@ -978,10 +1187,11 @@ List<AgentPresetEntry> _pickerOptions(AgentPresetRoster? roster) =>
     roster?.entries.where((entry) => entry.broken == null).toList() ??
     const <AgentPresetEntry>[];
 
-/// Busy-Enter preference row (web EnterBehaviorRow): a Queue/Steer
-/// capsule selector persisted to the shared LocalStateStore. The row
-/// renders with the queue default while the store loads or refuses to
-/// load — the preference is device-local and never fails a page.
+/// Busy-Enter preference row (web EnterBehaviorRow, an App setting on
+/// mobile — the preference persists on-device): a Queue/Steer capsule
+/// selector persisted to the shared LocalStateStore. The row renders
+/// with the queue default while the store loads or refuses to load —
+/// the preference is device-local and never fails a page.
 class _EnterBehaviorRow extends ConsumerWidget {
   const _EnterBehaviorRow();
 
@@ -2379,7 +2589,7 @@ class _CredentialSheetState extends State<_CredentialSheet> {
   }
 }
 
-/// The backend add/edit sheet body: label + base-URL fields with the
+/// The host add/edit sheet body: label + base-URL fields with the
 /// registry's validation mirrored as immediate inline feedback (the
 /// controller remains the authority — it re-checks on dispatch), plus
 /// the destructive remove with its guard stated, never a dead control.

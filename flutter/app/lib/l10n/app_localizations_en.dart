@@ -485,7 +485,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get settingsNavBackends => 'Backends';
+  String get settingsCategoryApp => 'App settings';
+
+  @override
+  String get settingsCategoryHost => 'Host settings';
+
+  @override
+  String get appSettingsIntro =>
+      'Preferences stored on this device — they apply everywhere, with or without a connected host.';
+
+  @override
+  String get languageLabel => 'Language';
+
+  @override
+  String get languageDescription =>
+      'The app interface language; Follow system tracks the device language.';
+
+  @override
+  String get languageOptionSystem => 'Follow system';
+
+  @override
+  String get languageOptionZh => '中文';
+
+  @override
+  String get languageOptionEn => 'English';
+
+  @override
+  String get settingsNavBackends => 'Hosts';
 
   @override
   String get settingsNavGeneral => 'General';
@@ -508,14 +534,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get settingsScopeTitle => 'Settings backend';
+  String get settingsScopeTitle => 'Choose a host';
 
   @override
   String get settingsScopeHint =>
-      'Which backend the host-settings pages describe - independent of the active chat backend.';
+      'These settings pages describe the chosen host - independent of the host Chat uses.';
 
   @override
-  String get settingsScopeFollowActive => 'Follow the active backend';
+  String get settingsScopeFollowActive => 'Follow the active host';
 
   @override
   String get settingsLoopbackHint =>
@@ -523,20 +549,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backendsIntro =>
-      'Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.';
+      'Host endpoints this device keeps connected — every configured host stays live; the active one drives Chat and these host-settings pages.';
 
   @override
-  String get addBackend => 'Add backend';
+  String get addBackend => 'Add host';
 
   @override
-  String get editBackend => 'Edit backend';
+  String get editBackend => 'Edit host';
 
   @override
   String get removeActiveBackendFirst =>
-      'Switch away before removing the active backend.';
+      'Switch away before removing the active host.';
 
   @override
-  String get cannotRemoveLastBackend => 'The last backend cannot be removed.';
+  String get cannotRemoveLastBackend => 'The last host cannot be removed.';
 
   @override
   String get backendStatusActive => 'Active';
@@ -549,7 +575,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hostSettingsUnavailableBody =>
-      'The active backend did not answer. Repoint or switch it from the Backends page.';
+      'The active host did not answer. Repoint or switch it from the Hosts page.';
 
   @override
   String get hostWritesLabel => 'Host writes';

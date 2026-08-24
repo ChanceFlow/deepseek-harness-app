@@ -12,6 +12,7 @@ import 'config.dart';
 import 'di/providers.dart' show systemNotifierProvider;
 import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
+import 'ui/settings/locale_preference.dart';
 import 'ui/theme/theme.dart';
 
 /// Debug-build telemetry bootstrap; null in release or when unavailable.
@@ -84,16 +85,22 @@ void _initDebugTools() {
   }
 }
 
-class DshApp extends StatelessWidget {
+class DshApp extends ConsumerWidget {
   const DshApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The App-settings language choice; null while the store loads (or
+    // when it is unavailable), which delegates to the device locale.
+    final preference = ref.watch(appLocalePreferenceProvider).value;
     return MaterialApp(
       // Brand title; resolves through l10n so the OS task-switcher
-      // label follows the device locale (DSH Mobile stays the
+      // label follows the active locale (DSH Mobile stays the
       // canonical name in every locale).
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+      // An explicit zh/en pins the whole app to that locale; system (or
+      // an unresolved store) leaves the resolution to the device.
+      locale: resolveAppLocale(preference),
       theme: DshTheme.light(),
       darkTheme: DshTheme.dark(),
       localizationsDelegates: const [

@@ -836,10 +836,58 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 session} other{{count} sessions}}'**
   String workspaceSessionCount(int count);
 
+  /// No description provided for @settingsCategoryApp.
+  ///
+  /// In en, this message translates to:
+  /// **'App settings'**
+  String get settingsCategoryApp;
+
+  /// No description provided for @settingsCategoryHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Host settings'**
+  String get settingsCategoryHost;
+
+  /// No description provided for @appSettingsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences stored on this device — they apply everywhere, with or without a connected host.'**
+  String get appSettingsIntro;
+
+  /// No description provided for @languageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get languageLabel;
+
+  /// No description provided for @languageDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The app interface language; Follow system tracks the device language.'**
+  String get languageDescription;
+
+  /// No description provided for @languageOptionSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow system'**
+  String get languageOptionSystem;
+
+  /// No description provided for @languageOptionZh.
+  ///
+  /// In en, this message translates to:
+  /// **'中文'**
+  String get languageOptionZh;
+
+  /// No description provided for @languageOptionEn.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageOptionEn;
+
   /// No description provided for @settingsNavBackends.
   ///
   /// In en, this message translates to:
-  /// **'Backends'**
+  /// **'Hosts'**
   String get settingsNavBackends;
 
   /// No description provided for @settingsNavGeneral.
@@ -872,7 +920,7 @@ abstract class AppLocalizations {
   /// **'Credentials'**
   String get settingsNavCredentials;
 
-  /// The backend whose host settings the Settings pages describe.
+  /// The host whose settings the Settings pages describe.
   ///
   /// In en, this message translates to:
   /// **'Configuring: {label}'**
@@ -881,19 +929,19 @@ abstract class AppLocalizations {
   /// No description provided for @settingsScopeTitle.
   ///
   /// In en, this message translates to:
-  /// **'Settings backend'**
+  /// **'Choose a host'**
   String get settingsScopeTitle;
 
   /// No description provided for @settingsScopeHint.
   ///
   /// In en, this message translates to:
-  /// **'Which backend the host-settings pages describe - independent of the active chat backend.'**
+  /// **'These settings pages describe the chosen host - independent of the host Chat uses.'**
   String get settingsScopeHint;
 
   /// No description provided for @settingsScopeFollowActive.
   ///
   /// In en, this message translates to:
-  /// **'Follow the active backend'**
+  /// **'Follow the active host'**
   String get settingsScopeFollowActive;
 
   /// No description provided for @settingsLoopbackHint.
@@ -905,31 +953,31 @@ abstract class AppLocalizations {
   /// No description provided for @backendsIntro.
   ///
   /// In en, this message translates to:
-  /// **'Host endpoints this device keeps connected — every configured backend stays live; the active one drives Chat and these host-settings pages.'**
+  /// **'Host endpoints this device keeps connected — every configured host stays live; the active one drives Chat and these host-settings pages.'**
   String get backendsIntro;
 
   /// No description provided for @addBackend.
   ///
   /// In en, this message translates to:
-  /// **'Add backend'**
+  /// **'Add host'**
   String get addBackend;
 
   /// No description provided for @editBackend.
   ///
   /// In en, this message translates to:
-  /// **'Edit backend'**
+  /// **'Edit host'**
   String get editBackend;
 
   /// No description provided for @removeActiveBackendFirst.
   ///
   /// In en, this message translates to:
-  /// **'Switch away before removing the active backend.'**
+  /// **'Switch away before removing the active host.'**
   String get removeActiveBackendFirst;
 
   /// No description provided for @cannotRemoveLastBackend.
   ///
   /// In en, this message translates to:
-  /// **'The last backend cannot be removed.'**
+  /// **'The last host cannot be removed.'**
   String get cannotRemoveLastBackend;
 
   /// No description provided for @backendStatusActive.
@@ -953,7 +1001,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostSettingsUnavailableBody.
   ///
   /// In en, this message translates to:
-  /// **'The active backend did not answer. Repoint or switch it from the Backends page.'**
+  /// **'The active host did not answer. Repoint or switch it from the Hosts page.'**
   String get hostSettingsUnavailableBody;
 
   /// No description provided for @hostWritesLabel.
