@@ -26,6 +26,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n_app.dart';
@@ -1045,6 +1046,64 @@ void main() {
         ),
       ),
     );
+  });
+
+  testWidgets('recommended badge paints onPrimaryContainer ink on a '
+      'primaryContainer chip in both themes', (tester) async {
+    // Regression: the badge text used primaryContainer as ink on a
+    // secondaryContainer chip — 1.00:1 in light, 1.02:1 in dark, invisible.
+    // The M3 pairing is primaryContainer chip + onPrimaryContainer ink.
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      final actions = <ChatAction>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+                .overrideWithValue(_FakeRpc()),
+            dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+                .overrideWithValue(_NeverSocket()),
+          ],
+          child: l10nApp(
+            theme: theme,
+            home: ChatScreen(
+              uiState: _state(
+                sessions: const [
+                  SessionSummary(id: 's1', title: 'Alpha', blank: false),
+                ],
+                selectedSessionId: 's1',
+                timeline: const [
+                  TimelineQuestionRequest(
+                    requestId: 'rpc-badge',
+                    questions: [
+                      QuestionItem(
+                        id: 'q1',
+                        question: 'Pick a target',
+                        options: ['Code（推荐）', 'Docs'],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              onAction: actions.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final badge = find.text('Recommended');
+      expect(badge, findsOneWidget);
+      final scheme = theme.colorScheme;
+      final textWidget = tester.widget<Text>(badge);
+      expect(textWidget.style?.color, scheme.onPrimaryContainer);
+      // The chip behind the ink: the badge text's ancestor Container carries
+      // the chip fill.
+      final container = tester.widget<Container>(
+        find.ancestor(of: badge, matching: find.byType(Container)).first,
+      );
+      final decoration = container.decoration as BoxDecoration;
+      expect(decoration.color, scheme.primaryContainer);
+    }
   });
 
   testWidgets('optionless question answers through the free-form field', (

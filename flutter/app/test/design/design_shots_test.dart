@@ -51,6 +51,7 @@ final class DesignShot {
     required this.state,
     this.act,
     this.dark = true,
+    this.locale,
   });
 
   final String name;
@@ -60,6 +61,11 @@ final class DesignShot {
   /// Whether the dark twin renders too. A state whose defect is layout
   /// rather than tone renders once and stays cheap to review.
   final bool dark;
+
+  /// Locale the shot renders chrome in; null leaves the platform default
+  /// (English). A localized chrome string (e.g. the question card's
+  /// recommended badge, "Recommended" vs "推荐") earns a zh twin.
+  final Locale? locale;
 }
 
 final List<DesignShot> shots = <DesignShot>[
@@ -83,6 +89,14 @@ final List<DesignShot> shots = <DesignShot>[
       await tester.longPress(find.text(kBubbleUnderTest));
       await settle(tester);
     },
+  ),
+  DesignShot(name: 'question', state: questionState()),
+  // The zh twin renders the same card with the localized chrome — the
+  // recommended badge must read 推荐, not Recommended.
+  DesignShot(
+    name: 'question-zh',
+    state: questionState(),
+    locale: const Locale('zh'),
   ),
 ];
 
@@ -213,6 +227,7 @@ Future<void> _render(WidgetTester tester, DesignShot shot, ThemeData theme) asyn
         debugShowCheckedModeBanner: false,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        locale: shot.locale,
         theme: _withRealFonts(theme),
         home: ChatScreen(uiState: shot.state, onAction: (_) {}),
       ),
