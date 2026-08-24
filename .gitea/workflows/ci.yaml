@@ -47,6 +47,8 @@ jobs:
     # resolve `vars.*` in env, so the job ran proxy-less and pub's large
     # package downloads hung. The proxy env is still declared here for a
     # runner that does resolve vars.
+    # Toolchain pin (verify_toolchain_pin.py reads this file as source):
+    # flutter-version: 3.47.1 — baked into the flutter-android image.
     runs-on: flutter-android
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
