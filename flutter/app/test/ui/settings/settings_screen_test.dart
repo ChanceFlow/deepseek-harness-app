@@ -332,30 +332,28 @@ void main() {
       [],
     );
 
-    // The two category capsules carry the tab's split: App settings
-    // (device-local) and Host settings; Host is the initial category.
-    expect(find.text('App settings').hitTestable(), findsOneWidget);
-    expect(find.text('Host settings').hitTestable(), findsOneWidget);
+    // The two category capsules carry the tab's split: App
+    // (device-local) and Host; Host is the initial category.
+    expect(find.text('App').hitTestable(), findsOneWidget);
+    expect(find.text('Host').hitTestable(), findsOneWidget);
+
+    // The host bar names the configured host; the registry itself
+    // lives behind the bar's sheet, not on the section nav.
+    expect(find.text('Laptop').hitTestable(), findsNothing);
 
     // The panel nav (web nav rail) collapsed to capsules, in the web
-    // nav order with the mobile-only Credentials page last. Six
+    // nav order with the mobile-only Credentials page last. Five
     // capsules overflow the phone width in the test font, so the nav
-    // scrolls: the first five sit in the viewport, Credentials reveals
+    // scrolls: the first four sit in the viewport, Credentials reveals
     // on scroll. The active section's page header repeats its title,
     // so presence (not count) is the assertion.
-    for (final label in [
-      'Hosts',
-      'General',
-      'Models',
-      'Plugins',
-      'Agent presets',
-    ]) {
+    for (final label in ['General', 'Models', 'Plugins', 'Agent presets']) {
       expect(find.text(label).hitTestable(), findsWidgets);
     }
     await _revealCapsule(tester, 'Credentials');
     expect(find.text('Credentials').hitTestable(), findsWidgets);
     // Back to the leading capsules for the page assertions below.
-    await _revealCapsule(tester, 'Hosts');
+    await _revealCapsule(tester, 'General');
 
     // General page: the interactive rows over the connection facts.
     expect(find.text('Agent preset').hitTestable(), findsOneWidget);
@@ -400,7 +398,7 @@ void main() {
     // The category switch keeps both halves mounted (IndexedStack):
     // the App page renders its own rows while the host pages keep
     // their state behind it.
-    await tester.tap(find.text('App settings').hitTestable());
+    await tester.tap(find.text('App').hitTestable());
     await tester.pumpAndSettle();
     expect(
       find.text('Enter behavior while busy').hitTestable(),
@@ -409,8 +407,8 @@ void main() {
     expect(find.text('Language').hitTestable(), findsOneWidget);
     expect(find.text('Host writes').hitTestable(), findsNothing);
 
-    // Back to Host settings: the section stack resumes where it was.
-    await tester.tap(find.text('Host settings').hitTestable());
+    // Back to the host pages: the section stack resumes where it was.
+    await tester.tap(find.text('Host').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Host writes').hitTestable(), findsOneWidget);
   });
@@ -423,7 +421,7 @@ void main() {
     );
 
     // The row lives on the App page now (device-local preference).
-    await tester.tap(find.text('App settings').hitTestable());
+    await tester.tap(find.text('App').hitTestable());
     await tester.pumpAndSettle();
 
     // Pre-cache default: an unloaded store reads null for every key.
@@ -454,7 +452,7 @@ void main() {
       [],
     );
 
-    await tester.tap(find.text('App settings').hitTestable());
+    await tester.tap(find.text('App').hitTestable());
     await tester.pumpAndSettle();
 
     // The row offers the system default plus the two display names
@@ -819,7 +817,7 @@ void main() {
       '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
       '], "activeId": "default"}';
 
-  Future<void> pumpBackends(
+  Future<void> pumpHostSettings(
     WidgetTester tester, {
     String document = twoBackendsDoc,
     SettingsUiState uiState = const SettingsUiState(snapshot: _snapshot),
@@ -852,29 +850,58 @@ void main() {
       ),
     );
     await _letRegistryLoad(tester);
-    // The nav capsule is the first 'Hosts' text in the column (the
-    // unreachable-host gate's shortcut button may render below it).
-    await tester.tap(find.text('Hosts').hitTestable().first);
     await tester.pumpAndSettle();
   }
 
-  testWidgets('hosts section lists rows and switches the active one', (
+  /// Opens the host sheet through the host bar (the scoped host's
+  /// label is the bar's title).
+  Future<void> openHostSheet(WidgetTester tester, String barLabel) async {
+    await tester.tap(find.text(barLabel).hitTestable());
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('host sheet lists hosts and switches the chat-active one', (
     tester,
   ) async {
-    await pumpBackends(tester);
+    await pumpHostSettings(tester);
+    // The host bar names the scoped host; its sheet owns the registry.
+    expect(find.text('Laptop').hitTestable(), findsOneWidget);
+    await openHostSheet(tester, 'Laptop');
 
-    // Both configured rows with their endpoints; the active one badged.
-    // The badge assertions scope to the rows: the scope bar (visible
-    // with two backends) carries its own Active mark for the scoped
-    // backend, which rides the same registry.
-    expect(find.text('Laptop'), findsOneWidget);
-    expect(find.text('Build box'), findsOneWidget);
-    final laptopRow = find.ancestor(
-      of: find.text('Laptop'),
-      matching: find.byType(InkWell),
+    // Both configured rows with their endpoints; the sheet's title
+    // states the choice.
+    final sheet = find.byType(BottomSheet);
+    expect(
+      find.descendant(of: sheet, matching: find.text('Choose a host')),
+      findsOneWidget,
     );
-    final buildBoxRow = find.ancestor(
-      of: find.text('Build box'),
+    expect(
+      find.descendant(of: sheet, matching: find.text('Build box')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text('Add host')),
+      findsOneWidget,
+    );
+    // The connected hosts' versions ride the endpoint lines (the fake
+    // host.describe answers version 'test').
+    expect(
+      find.descendant(
+        of: sheet,
+        matching: find.text('10.0.2.2:3080 · vtest'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: sheet,
+        matching: find.text('10.0.2.2:3081 · vtest'),
+      ),
+      findsOneWidget,
+    );
+    // Laptop is scoped (check) and chat-active (badge).
+    final laptopRow = find.ancestor(
+      of: find.descendant(of: sheet, matching: find.text('Laptop')),
       matching: find.byType(InkWell),
     );
     expect(
@@ -882,101 +909,119 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: buildBoxRow, matching: find.text('Standby')),
+      find.descendant(of: laptopRow, matching: find.byIcon(Icons.check)),
       findsOneWidget,
     );
-    expect(find.text('Add host'), findsOneWidget);
 
-    // The connected host's version rides the endpoint line (the fake
-    // host.describe answers version 'test').
-    expect(find.text('10.0.2.2:3080 · vtest'), findsOneWidget);
-    expect(find.text('10.0.2.2:3081 · vtest'), findsOneWidget);
-
-    // Tapping the standby row selects it: the badges swap (the chat
-    // surface follows the registry's active id).
-    await tester.tap(find.text('Build box'));
+    // The chat-active switch rides the edit sheet.
+    await tester.tap(find.byTooltip('Edit host').at(1));
     await tester.pumpAndSettle();
-    final activeBuildBoxRow = find.ancestor(
+    await tester.tap(find.text('Set as chat host'));
+    await tester.pumpAndSettle();
+
+    // Back on the host sheet: the Active badge moved to Build box.
+    final buildBoxRow = find.ancestor(
+      of: find.descendant(of: sheet, matching: find.text('Build box')),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Active')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('host sheet pins a scope independent of the chat-active host', (
+    tester,
+  ) async {
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
+
+    // Following the chat-active host: the sheet has no follow entry
+    // while nothing is pinned.
+    expect(find.text('Follow the active host'), findsNothing);
+
+    // Pin Build box: the sheet closes and the bar follows the pin, not
+    // the chat-active id.
+    await tester.tap(find.text('Build box').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Build box').hitTestable(), findsOneWidget);
+    expect(find.text('Laptop').hitTestable(), findsNothing);
+
+    // Chat-active switches do not move the pinned scope: make Build
+    // box the chat host, then switch back to Laptop — the scope check
+    // stays on Build box throughout.
+    await openHostSheet(tester, 'Build box');
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set as chat host'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Edit host').at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Set as chat host'));
+    await tester.pumpAndSettle();
+
+    // Laptop is the chat host again; the scope stayed pinned to
+    // Build box (it keeps the check).
+    final laptopRow = find.ancestor(
+      of: find.text('Laptop'),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    final buildBoxRow = find.ancestor(
       of: find.text('Build box'),
       matching: find.byType(InkWell),
     );
     expect(
-      find.descendant(of: activeBuildBoxRow, matching: find.text('Active')),
+      find.descendant(of: buildBoxRow, matching: find.byIcon(Icons.check)),
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: find.ancestor(
-          of: find.text('Laptop'),
-          matching: find.byType(InkWell),
-        ),
-        matching: find.text('Standby'),
-      ),
-      findsOneWidget,
+      find.descendant(of: laptopRow, matching: find.byIcon(Icons.check)),
+      findsNothing,
     );
-  });
 
-  testWidgets('scope bar pins a host independent of the chat-active one', (
-    tester,
-  ) async {
-    await pumpBackends(tester);
-
-    // Following the chat-active backend: the bar names Laptop and the
-    // picker has no follow entry while nothing is pinned.
-    expect(find.text('Configuring: Laptop'), findsOneWidget);
-    expect(find.text('Configuring: Build box'), findsNothing);
-    await tester.tap(find.text('Configuring: Laptop'));
-    await tester.pumpAndSettle();
-    expect(find.text('Choose a host'), findsOneWidget);
-    expect(find.text('Follow the active host'), findsNothing);
-    expect(find.text('Laptop').hitTestable(), findsOneWidget);
-    expect(find.text('Build box').hitTestable(), findsOneWidget);
-
-    // Pin Build box: the bar follows the pin, not the chat-active id.
-    await tester.tap(find.text('Build box').hitTestable());
-    await tester.pumpAndSettle();
-    expect(find.text('Configuring: Build box'), findsOneWidget);
-    expect(find.text('Configuring: Laptop'), findsNothing);
-
-    // Chat-active switches neither move the pinned bar.
-    await tester.tap(find.text('Build box'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Laptop'));
-    await tester.pumpAndSettle();
-    expect(find.text('Configuring: Build box'), findsOneWidget);
-
-    // While pinned the picker offers follow-active; choosing it snaps
-    // the scope back to the chat-active backend.
-    await tester.tap(find.text('Configuring: Build box'));
-    await tester.pumpAndSettle();
+    // While pinned the sheet offers follow-active; choosing it snaps
+    // the scope back to the chat-active host (Laptop now).
     expect(find.text('Follow the active host'), findsOneWidget);
     await tester.tap(find.text('Follow the active host'));
     await tester.pumpAndSettle();
-    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Laptop').hitTestable(), findsOneWidget);
   });
 
-  testWidgets('a single configured host hides the scope bar', (
+  testWidgets('a single configured host keeps the bar and sheet minimal', (
     tester,
   ) async {
-    await pumpBackends(
+    await pumpHostSettings(
       tester,
       document:
           '{"backends": [{"id": "default", "label": "Laptop", '
           '"baseUrl": "http://10.0.2.2:3080"}], "activeId": "default"}',
     );
 
-    // Nothing to disambiguate: the bar (and its picker trigger) is
-    // absent, and the row-level surface is unchanged.
-    expect(find.text('Configuring: Laptop'), findsNothing);
+    // The bar always renders: the single host's identity and state.
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
+    expect(find.textContaining('10.0.2.2:3080'), findsOneWidget);
+
+    // Its sheet: one row, no follow entry, adding stays reachable.
+    await openHostSheet(tester, 'Laptop');
+    expect(find.text('Choose a host'), findsOneWidget);
+    expect(find.text('Follow the active host'), findsNothing);
+    expect(find.text('Add host'), findsOneWidget);
   });
 
-  testWidgets('SettingsRoute rebinds the described host to the scoped backend', (
+  testWidgets('SettingsRoute rebinds the described host to the scoped host', (
     tester,
   ) async {
     // The route rides the real registry chain; only the repositories
-    // are faked, each backend describing a different writability so the
+    // are faked, each host describing a different writability so the
     // rebind is observable on the General page.
     final laptop = _RecordingSettingsRepository(
       snapshot: _snapshot,
@@ -1020,32 +1065,33 @@ void main() {
     await _letRegistryLoad(tester);
     await tester.pumpAndSettle();
 
-    // Following the chat-active backend: Laptop's snapshot drives the
+    // Following the chat-active host: Laptop's snapshot drives the
     // host pages.
-    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Writable'), findsOneWidget);
 
-    // Pin Build box on the scope bar: the host pages rebind to its
-    // snapshot (read-only), independent of the chat-active backend.
-    await tester.tap(find.text('Configuring: Laptop'));
+    // Pin Build box through the host sheet: the host pages rebind to
+    // its snapshot (read-only), independent of the chat-active host.
+    await tester.tap(find.text('Laptop'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Build box').hitTestable());
     await tester.pumpAndSettle();
-    expect(find.text('Configuring: Build box'), findsOneWidget);
+    expect(find.text('Build box'), findsOneWidget);
     expect(find.text('Read-only'), findsOneWidget);
     expect(find.text('Writable'), findsNothing);
 
-    // Re-follow: the pages describe the chat-active backend again.
-    await tester.tap(find.text('Configuring: Build box'));
+    // Re-follow: the pages describe the chat-active host again.
+    await tester.tap(find.text('Build box'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Follow the active host'));
     await tester.pumpAndSettle();
-    expect(find.text('Configuring: Laptop'), findsOneWidget);
+    expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Writable'), findsOneWidget);
   });
 
   testWidgets('add host flow appends through the registry', (tester) async {
-    await pumpBackends(tester);
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
 
     await tester.tap(find.text('Add host').hitTestable());
     await tester.pumpAndSettle();
@@ -1064,9 +1110,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Add'));
     await tester.pumpAndSettle();
 
-    // The sheet closed and the new row renders (the endpoint line may
-    // or may not carry the connected version yet — it appears once the
-    // new backend's handshake completes).
+    // The add sheet popped back onto the host sheet: the new row
+    // renders in it (the endpoint line may or may not carry the
+    // connected version yet — it appears once the new host's
+    // handshake completes).
     expect(find.text('Label'), findsNothing);
     expect(find.text('CI host'), findsOneWidget);
     expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
@@ -1075,15 +1122,16 @@ void main() {
   testWidgets('edit sheet repoints a host and states removal guards', (
     tester,
   ) async {
-    await pumpBackends(tester);
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
 
-    // The standby backend's editor: prefilled fields, removable.
+    // The standby host's editor: prefilled fields, removable.
     await tester.tap(find.byTooltip('Edit host').at(1));
     await tester.pumpAndSettle();
     expect(find.text('Edit host'), findsOneWidget);
     expect(find.text('Remove'), findsOneWidget);
 
-    // Repoint the URL; the row's endpoint line follows.
+    // Repoint the URL; the row's endpoint line follows on the sheet.
     final fields = find.descendant(
       of: find.byType(BottomSheet),
       matching: find.byType(TextField),
@@ -1095,7 +1143,7 @@ void main() {
     expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
     expect(find.textContaining('10.0.2.2:3081'), findsNothing);
 
-    // The active backend's editor states the guard instead of a dead
+    // The active host's editor states the guard instead of a dead
     // remove control.
     await tester.tap(find.byTooltip('Edit host').at(0));
     await tester.pumpAndSettle();
@@ -1103,20 +1151,24 @@ void main() {
     expect(find.textContaining('Switch away before removing'), findsOneWidget);
   });
 
-  testWidgets('unreachable host page routes to the hosts section', (
+  testWidgets('unreachable host page opens the host sheet', (
     tester,
   ) async {
     // No snapshot and not loading: the host pages state the dead end;
-    // the Backends page (device-local) is the way out.
-    await pumpBackends(tester, uiState: const SettingsUiState());
+    // the host sheet (device-local) is the way out.
+    await pumpHostSettings(tester, uiState: const SettingsUiState());
 
     await tester.tap(find.text('General').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Host settings unavailable'), findsOneWidget);
+    expect(
+      find.textContaining('Repoint it, or choose another host'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Hosts'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Host'));
     await tester.pumpAndSettle();
+    expect(find.text('Choose a host'), findsOneWidget);
     expect(find.text('Add host').hitTestable(), findsOneWidget);
-    expect(find.text('Host settings unavailable'), findsNothing);
   });
 }

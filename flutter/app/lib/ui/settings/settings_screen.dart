@@ -1,10 +1,15 @@
 /// Settings screen — Flutter port of the dsh web settings surface.
 ///
 /// The tab carries two kinds of settings, picked by the category
-/// capsules under the header: **App settings** — device-local
-/// preferences (interface language, busy-Enter behavior) persisted to
-/// the shared LocalStateStore, reachable with or without a host — and
-/// **Host settings** — the pages describing one configured host.
+/// capsules under the header: **App** — device-local preferences
+/// (interface language, busy-Enter behavior) persisted to the shared
+/// LocalStateStore, reachable with or without a host — and **Host** —
+/// the pages describing one configured host. The word "host" appears
+/// exactly once on the surface (the category capsule): the host half
+/// leads with the host bar — the identity of the host these pages
+/// describe — and its sheet owns the whole host dimension (picking
+/// the settings scope, adding/renaming/repointing/removing hosts,
+/// switching the chat-active host), so no section repeats the word.
 ///
 /// The host half translates the web settings panel (ui-settings shell
 /// plus the ui-settings-general / -models / -plugins sections,
@@ -16,17 +21,16 @@
 /// packages/client/ui-settings-* module css). The web's two-pane panel
 /// (nav rail + content column) collapses to a horizontal capsule nav
 /// over an IndexedStack of pages in the web nav's order — General,
-/// Models, Plugins, Agent presets — plus mobile-only pages: Hosts (the
-/// device-local multi-host registry, which stays reachable even when
-/// the active host is not) and Credentials; IndexedStack preserves
-/// each section's scroll and entry state across switches (and, at the
-/// category level, across App/Host switches). General facts render as
-/// value rows, the agent-preset default renders as the web's
-/// interactive preference row, presets render as the web's selectable
-/// cards (read-only: authoring verbs are loopback-pinned), namespaces
-/// disclose in place under Plugins (web PluginCard), the DeepSeek
-/// API-key card rides Models, and the credential editor opens as a
-/// bottom sheet on the popover surface instead of a side panel.
+/// Models, Plugins, Agent presets — plus the mobile-only Credentials
+/// page; IndexedStack preserves each section's scroll and entry state
+/// across switches (and, at the category level, across App/Host
+/// switches). General facts render as value rows, the agent-preset
+/// default renders as the web's interactive preference row, presets
+/// render as the web's selectable cards (read-only: authoring verbs
+/// are loopback-pinned), namespaces disclose in place under Plugins
+/// (web PluginCard), the DeepSeek API-key card rides Models, and the
+/// credential editor opens as a bottom sheet on the popover surface
+/// instead of a side panel.
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -83,14 +87,15 @@ String _categoryLabel(_SettingsCategory category, AppLocalizations l10n) =>
       _SettingsCategory.host => l10n.settingsCategoryHost,
     };
 
-/// Phone-tab host-settings sections. The web nav order is general 0,
-/// models 10, plugins 15, agent-presets 20 (reference ui-settings nav); the
-/// mobile-only pages bracket it: Hosts first (the device-local
-/// registry decides which host every other page even describes, and it
-/// stays reachable when that host is not), Credentials last (the web
-/// manages secrets inside the Models provider editors).
+/// Phone-tab host-settings sections — the pages that describe one
+/// configured host. The web nav order is general 0, models 10,
+/// plugins 15, agent-presets 20 (reference ui-settings nav); the
+/// mobile-only Credentials page is last (the web manages secrets
+/// inside the Models provider editors). The host registry is NOT a
+/// section: the host bar under the category nav names the host these
+/// pages describe, and its sheet manages the registry — so the word
+/// "host" appears exactly once on the surface (the category capsule).
 enum _SettingsSection {
-  backends,
   general,
   models,
   plugins,
@@ -100,7 +105,6 @@ enum _SettingsSection {
 
 String _sectionLabel(_SettingsSection section, AppLocalizations l10n) =>
     switch (section) {
-      _SettingsSection.backends => l10n.settingsNavBackends,
       _SettingsSection.general => l10n.settingsNavGeneral,
       _SettingsSection.models => l10n.settingsNavModels,
       _SettingsSection.plugins => l10n.settingsNavPlugins,
@@ -250,20 +254,19 @@ class _HostSettingsArea extends StatelessWidget {
             color: scheme.primary,
             backgroundColor: Colors.transparent,
           ),
-        // The nav and the page stack always mount: the Hosts page is
-        // device-local, so it stays reachable when the scoped host is
-        // unreachable (fixing that host's URL is exactly the flow that
-        // must not dead-end).
+        // The nav and the page stack always mount: the host bar and its
+        // sheet are device-local, so they stay reachable when the
+        // scoped host is unreachable (fixing that host's URL is exactly
+        // the flow that must not dead-end).
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // The host-settings scope: which host the pages below
-              // describe. Multi-host only — a single host is
-              // unambiguous. The bar is device-local, so it renders
-              // even when the scoped host is unreachable (pinning a
-              // reachable host is the way out of that dead end).
-              const _ScopeBar(),
+              // The host bar: which host the pages below describe, with
+              // its live connection state. Device-local, so it renders
+              // even when the host is unreachable; its sheet owns scope
+              // selection and the whole host registry.
+              const _HostBar(),
               _SettingsSectionNav(
                 section: section,
                 onSelect: onSelectSection,
@@ -272,13 +275,9 @@ class _HostSettingsArea extends StatelessWidget {
                 child: IndexedStack(
                   index: section.index,
                   children: [
-                    const _BackendsPage(),
                     _HostPageGate(
                       snapshot: described,
                       loading: uiState.isLoading,
-                      onOpenBackends: () => onSelectSection(
-                        _SettingsSection.backends,
-                      ),
                       page: (host) => _GeneralPage(
                         snapshot: host,
                         roster: uiState.roster,
@@ -289,9 +288,6 @@ class _HostSettingsArea extends StatelessWidget {
                     _HostPageGate(
                       snapshot: described,
                       loading: uiState.isLoading,
-                      onOpenBackends: () => onSelectSection(
-                        _SettingsSection.backends,
-                      ),
                       page: (host) => _ModelsPage(
                         writable: host.writable,
                         credentials: uiState.credentials,
@@ -301,9 +297,6 @@ class _HostSettingsArea extends StatelessWidget {
                     _HostPageGate(
                       snapshot: described,
                       loading: uiState.isLoading,
-                      onOpenBackends: () => onSelectSection(
-                        _SettingsSection.backends,
-                      ),
                       page: (host) => _PluginsPage(
                         snapshot: host,
                         busy: uiState.isLoading,
@@ -313,9 +306,6 @@ class _HostSettingsArea extends StatelessWidget {
                     _HostPageGate(
                       snapshot: described,
                       loading: uiState.isLoading,
-                      onOpenBackends: () => onSelectSection(
-                        _SettingsSection.backends,
-                      ),
                       page: (_) => _AgentPresetsPage(
                         roster: uiState.roster,
                         onAction: onAction,
@@ -324,9 +314,6 @@ class _HostSettingsArea extends StatelessWidget {
                     _HostPageGate(
                       snapshot: described,
                       loading: uiState.isLoading,
-                      onOpenBackends: () => onSelectSection(
-                        _SettingsSection.backends,
-                      ),
                       page: (_) => _CredentialsPage(
                         credentials: uiState.credentials,
                         credentialError: uiState.credentialError,
@@ -346,7 +333,9 @@ class _HostSettingsArea extends StatelessWidget {
 
 /// App page — the device-local preferences. Nothing here reads host
 /// state: the rows persist through the shared LocalStateStore, so the
-/// page works with or without a configured, reachable host.
+/// page works with or without a configured, reachable host. The
+/// category capsule already names it, so the page leads with the
+/// intro caption instead of repeating a title.
 class _AppSettingsPage extends StatelessWidget {
   const _AppSettingsPage();
 
@@ -357,9 +346,14 @@ class _AppSettingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        _SectionHeader(
-          title: l10n.settingsCategoryApp,
-          intro: l10n.appSettingsIntro,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            l10n.appSettingsIntro,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
         ),
         ..._divided(scheme, [
           const _LanguageRow(),
@@ -508,29 +502,33 @@ class _SettingsHeader extends StatelessWidget {
   }
 }
 
-/// The host-settings scope bar: which host's settings the pages below
-/// describe. Renders only when more than one host is configured (a
-/// single host is unambiguous); the row is the picker trigger —
-/// tapping it opens the host-scope sheet, which pins a scope
-/// independent of the chat-active host.
-class _ScopeBar extends ConsumerWidget {
-  const _ScopeBar();
+/// The host bar: which host the pages below describe, with its live
+/// connection dot and endpoint. Always rendered (even single-host —
+/// the identity and version of the configured host are worth seeing);
+/// tapping it opens the host sheet, which owns the whole host
+/// dimension: picking the settings scope, and managing the registry
+/// (add / edit / remove / make chat-active).
+class _HostBar extends ConsumerWidget {
+  const _HostBar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final registry = ref.watch(backendRegistryStateProvider).value;
-    if (registry == null || registry.backends.length <= 1) {
-      return const SizedBox.shrink();
-    }
     final scopedId = ref.watch(settingsBackendScopeProvider);
-    final backend = registry.backends
+    final backend = registry?.backends
         .where((backend) => backend.id == scopedId)
         .firstOrNull;
     if (backend == null) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
+    final connection = ref
+        .watch(backendConnectionStateProvider(backend.id))
+        .value;
+    final version = connection?.hostDescription?.version ?? '';
     final endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
+    final subtitle = version.isEmpty
+        ? endpoint
+        : '$endpoint · ${AppLocalizations.of(context)!.backendVersion(version)}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
       child: Material(
@@ -538,7 +536,7 @@ class _ScopeBar extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           hoverColor: scheme.surfaceContainerHigh,
-          onTap: () => _openScopePicker(context, ref),
+          onTap: () => _openHostSheet(context, ref),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
@@ -549,13 +547,10 @@ class _ScopeBar extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        l10n.settingsScopeLabel(backend.label),
-                        style: theme.textTheme.bodyMedium,
-                      ),
+                      Text(backend.label, style: theme.textTheme.bodyMedium),
                       const SizedBox(height: 2),
                       Text(
-                        endpoint,
+                        subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -563,11 +558,11 @@ class _ScopeBar extends ConsumerWidget {
                     ],
                   ),
                 ),
-                if (backend.id == registry.activeId) ...[
+                if (backend.id == registry!.activeId) ...[
                   const SizedBox(width: 8),
                   _StateBadge(
                     configured: true,
-                    label: l10n.backendStatusActive,
+                    label: AppLocalizations.of(context)!.backendStatusActive,
                   ),
                 ],
                 const SizedBox(width: 4),
@@ -579,115 +574,178 @@ class _ScopeBar extends ConsumerWidget {
       ),
     );
   }
+}
 
-  /// Opens the scope picker: the menu-surface sheet listing every
-  /// configured host (the current scope checked, the chat-active one
-  /// badged) plus the follow-active entry while a scope is pinned.
-  Future<void> _openScopePicker(BuildContext context, WidgetRef ref) {
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        final theme = Theme.of(sheetContext);
-        final l10n = AppLocalizations.of(sheetContext)!;
-        final registry = ref
-            .read(backendRegistryStateProvider)
-            .value ??
-            const BackendRegistryState();
-        final scopedId = ref.read(settingsBackendScopeProvider);
-        final pinned = ref.read(settingsBackendScopeProvider.notifier).isPinned;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
+/// The host sheet: one row per configured host with its LIVE
+/// connection dot; tapping a row makes it the host these settings
+/// pages describe (a scope pinned independent of the chat-active
+/// host), the edit affordance opens the add/edit sheet, and the footer
+/// adds a host. The sheet is device-local, so it stays usable when
+/// every host is unreachable (fixing a host's URL is exactly the flow
+/// that must not dead-end).
+Future<void> _openHostSheet(BuildContext context, WidgetRef ref) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      final scheme = Theme.of(sheetContext).colorScheme;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: scheme.outlineVariant),
+            boxShadow: kM3ShadowElevation3,
+          ),
+          child: const SafeArea(top: false, child: _HostSheet()),
+        ),
+      );
+    },
+  );
+}
+
+/// The host sheet body: watches the registry so every mutation (add,
+/// rename, repoint, remove, scope pin, active switch) re-renders it in
+/// place; the keep-alive watch pins every configured host's
+/// connection while the sheet is open (the dots read live phases).
+class _HostSheet extends ConsumerWidget {
+  const _HostSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(allBackendConnectionsProvider);
+    final registry = ref.watch(backendRegistryStateProvider).value;
+    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final scopedId = ref.watch(settingsBackendScopeProvider);
+    final pinned = ref.watch(settingsBackendScopeProvider.notifier).isPinned;
+    if (registry == null) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.settingsScopeTitle, style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          l10n.settingsScopeHint,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        // The registry's last refusal or persist failure (guards fail
+        // loud on the state); the next successful mutation clears it.
+        if (registry.errorMessage case final String message)
+          _RegistryErrorLine(message: message),
+        if (pinned && registry.backends.length > 1)
+          _HostSheetRow(
+            leading: Icon(
+              Icons.autorenew,
+              size: 18,
+              color: scheme.onSurfaceVariant,
             ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.settingsScopeTitle,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.settingsScopeHint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (pinned)
-                    _ScopePickerRow(
-                      leading: Icon(Icons.autorenew, size: 18, color: scheme.onSurfaceVariant),
-                      title: l10n.settingsScopeFollowActive,
-                      subtitle: null,
-                      active: false,
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        ref
-                            .read(settingsBackendScopeProvider.notifier)
-                            .followActive();
-                      },
-                    ),
-                  for (final backend in registry.backends)
-                    _ScopePickerRow(
-                      leading: BackendConnectionDot(backendId: backend.id),
-                      title: backend.label,
-                      subtitle: '${backend.baseUri.host}:${backend.baseUri.port}',
-                      active: backend.id == registry.activeId,
-                      selected: backend.id == scopedId,
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        ref
-                            .read(settingsBackendScopeProvider.notifier)
-                            .select(backend.id);
-                      },
-                    ),
-                ],
+            title: l10n.settingsScopeFollowActive,
+            subtitle: null,
+            active: false,
+            selected: false,
+            onTap: () {
+              Navigator.of(context).pop();
+              ref.read(settingsBackendScopeProvider.notifier).followActive();
+            },
+          ),
+        for (final backend in registry.backends)
+          _HostSheetRow(
+            backendId: backend.id,
+            title: backend.label,
+            subtitle:
+                '${backend.baseUri.host}:${backend.baseUri.port}',
+            active: backend.id == registry.activeId,
+            selected: backend.id == scopedId,
+            onTap: () {
+              Navigator.of(context).pop();
+              ref.read(settingsBackendScopeProvider.notifier).select(
+                backend.id,
+              );
+            },
+            onEdit: () => _openBackendSheet(
+              context,
+              ref,
+              backend,
+              removeBlockedReason: _removeBlockedReason(
+                registry,
+                backend,
+                l10n,
               ),
             ),
           ),
-        );
-      },
+        const SizedBox(height: 4),
+        Center(
+          child: OutlinedButton(
+            onPressed: () => _openBackendSheet(context, ref, null),
+            style: _outlineCapsule(context),
+            child: Text(l10n.addBackend),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// One scope-picker row: the live dot, label over endpoint, the chat
-/// Active mark, and the check on the current scope.
-class _ScopePickerRow extends StatelessWidget {
-  const _ScopePickerRow({
-    required this.leading,
+/// One host-sheet row: the live dot (when a backend id carries it),
+/// label over endpoint, the chat-Active badge, the check on the
+/// current settings scope, and the edit affordance. Tapping the row
+/// selects the settings scope; the edit sheet owns the registry
+/// mutations.
+class _HostSheetRow extends ConsumerWidget {
+  const _HostSheetRow({
     required this.title,
     required this.subtitle,
     required this.active,
+    required this.selected,
     required this.onTap,
-    this.selected = false,
+    this.backendId,
+    this.onEdit,
+    this.leading,
   });
 
-  final Widget leading;
+  /// The row's host; null for synthetic rows (follow-active).
+  final String? backendId;
+
+  /// Synthetic-row glyph (follow-active); null falls back to the
+  /// connection dot ([backendId] rows) or a spacer.
+  final Widget? leading;
   final String title;
   final String? subtitle;
+
+  /// Whether this host drives the chat surface.
   final bool active;
 
-  /// Whether this row is the currently scoped backend.
+  /// Whether this host is the current settings scope.
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onEdit;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final backendId = this.backendId;
+    // The connection's version rides the subtitle when one is known.
+    final version = backendId == null
+        ? ''
+        : ref.watch(backendConnectionStateProvider(backendId)).value
+              ?.hostDescription
+              ?.version ??
+              '';
+    final subtitle = this.subtitle == null
+        ? null
+        : (version.isEmpty
+              ? this.subtitle!
+              : '${this.subtitle!} · ${l10n.backendVersion(version)}');
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -698,7 +756,12 @@ class _ScopePickerRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             children: [
-              leading,
+              if (leading != null)
+                leading!
+              else if (backendId != null)
+                BackendConnectionDot(backendId: backendId)
+              else
+                const SizedBox(width: 8),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -708,7 +771,7 @@ class _ScopePickerRow extends StatelessWidget {
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        subtitle!,
+                        subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -724,6 +787,15 @@ class _ScopePickerRow extends StatelessWidget {
               if (selected) ...[
                 const SizedBox(width: 8),
                 Icon(Icons.check, size: 18, color: scheme.primary),
+              ],
+              if (onEdit != null) ...[
+                const SizedBox(width: 4),
+                _CircleAction(
+                  icon: Icons.edit_outlined,
+                  iconSize: 16,
+                  tooltip: l10n.editBackend,
+                  onTap: onEdit!,
+                ),
               ],
             ],
           ),
@@ -790,79 +862,6 @@ class _ErrorBanner extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Hosts page — the device-local multi-host registry (no web peer: the
-/// web client is compiled against one host). One row per configured
-/// host with its LIVE connection dot; tapping a non-active row makes
-/// it the host the chat surface presents. The edit sheet owns
-/// add/rename/repoint/remove with the registry's guards surfaced
-/// inline.
-class _BackendsPage extends ConsumerWidget {
-  const _BackendsPage();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Watching the keep-alive here pins every configured backend's
-    // connection while this page exists (the dots read live phases).
-    ref.watch(allBackendConnectionsProvider);
-    final registry = ref.watch(backendRegistryStateProvider);
-    return registry.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text(error.toString())),
-      data: (state) => _BackendsList(state: state, ref: ref),
-    );
-  }
-}
-
-class _BackendsList extends StatelessWidget {
-  const _BackendsList({required this.state, required this.ref});
-
-  final BackendRegistryState state;
-  final WidgetRef ref;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        _SectionHeader(
-          title: l10n.settingsNavBackends,
-          intro: l10n.backendsIntro,
-        ),
-        // The registry's last refusal or persist failure (guards fail
-        // loud on the state); the next successful mutation clears it.
-        if (state.errorMessage case final String message)
-          _RegistryErrorLine(message: message),
-        ..._divided(scheme, [
-          for (final backend in state.backends)
-            _BackendRow(
-              backend: backend,
-              active: backend.id == state.activeId,
-              onAction: (action) => _dispatchBackendAction(ref, action),
-              onEdit: () => _openBackendSheet(
-                context,
-                ref,
-                backend,
-                removeBlockedReason: _removeBlockedReason(state, backend, l10n),
-              ),
-            ),
-        ]),
-        const SizedBox(height: 12),
-        // Web empty-column convention: the trailing affordance is a
-        // capsule on the selector vocabulary.
-        Center(
-          child: OutlinedButton(
-            onPressed: () => _openBackendSheet(context, ref, null),
-            style: _outlineCapsule(context),
-            child: Text(l10n.addBackend),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -935,92 +934,22 @@ Future<void> _openBackendSheet(
             onRemove: backend == null || removeBlockedReason != null
                 ? null
                 : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
+            // The chat-active switch lives here: the host-sheet rows
+            // select the settings scope only. Offered only for a
+            // configured host that is not already the chat host.
+            onSetChatHost: backend != null &&
+                    backend.id !=
+                        ref.read(backendRegistryStateProvider).value?.activeId
+                ? () {
+                    _dispatchBackendAction(ref, SelectBackend(backend.id));
+                    Navigator.of(sheetContext).pop();
+                  }
+                : null,
           ),
         ),
       );
     },
   );
-}
-
-/// One host row: live connection dot, label over `host:port` (with
-/// the connected host's version appended when one is known), the Active
-/// badge on the presented host, and the edit affordance. Tapping a
-/// non-active row selects it (the registry guards the rest).
-class _BackendRow extends ConsumerWidget {
-  const _BackendRow({
-    required this.backend,
-    required this.active,
-    required this.onAction,
-    required this.onEdit,
-  });
-
-  final BackendConfig backend;
-  final bool active;
-
-  final void Function(BackendAction action) onAction;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    final connection = ref
-        .watch(backendConnectionStateProvider(backend.id))
-        .value;
-    final version = connection?.hostDescription?.version ?? '';
-    final endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
-    final subtitle = version.isEmpty
-        ? endpoint
-        : '$endpoint · ${l10n.backendVersion(version)}';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: scheme.surfaceContainerHigh,
-        onTap: active ? null : () => onAction(SelectBackend(backend.id)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              BackendConnectionDot(backendId: backend.id),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(backend.label, style: theme.textTheme.bodyMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (active)
-                _StateBadge(configured: true, label: l10n.backendStatusActive)
-              else
-                _StateBadge(
-                  configured: false,
-                  label: l10n.backendStatusStandby,
-                ),
-              const SizedBox(width: 4),
-              _CircleAction(
-                icon: Icons.edit_outlined,
-                iconSize: 16,
-                tooltip: l10n.editBackend,
-                onTap: onEdit,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Registry refusal line: error ink at 12/18 with the outline glyph,
@@ -1064,23 +993,22 @@ class _RegistryErrorLine extends StatelessWidget {
 
 /// Host-settings page gate: the page renders from a snapshot; before
 /// the first snapshot the surface is the loading state, and after a
-/// failed load it states the unreachable host and routes to Backends
-/// (repointing the host is the fix for exactly this dead end).
-class _HostPageGate extends StatelessWidget {
+/// failed load it states the unreachable host and opens the host sheet
+/// (repointing the host — or picking another — is the fix for exactly
+/// this dead end).
+class _HostPageGate extends ConsumerWidget {
   const _HostPageGate({
     required this.snapshot,
     required this.loading,
-    required this.onOpenBackends,
     required this.page,
   });
 
   final SettingsSnapshot? snapshot;
   final bool loading;
-  final VoidCallback onOpenBackends;
   final Widget Function(SettingsSnapshot) page;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final described = snapshot;
     if (described != null) return page(described);
     if (loading) {
@@ -1111,9 +1039,9 @@ class _HostPageGate extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: onOpenBackends,
+              onPressed: () => _openHostSheet(context, ref),
               style: _filledCapsule(context),
-              child: Text(l10n.settingsNavBackends),
+              child: Text(l10n.settingsCategoryHost),
             ),
           ],
         ),
@@ -2599,6 +2527,7 @@ class _BackendSheet extends StatefulWidget {
     required this.onSave,
     this.onRemove,
     this.removeBlockedReason,
+    this.onSetChatHost,
   });
 
   /// Null = add mode (no remove control).
@@ -2615,6 +2544,12 @@ class _BackendSheet extends StatefulWidget {
   /// The registry's refusal for removing this backend right now (null
   /// = removable; unused in add mode).
   final String? removeBlockedReason;
+
+  /// Present only when the edited host is not the chat-active one:
+  /// makes it the host the chat surface presents (SelectBackend). The
+  /// registry rows in the host sheet select the settings scope only,
+  /// so the edit sheet owns this switch.
+  final VoidCallback? onSetChatHost;
 
   @override
   State<_BackendSheet> createState() => _BackendSheetState();
@@ -2701,6 +2636,17 @@ class _BackendSheetState extends State<_BackendSheet> {
               color: urlValid ? scheme.onSurfaceVariant : theme.colorScheme.error,
             ),
           ),
+          if (widget.onSetChatHost != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: widget.onSetChatHost,
+                style: _outlineCapsule(context),
+                child: Text(l10n.setChatHost),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

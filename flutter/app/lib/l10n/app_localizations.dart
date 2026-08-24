@@ -839,13 +839,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsCategoryApp.
   ///
   /// In en, this message translates to:
-  /// **'App settings'**
+  /// **'App'**
   String get settingsCategoryApp;
 
   /// No description provided for @settingsCategoryHost.
   ///
   /// In en, this message translates to:
-  /// **'Host settings'**
+  /// **'Host'**
   String get settingsCategoryHost;
 
   /// No description provided for @appSettingsIntro.
@@ -884,12 +884,6 @@ abstract class AppLocalizations {
   /// **'English'**
   String get languageOptionEn;
 
-  /// No description provided for @settingsNavBackends.
-  ///
-  /// In en, this message translates to:
-  /// **'Hosts'**
-  String get settingsNavBackends;
-
   /// No description provided for @settingsNavGeneral.
   ///
   /// In en, this message translates to:
@@ -920,12 +914,6 @@ abstract class AppLocalizations {
   /// **'Credentials'**
   String get settingsNavCredentials;
 
-  /// The host whose settings the Settings pages describe.
-  ///
-  /// In en, this message translates to:
-  /// **'Configuring: {label}'**
-  String settingsScopeLabel(String label);
-
   /// No description provided for @settingsScopeTitle.
   ///
   /// In en, this message translates to:
@@ -950,11 +938,11 @@ abstract class AppLocalizations {
   /// **'settings/credentials are loopback-only on the host; connect via adb reverse'**
   String get settingsLoopbackHint;
 
-  /// No description provided for @backendsIntro.
+  /// No description provided for @setChatHost.
   ///
   /// In en, this message translates to:
-  /// **'Host endpoints this device keeps connected — every configured host stays live; the active one drives Chat and these host-settings pages.'**
-  String get backendsIntro;
+  /// **'Set as chat host'**
+  String get setChatHost;
 
   /// No description provided for @addBackend.
   ///
@@ -1001,7 +989,7 @@ abstract class AppLocalizations {
   /// No description provided for @hostSettingsUnavailableBody.
   ///
   /// In en, this message translates to:
-  /// **'The active host did not answer. Repoint or switch it from the Hosts page.'**
+  /// **'The host did not answer. Repoint it, or choose another host.'**
   String get hostSettingsUnavailableBody;
 
   /// No description provided for @hostWritesLabel.

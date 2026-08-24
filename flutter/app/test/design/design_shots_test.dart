@@ -325,19 +325,20 @@ Future<void> _loadRegistry(WidgetTester tester) async {
 
 Future<void> _openHostsPage(WidgetTester tester) async {
   await _loadRegistry(tester);
-  await tester.tap(find.text('Hosts').hitTestable().first);
+  // The host bar's sheet is the host surface now (no Hosts section).
+  await tester.tap(find.text('Laptop').hitTestable());
   await settle(tester);
 }
 
 Future<void> _openAppCategory(WidgetTester tester) async {
   await _loadRegistry(tester);
-  await tester.tap(find.text('App settings').hitTestable());
+  await tester.tap(find.text('App').hitTestable());
   await settle(tester);
 }
 
 Future<void> _openAppCategoryZh(WidgetTester tester) async {
   await _loadRegistry(tester);
-  await tester.tap(find.text('应用设置').hitTestable());
+  await tester.tap(find.text('应用').hitTestable());
   await settle(tester);
 }
 

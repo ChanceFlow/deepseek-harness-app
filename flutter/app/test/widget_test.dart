@@ -241,7 +241,7 @@ void main() {
     // Settings → App settings category → the language row.
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('App settings').hitTestable());
+    await tester.tap(find.text('App').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Language').hitTestable(), findsOneWidget);
 
