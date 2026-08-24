@@ -24,6 +24,7 @@ import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_controller.dart';
+import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/state_stream.dart';
 
@@ -231,19 +232,27 @@ class FakeChatRepository implements ChatRepository {
   @override
   Future<void> deleteWorkspace(String workspaceId) async {}
 
+  /// Directory served by `loadModels`.
+  SessionModels modelsResult = const SessionModels(
+    current: ModelSelection(provider: 'test', model: 'test'),
+    routable: true,
+  );
+
   @override
-  Future<SessionModels> loadModels(String sessionId) async {
-    return const SessionModels(
-      current: ModelSelection(provider: 'test', model: 'test'),
-      routable: true,
-    );
-  }
+  Future<SessionModels> loadModels(String sessionId) async => modelsResult;
+
+  /// Selections submitted through `selectModel`, in order.
+  final List<(String, ModelSelection)> selectModelCalls =
+      <(String, ModelSelection)>[];
 
   @override
   Future<ModelSelection> selectModel(
     String sessionId,
     ModelSelection selection,
-  ) async => selection;
+  ) async {
+    selectModelCalls.add((sessionId, selection));
+    return selection;
+  }
 
   @override
   Future<List<SessionSearchResult>> searchSessions(String query) async =>
@@ -440,6 +449,28 @@ class FakeChatRepository implements ChatRepository {
   Stream<TimelineWindow>? Function(String sessionId)? windowSource;
 }
 
+/// In-memory [ModelPreferencePersistence] double: serves the last written
+/// value, records every write.
+class FakeModelPreferencePersistence implements ModelPreferencePersistence {
+  FakeModelPreferencePersistence([
+    ModelSeatPreferences initial = const ModelSeatPreferences(),
+  ]) : _value = initial;
+
+  ModelSeatPreferences _value;
+
+  /// Every write, in order.
+  final List<ModelSeatPreferences> writes = <ModelSeatPreferences>[];
+
+  @override
+  Future<ModelSeatPreferences> read() async => _value;
+
+  @override
+  Future<void> write(ModelSeatPreferences preferences) async {
+    writes.add(preferences);
+    _value = preferences;
+  }
+}
+
 void main() {
   test('init refreshes sessions', () async {
     final repository = FakeChatRepository(
@@ -533,6 +564,124 @@ void main() {
         text: 'hello',
       ),
     ]);
+  });
+
+  test('selecting a model remembers the selection and its effort', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final persistence = FakeModelPreferencePersistence();
+    final controller = ChatController(
+      repository,
+      modelPreferences: Future<ModelPreferencePersistence?>.value(persistence),
+    );
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+    controller.onAction(
+      const SelectModelSeat(
+        ModelSelection(provider: 'test', model: 'pro', reasoningEffort: 'high'),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      controller.state.modelPrefs?.lastSelection,
+      const ModelSelection(
+        provider: 'test',
+        model: 'pro',
+        reasoningEffort: 'high',
+      ),
+    );
+    expect(controller.state.modelPrefs?.effortFor('test', 'pro'), 'high');
+    expect(persistence.writes, hasLength(1));
+  });
+
+  test('a blank session applies the remembered selection', () async {
+    final repository = FakeChatRepository(
+      initialSessions: const <SessionSummary>[
+        SessionSummary(id: 'blank-1', title: 'New session', blank: true),
+      ],
+    );
+    const remembered = ModelSelection(
+      provider: 'test',
+      model: 'pro',
+      reasoningEffort: 'high',
+    );
+    final controller = ChatController(
+      repository,
+      modelPreferences: Future<ModelPreferencePersistence?>.value(
+        FakeModelPreferencePersistence(
+          const ModelSeatPreferences(lastSelection: remembered),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('blank-1'));
+    await pumpEventQueue();
+
+    expect(repository.selectModelCalls, <(String, ModelSelection)>[
+      ('blank-1', remembered),
+    ]);
+    expect(controller.state.models?.current, remembered);
+  });
+
+  test('a session that already ran keeps the host selection', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final controller = ChatController(
+      repository,
+      modelPreferences: Future<ModelPreferencePersistence?>.value(
+        FakeModelPreferencePersistence(
+          const ModelSeatPreferences(
+            lastSelection: ModelSelection(provider: 'test', model: 'pro'),
+          ),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+
+    expect(repository.selectModelCalls, isEmpty);
+  });
+
+  test('late-resolving preferences still arm the apply', () async {
+    final repository = FakeChatRepository(
+      initialSessions: const <SessionSummary>[
+        SessionSummary(id: 'blank-1', title: 'New session', blank: true),
+      ],
+    );
+    final persistence = Completer<ModelPreferencePersistence?>();
+    final controller = ChatController(
+      repository,
+      modelPreferences: persistence.future,
+    );
+    await pumpEventQueue();
+
+    controller.onAction(const SelectSession('blank-1'));
+    await pumpEventQueue();
+    // Preferences unresolved: the seat stays on the host's current.
+    expect(repository.selectModelCalls, isEmpty);
+
+    persistence.complete(
+      FakeModelPreferencePersistence(
+        const ModelSeatPreferences(
+          lastSelection: ModelSelection(provider: 'test', model: 'pro'),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(repository.selectModelCalls, hasLength(1));
+    expect(
+      controller.state.models?.current,
+      const ModelSelection(provider: 'test', model: 'pro'),
+    );
   });
 
   test(

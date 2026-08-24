@@ -6,11 +6,136 @@
 /// of a ChatScreen mounted without a store (tests inject a fake).
 library;
 
+import 'package:domain/model/model_catalog.dart';
+
 import '../../local_state/local_state_store.dart';
 
 /// Busy-send preference values: 'queue' (default) or 'steer'.
 const String kBusyEnterQueue = 'queue';
 const String kBusyEnterSteer = 'steer';
+
+/// Remembered composer model-seat preferences: the last selection the
+/// reader made, plus the reasoning effort they last chose for each
+/// provider/model route. The host persists a session's own selection;
+/// this is the client-side memory that pre-arms a fresh session and
+/// prefills the effort when a model is picked again.
+final class ModelSeatPreferences {
+  const ModelSeatPreferences({
+    this.lastSelection,
+    this.effortByRoute = const <String, String>{},
+  });
+
+  /// The selection the reader last committed from the model seat.
+  final ModelSelection? lastSelection;
+
+  /// Last-chosen reasoning effort per `provider/model` route; a route
+  /// absent here has no remembered effort (the model's default applies).
+  final Map<String, String> effortByRoute;
+
+  /// The remembered effort for one route, null when none is stored.
+  String? effortFor(String provider, String model) =>
+      effortByRoute['$provider/$model'];
+
+  /// The preference that follows one committed selection: it becomes the
+  /// last selection and overwrites its route's remembered effort.
+  ModelSeatPreferences remembering(ModelSelection selection) =>
+      ModelSeatPreferences(
+        lastSelection: selection,
+        effortByRoute: <String, String>{
+          ...effortByRoute,
+          if (selection.reasoningEffort case final String effort)
+            '${selection.provider}/${selection.model}': effort,
+        },
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is ModelSeatPreferences &&
+      other.lastSelection == lastSelection &&
+      _mapEquals(other.effortByRoute, effortByRoute);
+
+  @override
+  int get hashCode => Object.hash(lastSelection, Object.hashAll(effortByRoute.values));
+
+  static bool _mapEquals(Map<String, String> a, Map<String, String> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (b[entry.key] != entry.value) return false;
+    }
+    return true;
+  }
+}
+
+/// Composer model-seat preference persistence; null disables remembering
+/// (the seat then always opens on the host's current selection).
+abstract class ModelPreferencePersistence {
+  /// The remembered preferences; empty when nothing was ever stored.
+  Future<ModelSeatPreferences> read();
+
+  /// Persist the remembered preferences.
+  Future<void> write(ModelSeatPreferences preferences);
+}
+
+/// [ModelPreferencePersistence] over the shared [LocalStateStore], keyed
+/// per backend scope: hosts own different catalogs, so a preference
+/// remembered on one must not land on another's seat.
+class StoreModelPreferencePersistence implements ModelPreferencePersistence {
+  StoreModelPreferencePersistence(this._store, this._scope);
+
+  final LocalStateStore _store;
+  final String _scope;
+
+  String get _lastKey => 'chat.modelPrefs.$_scope.last';
+  String get _effortsKey => 'chat.modelPrefs.$_scope.efforts';
+
+  @override
+  Future<ModelSeatPreferences> read() async {
+    return ModelSeatPreferences(
+      lastSelection: _readSelection(_store.read(_lastKey)),
+      effortByRoute: _readEfforts(_store.read(_effortsKey)),
+    );
+  }
+
+  @override
+  Future<void> write(ModelSeatPreferences preferences) {
+    final last = preferences.lastSelection;
+    _store.write(
+      _lastKey,
+      last == null
+          ? null
+          : <String, Object?>{
+              'provider': last.provider,
+              'model': last.model,
+              if (last.reasoningEffort case final String effort)
+                'reasoningEffort': effort,
+            },
+    );
+    _store.write(_effortsKey, preferences.effortByRoute);
+    return Future<void>.value();
+  }
+
+  static ModelSelection? _readSelection(Object? raw) {
+    if (raw is! Map) return null;
+    final provider = raw['provider'];
+    final model = raw['model'];
+    if (provider is! String || model is! String) return null;
+    final effort = raw['reasoningEffort'];
+    return ModelSelection(
+      provider: provider,
+      model: model,
+      reasoningEffort: effort is String ? effort : null,
+    );
+  }
+
+  static Map<String, String> _readEfforts(Object? raw) {
+    if (raw is! Map) return const <String, String>{};
+    return <String, String>{
+      for (final entry in raw.entries)
+        if (entry.key is String && entry.value is String)
+          entry.key as String: entry.value as String,
+    };
+  }
+}
 
 /// Draft text of one session; absent (null or empty) when none is saved.
 String chatDraftKey(String sessionId) => 'chat.draft.$sessionId';

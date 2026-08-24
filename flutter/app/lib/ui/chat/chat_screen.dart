@@ -115,6 +115,7 @@ class ChatRoute extends ConsumerWidget {
             loadAttachment: controller.loadAttachmentBytes,
             backendId: resolved,
             backendSlices: slices,
+            onRefreshModels: controller.refreshModels,
             onSelectBackend: (backendId) => ref
                 .read(backendRegistryProvider.future)
                 .then(
@@ -1369,6 +1370,7 @@ class _ChatPanelState extends State<ChatPanel> {
                         models: widget.models,
                         onSelectModel: widget.onSelectModel,
                         onRefreshModels: widget.onRefreshModels,
+                        modelPrefs: uiState.modelPrefs,
                         pendingImages: uiState.pendingImages,
                         imageLimits: uiState.imageLimits,
                         skills: uiState.skills,
@@ -3705,6 +3707,7 @@ class ComposerBar extends StatefulWidget {
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
+    this.modelPrefs,
     this.contextPressure,
     this.contextBreakdown,
     this.sessionId,
@@ -3743,6 +3746,11 @@ class ComposerBar extends StatefulWidget {
   final SessionModels? models;
   final void Function(ModelSelection selection)? onSelectModel;
   final VoidCallback? onRefreshModels;
+
+  /// Remembered model-seat preferences: the effort the reader last chose
+  /// for a route prefills that model's pick; null leaves each model on
+  /// its own default.
+  final ModelSeatPreferences? modelPrefs;
   final ContextPressure? contextPressure;
 
   final ContextBreakdown? contextBreakdown;
@@ -3959,6 +3967,7 @@ class _ComposerBarState extends State<ComposerBar> {
                       locked: !widget.enabled,
                       onSelect: widget.onSelectModel!,
                       onRefresh: widget.onRefreshModels ?? () {},
+                      modelPrefs: widget.modelPrefs,
                     ),
                   ],
                   // Web .modes order: the access seat precedes the plan

@@ -8,12 +8,26 @@
 /// behavior; the widget layer owns every style decision.
 library;
 
-import 'dart:convert';
-
 import 'unicode_punct.dart';
 
 sealed class MarkdownBlock {
   const MarkdownBlock();
+}
+
+/// One top-level [MarkdownBlock] with its source span: [start] inclusive
+/// and [end] exclusive, both character offsets into the parsed text. The
+/// span is what lets a streaming render freeze every block behind the
+/// unstable tail and re-parse only the remainder.
+final class SpannedMarkdownBlock {
+  const SpannedMarkdownBlock({
+    required this.block,
+    required this.start,
+    required this.end,
+  });
+
+  final MarkdownBlock block;
+  final int start;
+  final int end;
 }
 
 final class CodeBlock extends MarkdownBlock {
@@ -247,10 +261,55 @@ abstract final class MarkdownParser {
   static final RegExp _delimiterCell = RegExp(r'^:?-+:?$');
 
   /// Parse one message body into ordered blocks.
-  static List<MarkdownBlock> parse(String text) {
-    final blocks = <MarkdownBlock>[];
-    final lines = const LineSplitter().convert(text);
+  static List<MarkdownBlock> parse(String text) =>
+      parseSpanned(text)
+          .map((spanned) => spanned.block)
+          .toList(growable: false);
+
+  /// Split [text] into lines with each line's starting character offset,
+  /// with the same line-boundary semantics as [LineSplitter] (`\n`, `\r\n`,
+  /// and a lone `\r` end a line; a trailing terminator adds no empty line).
+  static (List<String>, List<int>) linesWithStarts(String text) {
+    final lines = <String>[];
+    final starts = <int>[];
+    var start = 0;
     var index = 0;
+    while (index < text.length) {
+      final char = text.codeUnitAt(index);
+      if (char == 0x0A || char == 0x0D) {
+        lines.add(text.substring(start, index));
+        starts.add(start);
+        if (char == 0x0D &&
+            index + 1 < text.length &&
+            text.codeUnitAt(index + 1) == 0x0A) {
+          index++;
+        }
+        index++;
+        start = index;
+      } else {
+        index++;
+      }
+    }
+    if (start < text.length) {
+      lines.add(text.substring(start));
+      starts.add(start);
+    }
+    return (lines, starts);
+  }
+
+  /// Parse one message body into ordered blocks, each with the character
+  /// span of its source lines. Spans tile the source: a block's [SpannedMarkdownBlock.end]
+  /// is where the next block (or the trailing region) begins, so cutting a
+  /// stream at a frozen block's end re-parses exactly the remainder.
+  static List<SpannedMarkdownBlock> parseSpanned(String text) {
+    final blocks = <SpannedMarkdownBlock>[];
+    final (lines, lineStarts) = linesWithStarts(text);
+    var index = 0;
+
+    // Offset of the first line of the block being accumulated, for
+    // flush-time emission (paragraphs and lists outlive their lines).
+    var paragraphStart = 0;
+    var listStart = 0;
 
     var paragraph = <String>[];
     var bullets = <BulletEntry>[];
@@ -259,9 +318,22 @@ abstract final class MarkdownParser {
     // line folds into it before its inlines are parsed.
     var itemLines = <String>[];
 
+    // Character offset of the first unconsumed line: the cursor's block
+    // boundary (the end of whatever is emitted at this moment).
+    int boundary() =>
+        index < lines.length ? lineStarts[index] : text.length;
+
     void flushParagraph() {
       if (paragraph.isNotEmpty) {
-        blocks.add(ParagraphBlock(inlines: parseInlines(foldLines(paragraph))));
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: ParagraphBlock(
+              inlines: parseInlines(foldLines(paragraph)),
+            ),
+            start: paragraphStart,
+            end: boundary(),
+          ),
+        );
         paragraph = <String>[];
       }
     }
@@ -288,13 +360,29 @@ abstract final class MarkdownParser {
     void flushBullets() {
       closeItem();
       if (bullets.isNotEmpty) {
-        blocks.add(BulletListBlock(items: List.of(bullets)));
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: BulletListBlock(items: List.of(bullets)),
+            start: listStart,
+            end: boundary(),
+          ),
+        );
         bullets = <BulletEntry>[];
       }
       if (ordered.isNotEmpty) {
-        blocks.add(OrderedListBlock(items: List.of(ordered)));
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: OrderedListBlock(items: List.of(ordered)),
+            start: listStart,
+            end: boundary(),
+          ),
+        );
         ordered = <OrderedEntry>[];
       }
+    }
+
+    void openListLine() {
+      if (bullets.isEmpty && ordered.isEmpty) listStart = lineStarts[index];
     }
 
     while (index < lines.length) {
@@ -303,6 +391,7 @@ abstract final class MarkdownParser {
       if (fenceMatch != null) {
         flushParagraph();
         flushBullets();
+        final start = lineStarts[index];
         final marker = fenceMatch.group(1)!;
         final language = fenceMatch.group(2)!.isEmpty
             ? null
@@ -323,7 +412,15 @@ abstract final class MarkdownParser {
           index++;
         }
         blocks.add(
-          CodeBlock(language: language, code: code.toString(), open: !closed),
+          SpannedMarkdownBlock(
+            block: CodeBlock(
+              language: language,
+              code: code.toString(),
+              open: !closed,
+            ),
+            start: start,
+            end: boundary(),
+          ),
         );
         continue;
       }
@@ -338,6 +435,7 @@ abstract final class MarkdownParser {
       if (_isTableStart(lines, index)) {
         flushParagraph();
         flushBullets();
+        final start = lineStarts[index];
         final header = _splitTableRow(line);
         index += 2;
         final rows = <List<List<MarkdownInline>>>[];
@@ -347,7 +445,13 @@ abstract final class MarkdownParser {
           rows.add(_splitTableRow(lines[index]));
           index++;
         }
-        blocks.add(TableBlock(header: header, rows: rows));
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: TableBlock(header: header, rows: rows),
+            start: start,
+            end: boundary(),
+          ),
+        );
         continue;
       }
 
@@ -355,6 +459,7 @@ abstract final class MarkdownParser {
       if (quoteStart != null) {
         flushParagraph();
         flushBullets();
+        final start = lineStarts[index];
         final quoted = <String>[quoteStart.group(1)!];
         index++;
         while (index < lines.length) {
@@ -363,7 +468,13 @@ abstract final class MarkdownParser {
           quoted.add(nextQuote.group(1)!);
           index++;
         }
-        blocks.add(BlockQuoteBlock(inlines: parseInlines(foldLines(quoted))));
+        blocks.add(
+          SpannedMarkdownBlock(
+            block: BlockQuoteBlock(inlines: parseInlines(foldLines(quoted))),
+            start: start,
+            end: boundary(),
+          ),
+        );
         continue;
       }
 
@@ -371,13 +482,17 @@ abstract final class MarkdownParser {
       if (headingMatch != null) {
         flushParagraph();
         flushBullets();
+        final start = lineStarts[index];
+        final level = headingMatch.group(1)!.length;
+        final inlines = parseInlines(headingMatch.group(2)!);
+        index++;
         blocks.add(
-          HeadingBlock(
-            level: headingMatch.group(1)!.length,
-            inlines: parseInlines(headingMatch.group(2)!),
+          SpannedMarkdownBlock(
+            block: HeadingBlock(level: level, inlines: inlines),
+            start: start,
+            end: boundary(),
           ),
         );
-        index++;
         continue;
       }
 
@@ -386,6 +501,7 @@ abstract final class MarkdownParser {
         flushParagraph();
         if (ordered.isNotEmpty) flushBullets();
         closeItem();
+        openListLine();
         final indent = ' '.allMatches(bulletMatch.group(1)!).length;
         bullets.add(
           BulletEntry(
@@ -405,6 +521,7 @@ abstract final class MarkdownParser {
         flushParagraph();
         if (bullets.isNotEmpty) flushBullets();
         closeItem();
+        openListLine();
         final indent = ' '.allMatches(orderedMatch.group(1)!).length;
         ordered.add(
           OrderedEntry(
@@ -429,6 +546,7 @@ abstract final class MarkdownParser {
       }
 
       flushBullets();
+      if (paragraph.isEmpty) paragraphStart = lineStarts[index];
       paragraph.add(line);
       index++;
     }

@@ -6,6 +6,14 @@
 /// column so wrapped text hangs under the text and not under the marker,
 /// and every glyph is selectable — a path or an identifier is copied on its
 /// own, without the message around it.
+///
+/// Rendering is incremental across a stream: all but the trailing two
+/// blocks freeze (the reference web client's `IncrementalMarkdownParser`
+/// rule), and a frozen block's widget instance is reused verbatim, so a
+/// streaming chunk re-parses and re-builds only the tail while settled
+/// messages cost nothing on each rebuild. The block widgets bake in theme
+/// and locale reads; a dependency change discards the widget cache (the
+/// parsed blocks stay valid).
 library;
 
 import 'package:flutter/gestures.dart';
@@ -16,6 +24,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../theme/theme.dart';
+import 'incremental.dart';
 import 'markdown_parser.dart';
 
 /// Column the list marker occupies; wrapped text aligns to its right edge.
@@ -24,21 +33,83 @@ const double _kMarkerColumn = 22;
 /// Indent one nesting level adds.
 const double _kNestIndent = 16;
 
-class MarkdownText extends StatelessWidget {
+class MarkdownText extends StatefulWidget {
   const MarkdownText({super.key, required this.text});
 
   final String text;
 
   @override
+  State<MarkdownText> createState() => _MarkdownTextState();
+}
+
+class _MarkdownTextState extends State<MarkdownText> {
+  final IncrementalMarkdownParse _parse = IncrementalMarkdownParse();
+
+  /// Current block list for [MarkdownText.text]; instance-stable prefix
+  /// across streaming appends.
+  List<MarkdownBlock> _blocks = const <MarkdownBlock>[];
+
+  /// Blocks and their widgets as last rendered. An identical block
+  /// instance in the same position reuses its widget instance verbatim —
+  /// Flutter skips a subtree whose widget did not change identity.
+  List<MarkdownBlock> _renderedBlocks = const <MarkdownBlock>[];
+  List<Widget> _renderedWidgets = const <Widget>[];
+  bool _widgetsDirty = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _blocks = _parse.update(widget.text);
+  }
+
+  @override
+  void didUpdateWidget(covariant MarkdownText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _blocks = _parse.update(widget.text);
+      _widgetsDirty = true;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Block widgets resolve Theme and AppLocalizations at build time; a
+    // dependency change invalidates them. The parse stays valid.
+    _renderedBlocks = const <MarkdownBlock>[];
+    _renderedWidgets = const <Widget>[];
+    _widgetsDirty = true;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final blocks = MarkdownParser.parse(text);
+    if (_widgetsDirty) {
+      final widgets = <Widget>[];
+      for (var i = 0; i < _blocks.length; i++) {
+        final block = _blocks[i];
+        // An unchanged block keeps its widget instance — identity for the
+        // frozen prefix (O(1)), deep equality for the unstable tail's
+        // settled blocks — so Flutter skips a subtree whose widget did
+        // not change, and a streaming chunk only pays for what moved.
+        final rendered = i < _renderedBlocks.length ? _renderedBlocks[i] : null;
+        widgets.add(
+          rendered != null &&
+              (identical(rendered, block) || rendered == block)
+              ? _renderedWidgets[i]
+              : _block(context, block),
+        );
+      }
+      _renderedBlocks = _blocks;
+      _renderedWidgets = widgets;
+      _widgetsDirty = false;
+    }
     return SelectionArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < blocks.length; i++) ...[
-            if (i > 0) SizedBox(height: _gapBetween(blocks[i - 1], blocks[i])),
-            _block(context, blocks[i]),
+          for (var i = 0; i < _renderedWidgets.length; i++) ...[
+            if (i > 0) SizedBox(height: _gapBetween(_blocks[i - 1], _blocks[i])),
+            _renderedWidgets[i],
           ],
         ],
       ),

@@ -10,6 +10,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import 'chat_local_state.dart';
 
 /// The catalog's display name for the session's current model, falling back
 /// to the raw id while the catalog is unresolved; null when no model is
@@ -33,12 +34,18 @@ class ModelSelect extends StatelessWidget {
     required this.locked,
     required this.onSelect,
     required this.onRefresh,
+    this.modelPrefs,
   });
 
   final SessionModels? models;
   final bool locked;
   final void Function(ModelSelection selection) onSelect;
   final VoidCallback onRefresh;
+
+  /// Remembered model-seat preferences: a route the reader already chose
+  /// an effort for pre-fills that effort when the model is picked again,
+  /// instead of the model's default.
+  final ModelSeatPreferences? modelPrefs;
 
   String _modelLabel(AppLocalizations l10n) =>
       modelDisplayName(models) ?? l10n.modelLabel;
@@ -92,6 +99,7 @@ class ModelSelect extends StatelessWidget {
               constraints: const BoxConstraints(maxHeight: 520),
               child: _ModelSelectSheet(
                 models: models,
+                modelPrefs: modelPrefs,
                 onSelect: (selection) {
                   onSelect(selection);
                   root.pop();
@@ -107,10 +115,17 @@ class ModelSelect extends StatelessWidget {
 
 /// The two-level menu (mobile bottom-sheet form of the MenuDropdown).
 class _ModelSelectSheet extends StatefulWidget {
-  const _ModelSelectSheet({required this.models, required this.onSelect});
+  const _ModelSelectSheet({
+    required this.models,
+    required this.onSelect,
+    this.modelPrefs,
+  });
 
   final SessionModels? models;
   final void Function(ModelSelection selection) onSelect;
+
+  /// Remembered per-route efforts (the effort prefill for model picks).
+  final ModelSeatPreferences? modelPrefs;
 
   @override
   State<_ModelSelectSheet> createState() => _ModelSelectSheetState();
@@ -220,7 +235,14 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                       ModelSelection(
                         provider: group.id,
                         model: model.id,
-                        reasoningEffort: model.reasoning?.defaultEffort,
+                        // The remembered effort for this route wins over
+                        // the model's default (web selectionOf parity:
+                        // same-route keeps the current effort, a new
+                        // route starts from the catalog default — here
+                        // the remembered default the reader chose).
+                        reasoningEffort:
+                            widget.modelPrefs?.effortFor(group.id, model.id) ??
+                            model.reasoning?.defaultEffort,
                       ),
                     ),
                   ),

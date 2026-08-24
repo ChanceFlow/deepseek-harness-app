@@ -1,6 +1,7 @@
 import 'package:app/ui/chat/markdown/markdown_text.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -80,5 +81,53 @@ void main() {
     await _pump(tester, 'a path lives at lib/main.dart');
 
     expect(find.byType(SelectionArea), findsOneWidget);
+  });
+
+  testWidgets('streaming appends render the settled document', (
+    tester,
+  ) async {
+    const settled =
+        'first paragraph\n\n- item one\n- item two\n\n'
+        '```dart\nvar a = 1;\n```\n\nlast paragraph still growing';
+    var body = '';
+    for (final chunk in settled.split('\n\n')) {
+      body = body.isEmpty ? chunk : '$body\n\n$chunk';
+      await _pump(tester, body);
+    }
+
+    expect(find.text('first paragraph'), findsOneWidget);
+    expect(find.text('item two'), findsOneWidget);
+    expect(find.text('var a = 1;'), findsOneWidget);
+    expect(find.text('last paragraph still growing'), findsOneWidget);
+    // The closed fence's language label replaced the streaming label.
+    expect(find.text('streaming'), findsNothing);
+    expect(find.text('dart'), findsOneWidget);
+  });
+
+  testWidgets('a theme change re-renders cached block widgets', (
+    tester,
+  ) async {
+    await _pump(tester, 'one\n\ntwo');
+    final light = tester.widget<Text>(find.text('one')).style;
+
+    await tester.pumpWidget(
+      l10nApp(
+        theme: DshTheme.dark(),
+        home: const Scaffold(
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: MarkdownText(text: 'one\n\ntwo'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The block widgets bake the theme in at build time; the cached
+    // widgets must have been discarded, not reused, on the swap.
+    final dark = tester.widget<Text>(find.text('one')).style;
+    expect(dark, isNot(light));
   });
 }

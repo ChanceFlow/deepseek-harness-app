@@ -26,11 +26,19 @@ class TimelineReducer {
   int _partialIndex = -1;
   final Set<int> _seenTurns = <int>{};
 
+  /// The streaming partial accumulates into buffers: one delta is one
+  /// O(delta) append, and the [ChatMessage] string is materialized only
+  /// when a snapshot reads it. Concatenating an immutable string per
+  /// delta is quadratic in the final message length — a huge streamed
+  /// reply re-copied the whole text on every chunk.
+  StringBuffer? _partialText;
+  StringBuffer? _partialReasoning;
+  bool _partialDirty = false;
+
   void reset(List<JsonMap> history) {
     _items.clear();
     _lastSeq = -1;
-    _partialKey = null;
-    _partialIndex = -1;
+    _clearPartial();
     _seenTurns.clear();
     final sorted = List<JsonMap>.of(history)
       ..sort((a, b) => wireLong(a, 'seq').compareTo(wireLong(b, 'seq')));
@@ -39,7 +47,12 @@ class TimelineReducer {
     }
   }
 
-  List<TimelineItem> snapshot() => List<TimelineItem>.unmodifiable(_items);
+  List<TimelineItem> snapshot() {
+    if (_partialDirty) {
+      _materializePartial();
+    }
+    return List<TimelineItem>.unmodifiable(_items);
+  }
 
   void ingestFrame(ServerRequest envelope) {
     final frame = envelope.payload;
@@ -332,42 +345,40 @@ class TimelineReducer {
     if (chunk == null) return;
     _ensurePartial(turn, step, event);
 
-    final current = _items[_partialIndex] as TimelineMessage;
-    final value = current.value;
     final chunkType = wireType(chunk);
+    final text = _partialText ??= StringBuffer();
+    var reasoning = _partialReasoning;
 
-    var text = value.text;
-    String? reasoning = value.reasoning;
     switch (chunkType) {
       case 'text-delta':
-        text += wireString(chunk, 'text') ?? '';
+        text.write(wireString(chunk, 'text') ?? '');
+        _partialDirty = true;
       case 'reasoning-delta':
-        reasoning = (reasoning ?? '') + (wireString(chunk, 'text') ?? '');
+        reasoning = (reasoning ??= StringBuffer())
+          ..write(wireString(chunk, 'text') ?? '');
+        _partialDirty = true;
       case 'block-end':
         final block = asJsonObject(chunk['block']);
         if (block != null) {
-          if (wireType(block) == 'text') text = _extractText(block);
+          if (wireType(block) == 'text') {
+            text
+              ..clear()
+              ..write(_extractText(block));
+          }
           final blockReasoning = _extractReasoning(block);
-          if (blockReasoning != null) reasoning = blockReasoning;
+          if (blockReasoning != null) {
+            reasoning = (reasoning ??= StringBuffer())
+              ..clear()
+              ..write(blockReasoning);
+          }
+          _partialDirty = true;
         }
       case 'finish':
       case 'usage':
         break;
     }
-
-    _items[_partialIndex] = TimelineMessage(
-      ChatMessage(
-        id: value.id,
-        sessionId: value.sessionId,
-        role: value.role,
-        text: text,
-        reasoning: reasoning,
-        streaming: true,
-        createdAtEpochMs: value.createdAtEpochMs,
-        images: value.images,
-        seq: value.seq,
-      ),
-    );
+    _partialText = text;
+    _partialReasoning = reasoning;
   }
 
   void _ensurePartial(int turn, int step, JsonMap event) {
@@ -395,28 +406,48 @@ class TimelineReducer {
     if (_partialIndex >= 0 && _partialIndex < _items.length) {
       final current = _items[_partialIndex];
       if (current is TimelineMessage && current.value.streaming) {
-        final value = current.value;
-        _items[_partialIndex] = TimelineMessage(
-          ChatMessage(
-            id: value.id,
-            sessionId: value.sessionId,
-            role: value.role,
-            text: value.text,
-            reasoning: value.reasoning,
-            streaming: false,
-            createdAtEpochMs: value.createdAtEpochMs,
-            images: value.images,
-            seq: value.seq,
-          ),
-        );
+        _items[_partialIndex] = _partialMessage(streaming: false);
       }
     }
     _clearPartial();
   }
 
+  /// Build the partial's current [ChatMessage] from the buffers; the
+  /// item's own fields stand in for parts no chunk has touched yet.
+  TimelineMessage _partialMessage({required bool streaming}) {
+    final value = (_items[_partialIndex] as TimelineMessage).value;
+    return TimelineMessage(
+      ChatMessage(
+        id: value.id,
+        sessionId: value.sessionId,
+        role: value.role,
+        text: _partialText?.toString() ?? value.text,
+        reasoning: _partialReasoning?.toString() ?? value.reasoning,
+        streaming: streaming,
+        createdAtEpochMs: value.createdAtEpochMs,
+        images: value.images,
+        seq: value.seq,
+      ),
+    );
+  }
+
+  /// Fold the buffers into the streaming item (snapshot read path).
+  void _materializePartial() {
+    if (_partialIndex >= 0 &&
+        _partialIndex < _items.length &&
+        _items[_partialIndex] is TimelineMessage &&
+        (_items[_partialIndex] as TimelineMessage).value.streaming) {
+      _items[_partialIndex] = _partialMessage(streaming: true);
+    }
+    _partialDirty = false;
+  }
+
   void _clearPartial() {
     _partialKey = null;
     _partialIndex = -1;
+    _partialText = null;
+    _partialReasoning = null;
+    _partialDirty = false;
   }
 
   void _appendToolCall(JsonMap event) {
