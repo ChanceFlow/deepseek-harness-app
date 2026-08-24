@@ -35,15 +35,15 @@ jobs:
         run: python3 scripts/verify_all.py docs
 
   code:
-    runs-on: ubuntu-latest
-    # Egress (Flutter SDK download, pub) goes through the egress proxy from
-    # the repo variable EGRESS_PROXY (unset => direct); the local forge and
-    # the runner's cache service must bypass it. This env MUST sit at the
-    # job level, not the workflow top level: this Gitea Actions build does
-    # not evaluate `vars.*` in a top-level `env:` block, so a workflow-scope
-    # proxy silently never reaches the job and pub's large package downloads
-    # (analyzer etc.) hang against pub.dev. release-apk.yaml already sets it
-    # per-job for the same reason.
+    # Runs on the prebaked builder image, not ubuntu-latest: the image
+    # carries Flutter 3.47.1 on PATH and has the LAN egress proxy baked in
+    # (ENV HTTP_PROXY=http://127.0.0.1:7890) — exactly how release-apk
+    # reaches pub.dev. A plain ubuntu-latest job cannot rely on the
+    # workflow env's `vars.EGRESS_PROXY`: this Gitea Actions build does not
+    # resolve `vars.*` in env, so the job ran proxy-less and pub's large
+    # package downloads hung. The proxy env is still declared here for a
+    # runner that does resolve vars.
+    runs-on: flutter-android
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -56,16 +56,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      # flutter-action's `cache: true` persists BOTH the Flutter SDK and
-      # ~/.pub-cache through the runner's cache service — no separate pub
-      # cache step needed.
-      - name: Set up Flutter 3.47.1 stable
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.47.1
-          channel: stable
-          cache: true
 
       - name: Code gates (analyze, tests, imports)
         run: python3 scripts/verify_all.py code
