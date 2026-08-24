@@ -22,17 +22,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  # Egress (Flutter SDK download, pub) goes through the egress proxy from
-  # the repo variable EGRESS_PROXY (unset => direct); the local forge and
-  # the runner's cache service must bypass it.
-  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
-  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
-  http_proxy: ${{ vars.EGRESS_PROXY }}
-  https_proxy: ${{ vars.EGRESS_PROXY }}
-  NO_PROXY: gitea,localhost,127.0.0.1
-  no_proxy: gitea,localhost,127.0.0.1
-
 jobs:
   docs:
     runs-on: ubuntu-latest
@@ -47,6 +36,21 @@ jobs:
 
   code:
     runs-on: ubuntu-latest
+    # Egress (Flutter SDK download, pub) goes through the egress proxy from
+    # the repo variable EGRESS_PROXY (unset => direct); the local forge and
+    # the runner's cache service must bypass it. This env MUST sit at the
+    # job level, not the workflow top level: this Gitea Actions build does
+    # not evaluate `vars.*` in a top-level `env:` block, so a workflow-scope
+    # proxy silently never reaches the job and pub's large package downloads
+    # (analyzer etc.) hang against pub.dev. release-apk.yaml already sets it
+    # per-job for the same reason.
+    env:
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      NO_PROXY: gitea,localhost,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
