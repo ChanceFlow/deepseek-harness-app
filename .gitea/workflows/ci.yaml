@@ -24,7 +24,11 @@ on:
 
 jobs:
   docs:
-    runs-on: ubuntu-latest
+    # python-only, but the checkout clones the reference submodule from
+    # github.com — which needs the LAN proxy too (a proxy-less ubuntu-latest
+    # job stalls on `git submodule update` exactly like pub did). The
+    # prebaked image has the proxy baked in, so run docs there as well.
+    runs-on: flutter-android
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
