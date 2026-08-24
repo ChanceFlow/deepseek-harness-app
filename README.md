@@ -10,7 +10,7 @@ English | [简体中文](README.zh.md)
 
 A native Android client for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 (`dsh`), built with Flutter. It connects to an **unmodified `dsh web`
-backend** running on your own machine, so you can carry your agent
+host** running on your own machine, so you can carry your agent
 sessions in your pocket: watch a run live, approve tool calls, answer
 questions, and manage workspaces, models, goals and subagents — in
 English or 简体中文.
@@ -37,7 +37,7 @@ adb install dsh-android-<version>.apk
 
 Every release carries a `.sha256` sidecar next to the APK.
 
-### 2. Run the backend on your machine
+### 2. Run the host on your machine
 
 The app speaks to a stock `dsh web` server — no plugins, no patches:
 
@@ -51,23 +51,23 @@ npx @deepseek-ai/dsh web --port 3080
 decision, because the agent executes code: `dsh web` refuses
 `--host 0.0.0.0` outright ("it would expose remote code execution to
 the network"). There is no LAN mode to aim a phone at, so release APKs
-ship with `http://127.0.0.1:3080` baked in and you reach the backend
+ship with `http://127.0.0.1:3080` baked in and you reach the host
 by forwarding that loopback port to the machine running dsh:
 
 | Setup | What to do |
 |---|---|
 | **Phone or emulator over USB** | `adb reverse tcp:3080 tcp:3080` — one command, then the app connects. |
 | **Emulator without adb** | Build your own APK with `--dart-define=DSH_BASE_URL=http://10.0.2.2:3080`, the emulator's own route to the host loopback. |
-| **Anything else you can reach** — a tunnel, a second machine | Add it as another backend right in the app — see [Multiple backends](#multiple-backends). |
+| **Anything else you can reach** — a tunnel, a second machine | Add it as another host right in the app — see [Multiple hosts](#multiple-hosts). |
 
-> The backend serves its settings plane to loopback connections only,
+> The host serves its settings plane to loopback connections only,
 > so the in-app host-settings pages need the same forward.
 
-## Multiple backends
+## Multiple hosts
 
 One app, many dsh hosts: the settings page keeps a device-local
-registry of backends — add, rename, and switch between them at any
-time. Every configured backend stays live; the active one drives the
+registry of hosts — add, rename, and switch between them at any
+time. Every configured host stays live; the active one drives the
 chat. A fresh install seeds the registry with the build-time URL, so
 nothing changes until you add your second host — a laptop, a build
 box, a tunneled remote dsh.
@@ -80,7 +80,7 @@ box, a tunneled remote dsh.
   code, headings, lists, tables, clickable links), queue rows,
   approvals, questions, plan-review cards, background jobs, image
   attachments, skill candidates.
-- **Multiple backends** — keep several dsh hosts configured on this
+- **Multiple hosts** — keep several dsh hosts configured on this
   device and switch which one drives the chat.
 - **Workspaces** — create from a path or the in-app host directory
   browser, rename, delete, manual reordering.
@@ -90,8 +90,9 @@ box, a tunneled remote dsh.
   send a prompt, interrupt.
 - **Goals** — create/pause/resume/complete per phase, objective
   editing with CAS revision.
-- **Settings** — per-namespace editing with revision CAS, credentials
-  describe/set/unset.
+- **Settings** — App settings (interface language, send-while-busy
+  behavior) plus host settings: per-namespace editing with revision
+  CAS, credentials describe/set/unset.
 
 ## Wire compatibility
 
@@ -129,7 +130,7 @@ cd flutter/app
 flutter run
 ```
 
-The build-time default backend is `http://127.0.0.1:3080`; override it
+The build-time default host is `http://127.0.0.1:3080`; override it
 with `--dart-define=DSH_BASE_URL=...` (see
 [§Point the app at it](#3-point-the-app-at-it) for the emulator-only
 `10.0.2.2` route).

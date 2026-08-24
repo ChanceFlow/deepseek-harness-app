@@ -484,7 +484,31 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsNavBackends => '后端';
+  String get settingsCategoryApp => '应用设置';
+
+  @override
+  String get settingsCategoryHost => '主机设置';
+
+  @override
+  String get appSettingsIntro => '存储在本设备上的偏好——无论是否连接主机，全局生效。';
+
+  @override
+  String get languageLabel => '语言';
+
+  @override
+  String get languageDescription => '应用界面语言；“跟随系统”时沿用设备语言。';
+
+  @override
+  String get languageOptionSystem => '跟随系统';
+
+  @override
+  String get languageOptionZh => '中文';
+
+  @override
+  String get languageOptionEn => 'English';
+
+  @override
+  String get settingsNavBackends => '主机';
 
   @override
   String get settingsNavGeneral => '通用设置';
@@ -507,35 +531,35 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsScopeTitle => '设置后端';
+  String get settingsScopeTitle => '选择主机';
 
   @override
-  String get settingsScopeHint => '这些页面描述哪个后端的主机设置——独立于活动聊天后端。';
+  String get settingsScopeHint => '这些设置页面将描述所选主机——独立于对话当前使用的主机。';
 
   @override
-  String get settingsScopeFollowActive => '跟随活动后端';
+  String get settingsScopeFollowActive => '跟随当前主机';
 
   @override
   String get settingsLoopbackHint =>
       'settings/credentials 仅在宿主机回环可用；请通过 adb reverse 连接';
 
   @override
-  String get backendsIntro => '本设备保持连接的主机端点——每个已配置后端保持在线，活动后端驱动对话与这些主机设置页面。';
+  String get backendsIntro => '本设备保持连接的主机端点——每个已配置主机保持在线，当前主机驱动对话与这些主机设置页面。';
 
   @override
-  String get addBackend => '添加后端';
+  String get addBackend => '添加主机';
 
   @override
-  String get editBackend => '编辑后端';
+  String get editBackend => '编辑主机';
 
   @override
-  String get removeActiveBackendFirst => '请先切换离开活动后端再删除。';
+  String get removeActiveBackendFirst => '请先切换到其他主机，再移除当前主机。';
 
   @override
-  String get cannotRemoveLastBackend => '无法删除最后一个后端。';
+  String get cannotRemoveLastBackend => '无法移除最后一个主机。';
 
   @override
-  String get backendStatusActive => '活动';
+  String get backendStatusActive => '当前';
 
   @override
   String get backendStatusStandby => '待机';
@@ -544,7 +568,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hostSettingsUnavailable => '主机设置不可用';
 
   @override
-  String get hostSettingsUnavailableBody => '活动后端未响应。请在后端页面重新指向或切换后端。';
+  String get hostSettingsUnavailableBody => '当前主机未响应。请在主机页面重新指向或切换主机。';
 
   @override
   String get hostWritesLabel => '主机写入';

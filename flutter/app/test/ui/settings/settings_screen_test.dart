@@ -17,6 +17,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/settings/busy_enter_preference.dart';
+import 'package:app/ui/settings/locale_preference.dart';
 import 'package:app/ui/settings/settings_controller.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
@@ -164,29 +165,38 @@ Future<void> _letRegistryLoad(WidgetTester tester) async {
   }
 }
 
-/// The horizontal capsule nav. Six capsules overflow the phone-width
-/// viewport in the test font (every glyph renders at its full em), so
-/// the trailing section reveals on scroll.
+/// The horizontal capsule nav. The section nav's capsules overflow the
+/// phone-width viewport in the test font (every glyph renders at its
+/// full em), so the trailing section reveals on scroll. Scoped to the
+/// scrollable that carries the section capsules — the category row
+/// above it rides its own horizontal scroll view.
 final _navScrollable = find.byWidgetPredicate(
   (widget) =>
       widget is SingleChildScrollView &&
       widget.scrollDirection == Axis.horizontal,
 );
+final _sectionNavScrollable = find.ancestor(
+  of: find.text('General'),
+  matching: _navScrollable,
+);
 
 Future<void> _revealCapsule(WidgetTester tester, String label) async {
   final capsule = find.descendant(
-    of: _navScrollable,
+    of: _sectionNavScrollable,
     matching: find.text(label),
   );
   if (capsule.hitTestable().evaluate().isNotEmpty) return;
-  // Off the right edge drags left; clipped on the left drags right.
+  // Clipped on the right drags left; clipped on the left drags right.
+  // The right-edge test covers a capsule whose left edge already sits
+  // inside the viewport but whose body is cut off.
   final box = tester.renderObject<RenderBox>(capsule);
-  final dx = box.localToGlobal(Offset.zero).dx;
+  final left = box.localToGlobal(Offset.zero).dx;
+  final right = left + box.size.width;
   final viewportWidth =
       tester.view.physicalSize.width / tester.view.devicePixelRatio;
   await tester.drag(
-    _navScrollable,
-    Offset(dx > viewportWidth ? -600.0 : 600.0, 0),
+    _sectionNavScrollable,
+    Offset(right > viewportWidth ? -600.0 : 600.0, 0),
   );
   await tester.pumpAndSettle();
   expect(capsule.hitTestable(), findsOneWidget);
@@ -322,6 +332,11 @@ void main() {
       [],
     );
 
+    // The two category capsules carry the tab's split: App settings
+    // (device-local) and Host settings; Host is the initial category.
+    expect(find.text('App settings').hitTestable(), findsOneWidget);
+    expect(find.text('Host settings').hitTestable(), findsOneWidget);
+
     // The panel nav (web nav rail) collapsed to capsules, in the web
     // nav order with the mobile-only Credentials page last. Six
     // capsules overflow the phone width in the test font, so the nav
@@ -329,7 +344,7 @@ void main() {
     // on scroll. The active section's page header repeats its title,
     // so presence (not count) is the assertion.
     for (final label in [
-      'Backends',
+      'Hosts',
       'General',
       'Models',
       'Plugins',
@@ -340,17 +355,18 @@ void main() {
     await _revealCapsule(tester, 'Credentials');
     expect(find.text('Credentials').hitTestable(), findsWidgets);
     // Back to the leading capsules for the page assertions below.
-    await _revealCapsule(tester, 'Backends');
+    await _revealCapsule(tester, 'Hosts');
 
     // General page: the interactive rows over the connection facts.
-    expect(
-      find.text('Enter behavior while busy').hitTestable(),
-      findsOneWidget,
-    );
     expect(find.text('Agent preset').hitTestable(), findsOneWidget);
     expect(find.text('Standard mode').hitTestable(), findsOneWidget);
     expect(find.text('Host writes').hitTestable(), findsOneWidget);
     expect(find.text('Settings document').hitTestable(), findsOneWidget);
+    // The busy-Enter row moved to the App page (device-local).
+    expect(
+      find.text('Enter behavior while busy').hitTestable(),
+      findsNothing,
+    );
 
     // The other pages stay mounted behind the nav (IndexedStack) but
     // are not visible: their content is not hit-testable.
@@ -380,6 +396,23 @@ void main() {
     await tester.tap(find.text('General').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Host writes').hitTestable(), findsOneWidget);
+
+    // The category switch keeps both halves mounted (IndexedStack):
+    // the App page renders its own rows while the host pages keep
+    // their state behind it.
+    await tester.tap(find.text('App settings').hitTestable());
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Enter behavior while busy').hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.text('Language').hitTestable(), findsOneWidget);
+    expect(find.text('Host writes').hitTestable(), findsNothing);
+
+    // Back to Host settings: the section stack resumes where it was.
+    await tester.tap(find.text('Host settings').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Host writes').hitTestable(), findsOneWidget);
   });
 
   testWidgets('enter behavior row persists through the store', (tester) async {
@@ -388,6 +421,10 @@ void main() {
       const SettingsUiState(snapshot: _snapshot),
       [],
     );
+
+    // The row lives on the App page now (device-local preference).
+    await tester.tap(find.text('App settings').hitTestable());
+    await tester.pumpAndSettle();
 
     // Pre-cache default: an unloaded store reads null for every key.
     expect(store.read(kBusyEnterBehaviorKey), isNull);
@@ -402,6 +439,48 @@ void main() {
     // A fresh preference controller over the same store (the read path
     // the provider seeds) resolves the stored behavior.
     expect(BusyEnterPreferenceController(store).state, BusyEnterBehavior.steer);
+
+    // Walk past the store's 500ms write debounce so no store timer
+    // outlives the test.
+    await tester.pump(const Duration(milliseconds: 600));
+  });
+
+  testWidgets('language row persists and seeds the locale controller', (
+    tester,
+  ) async {
+    final store = await _pump(
+      tester,
+      const SettingsUiState(snapshot: _snapshot),
+      [],
+    );
+
+    await tester.tap(find.text('App settings').hitTestable());
+    await tester.pumpAndSettle();
+
+    // The row offers the system default plus the two display names
+    // (each in its own language, the web locale vocabulary).
+    expect(find.text('Follow system').hitTestable(), findsOneWidget);
+    expect(find.text('中文').hitTestable(), findsOneWidget);
+    expect(find.text('English').hitTestable(), findsOneWidget);
+
+    // Pre-cache default: no stored preference.
+    expect(store.read(kAppLocalePreferenceKey), isNull);
+
+    await tester.tap(find.text('中文'));
+    await tester.pump();
+
+    // The write reached the shared store's cache synchronously — the
+    // same instance DshApp's locale resolution reads.
+    expect(store.read(kAppLocalePreferenceKey), 'zh');
+
+    // A fresh controller over the same store (the read path the
+    // provider seeds) resolves the stored preference, and the
+    // MaterialApp mapping follows it.
+    final controller = LocalePreferenceController(store);
+    expect(controller.state, AppLocalePreference.zh);
+    expect(resolveAppLocale(controller.state), const Locale('zh'));
+    expect(resolveAppLocale(AppLocalePreference.system), isNull);
+    addTearDown(controller.dispose);
 
     // Walk past the store's 500ms write debounce so no store timer
     // outlives the test.
@@ -730,7 +809,7 @@ void main() {
     expect(find.text('No credentials referenced.'), findsOneWidget);
   });
 
-  // The Backends section: device-local registry surface. The registry
+  // The Hosts section: device-local registry surface. The registry
   // runs its real controller over a temp-file store seeded with two
   // hosts; both endpoints ride the quiet transport fakes (a second
   // port on the emulator-loopback host).
@@ -773,13 +852,13 @@ void main() {
       ),
     );
     await _letRegistryLoad(tester);
-    // The nav capsule is the first 'Backends' text in the column (the
+    // The nav capsule is the first 'Hosts' text in the column (the
     // unreachable-host gate's shortcut button may render below it).
-    await tester.tap(find.text('Backends').hitTestable().first);
+    await tester.tap(find.text('Hosts').hitTestable().first);
     await tester.pumpAndSettle();
   }
 
-  testWidgets('backends section lists rows and switches the active one', (
+  testWidgets('hosts section lists rows and switches the active one', (
     tester,
   ) async {
     await pumpBackends(tester);
@@ -806,7 +885,7 @@ void main() {
       find.descendant(of: buildBoxRow, matching: find.text('Standby')),
       findsOneWidget,
     );
-    expect(find.text('Add backend'), findsOneWidget);
+    expect(find.text('Add host'), findsOneWidget);
 
     // The connected host's version rides the endpoint line (the fake
     // host.describe answers version 'test').
@@ -837,7 +916,7 @@ void main() {
     );
   });
 
-  testWidgets('scope bar pins a backend independent of the chat-active one', (
+  testWidgets('scope bar pins a host independent of the chat-active one', (
     tester,
   ) async {
     await pumpBackends(tester);
@@ -848,8 +927,8 @@ void main() {
     expect(find.text('Configuring: Build box'), findsNothing);
     await tester.tap(find.text('Configuring: Laptop'));
     await tester.pumpAndSettle();
-    expect(find.text('Settings backend'), findsOneWidget);
-    expect(find.text('Follow the active backend'), findsNothing);
+    expect(find.text('Choose a host'), findsOneWidget);
+    expect(find.text('Follow the active host'), findsNothing);
     expect(find.text('Laptop').hitTestable(), findsOneWidget);
     expect(find.text('Build box').hitTestable(), findsOneWidget);
 
@@ -870,13 +949,13 @@ void main() {
     // the scope back to the chat-active backend.
     await tester.tap(find.text('Configuring: Build box'));
     await tester.pumpAndSettle();
-    expect(find.text('Follow the active backend'), findsOneWidget);
-    await tester.tap(find.text('Follow the active backend'));
+    expect(find.text('Follow the active host'), findsOneWidget);
+    await tester.tap(find.text('Follow the active host'));
     await tester.pumpAndSettle();
     expect(find.text('Configuring: Laptop'), findsOneWidget);
   });
 
-  testWidgets('a single configured backend hides the scope bar', (
+  testWidgets('a single configured host hides the scope bar', (
     tester,
   ) async {
     await pumpBackends(
@@ -959,16 +1038,16 @@ void main() {
     // Re-follow: the pages describe the chat-active backend again.
     await tester.tap(find.text('Configuring: Build box'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Follow the active backend'));
+    await tester.tap(find.text('Follow the active host'));
     await tester.pumpAndSettle();
     expect(find.text('Configuring: Laptop'), findsOneWidget);
     expect(find.text('Writable'), findsOneWidget);
   });
 
-  testWidgets('add backend flow appends through the registry', (tester) async {
+  testWidgets('add host flow appends through the registry', (tester) async {
     await pumpBackends(tester);
 
-    await tester.tap(find.text('Add backend').hitTestable());
+    await tester.tap(find.text('Add host').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Label'), findsOneWidget);
     expect(find.text('Base URL'), findsOneWidget);
@@ -993,15 +1072,15 @@ void main() {
     expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
   });
 
-  testWidgets('edit sheet repoints a backend and states removal guards', (
+  testWidgets('edit sheet repoints a host and states removal guards', (
     tester,
   ) async {
     await pumpBackends(tester);
 
     // The standby backend's editor: prefilled fields, removable.
-    await tester.tap(find.byTooltip('Edit backend').at(1));
+    await tester.tap(find.byTooltip('Edit host').at(1));
     await tester.pumpAndSettle();
-    expect(find.text('Edit backend'), findsOneWidget);
+    expect(find.text('Edit host'), findsOneWidget);
     expect(find.text('Remove'), findsOneWidget);
 
     // Repoint the URL; the row's endpoint line follows.
@@ -1018,13 +1097,13 @@ void main() {
 
     // The active backend's editor states the guard instead of a dead
     // remove control.
-    await tester.tap(find.byTooltip('Edit backend').at(0));
+    await tester.tap(find.byTooltip('Edit host').at(0));
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsNothing);
     expect(find.textContaining('Switch away before removing'), findsOneWidget);
   });
 
-  testWidgets('unreachable host page routes to the backends section', (
+  testWidgets('unreachable host page routes to the hosts section', (
     tester,
   ) async {
     // No snapshot and not loading: the host pages state the dead end;
@@ -1035,9 +1114,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Host settings unavailable'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Backends'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Hosts'));
     await tester.pumpAndSettle();
-    expect(find.text('Add backend').hitTestable(), findsOneWidget);
+    expect(find.text('Add host').hitTestable(), findsOneWidget);
     expect(find.text('Host settings unavailable'), findsNothing);
   });
 }

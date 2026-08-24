@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/backends/backend_store.dart';
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
+import 'package:app/local_state/local_state_providers.dart';
+import 'package:app/local_state/local_state_store.dart';
 import 'package:app/main.dart';
 
 class _FakeRpc implements DshRpcClient {
@@ -57,7 +59,20 @@ BackendStore _testStore() {
   );
 }
 
-Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) async {
+/// The device-local UI-state cache, temp-backed (path_provider has no
+/// plugin in tests). Unloaded, as the shared harness does: reads are
+/// null and writes land in the cache.
+LocalStateStore _testLocalState() {
+  final dir = Directory.systemTemp.createTempSync('dsh-local-state-test');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  return LocalStateStore(File('${dir.path}/local_state.json'));
+}
+
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  DshRpcClient? rpc,
+  LocalStateStore? localState,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -70,6 +85,8 @@ Future<void> _pumpApp(WidgetTester tester, {DshRpcClient? rpc}) async {
         dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
           _NeverSocket(),
         ),
+        if (localState != null)
+          localStateStoreProvider.overrideWith((ref) async => localState),
       ],
       child: const DshApp(),
     ),
@@ -206,5 +223,50 @@ void main() {
       tester.widget<TextField>(composerField).controller?.text,
       'half-finished thought',
     );
+  });
+
+  testWidgets('the App-settings language row re-localizes the whole app', (
+    tester,
+  ) async {
+    final store = _testLocalState();
+    await _pumpApp(tester, localState: store);
+    await tester.pumpAndSettle();
+
+    // The device locale (en in tests) drives the shell until a
+    // preference resolves; the store starts empty, so nothing pins a
+    // locale yet.
+    expect(find.text('Chat'), findsOneWidget);
+    expect(store.read('app.localePreference'), isNull);
+
+    // Settings → App settings category → the language row.
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('App settings').hitTestable());
+    await tester.pumpAndSettle();
+    expect(find.text('Language').hitTestable(), findsOneWidget);
+
+    // Picking 中文 pins the app locale: DshApp re-resolves MaterialApp
+    // through the shared store, and the shell re-localizes — the
+    // bottom bar labels are the observable surface (the Settings tab's
+    // own header repeats 设置, so the assertions scope to the bar).
+    final navBarLabels = find.byType(NavigationBar);
+    await tester.tap(find.text('中文').hitTestable());
+    await tester.pumpAndSettle();
+    expect(store.read('app.localePreference'), 'zh');
+    expect(find.descendant(of: navBarLabels, matching: find.text('对话')),
+        findsOneWidget);
+    expect(find.descendant(of: navBarLabels, matching: find.text('工作区')),
+        findsOneWidget);
+    expect(find.descendant(of: navBarLabels, matching: find.text('设置')),
+        findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+
+    // Follow system releases the pin; the shell returns to the device
+    // locale.
+    await tester.tap(find.text('跟随系统').hitTestable());
+    await tester.pumpAndSettle();
+    expect(store.read('app.localePreference'), 'system');
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('对话'), findsNothing);
   });
 }
