@@ -137,6 +137,45 @@ class StoreModelPreferencePersistence implements ModelPreferencePersistence {
   }
 }
 
+/// Selected-session persistence: which session each backend's chat surface
+/// had open when the app last ran (the reference web client's
+/// `dsh.sessions.current` localStorage entry). Null disables restore —
+/// cold start then lands on no session, exactly as before.
+abstract class SessionSelectionPersistence {
+  /// The last-opened session id for this scope; null when none is stored.
+  Future<String?> readSelectedSession();
+
+  /// Persist the last-opened session id; null clears it.
+  Future<void> writeSelectedSession(String? sessionId);
+}
+
+/// [SessionSelectionPersistence] over the shared [LocalStateStore], keyed
+/// per backend scope (each backend's chat surface restores its own
+/// session).
+class StoreSessionSelectionPersistence implements SessionSelectionPersistence {
+  StoreSessionSelectionPersistence(this._store, this._scope);
+
+  final LocalStateStore _store;
+  final String _scope;
+
+  String get _key => 'chat.selectedSession.$_scope';
+
+  @override
+  Future<String?> readSelectedSession() async {
+    final raw = _store.read(_key);
+    return raw is String && raw.isNotEmpty ? raw : null;
+  }
+
+  @override
+  Future<void> writeSelectedSession(String? sessionId) {
+    _store.write(
+      _key,
+      sessionId == null || sessionId.isEmpty ? null : sessionId,
+    );
+    return Future<void>.value();
+  }
+}
+
 /// Draft text of one session; absent (null or empty) when none is saved.
 String chatDraftKey(String sessionId) => 'chat.draft.$sessionId';
 

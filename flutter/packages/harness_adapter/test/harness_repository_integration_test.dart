@@ -475,6 +475,145 @@ void main() {
   });
 
   test(
+    'streaming chunks coalesce into one window publish per window',
+    () async {
+      // Web markFrameDirty parity: N assistant token chunks inside one
+      // window collapse into ONE timeline-window publish carrying the
+      // fully accumulated partial — never one publish per chunk.
+      JsonMap chunkEvent(int seq, String text) => <String, Object?>{
+        'type': 'assistant/chunk',
+        'seq': seq,
+        'time': seq,
+        'data': <String, Object?>{
+          'turn': 1,
+          'step': 1,
+          'chunk': <String, Object?>{
+            'type': 'text-delta',
+            'index': 0,
+            'text': text,
+          },
+        },
+      };
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          for (var i = 0; i < 5; i++)
+            _muxFrame('session/event', 'session-1', chunkEvent(i + 1, 'x')),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      final windows = <TimelineWindow>[];
+      final sub = repository
+          .observeTimelineWindow('session-1')
+          .listen(windows.add);
+      addTearDown(() => sub.cancel());
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+      // The seed emission only: every chunk deferred to the window timer.
+      expect(windows, hasLength(1));
+
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+      // One coalesced publish carried all five chunks at once.
+      expect(windows, hasLength(2));
+      final published = windows.last.items;
+      expect(published, hasLength(1));
+      final partial = published.single as TimelineMessage;
+      expect(partial.value.text, 'xxxxx');
+      expect(partial.value.streaming, isTrue);
+    },
+  );
+
+  test(
+    'a non-streaming frame publishes immediately and carries pending chunks',
+    () async {
+      // Structural events keep microtask latency (web markDirty); the
+      // immediate publish also flushes chunks still waiting on the window
+      // timer, so nothing the stream already delivered is delayed behind
+      // it.
+      JsonMap chunkEvent(int seq) => <String, Object?>{
+        'type': 'assistant/chunk',
+        'seq': seq,
+        'time': seq,
+        'data': <String, Object?>{
+          'turn': 1,
+          'step': 1,
+          'chunk': <String, Object?>{
+            'type': 'text-delta',
+            'index': 0,
+            'text': 'abc',
+          },
+        },
+      };
+      JsonMap userMessageEvent(int seq) => <String, Object?>{
+        'type': 'user/message',
+        'seq': seq,
+        'time': seq,
+        'data': <String, Object?>{
+          'id': 'user-1',
+          'role': 'user',
+          'source': <String, Object?>{'kind': 'user'},
+          'content': <Object?>[
+            <String, Object?>{'type': 'text', 'text': 'next turn'},
+          ],
+        },
+      };
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          _muxFrame('session/event', 'session-1', chunkEvent(1)),
+          _muxFrame('session/event', 'session-1', chunkEvent(2)),
+          _muxFrame('session/event', 'session-1', userMessageEvent(3)),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      final windows = <TimelineWindow>[];
+      final sub = repository
+          .observeTimelineWindow('session-1')
+          .listen(windows.add);
+      addTearDown(() => sub.cancel());
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      // The user message's immediate publish already carries both the
+      // finalized partial (its two chunks) and itself — no timer wait.
+      expect(windows, hasLength(2));
+      final items = windows.last.items;
+      expect(items, hasLength(2));
+      final settled = items.first as TimelineMessage;
+      expect(settled.value.text, 'abcabc');
+      expect(settled.value.streaming, isFalse);
+      final user = items.last as TimelineMessage;
+      expect(user.value.role, MessageRole.user);
+    },
+  );
+
+  test(
     'question/requested that arrives before the session is opened still '
     'renders after openSession (web pendingBuffers parity)',
     () async {
