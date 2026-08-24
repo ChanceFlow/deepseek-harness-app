@@ -485,10 +485,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get settingsCategoryApp => 'App settings';
+  String get settingsCategoryApp => 'App';
 
   @override
-  String get settingsCategoryHost => 'Host settings';
+  String get settingsCategoryHost => 'Host';
 
   @override
   String get appSettingsIntro =>
@@ -511,9 +511,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageOptionEn => 'English';
 
   @override
-  String get settingsNavBackends => 'Hosts';
-
-  @override
   String get settingsNavGeneral => 'General';
 
   @override
@@ -527,11 +524,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsNavCredentials => 'Credentials';
-
-  @override
-  String settingsScopeLabel(String label) {
-    return 'Configuring: $label';
-  }
 
   @override
   String get settingsScopeTitle => 'Choose a host';
@@ -548,8 +540,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'settings/credentials are loopback-only on the host; connect via adb reverse';
 
   @override
-  String get backendsIntro =>
-      'Host endpoints this device keeps connected — every configured host stays live; the active one drives Chat and these host-settings pages.';
+  String get setChatHost => 'Set as chat host';
 
   @override
   String get addBackend => 'Add host';
@@ -575,7 +566,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hostSettingsUnavailableBody =>
-      'The active host did not answer. Repoint or switch it from the Hosts page.';
+      'The host did not answer. Repoint it, or choose another host.';
 
   @override
   String get hostWritesLabel => 'Host writes';

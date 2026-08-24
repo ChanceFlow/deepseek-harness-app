@@ -484,10 +484,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsCategoryApp => '应用设置';
+  String get settingsCategoryApp => '应用';
 
   @override
-  String get settingsCategoryHost => '主机设置';
+  String get settingsCategoryHost => '主机';
 
   @override
   String get appSettingsIntro => '存储在本设备上的偏好——无论是否连接主机，全局生效。';
@@ -508,9 +508,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageOptionEn => 'English';
 
   @override
-  String get settingsNavBackends => '主机';
-
-  @override
   String get settingsNavGeneral => '通用设置';
 
   @override
@@ -526,11 +523,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavCredentials => '凭据';
 
   @override
-  String settingsScopeLabel(String label) {
-    return '正在配置:$label';
-  }
-
-  @override
   String get settingsScopeTitle => '选择主机';
 
   @override
@@ -544,7 +536,7 @@ class AppLocalizationsZh extends AppLocalizations {
       'settings/credentials 仅在宿主机回环可用；请通过 adb reverse 连接';
 
   @override
-  String get backendsIntro => '本设备保持连接的主机端点——每个已配置主机保持在线，当前主机驱动对话与这些主机设置页面。';
+  String get setChatHost => '设为对话主机';
 
   @override
   String get addBackend => '添加主机';
@@ -568,7 +560,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hostSettingsUnavailable => '主机设置不可用';
 
   @override
-  String get hostSettingsUnavailableBody => '当前主机未响应。请在主机页面重新指向或切换主机。';
+  String get hostSettingsUnavailableBody => '该主机未响应。请重新指向它，或选择其他主机。';
 
   @override
   String get hostWritesLabel => '主机写入';

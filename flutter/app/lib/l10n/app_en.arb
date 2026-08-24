@@ -374,26 +374,24 @@
   "newFolderIn": "New folder in \"{parent}\"",
   "secretsSetCount": "{count, plural, =1{1 secret set} other{{count} secrets set}}",
   "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
-  "settingsCategoryApp": "App settings",
-  "settingsCategoryHost": "Host settings",
+  "settingsCategoryApp": "App",
+  "settingsCategoryHost": "Host",
   "appSettingsIntro": "Preferences stored on this device — they apply everywhere, with or without a connected host.",
   "languageLabel": "Language",
   "languageDescription": "The app interface language; Follow system tracks the device language.",
   "languageOptionSystem": "Follow system",
   "languageOptionZh": "中文",
   "languageOptionEn": "English",
-  "settingsNavBackends": "Hosts",
   "settingsNavGeneral": "General",
   "settingsNavModels": "Models",
   "settingsNavPlugins": "Plugins",
   "settingsNavAgentPresets": "Agent presets",
   "settingsNavCredentials": "Credentials",
-  "settingsScopeLabel": "Configuring: {label}",
   "settingsScopeTitle": "Choose a host",
   "settingsScopeHint": "These settings pages describe the chosen host - independent of the host Chat uses.",
   "settingsScopeFollowActive": "Follow the active host",
   "settingsLoopbackHint": "settings/credentials are loopback-only on the host; connect via adb reverse",
-  "backendsIntro": "Host endpoints this device keeps connected — every configured host stays live; the active one drives Chat and these host-settings pages.",
+  "setChatHost": "Set as chat host",
   "addBackend": "Add host",
   "editBackend": "Edit host",
   "removeActiveBackendFirst": "Switch away before removing the active host.",
@@ -401,7 +399,7 @@
   "backendStatusActive": "Active",
   "backendStatusStandby": "Standby",
   "hostSettingsUnavailable": "Host settings unavailable",
-  "hostSettingsUnavailableBody": "The active host did not answer. Repoint or switch it from the Hosts page.",
+  "hostSettingsUnavailableBody": "The host did not answer. Repoint it, or choose another host.",
   "hostWritesLabel": "Host writes",
   "hostWritesDescription": "Whether the host accepts settings and credential writes.",
   "writableValue": "Writable",
@@ -847,14 +845,6 @@
     "description": "Localized screen copy.",
     "placeholders": {
       "ref": {
-        "type": "String"
-      }
-    }
-  },
-  "@settingsScopeLabel": {
-    "description": "The host whose settings the Settings pages describe.",
-    "placeholders": {
-      "label": {
         "type": "String"
       }
     }
