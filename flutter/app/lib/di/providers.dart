@@ -39,7 +39,9 @@ import '../config.dart';
 import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/system_notifier.dart';
+import '../local_state/local_state_providers.dart';
 import '../ui/chat/chat_controller.dart';
+import '../ui/chat/chat_local_state.dart';
 import '../ui/chat/chat_ui_state.dart';
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
@@ -244,10 +246,30 @@ final systemNotificationTargetsProvider = StreamProvider<NotificationTarget>(
 /// Chat screen controller (UDF), one per backend.
 final chatControllerProvider = Provider.family.autoDispose<ChatController,
     String>((ref, backendId) {
-  final controller = ChatController(ref.watch(chatRepositoryProvider(backendId)));
+  final controller = ChatController(
+    ref.watch(chatRepositoryProvider(backendId)),
+    // Model-seat preferences are scoped per backend: hosts own different
+    // catalogs, so a route remembered on one must not land on another's
+    // seat. The store resolves asynchronously; the controller arms the
+    // remembered values once it settles.
+    modelPreferences: ref.watch(
+      modelPreferencePersistenceProvider(backendId).future,
+    ),
+  );
   ref.onDispose(controller.dispose);
   return controller;
 });
+
+/// Composer model-seat preference persistence over the shared
+/// [LocalStateStore], one scope per backend.
+final modelPreferencePersistenceProvider =
+    FutureProvider.family.autoDispose<ModelPreferencePersistence?, String>((
+      ref,
+      backendId,
+    ) async {
+      final store = await ref.watch(localStateStoreProvider.future);
+      return StoreModelPreferencePersistence(store, 'backend.$backendId');
+    });
 
 /// Chat UI state stream for widgets.
 final chatUiStateProvider = StreamProvider.family<ChatUiState, String>((

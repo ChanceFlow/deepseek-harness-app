@@ -32,6 +32,7 @@ import 'package:dev/dev.dart' show DebugTelemetry;
 
 import '../state_stream.dart';
 import 'command_roster.dart';
+import 'chat_local_state.dart';
 import 'chat_ui_state.dart';
 
 /// Bounded attachment byte cache; decoded images are bounded by the same
@@ -39,11 +40,12 @@ import 'chat_ui_state.dart';
 const int _attachmentCacheLimit = 24;
 
 class ChatController {
-  ChatController(this._repository) {
+  ChatController(this._repository, {Future<ModelPreferencePersistence?>? modelPreferences}) {
     _refresh();
     _subscribeBaselines();
     _observeSelectedSessionRemoval();
     _loadAgentPresets();
+    _loadModelPreferences(modelPreferences);
   }
 
   final ChatRepository _repository;
@@ -72,6 +74,15 @@ class ChatController {
   List<TodoItem>? _todos;
   List<SkillEntry> _skills = const <SkillEntry>[];
   SessionModels? _models;
+
+  /// The session whose directory [_models] currently holds; the
+  /// remembered-selection apply must not read a previous session's seat.
+  String? _modelsSessionId;
+  ModelSeatPreferences _modelPrefs = const ModelSeatPreferences();
+  ModelPreferencePersistence? _modelPrefsStore;
+  bool _prefsLoaded = false;
+  String? _modelPrefsDecidedFor;
+  bool _disposed = false;
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
   GoalProjection? _goal;
@@ -116,6 +127,7 @@ class ChatController {
   Stream<ChatUiState> get uiState => _state.stream;
 
   void dispose() {
+    _disposed = true;
     for (final sub in _subs) {
       unawaited(sub.cancel());
     }
@@ -162,6 +174,7 @@ class ChatController {
       jobs: _timelineJobs(),
       permissions: _permissions,
       agentPresets: _agentPresets,
+      modelPrefs: _prefsLoaded ? _modelPrefs : null,
     );
   }
 
@@ -170,6 +183,9 @@ class ChatController {
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
         _publish();
+        // A blank session's summary can land after its model directory;
+        // the remembered-selection apply waits on both.
+        _maybeApplyModelPreferences();
       }),
     );
     _subs.add(
@@ -289,6 +305,7 @@ class ChatController {
       _sessionStats = const SessionWindowStats();
       _goal = null;
       _models = null;
+      _modelsSessionId = null;
       _permissions = null;
       _timelineSub = null;
       _planSub = null;
@@ -302,7 +319,10 @@ class ChatController {
     }
     // Session-scoped projections reset on rebind: the leaving
     // session's values never flash under the entering one's header.
+    // The model directory also unbinds — the remembered-selection apply
+    // must never read the leaving session's seat as the entering one's.
     _permissions = null;
+    _modelsSessionId = null;
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
       window,
     ) {
@@ -659,7 +679,9 @@ class ChatController {
     final cached = _modelsBySession[sessionId];
     if (cached != null) {
       _models = cached;
+      _modelsSessionId = sessionId;
       _publish();
+      _maybeApplyModelPreferences();
       return;
     }
     refreshModels();
@@ -677,7 +699,9 @@ class ChatController {
         _modelsBySession[sessionId] = models;
         if (_selectedSessionId == sessionId) {
           _models = models;
+          _modelsSessionId = sessionId;
           _publish();
+          _maybeApplyModelPreferences();
         }
       }
     }());
@@ -691,19 +715,101 @@ class ChatController {
         () => _repository.selectModel(sessionId, selection),
       );
       if (updated != null) {
-        // Patch the cached directory's current selection in place.
-        final models = _models;
-        if (models != null) {
-          final patched = SessionModels(
-            current: updated,
-            routable: models.routable,
-            groups: models.groups,
-            failures: models.failures,
-          );
-          _modelsBySession[sessionId] = patched;
-          _models = patched;
-          _publish();
-        }
+        _rememberModelSelection(updated);
+        _applySelectedModel(sessionId, updated);
+      }
+    }());
+  }
+
+  /// Patch the cached directory's current selection in place (the host
+  /// validated the route before accepting it).
+  void _applySelectedModel(String sessionId, ModelSelection updated) {
+    final models = _models;
+    if (models == null) return;
+    final patched = SessionModels(
+      current: updated,
+      routable: models.routable,
+      groups: models.groups,
+      failures: models.failures,
+    );
+    _modelsBySession[sessionId] = patched;
+    if (_selectedSessionId == sessionId) {
+      _models = patched;
+      _modelsSessionId = sessionId;
+      _publish();
+    }
+  }
+
+  /// Resolve the model-preference seam once it settles (the store loads
+  /// asynchronously); the remembered values then arm the apply pass.
+  void _loadModelPreferences(Future<ModelPreferencePersistence?>? source) {
+    if (source == null) return;
+    unawaited(
+      source.then((store) async {
+        if (_disposed || store == null) return;
+        _modelPrefsStore = store;
+        final preferences = await store.read();
+        if (_disposed) return;
+        _modelPrefs = preferences;
+        _prefsLoaded = true;
+        // The apply pass may already have decided "nothing remembered"
+        // against the empty default; re-arm it with the loaded values.
+        _modelPrefsDecidedFor = null;
+        _publish();
+        _maybeApplyModelPreferences();
+      }),
+    );
+  }
+
+  /// Remember one committed selection: it becomes the last selection and
+  /// overwrites its route's remembered effort.
+  void _rememberModelSelection(ModelSelection selection) {
+    final next = _modelPrefs.remembering(selection);
+    _modelPrefs = next;
+    _publish();
+    final store = _modelPrefsStore;
+    if (store == null) return;
+    unawaited(() async {
+      try {
+        await store.write(next);
+      } catch (_) {
+        // A failed preference write only costs the memory: the seat still
+        // works off the host's own selection on the next cold start.
+      }
+    }());
+  }
+
+  /// Apply the remembered selection to the selected session's seat. Only
+  /// a blank session takes the remembered model (web agent-default-model
+  /// parity: a session that already ran keeps the selection the host
+  /// logged for it); the decision is made once per session selection.
+  void _maybeApplyModelPreferences() {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null || _modelPrefsDecidedFor == sessionId) return;
+    if (!_prefsLoaded || _modelsSessionId != sessionId) return;
+    final session = _sessions
+        .where((item) => item.id == sessionId)
+        .firstOrNull;
+    if (session == null) return;
+    _modelPrefsDecidedFor = sessionId;
+    final remembered = _modelPrefs.lastSelection;
+    if (remembered == null || !session.blank) return;
+    final current = _models?.current;
+    if (current == null || remembered == current) return;
+    _telemetry?.count('chat.model.prefs.apply');
+    unawaited(() async {
+      try {
+        final updated = await _repository.selectModel(sessionId, remembered);
+        if (_disposed || _selectedSessionId != sessionId) return;
+        _applySelectedModel(sessionId, updated);
+      } catch (error) {
+        // A remembered route the host can no longer serve stays
+        // unapplied; the seat keeps the host's own current selection.
+        _telemetry?.count('chat.model.prefs.apply_failed');
+        _telemetry?.event('chat.model.prefs.apply_failed', attributes: {
+          'sessionId': sessionId,
+          'error': error.toString(),
+        });
       }
     }());
   }
@@ -764,6 +870,7 @@ class ChatController {
       _selectedSessionId = resolved;
       _timelineWindow = const TimelineWindow();
       _bindSelected(resolved);
+      _loadModels(resolved);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
       _telemetry?.count('chat.session.create');
@@ -880,6 +987,7 @@ class ChatController {
       _selectedSessionId = forked.id;
       _timelineWindow = const TimelineWindow();
       _bindSelected(forked.id);
+      _loadModels(forked.id);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(forked.id));
       _telemetry?.count('chat.session.fork');

@@ -18,6 +18,8 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 
+import 'chat_local_state.dart';
+
 final class ChatUiState {
   const ChatUiState({
     this.sessions = const <SessionSummary>[],
@@ -45,6 +47,7 @@ final class ChatUiState {
     this.jobs = const <JobView>[],
     this.permissions,
     this.agentPresets,
+    this.modelPrefs,
   });
 
   final List<SessionSummary> sessions;
@@ -115,6 +118,11 @@ final class ChatUiState {
   /// switch, header label); null while unloaded or on load failure —
   /// every preset surface then stays hidden.
   final AgentPresetRoster? agentPresets;
+
+  /// Remembered composer model-seat preferences (effort prefill when a
+  /// model is picked again); null while persistence is absent or still
+  /// loading, in which case the seat opens on the model's own default.
+  final ModelSeatPreferences? modelPrefs;
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin
