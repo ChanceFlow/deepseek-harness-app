@@ -255,6 +255,11 @@ final chatControllerProvider = Provider.family.autoDispose<ChatController,
     modelPreferences: ref.watch(
       modelPreferencePersistenceProvider(backendId).future,
     ),
+    // The last-opened session restores per backend after the session
+    // list loads (web `dsh.sessions.current` parity).
+    sessionSelection: ref.watch(
+      sessionSelectionPersistenceProvider(backendId).future,
+    ),
   );
   ref.onDispose(controller.dispose);
   return controller;
@@ -269,6 +274,17 @@ final modelPreferencePersistenceProvider =
     ) async {
       final store = await ref.watch(localStateStoreProvider.future);
       return StoreModelPreferencePersistence(store, 'backend.$backendId');
+    });
+
+/// Selected-session persistence over the shared [LocalStateStore], one
+/// scope per backend.
+final sessionSelectionPersistenceProvider =
+    FutureProvider.family.autoDispose<SessionSelectionPersistence?, String>((
+      ref,
+      backendId,
+    ) async {
+      final store = await ref.watch(localStateStoreProvider.future);
+      return StoreSessionSelectionPersistence(store, 'backend.$backendId');
     });
 
 /// Chat UI state stream for widgets.

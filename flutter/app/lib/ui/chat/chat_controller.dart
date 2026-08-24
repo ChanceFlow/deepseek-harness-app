@@ -40,12 +40,17 @@ import 'chat_ui_state.dart';
 const int _attachmentCacheLimit = 24;
 
 class ChatController {
-  ChatController(this._repository, {Future<ModelPreferencePersistence?>? modelPreferences}) {
+  ChatController(
+    this._repository, {
+    Future<ModelPreferencePersistence?>? modelPreferences,
+    Future<SessionSelectionPersistence?>? sessionSelection,
+  }) {
     _refresh();
     _subscribeBaselines();
     _observeSelectedSessionRemoval();
     _loadAgentPresets();
     _loadModelPreferences(modelPreferences);
+    _loadSessionSelection(sessionSelection);
   }
 
   final ChatRepository _repository;
@@ -83,6 +88,12 @@ class ChatController {
   bool _prefsLoaded = false;
   String? _modelPrefsDecidedFor;
   bool _disposed = false;
+
+  /// Selected-session persistence (web `dsh.sessions.current` parity);
+  /// resolves asynchronously with the store.
+  SessionSelectionPersistence? _selectionStore;
+  String? _restoreSessionId;
+  bool _restoreGivenUp = false;
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
   GoalProjection? _goal;
@@ -183,6 +194,9 @@ class ChatController {
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
         _publish();
+        // The restore pass waits on the stored id resolving together with
+        // a session list that either contains it or rules it out.
+        _maybeRestoreSelectedSession();
         // A blank session's summary can land after its model directory;
         // the remembered-selection apply waits on both.
         _maybeApplyModelPreferences();
@@ -276,6 +290,7 @@ class ChatController {
 
   void _selectSession(String sessionId) {
     _selectedSessionId = sessionId;
+    _rememberSelectedSession(sessionId);
     _timelineWindow = const TimelineWindow();
     _bindSelected(sessionId);
     _loadSkills(sessionId);
@@ -435,6 +450,7 @@ class ChatController {
         if (selected == null) return;
         if (!sessions.any((session) => session.id == selected)) {
           _selectedSessionId = null;
+          _rememberSelectedSession(null);
           _timelineWindow = const TimelineWindow();
           _bindSelected(null);
           _publish();
@@ -740,8 +756,74 @@ class ChatController {
     }
   }
 
+  /// Resolve the selected-session seam once it settles, then arm the
+  /// cold-start restore (web `dsh.sessions.current` parity: the surface
+  /// reopens the session it had open when the app last ran). A failed
+  /// seam (unreadable documents directory) leaves restore off — the
+  /// surface opens on no selection, exactly as before the feature.
+  void _loadSessionSelection(Future<SessionSelectionPersistence?>? source) {
+    if (source == null) return;
+    unawaited(
+      source.then((store) async {
+        if (_disposed || store == null) return;
+        _selectionStore = store;
+        final stored = await store.readSelectedSession();
+        if (_disposed) return;
+        _restoreSessionId = stored;
+        _maybeRestoreSelectedSession();
+      }).catchError((_) {
+        // Persistence is a convenience; selection itself never depends
+        // on the seam resolving.
+      }),
+    );
+  }
+
+  /// Restore the stored selection once the session list can adjudicate
+  /// it: select when the session exists, give up when a non-empty list
+  /// proves it gone (archived or deleted). A session selected in the
+  /// meantime wins and cancels the restore.
+  void _maybeRestoreSelectedSession() {
+    if (_restoreGivenUp || _restoreSessionId == null) return;
+    if (_selectedSessionId != null) {
+      // The reader (or another restore) already selected; nothing to do.
+      _restoreSessionId = null;
+      return;
+    }
+    final target = _restoreSessionId!;
+    final present = _sessions.any((session) => session.id == target);
+    if (!present) {
+      // An empty list can still be the pre-load state; only a non-empty
+      // one proves the stored session gone.
+      if (_sessions.isNotEmpty) {
+        _restoreSessionId = null;
+        _restoreGivenUp = true;
+      }
+      return;
+    }
+    _restoreSessionId = null;
+    _telemetry?.count('chat.session.restore');
+    _selectSession(target);
+  }
+
+  /// Persist one selection change through the seam; a write failure only
+  /// costs the next cold start's restore (the selection still works).
+  void _rememberSelectedSession(String? sessionId) {
+    final store = _selectionStore;
+    if (store == null) return;
+    unawaited(() async {
+      try {
+        await store.writeSelectedSession(sessionId);
+      } catch (_) {
+        // Local persistence is a convenience; selection itself never
+        // depends on the write landing.
+      }
+    }());
+  }
+
   /// Resolve the model-preference seam once it settles (the store loads
-  /// asynchronously); the remembered values then arm the apply pass.
+  /// asynchronously); the remembered values then arm the apply pass. A
+  /// failed seam (unreadable documents directory) keeps remembering off —
+  /// the seat behaves exactly as before the feature.
   void _loadModelPreferences(Future<ModelPreferencePersistence?>? source) {
     if (source == null) return;
     unawaited(
@@ -757,6 +839,9 @@ class ChatController {
         _modelPrefsDecidedFor = null;
         _publish();
         _maybeApplyModelPreferences();
+      }).catchError((_) {
+        // Preference memory is a convenience; the seat never depends on
+        // the seam resolving.
       }),
     );
   }
@@ -868,6 +953,7 @@ class ChatController {
       final resolved = sessionId;
       if (resolved == null) return;
       _selectedSessionId = resolved;
+      _rememberSelectedSession(resolved);
       _timelineWindow = const TimelineWindow();
       _bindSelected(resolved);
       _loadModels(resolved);
@@ -985,6 +1071,7 @@ class ChatController {
       );
       if (forked == null) return;
       _selectedSessionId = forked.id;
+      _rememberSelectedSession(forked.id);
       _timelineWindow = const TimelineWindow();
       _bindSelected(forked.id);
       _loadModels(forked.id);

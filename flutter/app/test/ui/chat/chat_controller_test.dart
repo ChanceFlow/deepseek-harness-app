@@ -471,6 +471,21 @@ class FakeModelPreferencePersistence implements ModelPreferencePersistence {
   }
 }
 
+/// In-memory [SessionSelectionPersistence] double: serves the stored id.
+class FakeSessionSelectionPersistence implements SessionSelectionPersistence {
+  FakeSessionSelectionPersistence([this.value]);
+
+  String? value;
+
+  @override
+  Future<String?> readSelectedSession() async => value;
+
+  @override
+  Future<void> writeSelectedSession(String? sessionId) async {
+    value = sessionId;
+  }
+}
+
 void main() {
   test('init refreshes sessions', () async {
     final repository = FakeChatRepository(
@@ -498,6 +513,84 @@ void main() {
       FakeChatRepository.initialSession.id,
     ]);
     expect(controller.state.timeline, hasLength(1));
+  });
+
+  test('selecting a session persists it for the next cold start', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final selection = FakeSessionSelectionPersistence();
+    final controller = ChatController(
+      repository,
+      sessionSelection: Future<SessionSelectionPersistence?>.value(selection),
+    );
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+
+    expect(selection.value, FakeChatRepository.initialSession.id);
+  });
+
+  test('the stored selected session restores after sessions load', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final controller = ChatController(
+      repository,
+      sessionSelection: Future<SessionSelectionPersistence?>.value(
+        FakeSessionSelectionPersistence(FakeChatRepository.initialSession.id),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      controller.state.selectedSessionId,
+      FakeChatRepository.initialSession.id,
+    );
+    expect(repository.openedSessionIds, <String>[
+      FakeChatRepository.initialSession.id,
+    ]);
+  });
+
+  test('a stored session absent from a loaded list does not restore', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final controller = ChatController(
+      repository,
+      sessionSelection: Future<SessionSelectionPersistence?>.value(
+        FakeSessionSelectionPersistence('session-gone'),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(controller.state.selectedSessionId, isNull);
+    expect(repository.openedSessionIds, isEmpty);
+  });
+
+  test('late-resolving selection persistence still restores', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final selection = Completer<SessionSelectionPersistence?>();
+    final controller = ChatController(
+      repository,
+      sessionSelection: selection.future,
+    );
+    await pumpEventQueue();
+
+    expect(controller.state.selectedSessionId, isNull);
+
+    selection.complete(
+      FakeSessionSelectionPersistence(FakeChatRepository.initialSession.id),
+    );
+    await pumpEventQueue();
+
+    expect(
+      controller.state.selectedSessionId,
+      FakeChatRepository.initialSession.id,
+    );
   });
 
   test('timeline window loading flag threads into the UI state', () async {

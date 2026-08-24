@@ -98,4 +98,30 @@ void main() {
     expect(remembered.effortFor('p', 'm1'), 'high');
     expect(remembered.effortFor('p', 'm2'), isNull);
   });
+
+  test('selected-session persistence roundtrips per backend scope', () async {
+    final file = File('${tempDir.path}/local_state.json');
+    final store = LocalStateStore(file);
+    await store.load();
+
+    final b1 = StoreSessionSelectionPersistence(store, 'backend.b1');
+    final b2 = StoreSessionSelectionPersistence(store, 'backend.b2');
+    await b1.writeSelectedSession('session-1');
+    expect(await b1.readSelectedSession(), 'session-1');
+    // The other backend's seat restores its own session, not b1's.
+    expect(await b2.readSelectedSession(), isNull);
+
+    await store.flush();
+    final reopened = LocalStateStore(file);
+    await reopened.load();
+    expect(
+      await StoreSessionSelectionPersistence(reopened, 'backend.b1')
+          .readSelectedSession(),
+      'session-1',
+    );
+
+    // Clearing (session removed) deletes rather than storing empty.
+    await b1.writeSelectedSession(null);
+    expect(await b1.readSelectedSession(), isNull);
+  });
 }

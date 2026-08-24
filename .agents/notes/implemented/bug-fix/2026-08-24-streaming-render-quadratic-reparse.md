@@ -39,8 +39,7 @@ trailing two and re-parses only the tail
 
 ## Decision
 
-Port the web's per-message economics; leave its cross-message batching
-documented as follow-up:
+Port the web's per-message economics, then its frame-cadence publishing:
 
 - **Incremental parse.**
   [markdown_parser.dart](../../../../flutter/app/lib/ui/chat/markdown/markdown_parser.dart)
@@ -60,15 +59,25 @@ documented as follow-up:
   accumulates into `StringBuffer`s; one delta is one O(delta) append and
   the `ChatMessage` string materializes only when `snapshot()` reads it
   (`_materializePartial`), pairing with the render-side freeze.
+- **Frame-cadence publishing** (web layer 1, `markFrameDirty` /
+  `'animation-frame'` publication rank).
+  [harness_repository_impl.dart](../../../../flutter/packages/harness_adapter/lib/src/harness_repository_impl.dart)
+  `_SessionState` coalesces streaming token chunks — every
+  `assistant/chunk` except `finish`/`usage` — into one timeline-window
+  publish per 16ms window (`kStreamPublishWindow`), capping the publish
+  rate at frame cadence no matter how fast the host flushes chunks. All
+  other frames (turn boundaries, tool calls, approvals, queue, jobs)
+  publish immediately, and an immediate publish flushes chunks still
+  waiting on the timer, so structural events never wait a frame behind
+  streaming. Repository `dispose()` cancels a still-pending publish.
 
 ## Alternatives considered
 
-- **Frame-coalesced publishing** (web layer 1: collapse N chunks into one
-  publish per animation frame, in the adapter or controller): deferred —
-  after the per-message fixes, per-delta cost is tail-sized and the
-  publish path is O(items); the adapter's tests assert synchronous
-  post-frame state, and a Timer-based coalescer trades that away. Revisit
-  with profiling evidence.
+- **Frame-coalesced publishing in the controller instead of the
+  adapter**: rejected — the adapter is where the publication rank lives
+  (the web classifies in the conversation assembler under the Session),
+  and coalescing after the controller would still pay the window-stream
+  fan-out per chunk.
 - **Virtualization / per-row subscriptions** (web layer 2): deferred —
   the transcript is already a lazy `ListView.builder` and only visible
   rows build; the multi-backend slice watch in `ChatRoute` is the
@@ -87,10 +96,15 @@ documented as follow-up:
   parse at every prefix (per-line and per-word corpora), frozen blocks
   keep their instances, non-append input resets, and `linesWithStarts`
   matches `LineSplitter`'s boundary semantics.
+- Two integration tests pin the coalescing: five chunks inside one window
+  produce exactly one window publish carrying the accumulated partial,
+  and a structural frame publishes immediately while flushing chunks
+  still waiting on the timer.
 - Known shared deviation (inherited from the reference design): a
   reference-style link whose definition lands across the freeze boundary
   renders literally until the settled full parse self-heals it — our
   grammar has no reference links, so the deviation is vacuous here.
-- `_framesAfterOpen` still retains every live frame's raw JSON for the
-  session's lifetime (a huge reply is held twice: concatenated text plus
-  raw deltas); bounded only by session length, same as before.
+- `_framesAfterOpen` retains every live frame's raw JSON for the
+  session's lifetime — the reference `Session` does the same with its
+  `events` array (the window pages only toward older history), so this is
+  parity, not a deviation.

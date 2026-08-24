@@ -41,6 +41,11 @@ import 'state_stream.dart';
 import 'timeline_reducer.dart';
 import 'wire_json.dart';
 
+/// Coalescing window for streaming-chunk timeline publishes: chunks that
+/// land inside it collapse into one publish, capping the publish rate at
+/// frame cadence (the reference web client's animation-frame flush).
+const Duration kStreamPublishWindow = Duration(milliseconds: 16);
+
 const String _sessionList = 'session.list';
 const String _sessionCreate = 'session.create';
 const String _sessionHistory = 'session.history';
@@ -172,6 +177,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       await sub.cancel();
     }
     _subs.clear();
+    for (final state in _sessionStates.values) {
+      state.discard();
+    }
   }
 
   @override
@@ -1938,6 +1946,10 @@ final class _SessionState {
   List<ServerRequest> _pending = <ServerRequest>[];
   List<ServerRequest> _framesAfterOpen = <ServerRequest>[];
 
+  /// Pending frame-cadence publish (streaming chunks); null when the next
+  /// publish goes out immediately.
+  Timer? _coalescedPublish;
+
   Future<void> ensureLoaded(
     Future<_HistoryPage> Function(int? beforeSeq) loader,
   ) {
@@ -1998,8 +2010,24 @@ final class _SessionState {
         sessionStats.value = _statsFold.value;
       }
       _framesAfterOpen.add(frame);
-      _publish();
+      _publish(coalescable: _isStreamingChunk(frame));
     });
+  }
+
+  /// Streaming token chunks publish at frame cadence (the reference web
+  /// client's `markFrameDirty` / `'animation-frame'` publication rank:
+  /// every assistant chunk except `finish`/`usage` coalesces into one
+  /// notification per frame); everything else — turn boundaries, tool
+  /// calls, approvals, queue and job frames — publishes immediately.
+  static bool _isStreamingChunk(ServerRequest frame) {
+    if (wireType(frame.payload) != 'session/event') return false;
+    final event = asJsonObject(frame.payload['event']);
+    if (event == null || wireType(event) != 'assistant/chunk') return false;
+    final chunk = asJsonObject(
+      (asJsonObject(event['data']) ?? const <String, Object?>{})['chunk'],
+    );
+    final type = chunk == null ? null : wireType(chunk);
+    return type != null && type != 'finish' && type != 'usage';
   }
 
   Future<bool> loadOlder(Future<_HistoryPage> Function(int beforeSeq) loader) {
@@ -2052,7 +2080,20 @@ final class _SessionState {
     sessionStats.value = _statsFold.value;
   }
 
-  void _publish() {
+  void _publish({bool coalescable = false}) {
+    if (coalescable) {
+      // N chunks inside one window collapse into one publish of the
+      // freshest state (the web's markFrameDirty→rAF flush); the first
+      // publish carries whatever landed before the timer fires.
+      _coalescedPublish ??= Timer(kStreamPublishWindow, _flushCoalesced);
+      return;
+    }
+    _flushCoalesced();
+  }
+
+  void _flushCoalesced() {
+    _coalescedPublish?.cancel();
+    _coalescedPublish = null;
     final items = _reducer.snapshot();
     timeline.value = items;
     window.value = TimelineWindow(
@@ -2061,5 +2102,11 @@ final class _SessionState {
       isLoadingOlder: _loadingOlder,
       isLoading: _loading,
     );
+  }
+
+  /// Cancel a still-pending coalesced publish (repository dispose).
+  void discard() {
+    _coalescedPublish?.cancel();
+    _coalescedPublish = null;
   }
 }
