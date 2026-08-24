@@ -53,6 +53,61 @@ void main() {
     expect(message.value.streaming, false);
   });
 
+  test('streaming deltas materialize lazily and snapshots are stable', () {
+    ServerRequest frame(int seq, String text) => ServerRequest(
+      rpcId: 'r$seq',
+      method: 'session/event',
+      payload: <String, Object?>{
+        'type': 'session/event',
+        'event': event(seq, 'assistant/chunk', <String, Object?>{
+          'turn': 1,
+          'step': 1,
+          'chunk': <String, Object?>{
+            'type': 'text-delta',
+            'index': 0,
+            'text': text,
+          },
+        }),
+      },
+    );
+
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(frame(1, 'a'));
+    // The streaming partial reads through the snapshot fold: the delta
+    // landed without an intermediate item rebuild.
+    var snapshot = reducer.snapshot();
+    var streaming = snapshot.single as TimelineMessage;
+    expect(streaming.value.text, 'a');
+    expect(streaming.value.streaming, isTrue);
+
+    // Deltas between snapshots accumulate into the next read only, and a
+    // snapshot without new deltas reports the same content.
+    reducer.ingestFrame(frame(2, 'bcd'));
+    reducer.ingestFrame(frame(3, 'e'));
+    snapshot = reducer.snapshot();
+    snapshot = reducer.snapshot();
+    streaming = snapshot.single as TimelineMessage;
+    expect(streaming.value.text, 'abcde');
+    expect(streaming.value.streaming, isTrue);
+
+    // A new turn finalizes the open partial with everything accumulated.
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r4',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': event(4, 'turn/start', <String, Object?>{'turn': 2}),
+        },
+      ),
+    );
+    snapshot = reducer.snapshot();
+    expect(snapshot, hasLength(2));
+    final settled = snapshot.first as TimelineMessage;
+    expect(settled.value.text, 'abcde');
+    expect(settled.value.streaming, isFalse);
+  });
+
   test('tool call pairs with result', () {
     final history = <JsonMap>[
       event(1, 'tool/call', <String, Object?>{
