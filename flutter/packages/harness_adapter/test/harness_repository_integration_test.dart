@@ -474,6 +474,104 @@ void main() {
     expect(message.value.streaming, isFalse);
   });
 
+  test(
+    'question/requested that arrives before the session is opened still '
+    'renders after openSession (web pendingBuffers parity)',
+    () async {
+      // Regression: the host can emit a pending question for a session the
+      // client has not opened yet (agent asked mid-turn, user opens the
+      // session afterwards). `question/requested` is a live frame that never
+      // lands in session.history, so the open's history backfill shows only
+      // the still-running ask_user_question tool call — without buffering the
+      // frame would be dropped and the card never render (spinner forever).
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-q',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          _pendingFrame('question/requested', <String, Object?>{
+            'sessionId': 'session-q',
+            'questions': <Object?>[
+              <String, Object?>{
+                'id': 'q1',
+                'question': 'Continue?',
+                'options': <Object?>[
+                  <String, Object?>{'label': 'yes'},
+                  <String, Object?>{'label': 'no'},
+                ],
+              },
+            ],
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      // The frame arrives before openSession instantiates the session state.
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      await repository.openSession('session-q');
+      await pumpEventQueue();
+
+      final timeline = await repository.observeTimeline('session-q').first;
+      final question = timeline.whereType<TimelineQuestionRequest>();
+      expect(question, hasLength(1), reason: 'buffered question must render');
+      expect(question.single.questions.single.id, 'q1');
+    },
+  );
+
+  test(
+    'question/resolved before openSession drops the buffered question '
+    '(no replay of an answered request)',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-q',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          _pendingFrame('question/requested', <String, Object?>{
+            'sessionId': 'session-q',
+            'rpcId': 'rpc-question/requested',
+            'questions': <Object?>[
+              <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+            ],
+          }),
+          _pendingFrame('question/resolved', <String, Object?>{
+            'sessionId': 'session-q',
+            'questionRpcId': 'rpc-question/requested',
+            'outcome': 'answered',
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      await repository.openSession('session-q');
+      await pumpEventQueue();
+
+      final timeline = await repository.observeTimeline('session-q').first;
+      expect(
+        timeline.whereType<TimelineQuestionRequest>(),
+        isEmpty,
+        reason: 'resolved question must not replay into the timeline',
+      );
+    },
+  );
+
   test('initial timeline load publishes a loading window then settles', () async {
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
