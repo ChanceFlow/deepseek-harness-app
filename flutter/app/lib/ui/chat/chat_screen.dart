@@ -3165,13 +3165,16 @@ class _QuestionOptionTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
-              color: scheme.secondaryContainer,
+              color: scheme.primaryContainer,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               AppLocalizations.of(context)!.questionRecommended,
               style: TextStyle(
-                color: scheme.primaryContainer,
+                // The M3 role pairing, not two pale containers: the web badge
+                // paints accent-fill with dark ink, and primaryContainer text
+                // on secondaryContainer measured 1.00:1 — invisible.
+                color: scheme.onPrimaryContainer,
                 fontSize: 11,
                 height: 18 / 11,
                 fontWeight: FontWeight.w600,

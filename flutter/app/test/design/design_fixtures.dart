@@ -292,3 +292,70 @@ ChatUiState emptyState() {
     selectedSessionId: 's9',
   );
 }
+
+/// The ask_user_question control, fed with REAL recorded data: the
+/// `ask_user_question` tool payload from dsh session
+/// `--home-chance-Projects-deepseek-harness-android--/session-50a3fe03-…`
+/// (step 33, call `call_hx2whh2dpi2uvay7gn6vgb82`). The question, header,
+/// option labels and descriptions below are that session's verbatim wire
+/// arguments — not fabricated. Option one carries the model's conventional
+/// `(Recommended)` suffix; the UI must strip it into the localized badge
+/// ("Recommended" / "推荐").
+const List<TimelineItem> _questionTimeline = <TimelineItem>[
+  TimelineMessage(
+    ChatMessage(
+      id: 'u1',
+      sessionId: 's1',
+      role: MessageRole.user,
+      text: '侧边栏的归档动作按参考实现来,还是按产品扩展做?',
+      createdAtEpochMs: kNow,
+      seq: 51,
+    ),
+  ),
+  TimelineMessage(
+    ChatMessage(
+      id: 'a1',
+      sessionId: 's1',
+      role: MessageRole.assistant,
+      text: '参考 web 确认了一下归档语义,回来问你两件事。',
+      createdAtEpochMs: kNow + 1000,
+      seq: 52,
+    ),
+  ),
+  TimelineQuestionRequest(
+    requestId: 'rpc-real-q1',
+    questions: [
+      QuestionItem(
+        id: 'archive_scope',
+        question:
+            '在 web 参考实现里，没有“归档工作区”这个字段/动作——归档是按会话的'
+            '（字段是 archivedSessionIds，会话行菜单里有“归档会话”，归档后该会话'
+            '在所有分组界面消失，但工作区组头仍显示）。侧边栏要哪种归档？',
+        header: '归档范围',
+        options: [
+          '会话行归档（web 平价）(Recommended)',
+          '工作区组头“归档此工作区”',
+          '两者都要',
+        ],
+        optionDescriptions: {
+          '会话行归档（web 平价）(Recommended)':
+              '每个侧边栏会话行加“⋮ 菜单 → 归档会话”，归档后该行消失，'
+              '与 web 完全一致；工作区组头仍保留。',
+          '工作区组头“归档此工作区”':
+              '在工作区组头加“归档此工作区”，一键归档该组所有会话，'
+              '整组随后消失（web 无此动作，属产品扩展）。',
+          '两者都要':
+              '会话行归档（web 平价）+ 组头“归档此工作区”批量归档该组全部会话。',
+        },
+      ),
+    ],
+  ),
+];
+
+ChatUiState questionState() {
+  return const ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: _questionTimeline,
+  );
+}
