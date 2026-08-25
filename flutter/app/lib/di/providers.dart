@@ -15,6 +15,8 @@ import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:app/platform/disk_space.dart';
+
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart' show SessionSummary;
@@ -413,6 +415,7 @@ final asrModelManagerProvider = FutureProvider<AsrModelManager>((ref) async {
   return AsrModelManager(
     baseModelsDir: modelsDir,
     registry: registry,
+    diskSpaceChecker: freeDiskSpaceBytes,
   );
 });
 

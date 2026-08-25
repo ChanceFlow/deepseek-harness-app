@@ -33,7 +33,7 @@ class AsrModelCardState {
 class AsrModelsUiState {
   const AsrModelsUiState({
     this.models = const <AsrModelCardState>[],
-    this.defaultSource = ModelSource.modelScope,
+    this.defaultSource = ModelSource.hfMirror,
     this.allowCellular = false,
     this.installedCount = 0,
     this.totalCount = 0,

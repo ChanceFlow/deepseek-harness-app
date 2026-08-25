@@ -242,6 +242,22 @@ class AsrDownloader {
         );
       }
 
+      // Content verification: runs only when the manifest carries a real
+      // checksum; an unprovisioned (empty) hash falls back to the size
+      // check above. A failed digest deletes the partial file so a retry
+      // downloads from scratch instead of resuming corrupt bytes.
+      if (fileSpec.sha256.isNotEmpty &&
+          !await verifySha256(partialFile, fileSpec.sha256)) {
+        try {
+          await partialFile.delete();
+        } catch (_) {
+          // Best-effort cleanup; a stale partial is truncated on retry.
+        }
+        throw DownloadFailedException(
+          'SHA-256 mismatch for ${fileSpec.name}: expected ${fileSpec.sha256}',
+        );
+      }
+
       if (await finishedFile.exists()) {
         await finishedFile.delete();
       }

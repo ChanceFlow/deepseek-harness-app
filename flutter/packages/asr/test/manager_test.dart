@@ -110,7 +110,7 @@ void main() {
       await registry.updateEntry(
         ModelRegistryEntry(
           modelId: 'sensevoice-small',
-          source: ModelSource.modelScope,
+          source: ModelSource.hfMirror,
           localDir: modelDir.path,
           status: AsrModelStatus.downloaded,
           totalBytes: 18,

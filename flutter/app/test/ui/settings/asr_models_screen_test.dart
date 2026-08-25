@@ -18,7 +18,7 @@ void main() {
           info: info,
           entry: ModelRegistryEntry(
             modelId: info.id,
-            source: ModelSource.modelScope,
+            source: ModelSource.hfMirror,
             localDir: '/tmp/${info.id}',
             status: AsrModelStatus.idle,
           ),
@@ -27,7 +27,7 @@ void main() {
 
       final AsrModelsUiState state = AsrModelsUiState(
         models: cards,
-        defaultSource: ModelSource.modelScope,
+        defaultSource: ModelSource.hfMirror,
         allowCellular: false,
         installedCount: 0,
         totalCount: 3,
@@ -64,7 +64,7 @@ void main() {
           info: info,
           entry: ModelRegistryEntry(
             modelId: info.id,
-            source: ModelSource.modelScope,
+            source: ModelSource.hfMirror,
             localDir: '/tmp/${info.id}',
             status: AsrModelStatus.idle,
           ),
@@ -73,7 +73,7 @@ void main() {
 
       final AsrModelsUiState state = AsrModelsUiState(
         models: cards,
-        defaultSource: ModelSource.modelScope,
+        defaultSource: ModelSource.hfMirror,
         installedCount: 0,
         totalCount: 3,
       );
@@ -110,7 +110,7 @@ void main() {
           info: AsrModelManifest.senseVoiceSmall,
           entry: ModelRegistryEntry(
             modelId: 'sensevoice-small',
-            source: ModelSource.modelScope,
+            source: ModelSource.hfMirror,
             localDir: '/tmp/sensevoice-small',
             status: AsrModelStatus.downloaded,
           ),

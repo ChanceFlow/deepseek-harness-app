@@ -19,7 +19,7 @@ class AsrModelManager {
     required this.registry,
     AsrDownloader? downloader,
     DiskSpaceChecker? diskSpaceChecker,
-    this.defaultSource = ModelSource.modelScope,
+    this.defaultSource = ModelSource.hfMirror,
     this.allowCellular = false,
   })  : _downloader = downloader ?? AsrDownloader(),
         _diskSpaceChecker = diskSpaceChecker ?? _defaultDiskSpaceChecker;
@@ -97,8 +97,8 @@ class AsrModelManager {
     }
 
     final ModelSource source = sourceOverride ?? defaultSource;
-    final ModelSourceClient sourceClient = source == ModelSource.modelScope
-        ? const ModelScopeSourceClient()
+    final ModelSourceClient sourceClient = source == ModelSource.hfMirror
+        ? const HfMirrorSourceClient()
         : const HuggingFaceSourceClient();
 
     _activeDownloadingModelId = modelId;

@@ -151,8 +151,8 @@ class AsrModelsScreen extends StatelessWidget {
                     SegmentedButton<ModelSource>(
                       segments: const <ButtonSegment<ModelSource>>[
                         ButtonSegment<ModelSource>(
-                          value: ModelSource.modelScope,
-                          label: Text('ModelScope (国内)'),
+                          value: ModelSource.hfMirror,
+                          label: Text('HF Mirror (国内)'),
                           icon: Icon(Icons.hub_outlined),
                         ),
                         ButtonSegment<ModelSource>(
@@ -438,16 +438,16 @@ class _ModelCard extends StatelessWidget {
                   OutlinedButton(
                     onPressed: () {
                       final ModelSource alternate =
-                          entry.source == ModelSource.modelScope
+                          entry.source == ModelSource.hfMirror
                               ? ModelSource.huggingFace
-                              : ModelSource.modelScope;
+                              : ModelSource.hfMirror;
                       onAction(RetryWithSourceAction(info.id, alternate));
                     },
                     child: Text(
                       l10n.asrSwitchSourceRetry(
-                        entry.source == ModelSource.modelScope
+                        entry.source == ModelSource.hfMirror
                             ? ModelSource.huggingFace.label
-                            : ModelSource.modelScope.label,
+                            : ModelSource.hfMirror.label,
                       ),
                     ),
                   ),

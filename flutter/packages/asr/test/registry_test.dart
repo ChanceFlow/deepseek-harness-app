@@ -31,7 +31,7 @@ void main() {
     test('saves and loads model entries cleanly', () async {
       final ModelRegistryEntry entry = ModelRegistryEntry(
         modelId: 'sensevoice-small',
-        source: ModelSource.modelScope,
+        source: ModelSource.hfMirror,
         localDir: '${tempDir.path}/sensevoice-small',
         status: AsrModelStatus.downloaded,
         totalBytes: 157286400,
@@ -64,7 +64,7 @@ void main() {
     test('marks in-flight downloading status as canceled on cold start', () async {
       final ModelRegistryEntry entry = ModelRegistryEntry(
         modelId: 'sensevoice-small',
-        source: ModelSource.modelScope,
+        source: ModelSource.hfMirror,
         localDir: '${tempDir.path}/sensevoice-small',
         status: AsrModelStatus.downloading,
         totalBytes: 157286400,
@@ -85,7 +85,7 @@ void main() {
     test('removes entry and updates count', () async {
       final ModelRegistryEntry entry = ModelRegistryEntry(
         modelId: 'sensevoice-small',
-        source: ModelSource.modelScope,
+        source: ModelSource.hfMirror,
         localDir: '${tempDir.path}/sensevoice-small',
         status: AsrModelStatus.downloaded,
         totalBytes: 100,

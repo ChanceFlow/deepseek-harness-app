@@ -36,14 +36,13 @@ void main() {
       languages: 'en',
       estimatedSizeBytes: 10,
       license: 'MIT',
-      modelScopeRepo: 'test/repo',
       huggingFaceRepo: 'test/repo',
       files: <AsrModelFile>[
         AsrModelFile(
           name: 'test.onnx',
           sizeBytes: 10,
-          sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945', // sha256 of "0123456789"
-          modelScopeUrl: 'https://modelscope.cn/test.onnx',
+          sha256: '84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882', // sha256 of "0123456789"
+          hfMirrorUrl: 'https://hf-mirror.com/test.onnx',
           huggingFaceUrl: 'https://huggingface.co/test.onnx',
         ),
       ],
@@ -60,7 +59,7 @@ void main() {
 
       await downloader.downloadModel(
         model: testModel,
-        sourceClient: const ModelScopeSourceClient(),
+        sourceClient: const HfMirrorSourceClient(),
         targetDir: tempDir,
         onProgress: progressList.add,
       );
@@ -69,6 +68,78 @@ void main() {
       expect(await downloadedFile.exists(), isTrue);
       expect(await downloadedFile.readAsString(), equals('0123456789'));
       expect(progressList.isNotEmpty, isTrue);
+    });
+
+    test('rejects content that fails SHA-256 verification', () async {
+      final MockHttpClient client = MockHttpClient((http.BaseRequest request) async {
+        // Wrong bytes for the manifest's checksum (hash of '0123456789').
+        final Stream<List<int>> stream =
+            Stream<List<int>>.value(utf8.encode('abcdefghij'));
+        return http.StreamedResponse(stream, 200, contentLength: 10);
+      });
+
+      final AsrDownloader downloader = AsrDownloader(httpClient: client);
+
+      await expectLater(
+        downloader.downloadModel(
+          model: testModel,
+          sourceClient: const HfMirrorSourceClient(),
+          targetDir: tempDir,
+          onProgress: (_) {},
+        ),
+        throwsA(
+          isA<DownloadFailedException>().having(
+            (DownloadFailedException e) => e.message,
+            'message',
+            contains('SHA-256 mismatch'),
+          ),
+        ),
+      );
+
+      // The corrupt partial is removed so the next attempt starts fresh.
+      expect(await File('${tempDir.path}/test.onnx.downloading').exists(), isFalse);
+      expect(await File('${tempDir.path}/test.onnx').exists(), isFalse);
+    });
+
+    test('skips hash verification when the manifest checksum is unprovisioned',
+        () async {
+      const AsrModelInfo unprovisionedModel = AsrModelInfo(
+        id: 'unprovisioned-model',
+        name: 'Unprovisioned Model',
+        descriptionZh: '测试',
+        descriptionEn: 'Test',
+        languages: 'en',
+        estimatedSizeBytes: 10,
+        license: 'MIT',
+        huggingFaceRepo: 'test/repo',
+        files: <AsrModelFile>[
+          AsrModelFile(
+            name: 'test.onnx',
+            sizeBytes: 10,
+            sha256: '', // unprovisioned
+            hfMirrorUrl: 'https://hf-mirror.com/test.onnx',
+            huggingFaceUrl: 'https://huggingface.co/test.onnx',
+          ),
+        ],
+      );
+
+      final MockHttpClient client = MockHttpClient((http.BaseRequest request) async {
+        final Stream<List<int>> stream =
+            Stream<List<int>>.value(utf8.encode('deadbeef!!'));
+        return http.StreamedResponse(stream, 200, contentLength: 10);
+      });
+
+      final AsrDownloader downloader = AsrDownloader(httpClient: client);
+      await downloader.downloadModel(
+        model: unprovisionedModel,
+        sourceClient: const HfMirrorSourceClient(),
+        targetDir: tempDir,
+        onProgress: (_) {},
+      );
+
+      final File downloadedFile = File('${tempDir.path}/test.onnx');
+      expect(await downloadedFile.exists(), isTrue);
+      expect(await downloadedFile.readAsString(), equals('deadbeef!!'));
     });
 
     test('resumes partial download using Range 206 Partial Content', () async {
@@ -85,7 +156,7 @@ void main() {
       final AsrDownloader downloader = AsrDownloader(httpClient: client);
       await downloader.downloadModel(
         model: testModel,
-        sourceClient: const ModelScopeSourceClient(),
+        sourceClient: const HfMirrorSourceClient(),
         targetDir: tempDir,
         onProgress: (_) {},
       );
@@ -112,7 +183,7 @@ void main() {
       final AsrDownloader downloader = AsrDownloader(httpClient: client);
       await downloader.downloadModel(
         model: testModel,
-        sourceClient: const ModelScopeSourceClient(),
+        sourceClient: const HfMirrorSourceClient(),
         targetDir: tempDir,
         onProgress: (_) {},
       );
@@ -133,7 +204,7 @@ void main() {
 
       final Future<void> downloadFuture = downloader.downloadModel(
         model: testModel,
-        sourceClient: const ModelScopeSourceClient(),
+        sourceClient: const HfMirrorSourceClient(),
         targetDir: tempDir,
         onProgress: (_) {},
       );

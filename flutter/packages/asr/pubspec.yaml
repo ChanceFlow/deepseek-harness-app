@@ -1,5 +1,5 @@
 name: asr
-description: ASR model catalog, download state machine, ModelScope / Hugging Face source clients, and model registry.
+description: ASR model catalog, download state machine, Hugging Face / hf-mirror source clients, and model registry.
 version: 0.1.0
 publish_to: none
 

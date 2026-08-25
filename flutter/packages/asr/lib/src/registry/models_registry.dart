@@ -208,7 +208,7 @@ class ModelsRegistry {
     if (existing != null) return existing;
     return ModelRegistryEntry(
       modelId: modelId,
-      source: ModelSource.modelScope,
+      source: ModelSource.hfMirror,
       localDir: defaultLocalDir,
       status: AsrModelStatus.idle,
     );
