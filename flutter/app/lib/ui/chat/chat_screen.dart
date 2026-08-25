@@ -10,7 +10,6 @@ import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
-import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -85,27 +84,12 @@ class ChatRoute extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final controller = ref.watch(chatControllerProvider(resolved));
-    // Every configured backend's browsing slice: watching each host's
-    // chat state keeps its controller alive, so every backend's session
-    // list stays live in the sidebar (and its browsing state survives
-    // switching back).
-    final registry =
-        ref.watch(backendRegistryStateProvider).value ??
-        const BackendRegistryState();
-    final slices = <BackendSessionSlice>[];
-    for (final backend in registry.backends) {
-      final backendUi =
-          ref.watch(chatUiStateProvider(backend.id)).value ??
-          const ChatUiState();
-      slices.add(
-        BackendSessionSlice(
-          backend: backend,
-          active: backend.id == resolved,
-          sessions: backendUi.sessions,
-          workspaces: backendUi.workspaces,
-        ),
-      );
-    }
+    // Every configured backend's browsing slice. The slices provider
+    // selects the roster facts out of each host's chat state, so a
+    // streaming publish on any backend (each backend's restored session
+    // streams while the app is open) recomputes nothing here — only a
+    // real roster or registry change rebuilds this route.
+    final slices = ref.watch(backendSessionSlicesProvider(resolved));
     return ref
         .watch(chatUiStateProvider(resolved))
         .when(
