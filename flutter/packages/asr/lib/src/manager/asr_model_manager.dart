@@ -61,6 +61,34 @@ class AsrModelManager {
   int get installedCount => registry.installedCount;
   int get totalCount => registry.totalCount;
 
+  /// ID of the currently active model selected for speech recognition.
+  String? get activeModelId => registry.activeModelId;
+
+  /// Sets the active speech recognition model.
+  Future<void> setActiveModelId(String? modelId) async {
+    await registry.setActiveModelId(modelId);
+  }
+
+  /// Returns the configured active model if installed, or the first
+  /// installed model from the manifest, or null if no models are installed.
+  AsrModelInfo? getActiveModel() {
+    final activeId = registry.activeModelId;
+    if (activeId != null) {
+      final entry = getStatus(activeId);
+      if (entry.isDownloaded) {
+        return AsrModelManifest.findById(activeId);
+      }
+    }
+    // Fallback: pick first downloaded model
+    for (final info in AsrModelManifest.all) {
+      final entry = getStatus(info.id);
+      if (entry.isDownloaded) {
+        return info;
+      }
+    }
+    return null;
+  }
+
   Stream<Map<String, ModelRegistryEntry>> get updates => registry.updates;
 
   /// Starts downloading [modelId] using [sourceOverride] or [defaultSource].

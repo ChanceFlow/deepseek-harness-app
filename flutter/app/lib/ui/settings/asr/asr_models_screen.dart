@@ -188,6 +188,53 @@ class AsrModelsScreen extends StatelessWidget {
                         onAction(SetAllowCellularAction(value));
                       },
                     ),
+                    if (uiState.installedCount > 0) ...<Widget>[
+                      const Divider(height: 24),
+                      Text(
+                        l10n.asrActiveModel,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.asrActiveModelDesc,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: uiState.activeModelId ??
+                            uiState.models
+                                .where((AsrModelCardState m) => m.isDownloaded)
+                                .firstOrNull
+                                ?.info
+                                .id,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        items: uiState.models
+                            .where((AsrModelCardState m) => m.isDownloaded)
+                            .map((AsrModelCardState m) => DropdownMenuItem<String>(
+                                  value: m.info.id,
+                                  child: Text(m.info.name),
+                                ))
+                            .toList(),
+                        onChanged: (String? modelId) {
+                          if (modelId != null) {
+                            onAction(SetActiveModelAction(modelId));
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),

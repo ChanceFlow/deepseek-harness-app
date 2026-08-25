@@ -38,6 +38,7 @@ class AsrModelsUiState {
     this.installedCount = 0,
     this.totalCount = 0,
     this.activeDownloadingId,
+    this.activeModelId,
     this.errorMessage,
     this.isLoading = false,
   });
@@ -48,6 +49,7 @@ class AsrModelsUiState {
   final int installedCount;
   final int totalCount;
   final String? activeDownloadingId;
+  final String? activeModelId;
   final String? errorMessage;
   final bool isLoading;
 
@@ -58,6 +60,7 @@ class AsrModelsUiState {
     int? installedCount,
     int? totalCount,
     String? activeDownloadingId,
+    String? activeModelId,
     String? errorMessage,
     bool clearError = false,
     bool? isLoading,
@@ -69,6 +72,7 @@ class AsrModelsUiState {
       installedCount: installedCount ?? this.installedCount,
       totalCount: totalCount ?? this.totalCount,
       activeDownloadingId: activeDownloadingId ?? this.activeDownloadingId,
+      activeModelId: activeModelId ?? this.activeModelId,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isLoading: isLoading ?? this.isLoading,
     );
@@ -110,6 +114,11 @@ class SetDefaultSourceAction extends AsrModelsAction {
 class SetAllowCellularAction extends AsrModelsAction {
   const SetAllowCellularAction(this.allow);
   final bool allow;
+}
+
+class SetActiveModelAction extends AsrModelsAction {
+  const SetActiveModelAction(this.modelId);
+  final String? modelId;
 }
 
 class DismissAsrErrorAction extends AsrModelsAction {
@@ -174,6 +183,7 @@ class AsrModelsController {
         installedCount: manager!.installedCount,
         totalCount: manager!.totalCount,
         activeDownloadingId: manager!.activeDownloadingModelId,
+        activeModelId: manager!.activeModelId,
         isLoading: false,
       ),
     );
@@ -200,11 +210,19 @@ class AsrModelsController {
         _setDefaultSource(source);
       case SetAllowCellularAction(:final bool allow):
         _setAllowCellular(allow);
+      case SetActiveModelAction(:final String? modelId):
+        _setActiveModel(modelId);
       case DismissAsrErrorAction():
         _emit(_state.copyWith(clearError: true));
       case RefreshAsrStateAction():
         _refresh();
     }
+  }
+
+  Future<void> _setActiveModel(String? modelId) async {
+    if (manager == null) return;
+    await manager!.setActiveModelId(modelId);
+    await _refresh();
   }
 
   Future<void> _startDownload(String modelId, {ModelSource? sourceOverride}) async {

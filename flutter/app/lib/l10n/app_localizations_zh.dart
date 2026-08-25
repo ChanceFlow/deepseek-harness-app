@@ -1396,4 +1396,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String asrSpeedLabel(String speed) {
     return '$speed/s';
   }
+
+  @override
+  String get voiceInputTooltip => '语音输入';
+
+  @override
+  String get voiceInputNoModelTitle => '需要语音识别模型';
+
+  @override
+  String get voiceInputNoModelBody => '请在设置中下载离线语音识别模型，即可开启端侧语音输入。';
+
+  @override
+  String get voiceInputGoToSettings => '前往设置';
+
+  @override
+  String get voiceInputCancel => '取消';
+
+  @override
+  String get voiceInputDone => '完成';
+
+  @override
+  String get voiceInputPermissionDenied => '需要麦克风权限才能进行语音输入。';
+
+  @override
+  String get asrActiveModel => '当前活跃模型';
+
+  @override
+  String get asrActiveModelDesc => '用于聊天中语音识别的模型。';
+
+  @override
+  String get asrNoModelInstalled => '无（请在下方下载模型）';
 }

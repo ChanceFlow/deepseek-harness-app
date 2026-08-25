@@ -151,5 +151,46 @@ void main() {
       expect(actions.first, isA<DeleteModelAction>());
       expect((actions.first as DeleteModelAction).modelId, equals('sensevoice-small'));
     });
+
+    testWidgets('renders active speech model section when models are downloaded', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const List<AsrModelCardState> cards = <AsrModelCardState>[
+        AsrModelCardState(
+          info: AsrModelManifest.senseVoiceSmall,
+          entry: ModelRegistryEntry(
+            modelId: 'sensevoice-small',
+            source: ModelSource.hfMirror,
+            localDir: '/tmp/sensevoice-small',
+            status: AsrModelStatus.downloaded,
+          ),
+          diskUsageBytes: 239549735,
+        ),
+      ];
+
+      const AsrModelsUiState state = AsrModelsUiState(
+        models: cards,
+        installedCount: 1,
+        totalCount: 3,
+        activeModelId: 'sensevoice-small',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: AsrModelsScreen(
+            uiState: state,
+            onAction: (_) {},
+          ),
+        ),
+      );
+
+      expect(find.text('Active speech model'), findsOneWidget);
+    });
   });
 }

@@ -98,5 +98,19 @@ void main() {
       expect(registry.entries, isEmpty);
       expect(registry.installedCount, equals(0));
     });
+
+    test('persists and clears activeModelId', () async {
+      expect(registry.activeModelId, isNull);
+      await registry.setActiveModelId('sensevoice-small');
+      expect(registry.activeModelId, equals('sensevoice-small'));
+
+      final ModelsRegistry reloaded = ModelsRegistry(registryFile: registryFile);
+      await reloaded.load();
+      expect(reloaded.activeModelId, equals('sensevoice-small'));
+
+      await reloaded.removeEntry('sensevoice-small');
+      expect(reloaded.activeModelId, isNull);
+      await reloaded.dispose();
+    });
   });
 }

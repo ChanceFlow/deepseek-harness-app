@@ -52,12 +52,17 @@ import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
 import '../ui/settings/settings_controller.dart';
 import '../ui/settings/asr/asr_models_controller.dart';
+import '../ui/chat/voice_input/voice_input_controller.dart';
+import '../ui/chat/voice_input/voice_input_ui_state.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 import 'package:asr/asr.dart';
 
 export '../ui/settings/asr/asr_models_controller.dart';
 export '../ui/settings/asr/asr_models_screen.dart';
+export '../ui/chat/voice_input/voice_input_controller.dart';
+export '../ui/chat/voice_input/voice_input_ui_state.dart';
+export '../ui/chat/voice_input/voice_recording_dock.dart';
 
 /// Backend registry (device-local store + UDF stream).
 final backendStoreProvider = FutureProvider<BackendStore>((ref) async {
@@ -432,6 +437,29 @@ final asrModelsControllerProvider =
 final asrModelsUiStateProvider =
     StreamProvider.autoDispose<AsrModelsUiState>((ref) {
   final controller = ref.watch(asrModelsControllerProvider);
+  return controller.uiState;
+});
+
+/// Voice input controller for speech recognition in the chat composer.
+final voiceInputControllerProvider =
+    Provider.autoDispose<VoiceInputController>((ref) {
+  final managerAsync = ref.watch(asrModelManagerProvider);
+  final manager = managerAsync.value ??
+      AsrModelManager(
+        baseModelsDir: Directory.systemTemp,
+        registry: ModelsRegistry(
+          registryFile: File('${Directory.systemTemp.path}/tmp_registry.json'),
+        ),
+      );
+  final controller = VoiceInputController(manager: manager);
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Voice input UI state stream.
+final voiceInputUiStateProvider =
+    StreamProvider.autoDispose<VoiceInputUiState>((ref) {
+  final controller = ref.watch(voiceInputControllerProvider);
   return controller.uiState;
 });
 
