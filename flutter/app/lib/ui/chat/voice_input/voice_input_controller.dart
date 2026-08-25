@@ -7,10 +7,16 @@ import 'package:asr/asr.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../../platform/audio_recorder.dart';
+import '../../../platform/sherpa_offline_asr_engine.dart';
 import 'voice_input_ui_state.dart';
 
 /// Callback invoked when transcription updates arrive (partial or final).
 typedef OnTranscriptionUpdate = void Function(String text, bool isFinal);
+
+/// Creates the session engine when none is injected. Exposed as a seam so
+/// tests can assert the engine instance is reused across acceptAudio and
+/// finish (the phone path uses [SherpaOfflineAsrEngine]).
+typedef AsrEngineFactory = AsrEngine Function(AsrModelInfo? model);
 
 /// Controller driving on-device voice input and streaming state.
 class VoiceInputController {
@@ -19,13 +25,16 @@ class VoiceInputController {
     AudioInputSource? audioRecorder,
     this.engine,
     this.onTranscriptionUpdate,
-  })  : _recorder = audioRecorder ?? PlatformAudioRecorder() {
+    AsrEngineFactory? engineFactory,
+  })  : _recorder = audioRecorder ?? PlatformAudioRecorder(),
+        _engineFactory = engineFactory ?? _defaultEngineFactory {
     _init();
   }
 
   final AsrModelManager manager;
   final AudioInputSource _recorder;
   final AsrEngine? engine;
+  final AsrEngineFactory _engineFactory;
   final OnTranscriptionUpdate? onTranscriptionUpdate;
 
   final StreamController<VoiceInputUiState> _stateController =
@@ -43,6 +52,13 @@ class VoiceInputController {
   Timer? _durationTimer;
   Timer? _debugTickTimer;
   DateTime? _recordingStartTime;
+
+  /// The engine serving the current session. Created in [startRecording]
+  /// and reused by [stopRecording]/[cancelRecording] so the audio accumulated
+  /// via [AsrEngine.acceptAudio] reaches the same instance that decodes in
+  /// [AsrEngine.finish]. Recreating the engine at finish time handed the
+  /// recorder a fresh, empty engine and silently lost every sample.
+  AsrEngine? _activeEngine;
 
   void _init() {
     _refreshModelStatus();
@@ -104,9 +120,11 @@ class VoiceInputController {
     }
 
     try {
-      // Prepare engine
+      // Prepare engine. The instance is kept in _activeEngine so finish()
+      // later decodes the very audio accumulated here.
       final modelDir = manager.getModelDir(activeModel.id);
       final activeEngine = engine ?? _createEngineForModel(activeModel);
+      _activeEngine = activeEngine;
       await activeEngine.initialize(activeModel, modelDir);
 
       await _transcriptionSub?.cancel();
@@ -178,9 +196,15 @@ class VoiceInputController {
       _emit(_state.copyWith(phase: VoiceInputPhase.recording));
     } catch (e) {
       await cancelRecording();
+      // Engines reject unsupported models loudly (e.g. the streaming
+      // Zipformer in the offline-only scope); map that to a stable,
+      // localizable code instead of leaking the raw exception message.
+      final message = e is UnsupportedError
+          ? 'MODEL_UNSUPPORTED'
+          : e.toString();
       _emit(_state.copyWith(
         phase: VoiceInputPhase.error,
-        errorMessage: e.toString(),
+        errorMessage: message,
       ));
     }
   }
@@ -203,7 +227,12 @@ class VoiceInputController {
 
     String finalResult = '';
     try {
-      final activeEngine = engine ?? _createEngineForModel(_state.activeModel);
+      final activeEngine = _activeEngine;
+      if (activeEngine == null) {
+        // Session never initialized an engine (e.g. cancelled mid-start);
+        // nothing to transcribe.
+        return '';
+      }
       finalResult = await activeEngine.finish();
       onTranscriptionUpdate?.call(finalResult, true);
     } catch (e) {
@@ -212,6 +241,8 @@ class VoiceInputController {
         errorMessage: e.toString(),
       ));
     } finally {
+      unawaited(_activeEngine?.dispose());
+      _activeEngine = null;
       _emit(_state.copyWith(
         phase: VoiceInputPhase.idle,
         duration: Duration.zero,
@@ -237,7 +268,12 @@ class VoiceInputController {
     _errorSub = null;
     await _recorder.stop();
 
-    engine?.reset();
+    if (engine case final injected?) {
+      injected.reset();
+    } else {
+      unawaited(_activeEngine?.dispose());
+      _activeEngine = null;
+    }
 
     _emit(_state.copyWith(
       phase: VoiceInputPhase.idle,
@@ -267,11 +303,16 @@ class VoiceInputController {
   }
 
   AsrEngine _createEngineForModel(AsrModelInfo? model) {
+    return _engineFactory(model);
+  }
+
+  static AsrEngine _defaultEngineFactory(AsrModelInfo? model) {
     if (model == null) return MockAsrEngine();
-    if (model.id == 'zipformer-bilingual') {
-      return StreamingZipformerEngine();
-    }
-    return NonStreamingAsrEngine();
+    // SherpaOfflineAsrEngine throws a clear UnsupportedError for models
+    // outside the offline-only scope (e.g. the streaming Zipformer), which
+    // startRecording's handler surfaces instead of the old stub runner
+    // silently returning empty text.
+    return SherpaOfflineAsrEngine();
   }
 
   void dispose() {
@@ -283,6 +324,12 @@ class VoiceInputController {
     unawaited(_transcriptionSub?.cancel());
     unawaited(_registrySub?.cancel());
     unawaited(_recorder.dispose());
+    // Self-created engines are owned by the controller; injected engines
+    // belong to the caller (e.g. a test). Only dispose our own.
+    if (engine == null) {
+      unawaited(_activeEngine?.dispose());
+    }
+    _activeEngine = null;
     unawaited(_stateController.close());
   }
 }

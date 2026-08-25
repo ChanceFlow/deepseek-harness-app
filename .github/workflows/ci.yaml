@@ -46,5 +46,13 @@ jobs:
           channel: stable
           cache: true
 
+      # Warm the pub cache outside any gate timeout: flutter's bootstrap
+      # `pub get --example` talks to pub.dev for version checks, and a cold
+      # or flaky-proxied run can stall for minutes — which ate the whole
+      # 600s flutter-analyze gate in the past. Resolving here first makes
+      # the gate's internal pub gets fast cache hits.
+      - name: Warm pub cache
+        run: cd flutter && flutter pub get
+
       - name: Code gates (analyze, tests, imports)
         run: python3 scripts/verify_all.py code

@@ -1428,6 +1428,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputInputFailed => '语音输入意外中断，请重试。';
 
   @override
+  String get voiceInputModelUnsupported =>
+      '所选语音模型暂不支持，请在设置中选择 SenseVoice 或 Whisper。';
+
+  @override
   String get asrActiveModel => '当前活跃模型';
 
   @override

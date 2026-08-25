@@ -2575,6 +2575,12 @@ abstract class AppLocalizations {
   /// **'Voice input stopped unexpectedly. Please try again.'**
   String get voiceInputInputFailed;
 
+  /// No description provided for @voiceInputModelUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected speech model is not supported yet. Choose SenseVoice or Whisper in Settings.'**
+  String get voiceInputModelUnsupported;
+
   /// No description provided for @asrActiveModel.
   ///
   /// In en, this message translates to:
