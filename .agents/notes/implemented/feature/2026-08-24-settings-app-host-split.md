@@ -39,8 +39,14 @@ of jumping to a section.
 
 Scope semantics are unchanged ([settings backend scope](2026-08-21-settings-backend-scope.md)):
 follow-active until pinned, pin survives chat-active switches, a gone
-pin resets. The App page (language, busy-Enter) carries no title —
-the category capsule names it — just the intro caption and the rows.
+pin resets. The App page (language only) carries no title — the
+category capsule names it — just the intro caption and the row.
+
+Placement follows semantics, not storage: the busy-Enter row stays a
+General contribution (web parity — the web persists it in the host's
+`ui-conversation` settings namespace), though the mobile composer
+reads a device-local copy from the shared store; language is an App
+setting because it applies to the app itself, with or without a host.
 
 ### The language preference
 
@@ -73,6 +79,11 @@ layer never shows them to a user.
   the language must work before any host is reachable.
 - **Landing list with subpages**: rejected — the capsule/IndexedStack
   vocabulary keeps one-tap flips and per-page state.
+- **Busy-Enter on the App page (storage-semantics argument)**:
+  rejected after a first pass tried it — the row describes
+  interaction with a host turn (web parity: the host's
+  `ui-conversation` namespace); where the phone caches the value is
+  a persistence detail, not the category argument.
 - **Theme row on the App page too**: deferred — the user named
   language; the shape (a key, a row, a MaterialApp mapping) fits
   later without structural change.
@@ -91,7 +102,7 @@ layer never shows them to a user.
   pair against the first-pass renders; `settings-app` /
   `settings-app-zh` carry the App page. The review harness's `host`
   builder (a root-scope tree per shot) stays.
-- The settings-tab parity note's busy-Enter placement and the i18n
-  note's device-locale behavior are amended here (see
-  [settings parity](2026-08-20-settings-section-parity.md),
-  [bilingual i18n](2026-08-20-bilingual-i18n-zh-en.md)).
+- The i18n note's device-locale behavior is amended here (see
+  [bilingual i18n](2026-08-20-bilingual-i18n-zh-en.md)); busy-Enter
+  keeps the [settings parity](2026-08-20-settings-section-parity.md)
+  General placement, its mobile storage staying device-local.

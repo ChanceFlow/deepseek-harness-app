@@ -356,15 +356,14 @@ void main() {
     await _revealCapsule(tester, 'General');
 
     // General page: the interactive rows over the connection facts.
+    expect(
+      find.text('Enter behavior while busy').hitTestable(),
+      findsOneWidget,
+    );
     expect(find.text('Agent preset').hitTestable(), findsOneWidget);
     expect(find.text('Standard mode').hitTestable(), findsOneWidget);
     expect(find.text('Host writes').hitTestable(), findsOneWidget);
     expect(find.text('Settings document').hitTestable(), findsOneWidget);
-    // The busy-Enter row moved to the App page (device-local).
-    expect(
-      find.text('Enter behavior while busy').hitTestable(),
-      findsNothing,
-    );
 
     // The other pages stay mounted behind the nav (IndexedStack) but
     // are not visible: their content is not hit-testable.
@@ -400,11 +399,11 @@ void main() {
     // their state behind it.
     await tester.tap(find.text('App').hitTestable());
     await tester.pumpAndSettle();
+    expect(find.text('Language').hitTestable(), findsOneWidget);
     expect(
       find.text('Enter behavior while busy').hitTestable(),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Language').hitTestable(), findsOneWidget);
     expect(find.text('Host writes').hitTestable(), findsNothing);
 
     // Back to the host pages: the section stack resumes where it was.
@@ -420,10 +419,8 @@ void main() {
       [],
     );
 
-    // The row lives on the App page now (device-local preference).
-    await tester.tap(find.text('App').hitTestable());
-    await tester.pumpAndSettle();
-
+    // The row lives on the General page (host settings); its value
+    // persists device-local (the composer reads the shared store).
     // Pre-cache default: an unloaded store reads null for every key.
     expect(store.read(kBusyEnterBehaviorKey), isNull);
 
