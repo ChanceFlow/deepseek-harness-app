@@ -159,6 +159,26 @@ final List<DesignShot> shots = <DesignShot>[
     act: _settleVoiceShot,
     dark: false,
   ),
+  DesignShot(
+    name: 'voice-nomodel-dialog',
+    host: (theme, locale) => _voiceNoModelDialogHost(theme, locale, false),
+  ),
+  DesignShot(
+    name: 'voice-nomodel-dialog-zh',
+    locale: const Locale('zh'),
+    host: (theme, locale) => _voiceNoModelDialogHost(theme, locale, true),
+    dark: false,
+  ),
+  DesignShot(
+    name: 'settings-asr-models',
+    host: (theme, locale) => _settingsAsrHost(theme, locale, false),
+  ),
+  DesignShot(
+    name: 'settings-asr-models-zh',
+    locale: const Locale('zh'),
+    host: (theme, locale) => _settingsAsrHost(theme, locale, true),
+    dark: false,
+  ),
 ];
 
 /// A running session animates forever, so `pumpAndSettle` never returns.
@@ -400,6 +420,93 @@ Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
       theme: _withRealFonts(theme),
       home: ChatScreen(uiState: busyState(), onAction: (_) {}),
     ),
+  );
+}
+
+/// Full-tree builder for the "No Speech Model Installed" dialog shot.
+Widget _voiceNoModelDialogHost(ThemeData theme, Locale? locale, bool zh) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: Scaffold(
+      body: Center(
+        child: AlertDialog(
+          title: Text(zh ? '需要语音识别模型' : 'Speech Model Required'),
+          content: Text(
+            zh
+                ? '请在设置中下载离线语音识别模型，即可开启端侧语音输入。'
+                : 'Download an on-device speech recognition model in Settings to enable offline voice input.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {},
+              child: Text(zh ? '取消' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {},
+              child: Text(zh ? '前往设置' : 'Go to Settings'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Full-tree builder for the ASR Models management screen shot showing downloaded
+/// SenseVoice model, Active Speech Model selector, and catalog cards.
+Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
+  const cards = <AsrModelCardState>[
+    AsrModelCardState(
+      info: AsrModelManifest.senseVoiceSmall,
+      entry: ModelRegistryEntry(
+        modelId: 'sensevoice-small',
+        source: ModelSource.hfMirror,
+        localDir: '/data/models/sensevoice-small',
+        status: AsrModelStatus.downloaded,
+        downloadedBytes: 239549735,
+        totalBytes: 239549735,
+      ),
+      diskUsageBytes: 239549735,
+    ),
+    AsrModelCardState(
+      info: AsrModelManifest.zipformerBilingual,
+      entry: ModelRegistryEntry(
+        modelId: 'zipformer-bilingual',
+        source: ModelSource.hfMirror,
+        localDir: '/data/models/zipformer-bilingual',
+        status: AsrModelStatus.idle,
+      ),
+    ),
+    AsrModelCardState(
+      info: AsrModelManifest.whisperLargeV3Turbo,
+      entry: ModelRegistryEntry(
+        modelId: 'whisper-large-v3-turbo',
+        source: ModelSource.huggingFace,
+        localDir: '/data/models/whisper-large-v3-turbo',
+        status: AsrModelStatus.idle,
+      ),
+    ),
+  ];
+
+  final state = AsrModelsUiState(
+    models: cards,
+    defaultSource: ModelSource.hfMirror,
+    installedCount: 1,
+    totalCount: 3,
+    activeModelId: 'sensevoice-small',
+  );
+
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: AsrModelsScreen(uiState: state, onAction: (_) {}),
   );
 }
 
