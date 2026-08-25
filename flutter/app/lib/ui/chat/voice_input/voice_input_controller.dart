@@ -2,9 +2,9 @@
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:asr/asr.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../../platform/audio_recorder.dart';
 import 'voice_input_ui_state.dart';
@@ -37,9 +37,11 @@ class VoiceInputController {
 
   StreamSubscription<Float32List>? _audioSub;
   StreamSubscription<double>? _amplitudeSub;
+  StreamSubscription<Object>? _errorSub;
   StreamSubscription<AsrTranscriptionChunk>? _transcriptionSub;
   StreamSubscription<Map<String, ModelRegistryEntry>>? _registrySub;
   Timer? _durationTimer;
+  Timer? _debugTickTimer;
   DateTime? _recordingStartTime;
 
   void _init() {
@@ -113,6 +115,17 @@ class VoiceInputController {
         onTranscriptionUpdate?.call(chunk.text, chunk.isFinal);
       });
 
+      // A mid-session capture failure (event-channel error, or the native
+      // input_silent watchdog after ~2s of zeros) must end the recording
+      // visibly — never a phantom dock.
+      final recorder = _recorder;
+      if (recorder is PlatformAudioRecorder) {
+        await _errorSub?.cancel();
+        _errorSub = recorder.errors.listen((Object error) {
+          _failInput(error);
+        });
+      }
+
       // Subscribe to the audio/amplitude streams before capture starts:
       // both are broadcast (non-buffering), so events emitted between
       // start() and subscription would otherwise be dropped, losing the
@@ -150,6 +163,18 @@ class VoiceInputController {
         }
       });
 
+      // Debug strip: poll native capture stats so the data flow is
+      // visible on-screen (no adb/logcat needed).
+      _debugTickTimer?.cancel();
+      _debugTickTimer = null;
+      if (kDebugMode && recorder is PlatformAudioRecorder) {
+        _debugTickTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+          unawaited(recorder.debugStats().then((stats) {
+            _emit(_state.copyWith(debugStats: stats));
+          }));
+        });
+      }
+
       _emit(_state.copyWith(phase: VoiceInputPhase.recording));
     } catch (e) {
       await cancelRecording();
@@ -168,6 +193,8 @@ class VoiceInputController {
 
     _durationTimer?.cancel();
     _durationTimer = null;
+    _debugTickTimer?.cancel();
+    _debugTickTimer = null;
     await _audioSub?.cancel();
     _audioSub = null;
     await _amplitudeSub?.cancel();
@@ -198,12 +225,16 @@ class VoiceInputController {
   Future<void> cancelRecording() async {
     _durationTimer?.cancel();
     _durationTimer = null;
+    _debugTickTimer?.cancel();
+    _debugTickTimer = null;
     await _audioSub?.cancel();
     _audioSub = null;
     await _amplitudeSub?.cancel();
     _amplitudeSub = null;
     await _transcriptionSub?.cancel();
     _transcriptionSub = null;
+    await _errorSub?.cancel();
+    _errorSub = null;
     await _recorder.stop();
 
     engine?.reset();
@@ -213,6 +244,18 @@ class VoiceInputController {
       duration: Duration.zero,
       amplitude: 0.0,
       liveTranscription: '',
+    ));
+  }
+
+  /// Mid-recording capture failure: end the session with a real error
+  /// state instead of leaving a phantom dock on screen.
+  Future<void> _failInput(Object error) async {
+    await cancelRecording();
+    _emit(_state.copyWith(
+      phase: VoiceInputPhase.error,
+      errorMessage: error is PlatformException && error.code == 'input_silent'
+          ? 'RECORD_SILENT_INPUT'
+          : 'RECORD_INPUT_FAILED',
     ));
   }
 
@@ -233,8 +276,10 @@ class VoiceInputController {
 
   void dispose() {
     _durationTimer?.cancel();
+    _debugTickTimer?.cancel();
     unawaited(_audioSub?.cancel());
     unawaited(_amplitudeSub?.cancel());
+    unawaited(_errorSub?.cancel());
     unawaited(_transcriptionSub?.cancel());
     unawaited(_registrySub?.cancel());
     unawaited(_recorder.dispose());

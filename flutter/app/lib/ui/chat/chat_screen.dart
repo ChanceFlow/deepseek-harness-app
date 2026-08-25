@@ -3862,6 +3862,14 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputRecordFailed)),
           );
+        } else if (error == 'RECORD_SILENT_INPUT') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputSilentInput)),
+          );
+        } else if (error == 'RECORD_INPUT_FAILED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputInputFailed)),
+          );
         }
       }
     });

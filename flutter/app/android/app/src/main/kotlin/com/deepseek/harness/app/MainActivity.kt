@@ -3,6 +3,7 @@ package com.deepseek.harness.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
@@ -14,6 +15,8 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 class MainActivity : FlutterActivity() {
     private val RECORD_PERMISSION_CODE = 1001
@@ -23,6 +26,12 @@ class MainActivity : FlutterActivity() {
     private val isRecording = AtomicBoolean(false)
     private var recordingThread: Thread? = null
     private var audioEventSink: EventChannel.EventSink? = null
+
+    // Live capture diagnostics, readable from the app without adb/logcat.
+    private val statsReads = AtomicLong(0)
+    private val statsEventsSent = AtomicLong(0)
+    @Volatile private var statsMaxAbs = 0f
+    @Volatile private var statsSourceUsed = "none"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -42,6 +51,34 @@ class MainActivity : FlutterActivity() {
                                 result.error("stat_failed", e.message, null)
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Live capture diagnostics: what the native side sees, for the
+        // in-app debug strip. Distinguishes "device feeds silence"
+        // (maxAbs stays 0) from "events never reach Dart" (reads grow,
+        // events do not).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/audio_debug")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getStats" -> {
+                        val micMuted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val am = getSystemService(AUDIO_SERVICE) as AudioManager
+                            am.isMicrophoneMute
+                        } else {
+                            null
+                        }
+                        val map = mapOf<String, Any?>(
+                            "reads" to statsReads.get(),
+                            "eventsSent" to statsEventsSent.get(),
+                            "maxAbs" to statsMaxAbs,
+                            "sourceUsed" to statsSourceUsed,
+                            "isRecording" to isRecording.get(),
+                            "micMuted" to micMuted,
+                        )
+                        result.success(map)
                     }
                     else -> result.notImplemented()
                 }
@@ -130,33 +167,78 @@ class MainActivity : FlutterActivity() {
             throw SecurityException("RECORD_AUDIO permission not granted")
         }
 
-        val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            sampleRate,
-            channelConfig,
-            audioFormat,
-            bufferSize
-        )
-
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            throw IllegalStateException("Failed to initialize AudioRecord")
+        // Some OEM devices return silence on VOICE_RECOGNITION; fall back to
+        // MIC, then UNPROCESSED (API 24+) before giving up.
+        val sources = buildList {
+            add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+            add(MediaRecorder.AudioSource.MIC)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                add(MediaRecorder.AudioSource.UNPROCESSED)
+            }
         }
+        var record: AudioRecord? = null
+        for (source in sources) {
+            val candidate = AudioRecord(source, sampleRate, channelConfig, audioFormat, bufferSize)
+            if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                record = candidate
+                statsSourceUsed = when (source) {
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION -> "voice_recognition"
+                    MediaRecorder.AudioSource.MIC -> "mic"
+                    MediaRecorder.AudioSource.UNPROCESSED -> "unprocessed"
+                    else -> "unknown"
+                }
+                break
+            }
+            candidate.release()
+        }
+        val recordFinal = record
+            ?: throw IllegalStateException("Failed to initialize AudioRecord on any source")
 
-        audioRecord = record
-        record.startRecording()
+        audioRecord = recordFinal
+        recordFinal.startRecording()
         isRecording.set(true)
+        statsReads.set(0)
+        statsEventsSent.set(0)
+        statsMaxAbs = 0f
 
+        var silentBufferCount = 0
         recordingThread = Thread {
             val shortBuffer = ShortArray(1600) // 100ms at 16kHz
             while (isRecording.get()) {
-                val readCount = record.read(shortBuffer, 0, shortBuffer.size)
+                val readCount = recordFinal.read(shortBuffer, 0, shortBuffer.size)
                 if (readCount > 0) {
+                    statsReads.incrementAndGet()
+                    var maxAbs = 0f
                     val floatArray = FloatArray(readCount)
                     for (i in 0 until readCount) {
-                        floatArray[i] = shortBuffer[i] / 32768.0f
+                        val v = shortBuffer[i] / 32768.0f
+                        floatArray[i] = v
+                        if (abs(v) > maxAbs) maxAbs = abs(v)
                     }
+                    statsMaxAbs = maxOf(statsMaxAbs, maxAbs)
+
+                    // The system delivers silence (not an error) when the
+                    // Android 12+ mic toggle is off or another app holds the
+                    // microphone; surface it after ~2s of pure zeros.
+                    if (maxAbs == 0f) {
+                        silentBufferCount++
+                        if (silentBufferCount >= 20) {
+                            silentBufferCount = 0
+                            runOnUiThread {
+                                audioEventSink?.error(
+                                    "input_silent",
+                                    "No audio signal detected from the microphone",
+                                    null
+                                )
+                            }
+                        }
+                    } else {
+                        silentBufferCount = 0
+                    }
+
                     runOnUiThread {
                         audioEventSink?.success(floatArray)
+                        statsEventsSent.incrementAndGet()
                     }
                 }
             }

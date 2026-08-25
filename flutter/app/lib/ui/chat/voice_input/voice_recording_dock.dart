@@ -4,6 +4,8 @@ library;
 import 'dart:math';
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/platform/audio_recorder.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'voice_input_ui_state.dart';
@@ -138,54 +140,72 @@ class VoiceRecordingDock extends StatelessWidget {
           color: scheme.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          // Pulsing red recording dot
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: scheme.error,
-              shape: BoxShape.circle,
+          Row(
+            children: <Widget>[
+              // Pulsing red recording dot
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: scheme.error,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Duration timer
+              Text(
+                formatVoiceDuration(uiState.duration),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Live animated soundwave
+              Expanded(
+                child: _SoundWaveform(amplitude: uiState.amplitude),
+              ),
+              const SizedBox(width: 8),
+
+              // Cancel button
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: l10n.voiceInputCancel,
+                icon: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant),
+                onPressed: onCancel,
+              ),
+
+              // Done / Stop button
+              FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                ),
+                icon: const Icon(Icons.check, size: 16),
+                label: Text(l10n.voiceInputDone),
+                onPressed: onDone,
+              ),
+            ],
+          ),
+          // Debug-only strip: native capture telemetry, so the data flow is
+          // visible on-screen without adb/logcat.
+          if (kDebugMode && uiState.debugStats != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                formatDebugStats(uiState.debugStats!) ?? '',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontFamily: 'monospace',
+                  color: scheme.primary,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-
-          // Duration timer
-          Text(
-            formatVoiceDuration(uiState.duration),
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontFamily: 'monospace',
-              color: scheme.onSurface,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Live animated soundwave
-          Expanded(
-            child: _SoundWaveform(amplitude: uiState.amplitude),
-          ),
-          const SizedBox(width: 8),
-
-          // Cancel button
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            tooltip: l10n.voiceInputCancel,
-            icon: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant),
-            onPressed: onCancel,
-          ),
-
-          // Done / Stop button
-          FilledButton.tonalIcon(
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            ),
-            icon: const Icon(Icons.check, size: 16),
-            label: Text(l10n.voiceInputDone),
-            onPressed: onDone,
-          ),
         ],
       ),
     );

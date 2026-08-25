@@ -1255,6 +1255,8 @@
   "voiceInputDone": "Done",
   "voiceInputPermissionDenied": "Microphone permission is required for voice input.",
   "voiceInputRecordFailed": "Voice recording could not start. Check that your microphone is available and try again.",
+  "voiceInputSilentInput": "No audio signal detected from the microphone. Check the mic access toggle and that no other app is using it.",
+  "voiceInputInputFailed": "Voice input stopped unexpectedly. Please try again.",
   "asrActiveModel": "Active speech model",
   "asrActiveModelDesc": "Model used for voice transcription in chat.",
   "asrNoModelInstalled": "None (download a model below)"
