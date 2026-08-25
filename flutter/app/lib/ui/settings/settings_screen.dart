@@ -2,13 +2,13 @@
 ///
 /// The tab carries two kinds of settings, picked by the category
 /// capsules under the header: **App** — device-local preferences
-/// (interface language, busy-Enter behavior) persisted to the shared
-/// LocalStateStore, reachable with or without a host — and **Host** —
-/// the pages describing one configured host. The word "host" appears
-/// exactly once on the surface (the category capsule): the host half
-/// leads with the host bar — the identity of the host these pages
-/// describe — and its sheet owns the whole host dimension (picking
-/// the settings scope, adding/renaming/repointing/removing hosts,
+/// (the interface language) persisted to the shared LocalStateStore,
+/// reachable with or without a host — and **Host** — the pages
+/// describing one configured host. The word "host" appears exactly
+/// once on the surface (the category capsule): the host half leads
+/// with the host bar — the identity of the host these pages describe
+/// — and its sheet owns the whole host dimension (picking the
+/// settings scope, adding/renaming/repointing/removing hosts,
 /// switching the chat-active host), so no section repeats the word.
 ///
 /// The host half translates the web settings panel (ui-settings shell
@@ -332,7 +332,7 @@ class _HostSettingsArea extends StatelessWidget {
 }
 
 /// App page — the device-local preferences. Nothing here reads host
-/// state: the rows persist through the shared LocalStateStore, so the
+/// state: the row persists through the shared LocalStateStore, so the
 /// page works with or without a configured, reachable host. The
 /// category capsule already names it, so the page leads with the
 /// intro caption instead of repeating a title.
@@ -355,10 +355,7 @@ class _AppSettingsPage extends StatelessWidget {
             ),
           ),
         ),
-        ..._divided(scheme, [
-          const _LanguageRow(),
-          const _EnterBehaviorRow(),
-        ]),
+        ..._divided(scheme, [const _LanguageRow()]),
       ],
     );
   }
@@ -1050,11 +1047,14 @@ class _HostPageGate extends ConsumerWidget {
   }
 }
 
-/// General page (web GeneralSection): the agent-preset default (web
-/// AgentPresetRow) over the connection-fact rows. The web's other
-/// General contributions live elsewhere on mobile: the language row
-/// is an App setting (device-local), and the busy-Enter row moved to
-/// the App page with it (the mobile preference persists on-device).
+/// General page (web GeneralSection): the preference rows — the
+/// busy-Enter row (web EnterBehaviorRow) and the agent-preset default
+/// (web AgentPresetRow) — over the connection-fact rows. The web's
+/// language contribution is the exception: it is an App setting on
+/// mobile (device-local, applies to the app itself). The busy-Enter
+/// value persists in the device-local shared store on mobile — the
+/// composer reads it there — where the web persists it in the host's
+/// `ui-conversation` settings namespace.
 class _GeneralPage extends StatelessWidget {
   const _GeneralPage({
     required this.snapshot,
@@ -1073,6 +1073,7 @@ class _GeneralPage extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final rows = <Widget>[
+      const _EnterBehaviorRow(),
       // Web rule: the row exists only when the deployment composes at
       // least one preset — an empty roster has nothing to choose between.
       if (roster?.entries.isNotEmpty ?? false)
@@ -1115,11 +1116,12 @@ List<AgentPresetEntry> _pickerOptions(AgentPresetRoster? roster) =>
     roster?.entries.where((entry) => entry.broken == null).toList() ??
     const <AgentPresetEntry>[];
 
-/// Busy-Enter preference row (web EnterBehaviorRow, an App setting on
-/// mobile — the preference persists on-device): a Queue/Steer capsule
-/// selector persisted to the shared LocalStateStore. The row renders
-/// with the queue default while the store loads or refuses to load —
-/// the preference is device-local and never fails a page.
+/// Busy-Enter preference row (web EnterBehaviorRow, a General-section
+/// contribution of ui-conversation): a Queue/Steer capsule selector.
+/// The web persists it in the host's `ui-conversation` settings
+/// namespace; the mobile composer reads a device-local copy from the
+/// shared LocalStateStore, so the row renders with the queue default
+/// while the store loads or refuses to load and never fails a page.
 class _EnterBehaviorRow extends ConsumerWidget {
   const _EnterBehaviorRow();
 
