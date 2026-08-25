@@ -1469,6 +1469,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Voice input stopped unexpectedly. Please try again.';
 
   @override
+  String get voiceInputModelUnsupported =>
+      'The selected speech model is not supported yet. Choose SenseVoice or Whisper in Settings.';
+
+  @override
   String get asrActiveModel => 'Active speech model';
 
   @override

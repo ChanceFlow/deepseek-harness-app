@@ -255,5 +255,165 @@ void main() {
 
       controller.dispose();
     });
+
+    test('reuses one engine instance across acceptAudio and finish', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      final engine = _TrackingEngine();
+      var factoryCalls = 0;
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        engineFactory: (_) {
+          factoryCalls++;
+          return engine;
+        },
+      );
+
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.recording));
+
+      // The mock recorder emits 1600-sample frames every 100 ms; wait for
+      // a couple of frames to flow from recorder -> engine.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      expect(engine.audioFrames, greaterThan(0),
+          reason: 'recorder audio must reach the session engine');
+
+      final text = await controller.stopRecording();
+      expect(text, '识别结果');
+      expect(factoryCalls, 1,
+          reason: 'stopRecording must finish on the same engine that '
+              'received audio, not a freshly created one');
+      expect(engine.finishCalls, 1);
+      expect(engine.samplesAtFinish, greaterThan(0),
+          reason: 'finish() must see the accumulated audio');
+      expect(controller.state.isRecording, isFalse);
+
+      controller.dispose();
+    });
+
+    test('maps an unsupported engine model to MODEL_UNSUPPORTED', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        engineFactory: (_) => _UnsupportedModelEngine(),
+      );
+
+      await controller.startRecording();
+
+      // The engine rejects the model; the controller must surface the
+      // stable localizable code, not the raw exception text.
+      expect(controller.state.phase, equals(VoiceInputPhase.error));
+      expect(controller.state.errorMessage, equals('MODEL_UNSUPPORTED'));
+      expect(controller.state.isRecording, isFalse);
+
+      controller.dispose();
+    });
   });
+}
+
+/// [AsrEngine] that records how much audio it received before [finish],
+/// so a test can tell whether the instance that decoded was the same one
+/// that accumulated audio.
+class _TrackingEngine implements AsrEngine {
+  int audioFrames = 0;
+  int samplesAtFinish = 0;
+  int finishCalls = 0;
+
+  final StreamController<AsrTranscriptionChunk> _chunks =
+      StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
+
+  AsrEngineState _state = AsrEngineState.ready;
+
+  @override
+  AsrEngineState get state => _state;
+
+  @override
+  Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
+
+  @override
+  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+    _state = AsrEngineState.ready;
+  }
+
+  @override
+  void acceptAudio(Float32List samples) {
+    audioFrames++;
+    samplesAtFinish += samples.length;
+  }
+
+  @override
+  Future<String> finish() async {
+    finishCalls++;
+    if (!_chunks.isClosed) {
+      _chunks.add(const AsrTranscriptionChunk(text: '识别结果', isFinal: true));
+    }
+    _state = AsrEngineState.ready;
+    return '识别结果';
+  }
+
+  @override
+  void reset() {
+    _state = AsrEngineState.ready;
+  }
+
+  @override
+  Future<void> dispose() async {
+    _state = AsrEngineState.disposed;
+    await _chunks.close();
+  }
+}
+
+/// [AsrEngine] whose [initialize] rejects the model, standing in for the
+/// real engine's loud refusal of streaming/unsupported models.
+class _UnsupportedModelEngine implements AsrEngine {
+  final StreamController<AsrTranscriptionChunk> _chunks =
+      StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
+
+  AsrEngineState _state = AsrEngineState.uninitialized;
+
+  @override
+  AsrEngineState get state => _state;
+
+  @override
+  Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
+
+  @override
+  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+    throw UnsupportedError('Model ${model.id} is not supported');
+  }
+
+  @override
+  void acceptAudio(Float32List samples) {}
+
+  @override
+  Future<String> finish() async => '';
+
+  @override
+  void reset() {}
+
+  @override
+  Future<void> dispose() async {
+    await _chunks.close();
+  }
 }

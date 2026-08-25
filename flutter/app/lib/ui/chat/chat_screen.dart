@@ -3870,6 +3870,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputInputFailed)),
           );
+        } else if (error == 'MODEL_UNSUPPORTED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputModelUnsupported)),
+          );
         }
       }
     });
