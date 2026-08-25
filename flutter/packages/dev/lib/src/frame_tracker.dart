@@ -44,9 +44,7 @@ class FrameTracker {
     WidgetsBinding.instance.addTimingsCallback(_onTimings);
     _timer = Timer.periodic(
       const Duration(seconds: 1),
-      (_) => _emitFps(
-        _accumulator.flush(interval: const Duration(seconds: 1)),
-      ),
+      (_) => _emitFps(_accumulator.flush(interval: const Duration(seconds: 1))),
     );
   }
 

@@ -6,6 +6,8 @@
 /// overflow, and search-result row widgets.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
@@ -67,10 +69,7 @@ const int kRecentWindowMs = 24 * 60 * 60 * 1000;
 /// then sessions waiting on the user (pending interaction), then sessions
 /// active within [kRecentWindowMs], then everything older. Lower ranks
 /// first.
-int sessionPriorityTier(
-  SessionSummary session,
-  int nowEpochMs,
-) {
+int sessionPriorityTier(SessionSummary session, int nowEpochMs) {
   if (session.running) return 0;
   if (session.pendingInteraction != null) return 1;
   if (nowEpochMs - session.updatedAtEpochMs <= kRecentWindowMs) return 2;
@@ -97,8 +96,10 @@ List<SessionSummary> priorityOrderedMembers(
     }
   }
   rest.sort((a, b) {
-    final byTier = sessionPriorityTier(a, nowEpochMs)
-        .compareTo(sessionPriorityTier(b, nowEpochMs));
+    final byTier = sessionPriorityTier(
+      a,
+      nowEpochMs,
+    ).compareTo(sessionPriorityTier(b, nowEpochMs));
     if (byTier != 0) return byTier;
     final byRecency = b.updatedAtEpochMs.compareTo(a.updatedAtEpochMs);
     if (byRecency != 0) return byRecency;
@@ -267,10 +268,10 @@ String relativeTimeLabel(
 /// discoverable for touch.
 class SessionTreeRow extends StatelessWidget {
   const SessionTreeRow({
-    super.key,
     required this.session,
     required this.selected,
     required this.nowEpochMs,
+    super.key,
     this.onSelect,
     this.onRename,
     this.onFork,
@@ -299,16 +300,21 @@ class SessionTreeRow extends StatelessWidget {
   void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final items = <(IconData, String, VoidCallback)>[
-      if (onRename != null) (Icons.edit_outlined, l10n.renameSession, onRename!),
-      if (onFork != null) (Icons.call_split_outlined, l10n.forkSession, onFork!),
-      if (onArchive != null) (Icons.archive_outlined, l10n.archiveSession, onArchive!),
+      if (onRename != null)
+        (Icons.edit_outlined, l10n.renameSession, onRename!),
+      if (onFork != null)
+        (Icons.call_split_outlined, l10n.forkSession, onFork!),
+      if (onArchive != null)
+        (Icons.archive_outlined, l10n.archiveSession, onArchive!),
     ];
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _SessionVerbsSheet(
-        title: session.blank ? l10n.newSession : session.displayTitle,
-        items: items,
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _SessionVerbsSheet(
+          title: session.blank ? l10n.newSession : session.displayTitle,
+          items: items,
+        ),
       ),
     );
   }
@@ -339,10 +345,7 @@ class SessionTreeRow extends StatelessWidget {
       selectedTileColor: scheme.secondaryContainer,
       hoverColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      leading: SizedBox(
-        width: 16,
-        child: SessionStatusDot(session: session),
-      ),
+      leading: SizedBox(width: 16, child: SessionStatusDot(session: session)),
       title: Text(
         title,
         maxLines: 1,
@@ -389,10 +392,7 @@ class SessionTreeRow extends StatelessWidget {
 /// Web SessionNodeItem "⋮" seat — mobile form: an always-visible
 /// ellipsis [IconButton] that opens the session-verbs menu on tap.
 class _SessionVerbButton extends StatelessWidget {
-  const _SessionVerbButton({
-    required this.session,
-    required this.onTap,
-  });
+  const _SessionVerbButton({required this.session, required this.onTap});
 
   final SessionSummary session;
   final VoidCallback onTap;
@@ -407,11 +407,7 @@ class _SessionVerbButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       constraints: const BoxConstraints.tightFor(width: 32, height: 32),
       padding: EdgeInsets.zero,
-      icon: Icon(
-        Icons.more_horiz,
-        size: 18,
-        color: scheme.onSurfaceVariant,
-      ),
+      icon: Icon(Icons.more_horiz, size: 18, color: scheme.onSurfaceVariant),
     );
   }
 }
@@ -469,7 +465,11 @@ class _SessionVerbsSheet extends StatelessWidget {
 /// verb. The transparent [Material] gives the tile an ink host (the sheet
 /// card behind it is a decorated container).
 class _VerbRow extends StatelessWidget {
-  const _VerbRow({required this.icon, required this.label, required this.onTap});
+  const _VerbRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -511,7 +511,7 @@ class _VerbRow extends StatelessWidget {
 /// web's `showStatus` is false for an idle row — the status seat stays
 /// empty).
 class SessionStatusDot extends StatelessWidget {
-  const SessionStatusDot({super.key, required this.session});
+  const SessionStatusDot({required this.session, super.key});
 
   final SessionSummary session;
 
@@ -556,10 +556,7 @@ class DoneDot extends StatelessWidget {
             child: Container(
               width: size * 0.6,
               height: size * 0.6,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           ),
         ],
@@ -594,10 +591,7 @@ class WarningDot extends StatelessWidget {
             child: Container(
               width: size * 0.6,
               height: size * 0.6,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           ),
         ],
@@ -612,10 +606,10 @@ class WarningDot extends StatelessWidget {
 /// under the session titles.
 class SessionOverflowRow extends StatelessWidget {
   const SessionOverflowRow({
-    super.key,
     required this.expanded,
     required this.totalCount,
     required this.onTap,
+    super.key,
   });
 
   final bool expanded;
@@ -638,9 +632,7 @@ class SessionOverflowRow extends StatelessWidget {
             minimumSize: const Size(0, 44),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             visualDensity: VisualDensity.compact,
-            textStyle: Theme.of(context)
-                .textTheme
-                .bodySmall
+            textStyle: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(fontSize: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
@@ -663,12 +655,12 @@ class SessionOverflowRow extends StatelessWidget {
 /// keeps the sidebar nav-item treatment.
 class SessionSearchResultRow extends StatelessWidget {
   const SessionSearchResultRow({
-    super.key,
     required this.session,
     required this.snippet,
     required this.workspaceLabel,
     required this.selected,
     required this.onSelect,
+    super.key,
   });
 
   final SessionSummary session;
@@ -769,10 +761,7 @@ class RunningDot extends StatelessWidget {
             child: Container(
               width: size * 0.6,
               height: size * 0.6,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           ),
         ],

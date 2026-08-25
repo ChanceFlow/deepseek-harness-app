@@ -63,7 +63,11 @@ class FrameStatsAccumulator {
     final stats = FrameIntervalStats(
       frameCount: _samples.length,
       avgMs: sum / _samples.length,
-      p95Ms: _samples[(_samples.length * 0.95 - 1).round().clamp(0, _samples.length - 1)],
+      p95Ms:
+          _samples[(_samples.length * 0.95 - 1).round().clamp(
+            0,
+            _samples.length - 1,
+          )],
       maxMs: _samples.last,
       jankCount: _jankCount,
       interval: interval,

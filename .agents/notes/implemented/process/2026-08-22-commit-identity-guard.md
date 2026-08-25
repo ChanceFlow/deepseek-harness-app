@@ -17,8 +17,9 @@ rewritten a second time.
 
 ## Decision
 
-`scripts/git-hooks/pre-commit` refuses any commit whose author or
-committer identity differs from the published one. The effective
+The `check-identity.sh` pre-commit job (lefthook, see
+`lefthook.yml`) refuses any commit whose author or committer identity
+differs from the published one. The effective
 identity is resolved the way git resolves it — `GIT_AUTHOR_*` /
 `GIT_COMMITTER_*` environment first, then `user.name` / `user.email`
 from git config — and both the name and the email must match. The
@@ -47,5 +48,7 @@ address, so forge-created merge commits inherit it.
 - Forge-created merge commits are covered by the account's single
   registered email, not by the hook; if another account ever gains merge
   rights, its primary email must match first.
-- The guard is repo-local through `core.hooksPath`; a fresh clone must
-  set it (same requirement as the leak gate it sits next to).
+- The guard is a lefthook pre-commit job in `lefthook.yml` calling
+  `scripts/git-hooks/check-identity.sh`; a fresh clone must run
+  `scripts/install-lefthook.sh` (same requirement as the leak gate it
+  sits next to).

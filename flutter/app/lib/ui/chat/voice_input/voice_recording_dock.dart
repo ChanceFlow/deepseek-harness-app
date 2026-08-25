@@ -1,6 +1,7 @@
 /// Stock Material 3 voice recording dock and microphone button.
 library;
 
+import 'dart:async';
 import 'dart:math';
 
 import 'package:app/l10n/app_localizations.dart';
@@ -20,12 +21,12 @@ String formatVoiceDuration(Duration duration) {
 /// 28px circular microphone button for the Composer tools row.
 class VoiceMicButton extends StatelessWidget {
   const VoiceMicButton({
-    super.key,
     required this.enabled,
     required this.isRecording,
     required this.hasInstalledModels,
     required this.onTap,
     required this.onOpenSettings,
+    super.key,
   });
 
   final bool enabled;
@@ -44,24 +45,26 @@ class VoiceMicButton extends StatelessWidget {
 
   void _showNoModelDialog(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.voiceInputNoModelTitle),
-        content: Text(l10n.voiceInputNoModelBody),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              onOpenSettings();
-            },
-            child: Text(l10n.voiceInputGoToSettings),
-          ),
-        ],
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.voiceInputNoModelTitle),
+          content: Text(l10n.voiceInputNoModelBody),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                onOpenSettings();
+              },
+              child: Text(l10n.voiceInputGoToSettings),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -81,11 +84,7 @@ class VoiceMicButton extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: enabled ? () => _handleTap(context) : null,
-            child: Icon(
-              Icons.mic,
-              size: 16,
-              color: scheme.onErrorContainer,
-            ),
+            child: Icon(Icons.mic, size: 16, color: scheme.onErrorContainer),
           ),
         ),
       );
@@ -103,7 +102,9 @@ class VoiceMicButton extends StatelessWidget {
           child: Icon(
             Icons.mic_outlined,
             size: 16,
-            color: enabled ? scheme.onSurfaceVariant : scheme.onSurface.withValues(alpha: 0.38),
+            color: enabled
+                ? scheme.onSurfaceVariant
+                : scheme.onSurface.withValues(alpha: 0.38),
           ),
         ),
       ),
@@ -114,10 +115,10 @@ class VoiceMicButton extends StatelessWidget {
 /// M3 surfaceContainerLow banner showing recording duration, soundwave, and Cancel/Done controls.
 class VoiceRecordingDock extends StatelessWidget {
   const VoiceRecordingDock({
-    super.key,
     required this.uiState,
     required this.onCancel,
     required this.onDone,
+    super.key,
   });
 
   final VoiceInputUiState uiState;
@@ -136,9 +137,7 @@ class VoiceRecordingDock extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-        ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -168,16 +167,18 @@ class VoiceRecordingDock extends StatelessWidget {
               const SizedBox(width: 12),
 
               // Live animated soundwave
-              Expanded(
-                child: _SoundWaveform(amplitude: uiState.amplitude),
-              ),
+              Expanded(child: _SoundWaveform(amplitude: uiState.amplitude)),
               const SizedBox(width: 8),
 
               // Cancel button
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: l10n.voiceInputCancel,
-                icon: Icon(Icons.close, size: 18, color: scheme.onSurfaceVariant),
+                icon: Icon(
+                  Icons.close,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
                 onPressed: onCancel,
               ),
 
@@ -185,7 +186,10 @@ class VoiceRecordingDock extends StatelessWidget {
               FilledButton.tonalIcon(
                 style: FilledButton.styleFrom(
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                 ),
                 icon: const Icon(Icons.check, size: 16),
                 label: Text(l10n.voiceInputDone),

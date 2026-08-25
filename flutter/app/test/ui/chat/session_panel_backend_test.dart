@@ -91,10 +91,7 @@ ChatUiState _state({
   List<SessionSummary> sessions = const <SessionSummary>[],
   String? selectedSessionId,
 }) {
-  return ChatUiState(
-    sessions: sessions,
-    selectedSessionId: selectedSessionId,
-  );
+  return ChatUiState(sessions: sessions, selectedSessionId: selectedSessionId);
 }
 
 final _laptop = BackendConfig(

@@ -41,7 +41,10 @@ void main() {
     final reloaded = LocalStateStore(file);
     await reloaded.load();
     expect(reloaded.read('chat.draft.s1'), 'hello');
-    expect(reloaded.read('chat.expandedTools.s1'), <Object?>['tool-1', 'tool-2']);
+    expect(reloaded.read('chat.expandedTools.s1'), <Object?>[
+      'tool-1',
+      'tool-2',
+    ]);
 
     reloaded.write('chat.draft.s1', null);
     await reloaded.flush();

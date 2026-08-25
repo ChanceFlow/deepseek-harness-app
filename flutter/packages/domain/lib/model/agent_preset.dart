@@ -55,7 +55,8 @@ final class AgentPresetEntry {
       other.broken == broken;
 
   @override
-  int get hashCode => Object.hash(id, trust, isDefault, name, description, broken);
+  int get hashCode =>
+      Object.hash(id, trust, isDefault, name, description, broken);
 }
 
 /// The whole roster plus the deployment-level facts of one
@@ -95,7 +96,8 @@ final class AgentPresetRoster {
       other.hasDocument == hasDocument;
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(entries), authorable, hasDocument);
+  int get hashCode =>
+      Object.hash(Object.hashAll(entries), authorable, hasDocument);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

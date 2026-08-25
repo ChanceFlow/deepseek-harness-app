@@ -58,35 +58,47 @@ void main() {
 
   tearDown(() => center.dispose());
 
-  test('other-session turn completion flows to the foreground toast stream',
-      () async {
-    repository.sessions.value = [_session('s2', title: 'Other', running: true)];
-    await pumpEventQueue();
-    final events = <AppNotificationEvent>[];
-    center.foregroundEvents.listen(events.add);
+  test(
+    'other-session turn completion flows to the foreground toast stream',
+    () async {
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      final events = <AppNotificationEvent>[];
+      center.foregroundEvents.listen(events.add);
 
-    repository.sessions.value = [_session('s2', title: 'Other', running: false)];
-    await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: false),
+      ];
+      await pumpEventQueue();
 
-    expect(events, hasLength(1));
-    expect(events.single.kind, AppNotificationKind.otherTurnComplete);
-    expect(events.single.sessionTitle, 'Other');
-    expect(background, isEmpty);
-  });
+      expect(events, hasLength(1));
+      expect(events.single.kind, AppNotificationKind.otherTurnComplete);
+      expect(events.single.sessionTitle, 'Other');
+      expect(background, isEmpty);
+    },
+  );
 
-  test('selected-session turn completion is silent while foregrounded',
-      () async {
-    final events = <AppNotificationEvent>[];
-    center.foregroundEvents.listen(events.add);
+  test(
+    'selected-session turn completion is silent while foregrounded',
+    () async {
+      final events = <AppNotificationEvent>[];
+      center.foregroundEvents.listen(events.add);
 
-    repository.sessions.value = [_session('s1', title: 'Selected', running: true)];
-    await pumpEventQueue();
-    repository.sessions.value = [_session('s1', title: 'Selected', running: false)];
-    await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s1', title: 'Selected', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s1', title: 'Selected', running: false),
+      ];
+      await pumpEventQueue();
 
-    expect(events, isEmpty);
-    expect(background, isEmpty);
-  });
+      expect(events, isEmpty);
+      expect(background, isEmpty);
+    },
+  );
 
   test('approval request flows to the foreground toast stream', () async {
     final events = <AppNotificationEvent>[];
@@ -115,7 +127,11 @@ void main() {
       onBackground: background.add,
     );
     repository.sessions.value = [
-      _session('s3', title: 'Review', pending: SessionPendingInteraction.planReview),
+      _session(
+        's3',
+        title: 'Review',
+        pending: SessionPendingInteraction.planReview,
+      ),
     ];
     await pumpEventQueue();
 
@@ -125,40 +141,52 @@ void main() {
     center2.dispose();
   });
 
-  test('backgrounded selected-session turn completion posts a system notification',
-      () async {
-    final center2 = AppNotificationCenter(
-      repository: repository,
-      backendId: 'b1',
-      isForegrounded: () => false,
-      selectedSessionIdOf: () => 's1',
-      onBackground: background.add,
-    );
-    repository.sessions.value = [_session('s1', title: 'Selected', running: true)];
-    await pumpEventQueue();
-    repository.sessions.value = [_session('s1', title: 'Selected', running: false)];
-    await pumpEventQueue();
+  test(
+    'backgrounded selected-session turn completion posts a system notification',
+    () async {
+      final center2 = AppNotificationCenter(
+        repository: repository,
+        backendId: 'b1',
+        isForegrounded: () => false,
+        selectedSessionIdOf: () => 's1',
+        onBackground: background.add,
+      );
+      repository.sessions.value = [
+        _session('s1', title: 'Selected', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s1', title: 'Selected', running: false),
+      ];
+      await pumpEventQueue();
 
-    expect(background, hasLength(1));
-    expect(background.single.kind, AppNotificationKind.selectedTurnComplete);
+      expect(background, hasLength(1));
+      expect(background.single.kind, AppNotificationKind.selectedTurnComplete);
 
-    center2.dispose();
-  });
+      center2.dispose();
+    },
+  );
 
-  test('a new subscriber does not replay old events (broadcast semantics)',
-      () async {
-    final first = <AppNotificationEvent>[];
-    center.foregroundEvents.listen(first.add);
-    repository.sessions.value = [_session('s2', title: 'Other', running: true)];
-    await pumpEventQueue();
-    repository.sessions.value = [_session('s2', title: 'Other', running: false)];
-    await pumpEventQueue();
-    expect(first, hasLength(1));
+  test(
+    'a new subscriber does not replay old events (broadcast semantics)',
+    () async {
+      final first = <AppNotificationEvent>[];
+      center.foregroundEvents.listen(first.add);
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s2', title: 'Other', running: false),
+      ];
+      await pumpEventQueue();
+      expect(first, hasLength(1));
 
-    // A second listener attached after the event sees nothing new.
-    final second = <AppNotificationEvent>[];
-    center.foregroundEvents.listen(second.add);
-    await pumpEventQueue();
-    expect(second, isEmpty);
-  });
+      // A second listener attached after the event sees nothing new.
+      final second = <AppNotificationEvent>[];
+      center.foregroundEvents.listen(second.add);
+      await pumpEventQueue();
+      expect(second, isEmpty);
+    },
+  );
 }

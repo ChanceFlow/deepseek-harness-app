@@ -45,7 +45,7 @@ String goalPhaseLabel(GoalPhase phase, AppLocalizations l10n) =>
     };
 
 class GoalScreen extends StatefulWidget {
-  const GoalScreen({super.key, required this.uiState, required this.onAction});
+  const GoalScreen({required this.uiState, required this.onAction, super.key});
 
   final GoalUiState uiState;
   final void Function(GoalAction) onAction;
@@ -99,8 +99,10 @@ class _GoalScreenState extends State<GoalScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(l10n.sessionLabel,
-                        style: theme.textTheme.labelLarge),
+                    child: Text(
+                      l10n.sessionLabel,
+                      style: theme.textTheme.labelLarge,
+                    ),
                   ),
                   OutlinedButton(
                     onPressed: uiState.selectedSessionId != null

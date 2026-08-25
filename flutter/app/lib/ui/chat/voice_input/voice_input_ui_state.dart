@@ -5,13 +5,7 @@ import 'package:app/platform/audio_recorder.dart';
 import 'package:asr/asr.dart';
 
 /// Lifecycle phase of the voice recording session.
-enum VoiceInputPhase {
-  idle,
-  initializing,
-  recording,
-  finalizing,
-  error,
-}
+enum VoiceInputPhase { idle, initializing, recording, finalizing, error }
 
 /// State for the voice recording UI dock and microphone button.
 class VoiceInputUiState {

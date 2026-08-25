@@ -80,12 +80,8 @@ Future<ProviderContainer> _slicesContainer(
 ) async {
   final container = ProviderContainer(
     overrides: [
-      backendRegistryStateProvider.overrideWith(
-        (ref) => registryStates.stream,
-      ),
-      chatUiStateProvider('default').overrideWith(
-        (ref) => laptopStates.stream,
-      ),
+      backendRegistryStateProvider.overrideWith((ref) => registryStates.stream),
+      chatUiStateProvider('default').overrideWith((ref) => laptopStates.stream),
       chatUiStateProvider('b1').overrideWith((ref) => buildBoxStates.stream),
     ],
   );

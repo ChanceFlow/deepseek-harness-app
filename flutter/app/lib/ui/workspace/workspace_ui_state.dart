@@ -3,7 +3,8 @@ library;
 
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/session.dart';
-import 'package:domain/model/workspace.dart' show WorkspaceSummary, SessionSearchResult;
+import 'package:domain/model/workspace.dart'
+    show WorkspaceSummary, SessionSearchResult;
 
 final class WorkspaceUiState {
   const WorkspaceUiState({

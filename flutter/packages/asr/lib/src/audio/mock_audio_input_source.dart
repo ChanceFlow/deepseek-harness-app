@@ -9,9 +9,7 @@ import 'audio_input_source.dart';
 
 /// Test implementation of [AudioInputSource] emitting simulated PCM and amplitude.
 class MockAudioInputSource implements AudioInputSource {
-  MockAudioInputSource({
-    this.simulatedDuration = const Duration(seconds: 3),
-  });
+  MockAudioInputSource({this.simulatedDuration = const Duration(seconds: 3)});
 
   final Duration simulatedDuration;
 
@@ -55,7 +53,7 @@ class MockAudioInputSource implements AudioInputSource {
         _amplitudeController.add(amp);
       }
       if (ticks * 100 >= simulatedDuration.inMilliseconds) {
-        stop();
+        unawaited(stop());
       }
     });
   }

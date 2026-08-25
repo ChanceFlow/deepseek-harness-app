@@ -17,7 +17,9 @@ analyzer:
 linter:
   rules:
     - always_declare_return_types
+    - always_put_required_named_parameters_first
     - avoid_dynamic_calls
+    - discarded_futures
     - prefer_const_constructors
     - prefer_const_declarations
     - prefer_final_locals

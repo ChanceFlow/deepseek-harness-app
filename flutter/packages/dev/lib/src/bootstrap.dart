@@ -91,7 +91,9 @@ class DebugToolBootstrap {
   void _installHooks() {
     _previousOnError = FlutterError.onError;
     FlutterError.onError = (details) {
-      telemetry.buffer.append(formatLogLine('CRASH', details.exceptionAsString()));
+      telemetry.buffer.append(
+        formatLogLine('CRASH', details.exceptionAsString()),
+      );
       final record = CrashRecord(
         crash: CapturedCrash.fromFlutterError(
           details,

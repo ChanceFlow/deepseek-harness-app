@@ -36,9 +36,9 @@ class ModelsRoute extends ConsumerWidget {
 
 class ModelsScreen extends StatelessWidget {
   const ModelsScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
   });
 
   final ModelsUiState uiState;
@@ -163,7 +163,10 @@ class _ModelRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.reasoningEffortLabel, style: theme.textTheme.labelMedium),
+                Text(
+                  l10n.reasoningEffortLabel,
+                  style: theme.textTheme.labelMedium,
+                ),
                 for (final effort in model.reasoning!.efforts)
                   _effortChip(
                     context,

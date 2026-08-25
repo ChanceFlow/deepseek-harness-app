@@ -60,12 +60,11 @@ ServerRequest _muxFrame(String type, String sessionId, JsonMap event) =>
 /// A top-level pending-interaction frame (`approval/requested`,
 /// `approval/resolved`, `question/requested`, `question/resolved`) — these
 /// carry their fields directly on the frame payload, not inside `event`.
-ServerRequest _pendingFrame(String type, JsonMap payload) =>
-    ServerRequest(
-      rpcId: 'rpc-$type',
-      method: type,
-      payload: <String, Object?>{'type': type, ...payload},
-    );
+ServerRequest _pendingFrame(String type, JsonMap payload) => ServerRequest(
+  rpcId: 'rpc-$type',
+  method: type,
+  payload: <String, Object?>{'type': type, ...payload},
+);
 
 JsonMap _assistantMessageEvent() => <String, Object?>{
   'type': 'assistant/message',
@@ -158,7 +157,8 @@ class HarnessFakeRpc implements DshRpcClient {
       _transportDropsRemaining--;
       throw DshTransportException(
         'transport failure for $endpoint',
-        _transportDropCause ?? const SocketException('Software caused connection abort'),
+        _transportDropCause ??
+            const SocketException('Software caused connection abort'),
       );
     }
     if (_failures.remove(endpoint) case final code?) {
@@ -613,136 +613,133 @@ void main() {
     },
   );
 
-  test(
-    'question/requested that arrives before the session is opened still '
-    'renders after openSession (web pendingBuffers parity)',
-    () async {
-      // Regression: the host can emit a pending question for a session the
-      // client has not opened yet (agent asked mid-turn, user opens the
-      // session afterwards). `question/requested` is a live frame that never
-      // lands in session.history, so the open's history backfill shows only
-      // the still-running ask_user_question tool call — without buffering the
-      // frame would be dropped and the card never render (spinner forever).
-      final rpc = HarnessFakeRpc(<Object?>[
-        <String, Object?>{
-          'sessionId': 'session-q',
-          'updatedAt': 3,
-          'running': false,
-          'blank': false,
-        },
-      ]);
-      final socket = ScriptedHarnessSocket(
-        muxFrames: <ServerRequest>[
-          _pendingFrame('question/requested', <String, Object?>{
-            'sessionId': 'session-q',
-            'questions': <Object?>[
-              <String, Object?>{
-                'id': 'q1',
-                'question': 'Continue?',
-                'options': <Object?>[
-                  <String, Object?>{'label': 'yes'},
-                  <String, Object?>{'label': 'no'},
-                ],
-              },
-            ],
-          }),
-        ],
-      );
-      final repository = await harnessRepository(rpc, socket);
-      await pumpEventQueue();
-
-      // The frame arrives before openSession instantiates the session state.
-      socket.releaseMuxFrames();
-      await pumpEventQueue();
-
-      await repository.openSession('session-q');
-      await pumpEventQueue();
-
-      final timeline = await repository.observeTimeline('session-q').first;
-      final question = timeline.whereType<TimelineQuestionRequest>();
-      expect(question, hasLength(1), reason: 'buffered question must render');
-      expect(question.single.questions.single.id, 'q1');
-    },
-  );
-
-  test(
-    'question/resolved before openSession drops the buffered question '
-    '(no replay of an answered request)',
-    () async {
-      final rpc = HarnessFakeRpc(<Object?>[
-        <String, Object?>{
-          'sessionId': 'session-q',
-          'updatedAt': 3,
-          'running': false,
-          'blank': false,
-        },
-      ]);
-      final socket = ScriptedHarnessSocket(
-        muxFrames: <ServerRequest>[
-          _pendingFrame('question/requested', <String, Object?>{
-            'sessionId': 'session-q',
-            'rpcId': 'rpc-question/requested',
-            'questions': <Object?>[
-              <String, Object?>{'id': 'q1', 'question': 'Continue?'},
-            ],
-          }),
-          _pendingFrame('question/resolved', <String, Object?>{
-            'sessionId': 'session-q',
-            'questionRpcId': 'rpc-question/requested',
-            'outcome': 'answered',
-          }),
-        ],
-      );
-      final repository = await harnessRepository(rpc, socket);
-      await pumpEventQueue();
-
-      socket.releaseMuxFrames();
-      await pumpEventQueue();
-
-      await repository.openSession('session-q');
-      await pumpEventQueue();
-
-      final timeline = await repository.observeTimeline('session-q').first;
-      expect(
-        timeline.whereType<TimelineQuestionRequest>(),
-        isEmpty,
-        reason: 'resolved question must not replay into the timeline',
-      );
-    },
-  );
-
-  test('initial timeline load publishes a loading window then settles', () async {
+  test('question/requested that arrives before the session is opened still '
+      'renders after openSession (web pendingBuffers parity)', () async {
+    // Regression: the host can emit a pending question for a session the
+    // client has not opened yet (agent asked mid-turn, user opens the
+    // session afterwards). `question/requested` is a live frame that never
+    // lands in session.history, so the open's history backfill shows only
+    // the still-running ask_user_question tool call — without buffering the
+    // frame would be dropped and the card never render (spinner forever).
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
-        'sessionId': 'session-1',
+        'sessionId': 'session-q',
         'updatedAt': 3,
         'running': false,
         'blank': false,
       },
     ]);
-    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-q',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Continue?',
+              'options': <Object?>[
+                <String, Object?>{'label': 'yes'},
+                <String, Object?>{'label': 'no'},
+              ],
+            },
+          ],
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
     await pumpEventQueue();
 
-    final windows = <TimelineWindow>[];
-    final sub = repository
-        .observeTimelineWindow('session-1')
-        .listen(windows.add);
-    addTearDown(() => sub.cancel());
-
-    await repository.openSession('session-1');
-    // Broadcast StateStream delivery is microtask-scheduled; flush so the
-    // window stream has observed the in-flight and settled emissions.
+    // The frame arrives before openSession instantiates the session state.
+    socket.releaseMuxFrames();
     await pumpEventQueue();
 
-    // Seed (empty, idle) → in-flight first load → settled empty window.
-    // The in-flight flag is what lets the UI render a loader instead of
-    // the empty hero while the conversation's history is fetched.
-    expect(windows.map((window) => window.isLoading).toList(), <bool>[
-      false,
-      true,
-      false,
-    ]);
+    await repository.openSession('session-q');
+    await pumpEventQueue();
+
+    final timeline = await repository.observeTimeline('session-q').first;
+    final question = timeline.whereType<TimelineQuestionRequest>();
+    expect(question, hasLength(1), reason: 'buffered question must render');
+    expect(question.single.questions.single.id, 'q1');
   });
+
+  test('question/resolved before openSession drops the buffered question '
+      '(no replay of an answered request)', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-q',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-q',
+          'rpcId': 'rpc-question/requested',
+          'questions': <Object?>[
+            <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+          ],
+        }),
+        _pendingFrame('question/resolved', <String, Object?>{
+          'sessionId': 'session-q',
+          'questionRpcId': 'rpc-question/requested',
+          'outcome': 'answered',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    await repository.openSession('session-q');
+    await pumpEventQueue();
+
+    final timeline = await repository.observeTimeline('session-q').first;
+    expect(
+      timeline.whereType<TimelineQuestionRequest>(),
+      isEmpty,
+      reason: 'resolved question must not replay into the timeline',
+    );
+  });
+
+  test(
+    'initial timeline load publishes a loading window then settles',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final windows = <TimelineWindow>[];
+      final sub = repository
+          .observeTimelineWindow('session-1')
+          .listen(windows.add);
+      addTearDown(() => sub.cancel());
+
+      await repository.openSession('session-1');
+      // Broadcast StateStream delivery is microtask-scheduled; flush so the
+      // window stream has observed the in-flight and settled emissions.
+      await pumpEventQueue();
+
+      // Seed (empty, idle) → in-flight first load → settled empty window.
+      // The in-flight flag is what lets the UI render a loader instead of
+      // the empty hero while the conversation's history is fetched.
+      expect(windows.map((window) => window.isLoading).toList(), <bool>[
+        false,
+        true,
+        false,
+      ]);
+    },
+  );
 
   test('failed initial timeline load clears the loading window', () async {
     final rpc = HarnessFakeRpc(<Object?>[
@@ -864,20 +861,23 @@ void main() {
     expect((firstAnswer['selected'] as List).length, 0);
   });
 
-  test('cancelled question responds with the cancelled error envelope', () async {
-    final rpc = HarnessFakeRpc();
-    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
-    await pumpEventQueue();
+  test(
+    'cancelled question responds with the cancelled error envelope',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
 
-    await repository.cancelQuestions('rpc-question', 'session-1');
+      await repository.cancelQuestions('rpc-question', 'session-1');
 
-    final received = rpc.receivedResponses().single;
-    expect(received.$1, 'rpc-question');
-    final result = received.$2;
-    expect(result.ok, isFalse);
-    expect(result.error?.code, 'cancelled');
-    expect(result.value?['sessionId'], 'session-1');
-  });
+      final received = rpc.receivedResponses().single;
+      expect(received.$1, 'rpc-question');
+      final result = received.$2;
+      expect(result.ok, isFalse);
+      expect(result.error?.code, 'cancelled');
+      expect(result.value?['sessionId'], 'session-1');
+    },
+  );
 
   test('goal edit sends objective with cas ref', () async {
     final rpc = HarnessFakeRpc();
@@ -968,7 +968,11 @@ void main() {
 
     // Reference: CommandRuntime.execute returns undefined on a syntax or
     // name miss — the wire serializes that as ok without a value.
-    final execution = await repository.executeCommand('session-1', '/nope', const <PendingImage>[]);
+    final execution = await repository.executeCommand(
+      'session-1',
+      '/nope',
+      const <PendingImage>[],
+    );
     expect(execution, isNull);
   });
 
@@ -978,19 +982,21 @@ void main() {
         'commandId': 'cmd-e487ba23-4',
         'result': <String, Object?>{
           'kind': 'error',
-          'text': 'unknown preset "bogus-preset" (available: read-only, '
+          'text':
+              'unknown preset "bogus-preset" (available: read-only, '
               'workspace-write, danger-full-access)',
         },
       };
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
-    final execution = await repository.executeCommand('session-1', '/permission bogus', const <PendingImage>[]);
-    expect(execution!.kind, CommandOutcomeKind.error);
-    expect(
-      execution.text,
-      startsWith('unknown preset "bogus-preset"'),
+    final execution = await repository.executeCommand(
+      'session-1',
+      '/permission bogus',
+      const <PendingImage>[],
     );
+    expect(execution!.kind, CommandOutcomeKind.error);
+    expect(execution.text, startsWith('unknown preset "bogus-preset"'));
   });
 
   test('executeCommand fails loud on a malformed execution', () async {
@@ -1761,67 +1767,70 @@ void main() {
   // session is not the one being viewed arms the green dot (web
   // SessionManager `syncCompletedNotifications`); opening it or it
   // running again clears it.
-  test('a session finishing while not viewed is completed; running clears it', () async {
-    final rpc = HarnessFakeRpc(<Object?>[
-      <String, Object?>{
-        'sessionId': 'session-a',
-        'updatedAt': 3,
-        'running': false,
-        'blank': false,
-      },
-      <String, Object?>{
-        'sessionId': 'session-b',
-        'updatedAt': 3,
-        'running': false,
-        'blank': false,
-      },
-    ]);
-    final socket = ScriptedHarnessSocket(
-      hostFrames: <ServerRequest>[
-        _hostFrame('host/session-status', <String, Object?>{
-          'type': 'host/session-status',
+  test(
+    'a session finishing while not viewed is completed; running clears it',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
           'sessionId': 'session-a',
-          'running': true,
-        }),
-        _hostFrame('host/session-status', <String, Object?>{
-          'type': 'host/session-status',
-          'sessionId': 'session-a',
+          'updatedAt': 3,
           'running': false,
-        }),
-      ],
-    );
-    final repository = await harnessRepository(rpc, socket);
-    await pumpEventQueue();
-    // Not viewing session-a; it then stops running → completed arms.
-    await repository.openSession('session-b');
-    await pumpEventQueue();
-    socket.releaseHostFrames();
-    await pumpEventQueue();
+          'blank': false,
+        },
+        <String, Object?>{
+          'sessionId': 'session-b',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        hostFrames: <ServerRequest>[
+          _hostFrame('host/session-status', <String, Object?>{
+            'type': 'host/session-status',
+            'sessionId': 'session-a',
+            'running': true,
+          }),
+          _hostFrame('host/session-status', <String, Object?>{
+            'type': 'host/session-status',
+            'sessionId': 'session-a',
+            'running': false,
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      // Not viewing session-a; it then stops running → completed arms.
+      await repository.openSession('session-b');
+      await pumpEventQueue();
+      socket.releaseHostFrames();
+      await pumpEventQueue();
 
-    var sessions = await repository.observeSessions().first;
-    expect(
-      sessions.firstWhere((item) => item.id == 'session-a').completed,
-      isTrue,
-    );
-    expect(
-      sessions.firstWhere((item) => item.id == 'session-b').completed,
-      isFalse,
-    );
+      var sessions = await repository.observeSessions().first;
+      expect(
+        sessions.firstWhere((item) => item.id == 'session-a').completed,
+        isTrue,
+      );
+      expect(
+        sessions.firstWhere((item) => item.id == 'session-b').completed,
+        isFalse,
+      );
 
-    // Opening the completed session clears the reminder.
-    await repository.openSession('session-a');
-    await pumpEventQueue();
-    sessions = await repository.observeSessions().first;
-    expect(
-      sessions.firstWhere((item) => item.id == 'session-a').completed,
-      isFalse,
-    );
+      // Opening the completed session clears the reminder.
+      await repository.openSession('session-a');
+      await pumpEventQueue();
+      sessions = await repository.observeSessions().first;
+      expect(
+        sessions.firstWhere((item) => item.id == 'session-a').completed,
+        isFalse,
+      );
 
-    // Running again also clears it.
-    socket.releaseHostFrames();
-    await repository.refreshSessions();
-    await pumpEventQueue();
-  });
+      // Running again also clears it.
+      socket.releaseHostFrames();
+      await repository.refreshSessions();
+      await pumpEventQueue();
+    },
+  );
 
   test('a session finishing while being viewed never arms completed', () async {
     final rpc = HarnessFakeRpc(<Object?>[
@@ -1947,10 +1956,7 @@ void main() {
             'key': 'permissions',
             'value': <String, Object?>{
               'options': <Object?>[
-                <String, Object?>{
-                  'value': 'read-only',
-                  'name': 'Read Only',
-                },
+                <String, Object?>{'value': 'read-only', 'name': 'Read Only'},
                 <String, Object?>{
                   'value': 'workspace-write',
                   'name': 'Workspace Write',
@@ -2037,10 +2043,7 @@ void main() {
     expect(select.currentOption?.name, 'Workspace Write');
     expect(select.options, hasLength(2));
     expect(select.options.first.description, isNull);
-    expect(
-      select.options.last.description,
-      'Edit files inside the workspace',
-    );
+    expect(select.options.last.description, 'Edit files inside the workspace');
   });
 
   // A `null`-valued frame clears the select back to the hidden state.
@@ -2099,35 +2102,38 @@ void main() {
   // Wire shape: `agent-preset/selected` arrives as a forwarded
   // host/remote-event frame with args [sessionId, agentPreset]
   // (events.ts HostFrame; allowlist in dsh-api-remotes remote-events.ts).
-  test('agent-preset/selected remote event folds the session summary', () async {
-    final rpc = HarnessFakeRpc(<Object?>[
-      <String, Object?>{
-        'sessionId': 'session-1',
-        'updatedAt': 3,
-        'running': false,
-        'blank': true,
-      },
-    ]);
-    final socket = ScriptedHarnessSocket(
-      hostFrames: <ServerRequest>[
-        _hostFrame('host/remote-event', <String, Object?>{
-          'type': 'host/remote-event',
-          'event': 'agent-preset/selected',
-          'args': <Object?>['session-1', 'minimal'],
-        }),
-      ],
-    );
-    final repository = await harnessRepository(rpc, socket);
-    await pumpEventQueue();
-    await repository.refreshSessions();
+  test(
+    'agent-preset/selected remote event folds the session summary',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': true,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        hostFrames: <ServerRequest>[
+          _hostFrame('host/remote-event', <String, Object?>{
+            'type': 'host/remote-event',
+            'event': 'agent-preset/selected',
+            'args': <Object?>['session-1', 'minimal'],
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      await repository.refreshSessions();
 
-    socket.releaseHostFrames();
-    await pumpEventQueue();
+      socket.releaseHostFrames();
+      await pumpEventQueue();
 
-    final sessions = await repository.observeSessions().first;
-    final switched = sessions.firstWhere(
-      (session) => session.id == 'session-1',
-    );
-    expect(switched.agentPreset, 'minimal');
-  });
+      final sessions = await repository.observeSessions().first;
+      final switched = sessions.firstWhere(
+        (session) => session.id == 'session-1',
+      );
+      expect(switched.agentPreset, 'minimal');
+    },
+  );
 }

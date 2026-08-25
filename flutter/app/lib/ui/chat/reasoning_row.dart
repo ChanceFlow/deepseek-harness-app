@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'sweep_highlight.dart';
 
 class ReasoningRow extends StatefulWidget {
-  const ReasoningRow({super.key, required this.text, required this.running});
+  const ReasoningRow({required this.text, required this.running, super.key});
 
   /// Complete or streaming reasoning text.
   final String text;

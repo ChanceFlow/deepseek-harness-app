@@ -96,14 +96,8 @@ final class TimelineCommand extends TimelineItem {
       other.text == text;
 
   @override
-  int get hashCode => Object.hash(
-    'command',
-    commandId,
-    name,
-    args,
-    status,
-    text,
-  );
+  int get hashCode =>
+      Object.hash('command', commandId, name, args, status, text);
 }
 
 /// Non-user context injected into model history (web ContextMessageNode):

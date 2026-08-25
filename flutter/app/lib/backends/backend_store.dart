@@ -22,10 +22,9 @@ class BackendStoreException implements Exception {
   final Object? cause;
 
   @override
-  String toString() =>
-      cause == null
-          ? 'BackendStoreException: $message'
-          : 'BackendStoreException: $message ($cause)';
+  String toString() => cause == null
+      ? 'BackendStoreException: $message'
+      : 'BackendStoreException: $message ($cause)';
 }
 
 /// One persisted registry document.
@@ -60,11 +59,15 @@ class BackendStore {
     try {
       final decoded = jsonDecode(await _file.readAsString());
       if (decoded is! Map<String, Object?>) {
-        throw const BackendStoreException('backends.json: root is not an object');
+        throw const BackendStoreException(
+          'backends.json: root is not an object',
+        );
       }
       final rawList = decoded['backends'];
       if (rawList is! List<Object?>) {
-        throw const BackendStoreException('backends.json: backends is not an array');
+        throw const BackendStoreException(
+          'backends.json: backends is not an array',
+        );
       }
       final backends = <BackendConfig>[];
       for (final raw in rawList) {
@@ -79,9 +82,7 @@ class BackendStore {
         if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
           throw BackendStoreException('backends.json: bad baseUrl "$baseUrl"');
         }
-        backends.add(
-          BackendConfig(id: id, label: label, baseUri: uri),
-        );
+        backends.add(BackendConfig(id: id, label: label, baseUri: uri));
       }
       if (backends.isEmpty) {
         throw const BackendStoreException('backends.json: empty backend list');

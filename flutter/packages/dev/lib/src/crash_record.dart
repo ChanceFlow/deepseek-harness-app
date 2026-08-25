@@ -17,8 +17,8 @@ class CapturedCrash {
     required this.kind,
     required this.type,
     required this.message,
-    this.stackFrames = const [],
     required this.occurredAt,
+    this.stackFrames = const [],
   });
 
   /// Free-text classifier, e.g. `FlutterError`, `uncaught-async`.
@@ -28,11 +28,24 @@ class CapturedCrash {
   final List<String> stackFrames;
   final DateTime occurredAt;
 
-  factory CapturedCrash.fromFlutterError(FlutterErrorDetails details, {required DateTime occurredAt}) {
-    final stack = details.stack?.toString().split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).take(20).toList() ?? const [];
+  factory CapturedCrash.fromFlutterError(
+    FlutterErrorDetails details, {
+    required DateTime occurredAt,
+  }) {
+    final stack =
+        details.stack
+            ?.toString()
+            .split('\n')
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .take(20)
+            .toList() ??
+        const [];
     final context = details.context?.toString().trim().split('\n').first;
     return CapturedCrash(
-      kind: context == null || context.isEmpty ? 'FlutterError' : 'FlutterError:$context',
+      kind: context == null || context.isEmpty
+          ? 'FlutterError'
+          : 'FlutterError:$context',
       type: details.exception.runtimeType.toString(),
       message: details.exceptionAsString(),
       stackFrames: stack,
@@ -40,8 +53,20 @@ class CapturedCrash {
     );
   }
 
-  factory CapturedCrash.fromAsyncError(Object error, StackTrace? stack, {required DateTime occurredAt}) {
-    final stackLines = stack?.toString().split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).take(20).toList() ?? const [];
+  factory CapturedCrash.fromAsyncError(
+    Object error,
+    StackTrace? stack, {
+    required DateTime occurredAt,
+  }) {
+    final stackLines =
+        stack
+            ?.toString()
+            .split('\n')
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .take(20)
+            .toList() ??
+        const [];
     return CapturedCrash(
       kind: 'uncaught-async',
       type: error.runtimeType.toString(),

@@ -63,17 +63,19 @@ class StreamingZipformerEngine implements AsrEngine {
       _pendingBuffer.removeRange(0, chunkSizeSamples);
       final chunk = Float32List.fromList(chunkList);
 
-      _runner(chunk, false).then((deltaText) {
-        if (deltaText.isNotEmpty && !_streamController.isClosed) {
-          _accumulatedText.write(deltaText);
-          _streamController.add(
-            AsrTranscriptionChunk(
-              text: _accumulatedText.toString(),
-              isFinal: false,
-            ),
-          );
-        }
-      });
+      unawaited(
+        _runner(chunk, false).then((deltaText) {
+          if (deltaText.isNotEmpty && !_streamController.isClosed) {
+            _accumulatedText.write(deltaText);
+            _streamController.add(
+              AsrTranscriptionChunk(
+                text: _accumulatedText.toString(),
+                isFinal: false,
+              ),
+            );
+          }
+        }),
+      );
     }
   }
 
@@ -91,10 +93,7 @@ class StreamingZipformerEngine implements AsrEngine {
     final String finalResult = _accumulatedText.toString();
     if (!_streamController.isClosed) {
       _streamController.add(
-        AsrTranscriptionChunk(
-          text: finalResult,
-          isFinal: true,
-        ),
+        AsrTranscriptionChunk(text: finalResult, isFinal: true),
       );
     }
     _state = AsrEngineState.ready;

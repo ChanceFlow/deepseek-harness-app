@@ -54,7 +54,7 @@ final class SelectBackend extends BackendAction {
 
 class BackendRegistryController {
   BackendRegistryController(this._store) {
-    _load();
+    unawaited(_load());
   }
 
   final BackendStore _store;
@@ -217,7 +217,12 @@ class BackendRegistryController {
   void _persist() {
     unawaited(
       _store
-          .save(BackendStoreData(backends: _state.backends, activeId: _state.activeId))
+          .save(
+            BackendStoreData(
+              backends: _state.backends,
+              activeId: _state.activeId,
+            ),
+          )
           .then((_) {
             _state = _state.withError(null);
             _publish();

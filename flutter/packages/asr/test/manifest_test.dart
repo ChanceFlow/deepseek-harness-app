@@ -33,7 +33,10 @@ void main() {
         expect(model.repoFor(ModelSource.huggingFace), isNotEmpty);
         for (final AsrModelFile file in model.files) {
           expect(file.urlFor(ModelSource.hfMirror), contains('hf-mirror.com'));
-          expect(file.urlFor(ModelSource.huggingFace), contains('huggingface.co'));
+          expect(
+            file.urlFor(ModelSource.huggingFace),
+            contains('huggingface.co'),
+          );
           expect(file.sizeBytes, greaterThan(0));
           // Unprovisioned checksums are an explicit empty sentinel; any
           // provisioned value must be a full lowercase hex digest.

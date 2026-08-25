@@ -50,10 +50,10 @@ String? stagedPresetId({
 /// (the deployment composes no presets — nothing to choose between).
 class AgentPresetSeat extends StatelessWidget {
   const AgentPresetSeat({
-    super.key,
     required this.roster,
     required this.currentId,
     required this.onSelect,
+    super.key,
   });
 
   final AgentPresetRoster? roster;
@@ -214,12 +214,10 @@ class _PresetSheet extends StatelessWidget {
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
-                                                  fontSize: 13,
-                                                  color:
-                                                      theme
-                                                          .colorScheme
-                                                          .onSurface,
-                                                ),
+                                              fontSize: 13,
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                            ),
                                       ),
                                     ),
                                     if (option.isDefault) ...[
@@ -239,19 +237,14 @@ class _PresetSheet extends StatelessWidget {
                                           l10n.defaultBadge,
                                           style: theme.textTheme.labelSmall
                                               ?.copyWith(
-                                                    color:
-                                                        scheme
-                                                            .onSurfaceVariant,
-                                                  ),
+                                                color: scheme.onSurfaceVariant,
+                                              ),
                                         ),
                                       ),
                                     ],
                                   ],
                                 ),
-                                if (agentPresetDisplayDescription(
-                                      option,
-                                      l10n,
-                                    )
+                                if (agentPresetDisplayDescription(option, l10n)
                                     case final String description)
                                   Text(
                                     description,
@@ -290,9 +283,9 @@ class _PresetSheet extends StatelessWidget {
 /// Hidden while the session names no preset or the roster is unloaded.
 class AgentPresetHeaderLabel extends StatelessWidget {
   const AgentPresetHeaderLabel({
-    super.key,
     required this.session,
     required this.roster,
+    super.key,
   });
 
   final SessionSummary? session;

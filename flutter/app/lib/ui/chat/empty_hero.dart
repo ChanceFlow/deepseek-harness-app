@@ -13,9 +13,9 @@ import 'preset_seat.dart';
 
 class EmptyHero extends StatelessWidget {
   const EmptyHero({
-    super.key,
     required this.workspaces,
     required this.onPickWorkspace,
+    super.key,
     this.currentWorkspaceLabel,
     this.presetRoster,
     this.currentPresetId,
@@ -140,9 +140,9 @@ class EmptyHero extends StatelessWidget {
 /// Folder + label + chevron; opens the workspace menu (web WorkspaceChip).
 class WorkspaceChip extends StatelessWidget {
   const WorkspaceChip({
-    super.key,
     required this.workspaces,
     required this.onPickWorkspace,
+    super.key,
     this.label,
   });
 
@@ -178,7 +178,9 @@ class WorkspaceChip extends StatelessWidget {
                       ? Icons.folder_outlined
                       : Icons.folder_open_outlined,
                   size: 16,
-                  color: label == null ? scheme.onSurfaceVariant : scheme.primary,
+                  color: label == null
+                      ? scheme.onSurfaceVariant
+                      : scheme.primary,
                 ),
                 const SizedBox(width: 6),
                 ConstrainedBox(
@@ -269,11 +271,7 @@ class _WorkspaceSheet extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.folder_outlined,
-                    size: 16,
-                    color: scheme.primary,
-                  ),
+                  Icon(Icons.folder_outlined, size: 16, color: scheme.primary),
                   const SizedBox(width: 6),
                   Text(
                     l10n.heroChooseWorkspace,

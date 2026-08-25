@@ -205,9 +205,7 @@ void main() {
     final dead = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final port = dead.port;
     await dead.close(force: true);
-    final socket = WebSocketDshEventSocket(
-      Uri.parse('http://127.0.0.1:$port'),
-    );
+    final socket = WebSocketDshEventSocket(Uri.parse('http://127.0.0.1:$port'));
     await expectLater(
       socket.connect('/api/events.mux'),
       emitsError(isA<DshTransportException>()),

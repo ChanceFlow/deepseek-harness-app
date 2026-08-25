@@ -88,9 +88,10 @@ class DebugTelemetry {
       secure: !settings.endpoint.startsWith('https://'),
       serviceName: settings.serviceName,
       serviceVersion: settings.serviceVersion,
-      resourceAttributes: OTel.attributesFromMap(
-        {...settings.resourceAttributes, ...DebugBuildInfo.fromEnvironment().toResourceAttributes()},
-      ),
+      resourceAttributes: OTel.attributesFromMap({
+        ...settings.resourceAttributes,
+        ...DebugBuildInfo.fromEnvironment().toResourceAttributes(),
+      }),
       detectPlatformResources: false,
       enableMetrics: true,
       enableLogs: true,
@@ -196,15 +197,18 @@ class DebugTelemetry {
   }
 
   /// Lazily-created histogram, e.g. `app.frame.total_ms`.
-  APIHistogram<double> histogram(String name, {String? unit, String? description}) =>
-      _histograms.putIfAbsent(
-        name,
-        () => _meter.createHistogram<double>(
-          name: name,
-          unit: unit,
-          description: description,
-        ),
-      );
+  APIHistogram<double> histogram(
+    String name, {
+    String? unit,
+    String? description,
+  }) => _histograms.putIfAbsent(
+    name,
+    () => _meter.createHistogram<double>(
+      name: name,
+      unit: unit,
+      description: description,
+    ),
+  );
 
   /// Record one measurement into a histogram.
   void record(String name, double value) {

@@ -75,8 +75,9 @@ const AgentPresetRoster _roster = AgentPresetRoster(
 );
 
 File _storeFile() {
-  final Directory directory =
-      Directory.systemTemp.createTempSync('settings_test');
+  final Directory directory = Directory.systemTemp.createTempSync(
+    'settings_test',
+  );
   addTearDown(() => directory.deleteSync(recursive: true));
   return File('${directory.path}/local_state.json');
 }
@@ -120,8 +121,9 @@ class _QuietSocket implements DshEventSocket {
 }
 
 BackendStore _backendStore({String? document}) {
-  final Directory dir =
-      Directory.systemTemp.createTempSync('settings_backends_test');
+  final Directory dir = Directory.systemTemp.createTempSync(
+    'settings_backends_test',
+  );
   addTearDown(() async {
     for (int i = 0; i < 50; i++) {
       try {
@@ -161,12 +163,8 @@ Future<LocalStateStore> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        localStateStoreProvider.overrideWith(
-          (Ref ref) async => store,
-        ),
-        backendStoreProvider.overrideWith(
-          (Ref ref) async => _backendStore(),
-        ),
+        localStateStoreProvider.overrideWith((Ref ref) async => store),
+        backendStoreProvider.overrideWith((Ref ref) async => _backendStore()),
         dshRpcClientProvider(Uri.parse(kDshBaseUrl))
             .overrideWithValue(_FakeRpc()),
         dshEventSocketProvider(Uri.parse(kDshBaseUrl))
@@ -212,12 +210,8 @@ Future<LocalStateStore> _pumpController(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        localStateStoreProvider.overrideWith(
-          (Ref ref) async => store,
-        ),
-        backendStoreProvider.overrideWith(
-          (Ref ref) async => _backendStore(),
-        ),
+        localStateStoreProvider.overrideWith((Ref ref) async => store),
+        backendStoreProvider.overrideWith((Ref ref) async => _backendStore()),
         dshRpcClientProvider(Uri.parse(kDshBaseUrl))
             .overrideWithValue(_FakeRpc()),
         dshEventSocketProvider(Uri.parse(kDshBaseUrl))
@@ -361,8 +355,9 @@ void main() {
 
     expect(store.read(kAppLocalePreferenceKey), 'zh');
 
-    final LocalePreferenceController controller =
-        LocalePreferenceController(store);
+    final LocalePreferenceController controller = LocalePreferenceController(
+      store,
+    );
     expect(controller.state, AppLocalePreference.zh);
     expect(resolveAppLocale(controller.state), const Locale('zh'));
     expect(resolveAppLocale(AppLocalePreference.system), isNull);
@@ -376,22 +371,22 @@ void main() {
     (WidgetTester tester) async {
       final _RecordingSettingsRepository repository =
           _RecordingSettingsRepository(
-        snapshot: const SettingsSnapshot(
-          writable: true,
-          hasDocument: true,
-          namespaces: <SettingsNamespace>[
-            SettingsNamespace(
-              ns: 'agent-presets',
-              applies: SettingsApplies.live,
-              revision: 3,
-              hasUserLayer: true,
-              secretCount: 0,
+            snapshot: const SettingsSnapshot(
+              writable: true,
+              hasDocument: true,
+              namespaces: <SettingsNamespace>[
+                SettingsNamespace(
+                  ns: 'agent-presets',
+                  applies: SettingsApplies.live,
+                  revision: 3,
+                  hasUserLayer: true,
+                  secretCount: 0,
+                ),
+              ],
+              credentialRefs: <String>[],
             ),
-          ],
-          credentialRefs: <String>[],
-        ),
-        roster: _roster,
-      );
+            roster: _roster,
+          );
       final SettingsController controller = SettingsController(repository);
       addTearDown(controller.dispose);
       await _pumpController(tester, controller);
@@ -442,10 +437,7 @@ void main() {
       expect(find.text('In use'), findsOneWidget);
       expect(find.text('My Agent'), findsOneWidget);
       expect(find.text('Failed to load'), findsOneWidget);
-      expect(
-        find.text('agent.cordis.yml not found'),
-        findsOneWidget,
-      );
+      expect(find.text('agent.cordis.yml not found'), findsOneWidget);
       expect(find.text('my-agent'), findsOneWidget);
 
       await tester.tap(find.text('Minimal mode'));
@@ -467,10 +459,7 @@ void main() {
     );
 
     expect(find.text('Agent preset'), findsNothing);
-    expect(
-      find.textContaining('authored on the host'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('authored on the host'), findsOneWidget);
     expect(find.text('Built-in'), findsNothing);
   });
 
@@ -519,11 +508,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final List<SettingsAction> actions = <SettingsAction>[];
-    await _pump(
-      tester,
-      const SettingsUiState(snapshot: _snapshot),
-      actions,
-    );
+    await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
@@ -563,11 +548,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final List<SettingsAction> actions = <SettingsAction>[];
-    await _pump(
-      tester,
-      const SettingsUiState(snapshot: _snapshot),
-      actions,
-    );
+    await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
@@ -751,17 +732,11 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: sheet,
-        matching: find.text('10.0.2.2:3080 · vtest'),
-      ),
+      find.descendant(of: sheet, matching: find.text('10.0.2.2:3080 · vtest')),
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: sheet,
-        matching: find.text('10.0.2.2:3081 · vtest'),
-      ),
+      find.descendant(of: sheet, matching: find.text('10.0.2.2:3081 · vtest')),
       findsOneWidget,
     );
 
@@ -993,10 +968,7 @@ void main() {
     await pumpHostSettings(tester, uiState: const SettingsUiState());
 
     expect(find.text('Host settings unavailable'), findsOneWidget);
-    expect(
-      find.textContaining('The host did not answer'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('The host did not answer'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Host'));
     await tester.pumpAndSettle();
@@ -1011,7 +983,9 @@ void main() {
 
     expect(find.text('ASR Models'), findsOneWidget);
     expect(
-      find.textContaining('Download and manage on-device speech recognition models'),
+      find.textContaining(
+        'Download and manage on-device speech recognition models',
+      ),
       findsOneWidget,
     );
   });

@@ -11,7 +11,10 @@ void main() {
     });
 
     test('DebugBuildInfo keeps the version provenance fields', () {
-      const info = DebugBuildInfo(version: '0.1.0-alpha.1', sourceCommit: 'abc');
+      const info = DebugBuildInfo(
+        version: '0.1.0-alpha.1',
+        sourceCommit: 'abc',
+      );
       expect(info.version, '0.1.0-alpha.1');
       expect(info.toResourceAttributes()['service.version'], '0.1.0-alpha.1');
       expect(info.toResourceAttributes()['deployment.environment'], 'dev');

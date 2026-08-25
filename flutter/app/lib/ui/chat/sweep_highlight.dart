@@ -8,9 +8,9 @@ import 'package:flutter/material.dart';
 
 class SweepHighlight extends StatelessWidget {
   const SweepHighlight({
-    super.key,
     required this.controller,
     required this.child,
+    super.key,
   });
 
   final AnimationController? controller;

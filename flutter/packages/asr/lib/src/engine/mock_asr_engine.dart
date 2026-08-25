@@ -31,7 +31,8 @@ class MockAsrEngine implements AsrEngine {
   AsrEngineState get state => _state;
 
   @override
-  Stream<AsrTranscriptionChunk> get transcriptionStream => _chunkController.stream;
+  Stream<AsrTranscriptionChunk> get transcriptionStream =>
+      _chunkController.stream;
 
   @override
   Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
@@ -40,17 +41,16 @@ class MockAsrEngine implements AsrEngine {
 
   @override
   void acceptAudio(Float32List samples) {
-    if (_state != AsrEngineState.ready && _state != AsrEngineState.listening) return;
+    if (_state != AsrEngineState.ready && _state != AsrEngineState.listening) {
+      return;
+    }
     _state = AsrEngineState.listening;
     _receivedSamplesCount += samples.length;
 
     if (_chunkIndex < simulatedChunks.length) {
       final chunkText = simulatedChunks[_chunkIndex++];
       _chunkController.add(
-        AsrTranscriptionChunk(
-          text: chunkText,
-          isFinal: false,
-        ),
+        AsrTranscriptionChunk(text: chunkText, isFinal: false),
       );
     }
   }
@@ -59,10 +59,7 @@ class MockAsrEngine implements AsrEngine {
   Future<String> finish() async {
     _state = AsrEngineState.transcribing;
     _chunkController.add(
-      AsrTranscriptionChunk(
-        text: finalTranscription,
-        isFinal: true,
-      ),
+      AsrTranscriptionChunk(text: finalTranscription, isFinal: true),
     );
     _state = AsrEngineState.ready;
     return finalTranscription;

@@ -23,8 +23,8 @@ final class GoalSnapshot {
     required this.revision,
     required this.objective,
     required this.phase,
-    this.blockedReason,
     required this.maxGoalRounds,
+    this.blockedReason,
   });
 
   final String id;

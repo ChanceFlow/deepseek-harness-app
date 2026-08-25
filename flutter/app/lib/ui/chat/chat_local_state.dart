@@ -55,7 +55,8 @@ final class ModelSeatPreferences {
       _mapEquals(other.effortByRoute, effortByRoute);
 
   @override
-  int get hashCode => Object.hash(lastSelection, Object.hashAll(effortByRoute.values));
+  int get hashCode =>
+      Object.hash(lastSelection, Object.hashAll(effortByRoute.values));
 
   static bool _mapEquals(Map<String, String> a, Map<String, String> b) {
     if (a.length != b.length) return false;
@@ -270,8 +271,7 @@ class StoreChatSessionLocalState implements ChatSessionLocalState {
   }
 
   @override
-  Future<bool> expanded(String key) async =>
-      _readExpandedTools().contains(key);
+  Future<bool> expanded(String key) async => _readExpandedTools().contains(key);
 
   @override
   Future<void> setExpanded(String key, bool expanded) {

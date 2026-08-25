@@ -59,7 +59,8 @@ const List<TimelineItem> _conversation = <TimelineItem>[
       id: 'm1',
       sessionId: 's1',
       role: MessageRole.user,
-      text: 'the dock eats half the screen on my phone — can you look at '
+      text:
+          'the dock eats half the screen on my phone — can you look at '
           'chat_screen.dart and tell me what is taking the space?',
       createdAtEpochMs: kNow,
       seq: 11,
@@ -70,9 +71,11 @@ const List<TimelineItem> _conversation = <TimelineItem>[
       id: 'm2',
       sessionId: 's1',
       role: MessageRole.assistant,
-      reasoning: 'The dock stacks four chrome strips above the composer. '
+      reasoning:
+          'The dock stacks four chrome strips above the composer. '
           'Measuring each one against the transcript budget.',
-      text: 'Three things stack above the composer:\n\n'
+      text:
+          'Three things stack above the composer:\n\n'
           '1. `TodoPanel` — 3 rows, always mounted\n'
           '2. `GoalBarStrip` — one line, only when a goal exists\n'
           '3. `StatsLine` — turns / steps / tokens\n\n'
@@ -111,7 +114,8 @@ const List<TimelineItem> _conversation = <TimelineItem>[
       id: 'm4',
       sessionId: 's1',
       role: MessageRole.assistant,
-      text: 'Done — `maxLines: 4`, and the field scrolls past that. The dock '
+      text:
+          'Done — `maxLines: 4`, and the field scrolls past that. The dock '
           'now tops out at 168px with the plan strip open.',
       createdAtEpochMs: kNow + 3000,
       seq: 22,
@@ -300,11 +304,7 @@ ChatUiState emptyState() {
 ChatUiState emptyStateWithWorkspaces() {
   return const ChatUiState(
     sessions: <SessionSummary>[
-      SessionSummary(
-        id: 's9',
-        title: '',
-        blank: true,
-      ),
+      SessionSummary(id: 's9', title: '', blank: true),
     ],
     selectedSessionId: 's9',
     workspaces: <WorkspaceSummary>[
@@ -363,11 +363,7 @@ const List<TimelineItem> _questionTimeline = <TimelineItem>[
             '（字段是 archivedSessionIds，会话行菜单里有“归档会话”，归档后该会话'
             '在所有分组界面消失，但工作区组头仍显示）。侧边栏要哪种归档？',
         header: '归档范围',
-        options: [
-          '会话行归档（web 平价）(Recommended)',
-          '工作区组头“归档此工作区”',
-          '两者都要',
-        ],
+        options: ['会话行归档（web 平价）(Recommended)', '工作区组头“归档此工作区”', '两者都要'],
         optionDescriptions: {
           '会话行归档（web 平价）(Recommended)':
               '每个侧边栏会话行加“⋮ 菜单 → 归档会话”，归档后该行消失，'
@@ -375,8 +371,7 @@ const List<TimelineItem> _questionTimeline = <TimelineItem>[
           '工作区组头“归档此工作区”':
               '在工作区组头加“归档此工作区”，一键归档该组所有会话，'
               '整组随后消失（web 无此动作，属产品扩展）。',
-          '两者都要':
-              '会话行归档（web 平价）+ 组头“归档此工作区”批量归档该组全部会话。',
+          '两者都要': '会话行归档（web 平价）+ 组头“归档此工作区”批量归档该组全部会话。',
         },
       ),
     ],

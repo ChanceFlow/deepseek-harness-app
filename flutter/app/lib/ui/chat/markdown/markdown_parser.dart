@@ -320,16 +320,13 @@ abstract final class MarkdownParser {
 
     // Character offset of the first unconsumed line: the cursor's block
     // boundary (the end of whatever is emitted at this moment).
-    int boundary() =>
-        index < lines.length ? lineStarts[index] : text.length;
+    int boundary() => index < lines.length ? lineStarts[index] : text.length;
 
     void flushParagraph() {
       if (paragraph.isNotEmpty) {
         blocks.add(
           SpannedMarkdownBlock(
-            block: ParagraphBlock(
-              inlines: parseInlines(foldLines(paragraph)),
-            ),
+            block: ParagraphBlock(inlines: parseInlines(foldLines(paragraph))),
             start: paragraphStart,
             end: boundary(),
           ),

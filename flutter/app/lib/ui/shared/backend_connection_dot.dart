@@ -12,7 +12,7 @@ import '../subagents/subagent_screen.dart'
     show SubagentDotState, SubagentStateDot;
 
 class BackendConnectionDot extends ConsumerWidget {
-  const BackendConnectionDot({super.key, required this.backendId});
+  const BackendConnectionDot({required this.backendId, super.key});
 
   final String backendId;
 

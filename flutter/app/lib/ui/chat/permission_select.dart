@@ -7,6 +7,8 @@
 /// read-only (nothing to switch to).
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +26,10 @@ String permissionDisplayName(String name) {
   if (!RegExp(r'^[a-z0-9]+(-[a-z0-9]+)*$').hasMatch(name)) return name;
   return name
       .split('-')
-      .map((word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1))
+      .map(
+        (word) =>
+            word.isEmpty ? word : word[0].toUpperCase() + word.substring(1),
+      )
       .join(' ');
 }
 
@@ -54,10 +59,10 @@ IconData permissionGlyph(String value) => switch (value) {
 /// session.
 class PermissionSelectChip extends StatelessWidget {
   const PermissionSelectChip({
-    super.key,
     required this.value,
     required this.locked,
     required this.onAction,
+    super.key,
   });
 
   final PermissionSelect value;
@@ -127,7 +132,7 @@ class PermissionSelectChip extends StatelessWidget {
   void _choose(BuildContext context, String preset) {
     if (preset == _currentValue) return;
     if (preset == _kFullAccess) {
-      _confirmFullAccess(context, preset);
+      unawaited(_confirmFullAccess(context, preset));
       return;
     }
     _submit(preset);
@@ -153,7 +158,8 @@ class PermissionSelectChip extends StatelessWidget {
     final enabled = !locked && !_readOnly;
     return Tooltip(
       message:
-          value.currentOption?.description ?? l10n.accessModeTooltip(_label(l10n)),
+          value.currentOption?.description ??
+          l10n.accessModeTooltip(_label(l10n)),
       child: Opacity(
         // Web .trigger:disabled — the locked seat dims.
         opacity: enabled ? 1 : 0.6,
@@ -269,11 +275,10 @@ class _PermissionSheet extends StatelessWidget {
                                     description,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall
-                                        ?.copyWith(
-                                          fontSize: 12,
-                                          color: scheme.onSurfaceVariant,
-                                        ),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontSize: 12,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ),
                               ],
                             ),

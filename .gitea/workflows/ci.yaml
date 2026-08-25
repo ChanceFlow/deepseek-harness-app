@@ -5,8 +5,8 @@
 #
 #   docs  python3 scripts/verify_all.py docs — python only; needs the
 #         reference submodule (the launcher-icon drift gate reads it)
-#   code  python3 scripts/verify_all.py code — flutter analyze, the full
-#         test suite, the import gate
+#   code  python3 scripts/verify_all.py code — flutter analyze, dart format
+#         check, the full test suite, the import gate, unused deps
 #
 # Requirements for the runner:
 #   - network access (fetches Flutter 3.47.1 via subosito/flutter-action and
@@ -63,5 +63,5 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Code gates (analyze, tests, imports)
+      - name: Code gates (analyze, format, tests, imports)
         run: python3 scripts/verify_all.py code

@@ -25,7 +25,9 @@ class SettingsBackendScope extends Notifier<String> {
     final registry = ref.watch(backendRegistryStateProvider).value;
     final candidate = _pinned ?? active;
     if (candidate.isNotEmpty && registry != null) {
-      final exists = registry.backends.any((backend) => backend.id == candidate);
+      final exists = registry.backends.any(
+        (backend) => backend.id == candidate,
+      );
       if (!exists) {
         // The pinned backend is gone; fall back to following the active
         // one. The registry guard keeps the active backend removable-proof,
@@ -58,6 +60,4 @@ class SettingsBackendScope extends Notifier<String> {
 /// The backend the Settings host pages describe. Follows the active
 /// backend until [SettingsBackendScope.select] pins it.
 final settingsBackendScopeProvider =
-    NotifierProvider<SettingsBackendScope, String>(
-      SettingsBackendScope.new,
-    );
+    NotifierProvider<SettingsBackendScope, String>(SettingsBackendScope.new);

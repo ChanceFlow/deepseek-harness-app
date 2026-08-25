@@ -518,9 +518,7 @@ class TimelineReducer {
     switch (kind) {
       case 'error':
         final failure = asJsonObject(reason!['error']);
-        message = failure == null
-            ? null
-            : wireString(failure, 'message') ?? '';
+        message = failure == null ? null : wireString(failure, 'message') ?? '';
       case 'aborted':
       case 'interrupted':
       case 'max-tokens':

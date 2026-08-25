@@ -675,13 +675,18 @@ void main() {
     // expansion controller restores it without a user tap.
     await localState
         .forSession('s1')
-        .setExpanded(timelineKey(const TimelineToolCall(
-          id: 'call-1',
-          name: 'bash',
-          arguments: 'ls -la',
-          result: 'README.md',
-          status: ToolRunStatus.completed,
-        )), true);
+        .setExpanded(
+          timelineKey(
+            const TimelineToolCall(
+              id: 'call-1',
+              name: 'bash',
+              arguments: 'ls -la',
+              result: 'README.md',
+              status: ToolRunStatus.completed,
+            ),
+          ),
+          true,
+        );
     await _pump(
       tester,
       _state(
@@ -717,13 +722,15 @@ void main() {
     final localState = FakeChatLocalState();
     final session = localState.forSession('s1');
     await session.setExpanded(
-      timelineKey(const TimelineToolCall(
-        id: 'call-1',
-        name: 'bash',
-        arguments: 'ls -la',
-        result: 'README.md',
-        status: ToolRunStatus.completed,
-      )),
+      timelineKey(
+        const TimelineToolCall(
+          id: 'call-1',
+          name: 'bash',
+          arguments: 'ls -la',
+          result: 'README.md',
+          status: ToolRunStatus.completed,
+        ),
+      ),
       true,
     );
     await _pump(
@@ -1177,11 +1184,7 @@ void main() {
           TimelineQuestionRequest(
             requestId: 'rpc-5',
             questions: [
-              QuestionItem(
-                id: 'q1',
-                question: 'Pick',
-                options: ['a', 'b'],
-              ),
+              QuestionItem(id: 'q1', question: 'Pick', options: ['a', 'b']),
             ],
           ),
         ],
@@ -1191,13 +1194,11 @@ void main() {
 
     await tester.tap(find.byTooltip('Dismiss all questions'));
     await tester.pump();
-    expect(
-      actions,
-      contains(const DismissQuestionAction(requestId: 'rpc-5')),
-    );
+    expect(actions, contains(const DismissQuestionAction(requestId: 'rpc-5')));
   });
 
-  testWidgets('plan review renders a decision card with approve/decline/discuss',
+  testWidgets(
+    'plan review renders a decision card with approve/decline/discuss',
     (tester) async {
       final actions = <ChatAction>[];
       await _pump(
@@ -1280,7 +1281,8 @@ void main() {
         actions,
         contains(const DismissQuestionAction(requestId: 'rpc-6')),
       );
-    });
+    },
+  );
 
   testWidgets('a non-binary question batch stays in the generic flow', (
     tester,
@@ -1301,10 +1303,7 @@ void main() {
                 id: 'plan-1',
                 question: 'Pick one',
                 options: ['Approve', 'Maybe', 'No'],
-                intent: QuestionIntent(
-                  kind: 'plan-review',
-                  approve: 'Approve',
-                ),
+                intent: QuestionIntent(kind: 'plan-review', approve: 'Approve'),
               ),
             ],
           ),
@@ -1490,9 +1489,7 @@ void main() {
     tester,
   ) async {
     final actions = <ChatAction>[];
-    const sessions = [
-      SessionSummary(id: 's1', title: 'Alpha', blank: false),
-    ];
+    const sessions = [SessionSummary(id: 's1', title: 'Alpha', blank: false)];
     const goal = GoalProjection(
       goal: GoalSnapshot(
         id: 'g1',
@@ -1549,9 +1546,7 @@ void main() {
     expect(find.text('Ship the MVP'), findsNothing);
   });
 
-  testWidgets('the composer field caps at four visible lines', (
-    tester,
-  ) async {
+  testWidgets('the composer field caps at four visible lines', (tester) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -1798,10 +1793,7 @@ void main() {
         ),
       ),
     );
-    expect(
-      actions.whereType<SendPrompt>(),
-      isEmpty,
-    );
+    expect(actions.whereType<SendPrompt>(), isEmpty);
     expect(find.text('a.png'), findsOneWidget);
     expect(
       tester.widget<TextField>(composerField).controller?.text,
@@ -1809,8 +1801,9 @@ void main() {
     );
   });
 
-  testWidgets('a submission with images still sends image-accepting commands',
-      (tester) async {
+  testWidgets('a submission with images still sends image-accepting commands', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -1847,10 +1840,7 @@ void main() {
       actions,
       contains(const SendPrompt('/goal Ship the MVP', mode: PromptMode.queue)),
     );
-    expect(
-      actions.whereType<CommandImageRefusal>(),
-      isEmpty,
-    );
+    expect(actions.whereType<CommandImageRefusal>(), isEmpty);
   });
 
   testWidgets('slash skill candidates filter and land /name text', (
@@ -2224,96 +2214,103 @@ void main() {
     expect(position().pixels, position().maxScrollExtent);
   });
 
-  testWidgets('jump-to-bottom FAB appears away from the bottom and jumps back', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(800, 1280);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'jump-to-bottom FAB appears away from the bottom and jumps back',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1280);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    String tail(int lines) => List<String>.generate(
-      lines,
-      (i) => 'jump line $i keeps growing',
-    ).join('\n');
-    ChatUiState stateFor(String assistantText) => ChatUiState(
-      sessions: const [
-        SessionSummary(id: 's1', title: 'Alpha', blank: false),
-      ],
-      selectedSessionId: 's1',
-      timeline: [
-        const TimelineTurnBoundary(1),
-        const TimelineMessage(
-          ChatMessage(
-            id: 'um1',
-            sessionId: 's1',
-            role: MessageRole.user,
-            text: 'go',
+      String tail(int lines) => List<String>.generate(
+        lines,
+        (i) => 'jump line $i keeps growing',
+      ).join('\n');
+      ChatUiState stateFor(String assistantText) => ChatUiState(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: [
+          const TimelineTurnBoundary(1),
+          const TimelineMessage(
+            ChatMessage(
+              id: 'um1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'go',
+            ),
           ),
-        ),
-        TimelineMessage(
-          ChatMessage(
-            id: 'm2',
-            sessionId: 's1',
-            role: MessageRole.assistant,
-            text: assistantText,
-            streaming: false,
+          TimelineMessage(
+            ChatMessage(
+              id: 'm2',
+              sessionId: 's1',
+              role: MessageRole.assistant,
+              text: assistantText,
+              streaming: false,
+            ),
           ),
+        ],
+      );
+      Widget host(ChatUiState ui) => ProviderScope(
+        child: l10nApp(
+          home: ChatScreen(uiState: ui, onAction: (_) {}),
         ),
-      ],
-    );
-    Widget host(ChatUiState ui) => ProviderScope(
-      child: l10nApp(
-        home: ChatScreen(uiState: ui, onAction: (_) {}),
-      ),
-    );
+      );
 
-    Finder timelineList() => find.descendant(
-      of: find.byType(ChatPanel),
-      matching: find.byType(ListView),
-    );
-    ScrollPosition position() => tester
-        .state<ScrollableState>(
-          find
-              .descendant(of: timelineList(), matching: find.byType(Scrollable))
-              .first,
-        )
-        .position;
-    Finder fab() => find.byTooltip('Jump to bottom');
+      Finder timelineList() => find.descendant(
+        of: find.byType(ChatPanel),
+        matching: find.byType(ListView),
+      );
+      ScrollPosition position() => tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: timelineList(),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      Finder fab() => find.byTooltip('Jump to bottom');
 
-    // First mount lands at the bottom: the FAB stays folded.
-    await tester.pumpWidget(host(stateFor(tail(80))));
-    await tester.pumpAndSettle();
-    expect(position().pixels, position().maxScrollExtent);
-    expect(fab(), findsNothing);
+      // First mount lands at the bottom: the FAB stays folded.
+      await tester.pumpWidget(host(stateFor(tail(80))));
+      await tester.pumpAndSettle();
+      expect(position().pixels, position().maxScrollExtent);
+      expect(fab(), findsNothing);
 
-    // The reader leaves the bottom: the FAB appears.
-    await tester.drag(timelineList(), const Offset(0, 400));
-    await tester.pumpAndSettle();
-    expect(position().maxScrollExtent - position().pixels, greaterThan(24));
-    expect(fab(), findsOneWidget);
-    // The FAB sits at the timeline's bottom-right corner.
-    expect(
-      tester.getBottomRight(fab()).dx,
-      lessThan(tester.getBottomRight(timelineList()).dx),
-    );
+      // The reader leaves the bottom: the FAB appears.
+      await tester.drag(timelineList(), const Offset(0, 400));
+      await tester.pumpAndSettle();
+      expect(position().maxScrollExtent - position().pixels, greaterThan(24));
+      expect(fab(), findsOneWidget);
+      // The FAB sits at the timeline's bottom-right corner.
+      expect(
+        tester.getBottomRight(fab()).dx,
+        lessThan(tester.getBottomRight(timelineList()).dx),
+      );
 
-    // Tap: glide back to the bottom and the FAB folds again.
-    await tester.tap(fab());
-    await tester.pumpAndSettle();
-    expect(position().pixels, position().maxScrollExtent);
-    expect(fab(), findsNothing);
+      // Tap: glide back to the bottom and the FAB folds again.
+      await tester.tap(fab());
+      await tester.pumpAndSettle();
+      expect(position().pixels, position().maxScrollExtent);
+      expect(fab(), findsNothing);
 
-    // Scrolling within the follow threshold of the bottom keeps it hidden.
-    await tester.drag(timelineList(), const Offset(0, 300));
-    await tester.pumpAndSettle();
-    expect(fab(), findsOneWidget);
-    await tester.drag(timelineList(), const Offset(0, -280));
-    await tester.pumpAndSettle();
-    // 300 - 280 = 20px from the bottom: inside the 24px threshold.
-    expect(position().maxScrollExtent - position().pixels, lessThanOrEqualTo(24));
-    expect(fab(), findsNothing);
-  });
+      // Scrolling within the follow threshold of the bottom keeps it hidden.
+      await tester.drag(timelineList(), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(fab(), findsOneWidget);
+      await tester.drag(timelineList(), const Offset(0, -280));
+      await tester.pumpAndSettle();
+      // 300 - 280 = 20px from the bottom: inside the 24px threshold.
+      expect(
+        position().maxScrollExtent - position().pixels,
+        lessThanOrEqualTo(24),
+      );
+      expect(fab(), findsNothing);
+    },
+  );
 
   testWidgets('jump-to-bottom FAB stays hidden on a short timeline', (
     tester,
@@ -2355,7 +2352,10 @@ void main() {
     // even after the reader tries to scroll.
     expect(find.byTooltip('Jump to bottom'), findsNothing);
     await tester.drag(
-      find.descendant(of: find.byType(ChatPanel), matching: find.byType(ListView)),
+      find.descendant(
+        of: find.byType(ChatPanel),
+        matching: find.byType(ListView),
+      ),
       const Offset(0, 300),
     );
     await tester.pumpAndSettle();
@@ -2623,10 +2623,7 @@ void main() {
     });
 
     test('no facts means no second line', () {
-      expect(
-        sessionContextLine(const SessionSummary(id: 's1'), null),
-        isNull,
-      );
+      expect(sessionContextLine(const SessionSummary(id: 's1'), null), isNull);
     });
   });
 }

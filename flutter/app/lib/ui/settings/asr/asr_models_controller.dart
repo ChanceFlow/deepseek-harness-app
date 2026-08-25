@@ -151,9 +151,9 @@ class AsrModelsController {
     }
 
     _registrySub = manager!.updates.listen((_) {
-      _refresh();
+      unawaited(_refresh());
     });
-    _refresh();
+    unawaited(_refresh());
   }
 
   Future<void> _refresh() async {
@@ -167,11 +167,7 @@ class AsrModelsController {
         diskBytes = await manager!.getActualDiskUsage(info.id);
       }
       cards.add(
-        AsrModelCardState(
-          info: info,
-          entry: entry,
-          diskUsageBytes: diskBytes,
-        ),
+        AsrModelCardState(info: info, entry: entry, diskUsageBytes: diskBytes),
       );
     }
 
@@ -198,24 +194,30 @@ class AsrModelsController {
 
   void onAction(AsrModelsAction action) {
     switch (action) {
-      case StartDownloadAction(:final String modelId, :final ModelSource? sourceOverride):
-        _startDownload(modelId, sourceOverride: sourceOverride);
+      case StartDownloadAction(
+        :final String modelId,
+        :final ModelSource? sourceOverride,
+      ):
+        unawaited(_startDownload(modelId, sourceOverride: sourceOverride));
       case CancelDownloadAction(:final String modelId):
-        _cancelDownload(modelId);
-      case RetryWithSourceAction(:final String modelId, :final ModelSource targetSource):
-        _retryWithSource(modelId, targetSource);
+        unawaited(_cancelDownload(modelId));
+      case RetryWithSourceAction(
+        :final String modelId,
+        :final ModelSource targetSource,
+      ):
+        unawaited(_retryWithSource(modelId, targetSource));
       case DeleteModelAction(:final String modelId):
-        _deleteModel(modelId);
+        unawaited(_deleteModel(modelId));
       case SetDefaultSourceAction(:final ModelSource source):
         _setDefaultSource(source);
       case SetAllowCellularAction(:final bool allow):
         _setAllowCellular(allow);
       case SetActiveModelAction(:final String? modelId):
-        _setActiveModel(modelId);
+        unawaited(_setActiveModel(modelId));
       case DismissAsrErrorAction():
         _emit(_state.copyWith(clearError: true));
       case RefreshAsrStateAction():
-        _refresh();
+        unawaited(_refresh());
     }
   }
 
@@ -225,7 +227,10 @@ class AsrModelsController {
     await _refresh();
   }
 
-  Future<void> _startDownload(String modelId, {ModelSource? sourceOverride}) async {
+  Future<void> _startDownload(
+    String modelId, {
+    ModelSource? sourceOverride,
+  }) async {
     if (manager == null) return;
     try {
       await manager!.startDownload(modelId, sourceOverride: sourceOverride);
@@ -239,7 +244,10 @@ class AsrModelsController {
     await manager!.cancelDownload(modelId);
   }
 
-  Future<void> _retryWithSource(String modelId, ModelSource targetSource) async {
+  Future<void> _retryWithSource(
+    String modelId,
+    ModelSource targetSource,
+  ) async {
     if (manager == null) return;
     try {
       await manager!.retryWithSource(modelId, targetSource);
@@ -267,7 +275,7 @@ class AsrModelsController {
   }
 
   void dispose() {
-    _registrySub?.cancel();
-    _stateController.close();
+    unawaited(_registrySub?.cancel());
+    unawaited(_stateController.close());
   }
 }

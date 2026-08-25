@@ -12,10 +12,10 @@ import 'package:flutter/services.dart';
 
 class MessageIconActions extends StatefulWidget {
   const MessageIconActions({
-    super.key,
     required this.text,
     required this.timeEpochMs,
     required this.clockAtStart,
+    super.key,
     this.onFork,
   });
 

@@ -13,9 +13,9 @@ import 'chat_ui_state.dart';
 
 class ApprovalPanel extends StatelessWidget {
   const ApprovalPanel({
-    super.key,
     required this.request,
     required this.onAction,
+    super.key,
   });
 
   final TimelineApprovalRequest request;
@@ -69,8 +69,7 @@ class ApprovalPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.reason ??
-                      l10n.approveToolFallback(request.toolName),
+                  request.reason ?? l10n.approveToolFallback(request.toolName),
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(

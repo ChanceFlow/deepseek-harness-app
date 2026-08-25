@@ -94,19 +94,21 @@ class LocalePreferenceController {
 
 /// One controller per store; the store instance is shared with every
 /// other LocalStateStore consumer (the App-settings language row).
-final localePreferenceProvider =
-    FutureProvider<LocalePreferenceController>((ref) async {
-      final store = await ref.watch(localStateStoreProvider.future);
-      final controller = LocalePreferenceController(store);
-      ref.onDispose(controller.dispose);
-      return controller;
-    });
+final localePreferenceProvider = FutureProvider<LocalePreferenceController>((
+  ref,
+) async {
+  final store = await ref.watch(localStateStoreProvider.future);
+  final controller = LocalePreferenceController(store);
+  ref.onDispose(controller.dispose);
+  return controller;
+});
 
 /// The effective preference for MaterialApp locale resolution; null
 /// (system) while the store loads or is unavailable. `DshApp` watches
 /// this so a language tap re-localizes the whole app.
-final appLocalePreferenceProvider =
-    StreamProvider<AppLocalePreference>((ref) async* {
-      final controller = await ref.watch(localePreferenceProvider.future);
-      yield* controller.uiState;
-    });
+final appLocalePreferenceProvider = StreamProvider<AppLocalePreference>((
+  ref,
+) async* {
+  final controller = await ref.watch(localePreferenceProvider.future);
+  yield* controller.uiState;
+});

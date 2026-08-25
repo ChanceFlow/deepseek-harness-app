@@ -22,11 +22,10 @@ class FakeChatLocalState implements ChatLocalState {
   Future<String> busyEnterBehavior() async => busyEnter;
 
   @override
-  ChatSessionLocalState forSession(String sessionId) => _sessions
-      .putIfAbsent(
-        sessionId,
-        () => FakeChatSessionLocalState(this, sessionId),
-      );
+  ChatSessionLocalState forSession(String sessionId) => _sessions.putIfAbsent(
+    sessionId,
+    () => FakeChatSessionLocalState(this, sessionId),
+  );
 }
 
 class FakeChatSessionLocalState implements ChatSessionLocalState {

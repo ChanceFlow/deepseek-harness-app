@@ -21,11 +21,9 @@ final class HttpDshRpcClient implements DshRpcClient {
     this._baseUrl, {
     http.Client? httpClient,
     this.connectTimeout = kDshRpcConnectTimeout,
-  }) : _httpClient = httpClient ??
-           IOClient(
-             HttpClient()
-               ..connectionTimeout = connectTimeout,
-           );
+  }) : _httpClient =
+           httpClient ??
+           IOClient(HttpClient()..connectionTimeout = connectTimeout);
 
   final Uri _baseUrl;
   final http.Client _httpClient;

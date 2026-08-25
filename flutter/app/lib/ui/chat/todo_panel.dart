@@ -54,7 +54,7 @@ class _StatusGlyph extends StatelessWidget {
 }
 
 class TodoPanel extends StatefulWidget {
-  const TodoPanel({super.key, required this.todos});
+  const TodoPanel({required this.todos, super.key});
 
   /// The session's standing plan; an empty list renders nothing (web
   /// rule — no data of its own, hidden while empty).

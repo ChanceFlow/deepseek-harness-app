@@ -60,9 +60,9 @@ class SubagentRoute extends ConsumerWidget {
 
 class SubagentScreen extends StatefulWidget {
   const SubagentScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
   });
 
   final SubagentUiState uiState;
@@ -337,7 +337,9 @@ class _ParentSelectorRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: selected == null ? scheme.onSurfaceVariant : null,
+                        color: selected == null
+                            ? scheme.onSurfaceVariant
+                            : null,
                       ),
                     ),
                   ],
@@ -541,7 +543,6 @@ class _CatalogBranch extends StatelessWidget {
 /// tap opens the child detail view.
 class _CatalogEntryRow extends StatelessWidget {
   const _CatalogEntryRow({
-    super.key,
     required this.entry,
     required this.summary,
     required this.level,
@@ -549,6 +550,7 @@ class _CatalogEntryRow extends StatelessWidget {
     required this.reserveDisclosure,
     required this.onOpen,
     required this.onToggleBranch,
+    super.key,
   });
 
   final SubagentEntry entry;
@@ -641,10 +643,10 @@ class _CatalogEntryRow extends StatelessWidget {
 /// row with the error dot and the reason as its only summary.
 class _DiagnosticEntryRow extends StatelessWidget {
   const _DiagnosticEntryRow({
-    super.key,
     required this.entry,
     required this.level,
     required this.reserveDisclosure,
+    super.key,
   });
 
   final SubagentEntry entry;
@@ -949,10 +951,10 @@ class _ReadOnlyComposerNotice extends StatelessWidget {
 /// to the child through the widget key.
 class _ChildComposerBar extends StatefulWidget {
   const _ChildComposerBar({
-    super.key,
     required this.enabled,
     required this.isSending,
     required this.onSend,
+    super.key,
   });
 
   final bool enabled;
@@ -1051,7 +1053,7 @@ class _ErrorBanner extends StatelessWidget {
 enum SubagentDotState { ongoing, done, error }
 
 class SubagentStateDot extends StatelessWidget {
-  const SubagentStateDot({super.key, required this.state, this.size = 8});
+  const SubagentStateDot({required this.state, super.key, this.size = 8});
 
   final SubagentDotState state;
   final double size;

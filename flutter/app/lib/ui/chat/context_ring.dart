@@ -8,6 +8,8 @@
 /// chrome).
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +17,7 @@ import 'package:flutter/material.dart';
 import 'stats_line.dart' show formatTokens;
 
 class ContextRing extends StatelessWidget {
-  const ContextRing({super.key, required this.pressure, this.breakdown});
+  const ContextRing({required this.pressure, super.key, this.breakdown});
 
   final ContextPressure? pressure;
 
@@ -59,78 +61,80 @@ class ContextRing extends StatelessWidget {
   void _openPanel(BuildContext context, int percent, int used, int window) {
     // Web anchors a popover above the ring; mobile v2 uses a right-aligned
     // bottom sheet-like dialog with the same panel chrome (deviation §8.1).
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final scheme = Theme.of(dialogContext).colorScheme;
-        final theme = Theme.of(dialogContext);
-        final l10n = AppLocalizations.of(dialogContext)!;
-        final rows = <(String, int, Color)>[
-          (
-            l10n.systemPromptLabel,
-            breakdown?.systemTokens ?? 0,
-            scheme.outline,
-          ),
-          (l10n.toolsLabel, breakdown?.toolsTokens ?? 0, scheme.tertiary),
-          (
-            l10n.conversationLabel,
-            breakdown?.messageTokens ?? 0,
-            scheme.primary,
-          ),
-        ];
-        return Dialog(
-          alignment: Alignment.bottomCenter,
-          backgroundColor: scheme.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: scheme.outlineVariant),
-          ),
-          child: SizedBox(
-            width: 264,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.contextUsedPercent(percent),
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  // Web panel header `.figures`: the reading's numerator
-                  // and capacity in compact token form.
-                  Text(
-                    l10n.contextTokens(
-                      formatTokens(used),
-                      formatTokens(window),
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          final scheme = Theme.of(dialogContext).colorScheme;
+          final theme = Theme.of(dialogContext);
+          final l10n = AppLocalizations.of(dialogContext)!;
+          final rows = <(String, int, Color)>[
+            (
+              l10n.systemPromptLabel,
+              breakdown?.systemTokens ?? 0,
+              scheme.outline,
+            ),
+            (l10n.toolsLabel, breakdown?.toolsTokens ?? 0, scheme.tertiary),
+            (
+              l10n.conversationLabel,
+              breakdown?.messageTokens ?? 0,
+              scheme.primary,
+            ),
+          ];
+          return Dialog(
+            alignment: Alignment.bottomCenter,
+            backgroundColor: scheme.surfaceContainerHigh,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+            child: SizedBox(
+              width: 264,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.contextUsedPercent(percent),
+                      style: theme.textTheme.bodyMedium,
                     ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w500,
+                    // Web panel header `.figures`: the reading's numerator
+                    // and capacity in compact token form.
+                    Text(
+                      l10n.contextTokens(
+                        formatTokens(used),
+                        formatTokens(window),
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  for (final (label, tokens, color) in rows)
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
+                    const SizedBox(height: 6),
+                    for (final (label, tokens, color) in rows)
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(child: Text(label)),
-                        Text('$tokens'),
-                      ],
-                    ),
-                ],
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(label)),
+                          Text('$tokens'),
+                        ],
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

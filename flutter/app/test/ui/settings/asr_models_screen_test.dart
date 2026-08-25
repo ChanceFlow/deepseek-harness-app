@@ -7,13 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AsrModelsScreen Widget Tests', () {
-    testWidgets('renders 3 model cards and header properly', (WidgetTester tester) async {
+    testWidgets('renders 3 model cards and header properly', (
+      WidgetTester tester,
+    ) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final List<AsrModelCardState> cards = AsrModelManifest.all.map((AsrModelInfo info) {
+      final List<AsrModelCardState> cards = AsrModelManifest.all.map((
+        AsrModelInfo info,
+      ) {
         return AsrModelCardState(
           info: info,
           entry: ModelRegistryEntry(
@@ -38,10 +42,7 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
-          home: AsrModelsScreen(
-            uiState: state,
-            onAction: (_) {},
-          ),
+          home: AsrModelsScreen(uiState: state, onAction: (_) {}),
         ),
       );
 
@@ -52,14 +53,18 @@ void main() {
       expect(find.text('Download'), findsNWidgets(3));
     });
 
-    testWidgets('dispatches start download action on tap', (WidgetTester tester) async {
+    testWidgets('dispatches start download action on tap', (
+      WidgetTester tester,
+    ) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final List<AsrModelsAction> actions = <AsrModelsAction>[];
-      final List<AsrModelCardState> cards = AsrModelManifest.all.map((AsrModelInfo info) {
+      final List<AsrModelCardState> cards = AsrModelManifest.all.map((
+        AsrModelInfo info,
+      ) {
         return AsrModelCardState(
           info: info,
           entry: ModelRegistryEntry(
@@ -83,10 +88,7 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
-          home: AsrModelsScreen(
-            uiState: state,
-            onAction: actions.add,
-          ),
+          home: AsrModelsScreen(uiState: state, onAction: actions.add),
         ),
       );
 
@@ -95,10 +97,15 @@ void main() {
 
       expect(actions.length, equals(1));
       expect(actions.first, isA<StartDownloadAction>());
-      expect((actions.first as StartDownloadAction).modelId, equals('sensevoice-small'));
+      expect(
+        (actions.first as StartDownloadAction).modelId,
+        equals('sensevoice-small'),
+      );
     });
 
-    testWidgets('shows delete confirmation dialog on delete button tap', (WidgetTester tester) async {
+    testWidgets('shows delete confirmation dialog on delete button tap', (
+      WidgetTester tester,
+    ) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -129,10 +136,7 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: const Locale('en'),
-          home: AsrModelsScreen(
-            uiState: state,
-            onAction: actions.add,
-          ),
+          home: AsrModelsScreen(uiState: state, onAction: actions.add),
         ),
       );
 
@@ -141,7 +145,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Delete model'), findsOneWidget);
-      expect(find.text('Are you sure you want to delete SenseVoice-Small? You can download it again anytime.'), findsOneWidget);
+      expect(
+        find.text(
+          'Are you sure you want to delete SenseVoice-Small? You can download it again anytime.',
+        ),
+        findsOneWidget,
+      );
 
       // Tap confirm Delete inside Dialog
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
@@ -149,48 +158,51 @@ void main() {
 
       expect(actions.length, equals(1));
       expect(actions.first, isA<DeleteModelAction>());
-      expect((actions.first as DeleteModelAction).modelId, equals('sensevoice-small'));
+      expect(
+        (actions.first as DeleteModelAction).modelId,
+        equals('sensevoice-small'),
+      );
     });
 
-    testWidgets('renders active speech model section when models are downloaded', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'renders active speech model section when models are downloaded',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      const List<AsrModelCardState> cards = <AsrModelCardState>[
-        AsrModelCardState(
-          info: AsrModelManifest.senseVoiceSmall,
-          entry: ModelRegistryEntry(
-            modelId: 'sensevoice-small',
-            source: ModelSource.hfMirror,
-            localDir: '/tmp/sensevoice-small',
-            status: AsrModelStatus.downloaded,
+        const List<AsrModelCardState> cards = <AsrModelCardState>[
+          AsrModelCardState(
+            info: AsrModelManifest.senseVoiceSmall,
+            entry: ModelRegistryEntry(
+              modelId: 'sensevoice-small',
+              source: ModelSource.hfMirror,
+              localDir: '/tmp/sensevoice-small',
+              status: AsrModelStatus.downloaded,
+            ),
+            diskUsageBytes: 239549735,
           ),
-          diskUsageBytes: 239549735,
-        ),
-      ];
+        ];
 
-      const AsrModelsUiState state = AsrModelsUiState(
-        models: cards,
-        installedCount: 1,
-        totalCount: 3,
-        activeModelId: 'sensevoice-small',
-      );
+        const AsrModelsUiState state = AsrModelsUiState(
+          models: cards,
+          installedCount: 1,
+          totalCount: 3,
+          activeModelId: 'sensevoice-small',
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('en'),
-          home: AsrModelsScreen(
-            uiState: state,
-            onAction: (_) {},
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: AsrModelsScreen(uiState: state, onAction: (_) {}),
           ),
-        ),
-      );
+        );
 
-      expect(find.text('Active speech model'), findsOneWidget);
-    });
+        expect(find.text('Active speech model'), findsOneWidget);
+      },
+    );
   });
 }

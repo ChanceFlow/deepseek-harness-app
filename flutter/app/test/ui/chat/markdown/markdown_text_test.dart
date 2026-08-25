@@ -49,9 +49,7 @@ void main() {
     expect(second.top - first.bottom, greaterThanOrEqualTo(8));
   });
 
-  testWidgets('a code block copies its body, not the message', (
-    tester,
-  ) async {
+  testWidgets('a code block copies its body, not the message', (tester) async {
     final copied = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
@@ -83,9 +81,7 @@ void main() {
     expect(find.byType(SelectionArea), findsOneWidget);
   });
 
-  testWidgets('streaming appends render the settled document', (
-    tester,
-  ) async {
+  testWidgets('streaming appends render the settled document', (tester) async {
     const settled =
         'first paragraph\n\n- item one\n- item two\n\n'
         '```dart\nvar a = 1;\n```\n\nlast paragraph still growing';
@@ -104,9 +100,7 @@ void main() {
     expect(find.text('dart'), findsOneWidget);
   });
 
-  testWidgets('a theme change re-renders cached block widgets', (
-    tester,
-  ) async {
+  testWidgets('a theme change re-renders cached block widgets', (tester) async {
     await _pump(tester, 'one\n\ntwo');
     final light = tester.widget<Text>(find.text('one')).style;
 

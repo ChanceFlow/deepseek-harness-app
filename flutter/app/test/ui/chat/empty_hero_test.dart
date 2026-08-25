@@ -191,8 +191,9 @@ void main() {
     );
   });
 
-  testWidgets('empty timeline while the conversation loads shows a spinner',
-      (tester) async {
+  testWidgets('empty timeline while the conversation loads shows a spinner', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ChatUiState(
@@ -210,8 +211,9 @@ void main() {
     expect(find.text('Into the Unknown'), findsNothing);
   });
 
-  testWidgets('empty timeline after a settled load shows the empty hero',
-      (tester) async {
+  testWidgets('empty timeline after a settled load shows the empty hero', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const ChatUiState(

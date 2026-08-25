@@ -18,8 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
-import '../../notifications/notification_events.dart'
-    show AppNotificationEvent;
+import '../../notifications/notification_events.dart' show AppNotificationEvent;
 import '../../notifications/notification_toast.dart';
 import '../../notifications/system_notifier.dart' show NotificationTarget;
 import '../chat/chat_screen.dart';
@@ -150,9 +149,13 @@ class _AppRootState extends ConsumerState<AppRoot> {
   void _navigateToTarget(NotificationTarget target) {
     final activeBackendId = ref.read(activeBackendIdProvider).value;
     if (activeBackendId != target.backendId) {
-      ref
-          .read(backendRegistryProvider.future)
-          .then((registry) => registry.onAction(SelectBackend(target.backendId)));
+      unawaited(
+        ref
+            .read(backendRegistryProvider.future)
+            .then(
+              (registry) => registry.onAction(SelectBackend(target.backendId)),
+            ),
+      );
     }
     ref
         .read(chatControllerProvider(target.backendId))
