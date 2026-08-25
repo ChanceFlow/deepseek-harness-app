@@ -390,7 +390,7 @@ class _UnsupportedModelEngine implements AsrEngine {
   final StreamController<AsrTranscriptionChunk> _chunks =
       StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
 
-  AsrEngineState _state = AsrEngineState.uninitialized;
+  final AsrEngineState _state = AsrEngineState.uninitialized;
 
   @override
   AsrEngineState get state => _state;
