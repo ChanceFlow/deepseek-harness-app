@@ -113,9 +113,15 @@ class PlatformAudioRecorder implements AudioInputSource {
         <String, Object>{'sampleRate': sampleRate},
       );
     } on MissingPluginException {
-      // No-op fallback for tests
+      // No-op fallback for headless/test environments.
     } on PlatformException {
+      // Capture failed to start (e.g. AudioRecord init threw on the native
+      // side). Never mask this: the caller must see it, or the UI presents a
+      // phantom recording dock with no audio behind it.
       _isRecording = false;
+      await _eventSubscription?.cancel();
+      _eventSubscription = null;
+      rethrow;
     }
   }
 

@@ -1419,6 +1419,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputPermissionDenied => '需要麦克风权限才能进行语音输入。';
 
   @override
+  String get voiceInputRecordFailed => '无法启动语音录制，请检查麦克风是否可用后重试。';
+
+  @override
   String get asrActiveModel => '当前活跃模型';
 
   @override

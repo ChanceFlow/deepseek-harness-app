@@ -170,7 +170,7 @@ void main() {
     // The stage rides the session the workspace pick creates.
     await tester.tap(find.text('Choose workspace'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('proj — /tmp/proj'));
+    await tester.tap(find.text('proj'));
     await tester.pumpAndSettle();
     expect(
       actions,

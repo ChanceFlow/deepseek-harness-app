@@ -16,6 +16,7 @@ import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
+import 'package:domain/model/workspace.dart';
 
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
@@ -293,6 +294,33 @@ ChatUiState emptyState() {
       ),
     ],
     selectedSessionId: 's9',
+  );
+}
+
+ChatUiState emptyStateWithWorkspaces() {
+  return const ChatUiState(
+    sessions: <SessionSummary>[
+      SessionSummary(
+        id: 's9',
+        title: '',
+        blank: true,
+      ),
+    ],
+    selectedSessionId: 's9',
+    workspaces: <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'w1',
+        title: 'deepseek-harness-app',
+        path: '/home/user/Projects/deepseek-harness-app',
+        sessionIds: <String>['s1', 's2'],
+      ),
+      WorkspaceSummary(
+        workspaceId: 'w2',
+        title: 'signoz-stack',
+        path: '/home/user/Projects/signoz-stack',
+        sessionIds: <String>['s3'],
+      ),
+    ],
   );
 }
 

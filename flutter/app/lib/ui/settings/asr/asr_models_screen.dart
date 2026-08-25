@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../di/providers.dart';
+import '../../theme/theme.dart';
 
 /// Route widget wrapping [AsrModelsScreen] with the Riverpod stream.
 class AsrModelsRoute extends ConsumerWidget {
@@ -204,34 +205,18 @@ class AsrModelsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        initialValue: uiState.activeModelId ??
+                      _ActiveModelSelector(
+                        models: uiState.models
+                            .where((AsrModelCardState m) => m.isDownloaded)
+                            .toList(),
+                        activeModelId: uiState.activeModelId ??
                             uiState.models
                                 .where((AsrModelCardState m) => m.isDownloaded)
                                 .firstOrNull
                                 ?.info
                                 .id,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        items: uiState.models
-                            .where((AsrModelCardState m) => m.isDownloaded)
-                            .map((AsrModelCardState m) => DropdownMenuItem<String>(
-                                  value: m.info.id,
-                                  child: Text(m.info.name),
-                                ))
-                            .toList(),
-                        onChanged: (String? modelId) {
-                          if (modelId != null) {
-                            onAction(SetActiveModelAction(modelId));
-                          }
+                        onSelect: (String modelId) {
+                          onAction(SetActiveModelAction(modelId));
                         },
                       ),
                     ],
@@ -656,6 +641,203 @@ class _StatusBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ActiveModelSelector extends StatelessWidget {
+  const _ActiveModelSelector({
+    required this.models,
+    required this.activeModelId,
+    required this.onSelect,
+  });
+
+  final List<AsrModelCardState> models;
+  final String? activeModelId;
+  final void Function(String modelId) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final active = models.where((m) => m.info.id == activeModelId).firstOrNull ??
+        models.firstOrNull;
+    if (active == null) return const SizedBox.shrink();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _open(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.record_voice_over_outlined,
+                  size: 16,
+                  color: scheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      active.info.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      active.info.languages,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _open(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        final theme = Theme.of(sheetContext);
+        final l10n = AppLocalizations.of(sheetContext)!;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                  child: Text(
+                    l10n.asrActiveModel,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: models.length,
+                    itemBuilder: (context, index) {
+                      final item = models[index];
+                      final isSelected = item.info.id == activeModelId;
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            onSelect(item.info.id);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? scheme.primaryContainer
+                                        : scheme.surfaceContainerHigh,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.record_voice_over_outlined,
+                                    size: 16,
+                                    color: isSelected
+                                        ? scheme.onPrimaryContainer
+                                        : scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.info.name,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        item.info.languages,
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 18,
+                                    color: scheme.primary,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

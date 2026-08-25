@@ -3858,6 +3858,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputPermissionDenied)),
           );
+        } else if (error == 'RECORD_START_FAILED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputRecordFailed)),
+          );
         }
       }
     });
@@ -4229,30 +4233,175 @@ class PopupMenuEntryShim extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final label = effectiveMode == PromptMode.steer ? l10n.steer : l10n.queue;
-    return PopupMenuButton<PromptMode>(
-      tooltip: l10n.delivery,
-      enabled: enabled,
-      initialValue: effectiveMode,
-      onSelected: onModeChange,
-      itemBuilder: (context) => [
-        PopupMenuItem(value: PromptMode.queue, child: Text(l10n.queue)),
-        PopupMenuItem(
-          value: PromptMode.steer,
-          enabled: running,
-          child: Text(l10n.steer),
-        ),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.labelMedium),
-            const Icon(Icons.arrow_drop_down, size: 16),
-          ],
+    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isSteer = effectiveMode == PromptMode.steer;
+    final label = isSteer ? l10n.steer : l10n.queue;
+    return Tooltip(
+      message: l10n.delivery,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: enabled ? () => _open(context) : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isSteer ? Icons.bolt_outlined : Icons.schedule_send_outlined,
+                  size: 14,
+                  color: isSteer ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: isSteer ? scheme.primary : scheme.onSurfaceVariant,
+                    fontWeight: isSteer ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 12,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Future<void> _open(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        final theme = Theme.of(sheetContext);
+        final l10n = AppLocalizations.of(sheetContext)!;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: scheme.outlineVariant),
+              boxShadow: kM3ShadowElevation3,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                  child: Text(l10n.delivery, style: theme.textTheme.titleSmall),
+                ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onModeChange(PromptMode.queue);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.schedule_send_outlined,
+                            size: 18,
+                            color: effectiveMode == PromptMode.queue
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              l10n.queue,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: effectiveMode == PromptMode.queue
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          if (effectiveMode == PromptMode.queue)
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: scheme.primary,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: running
+                        ? () {
+                            Navigator.of(sheetContext).pop();
+                            onModeChange(PromptMode.steer);
+                          }
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.bolt_outlined,
+                            size: 18,
+                            color: !running
+                                ? scheme.outline
+                                : effectiveMode == PromptMode.steer
+                                    ? scheme.primary
+                                    : scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              l10n.steer,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: !running
+                                    ? scheme.outline
+                                    : scheme.onSurface,
+                                fontWeight: effectiveMode == PromptMode.steer
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          if (effectiveMode == PromptMode.steer)
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: scheme.primary,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
