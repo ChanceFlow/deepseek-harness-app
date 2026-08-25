@@ -1246,5 +1246,15 @@
         "type": "String"
       }
     }
-  }
+  },
+  "voiceInputTooltip": "Voice input",
+  "voiceInputNoModelTitle": "Speech Model Required",
+  "voiceInputNoModelBody": "Download an on-device speech recognition model in Settings to enable offline voice input.",
+  "voiceInputGoToSettings": "Go to Settings",
+  "voiceInputCancel": "Cancel",
+  "voiceInputDone": "Done",
+  "voiceInputPermissionDenied": "Microphone permission is required for voice input.",
+  "asrActiveModel": "Active speech model",
+  "asrActiveModelDesc": "Model used for voice transcription in chat.",
+  "asrNoModelInstalled": "None (download a model below)"
 }

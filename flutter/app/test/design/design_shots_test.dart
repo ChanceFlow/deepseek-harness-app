@@ -29,6 +29,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/theme/theme.dart';
+import 'package:asr/asr.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -142,6 +143,40 @@ final List<DesignShot> shots = <DesignShot>[
     host: _settingsHost,
     locale: Locale('zh'),
     act: _openAppCategoryZh,
+    dark: false,
+  ),
+  DesignShot(
+    name: 'voice-recording',
+    state: busyState(),
+    host: (theme, locale) => _voiceRecordingHost(theme, locale, false),
+    act: _settleVoiceShot,
+  ),
+  DesignShot(
+    name: 'voice-recording-zh',
+    state: busyState(),
+    locale: const Locale('zh'),
+    host: (theme, locale) => _voiceRecordingHost(theme, locale, true),
+    act: _settleVoiceShot,
+    dark: false,
+  ),
+  DesignShot(
+    name: 'voice-nomodel-dialog',
+    host: (theme, locale) => _voiceNoModelDialogHost(theme, locale, false),
+  ),
+  DesignShot(
+    name: 'voice-nomodel-dialog-zh',
+    locale: const Locale('zh'),
+    host: (theme, locale) => _voiceNoModelDialogHost(theme, locale, true),
+    dark: false,
+  ),
+  DesignShot(
+    name: 'settings-asr-models',
+    host: (theme, locale) => _settingsAsrHost(theme, locale, false),
+  ),
+  DesignShot(
+    name: 'settings-asr-models-zh',
+    locale: const Locale('zh'),
+    host: (theme, locale) => _settingsAsrHost(theme, locale, true),
     dark: false,
   ),
 ];
@@ -307,6 +342,171 @@ Widget _settingsHost(ThemeData theme, Locale? locale) {
       theme: _withRealFonts(theme),
       home: SettingsScreen(uiState: settingsUiState(), onAction: (_) {}),
     ),
+  );
+}
+
+class _StaticVoiceInputController extends VoiceInputController {
+  _StaticVoiceInputController({
+    required super.manager,
+    required this.initialState,
+  }) : super(audioRecorder: MockAudioInputSource(simulatedDuration: Duration.zero));
+
+  final VoiceInputUiState initialState;
+
+  @override
+  VoiceInputUiState get state => initialState;
+
+  @override
+  Stream<VoiceInputUiState> get uiState =>
+      Stream<VoiceInputUiState>.value(initialState);
+
+  @override
+  Future<void> startRecording() async {}
+
+  @override
+  Future<String> stopRecording() async => '';
+
+  @override
+  Future<void> cancelRecording() async {}
+}
+
+Future<void> _settleVoiceShot(WidgetTester tester) async {
+  await settle(tester);
+}
+
+/// Full-tree builder for the voice recording state: initializes a static ASR state
+/// so the VoiceRecordingDock and active soundwave render deterministically.
+Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
+  final tempDir = Directory.systemTemp.createTempSync('dsh-design-voice');
+  addTearDown(() => tempDir.deleteSync(recursive: true));
+  final registryFile = File('${tempDir.path}/models_registry.json');
+  final registry = ModelsRegistry(registryFile: registryFile);
+  registry.updateEntry(
+    ModelRegistryEntry(
+      modelId: 'sensevoice-small',
+      source: ModelSource.hfMirror,
+      localDir: '${tempDir.path}/sensevoice-small',
+      status: AsrModelStatus.downloaded,
+    ),
+  );
+  final manager = AsrModelManager(
+    baseModelsDir: tempDir,
+    registry: registry,
+  );
+  final controller = _StaticVoiceInputController(
+    manager: manager,
+    initialState: VoiceInputUiState(
+      phase: VoiceInputPhase.recording,
+      duration: const Duration(seconds: 5),
+      amplitude: 0.65,
+      activeModel: AsrModelManifest.senseVoiceSmall,
+      hasInstalledModels: true,
+      liveTranscription: zh ? '端侧语音识别实时转写测试' : 'On-device speech recognition live transcription test',
+    ),
+  );
+
+  return ProviderScope(
+    overrides: [
+      asrModelManagerProvider.overrideWith((ref) async => manager),
+      voiceInputControllerProvider.overrideWith((ref) => controller),
+      dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(_FakeRpc()),
+      dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(_SilentSocket()),
+    ],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: _withRealFonts(theme),
+      home: ChatScreen(uiState: busyState(), onAction: (_) {}),
+    ),
+  );
+}
+
+/// Full-tree builder for the "No Speech Model Installed" dialog shot.
+Widget _voiceNoModelDialogHost(ThemeData theme, Locale? locale, bool zh) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: Scaffold(
+      body: Center(
+        child: AlertDialog(
+          title: Text(zh ? '需要语音识别模型' : 'Speech Model Required'),
+          content: Text(
+            zh
+                ? '请在设置中下载离线语音识别模型，即可开启端侧语音输入。'
+                : 'Download an on-device speech recognition model in Settings to enable offline voice input.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {},
+              child: Text(zh ? '取消' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {},
+              child: Text(zh ? '前往设置' : 'Go to Settings'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Full-tree builder for the ASR Models management screen shot showing downloaded
+/// SenseVoice model, Active Speech Model selector, and catalog cards.
+Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
+  const cards = <AsrModelCardState>[
+    AsrModelCardState(
+      info: AsrModelManifest.senseVoiceSmall,
+      entry: ModelRegistryEntry(
+        modelId: 'sensevoice-small',
+        source: ModelSource.hfMirror,
+        localDir: '/data/models/sensevoice-small',
+        status: AsrModelStatus.downloaded,
+        downloadedBytes: 239549735,
+        totalBytes: 239549735,
+      ),
+      diskUsageBytes: 239549735,
+    ),
+    AsrModelCardState(
+      info: AsrModelManifest.zipformerBilingual,
+      entry: ModelRegistryEntry(
+        modelId: 'zipformer-bilingual',
+        source: ModelSource.hfMirror,
+        localDir: '/data/models/zipformer-bilingual',
+        status: AsrModelStatus.idle,
+      ),
+    ),
+    AsrModelCardState(
+      info: AsrModelManifest.whisperLargeV3Turbo,
+      entry: ModelRegistryEntry(
+        modelId: 'whisper-large-v3-turbo',
+        source: ModelSource.huggingFace,
+        localDir: '/data/models/whisper-large-v3-turbo',
+        status: AsrModelStatus.idle,
+      ),
+    ),
+  ];
+
+  const state = AsrModelsUiState(
+    models: cards,
+    defaultSource: ModelSource.hfMirror,
+    installedCount: 1,
+    totalCount: 3,
+    activeModelId: 'sensevoice-small',
+  );
+
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: AsrModelsScreen(uiState: state, onAction: (_) {}),
   );
 }
 

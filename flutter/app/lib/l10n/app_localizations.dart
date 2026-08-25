@@ -2514,6 +2514,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{speed}/s'**
   String asrSpeedLabel(String speed);
+
+  /// No description provided for @voiceInputTooltip.
+  String get voiceInputTooltip;
+
+  /// No description provided for @voiceInputNoModelTitle.
+  String get voiceInputNoModelTitle;
+
+  /// No description provided for @voiceInputNoModelBody.
+  String get voiceInputNoModelBody;
+
+  /// No description provided for @voiceInputGoToSettings.
+  String get voiceInputGoToSettings;
+
+  /// No description provided for @voiceInputCancel.
+  String get voiceInputCancel;
+
+  /// No description provided for @voiceInputDone.
+  String get voiceInputDone;
+
+  /// No description provided for @voiceInputPermissionDenied.
+  String get voiceInputPermissionDenied;
+
+  /// No description provided for @asrActiveModel.
+  String get asrActiveModel;
+
+  /// No description provided for @asrActiveModelDesc.
+  String get asrActiveModelDesc;
+
+  /// No description provided for @asrNoModelInstalled.
+  String get asrNoModelInstalled;
 }
 
 class _AppLocalizationsDelegate

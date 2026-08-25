@@ -39,7 +39,11 @@ TEST_DIR = Path("app/test/design")
 SHOTS = FLUTTER_DIR / "app" / "test" / "design" / "shots"
 CATALOG = FLUTTER_DIR / "app" / "test" / "design" / "design_shots_test.dart"
 
-DEFAULT_WWW = Path.home() / "public_html" / "dsh-design"
+DEFAULT_WWW = (
+    Path.home() / "services" / "gitea" / "apk-www" / "design"
+    if (Path.home() / "services" / "gitea" / "apk-www" / "design").exists()
+    else Path.home() / "public_html" / "dsh-design"
+)
 DEFAULT_URL = "http://127.0.0.1:8899/design/"
 
 # Widget tests get no font fallback chain, so a host with no Han face

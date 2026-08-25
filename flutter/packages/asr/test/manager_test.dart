@@ -131,5 +131,34 @@ void main() {
       expect(manager.installedCount, equals(0));
       expect(await modelDir.exists(), isFalse);
     });
+
+    test('selects and falls back activeModel correctly', () async {
+      manager = AsrModelManager(
+        baseModelsDir: tempDir,
+        registry: registry,
+      );
+
+      expect(manager.getActiveModel(), isNull);
+
+      final Directory modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      // Automatic fallback when no explicit activeModelId is set
+      expect(manager.getActiveModel()?.id, equals('sensevoice-small'));
+
+      // Explicit selection
+      await manager.setActiveModelId('sensevoice-small');
+      expect(manager.activeModelId, equals('sensevoice-small'));
+      expect(manager.getActiveModel()?.id, equals('sensevoice-small'));
+    });
   });
 }

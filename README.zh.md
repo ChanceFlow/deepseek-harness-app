@@ -14,9 +14,10 @@
 管理工作区、模型、目标和子代理——支持英文和简体中文。
 
 <p align="center">
-  <img src="docs/screenshots/chat.png" width="250" alt="聊天时间线">
-  <img src="docs/screenshots/sessions.png" width="250" alt="会话抽屉">
-  <img src="docs/screenshots/markdown.png" width="250" alt="Markdown 渲染">
+  <img src="docs/screenshots/chat.png" width="210" alt="聊天时间线">
+  <img src="docs/screenshots/voice_zh.png" width="210" alt="端侧语音输入">
+  <img src="docs/screenshots/sessions.png" width="210" alt="会话抽屉">
+  <img src="docs/screenshots/markdown.png" width="210" alt="Markdown 渲染">
 </p>
 
 ## 快速开始
@@ -70,6 +71,8 @@ URL 为种子，所以在你添加第二台主机（笔记本、构建机、隧�
   扁平时间线与账本式大纲（可折叠回合分组、压缩标记）、Markdown 渲染（围栏代码、
   标题、列表、表格、可点击链接）、队列行、审批、提问、计划审阅卡片、后台任务、
   图片附件、技能候选。
+- **端侧语音输入与 ASR** — 100% 离线端侧语音识别（支持 SenseVoice、Zipformer、
+  Whisper 等模型），集成实时声浪波形底栏、计时器与流式文字上屏。
 - **多主机** — 在本机配置多个 dsh 主机，随时切换由哪个驱动聊天。
 - **工作区** — 从路径或应用内主机目录浏览器创建、重命名、删除、手动排序。
 - **模型** — 提供商分组、当前选择、推理档位、提供商故障。

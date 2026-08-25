@@ -1432,4 +1432,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String asrSpeedLabel(String speed) {
     return '$speed/s';
   }
+
+  @override
+  String get voiceInputTooltip => 'Voice input';
+
+  @override
+  String get voiceInputNoModelTitle => 'Speech Model Required';
+
+  @override
+  String get voiceInputNoModelBody =>
+      'Download an on-device speech recognition model in Settings to enable offline voice input.';
+
+  @override
+  String get voiceInputGoToSettings => 'Go to Settings';
+
+  @override
+  String get voiceInputCancel => 'Cancel';
+
+  @override
+  String get voiceInputDone => 'Done';
+
+  @override
+  String get voiceInputPermissionDenied =>
+      'Microphone permission is required for voice input.';
+
+  @override
+  String get asrActiveModel => 'Active speech model';
+
+  @override
+  String get asrActiveModelDesc =>
+      'Model used for voice transcription in chat.';
+
+  @override
+  String get asrNoModelInstalled => 'None (download a model below)';
 }

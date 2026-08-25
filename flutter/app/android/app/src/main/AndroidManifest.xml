@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The client talks to a plain-http dsh host (e.g. http://10.0.2.2:3080). -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- On-device speech recognition voice input. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Android 13+ local notifications: the flutter_local_notifications
          plugin (v16+) no longer merges these in, so without them the
          turn-complete/approval/plan notifications never appear. -->

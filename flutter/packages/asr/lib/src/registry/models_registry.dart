@@ -121,6 +121,7 @@ class ModelsRegistry {
 
   final File registryFile;
   final Map<String, ModelRegistryEntry> _entries = <String, ModelRegistryEntry>{};
+  String? _activeModelId;
   final StreamController<Map<String, ModelRegistryEntry>> _streamController =
       StreamController<Map<String, ModelRegistryEntry>>.broadcast();
 
@@ -129,6 +130,9 @@ class ModelsRegistry {
 
   Map<String, ModelRegistryEntry> get entries =>
       Map<String, ModelRegistryEntry>.unmodifiable(_entries);
+
+  /// ID of the currently selected active speech model for voice input.
+  String? get activeModelId => _activeModelId;
 
   int get installedCount => _entries.values
       .where((ModelRegistryEntry e) => e.status == AsrModelStatus.downloaded)
@@ -152,6 +156,7 @@ class ModelsRegistry {
       }
       final dynamic decoded = jsonDecode(content);
       if (decoded is Map<String, dynamic>) {
+        _activeModelId = decoded['activeModelId'] as String?;
         final dynamic list = decoded['models'];
         if (list is List<dynamic>) {
           for (final dynamic item in list) {
@@ -183,6 +188,7 @@ class ModelsRegistry {
     final Map<String, dynamic> doc = <String, dynamic>{
       'version': 1,
       'updatedAt': DateTime.now().toIso8601String(),
+      if (_activeModelId != null) 'activeModelId': _activeModelId,
       'models': _entries.values.map((ModelRegistryEntry e) => e.toJson()).toList(),
     };
 
@@ -219,7 +225,18 @@ class ModelsRegistry {
     await save();
   }
 
+  /// Sets the user-selected active speech recognition model.
+  Future<void> setActiveModelId(String? modelId) async {
+    if (_activeModelId != modelId) {
+      _activeModelId = modelId;
+      await save();
+    }
+  }
+
   Future<void> removeEntry(String modelId) async {
+    if (_activeModelId == modelId) {
+      _activeModelId = null;
+    }
     if (_entries.remove(modelId) != null) {
       await save();
     }

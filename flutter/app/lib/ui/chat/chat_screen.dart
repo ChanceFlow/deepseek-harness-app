@@ -3675,7 +3675,7 @@ final class QuestionDraft {
   }
 }
 
-class ComposerBar extends StatefulWidget {
+class ComposerBar extends ConsumerStatefulWidget {
   const ComposerBar({
     super.key,
     required this.enabled,
@@ -3740,11 +3740,12 @@ class ComposerBar extends StatefulWidget {
   final ContextBreakdown? contextBreakdown;
 
   @override
-  State<ComposerBar> createState() => _ComposerBarState();
+  ConsumerState<ComposerBar> createState() => _ComposerBarState();
 }
 
-class _ComposerBarState extends State<ComposerBar> {
+class _ComposerBarState extends ConsumerState<ComposerBar> {
   final TextEditingController _draftController = TextEditingController();
+  String _preRecordingDraft = '';
 
   @override
   void initState() {
@@ -3833,6 +3834,34 @@ class _ComposerBarState extends State<ComposerBar> {
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
+
+    final voiceController = ref.watch(voiceInputControllerProvider);
+    final voiceInputState = ref.watch(voiceInputUiStateProvider).value ??
+        voiceController.state;
+
+    ref.listen(voiceInputUiStateProvider, (prev, next) {
+      final text = next.value?.liveTranscription ?? '';
+      final prevText = prev?.value?.liveTranscription ?? '';
+      if (text.isNotEmpty && text != prevText) {
+        _draftController.text = _preRecordingDraft.isEmpty
+            ? text
+            : '$_preRecordingDraft $text';
+        _draftController.selection = TextSelection.collapsed(
+          offset: _draftController.text.length,
+        );
+        _persistDraft();
+        setState(() {});
+      }
+      final error = next.value?.errorMessage;
+      if (error != null && error != prev?.value?.errorMessage) {
+        if (error == 'PERMISSION_DENIED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputPermissionDenied)),
+          );
+        }
+      }
+    });
+
     // Textarea on top, action row below, primary actions bottom-right.
     // The surface underneath belongs to the dock: drawing a second card
     // here is what made the input edge read as a box inside a box.
@@ -3892,7 +3921,7 @@ class _ComposerBarState extends State<ComposerBar> {
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               onPressed: () =>
-                                  widget.onAction(RemovePendingImage(image.id)),
+                                   widget.onAction(RemovePendingImage(image.id)),
                               icon: const Icon(Icons.close, size: 16),
                               tooltip: l10n.removeImage(
                                 image.name ?? l10n.attachmentName,
@@ -3914,6 +3943,20 @@ class _ComposerBarState extends State<ComposerBar> {
               setState(() {});
             },
           ),
+          if (voiceInputState.isRecording)
+            VoiceRecordingDock(
+              uiState: voiceInputState,
+              onCancel: () {
+                voiceController.cancelRecording();
+                _draftController.text = _preRecordingDraft;
+                _draftController.selection = TextSelection.collapsed(
+                  offset: _draftController.text.length,
+                );
+                _persistDraft();
+                setState(() {});
+              },
+              onDone: () => voiceController.stopRecording(),
+            ),
           // Space, not a rule, separates the draft from the control row:
           // the dock already spends one hairline on the plan strip, and a
           // second inside the same card reads as ruling for its own sake.
@@ -3940,6 +3983,27 @@ class _ComposerBarState extends State<ComposerBar> {
                     onInsertCommand: (name) {
                       _draftController.text = '/$name ';
                       setState(() {});
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  VoiceMicButton(
+                    enabled: widget.enabled && !voiceInputState.isBusy,
+                    isRecording: voiceInputState.isRecording,
+                    hasInstalledModels: voiceInputState.hasInstalledModels,
+                    onTap: () {
+                      if (voiceInputState.isRecording) {
+                        voiceController.stopRecording();
+                      } else {
+                        _preRecordingDraft = _draftController.text;
+                        voiceController.startRecording();
+                      }
+                    },
+                    onOpenSettings: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (ctx) => const AsrModelsRoute(),
+                        ),
+                      );
                     },
                   ),
                   // Web trailing group: the model seat precedes the
