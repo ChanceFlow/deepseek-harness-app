@@ -27,10 +27,11 @@ FLUTTER_ROOT = Path(__file__).resolve().parent.parent / "flutter"
 
 # package -> set of forbidden import prefixes
 FORBIDDEN: dict[str, set[str]] = {
-    "domain": {"package:flutter/", "package:harness_adapter/", "package:network/", "package:app/"},
-    "network": {"package:flutter/", "package:harness_adapter/", "package:domain/", "package:app/"},
-    "harness_adapter": {"package:flutter/", "package:app/"},
-    "dev": {"package:harness_adapter/", "package:network/", "package:domain/", "package:app/"},
+    "domain": {"package:flutter/", "package:harness_adapter/", "package:network/", "package:app/", "package:asr/"},
+    "network": {"package:flutter/", "package:harness_adapter/", "package:domain/", "package:app/", "package:asr/"},
+    "harness_adapter": {"package:flutter/", "package:app/", "package:asr/"},
+    "dev": {"package:harness_adapter/", "package:network/", "package:domain/", "package:app/", "package:asr/"},
+    "asr": {"package:flutter/", "package:harness_adapter/", "package:domain/", "package:app/"},
 }
 
 

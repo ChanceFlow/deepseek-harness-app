@@ -491,6 +491,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCategoryHost => 'Host';
 
   @override
+  String get settingsSectionHost => 'Host & connection';
+
+  @override
+  String get settingsSectionApp => 'App preferences';
+
+  @override
+  String get settingsSectionChat => 'Chat & agent';
+
+  @override
+  String get settingsSectionModels => 'Models & credentials';
+
+  @override
+  String get settingsSectionPlugins => 'Plugins & advanced';
+
+  @override
+  String get manageHosts => 'Manage';
+
+  @override
   String get appSettingsIntro =>
       'Preferences stored on this device — they apply everywhere, with or without a connected host.';
 
@@ -1325,4 +1343,93 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get jumpToBottomTooltip => 'Jump to bottom';
+
+  @override
+  String get settingsSectionAsr => 'Voice recognition';
+
+  @override
+  String get asrModelsTitle => 'ASR Models';
+
+  @override
+  String get asrModelsDescription =>
+      'Download and manage on-device speech recognition models for offline voice input.';
+
+  @override
+  String asrInstalledCount(int installed, int total) {
+    return '$installed/$total installed';
+  }
+
+  @override
+  String get asrDefaultSource => 'Default download source';
+
+  @override
+  String get asrDefaultSourceDesc => 'Choose preferred model mirror repository';
+
+  @override
+  String get asrAllowCellular => 'Allow cellular downloads';
+
+  @override
+  String get asrAllowCellularDesc =>
+      'Download models over mobile data (may incur carrier data fees)';
+
+  @override
+  String get asrModelStatusIdle => 'Not downloaded';
+
+  @override
+  String get asrModelStatusDownloading => 'Downloading';
+
+  @override
+  String get asrModelStatusDownloaded => 'Installed';
+
+  @override
+  String get asrModelStatusFailed => 'Download failed';
+
+  @override
+  String get asrModelStatusCanceled => 'Canceled';
+
+  @override
+  String get asrDownloadButton => 'Download';
+
+  @override
+  String get asrCancelButton => 'Cancel';
+
+  @override
+  String get asrDeleteButton => 'Delete';
+
+  @override
+  String get asrRetryButton => 'Retry';
+
+  @override
+  String asrSwitchSourceRetry(String source) {
+    return 'Retry from $source';
+  }
+
+  @override
+  String get asrDeleteConfirmTitle => 'Delete model';
+
+  @override
+  String asrDeleteConfirmBody(String modelName) {
+    return 'Are you sure you want to delete $modelName? You can download it again anytime.';
+  }
+
+  @override
+  String asrDiskUsage(String size) {
+    return 'Disk: $size';
+  }
+
+  @override
+  String asrSourceLabel(String source) {
+    return 'Source: $source';
+  }
+
+  @override
+  String get asrLanguagesLabel => 'Languages';
+
+  @override
+  String get asrLicenseLabel => 'License';
+
+  @override
+  String asrSpeedLabel(String speed) {
+    return '$speed/s';
+  }
 }

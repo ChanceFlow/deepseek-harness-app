@@ -113,6 +113,7 @@ GATES: list[dict] = [
             "packages/network/test",
             "packages/harness_adapter/test",
             "packages/dev/test",
+            "packages/asr/test",
         ],
         "cwd": FLUTTER_ROOT,
         "timeout": 1800,
