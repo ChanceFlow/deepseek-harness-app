@@ -17,33 +17,31 @@ pages said "backend" (后端) while every other surface said "host"
 
 ## Decision
 
-### Two categories, one word
+### Grouped card layout on a single scrollable stream
 
-The tab carries two categories picked by capsules under the header —
-**App** (应用) and **Host** (主机); the screen title already says
-Settings, so the capsules drop the suffix. The host category is the
-default. Both halves stay mounted in a category-level IndexedStack.
+The Settings tab presents settings in a unified, single scrollable stream using
+Material 3 grouped cards with section headings:
+- **Host & Connection** (`_HostSection`): the scoped host tile with live status,
+  endpoint, active badge, and manage affordance to open the host management sheet.
+- **App Preferences** (`_AppPreferencesSection`): client-side preferences like
+  Language.
+- **Chat & Agent** (`_ChatAgentSection`): conversational preferences like Enter key
+  behavior and agent presets.
+- **Models & Credentials** (`_ModelsCredentialsSection`): API keys (DeepSeek, etc.)
+  and credential records.
+- **Plugins & Advanced** (`_PluginsAdvancedSection`): namespace configurations and
+  plugin overrides.
 
-The word "host" appears exactly once on the surface: the category
-capsule. The host half leads with the **host bar** — the scoped
-host's live dot, label, `endpoint · version`, and chat-Active badge —
-always rendered (even single-host: the identity is worth seeing),
-and its sheet owns the whole host dimension: picking the settings
-scope (check mark), the registry (add / rename / repoint / remove
-through the per-host edit sheet), and switching the chat-active host
-(Set-as-chat-host lives in the edit sheet — the rows select scope
-only, the two choices the scope note separated stay separated). The
-section nav shrinks to General / Models / Plugins / Agent presets /
-Credentials. The unreachable-host gate opens the same sheet instead
-of jumping to a section.
+This removes the friction of multi-layer capsule tab switching while keeping all
+controls organized and accessible. The host management sheet continues to own the
+host registry and scope operations.
 
 Scope semantics are unchanged ([settings backend scope](2026-08-21-settings-backend-scope.md)):
 follow-active until pinned, pin survives chat-active switches, a gone
-pin resets. The App page (language only) carries no title — the
-category capsule names it — just the intro caption and the row.
+pin resets.
 
 Placement follows semantics, not storage: the busy-Enter row stays a
-General contribution (web parity — the web persists it in the host's
+Chat & Agent contribution (web parity — the web persists it in the host's
 `ui-conversation` settings namespace), though the mobile composer
 reads a device-local copy from the shared store; language is an App
 setting because it applies to the app itself, with or without a host.

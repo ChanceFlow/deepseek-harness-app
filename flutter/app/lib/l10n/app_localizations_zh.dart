@@ -490,6 +490,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsCategoryHost => '主机';
 
   @override
+  String get settingsSectionHost => '主机与连接';
+
+  @override
+  String get settingsSectionApp => '应用偏好';
+
+  @override
+  String get settingsSectionChat => '会话与智能体';
+
+  @override
+  String get settingsSectionModels => '模型与凭据';
+
+  @override
+  String get settingsSectionPlugins => '插件与高级设置';
+
+  @override
+  String get manageHosts => '管理';
+
+  @override
   String get appSettingsIntro => '存储在本设备上的偏好——无论是否连接主机，全局生效。';
 
   @override
@@ -1291,4 +1309,91 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get jumpToBottomTooltip => '跳到底部';
+
+  @override
+  String get settingsSectionAsr => '语音识别';
+
+  @override
+  String get asrModelsTitle => '语音识别模型';
+
+  @override
+  String get asrModelsDescription => '下载与管理端侧离线语音识别模型，提供低延迟高隐私的语音输入能力。';
+
+  @override
+  String asrInstalledCount(int installed, int total) {
+    return '已装 $installed/$total';
+  }
+
+  @override
+  String get asrDefaultSource => '默认下载源';
+
+  @override
+  String get asrDefaultSourceDesc => '选择首选模型镜像下载源';
+
+  @override
+  String get asrAllowCellular => '允许移动网络下载';
+
+  @override
+  String get asrAllowCellularDesc => '允许使用移动流量下载模型（大文件可能消耗较多流量）';
+
+  @override
+  String get asrModelStatusIdle => '未下载';
+
+  @override
+  String get asrModelStatusDownloading => '下载中';
+
+  @override
+  String get asrModelStatusDownloaded => '已安装';
+
+  @override
+  String get asrModelStatusFailed => '下载失败';
+
+  @override
+  String get asrModelStatusCanceled => '已取消';
+
+  @override
+  String get asrDownloadButton => '下载';
+
+  @override
+  String get asrCancelButton => '取消';
+
+  @override
+  String get asrDeleteButton => '删除';
+
+  @override
+  String get asrRetryButton => '重试';
+
+  @override
+  String asrSwitchSourceRetry(String source) {
+    return '从 $source 重试';
+  }
+
+  @override
+  String get asrDeleteConfirmTitle => '删除模型';
+
+  @override
+  String asrDeleteConfirmBody(String modelName) {
+    return '确定要删除 $modelName 吗？删除后将释放存储空间，可随时重新下载。';
+  }
+
+  @override
+  String asrDiskUsage(String size) {
+    return '占用空间: $size';
+  }
+
+  @override
+  String asrSourceLabel(String source) {
+    return '来源: $source';
+  }
+
+  @override
+  String get asrLanguagesLabel => '支持语言';
+
+  @override
+  String get asrLicenseLabel => '开源协议';
+
+  @override
+  String asrSpeedLabel(String speed) {
+    return '$speed/s';
+  }
 }

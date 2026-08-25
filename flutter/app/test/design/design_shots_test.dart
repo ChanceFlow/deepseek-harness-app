@@ -332,13 +332,11 @@ Future<void> _openHostsPage(WidgetTester tester) async {
 
 Future<void> _openAppCategory(WidgetTester tester) async {
   await _loadRegistry(tester);
-  await tester.tap(find.text('App').hitTestable());
   await settle(tester);
 }
 
 Future<void> _openAppCategoryZh(WidgetTester tester) async {
   await _loadRegistry(tester);
-  await tester.tap(find.text('应用').hitTestable());
   await settle(tester);
 }
 

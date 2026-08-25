@@ -49,8 +49,13 @@ import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
 import '../ui/settings/settings_controller.dart';
+import '../ui/settings/asr/asr_models_controller.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
+import 'package:asr/asr.dart';
+
+export '../ui/settings/asr/asr_models_controller.dart';
+export '../ui/settings/asr/asr_models_screen.dart';
 
 /// Backend registry (device-local store + UDF stream).
 final backendStoreProvider = FutureProvider<BackendStore>((ref) async {
@@ -379,3 +384,51 @@ final workspaceControllerProvider = Provider.family
   ref.onDispose(controller.dispose);
   return controller;
 });
+
+/// ASR models base storage directory.
+final asrModelsDirectoryProvider = FutureProvider<Directory>((ref) async {
+  final supportDir = await getApplicationSupportDirectory();
+  final modelsDir = Directory('${supportDir.path}/models');
+  if (!await modelsDir.exists()) {
+    await modelsDir.create(recursive: true);
+  }
+  return modelsDir;
+});
+
+/// ASR models registry provider.
+final asrModelsRegistryProvider = FutureProvider<ModelsRegistry>((ref) async {
+  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
+  final registry = ModelsRegistry(
+    registryFile: File('${modelsDir.path}/models_registry.json'),
+  );
+  await registry.load();
+  ref.onDispose(registry.dispose);
+  return registry;
+});
+
+/// ASR model manager provider.
+final asrModelManagerProvider = FutureProvider<AsrModelManager>((ref) async {
+  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
+  final registry = await ref.watch(asrModelsRegistryProvider.future);
+  return AsrModelManager(
+    baseModelsDir: modelsDir,
+    registry: registry,
+  );
+});
+
+/// ASR models controller (UDF).
+final asrModelsControllerProvider =
+    Provider.autoDispose<AsrModelsController>((ref) {
+  final managerAsync = ref.watch(asrModelManagerProvider);
+  final controller = AsrModelsController(manager: managerAsync.value);
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// ASR models UI state stream.
+final asrModelsUiStateProvider =
+    StreamProvider.autoDispose<AsrModelsUiState>((ref) {
+  final controller = ref.watch(asrModelsControllerProvider);
+  return controller.uiState;
+});
+

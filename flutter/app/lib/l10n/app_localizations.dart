@@ -848,6 +848,42 @@ abstract class AppLocalizations {
   /// **'Host'**
   String get settingsCategoryHost;
 
+  /// No description provided for @settingsSectionHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Host & connection'**
+  String get settingsSectionHost;
+
+  /// No description provided for @settingsSectionApp.
+  ///
+  /// In en, this message translates to:
+  /// **'App preferences'**
+  String get settingsSectionApp;
+
+  /// No description provided for @settingsSectionChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat & agent'**
+  String get settingsSectionChat;
+
+  /// No description provided for @settingsSectionModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Models & credentials'**
+  String get settingsSectionModels;
+
+  /// No description provided for @settingsSectionPlugins.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugins & advanced'**
+  String get settingsSectionPlugins;
+
+  /// No description provided for @manageHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get manageHosts;
+
   /// No description provided for @appSettingsIntro.
   ///
   /// In en, this message translates to:
@@ -2328,6 +2364,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Jump to bottom'**
   String get jumpToBottomTooltip;
+
+  /// No description provided for @settingsSectionAsr.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice recognition'**
+  String get settingsSectionAsr;
+
+  /// No description provided for @asrModelsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'ASR Models'**
+  String get asrModelsTitle;
+
+  /// No description provided for @asrModelsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and manage on-device speech recognition models for offline voice input.'**
+  String get asrModelsDescription;
+
+  /// Installed count badge for ASR models.
+  ///
+  /// In en, this message translates to:
+  /// **'{installed}/{total} installed'**
+  String asrInstalledCount(int installed, int total);
+
+  /// No description provided for @asrDefaultSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Default download source'**
+  String get asrDefaultSource;
+
+  /// No description provided for @asrDefaultSourceDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose preferred model mirror repository'**
+  String get asrDefaultSourceDesc;
+
+  /// No description provided for @asrAllowCellular.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow cellular downloads'**
+  String get asrAllowCellular;
+
+  /// No description provided for @asrAllowCellularDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Download models over mobile data (may incur carrier data fees)'**
+  String get asrAllowCellularDesc;
+
+  /// No description provided for @asrModelStatusIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not downloaded'**
+  String get asrModelStatusIdle;
+
+  /// No description provided for @asrModelStatusDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get asrModelStatusDownloading;
+
+  /// No description provided for @asrModelStatusDownloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get asrModelStatusDownloaded;
+
+  /// No description provided for @asrModelStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed'**
+  String get asrModelStatusFailed;
+
+  /// No description provided for @asrModelStatusCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Canceled'**
+  String get asrModelStatusCanceled;
+
+  /// No description provided for @asrDownloadButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get asrDownloadButton;
+
+  /// No description provided for @asrCancelButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get asrCancelButton;
+
+  /// No description provided for @asrDeleteButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get asrDeleteButton;
+
+  /// No description provided for @asrRetryButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get asrRetryButton;
+
+  /// Button to retry download using alternate source.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry from {source}'**
+  String asrSwitchSourceRetry(String source);
+
+  /// No description provided for @asrDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete model'**
+  String get asrDeleteConfirmTitle;
+
+  /// Confirmation dialog body for deleting an ASR model.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete {modelName}? You can download it again anytime.'**
+  String asrDeleteConfirmBody(String modelName);
+
+  /// Disk usage label.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk: {size}'**
+  String asrDiskUsage(String size);
+
+  /// Model source label.
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {source}'**
+  String asrSourceLabel(String source);
+
+  /// No description provided for @asrLanguagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Languages'**
+  String get asrLanguagesLabel;
+
+  /// No description provided for @asrLicenseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'License'**
+  String get asrLicenseLabel;
+
+  /// Download speed label.
+  ///
+  /// In en, this message translates to:
+  /// **'{speed}/s'**
+  String asrSpeedLabel(String speed);
 }
 
 class _AppLocalizationsDelegate

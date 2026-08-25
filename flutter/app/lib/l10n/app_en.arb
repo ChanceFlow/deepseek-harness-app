@@ -376,6 +376,12 @@
   "workspaceSessionCount": "{count, plural, =1{1 session} other{{count} sessions}}",
   "settingsCategoryApp": "App",
   "settingsCategoryHost": "Host",
+  "settingsSectionHost": "Host & connection",
+  "settingsSectionApp": "App preferences",
+  "settingsSectionChat": "Chat & agent",
+  "settingsSectionModels": "Models & credentials",
+  "settingsSectionPlugins": "Plugins & advanced",
+  "manageHosts": "Manage",
   "appSettingsIntro": "Preferences stored on this device — they apply everywhere, with or without a connected host.",
   "languageLabel": "Language",
   "languageDescription": "The app interface language; Follow system tracks the device language.",
@@ -1164,5 +1170,81 @@
   "jumpToBottomTooltip": "Jump to bottom",
   "@jumpToBottomTooltip": {
     "description": "Tooltip for the floating button that scrolls the timeline to its newest message."
+  },
+  "settingsSectionAsr": "Voice recognition",
+  "asrModelsTitle": "ASR Models",
+  "asrModelsDescription": "Download and manage on-device speech recognition models for offline voice input.",
+  "asrInstalledCount": "{installed}/{total} installed",
+  "@asrInstalledCount": {
+    "description": "Installed count badge for ASR models.",
+    "placeholders": {
+      "installed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "asrDefaultSource": "Default download source",
+  "asrDefaultSourceDesc": "Choose preferred model mirror repository",
+  "asrAllowCellular": "Allow cellular downloads",
+  "asrAllowCellularDesc": "Download models over mobile data (may incur carrier data fees)",
+  "asrModelStatusIdle": "Not downloaded",
+  "asrModelStatusDownloading": "Downloading",
+  "asrModelStatusDownloaded": "Installed",
+  "asrModelStatusFailed": "Download failed",
+  "asrModelStatusCanceled": "Canceled",
+  "asrDownloadButton": "Download",
+  "asrCancelButton": "Cancel",
+  "asrDeleteButton": "Delete",
+  "asrRetryButton": "Retry",
+  "asrSwitchSourceRetry": "Retry from {source}",
+  "@asrSwitchSourceRetry": {
+    "description": "Button to retry download using alternate source.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "asrDeleteConfirmTitle": "Delete model",
+  "asrDeleteConfirmBody": "Are you sure you want to delete {modelName}? You can download it again anytime.",
+  "@asrDeleteConfirmBody": {
+    "description": "Confirmation dialog body for deleting an ASR model.",
+    "placeholders": {
+      "modelName": {
+        "type": "String"
+      }
+    }
+  },
+  "asrDiskUsage": "Disk: {size}",
+  "@asrDiskUsage": {
+    "description": "Disk usage label.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "asrSourceLabel": "Source: {source}",
+  "@asrSourceLabel": {
+    "description": "Model source label.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "asrLanguagesLabel": "Languages",
+  "asrLicenseLabel": "License",
+  "asrSpeedLabel": "{speed}/s",
+  "@asrSpeedLabel": {
+    "description": "Download speed label.",
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
   }
 }

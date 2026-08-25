@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart'
-    show Icons, NavigationBar, Size, TextField;
+    show Icons, ListView, NavigationBar, Offset, Size, TextField;
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/backends/backend_store.dart';
@@ -238,10 +238,10 @@ void main() {
     expect(find.text('Chat'), findsOneWidget);
     expect(store.read('app.localePreference'), isNull);
 
-    // Settings → App settings category → the language row.
+    // Settings → Language row in App preferences section.
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('App').hitTestable());
+    await tester.drag(find.byType(ListView).last, const Offset(0, -250));
     await tester.pumpAndSettle();
     expect(find.text('Language').hitTestable(), findsOneWidget);
 
