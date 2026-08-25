@@ -96,10 +96,10 @@ class _BackendAggregateScreen extends ConsumerWidget {
 /// region.
 class _BackendWorkspaceSection extends ConsumerWidget {
   const _BackendWorkspaceSection({
-    super.key,
     required this.backend,
     required this.active,
     required this.onAction,
+    super.key,
   });
 
   final BackendConfig backend;
@@ -128,7 +128,8 @@ class _BackendWorkspaceSection extends ConsumerWidget {
     // which must not highlight rows there (the sidebar's slice rule).
     final selectedSessionId = active
         ? (ref.watch(chatUiStateProvider(backend.id)).value ??
-                  const ChatUiState()).selectedSessionId
+                  const ChatUiState())
+              .selectedSessionId
         : null;
     return StreamBuilder<WorkspaceUiState>(
       stream: controller.uiState,
@@ -148,7 +149,9 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
                   decoration: BoxDecoration(
                     color: active ? scheme.secondaryContainer : null,
-                    border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+                    border: Border(
+                      bottom: BorderSide(color: scheme.outlineVariant),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -207,8 +210,9 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                 if (action is StartSessionInWorkspace) {
                   unawaited(() async {
                     if (!active) onAction(SelectBackend(backend.id));
-                    final sessionId = await controller
-                        .startSessionInWorkspace(action.workspaceId);
+                    final sessionId = await controller.startSessionInWorkspace(
+                      action.workspaceId,
+                    );
                     if (sessionId != null) {
                       _openSession(ref, sessionId);
                     }
@@ -235,9 +239,9 @@ class _BackendWorkspaceSection extends ConsumerWidget {
 /// the backend section owns the surface.
 class WorkspaceScreen extends StatefulWidget {
   const WorkspaceScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
     this.selectedSessionId,
     this.onSelectSession,
     this.embedded = false,
@@ -354,9 +358,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       context: context,
       builder: (_) => _RenameSessionDialog(
         initialTitle: session.displayTitle,
-        onSave: (title) => widget.onAction(
-          RenameSessionAction(session.id, title),
-        ),
+        onSave: (title) =>
+            widget.onAction(RenameSessionAction(session.id, title)),
       ),
     );
   }
@@ -375,10 +378,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// Web tree.ts `deriveSearchResults` surface: content matches render
   /// only for visible non-blank summaries — the flat result list
   /// replaces the tree while a query is active.
-  Widget _searchResults(
-    BuildContext context,
-    WorkspaceUiState uiState,
-  ) {
+  Widget _searchResults(BuildContext context, WorkspaceUiState uiState) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final sessionsById = <String, SessionSummary>{
@@ -450,9 +450,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           Scaffold(
             // Web: the browser region lives on the sidebar fill.
             backgroundColor: scheme.surfaceContainerLow,
-            body: SafeArea(
-              child: _browsingRegionBody(context, uiState, query),
-            ),
+            body: SafeArea(child: _browsingRegionBody(context, uiState, query)),
           ),
         if (uiState.directoryBrowserOpen) ...[
           // Modal scrim: the ColorScheme `scrim` role at the platform
@@ -462,9 +460,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => widget.onAction(const CloseDirectoryBrowser()),
-              child: ColoredBox(
-                color: scheme.scrim.withValues(alpha: 0.54),
-              ),
+              child: ColoredBox(color: scheme.scrim.withValues(alpha: 0.54)),
             ),
           ),
           Positioned(
@@ -540,7 +536,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         final session = uiState.sessions
             .where((item) => item.id == sessionId)
             .firstOrNull;
-        if (session != null) _showRenameSessionDialog(session);
+        if (session != null) unawaited(_showRenameSessionDialog(session));
       },
       onForkSession: (sessionId) =>
           widget.onAction(ForkSessionAction(sessionId)),
@@ -743,7 +739,11 @@ class _SearchCapsule extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(left: 10),
-              child: Icon(Icons.search, size: 14, color: scheme.onSurfaceVariant),
+              child: Icon(
+                Icons.search,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
             Expanded(
               child: TextField(
@@ -825,7 +825,11 @@ class _ErrorBanner extends StatelessWidget {
                 hoverColor: scheme.surfaceContainerHigh,
                 onTap: onDismiss,
                 child: Center(
-                  child: Icon(Icons.close, size: 14, color: scheme.onSurfaceVariant),
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
@@ -917,7 +921,8 @@ class _WorkspaceTree extends StatelessWidget {
           _WorkspaceGroup(
             group: groups[i],
             workspaces: workspaces,
-            expanded: expandedGroups.contains(groups[i].key) ||
+            expanded:
+                expandedGroups.contains(groups[i].key) ||
                 groups[i].key == currentGroupKey,
             overflowExpanded: overflowExpandedGroups.contains(groups[i].key),
             nowEpochMs: nowEpochMs,
@@ -979,7 +984,8 @@ class _WorkspaceGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sessions = group.sessions;
-    final visibleCount = overflowExpanded || sessions.length <= kCollapsedSessionLimit
+    final visibleCount =
+        overflowExpanded || sessions.length <= kCollapsedSessionLimit
         ? sessions.length
         : kCollapsedSessionLimit;
     final ungrouped = group.key == kUngroupedKey;
@@ -987,8 +993,11 @@ class _WorkspaceGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (ungrouped)
-          _UngroupedHeaderRow(label: group.label, expanded: expanded,
-              onToggle: () => onToggle(group.key))
+          _UngroupedHeaderRow(
+            label: group.label,
+            expanded: expanded,
+            onToggle: () => onToggle(group.key),
+          )
         else
           _WorkspaceRow(
             workspace: _workspaceOf(group),
@@ -1201,7 +1210,9 @@ class _RowIconButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(22),
             hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
-            child: Center(child: Icon(icon, size: 18, color: scheme.onSurfaceVariant)),
+            child: Center(
+              child: Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+            ),
           ),
         ),
       ),
@@ -1328,7 +1339,11 @@ class _MenuRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: isDanger ? error : scheme.onSurfaceVariant),
+              Icon(
+                icon,
+                size: 18,
+                color: isDanger ? error : scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1774,13 +1789,13 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
 /// folder adopts it as a workspace (the flow's one action).
 class DirectoryBrowserDialog extends StatefulWidget {
   const DirectoryBrowserDialog({
-    super.key,
     required this.listing,
     required this.loading,
     required this.onNavigate,
     required this.onCreateDirectory,
     required this.onSelect,
     required this.onClose,
+    super.key,
   });
 
   final DirectoryListing? listing;
@@ -2195,7 +2210,11 @@ class _PathEditorRow extends StatelessWidget {
             ? null
             : InkWell(
                 onTap: onCancel,
-                child: Icon(Icons.close, size: 14, color: scheme.onSurfaceVariant),
+                child: Icon(
+                  Icons.close,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -2236,7 +2255,11 @@ class _DirectoryEntryRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              Icon(Icons.folder_outlined, size: 16, color: scheme.onSurfaceVariant),
+              Icon(
+                Icons.folder_outlined,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -2249,7 +2272,11 @@ class _DirectoryEntryRow extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, size: 14, color: scheme.onSurfaceVariant),
+              Icon(
+                Icons.chevron_right,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
             ],
           ),
         ),

@@ -42,9 +42,7 @@ void main() {
   test('non-2xx response surfaces a DshTransportException', () async {
     final client = HttpDshRpcClient(
       Uri.parse('http://127.0.0.1:3080'),
-      httpClient: MockClient(
-        (request) async => http.Response('boom', 500),
-      ),
+      httpClient: MockClient((request) async => http.Response('boom', 500)),
     );
 
     await expectLater(
@@ -56,9 +54,7 @@ void main() {
   test('invalid JSON response surfaces a DshTransportException', () async {
     final client = HttpDshRpcClient(
       Uri.parse('http://127.0.0.1:3080'),
-      httpClient: MockClient(
-        (request) async => http.Response('not json', 200),
-      ),
+      httpClient: MockClient((request) async => http.Response('not json', 200)),
     );
 
     await expectLater(
@@ -93,10 +89,8 @@ void main() {
     final client = HttpDshRpcClient(
       Uri.parse('http://127.0.0.1:3080'),
       httpClient: MockClient(
-        (request) async => http.Response(
-          jsonEncode(RpcReceipt(accepted: true).toJson()),
-          200,
-        ),
+        (request) async =>
+            http.Response(jsonEncode(RpcReceipt(accepted: true).toJson()), 200),
       ),
     );
 
@@ -108,9 +102,7 @@ void main() {
       Uri.parse('http://127.0.0.1:3080'),
       httpClient: MockClient(
         (request) async => http.Response(
-          jsonEncode(
-            RpcReceipt(accepted: false, reason: 'gone').toJson(),
-          ),
+          jsonEncode(RpcReceipt(accepted: false, reason: 'gone').toJson()),
           200,
         ),
       ),

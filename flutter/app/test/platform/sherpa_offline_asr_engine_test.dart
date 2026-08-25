@@ -10,10 +10,7 @@ void main() {
       const info = AsrModelManifest.senseVoiceSmall;
       final dir = Directory('/models');
 
-      expect(
-        SherpaOfflineAsrEngine.modelFileNameFor(info),
-        'model.int8.onnx',
-      );
+      expect(SherpaOfflineAsrEngine.modelFileNameFor(info), 'model.int8.onnx');
 
       final config = SherpaOfflineAsrEngine.modelConfigFor(info, dir);
       expect(config.tokens, '/models/tokens.txt');
@@ -22,21 +19,24 @@ void main() {
       expect(config.modelType, isEmpty);
     });
 
-    test('whisper-large-v3-turbo maps to turbo encoder with Whisper config', () {
-      const info = AsrModelManifest.whisperLargeV3Turbo;
-      final dir = Directory('/models');
+    test(
+      'whisper-large-v3-turbo maps to turbo encoder with Whisper config',
+      () {
+        const info = AsrModelManifest.whisperLargeV3Turbo;
+        final dir = Directory('/models');
 
-      expect(
-        SherpaOfflineAsrEngine.modelFileNameFor(info),
-        'turbo-encoder.int8.onnx',
-      );
+        expect(
+          SherpaOfflineAsrEngine.modelFileNameFor(info),
+          'turbo-encoder.int8.onnx',
+        );
 
-      final config = SherpaOfflineAsrEngine.modelConfigFor(info, dir);
-      expect(config.tokens, '/models/turbo-tokens.txt');
-      expect(config.whisper.encoder, '/models/turbo-encoder.int8.onnx');
-      expect(config.whisper.decoder, '/models/turbo-decoder.int8.onnx');
-      expect(config.modelType, 'whisper');
-    });
+        final config = SherpaOfflineAsrEngine.modelConfigFor(info, dir);
+        expect(config.tokens, '/models/turbo-tokens.txt');
+        expect(config.whisper.encoder, '/models/turbo-encoder.int8.onnx');
+        expect(config.whisper.decoder, '/models/turbo-decoder.int8.onnx');
+        expect(config.modelType, 'whisper');
+      },
+    );
 
     test('streaming zipformer is rejected loudly, not silently', () {
       const info = AsrModelManifest.zipformerBilingual;

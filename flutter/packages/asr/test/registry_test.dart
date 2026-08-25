@@ -42,11 +42,16 @@ void main() {
       await registry.updateEntry(entry);
       expect(await registryFile.exists(), isTrue);
 
-      final ModelsRegistry reloaded = ModelsRegistry(registryFile: registryFile);
+      final ModelsRegistry reloaded = ModelsRegistry(
+        registryFile: registryFile,
+      );
       await reloaded.load();
 
       expect(reloaded.entries.length, equals(1));
-      final ModelRegistryEntry loadedEntry = reloaded.getEntry('sensevoice-small', defaultLocalDir: '');
+      final ModelRegistryEntry loadedEntry = reloaded.getEntry(
+        'sensevoice-small',
+        defaultLocalDir: '',
+      );
       expect(loadedEntry.status, equals(AsrModelStatus.downloaded));
       expect(loadedEntry.totalBytes, equals(157286400));
       expect(loadedEntry.isDownloaded, isTrue);
@@ -61,26 +66,34 @@ void main() {
       expect(registry.entries, isEmpty);
     });
 
-    test('marks in-flight downloading status as canceled on cold start', () async {
-      final ModelRegistryEntry entry = ModelRegistryEntry(
-        modelId: 'sensevoice-small',
-        source: ModelSource.hfMirror,
-        localDir: '${tempDir.path}/sensevoice-small',
-        status: AsrModelStatus.downloading,
-        totalBytes: 157286400,
-        downloadedBytes: 50000000,
-      );
-      await registry.updateEntry(entry);
+    test(
+      'marks in-flight downloading status as canceled on cold start',
+      () async {
+        final ModelRegistryEntry entry = ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: '${tempDir.path}/sensevoice-small',
+          status: AsrModelStatus.downloading,
+          totalBytes: 157286400,
+          downloadedBytes: 50000000,
+        );
+        await registry.updateEntry(entry);
 
-      final ModelsRegistry reloaded = ModelsRegistry(registryFile: registryFile);
-      await reloaded.load();
+        final ModelsRegistry reloaded = ModelsRegistry(
+          registryFile: registryFile,
+        );
+        await reloaded.load();
 
-      final ModelRegistryEntry loaded = reloaded.getEntry('sensevoice-small', defaultLocalDir: '');
-      expect(loaded.status, equals(AsrModelStatus.canceled));
-      expect(loaded.lastError, contains('interrupted'));
+        final ModelRegistryEntry loaded = reloaded.getEntry(
+          'sensevoice-small',
+          defaultLocalDir: '',
+        );
+        expect(loaded.status, equals(AsrModelStatus.canceled));
+        expect(loaded.lastError, contains('interrupted'));
 
-      await reloaded.dispose();
-    });
+        await reloaded.dispose();
+      },
+    );
 
     test('removes entry and updates count', () async {
       final ModelRegistryEntry entry = ModelRegistryEntry(
@@ -104,7 +117,9 @@ void main() {
       await registry.setActiveModelId('sensevoice-small');
       expect(registry.activeModelId, equals('sensevoice-small'));
 
-      final ModelsRegistry reloaded = ModelsRegistry(registryFile: registryFile);
+      final ModelsRegistry reloaded = ModelsRegistry(
+        registryFile: registryFile,
+      );
       await reloaded.load();
       expect(reloaded.activeModelId, equals('sensevoice-small'));
 

@@ -120,7 +120,8 @@ class ModelsRegistry {
   ModelsRegistry({required this.registryFile});
 
   final File registryFile;
-  final Map<String, ModelRegistryEntry> _entries = <String, ModelRegistryEntry>{};
+  final Map<String, ModelRegistryEntry> _entries =
+      <String, ModelRegistryEntry>{};
   String? _activeModelId;
   final StreamController<Map<String, ModelRegistryEntry>> _streamController =
       StreamController<Map<String, ModelRegistryEntry>>.broadcast();
@@ -161,7 +162,9 @@ class ModelsRegistry {
         if (list is List<dynamic>) {
           for (final dynamic item in list) {
             if (item is Map<String, dynamic>) {
-              final ModelRegistryEntry entry = ModelRegistryEntry.fromJson(item);
+              final ModelRegistryEntry entry = ModelRegistryEntry.fromJson(
+                item,
+              );
               if (entry.modelId.isNotEmpty) {
                 // If the app was killed while downloading, treat as failed/canceled
                 if (entry.status == AsrModelStatus.downloading) {
@@ -189,7 +192,9 @@ class ModelsRegistry {
       'version': 1,
       'updatedAt': DateTime.now().toIso8601String(),
       if (_activeModelId != null) 'activeModelId': _activeModelId,
-      'models': _entries.values.map((ModelRegistryEntry e) => e.toJson()).toList(),
+      'models': _entries.values
+          .map((ModelRegistryEntry e) => e.toJson())
+          .toList(),
     };
 
     final String jsonStr = const JsonEncoder.withIndent('  ').convert(doc);
@@ -209,7 +214,10 @@ class ModelsRegistry {
     _notify();
   }
 
-  ModelRegistryEntry getEntry(String modelId, {required String defaultLocalDir}) {
+  ModelRegistryEntry getEntry(
+    String modelId, {
+    required String defaultLocalDir,
+  }) {
     final ModelRegistryEntry? existing = _entries[modelId];
     if (existing != null) return existing;
     return ModelRegistryEntry(
@@ -244,7 +252,9 @@ class ModelsRegistry {
 
   void _notify() {
     if (!_streamController.isClosed) {
-      _streamController.add(Map<String, ModelRegistryEntry>.unmodifiable(_entries));
+      _streamController.add(
+        Map<String, ModelRegistryEntry>.unmodifiable(_entries),
+      );
     }
   }
 

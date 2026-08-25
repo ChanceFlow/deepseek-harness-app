@@ -59,9 +59,8 @@ final class BackendRegistryState {
 
   /// The active backend's config; null before the store loads or when the
   /// id dangles (a removed backend's fallback lands on the first entry).
-  BackendConfig? get active => backends
-      .where((backend) => backend.id == activeId)
-      .firstOrNull;
+  BackendConfig? get active =>
+      backends.where((backend) => backend.id == activeId).firstOrNull;
 
   /// A successful mutation clears the error: the state it leaves behind
   /// describes the current list, not the refusal before it.
@@ -71,10 +70,9 @@ final class BackendRegistryState {
   BackendRegistryState withActiveId(String? activeId) =>
       BackendRegistryState(backends: backends, activeId: activeId);
 
-  BackendRegistryState withError(String? errorMessage) =>
-      BackendRegistryState(
-        backends: backends,
-        activeId: activeId,
-        errorMessage: errorMessage,
-      );
+  BackendRegistryState withError(String? errorMessage) => BackendRegistryState(
+    backends: backends,
+    activeId: activeId,
+    errorMessage: errorMessage,
+  );
 }

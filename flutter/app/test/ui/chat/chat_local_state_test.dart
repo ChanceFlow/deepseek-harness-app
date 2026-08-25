@@ -22,45 +22,48 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  test('write roundtrips and a fresh store over the file reads it back', () async {
-    final file = File('${tempDir.path}/local_state.json');
-    final store = LocalStateStore(file);
-    await store.load();
-    final persistence = StoreModelPreferencePersistence(store, 'backend.b1');
+  test(
+    'write roundtrips and a fresh store over the file reads it back',
+    () async {
+      final file = File('${tempDir.path}/local_state.json');
+      final store = LocalStateStore(file);
+      await store.load();
+      final persistence = StoreModelPreferencePersistence(store, 'backend.b1');
 
-    await persistence.write(
-      const ModelSeatPreferences(
-        lastSelection: ModelSelection(
+      await persistence.write(
+        const ModelSeatPreferences(
+          lastSelection: ModelSelection(
+            provider: 'deepseek-official',
+            model: 'deepseek-reasoner',
+            reasoningEffort: 'high',
+          ),
+          effortByRoute: <String, String>{
+            'deepseek-official/deepseek-reasoner': 'high',
+            'deepseek-official/deepseek-chat': 'off',
+          },
+        ),
+      );
+      await store.flush();
+
+      final reopened = LocalStateStore(file);
+      await reopened.load();
+      final read = await StoreModelPreferencePersistence(
+        reopened,
+        'backend.b1',
+      ).read();
+      expect(
+        read.lastSelection,
+        const ModelSelection(
           provider: 'deepseek-official',
           model: 'deepseek-reasoner',
           reasoningEffort: 'high',
         ),
-        effortByRoute: <String, String>{
-          'deepseek-official/deepseek-reasoner': 'high',
-          'deepseek-official/deepseek-chat': 'off',
-        },
-      ),
-    );
-    await store.flush();
-
-    final reopened = LocalStateStore(file);
-    await reopened.load();
-    final read = await StoreModelPreferencePersistence(
-      reopened,
-      'backend.b1',
-    ).read();
-    expect(
-      read.lastSelection,
-      const ModelSelection(
-        provider: 'deepseek-official',
-        model: 'deepseek-reasoner',
-        reasoningEffort: 'high',
-      ),
-    );
-    expect(read.effortFor('deepseek-official', 'deepseek-reasoner'), 'high');
-    expect(read.effortFor('deepseek-official', 'deepseek-chat'), 'off');
-    expect(read.effortFor('other', 'model'), isNull);
-  });
+      );
+      expect(read.effortFor('deepseek-official', 'deepseek-reasoner'), 'high');
+      expect(read.effortFor('deepseek-official', 'deepseek-chat'), 'off');
+      expect(read.effortFor('other', 'model'), isNull);
+    },
+  );
 
   test('scopes never see each other keys', () async {
     final file = File('${tempDir.path}/local_state.json');
@@ -75,10 +78,7 @@ void main() {
       ),
     );
     expect(await other.read(), const ModelSeatPreferences());
-    expect(
-      await mine.read(),
-      isNot(const ModelSeatPreferences()),
-    );
+    expect(await mine.read(), isNot(const ModelSeatPreferences()));
   });
 
   test('remembering folds one selection into the preferences', () {
@@ -89,9 +89,7 @@ void main() {
       reasoningEffort: 'high',
     );
     const second = ModelSelection(provider: 'p', model: 'm2');
-    final remembered = prefs
-        .remembering(first)
-        .remembering(second);
+    final remembered = prefs.remembering(first).remembering(second);
     expect(remembered.lastSelection, second);
     // m1 keeps its own remembered effort; m2 chose none (provider
     // default), so it has no entry and the model default applies.
@@ -115,8 +113,10 @@ void main() {
     final reopened = LocalStateStore(file);
     await reopened.load();
     expect(
-      await StoreSessionSelectionPersistence(reopened, 'backend.b1')
-          .readSelectedSession(),
+      await StoreSessionSelectionPersistence(
+        reopened,
+        'backend.b1',
+      ).readSelectedSession(),
       'session-1',
     );
 

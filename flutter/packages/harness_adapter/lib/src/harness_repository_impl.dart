@@ -117,6 +117,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   final StateStream<Set<String>> _archivedSessionIds = StateStream<Set<String>>(
     <String>{},
   );
+
   /// Registry-global pending-interaction mirror: session id -> the
   /// outstanding user-wait status (approval / plan-review / question).
   /// Fed from the raw approval/question frame stream BEFORE the per-session
@@ -126,20 +127,23 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// connection generation — the reopen replay re-adds still-pending
   /// requests.
   final StateStream<Map<String, SessionPendingInteraction>>
-      _pendingInteractions = StateStream<Map<String, SessionPendingInteraction>>(
+  _pendingInteractions = StateStream<Map<String, SessionPendingInteraction>>(
     const <String, SessionPendingInteraction>{},
   );
+
   /// Session id -> per-key pending status (`a:<approvalId>` /
   /// `q:<rpcId>`); a session may wait on several interactions at once.
   /// [StateStream.value] of [_pendingInteractions] is the last-status-per-
   /// session projection of this map.
   final Map<String, Map<String, SessionPendingInteraction>> _pendingBySession =
       <String, Map<String, SessionPendingInteraction>>{};
+
   /// The session the app is currently viewing (last `openSession` target).
   /// The finished-but-unviewed reminder (green dot) is armed only when a
   /// session stops running while it is NOT this one (web SessionManager
   /// `completedNotifications`).
   String? _openSessionId;
+
   /// Last observed running bit per session, driving the true→false edge
   /// that arms the completion reminder.
   final Map<String, bool> _prevRunningBySession = <String, bool>{};
@@ -147,6 +151,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     null,
   );
   final Map<String, _SessionState> _sessionStates = <String, _SessionState>{};
+
   /// Session id -> answerable live frames that arrived before the session's
   /// state was instantiated (web SessionManager `pendingBuffers` parity).
   /// `question/requested`, `approval/requested` and `session/queue` never
@@ -401,9 +406,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// session list so `observeSessions` publishes the updated fact.
   void _setSessionCompleted(String sessionId, bool completed) {
     _sessions.value = _sessions.value
-        .map((item) => item.id == sessionId
-            ? _copySession(item, completed: completed)
-            : item)
+        .map(
+          (item) => item.id == sessionId
+              ? _copySession(item, completed: completed)
+              : item,
+        )
         .toList();
   }
 
@@ -1464,7 +1471,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       // re-buffered by `_bufferPendingFrame`.
       for (final entry in _pendingBuffers.entries.toList()) {
         final kept = entry.value
-            .where((frame) => wireString(frame.payload, 'type') != 'session/queue')
+            .where(
+              (frame) => wireString(frame.payload, 'type') != 'session/queue',
+            )
             .toList();
         if (kept.isEmpty) {
           _pendingBuffers.remove(entry.key);
@@ -1523,7 +1532,9 @@ class HarnessRepositoryImpl implements ChatRepository {
         pendingChanged = true;
       }
     }
-    _prevRunningBySession.removeWhere((sessionId, _) => !liveIds.contains(sessionId));
+    _prevRunningBySession.removeWhere(
+      (sessionId, _) => !liveIds.contains(sessionId),
+    );
     if (pendingChanged) {
       _pendingInteractions.value = _projectPending();
     }
@@ -1804,7 +1815,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       case 'approval/requested':
       case 'question/requested':
       case 'session/queue':
-        final buffer = _pendingBuffers.putIfAbsent(sessionId, () => <ServerRequest>[]);
+        final buffer = _pendingBuffers.putIfAbsent(
+          sessionId,
+          () => <ServerRequest>[],
+        );
         final key = switch (wireString(payload, 'type')) {
           'approval/requested' => 'a:${wireString(payload, 'approvalId')}',
           'question/requested' => 'q:${frame.rpcId}',
@@ -1961,7 +1975,10 @@ final class _SessionState {
       _publish();
       try {
         final page = await loader(null);
-        _history = stableSortedBy(page.events, (event) => wireLong(event, 'seq'));
+        _history = stableSortedBy(
+          page.events,
+          (event) => wireLong(event, 'seq'),
+        );
         _hasMoreOlder = page.hasMore;
         _reducer = TimelineReducer(sessionId);
         _reducer.reset(_history);

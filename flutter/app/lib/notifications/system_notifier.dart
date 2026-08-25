@@ -191,15 +191,14 @@ class SystemNotifier {
     AppNotificationKind.planReviewRequested => _l10n.planReviewChannel,
   };
 
-  String _channelDescriptionFor(AppNotificationKind kind) =>
-      switch (kind) {
-        AppNotificationKind.selectedTurnComplete ||
-        AppNotificationKind.otherTurnComplete =>
-          _l10n.turnCompletionChannelDescription,
-        AppNotificationKind.approvalRequested => _l10n.approvalChannelDescription,
-        AppNotificationKind.planReviewRequested =>
-          _l10n.planReviewChannelDescription,
-      };
+  String _channelDescriptionFor(AppNotificationKind kind) => switch (kind) {
+    AppNotificationKind.selectedTurnComplete ||
+    AppNotificationKind.otherTurnComplete =>
+      _l10n.turnCompletionChannelDescription,
+    AppNotificationKind.approvalRequested => _l10n.approvalChannelDescription,
+    AppNotificationKind.planReviewRequested =>
+      _l10n.planReviewChannelDescription,
+  };
 
   Importance _importanceFor(AppNotificationKind kind) => switch (kind) {
     // Pending user actions need attention over a finished turn.

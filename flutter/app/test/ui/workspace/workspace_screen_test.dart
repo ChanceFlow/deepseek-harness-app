@@ -86,16 +86,11 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('groups expand to session rows; verbs dispatch', (
-    tester,
-  ) async {
+  testWidgets('groups expand to session rows; verbs dispatch', (tester) async {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
-      const WorkspaceUiState(
-        workspaces: _twoWorkspaces,
-        sessions: _sessions,
-      ),
+      const WorkspaceUiState(workspaces: _twoWorkspaces, sessions: _sessions),
       actions,
     );
 
@@ -250,10 +245,7 @@ void main() {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
-      const WorkspaceUiState(
-        workspaces: _twoWorkspaces,
-        sessions: _sessions,
-      ),
+      const WorkspaceUiState(workspaces: _twoWorkspaces, sessions: _sessions),
       actions,
     );
 
@@ -277,10 +269,7 @@ void main() {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
-      const WorkspaceUiState(
-        workspaces: _twoWorkspaces,
-        sessions: _sessions,
-      ),
+      const WorkspaceUiState(workspaces: _twoWorkspaces, sessions: _sessions),
       actions,
     );
 
@@ -309,10 +298,7 @@ void main() {
     final actions = <WorkspaceAction>[];
     await _pump(
       tester,
-      const WorkspaceUiState(
-        workspaces: _twoWorkspaces,
-        sessions: _sessions,
-      ),
+      const WorkspaceUiState(workspaces: _twoWorkspaces, sessions: _sessions),
       actions,
     );
 
@@ -333,13 +319,13 @@ void main() {
     await tester.tap(find.text('Rename session'));
     await tester.pumpAndSettle();
     expect(find.text('Rename session'), findsWidgets);
-    await tester.enterText(
-      find.byType(TextField).last,
-      'renamed session',
-    );
+    await tester.enterText(find.byType(TextField).last, 'renamed session');
     await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
-    expect(actions, contains(const RenameSessionAction('s1', 'renamed session')));
+    expect(
+      actions,
+      contains(const RenameSessionAction('s1', 'renamed session')),
+    );
   });
 
   testWidgets('directory browser navigates, filters hidden, creates folders', (
@@ -434,10 +420,7 @@ void main() {
     final opened = <String>[];
     await _pump(
       tester,
-      const WorkspaceUiState(
-        workspaces: _twoWorkspaces,
-        sessions: _sessions,
-      ),
+      const WorkspaceUiState(workspaces: _twoWorkspaces, sessions: _sessions),
       [],
       selectedSessionId: 's1',
       openedSessions: opened,

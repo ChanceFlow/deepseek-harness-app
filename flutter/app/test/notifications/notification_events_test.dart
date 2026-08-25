@@ -137,7 +137,11 @@ void main() {
       );
       final events = detector.fold(
         sessions: [
-          session('s1', title: 'Perm', pending: SessionPendingInteraction.approval),
+          session(
+            's1',
+            title: 'Perm',
+            pending: SessionPendingInteraction.approval,
+          ),
         ],
         selectedSessionId: 's1',
         backendId: 'b1',
@@ -161,7 +165,11 @@ void main() {
       );
       final events = detector.fold(
         sessions: [
-          session('s1', title: 'Plan', pending: SessionPendingInteraction.planReview),
+          session(
+            's1',
+            title: 'Plan',
+            pending: SessionPendingInteraction.planReview,
+          ),
         ],
         selectedSessionId: 's1',
         backendId: 'b1',
@@ -185,7 +193,11 @@ void main() {
       );
       final events = detector.fold(
         sessions: [
-          session('s1', title: 'Q', pending: SessionPendingInteraction.question),
+          session(
+            's1',
+            title: 'Q',
+            pending: SessionPendingInteraction.question,
+          ),
         ],
         selectedSessionId: 's1',
         backendId: 'b1',
@@ -193,28 +205,31 @@ void main() {
       expect(events, isEmpty);
     });
 
-    test('a session removed while running emits nothing and stops tracking', () {
-      final detector = NotificationDetector();
-      detector.fold(
-        sessions: [session('s1', title: 'Gone', running: true)],
-        selectedSessionId: 's1',
-        backendId: 'b1',
-      );
-      // The session disappears; no transition is reported.
-      final events = detector.fold(
-        sessions: const <SessionSummary>[],
-        selectedSessionId: 's1',
-        backendId: 'b1',
-      );
-      expect(events, isEmpty);
-      // A re-added session is treated as a fresh baseline, not a completion.
-      final reAdded = detector.fold(
-        sessions: [session('s1', title: 'Gone', running: false)],
-        selectedSessionId: 's1',
-        backendId: 'b1',
-      );
-      expect(reAdded, isEmpty);
-    });
+    test(
+      'a session removed while running emits nothing and stops tracking',
+      () {
+        final detector = NotificationDetector();
+        detector.fold(
+          sessions: [session('s1', title: 'Gone', running: true)],
+          selectedSessionId: 's1',
+          backendId: 'b1',
+        );
+        // The session disappears; no transition is reported.
+        final events = detector.fold(
+          sessions: const <SessionSummary>[],
+          selectedSessionId: 's1',
+          backendId: 'b1',
+        );
+        expect(events, isEmpty);
+        // A re-added session is treated as a fresh baseline, not a completion.
+        final reAdded = detector.fold(
+          sessions: [session('s1', title: 'Gone', running: false)],
+          selectedSessionId: 's1',
+          backendId: 'b1',
+        );
+        expect(reAdded, isEmpty);
+      },
+    );
 
     test('multiple transitions in one snapshot all surface', () {
       final detector = NotificationDetector();
@@ -231,7 +246,11 @@ void main() {
         sessions: [
           session('s1', title: 'Selected', running: false),
           session('s2', title: 'Other', running: false),
-          session('s3', title: 'Perm', pending: SessionPendingInteraction.approval),
+          session(
+            's3',
+            title: 'Perm',
+            pending: SessionPendingInteraction.approval,
+          ),
         ],
         selectedSessionId: 's1',
         backendId: 'b1',
@@ -255,17 +274,17 @@ void main() {
 
     test('backgrounded routes every event to the system channel', () {
       for (final kind in AppNotificationKind.values) {
-        expect(channelFor(eventOf(kind), false), NotificationChannel.systemNotification,
-            reason: '$kind must be a system notification while backgrounded');
+        expect(
+          channelFor(eventOf(kind), false),
+          NotificationChannel.systemNotification,
+          reason: '$kind must be a system notification while backgrounded',
+        );
       }
     });
 
     test('foregrounded selected-turn-complete is silent', () {
       expect(
-        channelFor(
-          eventOf(AppNotificationKind.selectedTurnComplete),
-          true,
-        ),
+        channelFor(eventOf(AppNotificationKind.selectedTurnComplete), true),
         NotificationChannel.none,
       );
     });
@@ -276,8 +295,11 @@ void main() {
         AppNotificationKind.approvalRequested,
         AppNotificationKind.planReviewRequested,
       ]) {
-        expect(channelFor(eventOf(kind), true), NotificationChannel.foregroundToast,
-            reason: '$kind must toast while foregrounded');
+        expect(
+          channelFor(eventOf(kind), true),
+          NotificationChannel.foregroundToast,
+          reason: '$kind must toast while foregrounded',
+        );
       }
     });
   });

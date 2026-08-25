@@ -27,17 +27,20 @@ class _FakeRpc implements DshRpcClient {
     JsonMap payload,
   ) async {
     if (endpoint == 'session.list') {
-      return RpcResult(ok: true, value: <String, Object?>{
-        'items': [
-          <String, Object?>{
-            'sessionId': 's1',
-            'updatedAt': 1,
-            'running': false,
-            'blank': false,
-            'cwd': '/tmp/proj',
-          },
-        ],
-      });
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{
+          'items': [
+            <String, Object?>{
+              'sessionId': 's1',
+              'updatedAt': 1,
+              'running': false,
+              'blank': false,
+              'cwd': '/tmp/proj',
+            },
+          ],
+        },
+      );
     }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
@@ -89,12 +92,10 @@ void main() {
       ProviderScope(
         overrides: [
           backendStoreProvider.overrideWith((ref) async => _testStore()),
-          dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-            _FakeRpc(),
-          ),
-          dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-            _NeverSocket(),
-          ),
+          dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+              .overrideWithValue(_FakeRpc()),
+          dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+              .overrideWithValue(_NeverSocket()),
           foregroundNotificationEventsProvider.overrideWith(
             (ref) => foreground.stream,
           ),
@@ -174,9 +175,10 @@ void main() {
       AppDestination.chat.index,
     );
     final controller = tester.element(find.byType(AppRoot));
-    final selected = ProviderScope.containerOf(
-      controller,
-    ).read(chatControllerProvider('default')).state.selectedSessionId;
+    final selected = ProviderScope.containerOf(controller)
+        .read(chatControllerProvider('default'))
+        .state
+        .selectedSessionId;
     expect(selected, 's1');
   });
 

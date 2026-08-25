@@ -53,7 +53,10 @@ class AudioDebugStats {
 
   bool get nativeSawSignal => maxAbs > 0;
 
-  static AudioDebugStats fromMap(Map<Object?, Object?> m, {int eventsReceived = 0}) {
+  static AudioDebugStats fromMap(
+    Map<Object?, Object?> m, {
+    int eventsReceived = 0,
+  }) {
     return AudioDebugStats(
       reads: (m['reads'] as num?)?.toInt() ?? 0,
       eventsSent: (m['eventsSent'] as num?)?.toInt() ?? 0,
@@ -72,9 +75,10 @@ class PlatformAudioRecorder implements AudioInputSource {
     MethodChannel? methodChannel,
     EventChannel? eventChannel,
     MethodChannel? debugChannel,
-  })  : _methodChannel = methodChannel ?? const MethodChannel(kAudioRecordChannel),
-        _eventChannel = eventChannel ?? const EventChannel(kAudioStreamChannel),
-        _debugChannel = debugChannel ?? const MethodChannel(kAudioDebugChannel);
+  }) : _methodChannel =
+           methodChannel ?? const MethodChannel(kAudioRecordChannel),
+       _eventChannel = eventChannel ?? const EventChannel(kAudioStreamChannel),
+       _debugChannel = debugChannel ?? const MethodChannel(kAudioDebugChannel);
 
   final MethodChannel _methodChannel;
   final EventChannel _eventChannel;
@@ -118,8 +122,9 @@ class PlatformAudioRecorder implements AudioInputSource {
   /// Checks if the RECORD_AUDIO permission has been granted.
   Future<bool> checkPermission() async {
     try {
-      final bool? granted =
-          await _methodChannel.invokeMethod<bool>('hasPermission');
+      final bool? granted = await _methodChannel.invokeMethod<bool>(
+        'hasPermission',
+      );
       return granted ?? false;
     } on MissingPluginException {
       return true; // Fallback in headless/test environments
@@ -131,8 +136,9 @@ class PlatformAudioRecorder implements AudioInputSource {
   /// Requests the RECORD_AUDIO permission from the operating system.
   Future<bool> requestPermission() async {
     try {
-      final bool? granted =
-          await _methodChannel.invokeMethod<bool>('requestPermission');
+      final bool? granted = await _methodChannel.invokeMethod<bool>(
+        'requestPermission',
+      );
       return granted ?? false;
     } on MissingPluginException {
       return true; // Fallback in headless/test environments
@@ -147,7 +153,10 @@ class PlatformAudioRecorder implements AudioInputSource {
       final map = await _debugChannel.invokeMapMethod<Object?, Object?>(
         'getStats',
       );
-      return AudioDebugStats.fromMap(map ?? const {}, eventsReceived: _eventsReceived);
+      return AudioDebugStats.fromMap(
+        map ?? const {},
+        eventsReceived: _eventsReceived,
+      );
     } on MissingPluginException {
       return AudioDebugStats(eventsReceived: _eventsReceived);
     } on PlatformException {
@@ -192,8 +201,9 @@ class PlatformAudioRecorder implements AudioInputSource {
             } else {
               _peakLevel *= 0.96; // slow release across frames
             }
-            final double normalizedAmp =
-                _peakLevel <= 1e-6 ? 0.0 : (peak / _peakLevel).clamp(0.0, 1.0);
+            final double normalizedAmp = _peakLevel <= 1e-6
+                ? 0.0
+                : (peak / _peakLevel).clamp(0.0, 1.0);
 
             if (!_amplitudeController.isClosed) {
               _amplitudeController.add(normalizedAmp);
@@ -206,7 +216,7 @@ class PlatformAudioRecorder implements AudioInputSource {
           if (!_errorController.isClosed) {
             _errorController.add(error);
           }
-          stop();
+          unawaited(stop());
         },
       );
 

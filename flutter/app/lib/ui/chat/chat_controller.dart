@@ -298,7 +298,10 @@ class ChatController {
     _publish();
     unawaited(_runCatchingForUi(() => _repository.openSession(sessionId)));
     _telemetry?.count('chat.session.select');
-    _telemetry?.event('chat.session.select', attributes: {'sessionId': sessionId});
+    _telemetry?.event(
+      'chat.session.select',
+      attributes: {'sessionId': sessionId},
+    );
   }
 
   /// Re-subscribes the selected-session timeline and plan streams (the
@@ -395,10 +398,8 @@ class ChatController {
   void _selectAgentPreset(SelectAgentPreset action) {
     unawaited(
       _runCatchingForUi(
-        () => _repository.selectAgentPreset(
-          action.sessionId,
-          action.agentPreset,
-        ),
+        () =>
+            _repository.selectAgentPreset(action.sessionId, action.agentPreset),
       ),
     );
   }
@@ -473,22 +474,27 @@ class ChatController {
     // to the prompt channel (the model serves them).
     final commandLine = hostCommandLineFor(action.text.trim());
     if (commandLine != null) {
-      unawaited(_executeHostCommand(
-        sessionId,
-        commandLine,
-        images,
-        detached: hostCommandIsBare(action.text.trim()),
-      ));
+      unawaited(
+        _executeHostCommand(
+          sessionId,
+          commandLine,
+          images,
+          detached: hostCommandIsBare(action.text.trim()),
+        ),
+      );
       return;
     }
     final prompt = action.text.trim();
     _telemetry?.count('chat.message.send');
-    _telemetry?.event('chat.message.send', attributes: {
-      'sessionId': sessionId,
-      'mode': action.mode.name,
-      'textLength': prompt.length,
-      'images': images.length,
-    });
+    _telemetry?.event(
+      'chat.message.send',
+      attributes: {
+        'sessionId': sessionId,
+        'mode': action.mode.name,
+        'textLength': prompt.length,
+        'images': images.length,
+      },
+    );
     unawaited(() async {
       _isSending = true;
       _publish();
@@ -509,10 +515,10 @@ class ChatController {
           _pendingImages = const <PendingImage>[];
         } else {
           _telemetry?.count('chat.message.send_failed');
-          _telemetry?.event('chat.message.send_failed', attributes: {
-            'sessionId': sessionId,
-            'mode': action.mode.name,
-          });
+          _telemetry?.event(
+            'chat.message.send_failed',
+            attributes: {'sessionId': sessionId, 'mode': action.mode.name},
+          );
         }
       } finally {
         _isSending = false;
@@ -560,10 +566,10 @@ class ChatController {
       _publish();
     }
     _telemetry?.count('chat.command.execute');
-    _telemetry?.event('chat.command.execute', attributes: {
-      'sessionId': sessionId,
-      'command': line,
-    });
+    _telemetry?.event(
+      'chat.command.execute',
+      attributes: {'sessionId': sessionId, 'command': line},
+    );
     try {
       _errorMessage = null;
       _commandFailed = false;
@@ -583,11 +589,14 @@ class ChatController {
         if (detached) {
           _publish();
         }
-        _telemetry?.event('chat.command.error', attributes: {
-          'sessionId': sessionId,
-          'command': line,
-          'error': error.toString(),
-        });
+        _telemetry?.event(
+          'chat.command.error',
+          attributes: {
+            'sessionId': sessionId,
+            'command': line,
+            'error': error.toString(),
+          },
+        );
         return;
       }
       if (execution == null) {
@@ -606,11 +615,14 @@ class ChatController {
       if (execution.kind == CommandOutcomeKind.error) {
         _errorMessage = execution.text;
         _commandFailed = execution.text == null;
-        _telemetry?.event('chat.command.error', attributes: {
-          'sessionId': sessionId,
-          'command': line,
-          'result': execution.text ?? '',
-        });
+        _telemetry?.event(
+          'chat.command.error',
+          attributes: {
+            'sessionId': sessionId,
+            'command': line,
+            'result': execution.text ?? '',
+          },
+        );
         return;
       }
       _pendingImages = const <PendingImage>[];
@@ -764,17 +776,19 @@ class ChatController {
   void _loadSessionSelection(Future<SessionSelectionPersistence?>? source) {
     if (source == null) return;
     unawaited(
-      source.then((store) async {
-        if (_disposed || store == null) return;
-        _selectionStore = store;
-        final stored = await store.readSelectedSession();
-        if (_disposed) return;
-        _restoreSessionId = stored;
-        _maybeRestoreSelectedSession();
-      }).catchError((_) {
-        // Persistence is a convenience; selection itself never depends
-        // on the seam resolving.
-      }),
+      source
+          .then((store) async {
+            if (_disposed || store == null) return;
+            _selectionStore = store;
+            final stored = await store.readSelectedSession();
+            if (_disposed) return;
+            _restoreSessionId = stored;
+            _maybeRestoreSelectedSession();
+          })
+          .catchError((_) {
+            // Persistence is a convenience; selection itself never depends
+            // on the seam resolving.
+          }),
     );
   }
 
@@ -827,22 +841,24 @@ class ChatController {
   void _loadModelPreferences(Future<ModelPreferencePersistence?>? source) {
     if (source == null) return;
     unawaited(
-      source.then((store) async {
-        if (_disposed || store == null) return;
-        _modelPrefsStore = store;
-        final preferences = await store.read();
-        if (_disposed) return;
-        _modelPrefs = preferences;
-        _prefsLoaded = true;
-        // The apply pass may already have decided "nothing remembered"
-        // against the empty default; re-arm it with the loaded values.
-        _modelPrefsDecidedFor = null;
-        _publish();
-        _maybeApplyModelPreferences();
-      }).catchError((_) {
-        // Preference memory is a convenience; the seat never depends on
-        // the seam resolving.
-      }),
+      source
+          .then((store) async {
+            if (_disposed || store == null) return;
+            _modelPrefsStore = store;
+            final preferences = await store.read();
+            if (_disposed) return;
+            _modelPrefs = preferences;
+            _prefsLoaded = true;
+            // The apply pass may already have decided "nothing remembered"
+            // against the empty default; re-arm it with the loaded values.
+            _modelPrefsDecidedFor = null;
+            _publish();
+            _maybeApplyModelPreferences();
+          })
+          .catchError((_) {
+            // Preference memory is a convenience; the seat never depends on
+            // the seam resolving.
+          }),
     );
   }
 
@@ -872,9 +888,7 @@ class ChatController {
     final sessionId = _selectedSessionId;
     if (sessionId == null || _modelPrefsDecidedFor == sessionId) return;
     if (!_prefsLoaded || _modelsSessionId != sessionId) return;
-    final session = _sessions
-        .where((item) => item.id == sessionId)
-        .firstOrNull;
+    final session = _sessions.where((item) => item.id == sessionId).firstOrNull;
     if (session == null) return;
     _modelPrefsDecidedFor = sessionId;
     final remembered = _modelPrefs.lastSelection;
@@ -891,10 +905,10 @@ class ChatController {
         // A remembered route the host can no longer serve stays
         // unapplied; the seat keeps the host's own current selection.
         _telemetry?.count('chat.model.prefs.apply_failed');
-        _telemetry?.event('chat.model.prefs.apply_failed', attributes: {
-          'sessionId': sessionId,
-          'error': error.toString(),
-        });
+        _telemetry?.event(
+          'chat.model.prefs.apply_failed',
+          attributes: {'sessionId': sessionId, 'error': error.toString()},
+        );
       }
     }());
   }
@@ -960,11 +974,14 @@ class ChatController {
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
       _telemetry?.count('chat.session.create');
-      _telemetry?.event('chat.session.create', attributes: {
-        'sessionId': resolved,
-        'workspaceId': workspaceId ?? '',
-        'agentPreset': agentPreset ?? '',
-      });
+      _telemetry?.event(
+        'chat.session.create',
+        attributes: {
+          'sessionId': resolved,
+          'workspaceId': workspaceId ?? '',
+          'agentPreset': agentPreset ?? '',
+        },
+      );
       // A reused blank session was created without the staged preset;
       // the blank-session switch carries it (web stage semantics: the
       // stage reaches a session that is still blank, created or reused).
@@ -1002,10 +1019,10 @@ class ChatController {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
     _telemetry?.count('chat.approval.respond');
-    _telemetry?.event('chat.approval.respond', attributes: {
-      'sessionId': sessionId,
-      'allowed': action.allowed,
-    });
+    _telemetry?.event(
+      'chat.approval.respond',
+      attributes: {'sessionId': sessionId, 'allowed': action.allowed},
+    );
     unawaited(
       _runCatchingForUi(
         () => _repository.respondToApproval(
@@ -1024,10 +1041,10 @@ class ChatController {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
     _telemetry?.count('chat.question.answer');
-    _telemetry?.event('chat.question.answer', attributes: {
-      'sessionId': sessionId,
-      'answers': action.answers.length,
-    });
+    _telemetry?.event(
+      'chat.question.answer',
+      attributes: {'sessionId': sessionId, 'answers': action.answers.length},
+    );
     unawaited(
       _runCatchingForUi(
         () => _repository.answerQuestions(
@@ -1078,10 +1095,10 @@ class ChatController {
       _publish();
       await _runCatchingForUi(() => _repository.openSession(forked.id));
       _telemetry?.count('chat.session.fork');
-      _telemetry?.event('chat.session.fork', attributes: {
-        'fromSessionId': sessionId,
-        'sessionId': forked.id,
-      });
+      _telemetry?.event(
+        'chat.session.fork',
+        attributes: {'fromSessionId': sessionId, 'sessionId': forked.id},
+      );
     }());
   }
 
@@ -1115,10 +1132,13 @@ class ChatController {
       _errorMessage = error.toString();
       _publish();
       _telemetry?.count('chat.error');
-      _telemetry?.event('chat.error', attributes: {
-        'type': error.runtimeType.toString(),
-        'message': error.toString(),
-      });
+      _telemetry?.event(
+        'chat.error',
+        attributes: {
+          'type': error.runtimeType.toString(),
+          'message': error.toString(),
+        },
+      );
       return null;
     }
   }

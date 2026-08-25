@@ -1,6 +1,8 @@
 /// Screen for downloading and managing on-device ASR speech recognition models.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:asr/asr.dart';
 import 'package:flutter/material.dart';
@@ -15,22 +17,21 @@ class AsrModelsRoute extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsrModelsController controller =
-        ref.watch(asrModelsControllerProvider);
+    final AsrModelsController controller = ref.watch(
+      asrModelsControllerProvider,
+    );
     return StreamBuilder<AsrModelsUiState>(
       stream: controller.uiState,
       initialData: controller.state,
-      builder: (
-        BuildContext context,
-        AsyncSnapshot<AsrModelsUiState> snapshot,
-      ) {
-        final AsrModelsUiState uiState =
-            snapshot.data ?? const AsrModelsUiState();
-        return AsrModelsScreen(
-          uiState: uiState,
-          onAction: controller.onAction,
-        );
-      },
+      builder:
+          (BuildContext context, AsyncSnapshot<AsrModelsUiState> snapshot) {
+            final AsrModelsUiState uiState =
+                snapshot.data ?? const AsrModelsUiState();
+            return AsrModelsScreen(
+              uiState: uiState,
+              onAction: controller.onAction,
+            );
+          },
     );
   }
 }
@@ -38,9 +39,9 @@ class AsrModelsRoute extends ConsumerWidget {
 /// Screen presenting the ASR model catalog, source switchers, and controls.
 class AsrModelsScreen extends StatelessWidget {
   const AsrModelsScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
   });
 
   final AsrModelsUiState uiState;
@@ -128,7 +129,9 @@ class AsrModelsScreen extends StatelessWidget {
               color: scheme.surfaceContainerLow,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+                side: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: 0.5),
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -209,7 +212,8 @@ class AsrModelsScreen extends StatelessWidget {
                         models: uiState.models
                             .where((AsrModelCardState m) => m.isDownloaded)
                             .toList(),
-                        activeModelId: uiState.activeModelId ??
+                        activeModelId:
+                            uiState.activeModelId ??
                             uiState.models
                                 .where((AsrModelCardState m) => m.isDownloaded)
                                 .firstOrNull
@@ -239,7 +243,10 @@ class AsrModelsScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  l10n.asrInstalledCount(uiState.installedCount, uiState.totalCount),
+                  l10n.asrInstalledCount(
+                    uiState.installedCount,
+                    uiState.totalCount,
+                  ),
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -249,7 +256,8 @@ class AsrModelsScreen extends StatelessWidget {
             const SizedBox(height: 8),
 
             // Model Cards
-            for (final AsrModelCardState modelState in uiState.models) ...<Widget>[
+            for (final AsrModelCardState modelState
+                in uiState.models) ...<Widget>[
               _ModelCard(
                 cardState: modelState,
                 defaultSource: uiState.defaultSource,
@@ -287,8 +295,9 @@ class _ModelCard extends StatelessWidget {
     final ModelRegistryEntry entry = cardState.entry;
 
     final String locale = Localizations.localeOf(context).languageCode;
-    final String description =
-        locale == 'zh' ? info.descriptionZh : info.descriptionEn;
+    final String description = locale == 'zh'
+        ? info.descriptionZh
+        : info.descriptionEn;
 
     return Card(
       elevation: 0,
@@ -321,10 +330,7 @@ class _ModelCard extends StatelessWidget {
                         spacing: 6,
                         runSpacing: 4,
                         children: <Widget>[
-                          _Chip(
-                            label: info.languages,
-                            icon: Icons.translate,
-                          ),
+                          _Chip(label: info.languages, icon: Icons.translate),
                           _Chip(
                             label: info.license,
                             icon: Icons.gavel_outlined,
@@ -360,7 +366,11 @@ class _ModelCard extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Icon(Icons.folder_outlined, size: 14, color: scheme.onSurfaceVariant),
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 14,
+                        color: scheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -387,8 +397,11 @@ class _ModelCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        cardState.isDownloaded && cardState.diskUsageBytes != null
-                            ? l10n.asrDiskUsage(formatBytes(cardState.diskUsageBytes!))
+                        cardState.isDownloaded &&
+                                cardState.diskUsageBytes != null
+                            ? l10n.asrDiskUsage(
+                                formatBytes(cardState.diskUsageBytes!),
+                              )
                             : formatBytes(info.estimatedSizeBytes),
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: 11,
@@ -424,7 +437,9 @@ class _ModelCard extends StatelessWidget {
                   ),
                   if (cardState.speedBytesPerSecond > 0)
                     Text(
-                      l10n.asrSpeedLabel(formatBytes(cardState.speedBytesPerSecond.round())),
+                      l10n.asrSpeedLabel(
+                        formatBytes(cardState.speedBytesPerSecond.round()),
+                      ),
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: 11,
                         color: scheme.onSurfaceVariant,
@@ -435,7 +450,8 @@ class _ModelCard extends StatelessWidget {
             ],
 
             // Error notice if failed
-            if (cardState.isFailed && cardState.errorMessage != null) ...<Widget>[
+            if (cardState.isFailed &&
+                cardState.errorMessage != null) ...<Widget>[
               const SizedBox(height: 10),
               Text(
                 cardState.errorMessage!,
@@ -471,8 +487,8 @@ class _ModelCard extends StatelessWidget {
                     onPressed: () {
                       final ModelSource alternate =
                           entry.source == ModelSource.hfMirror
-                              ? ModelSource.huggingFace
-                              : ModelSource.hfMirror;
+                          ? ModelSource.huggingFace
+                          : ModelSource.hfMirror;
                       onAction(RetryWithSourceAction(info.id, alternate));
                     },
                     child: Text(
@@ -488,7 +504,10 @@ class _ModelCard extends StatelessWidget {
                     icon: const Icon(Icons.refresh, size: 16),
                     label: Text(l10n.asrRetryButton),
                     onPressed: () => onAction(
-                      StartDownloadAction(info.id, sourceOverride: entry.source),
+                      StartDownloadAction(
+                        info.id,
+                        sourceOverride: entry.source,
+                      ),
                     ),
                   ),
                 ] else ...<Widget>[
@@ -496,7 +515,12 @@ class _ModelCard extends StatelessWidget {
                   FilledButton.tonalIcon(
                     icon: const Icon(Icons.download, size: 16),
                     label: Text(l10n.asrDownloadButton),
-                    onPressed: () => onAction(StartDownloadAction(info.id, sourceOverride: defaultSource)),
+                    onPressed: () => onAction(
+                      StartDownloadAction(
+                        info.id,
+                        sourceOverride: defaultSource,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -512,25 +536,27 @@ class _ModelCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
 
-    showDialog<void>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: Text(l10n.asrDeleteConfirmTitle),
-        content: Text(l10n.asrDeleteConfirmBody(info.name)),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: scheme.error),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              onAction(DeleteModelAction(info.id));
-            },
-            child: Text(l10n.delete),
-          ),
-        ],
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (BuildContext ctx) => AlertDialog(
+          title: Text(l10n.asrDeleteConfirmTitle),
+          content: Text(l10n.asrDeleteConfirmBody(info.name)),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: scheme.error),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                onAction(DeleteModelAction(info.id));
+              },
+              child: Text(l10n.delete),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -583,41 +609,41 @@ class _StatusBadge extends StatelessWidget {
 
     final (Color bg, Color fg, String text, IconData icon) = switch (status) {
       AsrModelStatus.idle => (
-          scheme.surfaceContainerHighest,
-          scheme.onSurfaceVariant,
-          l10n.asrModelStatusIdle,
-          Icons.cloud_download_outlined,
-        ),
+        scheme.surfaceContainerHighest,
+        scheme.onSurfaceVariant,
+        l10n.asrModelStatusIdle,
+        Icons.cloud_download_outlined,
+      ),
       AsrModelStatus.downloading => (
-          scheme.primaryContainer,
-          scheme.onPrimaryContainer,
-          l10n.asrModelStatusDownloading,
-          Icons.sync,
-        ),
+        scheme.primaryContainer,
+        scheme.onPrimaryContainer,
+        l10n.asrModelStatusDownloading,
+        Icons.sync,
+      ),
       AsrModelStatus.downloaded => (
-          scheme.tertiaryContainer,
-          scheme.onTertiaryContainer,
-          l10n.asrModelStatusDownloaded,
-          Icons.check_circle_outline,
-        ),
+        scheme.tertiaryContainer,
+        scheme.onTertiaryContainer,
+        l10n.asrModelStatusDownloaded,
+        Icons.check_circle_outline,
+      ),
       AsrModelStatus.failed => (
-          scheme.errorContainer,
-          scheme.onErrorContainer,
-          l10n.asrModelStatusFailed,
-          Icons.error_outline,
-        ),
+        scheme.errorContainer,
+        scheme.onErrorContainer,
+        l10n.asrModelStatusFailed,
+        Icons.error_outline,
+      ),
       AsrModelStatus.canceled => (
-          scheme.surfaceContainerHighest,
-          scheme.onSurfaceVariant,
-          l10n.asrModelStatusCanceled,
-          Icons.cancel_outlined,
-        ),
+        scheme.surfaceContainerHighest,
+        scheme.onSurfaceVariant,
+        l10n.asrModelStatusCanceled,
+        Icons.cancel_outlined,
+      ),
       AsrModelStatus.deleting => (
-          scheme.surfaceContainerHighest,
-          scheme.onSurfaceVariant,
-          'Deleting',
-          Icons.hourglass_empty,
-        ),
+        scheme.surfaceContainerHighest,
+        scheme.onSurfaceVariant,
+        'Deleting',
+        Icons.hourglass_empty,
+      ),
     };
 
     return Container(
@@ -660,7 +686,8 @@ class _ActiveModelSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final active = models.where((m) => m.info.id == activeModelId).firstOrNull ??
+    final active =
+        models.where((m) => m.info.id == activeModelId).firstOrNull ??
         models.firstOrNull;
     if (active == null) return const SizedBox.shrink();
 
@@ -797,24 +824,27 @@ class _ActiveModelSelector extends StatelessWidget {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         item.info.name,
-                                        style: theme.textTheme.bodyMedium?.copyWith(
-                                          fontWeight: isSelected
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
-                                          fontSize: 13.5,
-                                        ),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                              fontSize: 13.5,
+                                            ),
                                       ),
                                       const SizedBox(height: 1),
                                       Text(
                                         item.info.languages,
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: scheme.onSurfaceVariant,
-                                          fontSize: 11.5,
-                                        ),
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                              fontSize: 11.5,
+                                            ),
                                       ),
                                     ],
                                   ),

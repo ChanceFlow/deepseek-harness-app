@@ -113,7 +113,10 @@ void main() {
     );
 
     expect(find.text('Finish the Android MVP'), findsOneWidget);
-    expect(find.text('Ongoing Goal · revision 3 · rounds 2/10'), findsOneWidget);
+    expect(
+      find.text('Ongoing Goal · revision 3 · rounds 2/10'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Pause goal'));
     await tester.pump();

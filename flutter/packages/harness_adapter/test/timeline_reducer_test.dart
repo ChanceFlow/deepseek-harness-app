@@ -626,11 +626,14 @@ void main() {
           method: 'session/event',
           payload: <String, Object?>{
             'type': 'session/event',
-            'event': event(seq, 'turn/end', <String, Object?>{'reason': reason}),
+            'event': event(seq, 'turn/end', <String, Object?>{
+              'reason': reason,
+            }),
           },
         ),
       );
     }
+
     turnEnd(1, <String, Object?>{
       'kind': 'error',
       'error': <String, Object?>{'message': 'model exploded'},

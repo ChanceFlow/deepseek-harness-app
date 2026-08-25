@@ -145,15 +145,18 @@ void main() {
     expect(h.container.read(settingsBackendScopeProvider), 'default');
   });
 
-  test('removing the pinned backend resets the scope to follow-active', () async {
-    final h = await _pump();
-    final notifier = h.container.read(settingsBackendScopeProvider.notifier);
+  test(
+    'removing the pinned backend resets the scope to follow-active',
+    () async {
+      final h = await _pump();
+      final notifier = h.container.read(settingsBackendScopeProvider.notifier);
 
-    notifier.select('b1');
-    expect(h.container.read(settingsBackendScopeProvider), 'b1');
+      notifier.select('b1');
+      expect(h.container.read(settingsBackendScopeProvider), 'b1');
 
-    await _act(h, const RemoveBackend('b1'));
-    expect(h.container.read(settingsBackendScopeProvider), 'default');
-    expect(notifier.isPinned, isFalse);
-  });
+      await _act(h, const RemoveBackend('b1'));
+      expect(h.container.read(settingsBackendScopeProvider), 'default');
+      expect(notifier.isPinned, isFalse);
+    },
+  );
 }

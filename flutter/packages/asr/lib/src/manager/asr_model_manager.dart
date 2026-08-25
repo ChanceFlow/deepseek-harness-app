@@ -21,8 +21,8 @@ class AsrModelManager {
     DiskSpaceChecker? diskSpaceChecker,
     this.defaultSource = ModelSource.hfMirror,
     this.allowCellular = false,
-  })  : _downloader = downloader ?? AsrDownloader(),
-        _diskSpaceChecker = diskSpaceChecker ?? _defaultDiskSpaceChecker;
+  }) : _downloader = downloader ?? AsrDownloader(),
+       _diskSpaceChecker = diskSpaceChecker ?? _defaultDiskSpaceChecker;
 
   final Directory baseModelsDir;
   final ModelsRegistry registry;
@@ -102,8 +102,11 @@ class AsrModelManager {
       throw ArgumentError('Unknown ASR model id: $modelId');
     }
 
-    if (_activeDownloadingModelId != null && _activeDownloadingModelId != modelId) {
-      throw StateError('Another download is currently in progress: $_activeDownloadingModelId');
+    if (_activeDownloadingModelId != null &&
+        _activeDownloadingModelId != modelId) {
+      throw StateError(
+        'Another download is currently in progress: $_activeDownloadingModelId',
+      );
     }
 
     if (isCellular && !allowCellular) {
@@ -118,7 +121,8 @@ class AsrModelManager {
     if (availableBytes < requiredBytes) {
       final ModelRegistryEntry failedEntry = getStatus(modelId).copyWith(
         status: AsrModelStatus.failed,
-        lastError: 'Insufficient storage space: required ${(requiredBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
+        lastError:
+            'Insufficient storage space: required ${(requiredBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
       );
       await registry.updateEntry(failedEntry);
       throw const DownloadFailedException('Insufficient storage space');
@@ -149,7 +153,7 @@ class AsrModelManager {
             downloadedBytes: p.downloadedBytes,
             totalBytes: p.totalBytes,
           );
-          registry.updateEntry(entry);
+          unawaited(registry.updateEntry(entry));
         },
       );
 
@@ -163,10 +167,7 @@ class AsrModelManager {
       );
       await registry.updateEntry(entry);
     } on DownloadCanceledException {
-      entry = entry.copyWith(
-        status: AsrModelStatus.canceled,
-        clearError: true,
-      );
+      entry = entry.copyWith(status: AsrModelStatus.canceled, clearError: true);
       await registry.updateEntry(entry);
       rethrow;
     } catch (e) {
@@ -202,10 +203,8 @@ class AsrModelManager {
       _downloader.cancel();
       _activeDownloadingModelId = null;
     }
-    final ModelRegistryEntry entry = getStatus(modelId).copyWith(
-      status: AsrModelStatus.canceled,
-      clearError: true,
-    );
+    final ModelRegistryEntry entry = getStatus(modelId)
+        .copyWith(status: AsrModelStatus.canceled, clearError: true);
     await registry.updateEntry(entry);
   }
 

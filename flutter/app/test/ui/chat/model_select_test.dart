@@ -130,9 +130,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Fresh'));
     await tester.pumpAndSettle();
-    final l10n = await AppLocalizations.delegate.load(
-      const Locale('en'),
-    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     // The effort row shows the catalog default, not the other route's
     // remembered effort.
     expect(find.text(l10n.providerDefault), findsNothing);

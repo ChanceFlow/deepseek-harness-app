@@ -50,7 +50,7 @@ String _statusLabel(JobStatus status, AppLocalizations l10n) =>
     };
 
 class JobListAction extends StatelessWidget {
-  const JobListAction({super.key, required this.jobs});
+  const JobListAction({required this.jobs, super.key});
 
   final List<JobView> jobs;
 

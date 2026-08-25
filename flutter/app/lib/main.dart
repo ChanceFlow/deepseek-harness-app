@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:app/l10n/app_localizations.dart';
@@ -52,34 +53,41 @@ void _initDebugTools() {
   try {
     final documents = getApplicationDocumentsDirectory();
     // Fire-and-forget directory lookup; bootstrap starts once it resolves.
-    documents.then((dir) async {
-      final bootstrap = await initDebugTelemetry(
-        settings: const TelemetrySettings(
-          endpoint: kDshDebugOtlpUrl,
-          serviceName: 'dsh-android',
-          serviceVersion: kDshAppVersion,
-          resourceAttributes: {
-            'build.number': kDshBuildNumber,
-            'source.repo': kDshSourceRepo,
-            'source.commit': kDshSourceCommit,
-          },
-          metricFlushInterval: Duration(seconds: 15),
-        ),
-        markerDirectory: dir,
-        dshBaseUrl: kDshBaseUrl,
-      );
-      debugBootstrap = bootstrap;
-      if (bootstrap != null) {
-        bootstrap.telemetry.event('app.start', attributes: {
-          'version': kDshAppVersion,
-          'build': kDshBuildNumber,
-          'source.commit': kDshSourceCommit,
-        });
-      }
-    }).catchError((Object _) {
-      // No documents dir (plugin missing) — disable telemetry silently.
-      debugBootstrap = null;
-    });
+    unawaited(
+      documents
+          .then((dir) async {
+            final bootstrap = await initDebugTelemetry(
+              settings: const TelemetrySettings(
+                endpoint: kDshDebugOtlpUrl,
+                serviceName: 'dsh-android',
+                serviceVersion: kDshAppVersion,
+                resourceAttributes: {
+                  'build.number': kDshBuildNumber,
+                  'source.repo': kDshSourceRepo,
+                  'source.commit': kDshSourceCommit,
+                },
+                metricFlushInterval: Duration(seconds: 15),
+              ),
+              markerDirectory: dir,
+              dshBaseUrl: kDshBaseUrl,
+            );
+            debugBootstrap = bootstrap;
+            if (bootstrap != null) {
+              bootstrap.telemetry.event(
+                'app.start',
+                attributes: {
+                  'version': kDshAppVersion,
+                  'build': kDshBuildNumber,
+                  'source.commit': kDshSourceCommit,
+                },
+              );
+            }
+          })
+          .catchError((Object _) {
+            // No documents dir (plugin missing) — disable telemetry silently.
+            debugBootstrap = null;
+          }),
+    );
   } catch (_) {
     debugBootstrap = null;
   }
@@ -108,10 +116,7 @@ class DshApp extends ConsumerWidget {
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('en'),
-        Locale('zh'),
-      ],
+      supportedLocales: const [Locale('en'), Locale('zh')],
       home: const AppRoot(),
     );
   }

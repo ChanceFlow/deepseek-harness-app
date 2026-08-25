@@ -12,10 +12,10 @@ JsonMap _asMap(Object? value, String what) {
 
 final class ClientRequest {
   ClientRequest({
-    this.type = 'client-request',
     required this.rpcId,
     required this.method,
     required this.payload,
+    this.type = 'client-request',
   });
 
   final String type;
@@ -43,9 +43,9 @@ final class ClientRequest {
 
 final class ClientResponse {
   ClientResponse({
-    this.type = 'client-response',
     required this.rpcId,
     required this.result,
+    this.type = 'client-response',
   });
 
   final String type;
@@ -70,9 +70,9 @@ final class ClientResponse {
 
 final class ServerResponse {
   ServerResponse({
-    this.type = 'server-response',
     required this.rpcId,
     required this.result,
+    this.type = 'server-response',
   });
 
   final String type;
@@ -97,10 +97,10 @@ final class ServerResponse {
 
 final class ServerRequest {
   ServerRequest({
-    this.type = 'server-request',
     required this.rpcId,
     required this.method,
     required this.payload,
+    this.type = 'server-request',
   });
 
   final String type;

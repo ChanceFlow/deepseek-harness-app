@@ -198,7 +198,11 @@ Future<void> settle(WidgetTester tester) async {
 
 class _FakeRpc implements DshRpcClient {
   @override
-  Future<RpcResult> call(String endpoint, String method, JsonMap payload) async {
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
     if (endpoint == 'host.describe') {
       // A valid description so the settings shots' connection
       // handshakes reach CONNECTED (green dots, versioned rows).
@@ -357,7 +361,9 @@ class _StaticVoiceInputController extends VoiceInputController {
   _StaticVoiceInputController({
     required super.manager,
     required this.initialState,
-  }) : super(audioRecorder: MockAudioInputSource(simulatedDuration: Duration.zero));
+  }) : super(
+         audioRecorder: MockAudioInputSource(simulatedDuration: Duration.zero),
+       );
 
   final VoiceInputUiState initialState;
 
@@ -389,18 +395,17 @@ Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
   addTearDown(() => tempDir.deleteSync(recursive: true));
   final registryFile = File('${tempDir.path}/models_registry.json');
   final registry = ModelsRegistry(registryFile: registryFile);
-  registry.updateEntry(
-    ModelRegistryEntry(
-      modelId: 'sensevoice-small',
-      source: ModelSource.hfMirror,
-      localDir: '${tempDir.path}/sensevoice-small',
-      status: AsrModelStatus.downloaded,
+  unawaited(
+    registry.updateEntry(
+      ModelRegistryEntry(
+        modelId: 'sensevoice-small',
+        source: ModelSource.hfMirror,
+        localDir: '${tempDir.path}/sensevoice-small',
+        status: AsrModelStatus.downloaded,
+      ),
     ),
   );
-  final manager = AsrModelManager(
-    baseModelsDir: tempDir,
-    registry: registry,
-  );
+  final manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
   final controller = _StaticVoiceInputController(
     manager: manager,
     initialState: VoiceInputUiState(
@@ -409,7 +414,9 @@ Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
       amplitude: 0.65,
       activeModel: AsrModelManifest.senseVoiceSmall,
       hasInstalledModels: true,
-      liveTranscription: zh ? '端侧语音识别实时转写测试' : 'On-device speech recognition live transcription test',
+      liveTranscription: zh
+          ? '端侧语音识别实时转写测试'
+          : 'On-device speech recognition live transcription test',
     ),
   );
 
@@ -417,8 +424,10 @@ Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
     overrides: [
       asrModelManagerProvider.overrideWith((ref) async => manager),
       voiceInputControllerProvider.overrideWith((ref) => controller),
-      dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(_FakeRpc()),
-      dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(_SilentSocket()),
+      dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+          .overrideWithValue(_FakeRpc()),
+      dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+          .overrideWithValue(_SilentSocket()),
     ],
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -444,15 +453,10 @@ Widget _voiceNoModelDialogHost(ThemeData theme, Locale? locale, bool zh) {
         child: AlertDialog(
           title: Text(zh ? '需要语音识别模型' : 'Speech Model Required'),
           content: Text(
-            zh
-                ? '请在设置中下载离线语音识别模型，即可开启端侧语音输入。'
-                : 'Download an on-device speech recognition model in Settings to enable offline voice input.',
+            zh ? '请在设置中下载离线语音识别模型，即可开启端侧语音输入。' : 'Download an on-device speech recognition model in Settings to enable offline voice input.',
           ),
           actions: <Widget>[
-            TextButton(
-              onPressed: () {},
-              child: Text(zh ? '取消' : 'Cancel'),
-            ),
+            TextButton(onPressed: () {}, child: Text(zh ? '取消' : 'Cancel')),
             FilledButton(
               onPressed: () {},
               child: Text(zh ? '前往设置' : 'Go to Settings'),
@@ -548,7 +552,11 @@ Future<void> _openAppCategoryZh(WidgetTester tester) async {
   await settle(tester);
 }
 
-Future<void> _render(WidgetTester tester, DesignShot shot, ThemeData theme) async {
+Future<void> _render(
+  WidgetTester tester,
+  DesignShot shot,
+  ThemeData theme,
+) async {
   tester.view.physicalSize = _kPhone;
   tester.view.devicePixelRatio = _kDevicePixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
@@ -558,12 +566,10 @@ Future<void> _render(WidgetTester tester, DesignShot shot, ThemeData theme) asyn
         ? shot.host!(theme, shot.locale)
         : ProviderScope(
             overrides: [
-              dshRpcClientProvider(
-                Uri.parse(kDshBaseUrl),
-              ).overrideWithValue(_FakeRpc()),
-              dshEventSocketProvider(
-                Uri.parse(kDshBaseUrl),
-              ).overrideWithValue(_SilentSocket()),
+              dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+                  .overrideWithValue(_FakeRpc()),
+              dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+                  .overrideWithValue(_SilentSocket()),
             ],
             child: MaterialApp(
               // The banner is chrome the reviewer did not ask about.

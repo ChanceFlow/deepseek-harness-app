@@ -98,9 +98,10 @@ final class WebSocketDshEventSocket implements DshEventSocket {
     try {
       // Bounded graceful close: a peer that never answers the close frame
       // must not hang the caller (subscription cancel / generation teardown).
-      await webSocket
-          .close()
-          .timeout(const Duration(seconds: 2), onTimeout: () {});
+      await webSocket.close().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {},
+      );
     } on Exception {
       // Abandon the socket to the OS; nothing else to clean up.
     }

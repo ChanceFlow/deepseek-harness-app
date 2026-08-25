@@ -853,10 +853,9 @@ void main() {
     await pumpEventQueue();
 
     expect(controller.state.pendingImages, isEmpty);
-    expect(
-      controller.state.imageRejections,
-      const <ImageRejection>[UnsupportedImageType(null, 'image/bmp')],
-    );
+    expect(controller.state.imageRejections, const <ImageRejection>[
+      UnsupportedImageType(null, 'image/bmp'),
+    ]);
   });
 
   test('pending image count is capped at the per-message limit', () async {
@@ -882,10 +881,9 @@ void main() {
       controller.state.pendingImages.length,
       ImageLimits.defaultMaxImagesPerMessage,
     );
-    expect(
-      controller.state.imageRejections,
-      const <ImageRejection>[NoImageRoom(20)],
-    );
+    expect(controller.state.imageRejections, const <ImageRejection>[
+      NoImageRoom(20),
+    ]);
   });
 
   test('remove pending image drops only that image', () async {
@@ -1157,52 +1155,53 @@ void main() {
     await pumpEventQueue();
 
     controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
-    controller.onAction(
-      const DismissQuestionAction(requestId: 'rpc-question'),
-    );
+    controller.onAction(const DismissQuestionAction(requestId: 'rpc-question'));
     await pumpEventQueue();
 
     expect(repository.cancelledQuestions.single, ('rpc-question', 'session-1'));
   });
 
-  test('host-command lines execute through commands/execute, never prompts', () async {
-    final repository = _GoalRecordingRepository();
-    final controller = ChatController(repository);
-    await pumpEventQueue();
-
-    controller.onAction(const SelectSession('s1'));
-    await pumpEventQueue();
-
-    // Every roster command with an input hint is args-tolerant: the full
-    // line rides the command RPC (the host's own grammar — /goal creates
-    // the goal server-side, /plan toggles plan mode).
-    for (final text in [
-      '/plan',
-      '/plan off',
-      '/goal Ship the MVP',
-      '/goal edit fix bugs first',
-      '/permission workspace-write',
-      '/feedback great session',
-    ]) {
-      controller.onAction(SendPrompt(text));
+  test(
+    'host-command lines execute through commands/execute, never prompts',
+    () async {
+      final repository = _GoalRecordingRepository();
+      final controller = ChatController(repository);
       await pumpEventQueue();
-    }
-    expect(repository.executedCommands, [
-      '/plan',
-      '/plan off',
-      '/goal Ship the MVP',
-      '/goal edit fix bugs first',
-      '/permission workspace-write',
-      '/feedback great session',
-    ]);
-    expect(repository.sentTexts, isEmpty);
-    expect(repository.createdGoals, isEmpty);
 
-    // Plain prompts still ride the message channel.
-    controller.onAction(const SendPrompt('hello'));
-    await pumpEventQueue();
-    expect(repository.sentTexts, ['hello']);
-  });
+      controller.onAction(const SelectSession('s1'));
+      await pumpEventQueue();
+
+      // Every roster command with an input hint is args-tolerant: the full
+      // line rides the command RPC (the host's own grammar — /goal creates
+      // the goal server-side, /plan toggles plan mode).
+      for (final text in [
+        '/plan',
+        '/plan off',
+        '/goal Ship the MVP',
+        '/goal edit fix bugs first',
+        '/permission workspace-write',
+        '/feedback great session',
+      ]) {
+        controller.onAction(SendPrompt(text));
+        await pumpEventQueue();
+      }
+      expect(repository.executedCommands, [
+        '/plan',
+        '/plan off',
+        '/goal Ship the MVP',
+        '/goal edit fix bugs first',
+        '/permission workspace-write',
+        '/feedback great session',
+      ]);
+      expect(repository.sentTexts, isEmpty);
+      expect(repository.createdGoals, isEmpty);
+
+      // Plain prompts still ride the message channel.
+      controller.onAction(const SendPrompt('hello'));
+      await pumpEventQueue();
+      expect(repository.sentTexts, ['hello']);
+    },
+  );
 
   test('the submit table mirrors the web decision rules', () async {
     final repository = _GoalRecordingRepository();
@@ -1245,79 +1244,87 @@ void main() {
     expect(repository.sentMessages.map((m) => m.text), ['/plan']);
   });
 
-  test('a command error result surfaces the text and keeps the images', () async {
-    final repository = FakeChatRepository();
-    repository.commandExecutions['/permission bogus'] = const CommandExecution(
-      commandId: 'cmd-9',
-      kind: CommandOutcomeKind.error,
-      text: 'unknown preset "bogus"',
-    );
-    final controller = ChatController(repository);
-    await pumpEventQueue();
+  test(
+    'a command error result surfaces the text and keeps the images',
+    () async {
+      final repository = FakeChatRepository();
+      repository.commandExecutions['/permission bogus'] =
+          const CommandExecution(
+            commandId: 'cmd-9',
+            kind: CommandOutcomeKind.error,
+            text: 'unknown preset "bogus"',
+          );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
 
-    controller.onAction(const SelectSession('s1'));
-    await pumpEventQueue();
+      controller.onAction(const SelectSession('s1'));
+      await pumpEventQueue();
 
-    controller.onAction(const SendPrompt('/permission bogus'));
-    await pumpEventQueue();
+      controller.onAction(const SendPrompt('/permission bogus'));
+      await pumpEventQueue();
 
-    final state = controller.state;
-    expect(state.errorMessage, 'unknown preset "bogus"');
-    // The line never rode the prompt channel.
-    expect(repository.sentMessages, isEmpty);
-  });
+      final state = controller.state;
+      expect(state.errorMessage, 'unknown preset "bogus"');
+      // The line never rode the prompt channel.
+      expect(repository.sentMessages, isEmpty);
+    },
+  );
 
-  test('a dispatch failure surfaces the error and never prompts the model',
-      () async {
-    final repository = FakeChatRepository();
-    // The dispatch itself fails — a transport abort mid-command (observed
-    // live: a 45s socket death during a 69s compaction).
-    repository.commandFailures.add('/compact');
-    final controller = ChatController(repository);
-    await pumpEventQueue();
+  test(
+    'a dispatch failure surfaces the error and never prompts the model',
+    () async {
+      final repository = FakeChatRepository();
+      // The dispatch itself fails — a transport abort mid-command (observed
+      // live: a 45s socket death during a 69s compaction).
+      repository.commandFailures.add('/compact');
+      final controller = ChatController(repository);
+      await pumpEventQueue();
 
-    controller.onAction(const SelectSession('s1'));
-    await pumpEventQueue();
+      controller.onAction(const SelectSession('s1'));
+      await pumpEventQueue();
 
-    controller.onAction(const SendPrompt('/compact'));
-    await pumpEventQueue();
+      controller.onAction(const SendPrompt('/compact'));
+      await pumpEventQueue();
 
-    final state = controller.state;
-    expect(state.errorMessage, contains('connection aborted'));
-    expect(state.isSending, isFalse);
-    // The command line never rode the prompt channel — the roster already
-    // adjudicated it as a host command, so the model must not receive it.
-    expect(repository.sentMessages, isEmpty);
-  });
+      final state = controller.state;
+      expect(state.errorMessage, contains('connection aborted'));
+      expect(state.isSending, isFalse);
+      // The command line never rode the prompt channel — the roster already
+      // adjudicated it as a host command, so the model must not receive it.
+      expect(repository.sentMessages, isEmpty);
+    },
+  );
 
-  test('a bare command dispatches detached and never holds the composer',
-      () async {
-    final repository = _DetachedDispatchRepository();
-    final controller = ChatController(repository);
-    await pumpEventQueue();
+  test(
+    'a bare command dispatches detached and never holds the composer',
+    () async {
+      final repository = _DetachedDispatchRepository();
+      final controller = ChatController(repository);
+      await pumpEventQueue();
 
-    controller.onAction(const SelectSession('s1'));
-    await pumpEventQueue();
+      controller.onAction(const SelectSession('s1'));
+      await pumpEventQueue();
 
-    // `/compact` is a bare-only command (no input hint): the web routes it
-    // through runDetached — the composer stays free while the host runs
-    // the compaction for tens of seconds, and the outcome arrives as the
-    // timeline command card, not a held sending state.
-    controller.onAction(const SendPrompt('/compact'));
-    await pumpEventQueue();
-    expect(repository.dispatched, ['/compact']);
-    expect(controller.state.isSending, isFalse);
+      // `/compact` is a bare-only command (no input hint): the web routes it
+      // through runDetached — the composer stays free while the host runs
+      // the compaction for tens of seconds, and the outcome arrives as the
+      // timeline command card, not a held sending state.
+      controller.onAction(const SendPrompt('/compact'));
+      await pumpEventQueue();
+      expect(repository.dispatched, ['/compact']);
+      expect(controller.state.isSending, isFalse);
 
-    // The hinted `/permission` command stays attached: the composer holds
-    // the sending state until its (fast) submission settles.
-    controller.onAction(const SendPrompt('/permission read-only'));
-    await pumpEventQueue();
-    expect(repository.dispatched, ['/compact', '/permission read-only']);
-    expect(controller.state.isSending, isTrue);
-    repository.releaseAll();
-    await pumpEventQueue();
-    expect(controller.state.isSending, isFalse);
-  });
+      // The hinted `/permission` command stays attached: the composer holds
+      // the sending state until its (fast) submission settles.
+      controller.onAction(const SendPrompt('/permission read-only'));
+      await pumpEventQueue();
+      expect(repository.dispatched, ['/compact', '/permission read-only']);
+      expect(controller.state.isSending, isTrue);
+      repository.releaseAll();
+      await pumpEventQueue();
+      expect(controller.state.isSending, isFalse);
+    },
+  );
 
   test('a command dispatch carries the composer images', () async {
     final repository = FakeChatRepository();
@@ -1346,8 +1353,10 @@ void main() {
     await pumpEventQueue();
 
     // The image rode the command's admission, and success consumed it.
-    expect(repository.commandDispatchImages['/goal Ship the MVP'],
-        const <PendingImage>[image]);
+    expect(
+      repository.commandDispatchImages['/goal Ship the MVP'],
+      const <PendingImage>[image],
+    );
     expect(controller.state.pendingImages, isEmpty);
     expect(repository.sentMessages, isEmpty);
   });
@@ -1357,7 +1366,8 @@ void main() {
     repository.commandExecutions['/goal pause'] = const CommandExecution(
       commandId: 'cmd-12',
       kind: CommandOutcomeKind.error,
-      text: 'Image attachments only accompany a goal objective: '
+      text:
+          'Image attachments only accompany a goal objective: '
           '/goal <objective> or /goal edit <objective>.',
     );
     final controller = ChatController(repository);
@@ -1483,11 +1493,8 @@ void main() {
   test('permissions subscribe per selected session', () async {
     final repository = FakeChatRepository();
     final bySession = <String, AppStateStream<PermissionSelect?>>{};
-    AppStateStream<PermissionSelect?> streamFor(String sessionId) =>
-        bySession.putIfAbsent(
-          sessionId,
-          () => AppStateStream<PermissionSelect?>(null),
-        );
+    AppStateStream<PermissionSelect?> streamFor(String sessionId) => bySession
+        .putIfAbsent(sessionId, () => AppStateStream<PermissionSelect?>(null));
     repository.permissionsSource = (sessionId) => streamFor(sessionId).stream;
     final controller = ChatController(repository);
     await pumpEventQueue();
@@ -1497,9 +1504,8 @@ void main() {
     await pumpEventQueue();
     expect(controller.state.permissions, isNull);
 
-    streamFor(
-      FakeChatRepository.initialSession.id,
-    ).value = const PermissionSelect(
+    streamFor(FakeChatRepository.initialSession.id)
+        .value = const PermissionSelect(
       options: [PermissionPresetOption(value: 'read-only', name: 'read-only')],
       currentValue: 'read-only',
     );
@@ -1531,11 +1537,7 @@ void main() {
   test('a reused blank session switches to the staged preset', () async {
     final repository = FakeChatRepository(
       initialSessions: <SessionSummary>[
-        const SessionSummary(
-          id: 's-blank',
-          blank: true,
-          cwd: '/tmp/proj',
-        ),
+        const SessionSummary(id: 's-blank', blank: true, cwd: '/tmp/proj'),
       ],
       initialWorkspaces: <WorkspaceSummary>[
         const WorkspaceSummary(
@@ -1682,4 +1684,3 @@ class _DetachedDispatchRepository extends FakeChatRepository {
     }
   }
 }
-

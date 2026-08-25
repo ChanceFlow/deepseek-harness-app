@@ -37,9 +37,7 @@ void main() {
 
   DebugToolBootstrap makeBootstrap(Directory dir) => DebugToolBootstrap(
     telemetry: telemetry,
-    marker: CrashMarker(
-      File('${dir.path}/${CrashMarker.markerName}'),
-    ),
+    marker: CrashMarker(File('${dir.path}/${CrashMarker.markerName}')),
     deviceProvider: () => 'Pixel 9',
     dshBaseUrl: 'http://10.0.2.2:3080',
     sessionIdProvider: () => 'sess-9',
@@ -98,7 +96,9 @@ void main() {
     };
     final bootstrap = makeBootstrap(dir);
     bootstrap.start(trackFrames: false);
-    FlutterError.reportError(FlutterErrorDetails(exception: StateError('kapow')));
+    FlutterError.reportError(
+      FlutterErrorDetails(exception: StateError('kapow')),
+    );
     expect(previousSaw, isA<StateError>(), reason: 'chain to previous handler');
     expect((previousSaw as StateError).message, 'kapow');
     expect(marker.exists, isTrue, reason: 'marker written synchronously');

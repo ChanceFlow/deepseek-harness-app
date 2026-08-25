@@ -14,9 +14,8 @@ typedef OfflineAsrRunner = Future<String> Function(Float32List audioSamples);
 /// Coordinates buffer accumulation and full-utterance inference for offline models
 /// like SenseVoice-Small and Whisper-Turbo.
 class NonStreamingAsrEngine implements AsrEngine {
-  NonStreamingAsrEngine({
-    OfflineAsrRunner? runner,
-  }) : _runner = runner ?? _defaultRunner;
+  NonStreamingAsrEngine({OfflineAsrRunner? runner})
+    : _runner = runner ?? _defaultRunner;
 
   final OfflineAsrRunner _runner;
   final StreamController<AsrTranscriptionChunk> _streamController =
@@ -63,12 +62,7 @@ class NonStreamingAsrEngine implements AsrEngine {
     final String result = await _runner(allSamples);
 
     if (!_streamController.isClosed) {
-      _streamController.add(
-        AsrTranscriptionChunk(
-          text: result,
-          isFinal: true,
-        ),
-      );
+      _streamController.add(AsrTranscriptionChunk(text: result, isFinal: true));
     }
     _state = AsrEngineState.ready;
     return result;

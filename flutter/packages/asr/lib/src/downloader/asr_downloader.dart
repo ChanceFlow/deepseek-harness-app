@@ -59,7 +59,7 @@ class DownloadFailedException implements Exception {
 /// and throttled progress reporting.
 class AsrDownloader {
   AsrDownloader({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
   bool _isCanceled = false;
@@ -93,7 +93,9 @@ class AsrDownloader {
     // Calculate already-downloaded bytes from previously completed files and partial downloads
     for (final AsrModelFile file in model.files) {
       final File finishedFile = File('${targetDir.path}/${file.name}');
-      final File partialFile = File('${targetDir.path}/${file.name}.downloading');
+      final File partialFile = File(
+        '${targetDir.path}/${file.name}.downloading',
+      );
       if (await finishedFile.exists()) {
         modelDownloadedBytes += await finishedFile.length();
       } else if (await partialFile.exists()) {
@@ -105,7 +107,11 @@ class AsrDownloader {
     int lastEmitBytes = modelDownloadedBytes;
     double currentSpeed = 0.0;
 
-    void emitProgress(String currentFileName, int completedFiles, {bool force = false}) {
+    void emitProgress(
+      String currentFileName,
+      int completedFiles, {
+      bool force = false,
+    }) {
       final DateTime now = DateTime.now();
       final int elapsedMs = now.difference(lastEmitTime).inMilliseconds;
       if (force || elapsedMs >= 500) {
@@ -134,7 +140,9 @@ class AsrDownloader {
 
       final AsrModelFile fileSpec = model.files[i];
       final File finishedFile = File('${targetDir.path}/${fileSpec.name}');
-      final File partialFile = File('${targetDir.path}/${fileSpec.name}.downloading');
+      final File partialFile = File(
+        '${targetDir.path}/${fileSpec.name}.downloading',
+      );
 
       // If finished file already exists and matches expected size, skip downloading it
       if (await finishedFile.exists()) {
@@ -191,11 +199,17 @@ class AsrDownloader {
         }
         modelDownloadedBytes -= startByte;
         startByte = 0;
-        final http.Request freshRequest = http.Request('GET', Uri.parse(fileUrl));
+        final http.Request freshRequest = http.Request(
+          'GET',
+          Uri.parse(fileUrl),
+        );
         freshRequest.headers.addAll(sourceClient.getHeaders());
         response = await _httpClient.send(freshRequest);
         if (response.statusCode != 200) {
-          throw DownloadFailedException('HTTP error', statusCode: response.statusCode);
+          throw DownloadFailedException(
+            'HTTP error',
+            statusCode: response.statusCode,
+          );
         }
         writeMode = FileMode.write;
       } else {

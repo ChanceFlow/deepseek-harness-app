@@ -106,19 +106,22 @@ abstract final class AsrModelManifest {
     languages: '中 / 英 / 粤 / 日 / 韩',
     estimatedSizeBytes: 239549735,
     license: 'Apache-2.0',
-    huggingFaceRepo: 'csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+    huggingFaceRepo:
+        'csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
     files: <AsrModelFile>[
       AsrModelFile(
         name: 'model.int8.onnx',
         sizeBytes: 239233841,
-        sha256: 'c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51',
+        sha256:
+            'c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx',
       ),
       AsrModelFile(
         name: 'tokens.txt',
         sizeBytes: 315894,
-        sha256: 'f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc',
+        sha256:
+            'f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt',
       ),
@@ -133,26 +136,30 @@ abstract final class AsrModelManifest {
     languages: '中 + 英 (代码混合)',
     estimatedSizeBytes: 198459312,
     license: 'Apache-2.0',
-    huggingFaceRepo: 'csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
+    huggingFaceRepo:
+        'csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
     files: <AsrModelFile>[
       AsrModelFile(
         name: 'encoder-epoch-99-avg-1.int8.onnx',
         sizeBytes: 181895032,
-        sha256: '8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b',
+        sha256:
+            '8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx',
       ),
       AsrModelFile(
         name: 'decoder-epoch-99-avg-1.int8.onnx',
         sizeBytes: 13091040,
-        sha256: '1a70c593d71e53f023f5f55b0b4cfff5055abb786ee3992e5f63dc2e273cc4fa',
+        sha256:
+            '1a70c593d71e53f023f5f55b0b4cfff5055abb786ee3992e5f63dc2e273cc4fa',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx',
       ),
       AsrModelFile(
         name: 'joiner-epoch-99-avg-1.int8.onnx',
         sizeBytes: 3228404,
-        sha256: '1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0',
+        sha256:
+            '1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx',
       ),
@@ -161,7 +168,8 @@ abstract final class AsrModelManifest {
       AsrModelFile(
         name: 'bpe.model',
         sizeBytes: 244836,
-        sha256: 'bcae393dbc5611be5ffa4c7ae0841558978a5a4f484008cb9dff3a2cc97ebe01',
+        sha256:
+            'bcae393dbc5611be5ffa4c7ae0841558978a5a4f484008cb9dff3a2cc97ebe01',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/bpe.model',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/bpe.model',
       ),
@@ -184,21 +192,24 @@ abstract final class AsrModelManifest {
       AsrModelFile(
         name: 'turbo-encoder.int8.onnx',
         sizeBytes: 674716297,
-        sha256: 'b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b',
+        sha256:
+            'b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-encoder.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-encoder.int8.onnx',
       ),
       AsrModelFile(
         name: 'turbo-decoder.int8.onnx',
         sizeBytes: 361080764,
-        sha256: '20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547',
+        sha256:
+            '20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-decoder.int8.onnx',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-decoder.int8.onnx',
       ),
       AsrModelFile(
         name: 'turbo-tokens.txt',
         sizeBytes: 816730,
-        sha256: 'b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126',
+        sha256:
+            'b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126',
         huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-tokens.txt',
         hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-tokens.txt',
       ),

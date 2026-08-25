@@ -16,6 +16,8 @@
 /// parsed blocks stay valid).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,7 +36,7 @@ const double _kMarkerColumn = 22;
 const double _kNestIndent = 16;
 
 class MarkdownText extends StatefulWidget {
-  const MarkdownText({super.key, required this.text});
+  const MarkdownText({required this.text, super.key});
 
   final String text;
 
@@ -93,8 +95,7 @@ class _MarkdownTextState extends State<MarkdownText> {
         // not change, and a streaming chunk only pays for what moved.
         final rendered = i < _renderedBlocks.length ? _renderedBlocks[i] : null;
         widgets.add(
-          rendered != null &&
-              (identical(rendered, block) || rendered == block)
+          rendered != null && (identical(rendered, block) || rendered == block)
               ? _renderedWidgets[i]
               : _block(context, block),
         );
@@ -108,7 +109,8 @@ class _MarkdownTextState extends State<MarkdownText> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < _renderedWidgets.length; i++) ...[
-            if (i > 0) SizedBox(height: _gapBetween(_blocks[i - 1], _blocks[i])),
+            if (i > 0)
+              SizedBox(height: _gapBetween(_blocks[i - 1], _blocks[i])),
             _renderedWidgets[i],
           ],
         ],
@@ -431,7 +433,7 @@ class _MarkdownTextState extends State<MarkdownText> {
                 ),
                 recognizer: TapGestureRecognizer()
                   ..onTap = () {
-                    launchUrl(Uri.parse(inline.url));
+                    unawaited(launchUrl(Uri.parse(inline.url)));
                   },
               ),
             );

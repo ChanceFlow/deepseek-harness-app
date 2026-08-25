@@ -132,13 +132,13 @@ class SherpaOfflineAsrEngine implements AsrEngine {
   ///
   /// Public for pure-Dart tests (no native load).
   static String modelFileNameFor(AsrModelInfo model) => switch (model.id) {
-        'sensevoice-small' => 'model.int8.onnx',
-        'whisper-large-v3-turbo' => 'turbo-encoder.int8.onnx',
-        _ => throw UnsupportedError(
-            'Model ${model.id} is not supported by the offline engine '
-            '(streaming models are not wired up yet)',
-          ),
-      };
+    'sensevoice-small' => 'model.int8.onnx',
+    'whisper-large-v3-turbo' => 'turbo-encoder.int8.onnx',
+    _ => throw UnsupportedError(
+      'Model ${model.id} is not supported by the offline engine '
+      '(streaming models are not wired up yet)',
+    ),
+  };
 
   /// Builds the sherpa-onnx offline model configuration for [model].
   /// Pure Dart object construction — no native calls — so it is unit

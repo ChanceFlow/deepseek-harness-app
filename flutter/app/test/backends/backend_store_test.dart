@@ -32,7 +32,10 @@ void main() {
   File fileFor(String name) => File('${tempDir.path}/$name.json');
 
   test('an absent file loads the seed-only document', () async {
-    final store = BackendStore(fileFor('absent'), seedBaseUrl: 'http://10.0.2.2:3080');
+    final store = BackendStore(
+      fileFor('absent'),
+      seedBaseUrl: 'http://10.0.2.2:3080',
+    );
 
     final data = await store.load();
     expect(data.backends, hasLength(1));
@@ -42,15 +45,18 @@ void main() {
     expect(data.activeId, isNull);
   });
 
-  test('seedDocument returns the fresh-install document without reading', () async {
-    final file = fileFor('seed');
-    await file.writeAsString('{"backends": [], "activeId": null}');
-    final store = BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080');
+  test(
+    'seedDocument returns the fresh-install document without reading',
+    () async {
+      final file = fileFor('seed');
+      await file.writeAsString('{"backends": [], "activeId": null}');
+      final store = BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080');
 
-    final data = store.seedDocument();
-    expect(data.backends.single.id, 'default');
-    expect(data.activeId, isNull);
-  });
+      final data = store.seedDocument();
+      expect(data.backends.single.id, 'default');
+      expect(data.activeId, isNull);
+    },
+  );
 
   test('save round-trips backends and the active id', () async {
     final file = fileFor('roundtrip');
@@ -82,15 +88,14 @@ void main() {
     expect(data.activeId, 'b1');
 
     // The document is the documented JSON shape.
-    final decoded = jsonDecode(await file.readAsString())
-        as Map<String, Object?>;
+    final decoded =
+        jsonDecode(await file.readAsString()) as Map<String, Object?>;
     expect(decoded['activeId'], 'b1');
-    expect((decoded['backends'] as List<Object?>).first,
-        <String, Object?>{
-          'id': 'default',
-          'label': 'Laptop',
-          'baseUrl': 'http://10.0.2.2:3080',
-        });
+    expect((decoded['backends'] as List<Object?>).first, <String, Object?>{
+      'id': 'default',
+      'label': 'Laptop',
+      'baseUrl': 'http://10.0.2.2:3080',
+    });
   });
 
   test('a dangling active id survives a load (the controller resolves it)', () async {
@@ -111,10 +116,7 @@ void main() {
   for (final (name, payload) in [
     ('root is not an object', '[]'),
     ('backends is not an array', '{"backends": {}}'),
-    (
-      'malformed entry',
-      '{"backends": [{"id": "default"}], "activeId": null}',
-    ),
+    ('malformed entry', '{"backends": [{"id": "default"}], "activeId": null}'),
     (
       'bad baseUrl',
       '{"backends": [{"id": "default", "label": "L", "baseUrl": "not-a-url"}]}',

@@ -10,6 +10,8 @@
 /// 5. **Plugins & Advanced** — Host settings namespaces with in-place editors.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/backend.dart';
@@ -43,8 +45,9 @@ class SettingsRoute extends ConsumerWidget {
     if (resolved.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final SettingsController controller =
-        ref.watch(settingsControllerProvider(resolved));
+    final SettingsController controller = ref.watch(
+      settingsControllerProvider(resolved),
+    );
     return StreamBuilder<SettingsUiState>(
       stream: controller.uiState,
       initialData: controller.state,
@@ -62,9 +65,9 @@ const String _kDeepSeekCredentialRef = 'DEEPSEEK_API_KEY';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
   });
 
   final SettingsUiState uiState;
@@ -267,8 +270,9 @@ class _HostSection extends ConsumerWidget {
     final ColorScheme scheme = theme.colorScheme;
 
     final String scopedId = ref.watch(settingsBackendScopeProvider);
-    final BackendRegistryState? registry =
-        ref.watch(backendRegistryStateProvider).value;
+    final BackendRegistryState? registry = ref
+        .watch(backendRegistryStateProvider)
+        .value;
     final BackendConfig? backend = registry?.backends
         .where((BackendConfig b) => b.id == scopedId)
         .firstOrNull;
@@ -396,8 +400,9 @@ class _HostHeaderTile extends ConsumerWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final domain.ConnectionState? connection =
-        ref.watch(backendConnectionStateProvider(backend.id)).value;
+    final domain.ConnectionState? connection = ref
+        .watch(backendConnectionStateProvider(backend.id))
+        .value;
     final String version = connection?.hostDescription?.version ?? '';
     final String endpoint = '${backend.baseUri.host}:${backend.baseUri.port}';
     final String subtitle = version.isEmpty
@@ -550,11 +555,11 @@ class _ChatAgentSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    for (final (AgentPresetTrust trust, String heading) in <
-                        (AgentPresetTrust, String)>[
-                      (AgentPresetTrust.system, l10n.presetGroupBuiltIn),
-                      (AgentPresetTrust.user, l10n.presetGroupCustom),
-                    ])
+                    for (final (AgentPresetTrust trust, String heading)
+                        in <(AgentPresetTrust, String)>[
+                          (AgentPresetTrust.system, l10n.presetGroupBuiltIn),
+                          (AgentPresetTrust.user, l10n.presetGroupCustom),
+                        ])
                       if (entries.any(
                         (AgentPresetEntry entry) => entry.trust == trust,
                       )) ...<Widget>[
@@ -780,8 +785,9 @@ class _LanguageRow extends ConsumerWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final LocalePreferenceController? controller =
-        ref.watch(localePreferenceProvider).value;
+    final LocalePreferenceController? controller = ref
+        .watch(localePreferenceProvider)
+        .value;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Column(
@@ -807,14 +813,15 @@ class _LanguageRow extends ConsumerWidget {
             StreamBuilder<AppLocalePreference>(
               stream: controller.uiState,
               initialData: controller.state,
-              builder: (
-                BuildContext context,
-                AsyncSnapshot<AppLocalePreference> snapshot,
-              ) => _languageCapsules(
-                context,
-                snapshot.data ?? AppLocalePreference.system,
-                controller.select,
-              ),
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<AppLocalePreference> snapshot,
+                  ) => _languageCapsules(
+                    context,
+                    snapshot.data ?? AppLocalePreference.system,
+                    controller.select,
+                  ),
             ),
         ],
       ),
@@ -855,8 +862,7 @@ class _AsrModelsEntryRow extends ConsumerWidget {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final AsrModelsUiState asrState =
-        ref.watch(asrModelsUiStateProvider).value ??
-        const AsrModelsUiState();
+        ref.watch(asrModelsUiStateProvider).value ?? const AsrModelsUiState();
 
     return InkWell(
       onTap: () {
@@ -914,11 +920,7 @@ class _AsrModelsEntryRow extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: scheme.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -956,14 +958,16 @@ class _HostSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(allBackendConnectionsProvider);
-    final BackendRegistryState? registry =
-        ref.watch(backendRegistryStateProvider).value;
+    final BackendRegistryState? registry = ref
+        .watch(backendRegistryStateProvider)
+        .value;
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final String scopedId = ref.watch(settingsBackendScopeProvider);
-    final bool pinned =
-        ref.watch(settingsBackendScopeProvider.notifier).isPinned;
+    final bool pinned = ref
+        .watch(settingsBackendScopeProvider.notifier)
+        .isPinned;
     if (registry == null) return const SizedBox.shrink();
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1005,9 +1009,9 @@ class _HostSheet extends ConsumerWidget {
             selected: backend.id == scopedId,
             onTap: () {
               Navigator.of(context).pop();
-              ref.read(settingsBackendScopeProvider.notifier).select(
-                backend.id,
-              );
+              ref
+                  .read(settingsBackendScopeProvider.notifier)
+                  .select(backend.id);
             },
             onEdit: () => _openBackendSheet(
               context,
@@ -1062,9 +1066,11 @@ class _HostSheetRow extends ConsumerWidget {
     final String? backendId = this.backendId;
     final String version = backendId == null
         ? ''
-        : ref.watch(backendConnectionStateProvider(backendId)).value
-              ?.hostDescription
-              ?.version ??
+        : ref
+                  .watch(backendConnectionStateProvider(backendId))
+                  .value
+                  ?.hostDescription
+                  ?.version ??
               '';
     final String? formattedSubtitle = subtitle == null
         ? null
@@ -1204,9 +1210,13 @@ String? _removeBlockedReason(
 }
 
 void _dispatchBackendAction(WidgetRef ref, BackendAction action) {
-  ref
-      .read(backendRegistryProvider.future)
-      .then((BackendRegistryController controller) => controller.onAction(action));
+  unawaited(
+    ref
+        .read(backendRegistryProvider.future)
+        .then(
+          (BackendRegistryController controller) => controller.onAction(action),
+        ),
+  );
 }
 
 Future<void> _openBackendSheet(
@@ -1253,7 +1263,8 @@ Future<void> _openBackendSheet(
             onRemove: backend == null || removeBlockedReason != null
                 ? null
                 : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
-            onSetChatHost: backend != null &&
+            onSetChatHost:
+                backend != null &&
                     backend.id !=
                         ref.read(backendRegistryStateProvider).value?.activeId
                 ? () {
@@ -1318,8 +1329,9 @@ class _EnterBehaviorRow extends ConsumerWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final BusyEnterPreferenceController? controller =
-        ref.watch(busyEnterPreferenceProvider).value;
+    final BusyEnterPreferenceController? controller = ref
+        .watch(busyEnterPreferenceProvider)
+        .value;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Column(
@@ -1345,14 +1357,15 @@ class _EnterBehaviorRow extends ConsumerWidget {
             StreamBuilder<BusyEnterBehavior>(
               stream: controller.uiState,
               initialData: controller.state,
-              builder: (
-                BuildContext context,
-                AsyncSnapshot<BusyEnterBehavior> snapshot,
-              ) => _enterBehaviorCapsules(
-                context,
-                snapshot.data ?? BusyEnterBehavior.queue,
-                controller.select,
-              ),
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<BusyEnterBehavior> snapshot,
+                  ) => _enterBehaviorCapsules(
+                    context,
+                    snapshot.data ?? BusyEnterBehavior.queue,
+                    controller.select,
+                  ),
             ),
         ],
       ),
@@ -1527,7 +1540,7 @@ class _AgentPresetRow extends StatelessWidget {
 }
 
 class _PresetCard extends StatelessWidget {
-  const _PresetCard({super.key, required this.entry, required this.onAction});
+  const _PresetCard({required this.entry, required this.onAction, super.key});
 
   final AgentPresetEntry entry;
   final void Function(SettingsAction) onAction;
@@ -1858,11 +1871,11 @@ class _StatusDot extends StatelessWidget {
 
 class _NamespaceCard extends StatefulWidget {
   const _NamespaceCard({
-    super.key,
     required this.namespace,
     required this.writable,
     required this.busy,
     required this.onAction,
+    super.key,
   });
 
   final SettingsNamespace namespace;
@@ -2130,9 +2143,8 @@ class _FieldLabel extends StatelessWidget {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Text(
       label,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: scheme.onSurfaceVariant,
-      ),
+      style: Theme.of(context).textTheme.labelMedium
+          ?.copyWith(color: scheme.onSurfaceVariant),
     );
   }
 }
@@ -2193,9 +2205,9 @@ ButtonStyle _dangerCapsule(BuildContext context) {
 
 class _CredentialRow extends StatelessWidget {
   const _CredentialRow({
-    super.key,
     required this.credential,
     required this.onAction,
+    super.key,
   });
 
   final CredentialStatus credential;
@@ -2293,9 +2305,8 @@ class _StateBadge extends StatelessWidget {
       ),
       child: Text(
         label ?? (configured ? l10n.stateConfigured : l10n.stateNotSet),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: scheme.onSurfaceVariant),
       ),
     );
   }
@@ -2638,26 +2649,23 @@ class _CircleAction extends StatelessWidget {
   }
 }
 
-String _namespaceMeta(
-  SettingsNamespace namespace,
-  AppLocalizations l10n,
-) => <String>[
-  l10n.namespaceMetaApplies(namespace.applies.name),
-  l10n.namespaceMetaRevision(namespace.revision),
-  if (namespace.hasUserLayer) l10n.userLayerLabel,
-  if (namespace.secretCount > 0) l10n.secretsSetCount(namespace.secretCount),
-].join(' · ');
+String _namespaceMeta(SettingsNamespace namespace, AppLocalizations l10n) =>
+    <String>[
+      l10n.namespaceMetaApplies(namespace.applies.name),
+      l10n.namespaceMetaRevision(namespace.revision),
+      if (namespace.hasUserLayer) l10n.userLayerLabel,
+      if (namespace.secretCount > 0)
+        l10n.secretsSetCount(namespace.secretCount),
+    ].join(' · ');
 
-String _credentialMeta(
-  CredentialStatus credential,
-  AppLocalizations l10n,
-) => <String>[
-  credential.configured
-      ? l10n.credentialMetaConfigured
-      : l10n.credentialMetaNotConfigured,
-  if (credential.source case final String source)
-    l10n.credentialMetaSource(source),
-  credential.writable
-      ? l10n.credentialMetaWritable
-      : l10n.credentialMetaReadOnly,
-].join(' · ');
+String _credentialMeta(CredentialStatus credential, AppLocalizations l10n) =>
+    <String>[
+      credential.configured
+          ? l10n.credentialMetaConfigured
+          : l10n.credentialMetaNotConfigured,
+      if (credential.source case final String source)
+        l10n.credentialMetaSource(source),
+      credential.writable
+          ? l10n.credentialMetaWritable
+          : l10n.credentialMetaReadOnly,
+    ].join(' · ');

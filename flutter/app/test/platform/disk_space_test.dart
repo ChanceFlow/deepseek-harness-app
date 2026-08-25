@@ -14,10 +14,13 @@ void main() {
   test('returns the host-reported free bytes for the path', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall call) async {
-      expect(call.method, equals('availableBytes'));
-      expect((call.arguments as Map<Object?, Object?>)['path'], equals('/data'));
-      return 123456789;
-    });
+          expect(call.method, equals('availableBytes'));
+          expect(
+            (call.arguments as Map<Object?, Object?>)['path'],
+            equals('/data'),
+          );
+          return 123456789;
+        });
 
     expect(await freeDiskSpaceBytes('/data'), equals(123456789));
   });
@@ -29,8 +32,8 @@ void main() {
   test('falls back on a host error', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall call) async {
-      throw PlatformException(code: 'stat_failed');
-    });
+          throw PlatformException(code: 'stat_failed');
+        });
 
     expect(await freeDiskSpaceBytes('/data'), equals(kDiskSpaceFallbackBytes));
   });

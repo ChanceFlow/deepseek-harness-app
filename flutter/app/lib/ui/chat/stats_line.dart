@@ -67,7 +67,7 @@ String fitStatsGroups(
 }
 
 class StatsLine extends StatelessWidget {
-  const StatsLine({super.key, required this.stats});
+  const StatsLine({required this.stats, super.key});
 
   final SessionWindowStats stats;
 
@@ -83,25 +83,19 @@ class StatsLine extends StatelessWidget {
         durations.add(l10n.statsLlmDuration(formatDuration(stats.llmMs)));
       }
       if (stats.toolMs > 0) {
-        durations.add(
-          l10n.statsToolDuration(formatDuration(stats.toolMs)),
-        );
+        durations.add(l10n.statsToolDuration(formatDuration(stats.toolMs)));
       }
       if (durations.isNotEmpty) durationGroups.add(durations.join(' · '));
       final speeds = <String>[];
       if (stats.ttftSteps > 0) {
         speeds.add(
-          l10n.statsTtftAvg(
-            formatDuration(stats.ttftMs ~/ stats.ttftSteps),
-          ),
+          l10n.statsTtftAvg(formatDuration(stats.ttftMs ~/ stats.ttftSteps)),
         );
       }
       if (stats.decodeMs > 0) {
         speeds.add(
           l10n.statsTokensPerSecond(
-            formatTokensPerSecond(
-              stats.decodeTokens / (stats.decodeMs / 1000),
-            ),
+            formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1000)),
           ),
         );
       }

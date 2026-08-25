@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:asr/asr.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import '../../../platform/audio_recorder.dart';
 import '../../../platform/sherpa_offline_asr_engine.dart';
 import 'voice_input_ui_state.dart';
@@ -26,8 +27,8 @@ class VoiceInputController {
     this.engine,
     this.onTranscriptionUpdate,
     AsrEngineFactory? engineFactory,
-  })  : _recorder = audioRecorder ?? PlatformAudioRecorder(),
-        _engineFactory = engineFactory ?? _defaultEngineFactory {
+  }) : _recorder = audioRecorder ?? PlatformAudioRecorder(),
+       _engineFactory = engineFactory ?? _defaultEngineFactory {
     _init();
   }
 
@@ -68,10 +69,9 @@ class VoiceInputController {
   void _refreshModelStatus() {
     final active = manager.getActiveModel();
     final hasInstalled = manager.installedCount > 0;
-    _emit(_state.copyWith(
-      activeModel: active,
-      hasInstalledModels: hasInstalled,
-    ));
+    _emit(
+      _state.copyWith(activeModel: active, hasInstalledModels: hasInstalled),
+    );
   }
 
   void _emit(VoiceInputUiState next) {
@@ -87,21 +87,25 @@ class VoiceInputController {
 
     final activeModel = manager.getActiveModel();
     if (activeModel == null) {
-      _emit(_state.copyWith(
-        phase: VoiceInputPhase.error,
-        errorMessage: 'NO_MODEL_INSTALLED',
-      ));
+      _emit(
+        _state.copyWith(
+          phase: VoiceInputPhase.error,
+          errorMessage: 'NO_MODEL_INSTALLED',
+        ),
+      );
       return;
     }
 
-    _emit(_state.copyWith(
-      phase: VoiceInputPhase.initializing,
-      duration: Duration.zero,
-      amplitude: 0.0,
-      liveTranscription: '',
-      clearError: true,
-      activeModel: activeModel,
-    ));
+    _emit(
+      _state.copyWith(
+        phase: VoiceInputPhase.initializing,
+        duration: Duration.zero,
+        amplitude: 0.0,
+        liveTranscription: '',
+        clearError: true,
+        activeModel: activeModel,
+      ),
+    );
 
     // Request permissions if needed
     final recorder = _recorder;
@@ -110,10 +114,12 @@ class VoiceInputController {
       if (!hasPerm) {
         final granted = await recorder.requestPermission();
         if (!granted) {
-          _emit(_state.copyWith(
-            phase: VoiceInputPhase.error,
-            errorMessage: 'PERMISSION_DENIED',
-          ));
+          _emit(
+            _state.copyWith(
+              phase: VoiceInputPhase.error,
+              errorMessage: 'PERMISSION_DENIED',
+            ),
+          );
           return;
         }
       }
@@ -140,7 +146,7 @@ class VoiceInputController {
       if (recorder is PlatformAudioRecorder) {
         await _errorSub?.cancel();
         _errorSub = recorder.errors.listen((Object error) {
-          _failInput(error);
+          unawaited(_failInput(error));
         });
       }
 
@@ -165,10 +171,12 @@ class VoiceInputController {
         // unavailable). Surface a stable, localizable error instead of a
         // phantom recording dock whose waveform never moves.
         await cancelRecording();
-        _emit(_state.copyWith(
-          phase: VoiceInputPhase.error,
-          errorMessage: 'RECORD_START_FAILED',
-        ));
+        _emit(
+          _state.copyWith(
+            phase: VoiceInputPhase.error,
+            errorMessage: 'RECORD_START_FAILED',
+          ),
+        );
         return;
       }
 
@@ -186,10 +194,14 @@ class VoiceInputController {
       _debugTickTimer?.cancel();
       _debugTickTimer = null;
       if (kDebugMode && recorder is PlatformAudioRecorder) {
-        _debugTickTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-          unawaited(recorder.debugStats().then((stats) {
-            _emit(_state.copyWith(debugStats: stats));
-          }));
+        _debugTickTimer = Timer.periodic(const Duration(milliseconds: 500), (
+          _,
+        ) {
+          unawaited(
+            recorder.debugStats().then((stats) {
+              _emit(_state.copyWith(debugStats: stats));
+            }),
+          );
         });
       }
 
@@ -202,10 +214,9 @@ class VoiceInputController {
       final message = e is UnsupportedError
           ? 'MODEL_UNSUPPORTED'
           : e.toString();
-      _emit(_state.copyWith(
-        phase: VoiceInputPhase.error,
-        errorMessage: message,
-      ));
+      _emit(
+        _state.copyWith(phase: VoiceInputPhase.error, errorMessage: message),
+      );
     }
   }
 
@@ -236,18 +247,22 @@ class VoiceInputController {
       finalResult = await activeEngine.finish();
       onTranscriptionUpdate?.call(finalResult, true);
     } catch (e) {
-      _emit(_state.copyWith(
-        phase: VoiceInputPhase.error,
-        errorMessage: e.toString(),
-      ));
+      _emit(
+        _state.copyWith(
+          phase: VoiceInputPhase.error,
+          errorMessage: e.toString(),
+        ),
+      );
     } finally {
       unawaited(_activeEngine?.dispose());
       _activeEngine = null;
-      _emit(_state.copyWith(
-        phase: VoiceInputPhase.idle,
-        duration: Duration.zero,
-        amplitude: 0.0,
-      ));
+      _emit(
+        _state.copyWith(
+          phase: VoiceInputPhase.idle,
+          duration: Duration.zero,
+          amplitude: 0.0,
+        ),
+      );
     }
     return finalResult;
   }
@@ -275,31 +290,32 @@ class VoiceInputController {
       _activeEngine = null;
     }
 
-    _emit(_state.copyWith(
-      phase: VoiceInputPhase.idle,
-      duration: Duration.zero,
-      amplitude: 0.0,
-      liveTranscription: '',
-    ));
+    _emit(
+      _state.copyWith(
+        phase: VoiceInputPhase.idle,
+        duration: Duration.zero,
+        amplitude: 0.0,
+        liveTranscription: '',
+      ),
+    );
   }
 
   /// Mid-recording capture failure: end the session with a real error
   /// state instead of leaving a phantom dock on screen.
   Future<void> _failInput(Object error) async {
     await cancelRecording();
-    _emit(_state.copyWith(
-      phase: VoiceInputPhase.error,
-      errorMessage: error is PlatformException && error.code == 'input_silent'
-          ? 'RECORD_SILENT_INPUT'
-          : 'RECORD_INPUT_FAILED',
-    ));
+    _emit(
+      _state.copyWith(
+        phase: VoiceInputPhase.error,
+        errorMessage: error is PlatformException && error.code == 'input_silent'
+            ? 'RECORD_SILENT_INPUT'
+            : 'RECORD_INPUT_FAILED',
+      ),
+    );
   }
 
   void dismissError() {
-    _emit(_state.copyWith(
-      phase: VoiceInputPhase.idle,
-      clearError: true,
-    ));
+    _emit(_state.copyWith(phase: VoiceInputPhase.idle, clearError: true));
   }
 
   AsrEngine _createEngineForModel(AsrModelInfo? model) {

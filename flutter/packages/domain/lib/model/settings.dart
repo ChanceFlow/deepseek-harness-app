@@ -76,8 +76,8 @@ final class CredentialStatus {
   const CredentialStatus({
     required this.ref,
     required this.configured,
-    this.source,
     required this.writable,
+    this.source,
   });
 
   final String ref;

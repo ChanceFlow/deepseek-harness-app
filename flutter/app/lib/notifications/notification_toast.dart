@@ -48,10 +48,10 @@ IconData notificationIcon(AppNotificationKind kind) => switch (kind) {
 /// can navigate; [onDismiss] unmounts the banner.
 class NotificationToast extends StatelessWidget {
   const NotificationToast({
-    super.key,
     required this.event,
     required this.onTap,
     required this.onDismiss,
+    super.key,
   });
 
   final AppNotificationEvent event;
@@ -75,10 +75,7 @@ class NotificationToast extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             onTap: () => onTap(event),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
                   Icon(notificationIcon(event.kind), color: scheme.primary),
@@ -97,9 +94,7 @@ class NotificationToast extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           copy.body,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: scheme.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

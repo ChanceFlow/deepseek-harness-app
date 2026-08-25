@@ -31,10 +31,11 @@ void main() {
 
   setUp(() => harness.clear());
 
-  ChatController makeController() =>
-      ChatController(FakeChatRepository(initialSessions: const [
-        FakeChatRepository.initialSession,
-      ]));
+  ChatController makeController() => ChatController(
+    FakeChatRepository(
+      initialSessions: const [FakeChatRepository.initialSession],
+    ),
+  );
 
   List<String> eventNames() => harness.logs.records
       .map((r) => r.eventName ?? '')

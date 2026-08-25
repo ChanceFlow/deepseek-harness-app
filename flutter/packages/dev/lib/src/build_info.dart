@@ -40,14 +40,20 @@ class DebugBuildInfo {
   /// well-formed when a dev build forgets the defines.
   factory DebugBuildInfo.fromEnvironment() => const DebugBuildInfo(
     app: String.fromEnvironment('DSH_APP_NAME', defaultValue: 'dsh-android'),
-    version: String.fromEnvironment('DSH_APP_VERSION', defaultValue: '0.0.0-dev'),
+    version: String.fromEnvironment(
+      'DSH_APP_VERSION',
+      defaultValue: '0.0.0-dev',
+    ),
     build: String.fromEnvironment('DSH_BUILD_NUMBER', defaultValue: '0'),
     platform: 'android',
     sourceRepo: String.fromEnvironment(
       'DSH_SOURCE_REPO',
       defaultValue: 'ChanceFlow/deepseek-harness-app',
     ),
-    sourceCommit: String.fromEnvironment('DSH_SOURCE_COMMIT', defaultValue: 'unknown'),
+    sourceCommit: String.fromEnvironment(
+      'DSH_SOURCE_COMMIT',
+      defaultValue: 'unknown',
+    ),
   );
 
   /// Resource attributes shared by every telemetry signal of this build.

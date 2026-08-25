@@ -37,8 +37,7 @@ class WorkspaceController {
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
-  List<SessionSearchResult> _searchResults =
-      const <SessionSearchResult>[];
+  List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<SessionSummary> _sessions = const <SessionSummary>[];
   bool _isLoading = false;
   String? _errorMessage;
@@ -215,7 +214,7 @@ class WorkspaceController {
     _directoryListing = null;
     _directoryBrowserOpen = true;
     _publish();
-    _loadDirectory(null);
+    unawaited(_loadDirectory(null));
   }
 
   void _closeDirectoryBrowser() {
@@ -226,7 +225,7 @@ class WorkspaceController {
 
   void _navigateDirectory(String? path) {
     if (path == null || path.trim().isEmpty) return;
-    _loadDirectory(path);
+    unawaited(_loadDirectory(path));
   }
 
   void _createDirectory(String parentPath, String name) {

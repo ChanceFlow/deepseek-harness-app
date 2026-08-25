@@ -82,9 +82,7 @@ void main() {
     expect(list.items[0].inlines, <MarkdownInline>[
       const TextInline('a long item wrapped by the source'),
     ]);
-    expect(list.items[1].inlines, <MarkdownInline>[
-      const TextInline('second'),
-    ]);
+    expect(list.items[1].inlines, <MarkdownInline>[const TextInline('second')]);
   });
 
   test('switching marker kind closes the list before it', () {
@@ -311,7 +309,9 @@ void main() {
   test('digits and punctuation may precede an http(s) URL', () {
     final digits = MarkdownParser.parse('第2条https://example.com');
     expect(
-      (digits.single as ParagraphBlock).inlines.whereType<LinkInline>().single
+      (digits.single as ParagraphBlock).inlines
+          .whereType<LinkInline>()
+          .single
           .url,
       'https://example.com',
     );

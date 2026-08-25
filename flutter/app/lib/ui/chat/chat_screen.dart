@@ -113,11 +113,13 @@ class ChatRoute extends ConsumerWidget {
               // Switch the registry first, then select on the target
               // backend's own controller — the chat surface rebinds to
               // it with the session already chosen.
-              ref
-                  .read(backendRegistryProvider.future)
-                  .then(
-                    (registry) => registry.onAction(SelectBackend(backendId)),
-                  );
+              unawaited(
+                ref
+                    .read(backendRegistryProvider.future)
+                    .then(
+                      (registry) => registry.onAction(SelectBackend(backendId)),
+                    ),
+              );
               ref
                   .read(chatControllerProvider(backendId))
                   .onAction(SelectSession(sessionId));
@@ -137,9 +139,9 @@ class ChatRoute extends ConsumerWidget {
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
-    super.key,
     required this.uiState,
     required this.onAction,
+    super.key,
     this.loadAttachment = _noAttachment,
     this.onRefreshModels,
     this.backendId,
@@ -208,7 +210,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _resolveLocalState();
+    unawaited(_resolveLocalState());
   }
 
   /// Resolve the shared [LocalStateStore] once: every surface must write
@@ -277,15 +279,17 @@ class _ChatScreenState extends State<ChatScreen> {
   /// opens the session rename dialog and dispatches through the
   /// backend-aware action callback.
   void _dispatchRenameSession(String backendId, String sessionId) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => _RenameSessionDialog(
-        onSave: (title) {
-          widget.dispatchSessionAction?.call(
-            backendId,
-            RenameSession(sessionId, title),
-          );
-        },
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _RenameSessionDialog(
+          onSave: (title) {
+            widget.dispatchSessionAction?.call(
+              backendId,
+              RenameSession(sessionId, title),
+            );
+          },
+        ),
       ),
     );
   }
@@ -533,11 +537,11 @@ String? sessionContextLine(SessionSummary? session, SessionModels? models) {
 /// Icon actions for the chat header (web header-action form).
 class ChatHeaderActions extends StatelessWidget {
   const ChatHeaderActions({
-    super.key,
     required this.uiState,
     required this.onAction,
     required this.onToggleOutline,
     required this.outline,
+    super.key,
     this.onOpenSubagents,
     this.compact = false,
   });
@@ -622,11 +626,11 @@ class ChatHeaderActions extends StatelessWidget {
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
-                  _rename(context, sessionId);
+                  unawaited(_rename(context, sessionId));
                 case _SessionVerb.fork:
                   onAction(ForkSession(sessionId));
                 case _SessionVerb.archive:
-                  _archive(context, sessionId);
+                  unawaited(_archive(context, sessionId));
               }
             },
             itemBuilder: (context) => [
@@ -700,10 +704,10 @@ enum _SessionVerb { subagents, rename, fork, archive }
 
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
-    super.key,
     required this.uiState,
     required this.onAction,
     required this.loadAttachment,
+    super.key,
     this.outline = false,
     this.onOpenGoal,
     this.models,
@@ -819,13 +823,15 @@ class _ChatPanelState extends State<ChatPanel> {
     }
     // The busy-send preference is live: the settings row can flip it
     // mid-session, and the send action must follow on its next use.
-    widget.localState?.busyEnterBehavior().then((behavior) {
-      if (!mounted) return;
-      final steer = behavior == kBusyEnterSteer;
-      if (steer != _busyEnterSteer) {
-        setState(() => _busyEnterSteer = steer);
-      }
-    });
+    unawaited(
+      widget.localState?.busyEnterBehavior().then((behavior) {
+        if (!mounted) return;
+        final steer = behavior == kBusyEnterSteer;
+        if (steer != _busyEnterSteer) {
+          setState(() => _busyEnterSteer = steer);
+        }
+      }),
+    );
     // Own words must be visible: a new trailing user node force-scrolls
     // (send lives in the composer, so arrival is detected here) — never
     // the first laid-out frame of a session, whose jump is the
@@ -938,29 +944,35 @@ class _ChatPanelState extends State<ChatPanel> {
         : widget.localState?.forSession(sessionId);
     _sessionState = sessionState;
     if (sessionState == null) return;
-    sessionState.readCollapsedTurns().then((turns) {
-      if (!mounted || _sessionState != sessionState) return;
-      setState(() => _collapsedTurns = turns);
-    });
-    widget.localState?.busyEnterBehavior().then((behavior) {
-      if (!mounted) return;
-      setState(() => _busyEnterSteer = behavior == kBusyEnterSteer);
-    });
+    unawaited(
+      sessionState.readCollapsedTurns().then((turns) {
+        if (!mounted || _sessionState != sessionState) return;
+        setState(() => _collapsedTurns = turns);
+      }),
+    );
+    unawaited(
+      widget.localState?.busyEnterBehavior().then((behavior) {
+        if (!mounted) return;
+        setState(() => _busyEnterSteer = behavior == kBusyEnterSteer);
+      }),
+    );
     if (_sessionActivelyRunning()) return;
     _restoreDecided = false;
-    sessionState.readReadOffset().then(
-      (offset) {
-        if (!mounted) return;
-        _restoredOffset = offset;
-        _restoreDecided = true;
-        // Content may already be laid out; the armed jump waits on us.
-        if (_needsInitialJump) _scheduleFollow();
-      },
-      onError: (_) {
-        if (!mounted) return;
-        _restoreDecided = true;
-        if (_needsInitialJump) _scheduleFollow();
-      },
+    unawaited(
+      sessionState.readReadOffset().then(
+        (offset) {
+          if (!mounted) return;
+          _restoredOffset = offset;
+          _restoreDecided = true;
+          // Content may already be laid out; the armed jump waits on us.
+          if (_needsInitialJump) _scheduleFollow();
+        },
+        onError: (_) {
+          if (!mounted) return;
+          _restoreDecided = true;
+          if (_needsInitialJump) _scheduleFollow();
+        },
+      ),
     );
   }
 
@@ -985,7 +997,7 @@ class _ChatPanelState extends State<ChatPanel> {
     _readOffsetSave?.cancel();
     _readOffsetSave = Timer(const Duration(milliseconds: 500), () {
       _pendingReadOffset = null;
-      _sessionState?.writeReadOffset(offset);
+      unawaited(_sessionState?.writeReadOffset(offset));
     });
   }
 
@@ -994,7 +1006,7 @@ class _ChatPanelState extends State<ChatPanel> {
     final offset = _pendingReadOffset;
     if (offset == null) return;
     _pendingReadOffset = null;
-    _sessionState?.writeReadOffset(offset);
+    unawaited(_sessionState?.writeReadOffset(offset));
   }
 
   /// Web ComposerSubmissionPolicy.resolve: queue outside a running turn;
@@ -1007,7 +1019,7 @@ class _ChatPanelState extends State<ChatPanel> {
   void _scheduleFollow() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _scrollToBottom();
+      unawaited(_scrollToBottom());
     });
   }
 
@@ -1100,7 +1112,7 @@ class _ChatPanelState extends State<ChatPanel> {
   /// Collapsed-turn set mutation: state and persistence move together.
   void _setCollapsedTurns(Set<int> next) {
     setState(() => _collapsedTurns = next);
-    _sessionState?.writeCollapsedTurns(next);
+    unawaited(_sessionState?.writeCollapsedTurns(next));
   }
 
   /// Preset staged for the next session (web seat's stage); spent by the
@@ -1419,9 +1431,9 @@ class _InputDock extends StatelessWidget {
 /// by typing `/plan` in the composer, never by this chip.
 class PlanChip extends StatefulWidget {
   const PlanChip({
-    super.key,
     required this.plan,
     required this.onExit,
+    super.key,
     this.locked = false,
   });
 
@@ -1497,10 +1509,10 @@ class _PlanChipState extends State<PlanChip> {
 
 class TimelineRow extends StatelessWidget {
   const TimelineRow({
-    super.key,
     required this.item,
     required this.onAction,
     required this.loadAttachment,
+    super.key,
     this.expansion,
   });
 
@@ -1521,9 +1533,7 @@ class TimelineRow extends StatelessWidget {
         loadAttachment: loadAttachment,
         onFork: value.seq == null
             ? null
-            : () => onAction(
-                ForkSession(value.sessionId, atSeq: value.seq),
-              ),
+            : () => onAction(ForkSession(value.sessionId, atSeq: value.seq)),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction(:final shadowedCount) => CompactionRow(
@@ -1569,9 +1579,9 @@ class TimelineRow extends StatelessWidget {
 
 class MessageRow extends StatelessWidget {
   const MessageRow({
-    super.key,
     required this.message,
     required this.loadAttachment,
+    super.key,
     this.onFork,
   });
 
@@ -1808,7 +1818,7 @@ class _StreamingCaretState extends State<_StreamingCaret>
 /// image, downsampled to icon size. The name chip stays if the bytes
 /// fail to decode.
 class PendingImageThumbnail extends StatefulWidget {
-  const PendingImageThumbnail({super.key, required this.image});
+  const PendingImageThumbnail({required this.image, super.key});
 
   final PendingImage image;
 
@@ -1822,14 +1832,16 @@ class _PendingImageThumbnailState extends State<PendingImageThumbnail> {
   @override
   void initState() {
     super.initState();
-    Future<void>(() {
-      try {
-        final bytes = base64Decode(widget.image.base64Data);
-        if (mounted) setState(() => _bytes = bytes);
-      } catch (_) {
-        // The name chip stays when the bytes fail to decode.
-      }
-    });
+    unawaited(
+      Future<void>(() {
+        try {
+          final bytes = base64Decode(widget.image.base64Data);
+          if (mounted) setState(() => _bytes = bytes);
+        } catch (_) {
+          // The name chip stays when the bytes fail to decode.
+        }
+      }),
+    );
   }
 
   @override
@@ -1855,10 +1867,10 @@ class _PendingImageThumbnailState extends State<PendingImageThumbnail> {
 /// failure.
 class AttachmentImageRow extends StatefulWidget {
   const AttachmentImageRow({
-    super.key,
     required this.sessionId,
     required this.ref,
     required this.loadAttachment,
+    super.key,
   });
 
   final String sessionId;
@@ -1879,9 +1891,11 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   }
 
   void _load() {
-    widget.loadAttachment(widget.sessionId, widget.ref).then((bytes) {
-      if (mounted) setState(() => _bytes = bytes);
-    });
+    unawaited(
+      widget.loadAttachment(widget.sessionId, widget.ref).then((bytes) {
+        if (mounted) setState(() => _bytes = bytes);
+      }),
+    );
   }
 
   @override
@@ -1945,7 +1959,7 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
 /// monospace stack; the expanded details render as the web IN/OUT card
 /// (bordered code surface with gutter labels and a hairline divider).
 class ToolCallRow extends StatefulWidget {
-  const ToolCallRow({super.key, required this.call, this.expansion});
+  const ToolCallRow({required this.call, super.key, this.expansion});
 
   final TimelineToolCall call;
 
@@ -1971,14 +1985,16 @@ class _ToolCallRowState extends State<ToolCallRow>
     final expansion = widget.expansion;
     if (expansion != null) {
       final key = timelineKey(widget.call);
-      expansion.expanded(key).then((restored) {
-        // Restore through the native controller: the tile reads this same
-        // instance at initState, so a restore landing before or after the
-        // first build both take effect.
-        if (mounted && restored && !_tileController.isExpanded) {
-          _tileController.expand();
-        }
-      });
+      unawaited(
+        expansion.expanded(key).then((restored) {
+          // Restore through the native controller: the tile reads this same
+          // instance at initState, so a restore landing before or after the
+          // first build both take effect.
+          if (mounted && restored && !_tileController.isExpanded) {
+            _tileController.expand();
+          }
+        }),
+      );
     }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
   }
@@ -2040,7 +2056,12 @@ class _ToolCallRowState extends State<ToolCallRow>
           tilePadding: const EdgeInsets.symmetric(horizontal: 2),
           onExpansionChanged: (expanded) {
             if (hasDetails) {
-              widget.expansion?.setExpanded(timelineKey(widget.call), expanded);
+              unawaited(
+                widget.expansion?.setExpanded(
+                  timelineKey(widget.call),
+                  expanded,
+                ),
+              );
             }
           },
           title: ClipRect(
@@ -2218,9 +2239,9 @@ String toolRunStatusLabel(ToolRunStatus status, AppLocalizations l10n) =>
 
 class GoalBarStrip extends StatelessWidget {
   const GoalBarStrip({
-    super.key,
     required this.goal,
     required this.onAction,
+    super.key,
     this.onOpen,
   });
 
@@ -2325,10 +2346,10 @@ class GoalBarStrip extends StatelessWidget {
 /// the timeline, context the injection rows).
 class QueueDock extends StatefulWidget {
   const QueueDock({
-    super.key,
     required this.items,
     required this.running,
     required this.onAction,
+    super.key,
   });
 
   final List<SessionQueueItem> items;
@@ -2441,12 +2462,12 @@ class _QueueDockState extends State<QueueDock> {
 /// inline editor, steer — only while the turn runs, remove).
 class _QueueItemRow extends StatefulWidget {
   const _QueueItemRow({
-    super.key,
     required this.item,
     required this.leadIcon,
     required this.running,
     required this.separated,
     required this.onAction,
+    super.key,
   });
 
   final SessionQueueItem item;
@@ -2654,12 +2675,12 @@ class _QueueAction extends StatelessWidget {
 
 class ApprovalRow extends StatelessWidget {
   const ApprovalRow({
-    super.key,
     required this.requestId,
     required this.approvalId,
     required this.toolName,
     required this.reason,
     required this.onAction,
+    super.key,
   });
 
   final String requestId;
@@ -2713,7 +2734,7 @@ class ApprovalRow extends StatelessWidget {
 }
 
 class QuestionRow extends StatefulWidget {
-  const QuestionRow({super.key, required this.request, required this.onAction});
+  const QuestionRow({required this.request, required this.onAction, super.key});
 
   final TimelineQuestionRequest request;
   final void Function(ChatAction) onAction;
@@ -3677,7 +3698,6 @@ final class QuestionDraft {
 
 class ComposerBar extends ConsumerStatefulWidget {
   const ComposerBar({
-    super.key,
     required this.enabled,
     required this.isSending,
     required this.running,
@@ -3686,6 +3706,7 @@ class ComposerBar extends ConsumerStatefulWidget {
     required this.skills,
     required this.onAction,
     required this.onSend,
+    super.key,
     this.onStop,
     this.plan,
     this.models,
@@ -3781,19 +3802,21 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       setState(() {});
       return;
     }
-    sessionState.readDraft().then((draft) {
-      if (!mounted) return;
-      _draftController
-        ..text = draft ?? ''
-        ..selection = TextSelection.collapsed(
-          offset: _draftController.text.length,
-        );
-      setState(() {});
-    });
+    unawaited(
+      sessionState.readDraft().then((draft) {
+        if (!mounted) return;
+        _draftController
+          ..text = draft ?? ''
+          ..selection = TextSelection.collapsed(
+            offset: _draftController.text.length,
+          );
+        setState(() {});
+      }),
+    );
   }
 
   void _persistDraft() {
-    widget.sessionState?.writeDraft(_draftController.text);
+    unawaited(widget.sessionState?.writeDraft(_draftController.text));
   }
 
   Future<void> _pickImages() async {
@@ -3836,8 +3859,8 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
 
     final voiceController = ref.watch(voiceInputControllerProvider);
-    final voiceInputState = ref.watch(voiceInputUiStateProvider).value ??
-        voiceController.state;
+    final voiceInputState =
+        ref.watch(voiceInputUiStateProvider).value ?? voiceController.state;
 
     ref.listen(voiceInputUiStateProvider, (prev, next) {
       final text = next.value?.liveTranscription ?? '';
@@ -3859,17 +3882,17 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             SnackBar(content: Text(l10n.voiceInputPermissionDenied)),
           );
         } else if (error == 'RECORD_START_FAILED') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.voiceInputRecordFailed)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.voiceInputRecordFailed)));
         } else if (error == 'RECORD_SILENT_INPUT') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.voiceInputSilentInput)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.voiceInputSilentInput)));
         } else if (error == 'RECORD_INPUT_FAILED') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.voiceInputInputFailed)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.voiceInputInputFailed)));
         } else if (error == 'MODEL_UNSUPPORTED') {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputModelUnsupported)),
@@ -3937,7 +3960,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               onPressed: () =>
-                                   widget.onAction(RemovePendingImage(image.id)),
+                                  widget.onAction(RemovePendingImage(image.id)),
                               icon: const Icon(Icons.close, size: 16),
                               tooltip: l10n.removeImage(
                                 image.name ?? l10n.attachmentName,
@@ -3963,7 +3986,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             VoiceRecordingDock(
               uiState: voiceInputState,
               onCancel: () {
-                voiceController.cancelRecording();
+                unawaited(voiceController.cancelRecording());
                 _draftController.text = _preRecordingDraft;
                 _draftController.selection = TextSelection.collapsed(
                   offset: _draftController.text.length,
@@ -3971,7 +3994,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 _persistDraft();
                 setState(() {});
               },
-              onDone: () => voiceController.stopRecording(),
+              onDone: () => unawaited(voiceController.stopRecording()),
             ),
           // Space, not a rule, separates the draft from the control row:
           // the dock already spends one hairline on the plan strip, and a
@@ -4008,10 +4031,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                     hasInstalledModels: voiceInputState.hasInstalledModels,
                     onTap: () {
                       if (voiceInputState.isRecording) {
-                        voiceController.stopRecording();
+                        unawaited(voiceController.stopRecording());
                       } else {
                         _preRecordingDraft = _draftController.text;
-                        voiceController.startRecording();
+                        unawaited(voiceController.startRecording());
                       }
                     },
                     onOpenSettings: () {
@@ -4138,11 +4161,11 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
 /// literal `/name ` text, matching the Web plain-text-reference decision.
 class SlashSkillCandidates extends StatelessWidget {
   const SlashSkillCandidates({
-    super.key,
     required this.draft,
     required this.skills,
     required this.enabled,
     required this.onPick,
+    super.key,
   });
 
   final String draft;
@@ -4230,11 +4253,11 @@ String? guessImageMediaType(String path) {
 /// Compact delivery-mode picker for narrow composer rows.
 class PopupMenuEntryShim extends StatelessWidget {
   const PopupMenuEntryShim({
-    super.key,
     required this.running,
     required this.enabled,
     required this.effectiveMode,
     required this.onModeChange,
+    super.key,
   });
 
   final bool running;
@@ -4381,8 +4404,8 @@ class PopupMenuEntryShim extends StatelessWidget {
                             color: !running
                                 ? scheme.outline
                                 : effectiveMode == PromptMode.steer
-                                    ? scheme.primary
-                                    : scheme.onSurfaceVariant,
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -4756,11 +4779,11 @@ class _PrimarySendButton extends StatelessWidget {
 
 class ModeChip extends StatelessWidget {
   const ModeChip({
-    super.key,
     required this.label,
     required this.selected,
     required this.enabled,
     required this.onClick,
+    super.key,
   });
 
   final String label;
@@ -4798,12 +4821,12 @@ String timelineKey(TimelineItem item) => switch (item) {
 /// Ledger-style outline: turn-group headers collapse their rows on tap.
 class OutlineTimeline extends StatelessWidget {
   const OutlineTimeline({
-    super.key,
     required this.timeline,
     required this.collapsedTurns,
     required this.onToggle,
     required this.onAction,
     required this.loadAttachment,
+    super.key,
     this.expansion,
   });
 
@@ -4882,11 +4905,11 @@ class OutlineTimeline extends StatelessWidget {
 
 class TurnGroupHeader extends StatelessWidget {
   const TurnGroupHeader({
-    super.key,
     required this.turn,
     required this.items,
     required this.collapsed,
     required this.onToggle,
+    super.key,
   });
 
   final int? turn;
@@ -4968,7 +4991,7 @@ class TurnGroupHeader extends StatelessWidget {
 /// tick + letterspaced caption text) marking where a turn begins — quiet
 /// enough to read as a boundary notice, not conversation content.
 class TurnBoundaryRow extends StatelessWidget {
-  const TurnBoundaryRow({super.key, required this.turn});
+  const TurnBoundaryRow({required this.turn, super.key});
 
   final int turn;
 
@@ -5000,7 +5023,7 @@ class TurnBoundaryRow extends StatelessWidget {
 /// 24px row (leading context icon + title + count), a boundary notice
 /// rather than conversation content.
 class CompactionRow extends StatelessWidget {
-  const CompactionRow({super.key, required this.shadowedCount});
+  const CompactionRow({required this.shadowedCount, super.key});
 
   final int shadowedCount;
 
@@ -5049,7 +5072,7 @@ class CompactionRow extends StatelessWidget {
 /// label tone, an error like "This operation was aborted" in the error
 /// tone). No UI copy is composed here: the name and text are host facts.
 class CommandRow extends StatelessWidget {
-  const CommandRow({super.key, required this.command});
+  const CommandRow({required this.command, super.key});
 
   final TimelineCommand command;
 
@@ -5128,7 +5151,7 @@ class CommandRow extends StatelessWidget {
 /// the durable producer the source identifies; the expanded body carries
 /// the injected content.
 class ContextInjectionRow extends StatelessWidget {
-  const ContextInjectionRow({super.key, required this.injection});
+  const ContextInjectionRow({required this.injection, super.key});
 
   final TimelineContextInjection injection;
 

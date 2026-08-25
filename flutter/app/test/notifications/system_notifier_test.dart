@@ -14,7 +14,10 @@ void main() {
     test('decodes a malformed payload to null', () {
       expect(NotificationTarget.decode('not json'), isNull);
       expect(NotificationTarget.decode('{"backendId":1}'), isNull);
-      expect(NotificationTarget.decode('{"backendId":"b","sessionId":2}'), isNull);
+      expect(
+        NotificationTarget.decode('{"backendId":"b","sessionId":2}'),
+        isNull,
+      );
       expect(NotificationTarget.decode('[]'), isNull);
     });
 

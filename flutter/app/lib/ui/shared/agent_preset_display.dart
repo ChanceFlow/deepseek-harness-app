@@ -13,22 +13,10 @@ import 'package:domain/model/agent_preset.dart';
 /// Built-in system preset copy, localized.
 Map<String, (String, String)> _builtInCopy(AppLocalizations l10n) =>
     <String, (String, String)>{
-      'standard': (
-        l10n.presetStandardName,
-        l10n.presetStandardDescription,
-      ),
-      'code': (
-        l10n.presetCodeName,
-        l10n.presetCodeDescription,
-      ),
-      'minimal': (
-        l10n.presetMinimalName,
-        l10n.presetMinimalDescription,
-      ),
-      'cordis': (
-        l10n.presetCordisName,
-        l10n.presetCordisDescription,
-      ),
+      'standard': (l10n.presetStandardName, l10n.presetStandardDescription),
+      'code': (l10n.presetCodeName, l10n.presetCodeDescription),
+      'minimal': (l10n.presetMinimalName, l10n.presetMinimalDescription),
+      'cordis': (l10n.presetCordisName, l10n.presetCordisDescription),
     };
 
 /// Label a surface shows for one preset row.

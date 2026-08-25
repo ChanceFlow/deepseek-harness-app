@@ -38,7 +38,11 @@ void main() {
 
   group('formatLogLine', () {
     test('clock prefix + level + message', () {
-      final line = formatLogLine('E/flutter', 'boom', at: DateTime(2026, 8, 21, 9, 8, 7, 6));
+      final line = formatLogLine(
+        'E/flutter',
+        'boom',
+        at: DateTime(2026, 8, 21, 9, 8, 7, 6),
+      );
       expect(line, '09:08:07.006 E/flutter boom');
     });
   });

@@ -29,11 +29,11 @@ String? modelDisplayName(SessionModels? models) {
 
 class ModelSelect extends StatelessWidget {
   const ModelSelect({
-    super.key,
     required this.models,
     required this.locked,
     required this.onSelect,
     required this.onRefresh,
+    super.key,
     this.modelPrefs,
   });
 
@@ -217,10 +217,9 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                   padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
                   child: Text(
                     group.name,
-                    style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
                 for (final model in group.models)
@@ -374,8 +373,8 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     BuildContext context, {
     required bool selected,
     required String title,
-    String? detail,
     required VoidCallback onTap,
+    String? detail,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -405,8 +404,10 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                         text,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(fontSize: 12, color: scheme.onSurfaceVariant),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                   ],
                 ),

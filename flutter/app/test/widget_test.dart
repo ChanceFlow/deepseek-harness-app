@@ -79,12 +79,10 @@ Future<void> _pumpApp(
         backendStoreProvider.overrideWith((ref) async => _testStore()),
         // Family seams keyed by the seed backend's URL (the store seeds
         // from kDshBaseUrl).
-        dshRpcClientProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          rpc ?? _FakeRpc(),
-        ),
-        dshEventSocketProvider(Uri.parse(kDshBaseUrl)).overrideWithValue(
-          _NeverSocket(),
-        ),
+        dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(rpc ?? _FakeRpc()),
+        dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+            .overrideWithValue(_NeverSocket()),
         if (localState != null)
           localStateStoreProvider.overrideWith((ref) async => localState),
       ],
@@ -253,12 +251,18 @@ void main() {
     await tester.tap(find.text('中文').hitTestable());
     await tester.pumpAndSettle();
     expect(store.read('app.localePreference'), 'zh');
-    expect(find.descendant(of: navBarLabels, matching: find.text('对话')),
-        findsOneWidget);
-    expect(find.descendant(of: navBarLabels, matching: find.text('工作区')),
-        findsOneWidget);
-    expect(find.descendant(of: navBarLabels, matching: find.text('设置')),
-        findsOneWidget);
+    expect(
+      find.descendant(of: navBarLabels, matching: find.text('对话')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: navBarLabels, matching: find.text('工作区')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: navBarLabels, matching: find.text('设置')),
+      findsOneWidget,
+    );
     expect(find.text('Chat'), findsNothing);
 
     // Follow system releases the pin; the shell returns to the device

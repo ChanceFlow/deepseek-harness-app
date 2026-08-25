@@ -252,9 +252,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final container = ProviderContainer(
       overrides: [
-        localStateStoreProvider.overrideWith(
-          (ref) async => _store(),
-        ),
+        localStateStoreProvider.overrideWith((ref) async => _store()),
       ],
     );
     addTearDown(container.dispose);

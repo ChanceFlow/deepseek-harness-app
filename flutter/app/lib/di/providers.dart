@@ -56,6 +56,7 @@ import '../ui/chat/voice_input/voice_input_controller.dart';
 import '../ui/chat/voice_input/voice_input_ui_state.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
+
 import 'package:asr/asr.dart';
 
 export '../ui/settings/asr/asr_models_controller.dart';
@@ -76,9 +77,9 @@ final backendStoreProvider = FutureProvider<BackendStore>((ref) async {
 final backendRegistryProvider = FutureProvider<BackendRegistryController>((
   ref,
 ) async {
-  final controller = BackendRegistryController(await ref.watch(
-    backendStoreProvider.future,
-  ));
+  final controller = BackendRegistryController(
+    await ref.watch(backendStoreProvider.future),
+  );
   ref.onDispose(controller.dispose);
   return controller;
 });
@@ -111,23 +112,23 @@ final activeBackendIdProvider = StreamProvider<String>((ref) async* {
 
 /// One backend's config by id; null once the backend is removed (the
 /// dependent connection disposes with it through autoDispose).
-final backendByIdProvider = StreamProvider.family.autoDispose<BackendConfig?,
-    String>((ref, backendId) async* {
-  final controller = await ref.watch(backendRegistryProvider.future);
-  BackendConfig? current = controller.state.backends
-      .where((backend) => backend.id == backendId)
-      .firstOrNull;
-  yield current;
-  await for (final next in controller.uiState) {
-    final updated = next.backends
-        .where((backend) => backend.id == backendId)
-        .firstOrNull;
-    if (updated != current) {
-      current = updated;
-      yield updated;
-    }
-  }
-});
+final backendByIdProvider = StreamProvider.family
+    .autoDispose<BackendConfig?, String>((ref, backendId) async* {
+      final controller = await ref.watch(backendRegistryProvider.future);
+      BackendConfig? current = controller.state.backends
+          .where((backend) => backend.id == backendId)
+          .firstOrNull;
+      yield current;
+      await for (final next in controller.uiState) {
+        final updated = next.backends
+            .where((backend) => backend.id == backendId)
+            .firstOrNull;
+        if (updated != current) {
+          current = updated;
+          yield updated;
+        }
+      }
+    });
 
 /// Raw transport seams, overridable in tests (one per backend URL).
 final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
@@ -135,8 +136,10 @@ final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
   name: 'dshRpcClient',
 );
 
-final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket,
-    Uri>((ref, uri) => WebSocketDshEventSocket(uri), name: 'dshEventSocket');
+final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
+  (ref, uri) => WebSocketDshEventSocket(uri),
+  name: 'dshEventSocket',
+);
 
 /// One live connection per backend, keyed by (id, url): a URL edit
 /// reconnects cleanly (the old member stops), a removal stops the member
@@ -176,26 +179,25 @@ final allBackendConnectionsProvider =
 /// Backends rows read it to show the connected host's version; the
 /// keep-alive map above guarantees the member exists for every
 /// configured backend.
-final backendConnectionStateProvider =
-    StreamProvider.family.autoDispose<ConnectionState, String>((ref,
-        backendId) async* {
-  final manager = ref.watch(allBackendConnectionsProvider)[backendId];
-  if (manager == null) return;
-  yield* manager.state.stream;
-});
+final backendConnectionStateProvider = StreamProvider.family
+    .autoDispose<ConnectionState, String>((ref, backendId) async* {
+      final manager = ref.watch(allBackendConnectionsProvider)[backendId];
+      if (manager == null) return;
+      yield* manager.state.stream;
+    });
 
 /// The domain-facing repository per backend.
-final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository,
-    String>((ref, backendId) {
-  final backend = ref.watch(backendByIdProvider(backendId)).value;
-  // The seed fallback covers only the pre-load window; a removed backend
-  // takes its dependents down with it before this can matter.
-  final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
-  return HarnessRepositoryImpl(
-    ref.watch(dshRpcClientProvider(uri)),
-    ref.watch(backendConnectionProvider((backendId, uri))),
-  );
-});
+final chatRepositoryProvider = Provider.family
+    .autoDispose<ChatRepository, String>((ref, backendId) {
+      final backend = ref.watch(backendByIdProvider(backendId)).value;
+      // The seed fallback covers only the pre-load window; a removed backend
+      // takes its dependents down with it before this can matter.
+      final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
+      return HarnessRepositoryImpl(
+        ref.watch(dshRpcClientProvider(uri)),
+        ref.watch(backendConnectionProvider((backendId, uri))),
+      );
+    });
 
 /// System (OS-level) notifications, single instance shared by every
 /// backend's notification center.
@@ -207,50 +209,48 @@ final systemNotifierProvider = Provider<SystemNotifier>((ref) {
 /// notification events and routes them to the foreground toast channel or
 /// the background system channel. The app-root toast host keeps every
 /// configured backend's center alive so backgrounded turns still notify.
-final appNotificationCenterProvider =
-    Provider.family.autoDispose<AppNotificationCenter, String>((ref,
-        backendId) {
-  final systemNotifier = ref.watch(systemNotifierProvider);
-  final center = AppNotificationCenter(
-    repository: ref.watch(chatRepositoryProvider(backendId)),
-    backendId: backendId,
-    isForegrounded: () =>
-        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
-    selectedSessionIdOf: () =>
-        ref.read(chatControllerProvider(backendId)).state.selectedSessionId,
-    onBackground: systemNotifier.show,
-  );
-  ref.onDispose(center.dispose);
-  return center;
-});
+final appNotificationCenterProvider = Provider.family
+    .autoDispose<AppNotificationCenter, String>((ref, backendId) {
+      final systemNotifier = ref.watch(systemNotifierProvider);
+      final center = AppNotificationCenter(
+        repository: ref.watch(chatRepositoryProvider(backendId)),
+        backendId: backendId,
+        isForegrounded: () =>
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+        selectedSessionIdOf: () =>
+            ref.read(chatControllerProvider(backendId)).state.selectedSessionId,
+        onBackground: systemNotifier.show,
+      );
+      ref.onDispose(center.dispose);
+      return center;
+    });
 
 /// Merged foreground channel across every configured backend: the app-root
 /// toast host listens here and watches the family, which keeps every
 /// backend's center (and its session fold) alive for the app's lifetime.
-final foregroundNotificationEventsProvider = StreamProvider<AppNotificationEvent>(
-  (ref) async* {
-    final registry =
-        ref.watch(backendRegistryStateProvider).value ??
-        const BackendRegistryState();
-    final controller = StreamController<AppNotificationEvent>.broadcast();
-    final subscriptions = <StreamSubscription<AppNotificationEvent>>[];
-    for (final backend in registry.backends) {
-      subscriptions.add(
-        ref
-            .watch(appNotificationCenterProvider(backend.id))
-            .foregroundEvents
-            .listen(controller.add),
-      );
-    }
-    ref.onDispose(() {
-      for (final subscription in subscriptions) {
-        unawaited(subscription.cancel());
+final foregroundNotificationEventsProvider =
+    StreamProvider<AppNotificationEvent>((ref) async* {
+      final registry =
+          ref.watch(backendRegistryStateProvider).value ??
+          const BackendRegistryState();
+      final controller = StreamController<AppNotificationEvent>.broadcast();
+      final subscriptions = <StreamSubscription<AppNotificationEvent>>[];
+      for (final backend in registry.backends) {
+        subscriptions.add(
+          ref
+              .watch(appNotificationCenterProvider(backend.id))
+              .foregroundEvents
+              .listen(controller.add),
+        );
       }
-      unawaited(controller.close());
+      ref.onDispose(() {
+        for (final subscription in subscriptions) {
+          unawaited(subscription.cancel());
+        }
+        unawaited(controller.close());
+      });
+      yield* controller.stream;
     });
-    yield* controller.stream;
-  },
-);
 
 /// System-notification tap destinations (running-app taps plus cold-start
 /// launches), merged so the app root can navigate on either.
@@ -259,54 +259,47 @@ final systemNotificationTargetsProvider = StreamProvider<NotificationTarget>(
 );
 
 /// Chat screen controller (UDF), one per backend.
-final chatControllerProvider = Provider.family.autoDispose<ChatController,
-    String>((ref, backendId) {
-  final controller = ChatController(
-    ref.watch(chatRepositoryProvider(backendId)),
-    // Model-seat preferences are scoped per backend: hosts own different
-    // catalogs, so a route remembered on one must not land on another's
-    // seat. The store resolves asynchronously; the controller arms the
-    // remembered values once it settles.
-    modelPreferences: ref.watch(
-      modelPreferencePersistenceProvider(backendId).future,
-    ),
-    // The last-opened session restores per backend after the session
-    // list loads (web `dsh.sessions.current` parity).
-    sessionSelection: ref.watch(
-      sessionSelectionPersistenceProvider(backendId).future,
-    ),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final chatControllerProvider = Provider.family
+    .autoDispose<ChatController, String>((ref, backendId) {
+      final controller = ChatController(
+        ref.watch(chatRepositoryProvider(backendId)),
+        // Model-seat preferences are scoped per backend: hosts own different
+        // catalogs, so a route remembered on one must not land on another's
+        // seat. The store resolves asynchronously; the controller arms the
+        // remembered values once it settles.
+        modelPreferences: ref.watch(
+          modelPreferencePersistenceProvider(backendId).future,
+        ),
+        // The last-opened session restores per backend after the session
+        // list loads (web `dsh.sessions.current` parity).
+        sessionSelection: ref.watch(
+          sessionSelectionPersistenceProvider(backendId).future,
+        ),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Composer model-seat preference persistence over the shared
 /// [LocalStateStore], one scope per backend.
-final modelPreferencePersistenceProvider =
-    FutureProvider.family.autoDispose<ModelPreferencePersistence?, String>((
-      ref,
-      backendId,
-    ) async {
+final modelPreferencePersistenceProvider = FutureProvider.family
+    .autoDispose<ModelPreferencePersistence?, String>((ref, backendId) async {
       final store = await ref.watch(localStateStoreProvider.future);
       return StoreModelPreferencePersistence(store, 'backend.$backendId');
     });
 
 /// Selected-session persistence over the shared [LocalStateStore], one
 /// scope per backend.
-final sessionSelectionPersistenceProvider =
-    FutureProvider.family.autoDispose<SessionSelectionPersistence?, String>((
-      ref,
-      backendId,
-    ) async {
+final sessionSelectionPersistenceProvider = FutureProvider.family
+    .autoDispose<SessionSelectionPersistence?, String>((ref, backendId) async {
       final store = await ref.watch(localStateStoreProvider.future);
       return StoreSessionSelectionPersistence(store, 'backend.$backendId');
     });
 
 /// Chat UI state stream for widgets.
-final chatUiStateProvider = StreamProvider.family<ChatUiState, String>((
-  ref,
-  backendId,
-) => ref.watch(chatControllerProvider(backendId)).uiState);
+final chatUiStateProvider = StreamProvider.family<ChatUiState, String>(
+  (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
+);
 
 /// Every configured backend's sidebar slice, keyed by the backend the
 /// chat surface presents (the slice's active flag follows it). Each
@@ -330,12 +323,9 @@ final backendSessionSlicesProvider =
               (uiState) => BackendSessionSlice(
                 backend: backend,
                 active: backend.id == activeBackendId,
-                sessions:
-                    uiState.value?.sessions ??
-                    const <SessionSummary>[],
+                sessions: uiState.value?.sessions ?? const <SessionSummary>[],
                 workspaces:
-                    uiState.value?.workspaces ??
-                    const <WorkspaceSummary>[],
+                    uiState.value?.workspaces ?? const <WorkspaceSummary>[],
               ),
             ),
           ),
@@ -343,54 +333,54 @@ final backendSessionSlicesProvider =
     });
 
 /// Models screen controller (UDF), one per backend.
-final modelsControllerProvider = Provider.family.autoDispose<ModelsController,
-    String>((ref, backendId) {
-  final controller = ModelsController(
-    ref.watch(chatRepositoryProvider(backendId)),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final modelsControllerProvider = Provider.family
+    .autoDispose<ModelsController, String>((ref, backendId) {
+      final controller = ModelsController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Subagents screen controller (UDF), one per backend.
 final subagentControllerProvider = Provider.family
     .autoDispose<SubagentController, String>((ref, backendId) {
-  final controller = SubagentController(
-    ref.watch(chatRepositoryProvider(backendId)),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+      final controller = SubagentController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Goal screen controller (UDF), one per backend.
-final goalControllerProvider = Provider.family.autoDispose<GoalController,
-    String>((ref, backendId) {
-  final controller = GoalController(
-    ref.watch(chatRepositoryProvider(backendId)),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final goalControllerProvider = Provider.family
+    .autoDispose<GoalController, String>((ref, backendId) {
+      final controller = GoalController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Settings screen controller (UDF), one per backend.
-final settingsControllerProvider = Provider.family.autoDispose<SettingsController,
-    String>((ref, backendId) {
-  final controller = SettingsController(
-    ref.watch(chatRepositoryProvider(backendId)),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final settingsControllerProvider = Provider.family
+    .autoDispose<SettingsController, String>((ref, backendId) {
+      final controller = SettingsController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// Workspace screen controller (UDF), one per backend.
 final workspaceControllerProvider = Provider.family
     .autoDispose<WorkspaceController, String>((ref, backendId) {
-  final controller = WorkspaceController(
-    ref.watch(chatRepositoryProvider(backendId)),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+      final controller = WorkspaceController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 /// ASR models base storage directory.
 final asrModelsDirectoryProvider = FutureProvider<Directory>((ref) async {
@@ -425,8 +415,9 @@ final asrModelManagerProvider = FutureProvider<AsrModelManager>((ref) async {
 });
 
 /// ASR models controller (UDF).
-final asrModelsControllerProvider =
-    Provider.autoDispose<AsrModelsController>((ref) {
+final asrModelsControllerProvider = Provider.autoDispose<AsrModelsController>((
+  ref,
+) {
   final managerAsync = ref.watch(asrModelManagerProvider);
   final controller = AsrModelsController(manager: managerAsync.value);
   ref.onDispose(controller.dispose);
@@ -434,32 +425,37 @@ final asrModelsControllerProvider =
 });
 
 /// ASR models UI state stream.
-final asrModelsUiStateProvider =
-    StreamProvider.autoDispose<AsrModelsUiState>((ref) {
+final asrModelsUiStateProvider = StreamProvider.autoDispose<AsrModelsUiState>((
+  ref,
+) {
   final controller = ref.watch(asrModelsControllerProvider);
   return controller.uiState;
 });
 
 /// Voice input controller for speech recognition in the chat composer.
-final voiceInputControllerProvider =
-    Provider.autoDispose<VoiceInputController>((ref) {
-  final managerAsync = ref.watch(asrModelManagerProvider);
-  final manager = managerAsync.value ??
-      AsrModelManager(
-        baseModelsDir: Directory.systemTemp,
-        registry: ModelsRegistry(
-          registryFile: File('${Directory.systemTemp.path}/tmp_registry.json'),
-        ),
-      );
-  final controller = VoiceInputController(manager: manager);
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final voiceInputControllerProvider = Provider.autoDispose<VoiceInputController>(
+  (ref) {
+    final managerAsync = ref.watch(asrModelManagerProvider);
+    final manager =
+        managerAsync.value ??
+        AsrModelManager(
+          baseModelsDir: Directory.systemTemp,
+          registry: ModelsRegistry(
+            registryFile: File(
+              '${Directory.systemTemp.path}/tmp_registry.json',
+            ),
+          ),
+        );
+    final controller = VoiceInputController(manager: manager);
+    ref.onDispose(controller.dispose);
+    return controller;
+  },
+);
 
 /// Voice input UI state stream.
-final voiceInputUiStateProvider =
-    StreamProvider.autoDispose<VoiceInputUiState>((ref) {
-  final controller = ref.watch(voiceInputControllerProvider);
-  return controller.uiState;
-});
-
+final voiceInputUiStateProvider = StreamProvider.autoDispose<VoiceInputUiState>(
+  (ref) {
+    final controller = ref.watch(voiceInputControllerProvider);
+    return controller.uiState;
+  },
+);

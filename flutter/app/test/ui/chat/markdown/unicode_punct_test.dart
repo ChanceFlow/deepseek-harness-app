@@ -16,19 +16,39 @@ void main() {
 
   test('ASCII punctuation and symbols classify, alphanumerics do not', () {
     for (var char = 0x21; char <= 0x7E; char++) {
-      final alnum = (char >= 0x30 && char <= 0x39) ||
+      final alnum =
+          (char >= 0x30 && char <= 0x39) ||
           (char >= 0x41 && char <= 0x5A) ||
           (char >= 0x61 && char <= 0x7A);
-      expect(isPunctOrSymbol(char), !alnum, reason: 'U+${char.toRadixString(16)}');
+      expect(
+        isPunctOrSymbol(char),
+        !alnum,
+        reason: 'U+${char.toRadixString(16)}',
+      );
     }
   });
 
   test('CJK punctuation and full-width forms classify', () {
-    const punct = ['、', '。', '〈', '《', '「', '『', '【', '〜', '！', '？',
-        '，', '；', '：', '）', '］', '｝'];
+    const punct = [
+      '、',
+      '。',
+      '〈',
+      '《',
+      '「',
+      '『',
+      '【',
+      '〜',
+      '！',
+      '？',
+      '，',
+      '；',
+      '：',
+      '）',
+      '］',
+      '｝',
+    ];
     for (final char in punct) {
-      expect(isPunctOrSymbol(char.codeUnitAt(0)), isTrue,
-          reason: char);
+      expect(isPunctOrSymbol(char.codeUnitAt(0)), isTrue, reason: char);
     }
   });
 
@@ -47,10 +67,13 @@ void main() {
   });
 
   test('whitespace and control characters never classify', () {
-    const never = [0x00, 0x09, 0x0A, 0x0D, 0x20, 0xA0, 0x2028, 0x3000,
-        0xFEFF];
+    const never = [0x00, 0x09, 0x0A, 0x0D, 0x20, 0xA0, 0x2028, 0x3000, 0xFEFF];
     for (final char in never) {
-      expect(isPunctOrSymbol(char), isFalse, reason: 'U+${char.toRadixString(16)}');
+      expect(
+        isPunctOrSymbol(char),
+        isFalse,
+        reason: 'U+${char.toRadixString(16)}',
+      );
     }
   });
 }

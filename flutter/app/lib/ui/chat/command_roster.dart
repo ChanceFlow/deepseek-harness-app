@@ -16,8 +16,12 @@ import 'package:app/l10n/app_localizations.dart';
 /// input hint shown as the row's trailing detail, and whether the
 /// command admits composer image attachments.
 final class HostCommand {
-  const HostCommand(this.name, this.description, this.hint,
-      {this.acceptsImages = false});
+  const HostCommand(
+    this.name,
+    this.description,
+    this.hint, {
+    this.acceptsImages = false,
+  });
 
   final String name;
   final String description;
@@ -45,8 +49,12 @@ const List<HostCommand> kHostCommandNames = <HostCommand>[
 /// The built-in command roster; descriptions are localized, the input
 /// hints mirror host syntax verbatim.
 List<HostCommand> hostCommands(AppLocalizations l10n) => <HostCommand>[
-  HostCommand('plan', l10n.commandPlanDescription, '[off|message]',
-      acceptsImages: true),
+  HostCommand(
+    'plan',
+    l10n.commandPlanDescription,
+    '[off|message]',
+    acceptsImages: true,
+  ),
   HostCommand(
     'goal',
     l10n.commandGoalDescription,
@@ -54,11 +62,7 @@ List<HostCommand> hostCommands(AppLocalizations l10n) => <HostCommand>[
     acceptsImages: true,
   ),
   HostCommand('compact', l10n.commandCompactDescription, null),
-  HostCommand(
-    'permission',
-    l10n.commandPermissionDescription,
-    '<preset>',
-  ),
+  HostCommand('permission', l10n.commandPermissionDescription, '<preset>'),
   HostCommand('feedback', l10n.commandFeedbackDescription, '<text>'),
 ];
 

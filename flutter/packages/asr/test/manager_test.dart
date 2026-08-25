@@ -10,7 +10,8 @@ class MockHttpClient extends http.BaseClient {
   final Future<http.StreamedResponse> Function(http.BaseRequest) _handler;
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) => _handler(request);
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _handler(request);
 }
 
 void main() {
@@ -66,13 +67,20 @@ void main() {
 
     test('enforces single concurrency across downloads', () async {
       final Completer<void> streamStarted = Completer<void>();
-      final StreamController<List<int>> streamController = StreamController<List<int>>();
+      final StreamController<List<int>> streamController =
+          StreamController<List<int>>();
 
-      final MockHttpClient client = MockHttpClient((http.BaseRequest request) async {
+      final MockHttpClient client = MockHttpClient((
+        http.BaseRequest request,
+      ) async {
         if (!streamStarted.isCompleted) {
           streamStarted.complete();
         }
-        return http.StreamedResponse(streamController.stream, 200, contentLength: 154140672);
+        return http.StreamedResponse(
+          streamController.stream,
+          200,
+          contentLength: 154140672,
+        );
       });
 
       manager = AsrModelManager(
@@ -82,7 +90,9 @@ void main() {
       );
 
       // Start first download
-      final Future<void> firstDownload = manager.startDownload('sensevoice-small');
+      final Future<void> firstDownload = manager.startDownload(
+        'sensevoice-small',
+      );
       await streamStarted.future;
 
       // Try starting second download while first is in-flight
@@ -118,10 +128,7 @@ void main() {
         ),
       );
 
-      manager = AsrModelManager(
-        baseModelsDir: tempDir,
-        registry: registry,
-      );
+      manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
 
       expect(manager.installedCount, equals(1));
       expect(await dummyFile.exists(), isTrue);
@@ -133,10 +140,7 @@ void main() {
     });
 
     test('selects and falls back activeModel correctly', () async {
-      manager = AsrModelManager(
-        baseModelsDir: tempDir,
-        registry: registry,
-      );
+      manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
 
       expect(manager.getActiveModel(), isNull);
 

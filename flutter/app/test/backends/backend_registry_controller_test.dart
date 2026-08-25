@@ -102,16 +102,19 @@ void main() {
     expect(state.activeId, 'default');
   });
 
-  test('a corrupt document falls back to the seed with the error on state', () async {
-    final controller = BackendRegistryController(
-      storeFor('corrupt', document: '{"backends": ['),
-    );
-    addTearDown(controller.dispose);
+  test(
+    'a corrupt document falls back to the seed with the error on state',
+    () async {
+      final controller = BackendRegistryController(
+        storeFor('corrupt', document: '{"backends": ['),
+      );
+      addTearDown(controller.dispose);
 
-    final state = await loadedState(controller);
-    expect(state.backends.single.id, 'default');
-    expect(state.errorMessage, contains('backends.json'));
-  });
+      final state = await loadedState(controller);
+      expect(state.backends.single.id, 'default');
+      expect(state.errorMessage, contains('backends.json'));
+    },
+  );
 
   test('add appends, persists, and selects nothing', () async {
     final store = storeFor('add');
@@ -135,24 +138,27 @@ void main() {
     expect(roundTrip.backends.last.label, 'Build box');
   });
 
-  test('add guards: bad URL and empty label refuse with the error on state', () async {
-    final controller = BackendRegistryController(storeFor('guards'));
-    addTearDown(controller.dispose);
-    await loadedState(controller);
-    final before = controller.state;
+  test(
+    'add guards: bad URL and empty label refuse with the error on state',
+    () async {
+      final controller = BackendRegistryController(storeFor('guards'));
+      addTearDown(controller.dispose);
+      await loadedState(controller);
+      final before = controller.state;
 
-    controller.onAction(const AddBackend('Bad', 'ftp://nope'));
-    expect(controller.state.errorMessage, contains('Invalid backend URL'));
-    expect(controller.state.backends, before.backends);
+      controller.onAction(const AddBackend('Bad', 'ftp://nope'));
+      expect(controller.state.errorMessage, contains('Invalid backend URL'));
+      expect(controller.state.backends, before.backends);
 
-    controller.onAction(const AddBackend('  ', 'http://10.0.2.2:3081'));
-    expect(controller.state.errorMessage, contains('label'));
+      controller.onAction(const AddBackend('  ', 'http://10.0.2.2:3081'));
+      expect(controller.state.errorMessage, contains('label'));
 
-    // The next successful mutation clears the refusal.
-    controller.onAction(const AddBackend('OK', 'http://10.0.2.2:3081'));
-    expect(controller.state.errorMessage, isNull);
-    expect(controller.state.backends, hasLength(2));
-  });
+      // The next successful mutation clears the refusal.
+      controller.onAction(const AddBackend('OK', 'http://10.0.2.2:3081'));
+      expect(controller.state.errorMessage, isNull);
+      expect(controller.state.backends, hasLength(2));
+    },
+  );
 
   test('rename and URL repoint update the entry and persist', () async {
     final store = storeFor('rename');
@@ -175,35 +181,38 @@ void main() {
     expect((await loadedState(reloaded)).backends.single.label, 'Laptop host');
   });
 
-  test('remove guards: the last backend and the active one are refused', () async {
-    final controller = BackendRegistryController(
-      storeFor(
-        'remove',
-        document:
-            '{"backends": ['
-            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
-            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
-            '], "activeId": "default"}',
-      ),
-    );
-    addTearDown(controller.dispose);
-    await loadedState(controller);
+  test(
+    'remove guards: the last backend and the active one are refused',
+    () async {
+      final controller = BackendRegistryController(
+        storeFor(
+          'remove',
+          document:
+              '{"backends": ['
+              '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+              '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
+              '], "activeId": "default"}',
+        ),
+      );
+      addTearDown(controller.dispose);
+      await loadedState(controller);
 
-    controller.onAction(const RemoveBackend('default'));
-    expect(controller.state.errorMessage, contains('active backend'));
-    expect(controller.state.backends, hasLength(2));
+      controller.onAction(const RemoveBackend('default'));
+      expect(controller.state.errorMessage, contains('active backend'));
+      expect(controller.state.backends, hasLength(2));
 
-    controller.onAction(const RemoveBackend('unknown-id'));
-    expect(controller.state.backends, hasLength(2));
+      controller.onAction(const RemoveBackend('unknown-id'));
+      expect(controller.state.backends, hasLength(2));
 
-    controller.onAction(const RemoveBackend('b1'));
-    expect(controller.state.errorMessage, isNull);
-    expect(controller.state.backends, hasLength(1));
+      controller.onAction(const RemoveBackend('b1'));
+      expect(controller.state.errorMessage, isNull);
+      expect(controller.state.backends, hasLength(1));
 
-    controller.onAction(const RemoveBackend('default'));
-    expect(controller.state.errorMessage, contains('last backend'));
-    expect(controller.state.backends, hasLength(1));
-  });
+      controller.onAction(const RemoveBackend('default'));
+      expect(controller.state.errorMessage, contains('last backend'));
+      expect(controller.state.backends, hasLength(1));
+    },
+  );
 
   test('select switches the active id and persists it', () async {
     final store = storeFor(
@@ -235,14 +244,17 @@ void main() {
     expect((await loadedState(reloaded)).activeId, 'b1');
   });
 
-  test('the state stream replays the current state to late subscribers', () async {
-    final controller = BackendRegistryController(storeFor('replay'));
-    addTearDown(controller.dispose);
-    await loadedState(controller);
+  test(
+    'the state stream replays the current state to late subscribers',
+    () async {
+      final controller = BackendRegistryController(storeFor('replay'));
+      addTearDown(controller.dispose);
+      await loadedState(controller);
 
-    // A subscriber attaching after the async load still receives the
-    // loaded state first (the registry load predates most watchers).
-    final first = await controller.uiState.first;
-    expect(first.backends.single.id, 'default');
-  });
+      // A subscriber attaching after the async load still receives the
+      // loaded state first (the registry load predates most watchers).
+      final first = await controller.uiState.first;
+      expect(first.backends.single.id, 'default');
+    },
+  );
 }

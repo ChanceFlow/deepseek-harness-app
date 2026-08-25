@@ -74,10 +74,13 @@ void main() {
     for (var i = 0; i < 2; i++) {
       expect(identical(step2[i], step3[i]), isTrue, reason: 'block $i');
     }
-    expect(step3, MarkdownParser.parse(
-      'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\n'
-      'Fourth paragraph.\n\nFifth paragraph still streaming',
-    ));
+    expect(
+      step3,
+      MarkdownParser.parse(
+        'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n\n'
+        'Fourth paragraph.\n\nFifth paragraph still streaming',
+      ),
+    );
     expect(step1.length, 3);
     expect(step2.length, 4);
     expect(step3.length, 5);

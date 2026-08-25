@@ -287,9 +287,9 @@ void main() {
     expect(find.byType(MessageRow), findsOneWidget);
     // The user message renders as the transcript bubble, tinted with the
     // scheme's secondary container rather than painted flat.
-    final bubbleColor = Theme.of(
-      tester.element(find.text('do the thing')),
-    ).colorScheme.secondaryContainer;
+    final bubbleColor = Theme.of(tester.element(find.text('do the thing')))
+        .colorScheme
+        .secondaryContainer;
     final bubble = find.byWidgetPredicate(
       (widget) => widget is Material && widget.color == bubbleColor,
     );

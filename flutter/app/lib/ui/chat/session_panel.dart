@@ -86,8 +86,6 @@ const String _overflowExpandedKey = 'sidebar.overflowExpanded';
 
 class SessionPanel extends ConsumerStatefulWidget {
   const SessionPanel({
-    super.key,
-    this.inDrawer = false,
     required this.sessions,
     required this.workspaces,
     required this.searchResults,
@@ -95,6 +93,8 @@ class SessionPanel extends ConsumerStatefulWidget {
     required this.onSelectSession,
     required this.onCreateSession,
     required this.onSearchSessions,
+    super.key,
+    this.inDrawer = false,
     this.onRailChanged,
     this.backendSlices,
     this.onSelectBackend,
@@ -573,21 +573,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             onToggle: () => _toggleGroup(groups[i].key),
             onToggleOverflow: () => _toggleOverflow(groups[i].key),
             onSelectSession: widget.onSelectSession,
-            onRenameSession: (sessionId) => _sessionVerb(
-              null,
-              sessionId,
-              widget.onRenameSession,
-            ),
-            onForkSession: (sessionId) => _sessionVerb(
-              null,
-              sessionId,
-              widget.onForkSession,
-            ),
-            onArchiveSession: (sessionId) => _sessionVerb(
-              null,
-              sessionId,
-              widget.onArchiveSession,
-            ),
+            onRenameSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onRenameSession),
+            onForkSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onForkSession),
+            onArchiveSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onArchiveSession),
           ),
         ],
       ],
@@ -672,21 +663,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onToggleOverflow: () =>
               _toggleOverflow(_sliceGroupKey(slice, groups[i].key)),
           onSelectSession: (sessionId) => _selectSessionOn(slice, sessionId),
-          onRenameSession: (sessionId) => _sessionVerb(
-            slice,
-            sessionId,
-            widget.onRenameSession,
-          ),
-          onForkSession: (sessionId) => _sessionVerb(
-            slice,
-            sessionId,
-            widget.onForkSession,
-          ),
-          onArchiveSession: (sessionId) => _sessionVerb(
-            slice,
-            sessionId,
-            widget.onArchiveSession,
-          ),
+          onRenameSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onRenameSession),
+          onForkSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onForkSession),
+          onArchiveSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onArchiveSession),
         ),
       ],
     ];
@@ -704,8 +686,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     final sessionsById = <String, SessionSummary>{
       for (final session in widget.sessions.where(
         (session) =>
-            !session.blank &&
-            sessionVisible(session, widget.selectedSessionId),
+            !session.blank && sessionVisible(session, widget.selectedSessionId),
       ))
         session.id: session,
     };
@@ -951,7 +932,9 @@ class _BackendSectionHeader extends StatelessWidget {
         '${backend.baseUri.host}:${backend.baseUri.port}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
       ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -962,7 +945,9 @@ class _BackendSectionHeader extends StatelessWidget {
         child: Text(
           slice.active ? l10n.backendStatusActive : l10n.backendStatusStandby,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: slice.active ? scheme.onSurfaceVariant : scheme.onSurfaceVariant,
+            color: slice.active
+                ? scheme.onSurfaceVariant
+                : scheme.onSurfaceVariant,
           ),
         ),
       ),
@@ -1075,7 +1060,9 @@ class _GroupSectionState extends State<_GroupSection> {
         size: 16,
         // Web `.slot .folder`: tertiary folder glyph (brand tint while
         // the group holds the selected session and is open).
-        color: expanded && widget.containsCurrent ? scheme.primary : scheme.onSurfaceVariant,
+        color: expanded && widget.containsCurrent
+            ? scheme.primary
+            : scheme.onSurfaceVariant,
       ),
       // The session-count caption rides beside the label (the web's
       // single-line header), ahead of the M3 trailing chevron.
@@ -1294,20 +1281,22 @@ class _NewSessionDialog extends StatelessWidget {
                                       workspace.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13,
-                                      ),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 13,
+                                          ),
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
                                       workspace.path,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        fontSize: 11,
-                                        color: scheme.onSurfaceVariant,
-                                      ),
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            fontSize: 11,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),

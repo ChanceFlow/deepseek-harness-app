@@ -41,13 +41,7 @@ class AsrTranscriptionChunk {
 }
 
 /// Lifecycle state of an [AsrEngine].
-enum AsrEngineState {
-  uninitialized,
-  ready,
-  listening,
-  transcribing,
-  disposed,
-}
+enum AsrEngineState { uninitialized, ready, listening, transcribing, disposed }
 
 /// Abstract interface for on-device speech recognition engines.
 abstract interface class AsrEngine {

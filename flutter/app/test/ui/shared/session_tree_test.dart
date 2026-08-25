@@ -71,11 +71,7 @@ void main() {
         title: 'A',
         sessionIds: <String>['r', 'p', 'x'],
       ),
-      const WorkspaceSummary(
-        workspaceId: 'w2',
-        path: '/b',
-        title: 'empty',
-      ),
+      const WorkspaceSummary(workspaceId: 'w2', path: '/b', title: 'empty'),
     ];
 
     test('priority order applies within a workspace group', () {
@@ -173,9 +169,7 @@ void main() {
     ) async {
       await tester.pumpWidget(
         l10nApp(
-          home: Scaffold(
-            body: SessionStatusDot(session: _session('a')),
-          ),
+          home: Scaffold(body: SessionStatusDot(session: _session('a'))),
         ),
       );
       expect(find.byType(DoneDot), findsNothing);
@@ -203,7 +197,10 @@ void main() {
     ) async {
       for (final theme in [DshTheme.light(), DshTheme.dark()]) {
         await tester.pumpWidget(
-          l10nApp(theme: theme, home: const Scaffold(body: DoneDot())),
+          l10nApp(
+            theme: theme,
+            home: const Scaffold(body: DoneDot()),
+          ),
         );
         // MaterialApp lerps between themes; land on the new one.
         await tester.pump(const Duration(milliseconds: 400));
