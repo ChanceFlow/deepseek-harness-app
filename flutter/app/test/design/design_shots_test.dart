@@ -492,7 +492,7 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
     ),
   ];
 
-  final state = AsrModelsUiState(
+  const state = AsrModelsUiState(
     models: cards,
     defaultSource: ModelSource.hfMirror,
     installedCount: 1,

@@ -16,9 +16,10 @@ questions, and manage workspaces, models, goals and subagents — in
 English or 简体中文.
 
 <p align="center">
-  <img src="docs/screenshots/chat.png" width="250" alt="Chat timeline">
-  <img src="docs/screenshots/sessions.png" width="250" alt="Session drawer">
-  <img src="docs/screenshots/markdown.png" width="250" alt="Markdown rendering">
+  <img src="docs/screenshots/chat.png" width="210" alt="Chat timeline">
+  <img src="docs/screenshots/voice.png" width="210" alt="On-device voice input">
+  <img src="docs/screenshots/sessions.png" width="210" alt="Session drawer">
+  <img src="docs/screenshots/markdown.png" width="210" alt="Markdown rendering">
 </p>
 
 ## Getting started
@@ -80,6 +81,9 @@ box, a tunneled remote dsh.
   code, headings, lists, tables, clickable links), queue rows,
   approvals, questions, plan-review cards, background jobs, image
   attachments, skill candidates.
+- **Voice input & on-device ASR** — 100% client-side speech recognition
+  (SenseVoice, Zipformer, Whisper) with live waveform dock, timer, and
+  direct transcription stream into the composer.
 - **Multiple hosts** — keep several dsh hosts configured on this
   device and switch which one drives the chat.
 - **Workspaces** — create from a path or the in-app host directory
