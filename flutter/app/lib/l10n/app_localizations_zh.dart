@@ -1422,6 +1422,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputRecordFailed => '无法启动语音录制，请检查麦克风是否可用后重试。';
 
   @override
+  String get voiceInputSilentInput => '未检测到麦克风输入信号，请检查系统麦克风开关及是否有其他应用占用麦克风。';
+
+  @override
+  String get voiceInputInputFailed => '语音输入意外中断，请重试。';
+
+  @override
   String get asrActiveModel => '当前活跃模型';
 
   @override

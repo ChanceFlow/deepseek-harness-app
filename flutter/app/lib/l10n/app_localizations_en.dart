@@ -1461,6 +1461,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Voice recording could not start. Check that your microphone is available and try again.';
 
   @override
+  String get voiceInputSilentInput =>
+      'No audio signal detected from the microphone. Check the mic access toggle and that no other app is using it.';
+
+  @override
+  String get voiceInputInputFailed =>
+      'Voice input stopped unexpectedly. Please try again.';
+
+  @override
   String get asrActiveModel => 'Active speech model';
 
   @override

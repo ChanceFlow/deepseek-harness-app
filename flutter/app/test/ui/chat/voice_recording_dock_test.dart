@@ -1,4 +1,5 @@
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/platform/audio_recorder.dart';
 import 'package:app/ui/chat/voice_input/voice_input_ui_state.dart';
 import 'package:app/ui/chat/voice_input/voice_recording_dock.dart';
 import 'package:flutter/material.dart';
@@ -100,6 +101,64 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pump();
       expect(done, isTrue);
+    });
+
+    testWidgets('VoiceRecordingDock renders the native debug strip when stats are present', (WidgetTester tester) async {
+      const state = VoiceInputUiState(
+        phase: VoiceInputPhase.recording,
+        duration: Duration.zero,
+        debugStats: AudioDebugStats(
+          reads: 42,
+          eventsSent: 40,
+          maxAbs: 0.5,
+          sourceUsed: 'mic',
+          isRecording: true,
+          eventsReceived: 39,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: VoiceRecordingDock(
+              uiState: state,
+              onCancel: () {},
+              onDone: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('reads=42'), findsOneWidget);
+      expect(find.textContaining('max=0.500'), findsOneWidget);
+      expect(find.textContaining('src=mic'), findsOneWidget);
+    });
+
+    testWidgets('VoiceRecordingDock hides the debug strip without stats', (WidgetTester tester) async {
+      const state = VoiceInputUiState(
+        phase: VoiceInputPhase.recording,
+        duration: Duration.zero,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: VoiceRecordingDock(
+              uiState: state,
+              onCancel: () {},
+              onDone: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('reads='), findsNothing);
     });
   });
 }

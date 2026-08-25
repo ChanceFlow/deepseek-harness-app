@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -181,6 +182,76 @@ void main() {
       expect(controller.state.phase, isNot(VoiceInputPhase.recording));
       expect(controller.state.isRecording, isFalse);
       expect(controller.state.errorMessage, equals('RECORD_START_FAILED'));
+
+      controller.dispose();
+    });
+
+    test('ends a phantom recording with RECORD_SILENT_INPUT when the native watchdog reports silence', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      const MethodChannel methodChannel = MethodChannel(kAudioRecordChannel);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(methodChannel, (MethodCall call) async {
+        switch (call.method) {
+          case 'hasPermission':
+          case 'requestPermission':
+          case 'startRecording':
+          case 'stopRecording':
+            return true;
+          default:
+            return null;
+        }
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(methodChannel, null);
+      });
+
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: PlatformAudioRecorder(),
+        engine: MockAsrEngine(),
+      );
+
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.recording));
+
+      // A mid-session capture failure must end the recording with a real
+      // error. Deliver a native error envelope on the audio stream channel
+      // exactly as the platform would (EventChannel → onError → errors
+      // stream → controller).
+      const codec = StandardMethodCodec();
+      unawaited(
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .handlePlatformMessage(
+          kAudioStreamChannel,
+          codec.encodeErrorEnvelope(
+            code: 'input_silent',
+            message: 'No audio signal detected from the microphone',
+            details: null,
+          ),
+          (_) {},
+        ),
+      );
+
+      // Let the error envelope flow through the event channel to the
+      // controller's error subscription and settle.
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.state.phase, equals(VoiceInputPhase.error));
+      expect(controller.state.errorMessage, equals('RECORD_SILENT_INPUT'));
+      expect(controller.state.isRecording, isFalse);
 
       controller.dispose();
     });

@@ -1,6 +1,7 @@
 /// UI state for voice recording and on-device speech-to-text.
 library;
 
+import 'package:app/platform/audio_recorder.dart';
 import 'package:asr/asr.dart';
 
 /// Lifecycle phase of the voice recording session.
@@ -22,6 +23,7 @@ class VoiceInputUiState {
     this.errorMessage,
     this.activeModel,
     this.hasInstalledModels = false,
+    this.debugStats,
   });
 
   final VoiceInputPhase phase;
@@ -31,6 +33,9 @@ class VoiceInputUiState {
   final String? errorMessage;
   final AsrModelInfo? activeModel;
   final bool hasInstalledModels;
+
+  /// Native capture diagnostics; populated only in debug builds.
+  final AudioDebugStats? debugStats;
 
   bool get isRecording =>
       phase == VoiceInputPhase.recording ||
@@ -48,6 +53,7 @@ class VoiceInputUiState {
     bool clearError = false,
     AsrModelInfo? activeModel,
     bool? hasInstalledModels,
+    AudioDebugStats? debugStats,
   }) {
     return VoiceInputUiState(
       phase: phase ?? this.phase,
@@ -57,6 +63,7 @@ class VoiceInputUiState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       activeModel: activeModel ?? this.activeModel,
       hasInstalledModels: hasInstalledModels ?? this.hasInstalledModels,
+      debugStats: debugStats ?? this.debugStats,
     );
   }
 }

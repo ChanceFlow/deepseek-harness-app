@@ -2563,6 +2563,18 @@ abstract class AppLocalizations {
   /// **'Voice recording could not start. Check that your microphone is available and try again.'**
   String get voiceInputRecordFailed;
 
+  /// No description provided for @voiceInputSilentInput.
+  ///
+  /// In en, this message translates to:
+  /// **'No audio signal detected from the microphone. Check the mic access toggle and that no other app is using it.'**
+  String get voiceInputSilentInput;
+
+  /// No description provided for @voiceInputInputFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input stopped unexpectedly. Please try again.'**
+  String get voiceInputInputFailed;
+
   /// No description provided for @asrActiveModel.
   ///
   /// In en, this message translates to:
