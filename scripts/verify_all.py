@@ -6,7 +6,8 @@ Groups:
         verify_skills, verify_env_names, verify_toolchain_pin,
         verify_i18n_arb, verify_theme_native,
         gen_launcher_icons --check                           (seconds, no Flutter)
-  code  flutter analyze, flutter test, check_dart_imports
+  code  flutter analyze, dart format check, flutter test,
+      check_dart_imports, verify_unused_deps
   all   docs + code (default)
 
 Usage:
@@ -103,6 +104,30 @@ GATES: list[dict] = [
         "timeout": 600,
     },
     {
+        "name": "dart-format",
+        "groups": ["code"],
+        "cmd": [
+            "dart",
+            "format",
+            "--output=none",
+            "--set-exit-if-changed",
+            "app/lib",
+            "app/test",
+            "packages/domain/lib",
+            "packages/domain/test",
+            "packages/network/lib",
+            "packages/network/test",
+            "packages/harness_adapter/lib",
+            "packages/harness_adapter/test",
+            "packages/dev/lib",
+            "packages/dev/test",
+            "packages/asr/lib",
+            "packages/asr/test",
+        ],
+        "cwd": FLUTTER_ROOT,
+        "timeout": 300,
+    },
+    {
         "name": "flutter-test",
         "groups": ["code"],
         "cmd": [
@@ -122,6 +147,12 @@ GATES: list[dict] = [
         "name": "dart-imports",
         "groups": ["code"],
         "cmd": [sys.executable, "scripts/check_dart_imports.py"],
+        "cwd": REPO,
+    },
+    {
+        "name": "unused-deps",
+        "groups": ["code"],
+        "cmd": [sys.executable, "scripts/verify_unused_deps.py"],
         "cwd": REPO,
     },
 ]

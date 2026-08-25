@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# pre-push — authoritative leak gate on the commits being pushed, using this
-# repo's gitleaks config (default ruleset + repo-specific signatures +
-# allowlists). The shared history must always be public-clean, so the full
-# config applies to every push, to either forge.
+# Push leak scan (lefthook pre-push job) — authoritative leak gate on the
+# commits being pushed, using this repo's gitleaks config (default ruleset
+# + repo-specific signatures + allowlists). The shared history must always
+# be public-clean, so the full config applies to every push, to either
+# forge.
 #
 # Escape hatch for exceptional local experiments:
 #   git config leakscan.mode off

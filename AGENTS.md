@@ -32,6 +32,7 @@ Reach for the narrowest tool that would fail for your change:
 ```sh
 cd flutter && flutter test app/test/ui/chat/chat_screen_test.dart   # one behavior
 cd flutter && flutter analyze app/lib/ui/chat                       # one directory
+cd flutter && dart format --output=none --set-exit-if-changed .      # format hygiene
 python3 scripts/verify_all.py docs                                  # every doc gate, ~2s
 python3 scripts/check_dart_imports.py                               # the import boundary
 cd flutter && flutter build apk --debug --dart-define=DSH_BASE_URL=http://127.0.0.1:3080
@@ -56,8 +57,9 @@ command.
 - Cut a branch off latest `master`, open a PR, get both CI statuses green;
   `master` is protected.
 - CI: [ci.yaml](.github/workflows/ci.yaml) runs the aggregate as two
-  parallel jobs — `docs` (python only, seconds) and `code` (analyze, full
-  suite, import gate) — so a doc-only change settles on `docs` alone.
+  parallel jobs — `docs` (python only, seconds) and `code` (analyze, dart
+  format check, full suite, import gate) — so a doc-only change settles on
+  `docs` alone.
 - [release-apk.yaml](.github/workflows/release-apk.yaml) publishes: every
   `master` push refreshes the rolling `dev` prerelease, a `v<semver>` tag
   cuts the stable Release, and both attach a signed APK to the Releases

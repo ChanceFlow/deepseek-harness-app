@@ -1,0 +1,36 @@
+# Git hooks (lefthook) — fast local checkpoints; CI owns the full gate matrix
+# (scripts/verify_all.py docs|code). Install: scripts/install-lefthook.sh
+# (downloads the pinned binary, then `lefthook install`).
+#
+# Jobs mirror the repo's historical bash hooks (see the leak-scan and
+# identity-guard agent notes): identity guard and the staged/push leak scans
+# keep their semantics and escape hatches, now orchestrated here. dart format
+# runs as an auto-fixing checkpoint (stage_fixed re-stages its changes).
+
+pre-commit:
+  jobs:
+    - name: identity guard
+      run: bash scripts/git-hooks/check-identity.sh
+
+    - name: leak scan (staged)
+      run: bash scripts/git-hooks/scan-staged.sh
+
+    - name: dart format (staged, auto-fix)
+      glob: '**/*.dart'
+      run: bash scripts/git-hooks/dart-format.sh --fix {staged_files}
+      stage_fixed: true
+
+    - name: whitespace (staged)
+      run: git diff --cached --check
+
+    - name: import gate (dart staged)
+      glob: '**/*.dart'
+      run: python3 scripts/check_dart_imports.py
+
+pre-push:
+  jobs:
+    - name: leak scan (push)
+      run: bash scripts/git-hooks/scan-push.sh
+
+    - name: dart format (workspace)
+      run: bash scripts/git-hooks/dart-format.sh --check
