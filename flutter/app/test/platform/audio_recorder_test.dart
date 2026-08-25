@@ -39,4 +39,27 @@ void main() {
     await recorder.stop();
     await recorder.dispose();
   });
+
+  test('propagates a native startRecording failure instead of swallowing it', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (MethodCall call) async {
+      if (call.method == 'startRecording') {
+        throw PlatformException(
+          code: 'record_error',
+          message: 'Failed to initialize AudioRecord',
+        );
+      }
+      return null;
+    });
+
+    final recorder = PlatformAudioRecorder();
+    await expectLater(
+      recorder.start(),
+      throwsA(isA<PlatformException>()
+          .having((e) => e.code, 'code', 'record_error')),
+    );
+    expect(recorder.isRecording, isFalse);
+
+    await recorder.dispose();
+  });
 }

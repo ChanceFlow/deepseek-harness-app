@@ -167,14 +167,20 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopAudioCapture() {
-        if (isRecording.compareAndSet(true, false)) {
-            try {
-                audioRecord?.stop()
-                audioRecord?.release()
-            } catch (_: Exception) {}
-            audioRecord = null
-            recordingThread = null
-        }
+        if (!isRecording.compareAndSet(true, false)) return
+        // Stop() unblocks a read() in flight, so the recording thread can
+        // observe isRecording=false and exit before we release the record.
+        // release() while read() is still running is undefined and can crash.
+        try {
+            audioRecord?.stop()
+        } catch (_: Exception) {}
+        val thread = recordingThread
+        recordingThread = null
+        thread?.join(500)
+        try {
+            audioRecord?.release()
+        } catch (_: Exception) {}
+        audioRecord = null
     }
 
     override fun onDestroy() {

@@ -319,9 +319,10 @@ void main() {
       find.text('Choose a workspace or keep the default.'),
       findsOneWidget,
     );
-    expect(find.text('proj — /tmp/proj'), findsOneWidget);
+    expect(find.text('proj'), findsOneWidget);
+    expect(find.text('/tmp/proj'), findsOneWidget);
 
-    await tester.tap(find.text('proj — /tmp/proj'));
+    await tester.tap(find.text('proj'));
     await tester.pumpAndSettle();
     expect(actions, contains(const CreateSessionInWorkspace('w1')));
 

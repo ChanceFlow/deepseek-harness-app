@@ -418,6 +418,7 @@
   "voiceInputCancel": "取消",
   "voiceInputDone": "完成",
   "voiceInputPermissionDenied": "需要麦克风权限才能进行语音输入。",
+  "voiceInputRecordFailed": "无法启动语音录制，请检查麦克风是否可用后重试。",
   "asrActiveModel": "当前活跃模型",
   "asrActiveModelDesc": "用于聊天中语音识别的模型。",
   "asrNoModelInstalled": "无（请在下方下载模型）"

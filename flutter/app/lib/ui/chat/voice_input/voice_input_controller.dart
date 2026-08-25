@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:asr/asr.dart';
+import 'package:flutter/services.dart';
 import '../../../platform/audio_recorder.dart';
 import 'voice_input_ui_state.dart';
 
@@ -112,8 +113,10 @@ class VoiceInputController {
         onTranscriptionUpdate?.call(chunk.text, chunk.isFinal);
       });
 
-      await _recorder.start();
-
+      // Subscribe to the audio/amplitude streams before capture starts:
+      // both are broadcast (non-buffering), so events emitted between
+      // start() and subscription would otherwise be dropped, losing the
+      // first ~100ms of input.
       await _audioSub?.cancel();
       _audioSub = _recorder.audioStream.listen((samples) {
         activeEngine.acceptAudio(samples);
@@ -123,6 +126,20 @@ class VoiceInputController {
       _amplitudeSub = _recorder.amplitudeStream.listen((amp) {
         _emit(_state.copyWith(amplitude: amp));
       });
+
+      try {
+        await _recorder.start();
+      } on PlatformException {
+        // Native AudioRecord failed to start (e.g. device/emulator input
+        // unavailable). Surface a stable, localizable error instead of a
+        // phantom recording dock whose waveform never moves.
+        await cancelRecording();
+        _emit(_state.copyWith(
+          phase: VoiceInputPhase.error,
+          errorMessage: 'RECORD_START_FAILED',
+        ));
+        return;
+      }
 
       _recordingStartTime = DateTime.now();
       _durationTimer?.cancel();

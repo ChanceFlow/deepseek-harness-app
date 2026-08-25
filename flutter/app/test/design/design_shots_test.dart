@@ -91,6 +91,14 @@ final List<DesignShot> shots = <DesignShot>[
   DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),
   DesignShot(name: 'empty', state: emptyState(), dark: false),
   DesignShot(
+    name: 'workspace-sheet',
+    state: emptyStateWithWorkspaces(),
+    act: (tester) async {
+      await tester.tap(find.text('Choose workspace'));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
     name: 'drawer',
     state: busyState(),
     act: (tester) async {

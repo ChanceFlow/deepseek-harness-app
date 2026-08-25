@@ -1,12 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:app/platform/audio_recorder.dart';
 import 'package:app/ui/chat/voice_input/voice_input_controller.dart';
 import 'package:app/ui/chat/voice_input/voice_input_ui_state.dart';
 import 'package:asr/asr.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('VoiceInputController', () {
     late Directory tempDir;
     late File registryFile;
@@ -126,6 +130,57 @@ void main() {
       await controller.cancelRecording();
       expect(controller.state.isRecording, isFalse);
       expect(controller.state.phase, equals(VoiceInputPhase.idle));
+
+      controller.dispose();
+    });
+
+    test('surfaces a native startRecording failure instead of a phantom recording', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      const MethodChannel methodChannel = MethodChannel(kAudioRecordChannel);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(methodChannel, (MethodCall call) async {
+        switch (call.method) {
+          case 'hasPermission':
+          case 'requestPermission':
+            return true;
+          case 'startRecording':
+            throw PlatformException(
+              code: 'record_error',
+              message: 'Failed to initialize AudioRecord',
+            );
+          default:
+            return null;
+        }
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(methodChannel, null);
+      });
+
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: PlatformAudioRecorder(),
+        engine: MockAsrEngine(),
+      );
+
+      await controller.startRecording();
+
+      // The controller must NOT present a phantom recording dock when the
+      // native recorder failed to start: the user sees no waveform and no
+      // audio, with no way to know capture never began.
+      expect(controller.state.phase, isNot(VoiceInputPhase.recording));
+      expect(controller.state.isRecording, isFalse);
+      expect(controller.state.errorMessage, equals('RECORD_START_FAILED'));
 
       controller.dispose();
     });

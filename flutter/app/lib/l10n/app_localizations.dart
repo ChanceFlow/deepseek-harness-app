@@ -2516,33 +2516,69 @@ abstract class AppLocalizations {
   String asrSpeedLabel(String speed);
 
   /// No description provided for @voiceInputTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input'**
   String get voiceInputTooltip;
 
   /// No description provided for @voiceInputNoModelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech Model Required'**
   String get voiceInputNoModelTitle;
 
   /// No description provided for @voiceInputNoModelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Download an on-device speech recognition model in Settings to enable offline voice input.'**
   String get voiceInputNoModelBody;
 
   /// No description provided for @voiceInputGoToSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Settings'**
   String get voiceInputGoToSettings;
 
   /// No description provided for @voiceInputCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
   String get voiceInputCancel;
 
   /// No description provided for @voiceInputDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
   String get voiceInputDone;
 
   /// No description provided for @voiceInputPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone permission is required for voice input.'**
   String get voiceInputPermissionDenied;
 
+  /// No description provided for @voiceInputRecordFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice recording could not start. Check that your microphone is available and try again.'**
+  String get voiceInputRecordFailed;
+
   /// No description provided for @asrActiveModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active speech model'**
   String get asrActiveModel;
 
   /// No description provided for @asrActiveModelDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Model used for voice transcription in chat.'**
   String get asrActiveModelDesc;
 
   /// No description provided for @asrNoModelInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'None (download a model below)'**
   String get asrNoModelInstalled;
 }
 

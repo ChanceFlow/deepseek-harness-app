@@ -1457,6 +1457,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Microphone permission is required for voice input.';
 
   @override
+  String get voiceInputRecordFailed =>
+      'Voice recording could not start. Check that your microphone is available and try again.';
+
+  @override
   String get asrActiveModel => 'Active speech model';
 
   @override
