@@ -32,6 +32,11 @@ import 'brand_wordmark.dart';
 /// One backend's slice of the sidebar's browsing region: that host's
 /// config, whether it is the one the chat surface presents, and its
 /// live session/workspace facts.
+///
+/// Value equality is load-bearing: the slices provider selects this out
+/// of each host's chat state, so a slice whose roster did not change
+/// compares equal and a streaming timeline publish never recomputes the
+/// sidebar's slice list.
 final class BackendSessionSlice {
   const BackendSessionSlice({
     required this.backend,
@@ -44,6 +49,30 @@ final class BackendSessionSlice {
   final bool active;
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BackendSessionSlice &&
+      other.backend == backend &&
+      other.active == active &&
+      _listEquals(other.sessions, sessions) &&
+      _listEquals(other.workspaces, workspaces);
+
+  @override
+  int get hashCode => Object.hash(
+    backend,
+    active,
+    Object.hashAll(sessions),
+    Object.hashAll(workspaces),
+  );
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }
 
 /// Local state store key: per-group expansion overrides

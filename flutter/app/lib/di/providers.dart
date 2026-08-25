@@ -17,6 +17,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
+import 'package:domain/model/session.dart' show SessionSummary;
+import 'package:domain/model/workspace.dart' show WorkspaceSummary;
 import 'package:domain/repository/chat_repository.dart';
 import 'package:harness_adapter/harness_adapter.dart';
 import 'package:network/dsh_event_socket.dart' show DshEventSocket;
@@ -43,6 +45,7 @@ import '../local_state/local_state_providers.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_local_state.dart';
 import '../ui/chat/chat_ui_state.dart';
+import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
 import '../ui/settings/settings_controller.dart';
@@ -292,6 +295,40 @@ final chatUiStateProvider = StreamProvider.family<ChatUiState, String>((
   ref,
   backendId,
 ) => ref.watch(chatControllerProvider(backendId)).uiState);
+
+/// Every configured backend's sidebar slice, keyed by the backend the
+/// chat surface presents (the slice's active flag follows it). Each
+/// slice is SELECTED out of its host's chat state — only the roster
+/// facts, never the timeline — so a slice whose sessions and workspaces
+/// did not change compares equal and a streaming publish on ANY backend
+/// (each backend's restored session now streams while the app is open)
+/// recomputes nothing and rebuilds no surface (the reference web client
+/// renders the sidebar from per-node subscriptions, not a whole-tree
+/// rebuild). Watching here also keeps every backend's chat controller
+/// alive for the app's lifetime.
+final backendSessionSlicesProvider =
+    Provider.family<List<BackendSessionSlice>, String>((ref, activeBackendId) {
+      final registry =
+          ref.watch(backendRegistryStateProvider).value ??
+          const BackendRegistryState();
+      return <BackendSessionSlice>[
+        for (final backend in registry.backends)
+          ref.watch(
+            chatUiStateProvider(backend.id).select(
+              (uiState) => BackendSessionSlice(
+                backend: backend,
+                active: backend.id == activeBackendId,
+                sessions:
+                    uiState.value?.sessions ??
+                    const <SessionSummary>[],
+                workspaces:
+                    uiState.value?.workspaces ??
+                    const <WorkspaceSummary>[],
+              ),
+            ),
+          ),
+      ];
+    });
 
 /// Models screen controller (UDF), one per backend.
 final modelsControllerProvider = Provider.family.autoDispose<ModelsController,
