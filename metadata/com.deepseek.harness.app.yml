@@ -3,9 +3,9 @@ Categories:
   - Internet
 License: MIT
 AuthorName: ChanceFlow
-SourceCode: https://github.com/ChanceFlow/deepseek-harness-android
-IssueTracker: https://github.com/ChanceFlow/deepseek-harness-android/issues
-Changelog: https://github.com/ChanceFlow/deepseek-harness-android/releases
+SourceCode: https://github.com/ChanceFlow/deepseek-harness-app
+IssueTracker: https://github.com/ChanceFlow/deepseek-harness-app/issues
+Changelog: https://github.com/ChanceFlow/deepseek-harness-app/releases
 
 AutoName: DSH Mobile
 Summary: Flutter client for DeepSeek Harness autonomous coding agent
@@ -26,7 +26,7 @@ AntiFeatures:
   - NonFreeNet
 
 RepoType: git
-Repo: https://github.com/ChanceFlow/deepseek-harness-android.git
+Repo: https://github.com/ChanceFlow/deepseek-harness-app.git
 
 Builds:
   - versionName: 0.0.4
