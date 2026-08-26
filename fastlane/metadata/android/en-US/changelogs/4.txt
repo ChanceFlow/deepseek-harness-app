@@ -1,0 +1,5 @@
+• On-device speech recognition: local offline voice input with SenseVoice and Whisper models.
+• Redesigned selectors: Material 3 bottom sheet selection for models, hosts, and presets.
+• Settings reorganization: split into App and Host categories with session and model seat memory.
+• Streaming render performance: linear message parsing and optimized timeline rendering.
+• Official F-Droid distribution metadata and assets.

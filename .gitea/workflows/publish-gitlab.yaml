@@ -1,0 +1,119 @@
+# Publish GitLab — mirror the SHARED history to the public GitLab repo
+# (ChanceFlow/deepseek-harness-app).
+#
+# Follows the same Model A sync policy as publish-github.yaml: Gitea and
+# GitLab hold ONE history with identical commit hashes. The tracked tree is
+# public-clean by construction, and every commit passes pre-commit/pre-push
+# leak sweeps.
+#
+# Hardening:
+# - Master is pushed fast-forward on normal merges; non-fast-forward needs
+#   confirm_rewrite on workflow_dispatch.
+# - Tags converge exactly (--prune deletes removed tags).
+# - Mirror failures open an alert issue on Gitea.
+#
+# Runner requires:
+# - secrets.GL_PUBLISH_TOKEN (GitLab personal/project access token with write_repository scope)
+# - vars.EGRESS_PROXY for gitlab.com network access.
+name: Publish GitLab
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      confirm_rewrite:
+        description: "Allow a NON-FAST-FORWARD force push (history rewrite). Normally false."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+  HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+  http_proxy: ${{ vars.EGRESS_PROXY }}
+  https_proxy: ${{ vars.EGRESS_PROXY }}
+  NO_PROXY: gitea,localhost,127.0.0.1
+  no_proxy: gitea,localhost,127.0.0.1
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate check token
+        id: gate
+        env:
+          TOKEN: ${{ secrets.GL_PUBLISH_TOKEN }}
+        run: |
+          if [[ -z "$TOKEN" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::secrets.GL_PUBLISH_TOKEN not set; skipping GitLab mirror job."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout (full history)
+        if: steps.gate.outputs.skip == 'false'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Last-line leak sweep (tree + full history, public mode, hard fail)
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          python3 scripts/scan_leaks.py --tree --mode=public \
+            || { echo "::error::leak sweep (tree) failed — mirror aborted"; exit 1; }
+          python3 scripts/scan_leaks.py --all-blobs --mode=public \
+            || { echo "::error::leak sweep (full history) failed — mirror aborted"; exit 1; }
+
+      - name: Mirror master + tags to GitLab
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          TARGET: https://oauth2:${{ secrets.GL_PUBLISH_TOKEN }}@gitlab.com/ChanceFlow/deepseek-harness-app.git
+          CONFIRM_REWRITE: ${{ github.event.inputs.confirm_rewrite || 'false' }}
+        run: |
+          set -euo pipefail
+          git remote add gitlab "$TARGET"
+          git fetch --quiet gitlab master 2>/dev/null || true
+
+          LOCAL_HEAD=$(git rev-parse HEAD)
+          GL_HEAD=$(git rev-parse -q --verify refs/remotes/gitlab/master || true)
+
+          if [[ -n "$GL_HEAD" && "$GL_HEAD" == "$LOCAL_HEAD" ]]; then
+            echo "master already in sync @ $LOCAL_HEAD"
+          elif [[ -z "$GL_HEAD" ]] || git merge-base --is-ancestor "$GL_HEAD" "$LOCAL_HEAD"; then
+            echo "master fast-forward: $GL_HEAD -> $LOCAL_HEAD"
+            git push gitlab master:master
+          else
+            echo "::error::NON-FAST-FORWARD: GitLab master ($GL_HEAD) is not an ancestor of local master ($LOCAL_HEAD)."
+            if [[ "$CONFIRM_REWRITE" == "true" ]]; then
+              echo "history rewrite CONFIRMED — force pushing to GitLab"
+              git push --force gitlab master:master
+            else
+              echo "::error::rewriting the public history needs human confirmation — rerun with confirm_rewrite=true"
+              exit 1
+            fi
+          fi
+
+          git push --force --prune gitlab 'refs/tags/*:refs/tags/*'
+          echo "mirrored master + tags to GitLab @ $(git rev-parse HEAD)"
+
+      - name: Alert on mirror failure
+        if: failure() && steps.gate.outputs.skip == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          API="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues"
+          TITLE="GitLab mirror failed — public repo may be stale"
+          BODY="The **Publish GitLab** workflow failed on $GITHUB_REF_NAME@$(git rev-parse --short HEAD). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          curl -fsS -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$API" -d "{\"title\": \"$TITLE\", \"body\": \"$BODY\"}" \
+            || echo "::warning::alert issue creation failed"

@@ -15,7 +15,7 @@ flutter/packages/network/          Transport: RPC envelopes, HTTP/WebSocket seam
 flutter/packages/dev/              Debug-build tooling: telemetry, frame stats, crash capture
 scripts/                           Gates (verify_*.py) and generators; gates_manifest.json holds every ceiling
 .github/workflows/                 ci.yaml — the merge gate; release-apk.yaml — the distribution channel
-.gitea/workflows/                  Same CI + release + GitHub-mirror pipelines for the internal forge
+.gitea/workflows/                  Same CI + release + GitHub/GitLab-mirror pipelines for the internal forge
 reference/deepseek-harness/        Pinned submodule — the dsh wire source of truth (read-only)
 docs/                              spec.md (wire contract + coverage), design-standard.md, testing.md, prose-standard.md
 .agents/notes/                     Public decision records — the repo's memory

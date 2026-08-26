@@ -1,0 +1,10 @@
+DSH Mobile is the official open-source Flutter client for DeepSeek Harness (dsh), an autonomous coding agent framework.
+
+Features:
+• Real-time Agent Monitoring: Track agent execution, tool invocations, bash commands, and multi-turn reasoning steps in real time.
+• Interactive Tool Approvals: Inspect and approve sandbox-restricted operations (file modifications, shell commands, web queries, and subagent forks) directly from your phone.
+• Seamless Backend Connectivity: Connect to your self-hosted or remote dsh web server over HTTP and WebSocket.
+• Goal & Session Management: Create, resume, pause, and inspect long-running autonomous development goals and multi-agent conversations.
+• Voice Input: On-device voice prompting with local speech recognition.
+• Modern UI: Built with Flutter and pure Material 3 design, supporting dynamic light and dark themes.
+• Free & Open Source: Licensed under MIT with no proprietary analytics or tracking SDKs.
