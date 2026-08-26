@@ -208,8 +208,7 @@ class VoiceInputController {
       _emit(_state.copyWith(phase: VoiceInputPhase.recording));
     } catch (e) {
       await cancelRecording();
-      // Engines reject unsupported models loudly (e.g. the streaming
-      // Zipformer in the offline-only scope); map that to a stable,
+      // Engines reject unsupported models loudly; map that to a stable,
       // localizable code instead of leaking the raw exception message.
       final message = e is UnsupportedError
           ? 'MODEL_UNSUPPORTED'
@@ -324,10 +323,8 @@ class VoiceInputController {
 
   static AsrEngine _defaultEngineFactory(AsrModelInfo? model) {
     if (model == null) return MockAsrEngine();
-    // SherpaOfflineAsrEngine throws a clear UnsupportedError for models
-    // outside the offline-only scope (e.g. the streaming Zipformer), which
-    // startRecording's handler surfaces instead of the old stub runner
-    // silently returning empty text.
+    // SherpaOfflineAsrEngine supports streaming Paraformer as well as offline
+    // SenseVoice and Whisper models, and throws UnsupportedError for unknown models.
     return SherpaOfflineAsrEngine();
   }
 

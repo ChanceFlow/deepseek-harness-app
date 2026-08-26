@@ -54,16 +54,19 @@ void main() {
     );
 
     test(
-      'StreamingZipformerEngine chunks audio and emits incremental output',
+      'StreamingParaformerEngine chunks audio and emits incremental output',
       () async {
-        final engine = StreamingZipformerEngine(
+        final engine = StreamingParaformerEngine(
           chunkSizeSamples: 1600,
           runner: (Float32List chunk, bool isLast) async {
             return isLast ? '结束' : '分块 ';
           },
         );
 
-        await engine.initialize(AsrModelManifest.zipformerBilingual, tempDir);
+        await engine.initialize(
+          AsrModelManifest.paraformerBilingualStreaming,
+          tempDir,
+        );
 
         final List<AsrTranscriptionChunk> chunks = <AsrTranscriptionChunk>[];
         final subscription = engine.transcriptionStream.listen(chunks.add);
