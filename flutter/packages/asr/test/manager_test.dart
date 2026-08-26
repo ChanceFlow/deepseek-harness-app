@@ -164,5 +164,28 @@ void main() {
       expect(manager.activeModelId, equals('sensevoice-small'));
       expect(manager.getActiveModel()?.id, equals('sensevoice-small'));
     });
+
+    test('stale active model id falls back to first installed model', () async {
+      manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
+
+      // Persisted active id from an older app version naming a model that no
+      // longer exists in the manifest (e.g. zipformer-bilingual before the
+      // FunASR Paraformer swap).
+      await registry.setActiveModelId('zipformer-bilingual');
+      final Directory modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      // The stale id must not yield null: voice input falls back to an
+      // actually installed model instead of reporting "no model installed".
+      expect(manager.getActiveModel()?.id, equals('sensevoice-small'));
+    });
   });
 }
