@@ -421,7 +421,7 @@
   "voiceInputRecordFailed": "无法启动语音录制，请检查麦克风是否可用后重试。",
   "voiceInputSilentInput": "未检测到麦克风输入信号，请检查系统麦克风开关及是否有其他应用占用麦克风。",
   "voiceInputInputFailed": "语音输入意外中断，请重试。",
-  "voiceInputModelUnsupported": "所选语音模型暂不支持，请在设置中选择 SenseVoice 或 Whisper。",
+  "voiceInputModelUnsupported": "所选语音模型暂不受支持，请在设置中重新选择可用的语音模型。",
   "asrActiveModel": "当前活跃模型",
   "asrActiveModelDesc": "用于聊天中语音识别的模型。",
   "asrNoModelInstalled": "无（请在下方下载模型）"
