@@ -2578,7 +2578,7 @@ abstract class AppLocalizations {
   /// No description provided for @voiceInputModelUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'The selected speech model is not supported yet. Choose SenseVoice or Whisper in Settings.'**
+  /// **'The selected speech model is not supported. Pick another installed model in Settings.'**
   String get voiceInputModelUnsupported;
 
   /// No description provided for @asrActiveModel.

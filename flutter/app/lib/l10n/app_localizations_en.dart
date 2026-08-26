@@ -1470,7 +1470,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceInputModelUnsupported =>
-      'The selected speech model is not supported yet. Choose SenseVoice or Whisper in Settings.';
+      'The selected speech model is not supported. Pick another installed model in Settings.';
 
   @override
   String get asrActiveModel => 'Active speech model';
