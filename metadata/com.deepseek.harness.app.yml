@@ -1,0 +1,48 @@
+Categories:
+  - Development
+  - Internet
+License: MIT
+AuthorName: ChanceFlow
+SourceCode: https://github.com/ChanceFlow/deepseek-harness-android
+IssueTracker: https://github.com/ChanceFlow/deepseek-harness-android/issues
+Changelog: https://github.com/ChanceFlow/deepseek-harness-android/releases
+
+AutoName: DSH Mobile
+Summary: Flutter client for DeepSeek Harness autonomous coding agent
+Description: |-
+  DSH Mobile is the official open-source Flutter client for DeepSeek Harness (dsh),
+  an autonomous coding agent framework.
+
+  Features:
+  * Real-time Agent Monitoring: Track agent execution, tool invocations, bash commands, and multi-turn reasoning steps in real time.
+  * Interactive Tool Approvals: Inspect and approve sandbox-restricted operations (file modifications, shell commands, web queries, and subagent forks) directly from your phone.
+  * Seamless Backend Connectivity: Connect to your self-hosted or remote dsh web server over HTTP and WebSocket.
+  * Goal & Session Management: Create, resume, pause, and inspect long-running autonomous development goals and multi-agent conversations.
+  * Voice Input: On-device voice prompting with local speech recognition.
+  * Modern UI: Built with Flutter and pure Material 3 design, supporting dynamic light and dark themes.
+  * Free & Open Source: Licensed under MIT with no proprietary analytics or tracking SDKs.
+
+AntiFeatures:
+  - NonFreeNet
+
+RepoType: git
+Repo: https://github.com/ChanceFlow/deepseek-harness-android.git
+
+Builds:
+  - versionName: 0.0.3
+    versionCode: 3
+    commit: v0.0.3
+    subdir: flutter/app
+    submodules: yes
+    output: flutter/app/build/app/outputs/flutter-apk/app-release.apk
+    flutter: 3.47.1
+    build:
+      - cd ..
+      - flutter pub get
+      - cd app
+      - flutter build apk --release --no-tree-shake-icons
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 0.0.3
+CurrentVersionCode: 3

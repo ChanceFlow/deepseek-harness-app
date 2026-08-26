@@ -46,6 +46,7 @@ docs/flutter-migration-analysis.md
 !.agents/notes/implemented/process/2026-08-22-github-mirror-hardening.md
 !.agents/notes/implemented/process/2026-08-25-ci-runner-env-injection.md
 !.agents/notes/implemented/process/2026-08-25-lint-rules-and-lefthook.md
+!.agents/notes/implemented/process/2026-08-26-fdroid-official-distribution.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/
