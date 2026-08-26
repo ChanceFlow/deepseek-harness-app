@@ -71,12 +71,19 @@ class AsrModelManager {
 
   /// Returns the configured active model if installed, or the first
   /// installed model from the manifest, or null if no models are installed.
+  ///
+  /// A persisted [activeModelId] that no longer exists in [AsrModelManifest]
+  /// (e.g. a model removed by an app upgrade) is treated as unset: it falls
+  /// through to the first-installed-model fallback instead of yielding null.
   AsrModelInfo? getActiveModel() {
     final activeId = registry.activeModelId;
     if (activeId != null) {
       final entry = getStatus(activeId);
       if (entry.isDownloaded) {
-        return AsrModelManifest.findById(activeId);
+        final info = AsrModelManifest.findById(activeId);
+        if (info != null) {
+          return info;
+        }
       }
     }
     // Fallback: pick first downloaded model
