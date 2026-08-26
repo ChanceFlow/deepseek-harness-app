@@ -48,7 +48,7 @@ void main() {
 
       expect(find.text('ASR Models'), findsOneWidget);
       expect(find.text('SenseVoice-Small'), findsOneWidget);
-      expect(find.text('Zipformer Bilingual (Streaming)'), findsOneWidget);
+      expect(find.text('Paraformer Bilingual (Streaming)'), findsOneWidget);
       expect(find.text('Whisper large-v3-turbo'), findsOneWidget);
       expect(find.text('Download'), findsNWidgets(3));
     });

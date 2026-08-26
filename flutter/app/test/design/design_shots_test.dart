@@ -485,11 +485,11 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
       diskUsageBytes: 239549735,
     ),
     AsrModelCardState(
-      info: AsrModelManifest.zipformerBilingual,
+      info: AsrModelManifest.paraformerBilingualStreaming,
       entry: ModelRegistryEntry(
-        modelId: 'zipformer-bilingual',
+        modelId: 'paraformer-bilingual-streaming',
         source: ModelSource.hfMirror,
-        localDir: '/data/models/zipformer-bilingual',
+        localDir: '/data/models/paraformer-bilingual-streaming',
         status: AsrModelStatus.idle,
       ),
     ),

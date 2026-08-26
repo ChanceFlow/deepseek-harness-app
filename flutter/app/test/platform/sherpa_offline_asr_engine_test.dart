@@ -11,6 +11,7 @@ void main() {
       final dir = Directory('/models');
 
       expect(SherpaOfflineAsrEngine.modelFileNameFor(info), 'model.int8.onnx');
+      expect(SherpaOfflineAsrEngine.isStreamingModel(info), isFalse);
 
       final config = SherpaOfflineAsrEngine.modelConfigFor(info, dir);
       expect(config.tokens, '/models/tokens.txt');
@@ -29,6 +30,7 @@ void main() {
           SherpaOfflineAsrEngine.modelFileNameFor(info),
           'turbo-encoder.int8.onnx',
         );
+        expect(SherpaOfflineAsrEngine.isStreamingModel(info), isFalse);
 
         final config = SherpaOfflineAsrEngine.modelConfigFor(info, dir);
         expect(config.tokens, '/models/turbo-tokens.txt');
@@ -38,15 +40,59 @@ void main() {
       },
     );
 
-    test('streaming zipformer is rejected loudly, not silently', () {
-      const info = AsrModelManifest.zipformerBilingual;
+    test('paraformer-bilingual-streaming maps to encoder.int8.onnx with online config', () {
+      const info = AsrModelManifest.paraformerBilingualStreaming;
+      final dir = Directory('/models');
 
       expect(
-        () => SherpaOfflineAsrEngine.modelFileNameFor(info),
+        SherpaOfflineAsrEngine.modelFileNameFor(info),
+        'encoder.int8.onnx',
+      );
+      expect(SherpaOfflineAsrEngine.isStreamingModel(info), isTrue);
+
+      final onlineConfig = SherpaOfflineAsrEngine.onlineModelConfigFor(
+        info,
+        dir,
+      );
+      expect(onlineConfig.model.tokens, '/models/tokens.txt');
+      expect(
+        onlineConfig.model.paraformer.encoder,
+        '/models/encoder.int8.onnx',
+      );
+      expect(
+        onlineConfig.model.paraformer.decoder,
+        '/models/decoder.int8.onnx',
+      );
+      expect(onlineConfig.enableEndpoint, isTrue);
+      expect(onlineConfig.decodingMethod, 'greedy_search');
+    });
+
+    test('unknown model is rejected loudly', () {
+      const unknown = AsrModelInfo(
+        id: 'unknown-model',
+        name: 'Unknown',
+        descriptionZh: '未知',
+        descriptionEn: 'Unknown',
+        languages: '未知',
+        estimatedSizeBytes: 100,
+        license: 'MIT',
+        huggingFaceRepo: 'repo',
+        files: <AsrModelFile>[],
+      );
+
+      expect(
+        () => SherpaOfflineAsrEngine.modelFileNameFor(unknown),
         throwsUnsupportedError,
       );
       expect(
-        () => SherpaOfflineAsrEngine.modelConfigFor(info, Directory('/m')),
+        () => SherpaOfflineAsrEngine.modelConfigFor(unknown, Directory('/m')),
+        throwsUnsupportedError,
+      );
+      expect(
+        () => SherpaOfflineAsrEngine.onlineModelConfigFor(
+          unknown,
+          Directory('/m'),
+        ),
         throwsUnsupportedError,
       );
     });

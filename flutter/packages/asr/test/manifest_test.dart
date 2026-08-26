@@ -11,9 +11,11 @@ void main() {
       expect(senseVoice.name, equals('SenseVoice-Small'));
       expect(senseVoice.files.isNotEmpty, isTrue);
 
-      const AsrModelInfo zipformer = AsrModelManifest.zipformerBilingual;
-      expect(zipformer.id, equals('zipformer-bilingual'));
-      expect(zipformer.files.length, equals(4));
+      const AsrModelInfo paraformer =
+          AsrModelManifest.paraformerBilingualStreaming;
+      expect(paraformer.id, equals('paraformer-bilingual-streaming'));
+      expect(paraformer.isStreaming, isTrue);
+      expect(paraformer.files.length, equals(3));
 
       const AsrModelInfo whisper = AsrModelManifest.whisperLargeV3Turbo;
       expect(whisper.id, equals('whisper-large-v3-turbo'));
@@ -22,7 +24,10 @@ void main() {
 
     test('findById retrieves correct model and returns null for unknown', () {
       expect(AsrModelManifest.findById('sensevoice-small'), isNotNull);
-      expect(AsrModelManifest.findById('zipformer-bilingual'), isNotNull);
+      expect(
+        AsrModelManifest.findById('paraformer-bilingual-streaming'),
+        isNotNull,
+      );
       expect(AsrModelManifest.findById('whisper-large-v3-turbo'), isNotNull);
       expect(AsrModelManifest.findById('non-existent'), isNull);
     });

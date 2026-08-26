@@ -73,6 +73,7 @@ class AsrModelInfo {
     required this.license,
     required this.huggingFaceRepo,
     required this.files,
+    this.isStreaming = false,
   });
 
   final String id;
@@ -84,6 +85,7 @@ class AsrModelInfo {
   final String license;
   final String huggingFaceRepo;
   final List<AsrModelFile> files;
+  final bool isStreaming;
 
   String repoFor(ModelSource source) => switch (source) {
     ModelSource.hfMirror => huggingFaceRepo,
@@ -128,50 +130,41 @@ abstract final class AsrModelManifest {
     ],
   );
 
-  static const AsrModelInfo zipformerBilingual = AsrModelInfo(
-    id: 'zipformer-bilingual',
-    name: 'Zipformer Bilingual (Streaming)',
-    descriptionZh: '中英混合流式语音识别，专为移动端低延迟实时听写优化，支持代码混杂交替输入。',
-    descriptionEn: 'Streaming bilingual Chinese/English ASR optimized for real-time mobile dictation.',
-    languages: '中 + 英 (代码混合)',
-    estimatedSizeBytes: 198459312,
+  static const AsrModelInfo paraformerBilingualStreaming = AsrModelInfo(
+    id: 'paraformer-bilingual-streaming',
+    name: 'Paraformer Bilingual (Streaming)',
+    descriptionZh: '中英双语原生流式语音识别，阿里开源架构，支持边说边出字与中英代码混说。',
+    descriptionEn: 'Streaming bilingual Chinese/English ASR by Alibaba FunASR with real-time partial drafts.',
+    languages: '中 + 英 (双语流式)',
+    estimatedSizeBytes: 237202501,
     license: 'Apache-2.0',
+    isStreaming: true,
     huggingFaceRepo:
-        'csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20',
+        'csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en',
     files: <AsrModelFile>[
       AsrModelFile(
-        name: 'encoder-epoch-99-avg-1.int8.onnx',
-        sizeBytes: 181895032,
+        name: 'encoder.int8.onnx',
+        sizeBytes: 165462184,
         sha256:
-            '8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b',
-        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx',
-        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/encoder-epoch-99-avg-1.int8.onnx',
+            '81a70226a8934e6ed92aa1d4fc486b428b5398e2f2619ed4897b7294cab90e9a',
+        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/encoder.int8.onnx',
+        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/encoder.int8.onnx',
       ),
       AsrModelFile(
-        name: 'decoder-epoch-99-avg-1.int8.onnx',
-        sizeBytes: 13091040,
+        name: 'decoder.int8.onnx',
+        sizeBytes: 71664561,
         sha256:
-            '1a70c593d71e53f023f5f55b0b4cfff5055abb786ee3992e5f63dc2e273cc4fa',
-        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx',
-        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/decoder-epoch-99-avg-1.int8.onnx',
+            'f3cca9f77bb9d93c8fcbfb63ae617b6b1ee96818df3aa3b151c40658fe38594f',
+        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/decoder.int8.onnx',
+        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/decoder.int8.onnx',
       ),
       AsrModelFile(
-        name: 'joiner-epoch-99-avg-1.int8.onnx',
-        sizeBytes: 3228404,
+        name: 'tokens.txt',
+        sizeBytes: 75756,
         sha256:
-            '1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0',
-        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx',
-        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/joiner-epoch-99-avg-1.int8.onnx',
-      ),
-      // BPE tokenizer — the streaming zipformer decoder reads this file,
-      // not tokens.txt.
-      AsrModelFile(
-        name: 'bpe.model',
-        sizeBytes: 244836,
-        sha256:
-            'bcae393dbc5611be5ffa4c7ae0841558978a5a4f484008cb9dff3a2cc97ebe01',
-        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/bpe.model',
-        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/resolve/main/bpe.model',
+            '59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6',
+        huggingFaceUrl: 'https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt',
+        hfMirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt',
       ),
     ],
   );
@@ -218,7 +211,7 @@ abstract final class AsrModelManifest {
 
   static const List<AsrModelInfo> all = <AsrModelInfo>[
     senseVoiceSmall,
-    zipformerBilingual,
+    paraformerBilingualStreaming,
     whisperLargeV3Turbo,
   ];
 

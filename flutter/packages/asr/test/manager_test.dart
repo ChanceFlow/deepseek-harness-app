@@ -97,7 +97,7 @@ void main() {
 
       // Try starting second download while first is in-flight
       await expectLater(
-        manager.startDownload('zipformer-bilingual'),
+        manager.startDownload('paraformer-bilingual-streaming'),
         throwsA(isA<StateError>()),
       );
 

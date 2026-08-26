@@ -11,5 +11,5 @@ export 'src/audio/audio_input_source.dart';
 export 'src/audio/mock_audio_input_source.dart';
 export 'src/engine/asr_engine.dart';
 export 'src/engine/mock_asr_engine.dart';
-export 'src/engine/streaming_zipformer_engine.dart';
+export 'src/engine/streaming_paraformer_engine.dart';
 export 'src/engine/non_streaming_engine.dart';

@@ -1,4 +1,4 @@
-/// Pure-Dart stateful coordinator for streaming transducer models (Zipformer).
+/// Pure-Dart stateful coordinator for streaming Paraformer models.
 library;
 
 import 'dart:async';
@@ -8,22 +8,22 @@ import 'dart:typed_data';
 import '../manifest/model_manifest.dart';
 import 'asr_engine.dart';
 
-/// Handler for executing native/ONNX streaming transducer forward steps.
-typedef StreamingTransducerRunner = Future<String> Function(
+/// Handler for executing native/ONNX streaming Paraformer forward steps.
+typedef StreamingParaformerRunner = Future<String> Function(
   Float32List chunk,
   bool isLast,
 );
 
 /// Coordinates streaming chunking, partial emission, and finalization for
-/// streaming transducer models like Zipformer Bilingual.
-class StreamingZipformerEngine implements AsrEngine {
-  StreamingZipformerEngine({
+/// streaming models like FunASR Paraformer Bilingual Streaming.
+class StreamingParaformerEngine implements AsrEngine {
+  StreamingParaformerEngine({
     this.chunkSizeSamples = 1600, // 100ms at 16kHz
-    StreamingTransducerRunner? runner,
+    StreamingParaformerRunner? runner,
   }) : _runner = runner ?? _defaultRunner;
 
   final int chunkSizeSamples;
-  final StreamingTransducerRunner _runner;
+  final StreamingParaformerRunner _runner;
 
   final StreamController<AsrTranscriptionChunk> _streamController =
       StreamController<AsrTranscriptionChunk>.broadcast(sync: true);

@@ -82,7 +82,7 @@ box, a tunneled remote dsh.
   approvals, questions, plan-review cards, background jobs, image
   attachments, skill candidates.
 - **Voice input & on-device ASR** — 100% client-side speech recognition
-  (SenseVoice, Zipformer, Whisper) with live waveform dock, timer, and
+  (SenseVoice, Paraformer, Whisper) with live waveform dock, timer, and
   direct transcription stream into the composer.
 - **Multiple hosts** — keep several dsh hosts configured on this
   device and switch which one drives the chat.
