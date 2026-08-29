@@ -39,6 +39,18 @@
 # .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
 name: Release APK
 
+# Only the newest build matters: the dev channel is rolling and a stable cut
+# is re-runnable, so superseded queued/running builds are pure waste on a
+# shared runner pool (2026-08-29: a master merge + tag push fired two full
+# Gradle builds of adjacent commits).
+# Branch builds share one group — the newest master push cancels older dev
+# builds. Tag builds get their own group so a routine merge can never cancel
+# a stable release in flight, while two tags in quick succession still
+# collapse to the newest.
+concurrency:
+  group: release-apk-${{ github.ref_type == 'tag' && 'stable' || 'latest' }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
     inputs:

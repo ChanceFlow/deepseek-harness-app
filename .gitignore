@@ -49,6 +49,7 @@ docs/flutter-migration-analysis.md
 !.agents/notes/implemented/process/2026-08-26-fdroid-official-distribution.md
 !.agents/notes/implemented/process/2026-08-26-gitlab-mirror-sync.md
 !.agents/notes/implemented/process/2026-08-29-mirror-prebaked-image.md
+!.agents/notes/implemented/process/2026-08-29-release-apk-concurrency.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/
