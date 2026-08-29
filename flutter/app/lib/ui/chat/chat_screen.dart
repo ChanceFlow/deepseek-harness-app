@@ -4520,9 +4520,92 @@ class _PlusButton extends StatelessWidget {
   }
 }
 
+/// One option row in the mobile selector form: 36px icon tile + bold label
+/// + secondary detail subtitle, matching the workspace / speech-model
+/// selector sheets.
+class _CommandRow extends StatelessWidget {
+  const _CommandRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.detail,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? detail;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: enabled ? scheme.onSurfaceVariant : scheme.outline,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        color: enabled
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (detail case final text?) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Web PopupSelectView body: search input on top, filtered option rows
-/// below (13px label-primary + 12px label-tertiary detail, check mark on
-/// the active row), status line when empty. The roster is the real
+/// below, status line when empty. The roster is the real
 /// command set — host slash commands first (web slash-menu sources),
 /// then the session's skills — with the mobile-only Attach-images row
 /// demoted to the tail (web relies on paste/drop).
@@ -4562,10 +4645,49 @@ class _CommandSheetState extends State<_CommandSheet> {
         .where((skill) => matches(skill.name, skill.description))
         .toList();
     final showAttach = query.isEmpty || 'attach images'.contains(query);
+    final int visibleCount =
+        commands.length + skills.length + (showAttach ? 1 : 0);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Sheet header: primary glyph + title + count pill, the same
+        // header family as the workspace and speech-model selectors.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.terminal, size: 16, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.commandsTooltip,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+              if (visibleCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$visibleCount',
+                    style: Theme.of(context).textTheme.labelSmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ),
+            ],
+          ),
+        ),
         // The web search box (PopupSelectView .search): hairline border,
         // no focus accent — focus never repaints it.
         Padding(
@@ -4615,12 +4737,14 @@ class _CommandSheetState extends State<_CommandSheet> {
                   children: [
                     for (final command in commands)
                       _CommandRow(
+                        icon: Icons.terminal,
                         label: '/${command.name}',
                         detail: command.hint ?? command.description,
                         onTap: () => widget.onInsertCommand(command.name),
                       ),
                     for (final skill in skills)
                       _CommandRow(
+                        icon: Icons.auto_awesome,
                         label: '/${skill.name}',
                         detail: skill.description.isEmpty
                             ? null
@@ -4631,6 +4755,7 @@ class _CommandSheetState extends State<_CommandSheet> {
                     // paste/drop) — demoted below the command roster.
                     if (showAttach)
                       _CommandRow(
+                        icon: Icons.image_outlined,
                         label: l10n.attachImages,
                         detail: l10n.pickFromGallery,
                         enabled: widget.canPickImages,
@@ -4640,68 +4765,6 @@ class _CommandSheetState extends State<_CommandSheet> {
                 ),
         ),
       ],
-    );
-  }
-}
-
-/// One option row (PopupSelectView .row): 6x8 padding, 8px radius, hover
-/// fill, ellipsized label + trailing detail.
-class _CommandRow extends StatelessWidget {
-  const _CommandRow({
-    required this.label,
-    required this.onTap,
-    this.detail,
-    this.enabled = true,
-  });
-
-  final String label;
-  final String? detail;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    color: enabled
-                        ? Theme.of(context).colorScheme.onSurface
-                        : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              if (detail case final text?) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 12,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

@@ -170,6 +170,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         _paneHeader(context, l10n.modelLabel),
         _menuCell(
           context,
+          icon: Icons.memory,
           label: l10n.modelLabel,
           value: _modelLabelOf(current, l10n),
           onTap: () => setState(() => _pane = _Pane.model),
@@ -177,6 +178,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
         if (hasEffort)
           _menuCell(
             context,
+            icon: Icons.speed,
             label: l10n.effortLabel,
             value: _effortLabelOf(current, currentModel, l10n),
             onTap: () => setState(() => _pane = _Pane.effort),
@@ -225,6 +227,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                 for (final model in group.models)
                   _option(
                     context,
+                    icon: Icons.memory,
                     selected:
                         group.id == current.provider &&
                         model.id == current.model,
@@ -276,6 +279,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
               for (final row in rows)
                 _option(
                   context,
+                  icon: Icons.speed,
                   selected: row.id == null
                       ? effective == null
                       : effective == row.id,
@@ -302,6 +306,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
   Widget _paneHeader(BuildContext context, String title) {
     final canBack = _pane != _Pane.root;
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -314,7 +319,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
               Icon(
                 canBack ? Icons.arrow_back : Icons.tune,
                 size: 16,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: scheme.primary,
               ),
               const SizedBox(width: 8),
               Text(title, style: Theme.of(context).textTheme.titleSmall),
@@ -327,10 +332,13 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
   Widget _menuCell(
     BuildContext context, {
+    required IconData icon,
     required String label,
     required String value,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -340,27 +348,32 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
+              _RowTile(icon: icon, selected: false),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurface,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13.5,
+                    color: scheme.onSurface,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 value,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 11.5,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
               Icon(
                 Icons.chevron_right,
                 size: 16,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: scheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -371,21 +384,25 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 
   Widget _option(
     BuildContext context, {
+    required IconData icon,
     required bool selected,
     required String title,
     required VoidCallback onTap,
     String? detail,
   }) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
+              _RowTile(icon: icon, selected: selected),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,29 +411,32 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                        color: Theme.of(context).colorScheme.onSurface,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        color: scheme.onSurface,
                       ),
                     ),
-                    if (detail case final text?)
+                    if (detail case final text?) ...[
+                      const SizedBox(height: 2),
                       Text(
                         text,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 12,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
               if (selected)
                 Icon(
-                  Icons.check,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: scheme.primary,
                 ),
             ],
           ),
@@ -445,3 +465,31 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
 }
 
 enum _Pane { root, model, effort }
+
+/// The selector row's leading glyph seat: 36px rounded tile that lifts to
+/// the primaryContainer pair when the row is the active selection — the
+/// same tile the workspace and speech-model selector sheets use.
+class _RowTile extends StatelessWidget {
+  const _RowTile({required this.icon, required this.selected});
+
+  final IconData icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: selected ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        icon,
+        size: 18,
+        color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
