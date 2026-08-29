@@ -36,7 +36,12 @@ env:
 
 jobs:
   reconcile:
-    runs-on: ubuntu-latest
+    # Prebaked local image — see the same note in publish-github.yaml:
+    # docker.gitea.com pulls stalled on 2026-08-26 and the mirror alerting
+    # chain broke with them.
+    runs-on: flutter-android
+    container:
+      image: flutter-3.47-android:latest
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@v4
