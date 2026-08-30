@@ -64,7 +64,10 @@ cited a section that exists in no doc; the deviations live here.
 ## Consequences
 
 The ring never leaves the composer; occupancy reads appear on arrival.
-Partially supersedes
+Both the static placeholder track (`DecoratedBox` border) and the active
+determinate track (`CircularProgressIndicator.backgroundColor`) explicitly
+render the `scheme.outlineVariant` role, and the occupancy arc renders
+`scheme.secondary`, verified under both brightnesses. Partially supersedes
 [the sidebar/context-ring note](../feature/2026-08-19-sidebar-visibility-context-ring.md):
 its occupancy formula and fold port stand; its "renders once a provider
 reports" visibility sentence and the dialog panel are this note's facts

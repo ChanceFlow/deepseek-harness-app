@@ -135,4 +135,60 @@ void main() {
     // remembered effort.
     expect(find.text(l10n.providerDefault), findsNothing);
   });
+
+  testWidgets('effort pane lists efforts and selects one', (tester) async {
+    final selections = <ModelSelection>[];
+    await tester.pumpWidget(
+      l10nApp(
+        home: Scaffold(
+          body: ModelSelect(
+            models: directory,
+            locked: false,
+            onSelect: selections.add,
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(IconButton));
+    await tester.pumpAndSettle();
+    // Root pane: tap effort row
+    await tester.tap(find.text('Effort'));
+    await tester.pumpAndSettle();
+    expect(find.text('Low'), findsOneWidget);
+    expect(find.text('High'), findsOneWidget);
+
+    await tester.tap(find.text('High'));
+    await tester.pumpAndSettle();
+    expect(selections.single.reasoningEffort, 'high');
+  });
+
+  testWidgets('sheet panes navigate back to root pane', (tester) async {
+    await tester.pumpWidget(
+      l10nApp(
+        home: Scaffold(
+          body: ModelSelect(
+            models: directory,
+            locked: false,
+            onSelect: (_) {},
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(IconButton));
+    await tester.pumpAndSettle();
+
+    // Navigate to model pane
+    await tester.tap(find.text('Model').last);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+
+    // Tap header back
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    // Back at root pane
+    expect(find.text('Effort'), findsOneWidget);
+  });
 }

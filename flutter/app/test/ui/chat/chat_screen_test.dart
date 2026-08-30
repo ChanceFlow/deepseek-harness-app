@@ -735,17 +735,13 @@ void main() {
           .join(),
       'Deep diving…',
     );
-    // The shared sweep glare glides over the hopping letters too.
+    // The text shimmer ShaderMask glides over the hopping letters.
     expect(
-      tester
-          .widget<SweepHighlight>(
-            find.descendant(
-              of: find.byType(TurnStatusRow),
-              matching: find.byType(SweepHighlight),
-            ),
-          )
-          .controller,
-      isNotNull,
+      find.descendant(
+        of: find.byType(TurnStatusRow),
+        matching: find.byType(ShaderMask),
+      ),
+      findsOneWidget,
     );
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
@@ -2169,6 +2165,74 @@ void main() {
     // Sheet closes on selection.
     expect(find.text('GLM Air'), findsNothing);
   });
+
+  testWidgets(
+    'composer model seat scrolls to tail on 360x600 with 30+ models without layout exceptions',
+    (tester) async {
+      final actions = <ChatAction>[];
+      final catalog30 = SessionModels(
+        current: const ModelSelection(
+          provider: 'provider-0',
+          model: 'model-0-0',
+        ),
+        routable: true,
+        groups: [
+          for (var p = 0; p < 4; p++)
+            ModelProviderGroup(
+              id: 'provider-$p',
+              name: 'Provider $p',
+              models: [
+                for (var m = 0; m < 8; m++)
+                  ModelCatalogModel(
+                    id: 'model-$p-$m',
+                    name: 'Model $p-$m',
+                    description: 'Description for model $p-$m',
+                  ),
+              ],
+            ),
+        ],
+      );
+      await _pump(
+        tester,
+        ChatUiState(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          models: catalog30,
+        ),
+        actions,
+        width: 360,
+      );
+      tester.view.physicalSize = const Size(360, 600);
+
+      await tester.tap(find.byTooltip('Model: Model 0-0'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Model').last);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Model 3-7'), findsNothing);
+
+      final listFinder = find.byType(ListView).last;
+      await tester.drag(listFinder, const Offset(0, -1500));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model 3-7'), findsOneWidget);
+      await tester.tap(find.text('Model 3-7'));
+      await tester.pumpAndSettle();
+
+      expect(
+        actions,
+        contains(
+          const SelectModelSeat(
+            ModelSelection(provider: 'provider-3', model: 'model-3-7'),
+          ),
+        ),
+      );
+    },
+  );
 
   testWidgets('pending images render chips with remove buttons', (
     tester,

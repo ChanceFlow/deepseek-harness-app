@@ -148,6 +148,79 @@ void main() {
     },
   );
 
+  testWidgets(
+    'sidebar list overscroll glow neutralizes to outlineVariant role under both brightnesses',
+    (tester) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        await _pumpPanel(tester, theme: theme);
+        // MaterialApp lerps between themes; land on the new one.
+        await tester.pump(const Duration(milliseconds: 400));
+
+        final scrollConfig = tester.widget<ScrollConfiguration>(
+          find
+              .ancestor(
+                of: find.byType(ListView),
+                matching: find.byType(ScrollConfiguration),
+              )
+              .first,
+        );
+
+        final context = tester.element(find.byType(ListView).first);
+        final details = ScrollableDetails(
+          direction: AxisDirection.down,
+          controller: ScrollController(),
+        );
+        addTearDown(details.controller!.dispose);
+
+        // Under M3 defaults on Android, the behavior builds StretchingOverscrollIndicator.
+        final stretchWidget = scrollConfig.behavior.buildOverscrollIndicator(
+          context,
+          const SizedBox(),
+          details,
+        );
+        expect(stretchWidget, isA<StretchingOverscrollIndicator>());
+
+        // When glow is evaluated (e.g. non-M3 fallback / Glow platform), the glow
+        // color neutralizes to outlineVariant rather than default secondary blue.
+        final glowTheme = ThemeData(
+          colorScheme: theme.colorScheme,
+          useMaterial3: false,
+        );
+        final glowWidget = Theme(
+          data: glowTheme,
+          child: Builder(
+            builder: (ctx) => scrollConfig.behavior.buildOverscrollIndicator(
+              ctx,
+              const SizedBox(),
+              details,
+            ),
+          ),
+        );
+        await tester.pumpWidget(
+          l10nApp(
+            theme: glowTheme,
+            home: Scaffold(body: glowWidget),
+          ),
+        );
+        final glowIndicator = tester.widget<GlowingOverscrollIndicator>(
+          find.byType(GlowingOverscrollIndicator),
+        );
+        expect(glowIndicator.color, theme.colorScheme.outlineVariant);
+        expect(glowIndicator.color, isNot(theme.colorScheme.secondary));
+      }
+    },
+  );
+
+  testWidgets(
+    'pulling at the top of the sidebar list drag-overscrolls smoothly',
+    (tester) async {
+      await _pumpPanel(tester);
+      await tester.drag(find.byType(ListView).first, const Offset(0, 80));
+      await tester.pump();
+      expect(find.byType(SessionTreeRow), findsWidgets);
+    },
+  );
+
   testWidgets('the destination selection restores from the store', (
     tester,
   ) async {

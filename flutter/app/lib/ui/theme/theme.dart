@@ -32,6 +32,16 @@ extension DshSchemeColors on ColorScheme {
   Color get warning => brightness == Brightness.light
       ? const Color(0xFFDD8629)
       : const Color(0xFFF7AD31);
+
+  /// Text shimmer glint highlight for the turn status row (port of the web
+  /// chat `turnStatus` linear text gradient in `ChatView.module.css`).
+  /// In light mode, sweeps a bright sky-blue highlight (the web palette's
+  /// `--dsw-static-deepseek-200`, `#D3E2FF`) across the darker primary text;
+  /// in dark mode, sweeps an off-white highlight (`#FFFFFF`) across the pastel
+  /// primary text for clear legibility and high dynamic contrast.
+  Color get statusGlint => brightness == Brightness.light
+      ? const Color(0xFFD3E2FF)
+      : const Color(0xFFFFFFFF);
 }
 
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
