@@ -1,22 +1,23 @@
 /// Turn-level activity line — port of the web ChatView turnStatus node:
 /// one status label at the timeline tail while the session's turn runs,
 /// hopping letter by letter (a rectified sine travelling left to right)
-/// under the shared sweep glare (the web line's own text shimmer), and
-/// only while the tail carries no louder signal (the streaming caret
-/// speaks once text flows). The elapsed clock joins once the wait is
-/// clearly long (the web threshold: 15s), anchored at mount — the web
-/// line's own fallback when the turn boundary sits outside the loaded
-/// window.
+/// with a bright text shimmer glint travelling across the words (the web
+/// line's own background-clip:text shimmer), and only while the tail carries
+/// no louder signal (the streaming caret speaks once text flows). The elapsed
+/// clock joins once the wait is clearly long (the web threshold: 15s),
+/// anchored at mount — the web line's own fallback when the turn boundary sits
+/// outside the loaded window.
 library;
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/theme.dart';
 import 'job_list_action.dart' show formatJobDuration;
-import 'sweep_highlight.dart';
 
 class TurnStatusRow extends StatefulWidget {
   const TurnStatusRow({super.key});
@@ -38,8 +39,8 @@ class _TurnStatusRowState extends State<TurnStatusRow>
   /// as travelling through the words.
   static const double _phaseStep = 0.6;
 
-  /// The glare band's pass: the web status line's shimmer period.
-  static const Duration _glarePeriod = Duration(milliseconds: 1800);
+  /// The text shimmer period: matching the web status line's 1.8s shimmer.
+  static const Duration _shimmerPeriod = Duration(milliseconds: 1800);
 
   /// Short turns keep the plain label; the clock only appears once the
   /// wait is clearly long (web showClock threshold).
@@ -50,9 +51,9 @@ class _TurnStatusRowState extends State<TurnStatusRow>
     vsync: this,
     duration: _hopPeriod,
   );
-  late final AnimationController _glare = AnimationController(
+  late final AnimationController _shimmer = AnimationController(
     vsync: this,
-    duration: _glarePeriod,
+    duration: _shimmerPeriod,
   );
   Timer? _tick;
   int _elapsedMs = 0;
@@ -61,7 +62,7 @@ class _TurnStatusRowState extends State<TurnStatusRow>
   void initState() {
     super.initState();
     _hop.repeat();
-    _glare.repeat();
+    _shimmer.repeat();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
@@ -74,43 +75,60 @@ class _TurnStatusRowState extends State<TurnStatusRow>
   void dispose() {
     _tick?.cancel();
     _hop.dispose();
-    _glare.dispose();
+    _shimmer.dispose();
     super.dispose();
   }
 
   /// The label set letter by letter so each one hops on its own phase,
-  /// with the shared sweep glare band gliding across the whole word. The
-  /// top padding keeps the lifted letters inside the mask's bounds.
-  /// Under reduced motion the text renders whole and rests.
-  Widget _label(BuildContext context, TextStyle? style, bool reduced) {
+  /// with a bright text shimmer glint gliding across the letters.
+  /// Under reduced motion the text renders whole, rests, and has no shimmer.
+  Widget _label(
+    BuildContext context,
+    TextStyle? style,
+    Color glint,
+    bool reduced,
+  ) {
     final label = AppLocalizations.of(context)!.turnStatusWorking;
     if (reduced) return Text(label, style: style);
-    return ClipRect(
-      child: SweepHighlight(
-        controller: _glare,
-        child: Padding(
-          padding: const EdgeInsets.only(top: _hopLift),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < label.length; i++)
-                AnimatedBuilder(
-                  animation: _hop,
-                  child: Text(label[i], style: style),
-                  builder: (context, child) {
-                    final wave = math.sin(
-                      _hop.value * 2 * math.pi - i * _phaseStep,
-                    );
-                    return Transform.translate(
-                      offset: Offset(0, -_hopLift * math.max(0.0, wave)),
-                      child: child,
-                    );
-                  },
-                ),
-            ],
+    return AnimatedBuilder(
+      animation: Listenable.merge([_hop, _shimmer]),
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            final w = bounds.width;
+            final progress = _shimmer.value;
+            final bandWidth = w * 0.4;
+            final glintCenter = -bandWidth + progress * (w + 2 * bandWidth);
+            return ui.Gradient.linear(
+              Offset(glintCenter - bandWidth, 0),
+              Offset(glintCenter + bandWidth, 0),
+              [glint.withValues(alpha: 0), glint, glint.withValues(alpha: 0)],
+              const [0.0, 0.5, 1.0],
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(top: _hopLift),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < label.length; i++)
+                  Transform.translate(
+                    offset: Offset(
+                      0,
+                      -_hopLift *
+                          math.max(
+                            0.0,
+                            math.sin(_hop.value * 2 * math.pi - i * _phaseStep),
+                          ),
+                    ),
+                    child: Text(label[i], style: style),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -124,6 +142,7 @@ class _TurnStatusRowState extends State<TurnStatusRow>
       fontWeight: FontWeight.w600,
       color: scheme.primary,
     );
+    final glint = scheme.statusGlint;
     return Semantics(
       label: l10n.semanticsRunning,
       // The label renders as letters for the hop; assistive technology
@@ -137,7 +156,7 @@ class _TurnStatusRowState extends State<TurnStatusRow>
           children: [
             // The web line is brand-blue text; the role map's accent
             // seat is primary.
-            _label(context, style, reduced),
+            _label(context, style, glint, reduced),
             if (_elapsedMs >= _clockAfterMs) ...[
               const SizedBox(width: 8),
               Text(

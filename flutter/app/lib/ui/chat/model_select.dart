@@ -127,16 +127,11 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
       }
     }
 
-    final sheet = switch (_pane) {
+    return switch (_pane) {
       _Pane.root => _rootPane(context, currentModel),
       _Pane.model => _modelPane(context),
       _Pane.effort => _effortPane(context, currentModel),
     };
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [sheet],
-    );
   }
 
   Widget _rootPane(BuildContext context, ModelCatalogModel? currentModel) {
