@@ -215,6 +215,9 @@ class HarnessFakeRpc implements DshRpcClient {
   /// from the map gets the default empty window.
   final Map<String, List<Object?>> historyEvents = <String, List<Object?>>{};
 
+  /// Scripted projections block for `session.history` keyed by sessionId.
+  final Map<String, JsonMap> historyProjections = <String, JsonMap>{};
+
   /// One-shot response holds: the next response for the key waits on the
   /// value before answering (each hold releases at most once).
   final Map<String, List<Future<void>>> _responseGates =
@@ -335,17 +338,22 @@ class HarnessFakeRpc implements DshRpcClient {
       case 'session.history':
         // History entries ride the `historyEntrySchema` envelope: the log
         // event nests under 'event' (sessions.schema.ts).
-        final scripted = historyEvents[payload['sessionId']];
+        final sessionId = payload['sessionId'] as String?;
+        final scripted = historyEvents[sessionId];
+        final scriptedProjections = historyProjections[sessionId];
         return <String, Object?>{
           'events': (scripted ?? <Object?>[])
               .map((event) => <String, Object?>{'event': event})
               .toList(),
           'hasMore': false,
-          'projections': <String, Object?>{
-            'values': <String, Object?>{
-              'plan': <String, Object?>{'active': false, 'pending': true},
+          if (scriptedProjections != null)
+            'projections': scriptedProjections
+          else
+            'projections': <String, Object?>{
+              'values': <String, Object?>{
+                'plan': <String, Object?>{'active': false, 'pending': true},
+              },
             },
-          },
         };
       case 'session.attachment':
         return <String, Object?>{
@@ -1527,6 +1535,277 @@ void main() {
     expect(emitted.first.status, TodoStatus.inProgress);
     expect(emitted.last.status, TodoStatus.completed);
   });
+
+  test(
+    'history tail page seeds contextPressure and contextBreakdown projections',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.historyProjections['session-1'] = <String, Object?>{
+        'asOfSeq': 90132,
+        'values': <String, Object?>{
+          'contextPressure': <String, Object?>{
+            'pressureTokens': 390103,
+            'projectedTokens': 390450,
+            'contextWindow': 1000000,
+          },
+          'contextBreakdown': <String, Object?>{
+            'systemTokens': 1582,
+            'toolsTokens': 6475,
+            'messageTokens': 269949,
+          },
+        },
+      };
+
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      final pressure = await repository
+          .observeContextPressure('session-1')
+          .first;
+      expect(pressure, isNotNull);
+      expect(pressure!.pressureTokens, 390103);
+      expect(pressure.projectedTokens, 390450);
+      expect(pressure.contextWindow, 1000000);
+
+      final breakdown = await repository
+          .observeContextBreakdown('session-1')
+          .first;
+      expect(breakdown, isNotNull);
+      expect(breakdown!.systemTokens, 1582);
+      expect(breakdown.toolsTokens, 6475);
+      expect(breakdown.messageTokens, 269949);
+    },
+  );
+
+  test(
+    'contextPressure projection frames update live and drop stale seq frames',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.historyProjections['session-1'] = <String, Object?>{
+        'asOfSeq': 100,
+        'values': <String, Object?>{
+          'contextPressure': <String, Object?>{
+            'pressureTokens': 10000,
+            'projectedTokens': 12000,
+            'contextWindow': 50000,
+          },
+        },
+      };
+
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          // Frame 1: Newer seq (110) -> updates
+          ServerRequest(
+            rpcId: 'rpc-press-1',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextPressure',
+              'seq': 110,
+              'value': <String, Object?>{
+                'pressureTokens': 20000,
+                'projectedTokens': 22000,
+                'contextWindow': 50000,
+              },
+            },
+          ),
+          // Frame 2: Older seq (95) -> dropped (higher seq wins)
+          ServerRequest(
+            rpcId: 'rpc-press-2',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextPressure',
+              'seq': 95,
+              'value': <String, Object?>{
+                'pressureTokens': 5000,
+                'projectedTokens': 5000,
+                'contextWindow': 50000,
+              },
+            },
+          ),
+          // Frame 3: Equal or newer seq (120) -> updates
+          ServerRequest(
+            rpcId: 'rpc-press-3',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextPressure',
+              'seq': 120,
+              'value': <String, Object?>{
+                'pressureTokens': 30000,
+                'projectedTokens': 35000,
+                'contextWindow': 50000,
+              },
+            },
+          ),
+        ],
+      );
+
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      // Baseline from history
+      expect(
+        (await repository.observeContextPressure('session-1').first)
+            ?.pressureTokens,
+        10000,
+      );
+
+      // Release push frames
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      // Final value should be from frame 3 (seq 120), frame 2 (seq 95) was dropped
+      final current = await repository
+          .observeContextPressure('session-1')
+          .first;
+      expect(current, isNotNull);
+      expect(current!.pressureTokens, 30000);
+      expect(current.projectedTokens, 35000);
+      expect(current.contextWindow, 50000);
+    },
+  );
+
+  test(
+    'contextBreakdown projection frames update live and drop stale seq frames',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.historyProjections['session-1'] = <String, Object?>{
+        'asOfSeq': 50,
+        'values': <String, Object?>{
+          'contextBreakdown': <String, Object?>{
+            'systemTokens': 100,
+            'toolsTokens': 200,
+            'messageTokens': 300,
+          },
+        },
+      };
+
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          // Frame 1: Newer seq (60) -> updates
+          ServerRequest(
+            rpcId: 'rpc-bd-1',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextBreakdown',
+              'seq': 60,
+              'value': <String, Object?>{
+                'systemTokens': 150,
+                'toolsTokens': 250,
+                'messageTokens': 350,
+              },
+            },
+          ),
+          // Frame 2: Older seq (40) -> dropped
+          ServerRequest(
+            rpcId: 'rpc-bd-2',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextBreakdown',
+              'seq': 40,
+              'value': <String, Object?>{
+                'systemTokens': 10,
+                'toolsTokens': 20,
+                'messageTokens': 30,
+              },
+            },
+          ),
+        ],
+      );
+
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      expect(
+        (await repository.observeContextBreakdown('session-1').first)
+            ?.systemTokens,
+        100,
+      );
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final current = await repository
+          .observeContextBreakdown('session-1')
+          .first;
+      expect(current, isNotNull);
+      expect(current!.systemTokens, 150);
+      expect(current.toolsTokens, 250);
+      expect(current.messageTokens, 350);
+    },
+  );
+
+  test(
+    'context projections tolerate missing and malformed shapes safely',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.historyProjections['session-1'] = <String, Object?>{
+        'asOfSeq': 10,
+        'values': <String, Object?>{
+          // Missing contextPressure and contextBreakdown keys
+        },
+      };
+
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          // Malformed non-object value
+          ServerRequest(
+            rpcId: 'rpc-malformed',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'session/projection',
+              'sessionId': 'session-1',
+              'key': 'contextPressure',
+              'seq': 20,
+              'value': 'not-an-object',
+            },
+          ),
+        ],
+      );
+
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      expect(
+        await repository.observeContextPressure('session-1').first,
+        isNull,
+      );
+      expect(
+        await repository.observeContextBreakdown('session-1').first,
+        isNull,
+      );
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      // Still safe and null
+      expect(
+        await repository.observeContextPressure('session-1').first,
+        isNull,
+      );
+    },
+  );
 
   test('skill list sends session scope and maps catalog', () async {
     final rpc = HarnessFakeRpc();

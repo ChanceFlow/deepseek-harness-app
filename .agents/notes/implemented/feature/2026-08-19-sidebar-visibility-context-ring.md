@@ -28,16 +28,11 @@ never shows blank sessions, matching `deriveSearchResults`.
 The ring's occupancy ports `contextOccupancy` from
 `.../ui-conversation/src/client/chat/StatsLine.tsx`:
 `usedTokens = projectedTokens ?? pressureTokens`, requiring `contextWindow`.
-The fold (`context_pressure_fold.dart`) ports the `contextPressure`
-projection from `.../llm/token-meter/src/usage-projection.ts`: a running
-heuristic surface total over model-visible messages
-(user/assistant/tool-result content under the fixed density estimator), a
-usage sample stamping `sampledSurfaceTokens` before its own event joins the
-surface, and `projectedTokens = max(0, pressureTokens + surfaceTokens -
-sampledSurfaceTokens)`. Compaction subtracts `shadowedTokenCount` and the
-adjacent replacement message rejoins through the ordinary append estimate —
-the arithmetic equivalent of the web's claim/replace protocol under the same
-estimator. `ChatPanel` passes the two projections to `ComposerBar`.
+The fold (`context_pressure_fold.dart`) previously ported the `contextPressure`
+projection from `.../llm/token-meter/src/usage-projection.ts`, now retired in
+favor of direct host projection consumption in
+[the context projection consumption note](../bug-fix/2026-08-30-context-pressure-host-projection-consumption.md).
+`ChatPanel` passes the two projections to `ComposerBar`.
 
 ## Alternatives considered
 
