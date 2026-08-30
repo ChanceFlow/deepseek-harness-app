@@ -14,8 +14,11 @@ route and dropped the composer draft.
 
 The dock ports the web `QueueDock.tsx` + `QueueDock.module.css`
 (`reference/deepseek-harness/packages/client/ui-conversation/src/client/queue/`):
-only `queued`-placement rows ride the dock (steering renders in the
-timeline, context as injection rows); one message renders directly with
+only `queued`-placement rows ride the dock (steering renders at the
+conversation tail as a pending row, context only durably as injection
+rows; that split shipped later, see
+[the 2026-08-29 note](../bug-fix/2026-08-29-steering-rows-send-draft-safety.md));
+one message renders directly with
 the queue glyph on the row, several collapse behind a 36px count header
 ("N queued messages", chevron flips with expansion, 180px scroll cap);
 rows are 36px with a single 13px dimmed preview line and 1px inset
@@ -43,7 +46,10 @@ scroll positions, and expansion states survive.
 ## Consequences
 
 Steering can no longer be dispatched from an idle session (the button
-disables instead of erroring). TimelineQueue items render nothing in the
-timeline body (the dock is their only home). All three tabs stay built
+disables instead of erroring). Queued rows ride only the dock; steering
+rows render at the transcript tail and the dock stays mounted beside an
+approval card — both per
+[the 2026-08-29 note](../bug-fix/2026-08-29-steering-rows-send-draft-safety.md).
+All three tabs stay built
 offstage; their controllers already lived at root scope, so stream
 lifetimes are unchanged.

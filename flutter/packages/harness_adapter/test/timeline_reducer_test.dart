@@ -1,4 +1,5 @@
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/session.dart' show QueuePlacement;
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:network/rpc_envelope.dart';
@@ -654,5 +655,153 @@ void main() {
     expect(errors[2].message, isEmpty);
     expect(errors[3].code, 'max-tokens');
     expect(errors[3].message, isEmpty);
+  });
+
+  // ---- session/queue mirror (reference events.schema.ts muxFrameSchema) ----
+
+  JsonMap queueWireItem(String id, String text, String placement) =>
+      <String, Object?>{
+        'id': id,
+        'placement': placement,
+        'message': <String, Object?>{
+          'id': 'msg-$id',
+          'role': 'user',
+          'content': <Object?>[textBlock(text)],
+          'source': <String, Object?>{'kind': 'user'},
+        },
+      };
+
+  ServerRequest queueFrame(List<Object?> items) => ServerRequest(
+    rpcId: 'rpc-queue',
+    method: 'session/queue',
+    payload: <String, Object?>{
+      'type': 'session/queue',
+      'sessionId': 's1',
+      'items': items,
+    },
+  );
+
+  ServerRequest subscribedFrame(int lastSeq) => ServerRequest(
+    rpcId: 'rpc-sub',
+    method: 'session/subscribed',
+    payload: <String, Object?>{
+      'type': 'session/subscribed',
+      'sessionId': 's1',
+      'lastSeq': lastSeq,
+    },
+  );
+
+  test('session/subscribed re-baselines the queue mirror in-band', () {
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(
+      queueFrame(<Object?>[queueWireItem('q1', 'steer later', 'steering')]),
+    );
+    expect(
+      reducer.snapshot().whereType<TimelineQueue>().single.items.single.text,
+      'steer later',
+    );
+
+    // The generation boundary drops the previous snapshot; the baseline that
+    // follows this frame on the same stream rebuilds it (web session.ts
+    // handleMuxEnvelope parity).
+    reducer.ingestFrame(subscribedFrame(9));
+    expect(reducer.snapshot().whereType<TimelineQueue>(), isEmpty);
+
+    reducer.ingestFrame(
+      queueFrame(<Object?>[queueWireItem('q2', 'fresh baseline', 'queued')]),
+    );
+    final dock = reducer.snapshot().whereType<TimelineQueue>().single;
+    expect(dock.items.single.itemId, 'q2');
+    expect(dock.items.single.placement, QueuePlacement.queued);
+  });
+
+  test(
+    'a history rebuild keeps the queue mirror and an emptied queue folds',
+    () {
+      final reducer = TimelineReducer('s1');
+      reducer.ingestFrame(
+        queueFrame(<Object?>[queueWireItem('q1', 'pending steer', 'steering')]),
+      );
+
+      // ensureLoaded/_rebuild semantics: history replay must not wipe the
+      // live-only baseline the host pushes once per generation.
+      reducer.reset(<JsonMap>[
+        event(3, 'turn/start', <String, Object?>{'turn': 1}),
+      ]);
+      final kept = reducer.snapshot();
+      expect(kept.whereType<TimelineTurnBoundary>(), hasLength(1));
+      expect(
+        kept.whereType<TimelineQueue>().single.items.single.text,
+        'pending steer',
+      );
+
+      // A change that empties the queue still sends `[]` (events.ts contract),
+      // which folds to an empty dock, not a missing one.
+      reducer.ingestFrame(queueFrame(<Object?>[]));
+      expect(
+        reducer.snapshot().whereType<TimelineQueue>().single.items,
+        isEmpty,
+      );
+    },
+  );
+
+  test('session/queue frames fail loud on missing or unknown fields', () {
+    final reducer = TimelineReducer('s1');
+    ServerRequest frame(JsonMap payload) =>
+        ServerRequest(rpcId: 'r', method: 'session/queue', payload: payload);
+
+    // Required `items` on the frame.
+    expect(
+      () => reducer.ingestFrame(
+        frame(<String, Object?>{'type': 'session/queue', 'sessionId': 's1'}),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('"items"'),
+        ),
+      ),
+    );
+    // Required item fields (muxFrameSchema: id/placement/message) and the
+    // closed placement union: each breakage names the offending field.
+    final JsonMap messageWire = <String, Object?>{
+      'id': 'm',
+      'role': 'user',
+      'content': <Object?>[],
+      'source': <String, Object?>{'kind': 'user'},
+    };
+    final broken = <(JsonMap, String)>[
+      (<String, Object?>{'placement': 'queued', 'message': messageWire}, 'id'),
+      (<String, Object?>{'id': 'q1', 'placement': 'queued'}, 'message'),
+      (<String, Object?>{'id': 'q1', 'message': messageWire}, 'placement'),
+      (
+        <String, Object?>{
+          'id': 'q1',
+          'placement': 'teleported',
+          'message': messageWire,
+        },
+        'placement',
+      ),
+    ];
+    for (final entry in broken) {
+      expect(
+        () => reducer.ingestFrame(
+          frame(<String, Object?>{
+            'type': 'session/queue',
+            'sessionId': 's1',
+            'items': <Object?>[entry.$1],
+          }),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('"${entry.$2}"'),
+          ),
+        ),
+        reason: '${entry.$2} must fail loud by name',
+      );
+    }
   });
 }

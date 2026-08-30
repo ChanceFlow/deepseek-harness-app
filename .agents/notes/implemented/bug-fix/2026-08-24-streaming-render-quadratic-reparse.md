@@ -95,7 +95,9 @@ its selected sidebar facts:
 
 - Per-chunk work tracks the unstable tail (≤2 blocks), not the message; a
   settled message costs zero parse on any later publish, so the easytile
-  shape renders at the same cost as the web's streaming path.
+  shape renders at web streaming-path cost. The controller-side publish
+  window and concurrent resync cure a complementary lesion:
+  [resync-concurrent-publish-coalesced](2026-08-29-resync-concurrent-publish-coalesced.md).
 - Property tests pin the invariant: incremental appends equal a full
   parse at every prefix, frozen blocks keep their instances, non-append
   input resets, and `linesWithStarts` matches `LineSplitter`. Integration

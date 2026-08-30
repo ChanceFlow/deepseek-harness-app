@@ -5,10 +5,13 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/subagent.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -66,6 +69,45 @@ ServerRequest _pendingFrame(String type, JsonMap payload) => ServerRequest(
   payload: <String, Object?>{'type': type, ...payload},
 );
 
+// Mux-open burst frames, wire shapes from reference/deepseek-harness/
+// packages/host/apiproxy/src/api/events.schema.ts `muxFrameSchema`: the
+// `session/subscribed` baseline boundary and the `session/queue` snapshot
+// that follows it on the same stream (api-proxy.ts mux open).
+ServerRequest _subscribedFrame(String sessionId, int lastSeq) => ServerRequest(
+  rpcId: 'rpc-subscribed-$sessionId',
+  method: 'session/subscribed',
+  payload: <String, Object?>{
+    'type': 'session/subscribed',
+    'sessionId': sessionId,
+    'lastSeq': lastSeq,
+  },
+);
+
+ServerRequest _queueFrame(String sessionId, List<Object?> items) =>
+    ServerRequest(
+      rpcId: 'rpc-queue-$sessionId',
+      method: 'session/queue',
+      payload: <String, Object?>{
+        'type': 'session/queue',
+        'sessionId': sessionId,
+        'items': items,
+      },
+    );
+
+JsonMap _queueWireItem(String id, String text, [String placement = 'queued']) =>
+    <String, Object?>{
+      'id': id,
+      'placement': placement,
+      'message': <String, Object?>{
+        'id': 'msg-$id',
+        'role': 'user',
+        'content': <Object?>[
+          <String, Object?>{'type': 'text', 'text': text},
+        ],
+        'source': <String, Object?>{'kind': 'user'},
+      },
+    };
+
 JsonMap _assistantMessageEvent() => <String, Object?>{
   'type': 'assistant/message',
   'seq': 7,
@@ -95,11 +137,10 @@ Future<HarnessRepositoryImpl> harnessRepository(
 
 class HarnessFakeRpc implements DshRpcClient {
   HarnessFakeRpc([
-    this._initialSessions = const <Object?>[],
+    List<Object?> initialSessions = const <Object?>[],
     this._initialWorkspaces = const <Object?>[],
-  ]);
+  ]) : sessionsValue = initialSessions;
 
-  final List<Object?> _initialSessions;
   final List<Object?> _initialWorkspaces;
   final Map<String, int> _calls = <String, int>{};
   final Map<String, List<JsonMap>> _payloadsByEndpoint =
@@ -145,6 +186,79 @@ class HarnessFakeRpc implements DshRpcClient {
     },
   };
 
+  /// Scripted subagent.list value slot: the parent's durable child tree
+  /// (`reference/deepseek-harness/packages/host/apiproxy/src/api/`
+  /// `subagents.schema.ts` `subagentListValueSchema` shape).
+  JsonMap subagentListValue = <String, Object?>{
+    'entries': <Object?>[],
+    'parentAvailable': false,
+  };
+
+  /// Scripted subagent.history value slot (`subagentHistoryValueSchema`:
+  /// the session history block shape, events plus hasMore).
+  JsonMap subagentHistoryValue = <String, Object?>{
+    'events': <Object?>[],
+    'hasMore': false,
+  };
+
+  /// Scripted subagent.prompt value slot (`subagentPromptValueSchema`:
+  /// the settled `messageId`).
+  JsonMap subagentPromptValue = <String, Object?>{
+    'messageId': 'subagent-msg-1',
+  };
+
+  /// The roster served by `session.list`; a resync test rewrites it between
+  /// generations to prove which response the folded state came from.
+  List<Object?> sessionsValue;
+
+  /// Scripted `session.history` events keyed by sessionId; a session absent
+  /// from the map gets the default empty window.
+  final Map<String, List<Object?>> historyEvents = <String, List<Object?>>{};
+
+  /// One-shot response holds: the next response for the key waits on the
+  /// value before answering (each hold releases at most once).
+  final Map<String, List<Future<void>>> _responseGates =
+      <String, List<Future<void>>>{};
+
+  /// Endpoints whose hold expired (witness never appeared) — an expired hold
+  /// means the awaited call overlap never happened.
+  final List<String> gateTimeouts = <String>[];
+
+  /// Completers fired (after arming) when an endpoint is called.
+  final Map<String, List<Completer<void>>> _callWitnesses =
+      <String, List<Completer<void>>>{};
+
+  /// `endpoint:start` / `endpoint:return` entries in arrival order: pins
+  /// which calls were simultaneously in flight.
+  final List<String> callJournal = <String>[];
+
+  /// Holds every further response of [endpoint] until [witness] is called
+  /// (bounded at 5s; expiry records into [gateTimeouts]). Two endpoints
+  /// gated on each other deadlock under a serial caller and settle under a
+  /// concurrent one — the resync fan-out witness.
+  void gateResponsesUntilCalled(String endpoint, String witness) {
+    final waiter = Completer<void>();
+    _callWitnesses.putIfAbsent(witness, () => <Completer<void>>[]).add(waiter);
+    _responseGates
+        .putIfAbsent(endpoint, () => <Future<void>>[])
+        .add(
+          waiter.future.timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              gateTimeouts.add(endpoint);
+            },
+          ),
+        );
+  }
+
+  /// Holds the next [count] responses of [endpoint] until [gate] completes.
+  void gateResponses(String endpoint, Future<void> gate, {int count = 1}) {
+    final gates = _responseGates.putIfAbsent(endpoint, () => <Future<void>>[]);
+    for (var i = 0; i < count; i++) {
+      gates.add(gate);
+    }
+  }
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -153,6 +267,25 @@ class HarnessFakeRpc implements DshRpcClient {
   ) async {
     _calls[endpoint] = callCountFor(endpoint) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
+    callJournal.add('$endpoint:start');
+    final witnesses = _callWitnesses.remove(endpoint);
+    if (witnesses != null) {
+      for (final waiter in witnesses) {
+        if (!waiter.isCompleted) waiter.complete();
+      }
+    }
+    final gates = _responseGates[endpoint];
+    if (gates != null && gates.isNotEmpty) {
+      await gates.removeAt(0);
+    }
+    try {
+      return await _answer(endpoint, payload);
+    } finally {
+      callJournal.add('$endpoint:return');
+    }
+  }
+
+  Future<RpcResult> _answer(String endpoint, JsonMap payload) async {
     if (endpoint == 'commands/execute' && _transportDropsRemaining > 0) {
       _transportDropsRemaining--;
       throw DshTransportException(
@@ -170,11 +303,11 @@ class HarnessFakeRpc implements DshRpcClient {
     if (endpoint == 'commands/execute') {
       return RpcResult(ok: true, value: commandValue);
     }
-    final value = _valueFor(endpoint);
+    final value = _valueFor(endpoint, payload);
     return RpcResult(ok: true, value: value);
   }
 
-  JsonMap _valueFor(String endpoint) {
+  JsonMap _valueFor(String endpoint, JsonMap payload) {
     switch (endpoint) {
       case 'host.describe':
         return <String, Object?>{
@@ -183,7 +316,13 @@ class HarnessFakeRpc implements DshRpcClient {
           'attachedSessions': 0,
         };
       case 'session.list':
-        return <String, Object?>{'items': _initialSessions};
+        return <String, Object?>{'items': sessionsValue};
+      case 'subagent.list':
+        return subagentListValue;
+      case 'subagent.history':
+        return subagentHistoryValue;
+      case 'subagent.prompt':
+        return subagentPromptValue;
       case 'workspace.list':
         return <String, Object?>{
           'items': _initialWorkspaces,
@@ -194,8 +333,13 @@ class HarnessFakeRpc implements DshRpcClient {
           'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
         };
       case 'session.history':
+        // History entries ride the `historyEntrySchema` envelope: the log
+        // event nests under 'event' (sessions.schema.ts).
+        final scripted = historyEvents[payload['sessionId']];
         return <String, Object?>{
-          'events': <Object?>[],
+          'events': (scripted ?? <Object?>[])
+              .map((event) => <String, Object?>{'event': event})
+              .toList(),
           'hasMore': false,
           'projections': <String, Object?>{
             'values': <String, Object?>{
@@ -398,6 +542,82 @@ class ScriptedHarnessSocket implements DshEventSocket {
     // awaitCancellation: stay open until the subscriber cancels.
     await Completer<void>().future;
   }
+}
+
+const String _muxPath = '/api/events.mux';
+
+/// A socket seam that can end the current generation: closing both
+/// downlink streams drives [DshConnectionManager] into its reconnect loop,
+/// so the next generation connects and the repository resyncs exactly as
+/// on a real resume. Frames flow through the per-generation controllers.
+class ReconnectableHarnessSocket implements DshEventSocket {
+  final Map<String, StreamController<ServerRequest>> _open =
+      <String, StreamController<ServerRequest>>{};
+  final List<String> _paths = <String>[];
+
+  /// How many times a downlink path was opened (2 per generation).
+  int get downlinksOpened => _paths.length;
+
+  List<String> get connectedPaths => List<String>.of(_paths);
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    final controller = StreamController<ServerRequest>();
+    _paths.add(path);
+    _open[path] = controller;
+    onOpen?.call();
+    return controller.stream;
+  }
+
+  void emitMuxFrame(ServerRequest frame) => _open[_muxPath]?.add(frame);
+
+  /// Ends every current downlink; the manager counts that as generation
+  /// loss and reconnects after its backoff.
+  void terminate() {
+    for (final controller in _open.values.toList()) {
+      unawaited(controller.close());
+    }
+    _open.clear();
+  }
+}
+
+JsonMap resyncSessionRow(String id) => <String, Object?>{
+  'sessionId': id,
+  'updatedAt': 3,
+  'running': false,
+  'blank': false,
+};
+
+JsonMap resyncAssistantTextEvent(int seq, String text) => <String, Object?>{
+  'type': 'assistant/message',
+  'seq': seq,
+  'time': seq,
+  'data': <String, Object?>{
+    'turn': 1,
+    'step': 1,
+    'message': <String, Object?>{
+      'id': 'assistant-$seq',
+      'role': 'assistant',
+      'content': <Object?>[
+        <String, Object?>{'type': 'text', 'text': text},
+      ],
+    },
+  },
+};
+
+/// A repository on a reconnect-capable socket with zero backoff: each
+/// [ReconnectableHarnessSocket.terminate] drives one fresh connection
+/// generation (and with it one repository resync) in tests.
+Future<HarnessRepositoryImpl> resyncFixture(
+  HarnessFakeRpc rpc,
+  ReconnectableHarnessSocket socket,
+) async {
+  final manager = DshConnectionManager(rpc, socket, (_) => 0);
+  final repository = HarnessRepositoryImpl(rpc, manager);
+  await pumpEventQueue();
+  await Future<void>.delayed(const Duration(milliseconds: 20));
+  await pumpEventQueue();
+  return repository;
 }
 
 void main() {
@@ -1598,6 +1818,345 @@ void main() {
     expect(root.origin, isNull);
   });
 
+  test('session list carries the subagent lineage into the domain', () async {
+    // Wire: `sessionSummarySchema.parentSessionId` is the optional
+    // spawning-parent key on a subagent child row —
+    // reference/deepseek-harness/packages/host/apiproxy/src/api/
+    // sessions.schema.ts. The Subagents screen diffs this key on the
+    // sessions stream to spot child spawns and detachments.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-child',
+        'updatedAt': 4,
+        'running': true,
+        'blank': false,
+        'parentSessionId': 'session-root',
+        'origin': 'subagent',
+      },
+      <String, Object?>{
+        'sessionId': 'session-root',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final sessions = await repository.observeSessions().first;
+    final child = sessions.firstWhere(
+      (session) => session.id == 'session-child',
+    );
+    expect(child.parentSessionId, 'session-root');
+    expect(child.origin, 'subagent');
+    final root = sessions.firstWhere((session) => session.id == 'session-root');
+    expect(root.parentSessionId, isNull);
+  });
+
+  test(
+    'host/session-added repulls the list so a spawn reaches the stream',
+    () async {
+      // Wire: `host/session-added` (events.schema.ts hostFrameSchema)
+      // carries sessionId + blank + parentSessionId + origin for a
+      // subagent spawn. The adapter repulls session.list on the frame;
+      // the pulled row is the lineage carrier into the domain.
+      final rows = <Object?>[
+        <String, Object?>{
+          'sessionId': 'session-root',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ];
+      final rpc = HarnessFakeRpc(rows);
+      final socket = ScriptedHarnessSocket(
+        hostFrames: <ServerRequest>[
+          _hostFrame('host/session-added', <String, Object?>{
+            'type': 'host/session-added',
+            'sessionId': 'session-child',
+            'blank': false,
+            'parentSessionId': 'session-root',
+            'origin': 'subagent',
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      final before = rpc.callCountFor('session.list');
+
+      final sessions = <List<SessionSummary>>[];
+      final sub = repository.observeSessions().listen(sessions.add);
+      addTearDown(() => sub.cancel());
+
+      // The spawn frame lands; by the time the adapter's repull reads
+      // `session.list`, the host's durable list answers the new child.
+      rows.add(<String, Object?>{
+        'sessionId': 'session-child',
+        'updatedAt': 5,
+        'running': true,
+        'blank': false,
+        'parentSessionId': 'session-root',
+        'origin': 'subagent',
+      });
+      socket.releaseHostFrames();
+      await pumpEventQueue();
+
+      expect(rpc.callCountFor('session.list'), greaterThan(before));
+      final last = sessions.last;
+      final child = last.firstWhere((session) => session.id == 'session-child');
+      expect(child.parentSessionId, 'session-root');
+      expect(child.origin, 'subagent');
+    },
+  );
+
+  // The subagent catalog is the tree's fact source: `subagent.list` reads
+  // durable session state, so a cold host answers the parent's complete
+  // child tree — the fact the Subagents screen cold-seeds from.
+  test('subagent.list decodes the host-reported child tree', () async {
+    // Fixture transcribed from
+    // reference/deepseek-harness/packages/host/apiproxy/src/api/
+    // subagents.schema.ts subagentListValueSchema: continuable and
+    // one-shot child rows (label required/optional per mode) plus a
+    // diagnostic row.
+    final rpc = HarnessFakeRpc()
+      ..subagentListValue = <String, Object?>{
+        'entries': <Object?>[
+          <String, Object?>{
+            'kind': 'child',
+            'id': 'child-1',
+            'mode': 'continuable',
+            'activity': 'running',
+            'hasChildren': true,
+            'label': 'Worker',
+          },
+          <String, Object?>{
+            'kind': 'child',
+            'id': 'child-2',
+            'mode': 'one-shot',
+            'activity': 'inactive',
+            'hasChildren': false,
+          },
+          <String, Object?>{
+            'kind': 'diagnostic',
+            'id': 'child-3',
+            'reason': 'corrupt',
+          },
+        ],
+        'parentAvailable': true,
+      };
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final catalog = await repository.loadSubagents('session-root');
+
+    expect(rpc.payloads('subagent.list').first, <String, Object?>{
+      'parentSessionId': 'session-root',
+    });
+    expect(catalog.parentSessionId, 'session-root');
+    expect(catalog.parentAvailable, isTrue);
+    expect(catalog.entries, const <SubagentEntry>[
+      SubagentEntry(
+        id: 'child-1',
+        kind: 'child',
+        mode: SubagentMode.continuable,
+        activity: 'running',
+        hasChildren: true,
+        label: 'Worker',
+      ),
+      SubagentEntry(
+        id: 'child-2',
+        kind: 'child',
+        mode: SubagentMode.oneShot,
+        activity: 'inactive',
+      ),
+      SubagentEntry(id: 'child-3', kind: 'diagnostic', reason: 'corrupt'),
+    ]);
+  });
+
+  test(
+    'subagent.list answers a parent without children as an empty catalog',
+    () async {
+      final rpc = HarnessFakeRpc()
+        ..subagentListValue = <String, Object?>{
+          'entries': <Object?>[],
+          'parentAvailable': false,
+        };
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final catalog = await repository.loadSubagents('session-root');
+
+      expect(catalog.parentSessionId, 'session-root');
+      expect(catalog.entries, isEmpty);
+      expect(catalog.parentAvailable, isFalse);
+    },
+  );
+
+  test(
+    'subagent.list child row without id fails loud with the field name',
+    () async {
+      // Negative fixture: the contract requires `id` on every row; a row
+      // missing it must throw naming the field, never decode to a default.
+      final rpc = HarnessFakeRpc()
+        ..subagentListValue = <String, Object?>{
+          'entries': <Object?>[
+            <String, Object?>{
+              'kind': 'child',
+              'mode': 'continuable',
+              'activity': 'running',
+              'hasChildren': false,
+              'label': 'Worker',
+            },
+          ],
+          'parentAvailable': true,
+        };
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.loadSubagents('session-root'),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('"id"'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'subagent.list child row without a mode fails loud naming the field',
+    () async {
+      // Negative fixture: `subagentListEntrySchema` requires `mode` on
+      // every child row ('one-shot' | 'continuable'); a child row
+      // without it must throw naming the field, never decode modeless.
+      final rpc = HarnessFakeRpc()
+        ..subagentListValue = <String, Object?>{
+          'entries': <Object?>[
+            <String, Object?>{
+              'kind': 'child',
+              'id': 'child-1',
+              'activity': 'running',
+              'hasChildren': false,
+              'label': 'Worker',
+            },
+          ],
+          'parentAvailable': true,
+        };
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.loadSubagents('session-root'),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('"mode"'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'subagent.history addresses each row with its own catalog mode',
+    () async {
+      // Wire: `subagentHistoryRequestSchema` carries mode
+      // ('one-shot' | 'continuable'), and the host's catalogChild guard
+      // answers subagent-not-found on a mismatch —
+      // reference/deepseek-harness/packages/host/apiproxy/src/api/
+      // subagents.schema.ts + api-proxy.ts. A one-shot row must go out
+      // as one-shot; the transcript folds through the reducer.
+      final rpc = HarnessFakeRpc()
+        ..subagentHistoryValue = <String, Object?>{
+          'events': <Object?>[
+            <String, Object?>{'event': _assistantMessageEvent()},
+          ],
+          'hasMore': false,
+        };
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final items = await repository.loadSubagentHistory(
+        'session-root',
+        'child-2',
+        SubagentMode.oneShot,
+      );
+
+      expect(rpc.payloads('subagent.history').single, <String, Object?>{
+        'parentSessionId': 'session-root',
+        'childSessionId': 'child-2',
+        'mode': 'one-shot',
+      });
+      expect(items, isNotEmpty);
+
+      await repository.loadSubagentHistory(
+        'session-root',
+        'child-1',
+        SubagentMode.continuable,
+      );
+      expect(rpc.payloads('subagent.history').last['mode'], 'continuable');
+    },
+  );
+
+  test('subagent.history host failure surfaces to the caller', () async {
+    // Fail-loud: a `subagent-not-found` answer (the host's mode-guard
+    // rejection) never decays into an empty transcript — the
+    // exception reaches the caller, which surfaces it on the error
+    // banner.
+    final rpc = HarnessFakeRpc()
+      ..failNextCall('subagent.history', 'subagent-not-found');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.loadSubagentHistory(
+        'session-root',
+        'child-2',
+        SubagentMode.oneShot,
+      ),
+      throwsA(
+        isA<DshBusinessException>().having(
+          (error) => error.code,
+          'code',
+          'subagent-not-found',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'subagent.interrupt and subagent.prompt pin the continuable mode',
+    () async {
+      // Wire: `subagentInterruptRequestSchema` and
+      // `subagentPromptRequestSchema` carry the literal 'continuable' —
+      // the verbs exist only for continuable rows (subagents.schema.ts).
+      final rpc = HarnessFakeRpc();
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await repository.interruptSubagent('session-root', 'child-1');
+      final messageId = await repository.sendSubagentPrompt(
+        'session-root',
+        'child-1',
+        'keep going',
+      );
+
+      expect(rpc.payloads('subagent.interrupt').single, <String, Object?>{
+        'parentSessionId': 'session-root',
+        'childSessionId': 'child-1',
+        'mode': 'continuable',
+      });
+      final prompt = rpc.payloads('subagent.prompt').single;
+      expect(prompt['mode'], 'continuable');
+      expect(prompt['childSessionId'], 'child-1');
+      expect(messageId, 'subagent-msg-1');
+    },
+  );
+
   // Pending-interaction fold: the sidebar's amber dot comes from
   // approval/question frames tracked for every session, opened or not
   // (web SessionManager list-level parity). Wire shapes:
@@ -1727,6 +2286,136 @@ void main() {
     expect(plan.pendingInteraction, SessionPendingInteraction.planReview);
     final plain = pending.firstWhere((item) => item.id == 'session-q');
     expect(plain.pendingInteraction, SessionPendingInteraction.question);
+  });
+
+  test('a question pending beside an approval projects the question', () async {
+    // Web SessionManager buildListSnapshot (sessions/manager.ts:1033-1039):
+    // the dot names the interaction the composer can act on, so a question
+    // outranks an approval regardless of arrival order.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-x',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('approval/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'approvalId': 'ap-1',
+          'toolName': 'bash',
+        }),
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Pick a color',
+              'options': <Object?>[
+                <String, Object?>{'label': 'Red'},
+                <String, Object?>{'label': 'Blue'},
+              ],
+            },
+          ],
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final sessions = await repository.observeSessions().first;
+    final session = sessions.firstWhere((item) => item.id == 'session-x');
+    expect(session.pendingInteraction, SessionPendingInteraction.question);
+  });
+
+  test('the question still projects when the approval arrives last', () async {
+    // The discriminating order: arrival-last would project the approval
+    // (the old `values.last` fold), while the reference priority keeps the
+    // question the user can act on.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-x',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Pick a color',
+              'options': <Object?>[
+                <String, Object?>{'label': 'Red'},
+                <String, Object?>{'label': 'Blue'},
+              ],
+            },
+          ],
+        }),
+        _pendingFrame('approval/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'approvalId': 'ap-1',
+          'toolName': 'bash',
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final sessions = await repository.observeSessions().first;
+    final session = sessions.firstWhere((item) => item.id == 'session-x');
+    expect(session.pendingInteraction, SessionPendingInteraction.question);
+    // Resolving the question leaves the still-pending approval projected.
+    final resolved = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _pendingFrame('question/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Pick a color',
+              'options': <Object?>[
+                <String, Object?>{'label': 'Red'},
+                <String, Object?>{'label': 'Blue'},
+              ],
+            },
+          ],
+        }),
+        _pendingFrame('approval/requested', <String, Object?>{
+          'sessionId': 'session-x',
+          'approvalId': 'ap-1',
+          'toolName': 'bash',
+        }),
+        _pendingFrame('question/resolved', <String, Object?>{
+          'sessionId': 'session-x',
+          'questionRpcId': 'rpc-question/requested',
+          'outcome': 'answered',
+        }),
+      ],
+    );
+    final resolvedRepository = await harnessRepository(rpc, resolved);
+    await pumpEventQueue();
+    resolved.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final afterResolve = await resolvedRepository.observeSessions().first;
+    final stillPending = afterResolve.firstWhere(
+      (item) => item.id == 'session-x',
+    );
+    expect(
+      stillPending.pendingInteraction,
+      SessionPendingInteraction.approval,
+      reason: 'with the question gone, the lone approval is the projection',
+    );
   });
 
   test('question resolution drops the pending status by rpcId', () async {
@@ -2136,4 +2825,380 @@ void main() {
       expect(switched.agentPreset, 'minimal');
     },
   );
+
+  // ---- Connection resync fan-out ------------------------------------------
+
+  test(
+    'resync fires the list pull and the window rebuilds concurrently',
+    () async {
+      // Web SessionManager `handleConnected` parity: `void refreshList()`
+      // and `void session.resync()` fire side by side, so one slow history
+      // load never holds back the roster or the release of buffered frames.
+      // Cross-gated RPCs deadlock a serial implementation: each response
+      // waits for the other endpoint's call to be observed.
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('a')]);
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await repository.openSession('a');
+
+      rpc.sessionsValue = <Object?>[
+        resyncSessionRow('a'),
+        resyncSessionRow('b'),
+      ];
+      await repository.openSession('b');
+      await pumpEventQueue();
+      expect(rpc.callCountFor('session.list'), 1);
+      expect(rpc.callCountFor('session.history'), 2);
+
+      rpc.historyEvents['a'] = <Object?>[
+        resyncAssistantTextEvent(7, 'after resync'),
+      ];
+      rpc.gateResponsesUntilCalled('session.list', 'session.history');
+      rpc.gateResponsesUntilCalled('session.history', 'session.list');
+      final mark = rpc.callJournal.length;
+
+      socket.terminate();
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await pumpEventQueue();
+
+      // Neither hold expired: the list response was still gated when the
+      // history call landed, and vice versa.
+      expect(rpc.gateTimeouts, isEmpty);
+      final journal = rpc.callJournal.sublist(mark);
+      expect(
+        journal.indexOf('session.list:start'),
+        lessThan(journal.indexOf('session.history:start')),
+      );
+      expect(
+        journal.indexOf('session.history:start'),
+        lessThan(journal.indexOf('session.list:return')),
+      );
+      expect(rpc.callCountFor('session.list'), 2);
+      expect(rpc.callCountFor('session.history'), 4);
+
+      final timeline = await repository.observeTimeline('a').first;
+      final message = timeline.whereType<TimelineMessage>().single;
+      expect(message.value.text, 'after resync');
+      final sessions = await repository.observeSessions().first;
+      expect(
+        sessions.map((session) => session.id),
+        containsAll(<String>['a', 'b']),
+      );
+    },
+  );
+
+  test(
+    'consecutive resync generations serialize; the newest baseline wins',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('a')]);
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await repository.openSession('a');
+
+      rpc.historyEvents['a'] = <Object?>[
+        resyncAssistantTextEvent(7, 'baseline v1'),
+      ];
+      final holdList = Completer<void>();
+      rpc.gateResponses('session.list', holdList.future);
+      socket.terminate();
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpEventQueue();
+
+      // Generation 2's window rebuild settled while its list pull is still
+      // in flight.
+      expect(rpc.callCountFor('session.list'), 2);
+      expect(rpc.callCountFor('session.history'), 2);
+      final first = await repository.observeTimeline('a').first;
+      expect(
+        first.whereType<TimelineMessage>().single.value.text,
+        'baseline v1',
+      );
+
+      // Connection loss while generation 2's resync is still in flight:
+      // the resync mutex keeps generation 3 from firing any RPC until
+      // generation 2 settles.
+      rpc.historyEvents['a'] = <Object?>[
+        resyncAssistantTextEvent(9, 'baseline v2'),
+      ];
+      socket.terminate();
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpEventQueue();
+      expect(rpc.callCountFor('session.list'), 2);
+
+      holdList.complete();
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await pumpEventQueue();
+      expect(rpc.callCountFor('session.list'), 3);
+      expect(rpc.callCountFor('session.history'), 3);
+      final second = await repository.observeTimeline('a').first;
+      expect(
+        second.whereType<TimelineMessage>().single.value.text,
+        'baseline v2',
+      );
+    },
+  );
+
+  test(
+    'a folded event that changes no value republishes only the window',
+    () async {
+      // The stats/pressure/breakdown folds mint a fresh equal value per
+      // handled event; the StateStream equality gate keeps those no-change
+      // writes off the streams, so the controller never rebuilds on them.
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('a')]);
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await repository.openSession('a');
+
+      final windows = <TimelineWindow>[];
+      final stats = <SessionWindowStats>[];
+      final pressures = <ContextPressure?>[];
+      final breakdowns = <ContextBreakdown?>[];
+      final subs = <StreamSubscription<void>>[
+        repository.observeTimelineWindow('a').listen(windows.add),
+        repository.observeSessionStats('a').listen(stats.add),
+        repository.observeContextPressure('a').listen(pressures.add),
+        repository.observeContextBreakdown('a').listen(breakdowns.add),
+      ];
+      for (final sub in subs) {
+        addTearDown(sub.cancel);
+      }
+      await pumpEventQueue();
+      expect(windows, hasLength(1));
+      expect(stats, hasLength(1));
+      expect(pressures, hasLength(1));
+      expect(breakdowns, hasLength(1));
+
+      JsonMap turnEnd(int seq) => <String, Object?>{
+        'type': 'turn/end',
+        'seq': seq,
+        'time': seq,
+        'data': <String, Object?>{
+          'turn': 1,
+          'reason': <String, Object?>{'kind': 'completed'},
+        },
+      };
+      socket.emitMuxFrame(_muxFrame('session/event', 'a', turnEnd(11)));
+      socket.emitMuxFrame(_muxFrame('session/event', 'a', turnEnd(12)));
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await pumpEventQueue();
+
+      // Structural frames publish the window immediately, one per frame…
+      expect(windows, hasLength(3));
+      // …while the unchanged folded values stayed silent past their seeds.
+      expect(stats, hasLength(1));
+      expect(pressures, hasLength(1));
+      expect(breakdowns, hasLength(1));
+    },
+  );
+
+  // ---- In-band queue re-baseline across a reconnect burst -----------------
+  // `session/queue` is a live authoritative snapshot with no durable history:
+  // the mux-open burst pushes each session's `session/subscribed` and the
+  // queue baseline that follows it, and the host never resends the baseline
+  // in that generation. `DshConnectionManager` forwards burst frames from
+  // stream open — before it publishes CONNECTED — so every re-baseline rides
+  // the stream, never the connected publish (reference session.ts:419-426
+  // author comment; web queueMirror design). Each test holds the generation's
+  // `host.describe` (or `session.history`) response to pin the burst relative
+  // to the resync prep.
+
+  test('a queue baseline whose burst outruns the connected publish survives '
+      'the window rebuild', () async {
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('a')]);
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+    rpc.historyEvents['a'] = <Object?>[
+      resyncAssistantTextEvent(5, 'durable history'),
+    ];
+    await repository.openSession('a');
+
+    // A live queue snapshot lands on the ready window (host change push).
+    socket.emitMuxFrame(
+      _queueFrame('a', <Object?>[
+        _queueWireItem('q-old', 'stale steer', 'steering'),
+      ]),
+    );
+    await pumpEventQueue();
+    expect(
+      (await repository.observeTimeline('a').first)
+          .whereType<TimelineQueue>()
+          .single
+          .items
+          .single
+          .text,
+      'stale steer',
+    );
+
+    // Generation 2: hold the readiness handshake so the mux-open burst
+    // flows while the previous window is still ready — the race the old
+    // connected-time truncation lost to.
+    final describeHeld = Completer<void>();
+    rpc.gateResponses('host.describe', describeHeld.future);
+    socket.terminate();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await pumpEventQueue();
+
+    socket.emitMuxFrame(_subscribedFrame('a', 5));
+    socket.emitMuxFrame(
+      _queueFrame('a', <Object?>[_queueWireItem('q-new', 'fresh steer')]),
+    );
+    socket.emitMuxFrame(
+      _pendingFrame('question/requested', <String, Object?>{
+        'sessionId': 'a',
+        'questions': <Object?>[
+          <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+        ],
+      }),
+    );
+    await pumpEventQueue();
+    describeHeld.complete();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await pumpEventQueue();
+
+    // The rebuild re-folded durable history and carried the fresh baseline
+    // over: no stale row, dock alive while the host queue is.
+    final timeline = await repository.observeTimeline('a').first;
+    expect(
+      timeline.whereType<TimelineMessage>().single.value.text,
+      'durable history',
+    );
+    final dock = timeline.whereType<TimelineQueue>().single;
+    expect(dock.items, <SessionQueueItem>[
+      const SessionQueueItem(
+        itemId: 'q-new',
+        placement: QueuePlacement.queued,
+        text: 'fresh steer',
+      ),
+    ]);
+    // The pending-interaction mirror likewise re-baselined in-band: the
+    // replayed request re-lit the dot after its session's subscribed
+    // frame, and the resync prep no longer wipes it.
+    final sessions = await repository.observeSessions().first;
+    expect(
+      sessions.firstWhere((session) => session.id == 'a').pendingInteraction,
+      SessionPendingInteraction.question,
+    );
+  });
+
+  test('a queue baseline arriving after the resync prep replays in order '
+      'past the history reset', () async {
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('a')]);
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+    rpc.historyEvents['a'] = <Object?>[
+      resyncAssistantTextEvent(5, 'durable history'),
+    ];
+    await repository.openSession('a');
+
+    // Generation 2: connected publishes, the prep runs, and the history
+    // reload is held — the burst now arrives against a not-ready window
+    // and parks for the after-reset replay.
+    final historyHeld = Completer<void>();
+    rpc.gateResponses('session.history', historyHeld.future);
+    socket.terminate();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await pumpEventQueue();
+
+    socket.emitMuxFrame(_subscribedFrame('a', 5));
+    socket.emitMuxFrame(
+      _queueFrame('a', <Object?>[_queueWireItem('q-new', 'parked baseline')]),
+    );
+    await pumpEventQueue();
+    historyHeld.complete();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await pumpEventQueue();
+
+    final timeline = await repository.observeTimeline('a').first;
+    expect(
+      timeline.whereType<TimelineMessage>().single.value.text,
+      'durable history',
+    );
+    final dock = timeline.whereType<TimelineQueue>().single;
+    expect(dock.items.single.itemId, 'q-new');
+    expect(dock.items.single.text, 'parked baseline');
+  });
+
+  test('an unopened session keeps its burst baseline and question card '
+      'for a later open', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('b'),
+      resyncSessionRow('c'),
+    ]);
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+
+    // Live queue snapshots buffer for the never-instantiated sessions.
+    // Session 'c' has a stale baseline whose new generation sends no
+    // queue frame at all (the host omits the baseline for an empty
+    // queue), so opening it must show no dock rows, never the stale.
+    socket.emitMuxFrame(
+      _queueFrame('b', <Object?>[_queueWireItem('q-old', 'stale work')]),
+    );
+    socket.emitMuxFrame(
+      _queueFrame('c', <Object?>[_queueWireItem('q-old-c', 'phantom work')]),
+    );
+    await pumpEventQueue();
+
+    // Generation 2: the burst (subscribed → replayed request → queue
+    // baseline) arrives before the connected publish drives the prep; the
+    // old connected-time truncation wiped exactly these fresh buffers.
+    final describeHeld = Completer<void>();
+    rpc.gateResponses('host.describe', describeHeld.future);
+    socket.terminate();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await pumpEventQueue();
+
+    socket.emitMuxFrame(_subscribedFrame('b', 2));
+    socket.emitMuxFrame(
+      _pendingFrame('question/requested', <String, Object?>{
+        'sessionId': 'b',
+        'questions': <Object?>[
+          <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+        ],
+      }),
+    );
+    socket.emitMuxFrame(
+      _queueFrame('b', <Object?>[_queueWireItem('q-new', 'fresh work')]),
+    );
+    // 'c''s generation: subscribed only — an emptied queue resends nothing.
+    socket.emitMuxFrame(_subscribedFrame('c', 1));
+    await pumpEventQueue();
+    describeHeld.complete();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await pumpEventQueue();
+
+    // Opening the session replays the buffer through the real frame path:
+    // the dock rows are the fresh baseline, not the stale one, and the
+    // question card renders (the 08-22 buffering contract intact).
+    await repository.openSession('b');
+    final timeline = await repository.observeTimeline('b').first;
+    final dock = timeline.whereType<TimelineQueue>().single;
+    expect(dock.items, <SessionQueueItem>[
+      const SessionQueueItem(
+        itemId: 'q-new',
+        placement: QueuePlacement.queued,
+        text: 'fresh work',
+      ),
+    ]);
+    expect(timeline.whereType<TimelineQuestionRequest>(), hasLength(1));
+
+    // The stale snapshot was truncated by 'c''s own subscribed frame, so
+    // its open shows no dock row (web manager.ts:714-732 phantom guard).
+    await repository.openSession('c');
+    expect(
+      (await repository.observeTimeline('c').first).whereType<TimelineQueue>(),
+      isEmpty,
+    );
+  });
 }

@@ -3,8 +3,11 @@
 ///
 /// Guarded mutations (fail loud to the caller, never silently mutate):
 /// the active backend cannot be removed (switch first), the list never
-/// drops below one entry, ids are unique, and base URLs must parse with
-/// an http(s) scheme and a host.
+/// drops below one entry, ids are unique, base URLs must parse with an
+/// http(s) scheme and a host, and a disabled backend cannot be
+/// activated. Disabling the active backend moves the active id to the
+/// next enabled backend (null when none remain); enabling a backend while
+/// none is active activates it.
 library;
 
 import 'dart:async';
@@ -52,6 +55,16 @@ final class SelectBackend extends BackendAction {
   final String backendId;
 }
 
+/// Turns a backend's connection on or off. A disabled backend keeps its
+/// config (and its Settings row) but owns no connection, controller,
+/// sidebar slice, or switcher entry.
+final class SetBackendEnabled extends BackendAction {
+  const SetBackendEnabled(this.backendId, this.enabled);
+
+  final String backendId;
+  final bool enabled;
+}
+
 class BackendRegistryController {
   BackendRegistryController(this._store) {
     unawaited(_load());
@@ -76,12 +89,15 @@ class BackendRegistryController {
   Future<void> _load() async {
     try {
       final data = await _store.load();
-      // A dangling active id (backend removed on another surface) falls
-      // back to the first entry.
+      // A dangling active id (backend removed on another surface) or one
+      // pointing at a disabled backend falls back to the first enabled
+      // entry; disabling every backend leaves no active backend.
       final active = data.activeId;
-      final activeId = data.backends.any((b) => b.id == active)
-          ? active
-          : data.backends.first.id;
+      final activeEnabled = data.backends
+          .where((b) => b.id == active && b.enabled)
+          .firstOrNull;
+      final activeId =
+          activeEnabled?.id ?? data.enabledBackends.firstOrNull?.id;
       _state = BackendRegistryState(
         backends: data.backends,
         activeId: activeId,
@@ -112,6 +128,8 @@ class BackendRegistryController {
         _remove(action.backendId);
       case SelectBackend():
         _select(action.backendId);
+      case SetBackendEnabled():
+        _setEnabled(action.backendId, action.enabled);
     }
   }
 
@@ -195,12 +213,43 @@ class BackendRegistryController {
   }
 
   void _select(String backendId) {
-    if (!_state.backends.any((b) => b.id == backendId)) {
+    final target = _state.backends.where((b) => b.id == backendId).firstOrNull;
+    if (target == null) {
       _fail('Unknown backend: $backendId');
+      return;
+    }
+    if (!target.enabled) {
+      _fail('Enable the backend before activating it');
       return;
     }
     if (backendId == _state.activeId) return;
     _state = _state.withActiveId(backendId);
+    _publish();
+    _persist();
+  }
+
+  void _setEnabled(String backendId, bool enabled) {
+    final index = _state.backends.indexWhere((b) => b.id == backendId);
+    if (index < 0) {
+      _fail('Unknown backend: $backendId');
+      return;
+    }
+    if (_state.backends[index].enabled == enabled) return;
+    final backends = [..._state.backends];
+    backends[index] = backends[index].copyWith(enabled: enabled);
+    _state = _state.withBackends(backends);
+    if (!enabled) {
+      // Disabling the active backend moves the chat surface to the next
+      // enabled backend; disabling the last enabled one leaves no active
+      // backend (surfaces show their loading/empty state).
+      if (_state.activeId == backendId) {
+        _state = _state.withActiveId(_state.enabledBackends.firstOrNull?.id);
+      }
+    } else if (_state.activeId == null) {
+      // Enabling a backend while none is active activates it: a disabled
+      // list has no chat surface to preserve.
+      _state = _state.withActiveId(backendId);
+    }
     _publish();
     _persist();
   }

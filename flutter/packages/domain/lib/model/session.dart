@@ -20,6 +20,7 @@ final class SessionSummary {
     this.cwd,
     this.agentPreset,
     this.origin,
+    this.parentSessionId,
     this.pendingInteraction,
     this.completed = false,
   });
@@ -35,6 +36,12 @@ final class SessionSummary {
   /// Coarse durable origin used by navigation surfaces; `subagent` marks a
   /// subagent child (absent for root sessions).
   final String? origin;
+
+  /// The session that spawned this one as a subagent child (the wire
+  /// `sessionSummarySchema.parentSessionId`); null on root sessions. The
+  /// Subagents screen keys its event-driven catalog refreshes on this
+  /// lineage.
+  final String? parentSessionId;
 
   /// Pending user interaction (approval / plan-review / question); null
   /// while nothing blocks on the user. A derived fact: the wire session
@@ -76,6 +83,7 @@ final class SessionSummary {
       other.cwd == cwd &&
       other.agentPreset == agentPreset &&
       other.origin == origin &&
+      other.parentSessionId == parentSessionId &&
       other.pendingInteraction == pendingInteraction &&
       other.completed == completed;
 
@@ -89,6 +97,7 @@ final class SessionSummary {
     cwd,
     agentPreset,
     origin,
+    parentSessionId,
     pendingInteraction,
     completed,
   );

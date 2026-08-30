@@ -5,6 +5,7 @@ import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
@@ -21,12 +22,20 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/repository/chat_repository.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:app/config.dart';
+import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_controller.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
+import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/state_stream.dart';
+
+import '../../l10n_app.dart';
+import 'chat_local_state_fake.dart';
 
 class FakeChatRepository implements ChatRepository {
   FakeChatRepository({
@@ -285,6 +294,7 @@ class FakeChatRepository implements ChatRepository {
   Future<List<TimelineItem>> loadSubagentHistory(
     String parentSessionId,
     String childSessionId,
+    SubagentMode mode,
   ) async => const <TimelineItem>[];
 
   @override
@@ -400,7 +410,11 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Stream<PlanState?> observePlan(String sessionId) =>
-      AppStateStream<PlanState?>(null).stream;
+      planSource?.call(sessionId) ?? AppStateStream<PlanState?>(null).stream;
+
+  /// Optional scripted plan-projection source; when set it replaces the
+  /// always-null stream so tests can drive the plan field upstream.
+  Stream<PlanState?>? Function(String sessionId)? planSource;
 
   @override
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
@@ -487,6 +501,17 @@ class FakeSessionSelectionPersistence implements SessionSelectionPersistence {
 }
 
 void main() {
+  // Upstream (repository stream) publishes fold into the controller's
+  // [kUiPublishWindow] frame window; local reads of `controller.state`
+  // need the window to have drained.
+  Future<void> settlePublish() async {
+    await pumpEventQueue();
+    await Future<void>.delayed(
+      kUiPublishWindow + const Duration(milliseconds: 16),
+    );
+    await pumpEventQueue();
+  }
+
   test('init refreshes sessions', () async {
     final repository = FakeChatRepository(
       initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
@@ -507,7 +532,7 @@ void main() {
     await pumpEventQueue();
 
     controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
-    await pumpEventQueue();
+    await settlePublish();
 
     expect(repository.openedSessionIds, <String>[
       FakeChatRepository.initialSession.id,
@@ -610,12 +635,12 @@ void main() {
     // In-flight first load: the chat body must render a loader, never the
     // empty hero.
     windows.value = const TimelineWindow(isLoading: true);
-    await pumpEventQueue();
+    await settlePublish();
     expect(controller.state.isTimelineLoading, isTrue);
 
     // Settled: back to idle.
     windows.value = const TimelineWindow();
-    await pumpEventQueue();
+    await settlePublish();
     expect(controller.state.isTimelineLoading, isFalse);
   });
 
@@ -1509,7 +1534,7 @@ void main() {
       options: [PermissionPresetOption(value: 'read-only', name: 'read-only')],
       currentValue: 'read-only',
     );
-    await pumpEventQueue();
+    await settlePublish();
     expect(controller.state.permissions?.currentValue, 'read-only');
 
     controller.onAction(const SelectSession('other'));
@@ -1574,6 +1599,241 @@ void main() {
 
     expect(repository.selectedAgentPresets, [('s1', 'minimal')]);
   });
+
+  test(
+    'upstream jitter inside one publish window folds into one publish',
+    () async {
+      final repository = FakeChatRepository();
+      final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
+      repository.windowSource = (_) => windows.stream;
+      final controller = ChatController(repository);
+      controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+      await settlePublish(); // bind + seed publishes settle.
+
+      final publishes = <ChatUiState>[];
+      final sub = controller.uiState.listen(publishes.add);
+      addTearDown(sub.cancel);
+      await pumpEventQueue();
+      final seedCount = publishes.length;
+
+      for (var i = 1; i <= 6; i++) {
+        windows.value = TimelineWindow(
+          items: List<TimelineItem>.filled(
+            i,
+            const TimelineError(id: 'e', message: 'x'),
+          ),
+        );
+      }
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await pumpEventQueue();
+
+      // Six stream events, one window flush — and the flush carries the
+      // freshest state, never an intermediate fold.
+      expect(publishes.length - seedCount, 1);
+      expect(publishes.last.timeline, hasLength(6));
+
+      // A later change opens a new window: final state stays correct at the
+      // boundary between windows.
+      windows.value = const TimelineWindow(
+        items: [TimelineError(id: 'e1', message: 'settled')],
+        hasMoreOlder: true,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await pumpEventQueue();
+      expect(publishes.length - seedCount, 2);
+      expect(publishes.last.hasMoreOlder, isTrue);
+      expect(
+        (publishes.last.timeline.single as TimelineError).message,
+        'settled',
+      );
+    },
+  );
+
+  test('the jobs roster is not re-scanned for an unchanged timeline', () async {
+    const jobsItem = TimelineJobs(
+      jobs: [
+        JobView(
+          id: 'j1',
+          kind: 'build',
+          label: 'assemble',
+          status: JobStatus.running,
+        ),
+      ],
+    );
+    final repository = FakeChatRepository();
+    final windows = AppStateStream<TimelineWindow>(
+      const TimelineWindow(items: [jobsItem]),
+    );
+    repository.windowSource = (_) => windows.stream;
+    final controller = ChatController(repository);
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await settlePublish();
+    expect(controller.state.jobs, hasLength(1));
+    final roster = controller.state.jobs;
+
+    repository.workspaces.value = const [
+      WorkspaceSummary(workspaceId: 'w1', path: '/p', title: 'p'),
+    ];
+    await settlePublish();
+    // The timeline list is unchanged; the publish reuses the cached scan.
+    expect(identical(controller.state.jobs, roster), isTrue);
+
+    windows.value = const TimelineWindow(
+      items: [
+        jobsItem,
+        TimelineJobs(
+          jobs: [
+            JobView(
+              id: 'j2',
+              kind: 'sync',
+              label: 'reindex',
+              status: JobStatus.completed,
+            ),
+          ],
+        ),
+      ],
+    );
+    await settlePublish();
+    // A new timeline instance rescans: both jobs surface.
+    expect(controller.state.jobs.map((job) => job.id), <String>['j1', 'j2']);
+  });
+
+  testWidgets('dispose cancels the pending publish window', (tester) async {
+    final repository = FakeChatRepository();
+    final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
+    repository.windowSource = (_) => windows.stream;
+    final controller = ChatController(repository);
+    addTearDown(controller.dispose);
+    await tester.pump(const Duration(milliseconds: 40));
+    final before = controller.state.timeline.length;
+
+    windows.value = const TimelineWindow(
+      items: [TimelineError(id: 'e', message: 'late')],
+    );
+    await tester.pump(); // event delivered: the publish window is open.
+    controller.dispose();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(controller.state.timeline.length, before);
+    // A leaked Timer fails this testWidgets at teardown.
+  });
+
+  testWidgets(
+    'approval, question and plan reach the rendered uiState within one '
+    'publish window',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1280);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repository = FakeChatRepository(
+        initialSessions: const <SessionSummary>[
+          SessionSummary(id: 'session-1', title: 'Test session'),
+        ],
+      );
+      final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
+      repository.windowSource = (_) => windows.stream;
+      final plan = AppStateStream<PlanState?>(null);
+      repository.planSource = (_) => plan.stream;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+
+      ChatUiState rendered = const ChatUiState();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+                .overrideWithValue(_WindowTestRpc()),
+            dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+                .overrideWithValue(_WindowTestSocket()),
+          ],
+          child: l10nApp(
+            home: StreamBuilder<ChatUiState>(
+              stream: controller.uiState,
+              builder: (context, snapshot) {
+                rendered = snapshot.data ?? rendered;
+                return ChatScreen(
+                  uiState: rendered,
+                  onAction: controller.onAction,
+                  localState: FakeChatLocalState(),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+
+      controller.onAction(const SelectSession('session-1'));
+      await tester.pump(const Duration(milliseconds: 40));
+
+      windows.value = const TimelineWindow(
+        items: [
+          TimelineApprovalRequest(
+            requestId: 'rpc-1',
+            sessionId: 'session-1',
+            approvalId: 'a-1',
+            toolName: 'bash',
+            reason: 'Would run a command',
+          ),
+          TimelineQuestionRequest(
+            requestId: 'rpc-2',
+            questions: [
+              QuestionItem(
+                id: 'q1',
+                question: 'Continue?',
+                options: ['yes', 'no'],
+              ),
+            ],
+          ),
+        ],
+      );
+      plan.value = const PlanState(active: true, pending: false);
+
+      // The stream events land; the uiState may still carry the previous
+      // fold until the window closes…
+      await tester.pump();
+      // …and it must carry them, no more than one window behind.
+      await tester.pump(kUiPublishWindow);
+      await tester.pump();
+      expect(
+        rendered.timeline.whereType<TimelineApprovalRequest>(),
+        hasLength(1),
+      );
+      expect(
+        rendered.timeline.whereType<TimelineQuestionRequest>(),
+        hasLength(1),
+      );
+      expect(rendered.plan, const PlanState(active: true, pending: false));
+      expect(find.text('Waiting for approval'), findsOneWidget);
+    },
+  );
+}
+
+/// Silent RPC answerer for the provider seams the ChatScreen tree resolves
+/// (same shape as chat_screen_test's harness).
+class _WindowTestRpc implements DshRpcClient {
+  @override
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+  ) async {
+    return RpcResult(ok: true, value: <String, Object?>{});
+  }
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {}
+}
+
+/// Opens its stream and never frames.
+class _WindowTestSocket implements DshEventSocket {
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    onOpen?.call();
+    return const Stream<ServerRequest>.empty();
+  }
 }
 
 /// Records goal mutations for the command-interception tests.

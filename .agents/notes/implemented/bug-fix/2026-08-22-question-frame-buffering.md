@@ -36,10 +36,14 @@ buffer so an answered request is never replayed. `_sessionStateFor` replays
 the buffer into the newly created state through `handleFrame` — while the
 state is not yet loaded these park in `_pending`, and `ensureLoaded`
 replays them after the history reset, the same ordering as a live frame.
-On connection resync, buffered `session/queue` entries are truncated (the
-new generation replays a fresh queue baseline; web `session/subscribed`
-does the same), while pending approval/question frames survive because the
-mux-open replay re-pushes them.
+A session's buffered `session/queue` entry is truncated in-band by its new
+generation's `session/subscribed` frame (the host pushes the fresh baseline
+after it on the same stream, and omits it for an emptied queue); a
+connected-time truncation raced the mux-open burst and is removed — see
+[queue-rebaseline-in-band](2026-08-29-queue-rebaseline-in-band.md). Pending
+approval/question frames survive the boundary because the burst re-pushes
+them after that frame, and the replay is no longer out-ordered by an
+out-of-band mirror clear.
 
 ## Alternatives considered
 

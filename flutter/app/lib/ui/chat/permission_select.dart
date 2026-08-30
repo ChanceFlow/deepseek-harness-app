@@ -13,7 +13,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../shared/menu_sheet.dart';
 import 'chat_ui_state.dart';
 
 /// The one preset the host gates behind acknowledgement.
@@ -93,37 +93,16 @@ class PermissionSelectChip extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      // Menu-surface sheet (ModelSelect vocabulary): surface fill, 12px
-      // radius, lv3 elevation, 4px inner padding.
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: _PermissionSheet(
-                value: value,
-                onPick: (preset) {
-                  Navigator.of(sheetContext).pop();
-                  _choose(sheetContext, preset);
-                },
-              ),
-            ),
-          ),
-        );
-      },
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 360,
+      builder: (sheetContext) => _PermissionSheet(
+        value: value,
+        onPick: (preset) {
+          Navigator.of(sheetContext).pop();
+          _choose(sheetContext, preset);
+        },
+      ),
     );
   }
 

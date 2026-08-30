@@ -296,6 +296,12 @@ abstract class AppLocalizations {
   /// **'{percent}% of context used'**
   String contextUsedPercent(int percent);
 
+  /// Composer context ring label while no usage sample exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get contextLabel;
+
   /// Context composition legend, system prompt row.
   ///
   /// In en, this message translates to:
@@ -1015,6 +1021,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Standby'**
   String get backendStatusStandby;
+
+  /// No description provided for @backendStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get backendStatusDisabled;
+
+  /// No description provided for @backendEnableTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable this host'**
+  String get backendEnableTooltip;
+
+  /// No description provided for @backendDisableTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable this host'**
+  String get backendDisableTooltip;
 
   /// No description provided for @hostSettingsUnavailable.
   ///
@@ -1849,6 +1873,12 @@ abstract class AppLocalizations {
   /// **'Running…'**
   String get runStatusRunning;
 
+  /// No description provided for @turnStatusWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Deep diving…'**
+  String get turnStatusWorking;
+
   /// No description provided for @runStatusDone.
   ///
   /// In en, this message translates to:
@@ -1914,6 +1944,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Steer'**
   String get steer;
+
+  /// No description provided for @steeringPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Steering'**
+  String get steeringPending;
 
   /// No description provided for @removeQueuedMessage.
   ///
@@ -2065,18 +2101,6 @@ abstract class AppLocalizations {
   /// **'Commands'**
   String get commandsTooltip;
 
-  /// No description provided for @searchCommandsHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Search commands'**
-  String get searchCommandsHint;
-
-  /// No description provided for @noMatchingCommands.
-  ///
-  /// In en, this message translates to:
-  /// **'No matching commands'**
-  String get noMatchingCommands;
-
   /// No description provided for @attachImages.
   ///
   /// In en, this message translates to:
@@ -2098,14 +2122,20 @@ abstract class AppLocalizations {
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'Before first turn · {count} messages'**
+  /// **'Before first turn · {count, plural, =1{1 message} other{{count} messages}}'**
   String beforeFirstTurnHeader(int count);
 
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
-  /// **'Turn {turn} · {count} messages · {toolCount} tools'**
+  /// **'Turn {turn} · {count, plural, =1{1 message} other{{count} messages}} · {toolCount, plural, =1{1 tool} other{{toolCount} tools}}'**
   String turnHeader(int count, int toolCount, int turn);
+
+  /// Failure count appended to a collapsed turn header's tool summary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failed'**
+  String turnFailedCount(int count);
 
   /// No description provided for @contextCompacted.
   ///
@@ -2358,6 +2388,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss notification'**
   String get notificationDismissTooltip;
+
+  /// No description provided for @workingChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Working sessions'**
+  String get workingChannel;
+
+  /// No description provided for @workingChannelDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Shows a silent, persistent notice while a session is working or waiting on you.'**
+  String get workingChannelDescription;
+
+  /// No description provided for @workingNotificationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Working…'**
+  String get workingNotificationBody;
+
+  /// No description provided for @waitingApprovalBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your approval'**
+  String get waitingApprovalBody;
+
+  /// No description provided for @waitingPlanReviewBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your plan review'**
+  String get waitingPlanReviewBody;
+
+  /// No description provided for @waitingAnswerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your answer'**
+  String get waitingAnswerBody;
 
   /// Tooltip for the floating button that scrolls the timeline to its newest message.
   ///

@@ -11,6 +11,7 @@ final class BackendConfig {
     required this.id,
     required this.label,
     required this.baseUri,
+    this.enabled = true,
   });
 
   /// Stable identity (device-local; the seed backend keeps `default`).
@@ -22,21 +23,30 @@ final class BackendConfig {
   /// Base URL (`http://host:port`).
   final Uri baseUri;
 
-  BackendConfig copyWith({String? label, Uri? baseUri}) => BackendConfig(
-    id: id,
-    label: label ?? this.label,
-    baseUri: baseUri ?? this.baseUri,
-  );
+  /// Whether the client keeps a live connection to this host. A disabled
+  /// backend stays configured (Settings still lists and edits it) but
+  /// owns no connection, controller, sidebar slice, or switcher entry;
+  /// the active backend is always enabled.
+  final bool enabled;
+
+  BackendConfig copyWith({String? label, Uri? baseUri, bool? enabled}) =>
+      BackendConfig(
+        id: id,
+        label: label ?? this.label,
+        baseUri: baseUri ?? this.baseUri,
+        enabled: enabled ?? this.enabled,
+      );
 
   @override
   bool operator ==(Object other) =>
       other is BackendConfig &&
       other.id == id &&
       other.label == label &&
-      other.baseUri == baseUri;
+      other.baseUri == baseUri &&
+      other.enabled == enabled;
 
   @override
-  int get hashCode => Object.hash(id, label, baseUri);
+  int get hashCode => Object.hash(id, label, baseUri, enabled);
 }
 
 /// The registry's published state: the configured backends, which one the
@@ -57,10 +67,18 @@ final class BackendRegistryState {
   /// null after any successful mutation.
   final String? errorMessage;
 
-  /// The active backend's config; null before the store loads or when the
-  /// id dangles (a removed backend's fallback lands on the first entry).
+  /// The active backend's config; null before the store loads, when all
+  /// backends are disabled, or when the id dangles (the controller's load
+  /// falls back to the first enabled entry).
   BackendConfig? get active =>
       backends.where((backend) => backend.id == activeId).firstOrNull;
+
+  /// The connected slice of [backends]: every surface that talks to hosts
+  /// (keep-alive, sidebar slices, switchers, notification centers) reads
+  /// this list; Settings' host-management sheet reads [backends] whole so
+  /// a disabled backend stays reachable for re-enabling.
+  List<BackendConfig> get enabledBackends =>
+      backends.where((backend) => backend.enabled).toList(growable: false);
 
   /// A successful mutation clears the error: the state it leaves behind
   /// describes the current list, not the refusal before it.

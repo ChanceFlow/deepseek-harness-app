@@ -22,6 +22,9 @@ plan 审阅四类事件，前台用可点击跳转的 toast，后台用系统通
   首个快照播种不触发（已运行/已等待的会话不是"新"）；running→idle 触发
   turn 完成，`pendingInteraction` 进入 `approval`/`planReview` 触发对应
   等待；`question` 不触发（普通提问不是待办）。会话消失即停止跟踪。
+  question 的等待现由 working 会话的常驻通知（WAITING 态）进入通知体系，
+  见 [working 会话常驻通知](2026-08-29-ongoing-working-notifications.md)；
+  检测器本身仍不发 question 事件。
 - **通知中心**（`app/lib/notifications/app_notification_center.dart`）：
   每 backend 一个实例，订阅 `observeSessions()` 折叠事件，按
   `channelFor(event, isForegrounded)` 路由：后台一律走系统通知；前台除

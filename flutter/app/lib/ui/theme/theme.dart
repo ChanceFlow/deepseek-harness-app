@@ -19,6 +19,19 @@ extension DshSchemeColors on ColorScheme {
   Color get success => brightness == Brightness.light
       ? const Color(0xFF43A047)
       : const Color(0xFF81C784);
+
+  /// Warning amber — the "waiting on the user" state, kept apart from
+  /// `error`'s red. M3 ships no warn role; the reference web palette does:
+  /// `--dsw-alias-state-warn-primary` is amber-500 in both brightnesses
+  /// (design-platform.css:230/:322), worn by the warning state dot
+  /// (StateDot.module.css:37-39). Like `success`, this rides the palette's
+  /// contrast steps around that anchor: light takes the darker amber-600
+  /// (design-platform.css:8, the web's own warn-label step) for text-level
+  /// contrast on a light surface; dark takes the brighter amber-400
+  /// (design-platform.css:6) for legibility on dark surfaces.
+  Color get warning => brightness == Brightness.light
+      ? const Color(0xFFDD8629)
+      : const Color(0xFFF7AD31);
 }
 
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
@@ -42,6 +55,37 @@ const double kShapeSheet = 28;
 const double kShapeDock = 20;
 const double kShapeCard = 14;
 const double kShapeChip = 8;
+
+/// The menu-surface bottom-sheet card (the web MenuDropdown family):
+/// picker sheets — model seat, workspaces, prompt mode, parent session —
+/// ride a `surfaceContainer` card with an `outlineVariant` hairline, the
+/// elevation-3 shadow, and this one radius, one step inside `kShapeCard`
+/// so a floating menu reads tighter than an in-page card. The form is the
+/// recorded house convention of
+/// [the dropdown-selector redesign](../../../../../.agents/notes/implemented/feature/2026-08-25-redesigned-dropdown-selectors.md);
+/// this constant is the fifth radius that note carries.
+const double kShapeMenuSheet = 12;
+
+/// Height ceiling for the menu-surface sheet card: a long picker scrolls
+/// inside the sheet instead of covering the transcript behind it.
+const double kMenuSheetMaxHeight = 520;
+
+/// Width of the session sidebar in each state, shared by the two-pane
+/// chat screen and the panel's rail geometry. The rail is the web shell's
+/// closed-sidebar width — `SIDEBAR_COLLAPSED` in
+/// `reference/deepseek-harness/packages/client/ui-layout/src/client/columns.ts`
+/// (a 24px icon column between 16px paddings, the same 56 the Material 3
+/// NavigationRail spec carries) — and the wide value is this app's fixed
+/// sidebar for both the two-pane pane and the compact drawer (the web
+/// sidebar is drag-resizable between 264 and 420 with a 280 default; a
+/// phone client fixes one width).
+const double kRailWidth = 56;
+const double kSidebarWidth = 320;
+
+/// Gap between the sidebar rail's stacked icon controls: the web rail's
+/// control rhythm (`margin-bottom: 12px` on the rail controls in
+/// `WorkspaceBrowser.module.css`).
+const double kRailControlGap = 12;
 
 class DshTheme {
   const DshTheme._();

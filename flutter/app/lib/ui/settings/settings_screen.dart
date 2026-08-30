@@ -43,7 +43,16 @@ class SettingsRoute extends ConsumerWidget {
     final String resolved =
         backendId ?? ref.watch(settingsBackendScopeProvider);
     if (resolved.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      if (ref.watch(backendRegistryStateProvider).value == null) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      // The registry loaded with no active backend (every backend is
+      // disabled): the host card's manage sheet stays reachable — it
+      // lists disabled backends too, and it is the way back.
+      return SettingsScreen(
+        uiState: const SettingsUiState(),
+        onAction: (SettingsAction _) {},
+      );
     }
     final SettingsController controller = ref.watch(
       settingsControllerProvider(resolved),
@@ -417,7 +426,10 @@ class _HostHeaderTile extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: <Widget>[
-              BackendConnectionDot(backendId: scopedId),
+              BackendConnectionDot(
+                backendId: scopedId,
+                enabled: backend.enabled,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1007,12 +1019,22 @@ class _HostSheet extends ConsumerWidget {
             subtitle: '${backend.baseUri.host}:${backend.baseUri.port}',
             active: backend.id == registry.activeId,
             selected: backend.id == scopedId,
-            onTap: () {
-              Navigator.of(context).pop();
-              ref
-                  .read(settingsBackendScopeProvider.notifier)
-                  .select(backend.id);
-            },
+            enabled: backend.enabled,
+            // Tapping pins the settings scope; the scope only ever
+            // describes a connected host, so a disabled row's tap does
+            // nothing (the switch is its control).
+            onTap: backend.enabled
+                ? () {
+                    Navigator.of(context).pop();
+                    ref
+                        .read(settingsBackendScopeProvider.notifier)
+                        .select(backend.id);
+                  }
+                : null,
+            onToggleEnabled: () => _dispatchBackendAction(
+              ref,
+              SetBackendEnabled(backend.id, !backend.enabled),
+            ),
             onEdit: () => _openBackendSheet(
               context,
               ref,
@@ -1046,6 +1068,8 @@ class _HostSheetRow extends ConsumerWidget {
     required this.onTap,
     this.backendId,
     this.onEdit,
+    this.onToggleEnabled,
+    this.enabled = true,
     this.leading,
   });
 
@@ -1055,8 +1079,13 @@ class _HostSheetRow extends ConsumerWidget {
   final String? subtitle;
   final bool active;
   final bool selected;
-  final VoidCallback onTap;
+  final bool enabled;
+  final VoidCallback? onTap;
   final VoidCallback? onEdit;
+
+  /// The enable/disable switch verb; null on rows that manage no backend
+  /// (the follow-active entry).
+  final VoidCallback? onToggleEnabled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1064,7 +1093,9 @@ class _HostSheetRow extends ConsumerWidget {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final String? backendId = this.backendId;
-    final String version = backendId == null
+    // The version reads the live connection; a disabled backend has
+    // none, and its state is told by the disabled badge instead.
+    final String version = backendId == null || !enabled
         ? ''
         : ref
                   .watch(backendConnectionStateProvider(backendId))
@@ -1090,7 +1121,7 @@ class _HostSheetRow extends ConsumerWidget {
               if (leading != null)
                 leading!
               else if (backendId != null)
-                BackendConnectionDot(backendId: backendId)
+                BackendConnectionDot(backendId: backendId, enabled: enabled)
               else
                 const SizedBox(width: 8),
               const SizedBox(width: 12),
@@ -1115,9 +1146,28 @@ class _HostSheetRow extends ConsumerWidget {
                 const SizedBox(width: 8),
                 _StateBadge(configured: true, label: l10n.backendStatusActive),
               ],
+              if (!enabled) ...<Widget>[
+                const SizedBox(width: 8),
+                _StateBadge(
+                  configured: false,
+                  label: l10n.backendStatusDisabled,
+                ),
+              ],
               if (selected) ...<Widget>[
                 const SizedBox(width: 8),
                 Icon(Icons.check, size: 18, color: scheme.primary),
+              ],
+              if (onToggleEnabled != null) ...<Widget>[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: enabled
+                      ? l10n.backendDisableTooltip
+                      : l10n.backendEnableTooltip,
+                  child: Switch(
+                    value: enabled,
+                    onChanged: (bool _) => onToggleEnabled!(),
+                  ),
+                ),
               ],
               if (onEdit != null) ...<Widget>[
                 const SizedBox(width: 4),
@@ -1265,6 +1315,7 @@ Future<void> _openBackendSheet(
                 : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
             onSetChatHost:
                 backend != null &&
+                    backend.enabled &&
                     backend.id !=
                         ref.read(backendRegistryStateProvider).value?.activeId
                 ? () {

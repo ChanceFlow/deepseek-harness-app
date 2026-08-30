@@ -122,6 +122,10 @@
   },
   "goalStatusLine": "{phase} · revision {revision} · rounds {started}/{max}",
   "contextUsedPercent": "{percent}% of context used",
+  "contextLabel": "Context",
+  "@contextLabel": {
+    "description": "Composer context ring label while no usage sample exists."
+  },
   "systemPromptLabel": "System prompt",
   "@systemPromptLabel": {
     "description": "Context composition legend, system prompt row."
@@ -404,6 +408,9 @@
   "cannotRemoveLastBackend": "The last host cannot be removed.",
   "backendStatusActive": "Active",
   "backendStatusStandby": "Standby",
+  "backendStatusDisabled": "Disabled",
+  "backendEnableTooltip": "Enable this host",
+  "backendDisableTooltip": "Disable this host",
   "hostSettingsUnavailable": "Host settings unavailable",
   "hostSettingsUnavailableBody": "The host did not answer. Repoint it, or choose another host.",
   "hostWritesLabel": "Host writes",
@@ -545,6 +552,7 @@
   "inputLabel": "Input",
   "outputLabel": "Output",
   "runStatusRunning": "Running…",
+  "turnStatusWorking": "Deep diving…",
   "runStatusDone": "Done",
   "runStatusFailed": "Failed",
   "pauseGoal": "Pause goal",
@@ -556,6 +564,7 @@
   "saveQueuedMessage": "Save queued message",
   "cancelEdit": "Cancel editing",
   "steer": "Steer",
+  "steeringPending": "Steering",
   "removeQueuedMessage": "Remove queued message",
   "approveTool": "Approve tool: {tool}",
   "allow": "Allow",
@@ -581,13 +590,12 @@
   "removeImage": "Remove {name}",
   "delivery": "Delivery",
   "commandsTooltip": "Commands",
-  "searchCommandsHint": "Search commands",
-  "noMatchingCommands": "No matching commands",
   "attachImages": "Attach images",
   "pickFromGallery": "Pick from gallery",
   "unknownImageType": "unknown image type for {name}",
-  "beforeFirstTurnHeader": "Before first turn · {count} messages",
-  "turnHeader": "Turn {turn} · {count} messages · {toolCount} tools",
+  "beforeFirstTurnHeader": "Before first turn · {count, plural, =1{1 message} other{{count} messages}}",
+  "turnHeader": "Turn {turn} · {count, plural, =1{1 message} other{{count} messages}} · {toolCount, plural, =1{1 tool} other{{toolCount} tools}}",
+  "turnFailedCount": "{count} failed",
   "contextCompacted": "Context compacted",
   "compactedHistoryCount": "Compacted {count} history items",
   "recallLabel": "Session recall",
@@ -1086,6 +1094,14 @@
       }
     }
   },
+  "@turnFailedCount": {
+    "description": "Failure count appended to a collapsed turn header's tool summary.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "@compactedHistoryCount": {
     "description": "Compaction notice line count.",
     "placeholders": {
@@ -1167,6 +1183,12 @@
   "planReviewChannel": "Plan reviews",
   "planReviewChannelDescription": "Notifies when a session waits on your plan review.",
   "notificationDismissTooltip": "Dismiss notification",
+  "workingChannel": "Working sessions",
+  "workingChannelDescription": "Shows a silent, persistent notice while a session is working or waiting on you.",
+  "workingNotificationBody": "Working…",
+  "waitingApprovalBody": "Waiting for your approval",
+  "waitingPlanReviewBody": "Waiting for your plan review",
+  "waitingAnswerBody": "Waiting for your answer",
   "jumpToBottomTooltip": "Jump to bottom",
   "@jumpToBottomTooltip": {
     "description": "Tooltip for the floating button that scrolls the timeline to its newest message."

@@ -145,8 +145,17 @@ class _AppRootState extends ConsumerState<AppRoot> {
 
   /// Jumps to [target]'s session: switches the active backend when needed,
   /// selects the session on that backend's controller (which opens it), and
-  /// lands on the chat destination.
+  /// lands on the chat destination. A target whose backend is gone or
+  /// disabled is dropped: its session belongs to a released connection
+  /// (reading the controller family would reconnect the host).
   void _navigateToTarget(NotificationTarget target) {
+    final registry = ref.read(backendRegistryStateProvider).value;
+    if (registry != null &&
+        !registry.enabledBackends.any(
+          (backend) => backend.id == target.backendId,
+        )) {
+      return;
+    }
     final activeBackendId = ref.read(activeBackendIdProvider).value;
     if (activeBackendId != target.backendId) {
       unawaited(

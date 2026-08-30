@@ -25,6 +25,7 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
 import 'package:app/ui/shared/session_tree.dart';
+import 'package:app/ui/theme/theme.dart';
 
 import '../../l10n_app.dart';
 
@@ -80,12 +81,14 @@ LocalStateStore _store() {
 
 /// Pumps the real panel with the chat screen's standard callbacks and
 /// returns the container so tests can read provider state. The store
-/// override defaults to a fresh temp-file-backed store.
+/// override defaults to a fresh temp-file-backed store; [theme] pumps a
+/// specific brightness for role read-backs.
 Future<ProviderContainer> _pumpPanel(
   WidgetTester tester, {
   bool inDrawer = false,
   LocalStateStore? store,
   String selectedSessionId = 's1',
+  ThemeData? theme,
 }) async {
   // Phone-scale logical surface so the tree rows and the foot lay out
   // naturally.
@@ -104,6 +107,7 @@ Future<ProviderContainer> _pumpPanel(
     UncontrolledProviderScope(
       container: container,
       child: l10nApp(
+        theme: theme,
         home: Scaffold(
           body: SessionPanel(
             inDrawer: inDrawer,
@@ -124,6 +128,26 @@ Future<ProviderContainer> _pumpPanel(
 }
 
 void main() {
+  testWidgets(
+    'the continuation hint dissolves the list edge, never overlays it',
+    (tester) async {
+      await _pumpPanel(tester);
+      // The web `.fade` rides as EdgeFade: a dstIn ShaderMask wrapping the
+      // tree, so the rows dissolve into the surface instead of sliding
+      // under a translucent band (the accent bleed this replaced).
+      expect(
+        find.ancestor(
+          of: find.byType(ListView),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is ShaderMask && widget.blendMode == BlendMode.dstIn,
+          ),
+        ),
+        findsWidgets,
+      );
+    },
+  );
+
   testWidgets('the destination selection restores from the store', (
     tester,
   ) async {
@@ -353,5 +377,182 @@ void main() {
     );
     expect(material.color, scheme.primary);
     expect(material.textStyle?.color, scheme.onPrimary);
+  });
+
+  group('rail form', () {
+    // A re-pump inside one test (the theme loop) updates the element tree
+    // in place, so the panel keeps its rail state across pumps: expand
+    // first to make the collapse idempotent per iteration.
+    Future<void> expandIfRail(WidgetTester tester) async {
+      if (find.byTooltip('Open sidebar').evaluate().isNotEmpty) {
+        await tester.tap(find.byTooltip('Open sidebar'));
+        await tester.pumpAndSettle();
+      }
+    }
+
+    Future<void> collapseToRail(WidgetTester tester) async {
+      await expandIfRail(tester);
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the rail column declares the shared rail width', (
+      tester,
+    ) async {
+      await _pumpPanel(tester);
+      await collapseToRail(tester);
+      // The panel's root Container sizes its rail form to the same
+      // theme.dart constant the two-pane host animates to.
+      final box = tester.widget<ConstrainedBox>(
+        find
+            .descendant(
+              of: find.byType(SessionPanel),
+              matching: find.byType(ConstrainedBox),
+            )
+            .first,
+      );
+      expect(box.constraints, const BoxConstraints.tightFor(width: kRailWidth));
+    });
+
+    testWidgets('rail seats ride the stock IconButton: no hand-spun ink, '
+        'size, or sub-48 constraints, in both themes', (tester) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        await _pumpPanel(tester, theme: theme);
+        await collapseToRail(tester);
+        // Past the theme lerp so the read-back colors are the new scheme's.
+        await tester.pump(const Duration(milliseconds: 400));
+        final scheme = theme.colorScheme;
+        for (final glyph in [
+          Icons.add_comment_outlined,
+          Icons.search,
+          Icons.menu,
+        ]) {
+          final seat = tester.widget<IconButton>(
+            find
+                .ancestor(
+                  of: find.byIcon(glyph),
+                  matching: find.byType(IconButton),
+                )
+                .first,
+          );
+          expect(seat.color, isNull, reason: '$glyph carries hand-spun ink');
+          expect(
+            seat.constraints,
+            isNull,
+            reason: '$glyph replaces the stock 48px seat',
+          );
+          expect(
+            seat.padding,
+            isNull,
+            reason: '$glyph replaces the stock padding',
+          );
+          expect(
+            (seat.icon as Icon).size,
+            isNull,
+            reason: '$glyph carries a hand-spun size',
+          );
+          // What the framework resolves for a stock seat is the contract:
+          // the onSurfaceVariant role and the 24px default glyph.
+          final iconTheme = IconTheme.of(tester.element(find.byIcon(glyph)));
+          expect(iconTheme.color, scheme.onSurfaceVariant);
+          expect(iconTheme.size, 24);
+        }
+      }
+    });
+
+    testWidgets("the rail repeats the pane's New Session glyph", (
+      tester,
+    ) async {
+      await _pumpPanel(tester);
+      // Expanded: one add_comment glyph on the filled seat, and the
+      // bottom-nav's chat bubble names no sidebar verb.
+      expect(find.byIcon(Icons.add_comment_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.chat_bubble_outline), findsNothing);
+      await collapseToRail(tester);
+      // Rail: the same verb keeps the same glyph; nothing was swapped.
+      expect(find.byIcon(Icons.add_comment_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.chat_bubble_outline), findsNothing);
+    });
+
+    testWidgets('the selected avatar rides the selected row role, in both '
+        'themes', (tester) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        await _pumpPanel(tester, theme: theme);
+        await expandIfRail(tester);
+        final scheme = theme.colorScheme;
+        // Expanded: the selected tree row fills on secondaryContainer.
+        final tile = tester.widget<ListTile>(
+          find
+              .ancestor(
+                of: find.text('session 1'),
+                matching: find.byType(ListTile),
+              )
+              .first,
+        );
+        expect(tile.selected, isTrue);
+        expect(tile.selectedTileColor, scheme.secondaryContainer);
+        await collapseToRail(tester);
+        await tester.pump(const Duration(milliseconds: 400));
+        // Rail: the selected avatar wears the same role, and its letter
+        // pairs (a filled seat never keeps quiet ink).
+        final selectedAvatar = tester.widget<CircleAvatar>(
+          find.descendant(
+            of: find.byTooltip('session 1'),
+            matching: find.byType(CircleAvatar),
+          ),
+        );
+        expect(selectedAvatar.backgroundColor, scheme.secondaryContainer);
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byTooltip('session 1'),
+                  matching: find.byType(Text),
+                ),
+              )
+              .style!
+              .color,
+          scheme.onSecondaryContainer,
+        );
+        // A resting avatar is the raised seat above the rail's
+        // surfaceContainerLow chrome, in quiet ink.
+        final restingAvatar = tester.widget<CircleAvatar>(
+          find.descendant(
+            of: find.byTooltip('session 2'),
+            matching: find.byType(CircleAvatar),
+          ),
+        );
+        expect(restingAvatar.backgroundColor, scheme.surfaceContainerHigh);
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byTooltip('session 2'),
+                  matching: find.byType(Text),
+                ),
+              )
+              .style!
+              .color,
+          scheme.onSurfaceVariant,
+        );
+      }
+    });
+
+    testWidgets('the selected seat reads selected to semantics', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await _pumpPanel(tester);
+      await collapseToRail(tester);
+      expect(
+        tester.getSemantics(find.byTooltip('session 1')),
+        isSemantics(isSelected: true),
+      );
+      expect(
+        tester.getSemantics(find.byTooltip('session 2')),
+        isSemantics(isSelected: false),
+      );
+      handle.dispose();
+    });
   });
 }

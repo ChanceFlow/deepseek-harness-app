@@ -6,7 +6,7 @@ library;
 import 'dart:async';
 
 import 'package:app/l10n/app_localizations.dart';
-import 'package:app/ui/theme/theme.dart';
+import 'package:app/ui/shared/state_dot.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 
@@ -75,7 +75,7 @@ class JobListAction extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (liveCount > 0)
-              const _StateDot(state: _DotState.ongoing, size: 8),
+              const StateDot(state: StateDotState.ongoing, size: 8),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -167,7 +167,7 @@ class _JobsSheetState extends State<_JobsSheet> {
                         ),
                         child: Row(
                           children: [
-                            _StateDot(state: _dotState(job.status), size: 8),
+                            StateDot(state: _dotState(job.status), size: 8),
                             const SizedBox(width: 8),
                             Text(job.kind, style: theme.textTheme.labelMedium),
                             const SizedBox(width: 8),
@@ -216,52 +216,12 @@ class _JobsSheetState extends State<_JobsSheet> {
   }
 }
 
-enum _DotState { ongoing, done, warning, error }
-
-_DotState _dotState(JobStatus status) => switch (status) {
-  JobStatus.running => _DotState.ongoing,
-  JobStatus.stopping => _DotState.warning,
-  JobStatus.completed => _DotState.done,
-  JobStatus.killed => _DotState.warning,
-  JobStatus.failed => _DotState.error,
+/// Maps a job status onto the shared state-dot vocabulary (web
+/// JobListAction's per-status StateDot).
+StateDotState _dotState(JobStatus status) => switch (status) {
+  JobStatus.running => StateDotState.ongoing,
+  JobStatus.stopping => StateDotState.warning,
+  JobStatus.completed => StateDotState.done,
+  JobStatus.killed => StateDotState.warning,
+  JobStatus.failed => StateDotState.error,
 };
-
-/// Web StateDot: halo + solid core riding currentColor per state.
-class _StateDot extends StatelessWidget {
-  const _StateDot({required this.state, required this.size});
-
-  final _DotState state;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color = switch (state) {
-      _DotState.ongoing => scheme.primary,
-      _DotState.done => scheme.success,
-      _DotState.warning => scheme.error,
-      _DotState.error => scheme.error,
-    };
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Center(
-            child: Container(
-              width: size * 0.6,
-              height: size * 0.6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

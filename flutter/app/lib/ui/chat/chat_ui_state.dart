@@ -145,10 +145,19 @@ final class SelectSession extends ChatAction {
 }
 
 final class SendPrompt extends ChatAction {
-  const SendPrompt(this.text, {this.mode = PromptMode.queue});
+  const SendPrompt(this.text, {this.mode = PromptMode.queue, this.onSettled});
 
   final String text;
   final PromptMode mode;
+
+  /// One-shot settle notice for a composer dispatch: `true` when the host
+  /// accepted the submission, `false` when it failed. The composer holds
+  /// the draft (and defers the cleared marker) until this lands, so a
+  /// failed send never loses the reader's words. Programmatic dispatches
+  /// (plan chip, permission seat) carry no notice — they consume nothing
+  /// the reader wrote. The notice is plumbing, not intent: value identity
+  /// stays the submitted text and mode.
+  final void Function(bool accepted)? onSettled;
 
   @override
   bool operator ==(Object other) =>

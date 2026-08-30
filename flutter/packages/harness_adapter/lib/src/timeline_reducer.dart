@@ -36,6 +36,20 @@ class TimelineReducer {
   bool _partialDirty = false;
 
   void reset(List<JsonMap> history) {
+    // The queue projection is not durable history: `session/queue` snapshots
+    // never land in the session log, and the host pushes a session's baseline
+    // exactly once per mux generation, right after its `session/subscribed`
+    // frame. A rebuild that drops the mirror leaves the dock empty until the
+    // next reconnect (web `Session.resync` keeps its queueMirror for the same
+    // reason — reference session.ts:419-426). The mirror is re-baselined
+    // in-band by the next `session/subscribed` frame, never here.
+    TimelineQueue? queueMirror;
+    for (final item in _items) {
+      if (item is TimelineQueue) {
+        queueMirror = item;
+        break;
+      }
+    }
     _items.clear();
     _lastSeq = -1;
     _clearPartial();
@@ -45,6 +59,7 @@ class TimelineReducer {
     for (final event in sorted) {
       _ingestEvent(event);
     }
+    if (queueMirror != null) _items.add(queueMirror);
   }
 
   List<TimelineItem> snapshot() {
@@ -57,6 +72,13 @@ class TimelineReducer {
   void ingestFrame(ServerRequest envelope) {
     final frame = envelope.payload;
     switch (wireType(frame)) {
+      case 'session/subscribed':
+        // New mux-generation baseline: the host pushes this session's queue
+        // snapshot after this frame on the same stream (api-proxy.ts mux
+        // burst), so the stale mirror clears here — race-free against the
+        // connected publish (web session.ts:482-490 parity: the mirror
+        // re-baselines on the session/subscribed frame).
+        _removeByKey('queue');
       case 'session/event':
         final event = asJsonObject(frame['event']);
         if (event != null) _ingestEvent(event);
@@ -95,15 +117,26 @@ class TimelineReducer {
       case 'question/resolved':
         _removeByKey('question:${wireString(frame, 'questionRpcId')}');
       case 'session/queue':
+        // The whole-snapshot items array is required by the wire contract
+        // (muxFrameSchema: `items` is a non-optional array; an emptied queue
+        // still sends `[]`), so its absence is host breakage, not an empty
+        // queue.
         final queueArray = asJsonArray(frame['items']);
-        final queueItems =
-            queueArray
-                ?.map((entry) => asJsonObject(entry))
-                .whereType<JsonMap>()
-                .map(_toQueueItem)
-                .whereType<SessionQueueItem>()
-                .toList() ??
-            <SessionQueueItem>[];
+        if (queueArray == null) {
+          throw const FormatException(
+            'session/queue frame missing required field "items"',
+          );
+        }
+        final queueItems = <SessionQueueItem>[];
+        for (final entry in queueArray) {
+          final obj = asJsonObject(entry);
+          if (obj == null) {
+            throw const FormatException(
+              'session/queue frame "items" entry is not an object',
+            );
+          }
+          queueItems.add(_toQueueItem(obj));
+        }
         _upsertByKey(
           key: 'queue',
           item: TimelineQueue(items: queueItems),
@@ -561,15 +594,33 @@ class TimelineReducer {
     return '';
   }
 
-  SessionQueueItem? _toQueueItem(JsonMap obj) {
+  /// Decodes one `session/queue` snapshot entry. `id`, `message` and
+  /// `placement` are required by the wire contract
+  /// (reference `events.schema.ts` `muxFrameSchema`), so each absence or
+  /// type mismatch throws with the field name; `placement` is a closed
+  /// union (`queued | steering | context`) — no silent fallback.
+  SessionQueueItem _toQueueItem(JsonMap obj) {
     final itemId = wireString(obj, 'id');
-    if (itemId == null) return null;
+    if (itemId == null) {
+      throw const FormatException(
+        'session/queue item missing required field "id"',
+      );
+    }
     final message = asJsonObject(obj['message']);
-    if (message == null) return null;
-    final placement = switch (wireString(obj, 'placement')) {
+    if (message == null) {
+      throw const FormatException(
+        'session/queue item missing required field "message"',
+      );
+    }
+    final placementValue = wireString(obj, 'placement');
+    final placement = switch (placementValue) {
+      'queued' => QueuePlacement.queued,
       'steering' => QueuePlacement.steering,
       'context' => QueuePlacement.context,
-      _ => QueuePlacement.queued,
+      final unknown => throw FormatException(
+        'session/queue item "placement" is not a known value: '
+        '${unknown == null ? "(missing)" : '"$unknown"'}',
+      ),
     };
     return SessionQueueItem(
       itemId: itemId,

@@ -38,11 +38,16 @@ output only.
 
 The Subagents screen renders the web catalog form (StateDot, label +
 `title · mode · activity` secondary, expandable branches, disabled
-diagnostic rows) and its child view renders through the real `TimelineRow`
+diagnostic rows) in the framework-row form componentized by
+[subagent screen component pass](../simplification/2026-08-29-subagent-screen-framework-component-pass.md),
+and its child view renders through the real `TimelineRow`
 set with three read-only semantics: the read-only composer notice for
-one-shot/parent-offline children (`SubagentReadOnlyComposer` copy), queued
-messages as read-only previews (`queueMutable = subagent === null`), and a
-locked plan chip fed by `observePlan(childId)`.
+one-shot/parent-offline children (`SubagentReadOnlyComposer` copy — the
+offline gate reads the availability of the catalog level owning the row,
+see
+[subagent lineage events](../bug-fix/2026-08-29-subagent-lineage-events-typed-mode-and-sheet-visibility.md)),
+queued messages as read-only previews (`queueMutable = subagent === null`),
+and a locked plan chip fed by `observePlan(childId)`.
 
 ## Alternatives considered
 

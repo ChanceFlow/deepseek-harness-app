@@ -160,6 +160,50 @@ void main() {
     expect(forBuildBox[1].active, isTrue);
   });
 
+  test('a backend disabled in the registry drops out of the slices', () async {
+    final registryStates = StreamController<BackendRegistryState>.broadcast();
+    final laptopStates = StreamController<ChatUiState>.broadcast();
+    final buildBoxStates = StreamController<ChatUiState>.broadcast();
+    final container = await _slicesContainer(
+      registryStates,
+      laptopStates,
+      buildBoxStates,
+    );
+    addTearDown(() => buildBoxStates.close());
+    addTearDown(() => laptopStates.close());
+    addTearDown(() => registryStates.close());
+    addTearDown(container.dispose);
+
+    final before = container.read(backendSessionSlicesProvider('default'));
+    expect(before, hasLength(2));
+
+    // The registry republishes with the build box switched off: the
+    // sidebar keeps no slice (and no watch) for a disabled backend.
+    registryStates.add(
+      BackendRegistryState(
+        backends: <BackendConfig>[_laptop, _buildBox.copyWith(enabled: false)],
+        activeId: 'default',
+      ),
+    );
+    await _settle();
+    final after = container.read(backendSessionSlicesProvider('default'));
+    expect(identical(before, after), isFalse);
+    expect(after, hasLength(1));
+    expect(after.single.backend.id, 'default');
+
+    // Re-enabling rebuilds the slice list (the lazy family rebuild).
+    registryStates.add(
+      BackendRegistryState(
+        backends: <BackendConfig>[_laptop, _buildBox],
+        activeId: 'default',
+      ),
+    );
+    await _settle();
+    final rebuilt = container.read(backendSessionSlicesProvider('default'));
+    expect(rebuilt, hasLength(2));
+    expect(rebuilt[1].backend.id, 'b1');
+  });
+
   test('a registry change rebuilds the slice list', () async {
     final registryStates = StreamController<BackendRegistryState>.broadcast();
     final laptopStates = StreamController<ChatUiState>.broadcast();

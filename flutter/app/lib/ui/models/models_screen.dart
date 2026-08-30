@@ -53,57 +53,46 @@ class ModelsScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // One viewport for the page: the session picker and the model
+          // catalog flow in a single scrolling list. Two sibling ListViews
+          // would each attach to the Scaffold's shared primary scroll
+          // controller, and a fixed-height picker pane swallows every swipe
+          // that starts above the catalog.
+          child: ListView(
             children: [
               if (uiState.errorMessage case final error?)
                 Text(error, style: TextStyle(color: theme.colorScheme.error)),
               Text(l10n.sessionLabel, style: theme.textTheme.labelLarge),
-              Expanded(
-                flex: 35,
-                child: ListView(
-                  children: [
-                    for (final session in uiState.sessions)
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: session.id == uiState.selectedSessionId
-                              ? null
-                              : () => onAction(SelectModelsSession(session.id)),
-                          child: Text(session.displayTitle),
-                        ),
-                      ),
-                  ],
+              for (final session in uiState.sessions)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: session.id == uiState.selectedSessionId
+                        ? null
+                        : () => onAction(SelectModelsSession(session.id)),
+                    child: Text(session.displayTitle),
+                  ),
                 ),
-              ),
               const SizedBox(height: 12),
               Text(l10n.providersLabel, style: theme.textTheme.labelLarge),
-              Expanded(
-                flex: 65,
-                child: ListView(
-                  children: [
-                    for (final group
-                        in uiState.models?.groups ??
-                            const <ModelProviderGroup>[]) ...[
-                      Text(group.name, style: theme.textTheme.titleSmall),
-                      for (final model in group.models)
-                        _ModelRow(
-                          group: group,
-                          model: model,
-                          selected: uiState.selected,
-                          onAction: onAction,
-                        ),
-                    ],
-                    for (final failure
-                        in uiState.models?.failures ??
-                            const <ModelCatalogFailure>[])
-                      Text(
-                        '${failure.name}: ${failure.message}',
-                        style: TextStyle(color: theme.colorScheme.error),
-                      ),
-                  ],
+              for (final group
+                  in uiState.models?.groups ??
+                      const <ModelProviderGroup>[]) ...[
+                Text(group.name, style: theme.textTheme.titleSmall),
+                for (final model in group.models)
+                  _ModelRow(
+                    group: group,
+                    model: model,
+                    selected: uiState.selected,
+                    onAction: onAction,
+                  ),
+              ],
+              for (final failure
+                  in uiState.models?.failures ?? const <ModelCatalogFailure>[])
+                Text(
+                  '${failure.name}: ${failure.message}',
+                  style: TextStyle(color: theme.colorScheme.error),
                 ),
-              ),
             ],
           ),
         ),

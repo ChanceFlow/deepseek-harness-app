@@ -116,7 +116,7 @@ void main() {
     }
   });
 
-  testWidgets('send button sends, clears, and clears the saved draft', (
+  testWidgets('send dispatches unsettled, then clears only on acceptance', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -135,15 +135,92 @@ void main() {
     await tester.tap(find.byTooltip('Send'));
     await tester.pump();
 
+    final prompt = actions.whereType<SendPrompt>().single;
+    expect(prompt, const SendPrompt('hello', mode: PromptMode.queue));
+    // The dispatch carries the settle notice the controller calls when
+    // the RPC lands; until then the draft is unconsumed material.
+    expect(prompt.onSettled, isNotNull);
     expect(
-      actions,
-      contains(const SendPrompt('hello', mode: PromptMode.queue)),
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'hello',
     );
+    expect(localState.values[chatDraftKey('s1')], 'hello');
+
+    prompt.onSettled!(true);
+    await tester.pump();
     expect(
       tester.widget<EditableText>(find.byType(EditableText)).controller.text,
       '',
     );
+    // Cleared on acceptance: the marker makes sure a remount does not
+    // resurrect the consumed draft.
     expect(localState.values.containsKey(chatDraftKey('s1')), isFalse);
+  });
+
+  testWidgets('a failed send keeps the draft for the reader', (tester) async {
+    final actions = <ChatAction>[];
+    final localState = FakeChatLocalState();
+    await _pump(
+      tester,
+      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+      actions,
+      localState: localState,
+    );
+
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+
+    actions.whereType<SendPrompt>().single.onSettled!(false);
+    await tester.pump();
+
+    // The words stay in the field and on disk: the failure banner speaks,
+    // the draft never vanishes.
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'hello',
+    );
+    expect(localState.values[chatDraftKey('s1')], 'hello');
+
+    // A resend is a fresh dispatch (one submit per tap): the reader's
+    // second attempt rides a new RPC, not a client-side replay.
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    expect(actions.whereType<SendPrompt>(), hasLength(2));
+  });
+
+  testWidgets('acceptance does not clobber a draft edited mid-flight', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    final localState = FakeChatLocalState();
+    await _pump(
+      tester,
+      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+      actions,
+      localState: localState,
+    );
+
+    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    final prompt = actions.whereType<SendPrompt>().single;
+
+    // The field moved on while the dispatch was in flight (a detached
+    // command dispatch never holds the composer): the reader's newer
+    // text wins over the pending acceptance's clear.
+    await tester.enterText(find.byType(TextField), 'new idea');
+    await tester.pump();
+    prompt.onSettled!(true);
+    await tester.pump();
+
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'new idea',
+    );
+    expect(localState.values[chatDraftKey('s1')], 'new idea');
   });
 
   testWidgets('send button follows the busy preference while running', (
@@ -419,7 +496,20 @@ void main() {
       actions,
       localState: localState,
     );
-    await tester.pumpAndSettle();
+    // The running turn keeps its tail status line sweeping forever (and
+    // the entry glide runs on finite pumps): settle by hand, as the
+    // streaming-follow test does, then pump full follow-glide cycles so
+    // the eased glide lands exactly on the re-estimated extent (the
+    // status line joins the extent after the entry jump).
+    Future<void> settle() async {
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    await tester.pump();
+    await settle();
+    await settle();
 
     // The lazy list builds only the visible slice; any built message
     // locates the timeline's own scrollable (the session panel beside it
@@ -464,11 +554,16 @@ void main() {
     await tester.tap(find.byTooltip('Outline'));
     await tester.pumpAndSettle();
 
-    // Restored collapsed turn 1 hides its rows.
+    // Restored collapsed turn 1 hides its rows; the ledger micro-line is
+    // a plain ListTile (no ▸ glyph chrome), located by its tile and title.
     expect(find.text('inside turn one'), findsNothing);
-    expect(find.textContaining('▸ Turn 1'), findsOneWidget);
+    final header = find.widgetWithText(
+      ListTile,
+      'Turn 1 · 1 message · 0 tools',
+    );
+    expect(header, findsOneWidget);
 
-    await tester.tap(find.textContaining('▸ Turn 1'));
+    await tester.tap(header);
     await tester.pumpAndSettle();
     expect(find.text('inside turn one'), findsOneWidget);
     expect(localState.values[chatCollapsedTurnsKey('s1')], isEmpty);
@@ -506,4 +601,130 @@ void main() {
     expect(actionable.foregroundColor, scheme.onPrimaryContainer);
     expect(actionable.onPressed, isNotNull);
   });
+
+  testWidgets('a slow draft restore lands when the field is untouched', (
+    tester,
+  ) async {
+    final localState = _SlowDraftLocalState();
+    await localState.forSession('s2').writeDraft('stored on s2');
+    localState.delayDraftReadsOf('s2');
+    const sessions = [
+      _session,
+      SessionSummary(id: 's2', title: 'Other', blank: false),
+    ];
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(sessions: sessions, selectedSessionId: 's1'),
+      actions,
+      localState: localState,
+    );
+    await tester.pump();
+
+    await _pump(
+      tester,
+      const ChatUiState(sessions: sessions, selectedSessionId: 's2'),
+      actions,
+      localState: localState,
+    );
+    await tester.pump();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      isEmpty,
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'stored on s2',
+    );
+  });
+
+  testWidgets('a late draft restore yields to live typing', (tester) async {
+    final localState = _SlowDraftLocalState();
+    await localState.forSession('s1').writeDraft('typed here');
+    await localState.forSession('s2').writeDraft('stored on s2');
+    localState.delayDraftReadsOf('s2');
+    const sessions = [
+      _session,
+      SessionSummary(id: 's2', title: 'Other', blank: false),
+    ];
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(sessions: sessions, selectedSessionId: 's1'),
+      actions,
+      localState: localState,
+    );
+    await tester.pump();
+
+    // Switch to s2: the draft read is in flight when the reader starts
+    // typing into the entering session's field.
+    await _pump(
+      tester,
+      const ChatUiState(sessions: sessions, selectedSessionId: 's2'),
+      actions,
+      localState: localState,
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'fresh words');
+    await tester.pump(const Duration(milliseconds: 120));
+
+    // The late answer must not overwrite what the reader typed, and the
+    // field's own (persisted) text stands.
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'fresh words',
+    );
+    expect(localState.values[chatDraftKey('s2')], 'fresh words');
+  });
+}
+
+/// [FakeChatLocalState] whose draft reads answer late, so a test can catch
+/// a restore in flight (the store's disk read is async in production).
+class _SlowDraftLocalState extends FakeChatLocalState {
+  final Set<String> _slowSessions = <String>{};
+
+  void delayDraftReadsOf(String sessionId) => _slowSessions.add(sessionId);
+
+  @override
+  ChatSessionLocalState forSession(String sessionId) {
+    final inner = super.forSession(sessionId);
+    if (!_slowSessions.contains(sessionId)) return inner;
+    return _DelayedDraftSession(inner);
+  }
+}
+
+class _DelayedDraftSession implements ChatSessionLocalState {
+  _DelayedDraftSession(this._inner);
+
+  final ChatSessionLocalState _inner;
+
+  @override
+  Future<String?> readDraft() async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    return _inner.readDraft();
+  }
+
+  @override
+  Future<void> writeDraft(String text) => _inner.writeDraft(text);
+
+  @override
+  Future<bool> expanded(String key) => _inner.expanded(key);
+
+  @override
+  Future<void> setExpanded(String key, bool expanded) =>
+      _inner.setExpanded(key, expanded);
+
+  @override
+  Future<double?> readReadOffset() => _inner.readReadOffset();
+
+  @override
+  Future<void> writeReadOffset(double offset) => _inner.writeReadOffset(offset);
+
+  @override
+  Future<Set<int>> readCollapsedTurns() => _inner.readCollapsedTurns();
+
+  @override
+  Future<void> writeCollapsedTurns(Set<int> turns) =>
+      _inner.writeCollapsedTurns(turns);
 }

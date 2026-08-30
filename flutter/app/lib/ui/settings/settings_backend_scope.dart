@@ -4,9 +4,11 @@
 /// The scope follows the active backend until the user pins one (so the
 /// pre-multi-backend behavior — settings describe what chat uses — stays
 /// intact), then holds the pinned choice across active switches. A
-/// pinned backend that leaves the registry resets the scope to
-/// follow-active. The choice is device-local and session-scoped: the app
-/// restarts to follow-active.
+/// pinned backend that leaves the registry or gets disabled resets the
+/// scope to follow-active: the host pages keep a connection alive for
+/// whatever they describe, so a disabled backend must not stay pinned.
+/// The choice is device-local and session-scoped: the app restarts to
+/// follow-active.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,13 +27,15 @@ class SettingsBackendScope extends Notifier<String> {
     final registry = ref.watch(backendRegistryStateProvider).value;
     final candidate = _pinned ?? active;
     if (candidate.isNotEmpty && registry != null) {
-      final exists = registry.backends.any(
-        (backend) => backend.id == candidate,
+      final usable = registry.backends.any(
+        (backend) => backend.id == candidate && backend.enabled,
       );
-      if (!exists) {
-        // The pinned backend is gone; fall back to following the active
-        // one. The registry guard keeps the active backend removable-proof,
-        // so the fallback target is always configured.
+      if (!usable) {
+        // The pinned backend is gone or switched off; fall back to
+        // following the active one. The registry guards keep the active
+        // backend removable-proof and always enabled, so the fallback
+        // target is a configured backend or empty (all backends
+        // disabled).
         _pinned = null;
         return active;
       }

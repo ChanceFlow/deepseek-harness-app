@@ -4,6 +4,17 @@
 /// `SubagentCatalogAction.tsx` branch expansion loads the child's own
 /// catalog, and the child conversation binds the plan projection the same
 /// way `ChatController` binds the selected session's.
+///
+/// The catalog tree is a host-reported fact: `subagent.list` reads durable
+/// state, so a cold host answers the parent's complete child tree. The
+/// controller seeds the pre-selected parent's tree once the host's
+/// `session.list` includes that session; the newest landed snapshot owns
+/// the tree (live events never merge catalog rows). Membership events keep
+/// it current: child rows in `session.list` carry their `parentSessionId`,
+/// and a child appearing or disappearing under the selected parent or an
+/// expanded branch schedules one debounced catalog re-pull per parent
+/// (web manager `scheduleCatalogRefresh`) — event re-pulls are independent
+/// of the cold seed's once-per-parent suppression.
 library;
 
 import 'dart:async';
@@ -14,6 +25,7 @@ import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/repository/chat_repository.dart';
 
+import '../shared/session_tree.dart';
 import '../state_stream.dart';
 import 'subagent_ui_state.dart';
 
@@ -23,10 +35,16 @@ class SubagentController {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
+        _coldSeedCatalog();
+        _observeChildMembership();
         _publish();
       }),
     );
   }
+
+  /// Web `SessionManager.scheduleCatalogRefresh` window: membership frames
+  /// that land together pull the affected catalog once.
+  static const Duration _catalogRefreshWindow = Duration(milliseconds: 50);
 
   final ChatRepository _repository;
   final AppStateStream<SubagentUiState> _state =
@@ -36,10 +54,22 @@ class SubagentController {
   List<SessionSummary> _sessions = const <SessionSummary>[];
   String? _selectedParentId;
   SubagentCatalog _catalog = const SubagentCatalog();
+
+  /// Parent whose cold-seed catalog load has been requested. `subagent.list`
+  /// answers from durable state and every landed snapshot replaces the tree
+  /// wholesale, so the seed requests a load once per selection event (cold
+  /// seed, explicit select, refresh, post-action reload); later catalog
+  /// upkeep rides child-membership events, which are not gated by this
+  /// field (see `_observeChildMembership`).
+  String? _catalogRequestedFor;
   final Map<String, SubagentCatalog> _branchCatalogs =
       <String, SubagentCatalog>{};
   final Set<String> _branchFailures = <String>{};
   String? _selectedChildId;
+
+  /// The opened child's catalog mode; `subagent.history` must request the
+  /// child under its own mode (host `subagent-not-found` on mismatch).
+  SubagentMode? _selectedChildMode;
   List<TimelineItem> _childTimeline = const <TimelineItem>[];
   StreamSubscription<void>? _planSub;
   PlanState? _childPlan;
@@ -50,10 +80,22 @@ class SubagentController {
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Last-seen child rows (id → running) per watched parent, from the
+  /// `session.list` publication — the membership-change diff baseline.
+  final Map<String, Map<String, bool>> _childIdsByParent =
+      <String, Map<String, bool>>{};
+
+  /// Watched parents whose child membership changed since the last
+  /// catalog load, awaiting the debounce window.
+  final Set<String> _catalogRefreshPending = <String>{};
+  Timer? _catalogRefreshTimer;
+
   SubagentUiState get state => _state.value;
   Stream<SubagentUiState> get uiState => _state.stream;
 
   void dispose() {
+    _catalogRefreshTimer?.cancel();
+    _catalogRefreshTimer = null;
     for (final sub in _subs) {
       unawaited(sub.cancel());
     }
@@ -63,8 +105,11 @@ class SubagentController {
   }
 
   void _publish() {
+    // App-wide session rule (web tree.ts `sessionVisible`): subagent
+    // children never surface in the parent-picking sheet either — the
+    // sidebar hides them, this sheet must not offer them as parents.
     final visible = _sessions
-        .where((session) => !session.blank || session.id == _selectedParentId)
+        .where((session) => sessionVisible(session, _selectedParentId))
         .toList();
     _state.value = SubagentUiState(
       sessions: visible,
@@ -87,7 +132,7 @@ class SubagentController {
       case SelectParent():
         _selectParent(action.sessionId);
       case OpenChild():
-        _openChild(action.childSessionId);
+        _openChild(action.childSessionId, action.mode);
       case SendSubagentPrompt():
         _sendPrompt(action.text);
       case InterruptSubagent():
@@ -104,24 +149,160 @@ class SubagentController {
     }
   }
 
+  /// Cold seed: the catalog tree is a host-reported fact. `subagent.list`
+  /// reads durable session state, so a pre-selected parent's children must
+  /// be on screen without a user gesture. The seed waits for a session
+  /// publication that actually contains the selected parent — that proves
+  /// the host answered `session.list` — so an offline launch surfaces no
+  /// spurious catalog failure.
+  void _coldSeedCatalog() {
+    final parentId = _selectedParentId;
+    if (parentId == null || _catalogRequestedFor == parentId) return;
+    if (!_sessions.any((session) => session.id == parentId)) return;
+    unawaited(_loadCatalog(parentId));
+  }
+
+  /// Membership upkeep against the `session.list` publication
+  /// (web `SessionManager.handleHostEnvelope` parity): a child appearing
+  /// under a watched parent schedules that parent's catalog re-pull
+  /// (`scheduleCatalogRefresh`), a child leaving it folds the row's
+  /// activity locally first and also re-pulls, and a running-state flip
+  /// only folds the local dot either way (`updateCatalogActivity`) — the
+  /// durable catalog row survives its session's removal and the host
+  /// re-reads it per pull. Watched parents are the selected root and the
+  /// expanded branches. The first observation of a parent records the
+  /// baseline without scheduling: the cold seed or the explicit select
+  /// already pulled that tree. Event re-pulls bypass the cold seed's
+  /// once-per-parent suppression.
+  void _observeChildMembership() {
+    final watched = <String>{
+      if (_selectedParentId != null) _selectedParentId!,
+      ..._branchCatalogs.keys,
+    };
+    _childIdsByParent.removeWhere((parent, _) => !watched.contains(parent));
+    for (final parent in watched) {
+      // The same host-answered gate as the cold seed: a publication that
+      // does not carry the parent's own row is pre-`session.list`, and
+      // must not seed the baseline (the cold open's children belong to
+      // the seed pull, not to an event refresh).
+      if (!_sessions.any((session) => session.id == parent)) {
+        _childIdsByParent.remove(parent);
+        continue;
+      }
+      final current = <String, bool>{
+        for (final session in _sessions)
+          if (session.parentSessionId == parent) session.id: session.running,
+      };
+      final previous = _childIdsByParent[parent];
+      _childIdsByParent[parent] = current;
+      if (previous == null) continue;
+      var membershipChanged = false;
+      for (final entry in current.entries) {
+        final wasRunning = previous[entry.key];
+        if (wasRunning == null) {
+          membershipChanged = true;
+        } else if (wasRunning != entry.value) {
+          _foldChildActivity(
+            parent,
+            entry.key,
+            entry.value ? 'running' : 'inactive',
+          );
+        }
+      }
+      for (final childId in previous.keys) {
+        if (current.containsKey(childId)) continue;
+        membershipChanged = true;
+        _foldChildActivity(parent, childId, 'inactive');
+      }
+      if (membershipChanged) _scheduleCatalogRefresh(parent);
+    }
+  }
+
+  /// Rewrites one loaded catalog row's activity in place (the web
+  /// `updateCatalogActivity` local fold): the catalog is a snapshot, so
+  /// live session facts merge into the rows while their tree is watched.
+  void _foldChildActivity(String parentId, String childId, String activity) {
+    SubagentCatalog fold(SubagentCatalog catalog) {
+      var changed = false;
+      final entries = <SubagentEntry>[];
+      for (final entry in catalog.entries) {
+        if (entry.id == childId &&
+            entry.kind == 'child' &&
+            entry.activity != activity) {
+          changed = true;
+          entries.add(
+            SubagentEntry(
+              id: entry.id,
+              kind: entry.kind,
+              mode: entry.mode,
+              activity: activity,
+              hasChildren: entry.hasChildren,
+              label: entry.label,
+              reason: entry.reason,
+            ),
+          );
+        } else {
+          entries.add(entry);
+        }
+      }
+      return changed
+          ? SubagentCatalog(
+              parentSessionId: catalog.parentSessionId,
+              entries: entries,
+              parentAvailable: catalog.parentAvailable,
+            )
+          : catalog;
+    }
+
+    if (parentId == _selectedParentId) {
+      _catalog = fold(_catalog);
+    } else if (_branchCatalogs.containsKey(parentId)) {
+      _branchCatalogs[parentId] = fold(_branchCatalogs[parentId]!);
+    }
+  }
+
+  /// Collapses the membership events that land inside the window into one
+  /// pull per watched parent (web `scheduleCatalogRefresh` debounce).
+  void _scheduleCatalogRefresh(String parentId) {
+    _catalogRefreshPending.add(parentId);
+    if (_catalogRefreshTimer?.isActive ?? false) return;
+    _catalogRefreshTimer = Timer(_catalogRefreshWindow, () {
+      final pending = _catalogRefreshPending.toList();
+      _catalogRefreshPending.clear();
+      for (final parent in pending) {
+        if (parent == _selectedParentId) {
+          unawaited(_loadCatalog(parent));
+        } else if (_branchCatalogs.containsKey(parent)) {
+          unawaited(_loadBranch(parent));
+        }
+      }
+    });
+  }
+
   void _selectParent(String sessionId) {
     if (_selectedParentId == sessionId) return;
     _selectedParentId = sessionId;
     _selectedChildId = null;
+    _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
     _isChildLoading = false;
     ++_childLoadSeq;
     _branchCatalogs.clear();
     _branchFailures.clear();
+    _childIdsByParent.clear();
+    _catalogRefreshPending.clear();
+    _catalogRefreshTimer?.cancel();
+    _catalogRefreshTimer = null;
     _bindChildPlan(null);
     _publish();
     unawaited(_loadCatalog(sessionId));
   }
 
-  void _openChild(String childSessionId) {
+  void _openChild(String childSessionId, SubagentMode mode) {
     final parentId = _selectedParentId;
     if (parentId == null) return;
     _selectedChildId = childSessionId;
+    _selectedChildMode = mode;
     _childTimeline = const <TimelineItem>[];
     _bindChildPlan(childSessionId);
     _publish();
@@ -133,10 +314,17 @@ class SubagentController {
       _publish();
       try {
         final result = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(parentId, childSessionId),
+          () => _repository.loadSubagentHistory(parentId, childSessionId, mode),
         );
         if (seq != _childLoadSeq) return;
-        _childTimeline = result ?? const <TimelineItem>[];
+        if (result == null) {
+          // A failed record load never renders as a fake-empty
+          // transcript: the host failure is on the error banner, and
+          // the view returns to the catalog.
+          _closeChild();
+          return;
+        }
+        _childTimeline = result;
       } finally {
         if (seq == _childLoadSeq) {
           _isChildLoading = false;
@@ -149,6 +337,7 @@ class SubagentController {
   void _closeChild() {
     if (_selectedChildId == null) return;
     _selectedChildId = null;
+    _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
     _isChildLoading = false;
     // A closed record is no longer the newest request; its in-flight
@@ -174,7 +363,8 @@ class SubagentController {
   void _sendPrompt(String text) {
     final parentId = _selectedParentId;
     final childId = _selectedChildId;
-    if (parentId == null || childId == null) return;
+    final mode = _selectedChildMode;
+    if (parentId == null || childId == null || mode == null) return;
     if (text.trim().isEmpty) return;
     unawaited(() async {
       _isSendingChild = true;
@@ -184,7 +374,7 @@ class SubagentController {
           () => _repository.sendSubagentPrompt(parentId, childId, text.trim()),
         );
         final reloaded = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(parentId, childId),
+          () => _repository.loadSubagentHistory(parentId, childId, mode),
         );
         if (reloaded != null && _selectedChildId == childId) {
           _childTimeline = reloaded;
@@ -235,6 +425,7 @@ class SubagentController {
   }
 
   Future<void> _loadCatalog(String parentId) async {
+    _catalogRequestedFor = parentId;
     // Catalog loads are superseded by selecting another parent; only the
     // newest request may land its catalog or clear the loading flag.
     final seq = ++_catalogLoadSeq;
