@@ -84,6 +84,9 @@ void main() {
     expect(state.backends, hasLength(2));
     expect(state.activeId, 'b1');
     expect(state.errorMessage, isNull);
+    // A document predating the `enabled` key decodes every entry as
+    // enabled.
+    expect(state.backends.every((b) => b.enabled), isTrue);
   });
 
   test('a dangling active id falls back to the first backend', () async {
@@ -243,6 +246,167 @@ void main() {
     addTearDown(reloaded.dispose);
     expect((await loadedState(reloaded)).activeId, 'b1');
   });
+
+  test(
+    'disabling the active backend moves active to the next enabled one',
+    () async {
+      final store = storeFor(
+        'disable-relocate',
+        document:
+            '{"backends": ['
+            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080", "enabled": true},'
+            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081", "enabled": true}'
+            '], "activeId": "default"}',
+      );
+      final controller = BackendRegistryController(store);
+      addTearDown(controller.dispose);
+      await loadedState(controller);
+
+      controller.onAction(const SetBackendEnabled('default', false));
+      final state = controller.state;
+      expect(state.backends, hasLength(2));
+      expect(state.backends.first.enabled, isFalse);
+      expect(state.activeId, 'b1');
+      expect(state.errorMessage, isNull);
+
+      // Disabling the now-active backend leaves no enabled backend: the
+      // active id becomes null.
+      controller.onAction(const SetBackendEnabled('b1', false));
+      expect(controller.state.enabledBackends, isEmpty);
+      expect(controller.state.activeId, isNull);
+
+      // Re-enabling a backend while none is active activates it.
+      controller.onAction(const SetBackendEnabled('b1', true));
+      expect(controller.state.activeId, 'b1');
+
+      // Toggling a backend's current state is a silent no-op, not an
+      // error.
+      controller.onAction(const SetBackendEnabled('b1', true));
+      expect(controller.state.errorMessage, isNull);
+    },
+  );
+
+  test('disabling a non-active backend keeps the active id', () async {
+    final controller = BackendRegistryController(
+      storeFor(
+        'disable-standby',
+        document:
+            '{"backends": ['
+            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
+            '], "activeId": "default"}',
+      ),
+    );
+    addTearDown(controller.dispose);
+    await loadedState(controller);
+
+    controller.onAction(const SetBackendEnabled('b1', false));
+    expect(controller.state.activeId, 'default');
+    expect(controller.state.backends.last.enabled, isFalse);
+  });
+
+  test('select refuses a disabled backend and an unknown id', () async {
+    final controller = BackendRegistryController(
+      storeFor(
+        'select-disabled',
+        document:
+            '{"backends": ['
+            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081", "enabled": false}'
+            '], "activeId": "default"}',
+      ),
+    );
+    addTearDown(controller.dispose);
+    await loadedState(controller);
+
+    controller.onAction(const SelectBackend('b1'));
+    expect(controller.state.activeId, 'default');
+    expect(controller.state.errorMessage, contains('Enable the backend'));
+
+    controller.onAction(const SetBackendEnabled('unknown', false));
+    expect(controller.state.errorMessage, contains('Unknown backend'));
+    expect(controller.state.backends, hasLength(2));
+  });
+
+  test(
+    'setEnabled persists: the flag and the relocated active survive reload',
+    () async {
+      final store = storeFor(
+        'disable-persist',
+        document:
+            '{"backends": ['
+            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080", "enabled": true},'
+            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081", "enabled": true}'
+            '], "activeId": "default"}',
+      );
+      final controller = BackendRegistryController(store);
+      addTearDown(controller.dispose);
+      await loadedState(controller);
+
+      controller.onAction(const SetBackendEnabled('default', false));
+      await letPersistLand(fileFor('disable-persist'), '"enabled":false');
+
+      final reloaded = BackendRegistryController(store);
+      addTearDown(reloaded.dispose);
+      final state = await loadedState(reloaded);
+      expect(state.backends.first.enabled, isFalse);
+      // The relocated active id persisted alongside the flag.
+      expect(state.activeId, 'b1');
+    },
+  );
+
+  test(
+    'a load whose active id points at a disabled backend relocates it',
+    () async {
+      final controller = BackendRegistryController(
+        storeFor(
+          'load-reconcile',
+          document:
+              '{"backends": ['
+              '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080", "enabled": false},'
+              '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081", "enabled": true}'
+              '], "activeId": "default"}',
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      final state = await loadedState(controller);
+      expect(state.activeId, 'b1');
+    },
+  );
+
+  test('a load with every backend disabled yields no active backend', () async {
+    final controller = BackendRegistryController(
+      storeFor(
+        'all-disabled',
+        document:
+            '{"backends": ['
+            '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080", "enabled": false},'
+            '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081", "enabled": false}'
+            '], "activeId": "default"}',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    final state = await loadedState(controller);
+    expect(state.activeId, isNull);
+    expect(state.enabledBackends, isEmpty);
+  });
+
+  test(
+    'a new backend is added enabled and does not steal the active id',
+    () async {
+      final controller = BackendRegistryController(storeFor('add-enabled'));
+      addTearDown(controller.dispose);
+      await loadedState(controller);
+
+      controller.onAction(
+        const AddBackend('Build box', 'http://10.0.2.2:3081'),
+      );
+      expect(controller.state.activeId, 'default');
+      expect(controller.state.backends.last.enabled, isTrue);
+    },
+  );
 
   test(
     'the state stream replays the current state to late subscribers',

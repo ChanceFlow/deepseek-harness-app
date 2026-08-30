@@ -1,12 +1,24 @@
 /// Per-backend notification center: folds the session-list stream through
 /// [NotificationDetector] and routes each event to the foreground (in-app
-/// toast) or background (system notification) channel.
+/// toast) or background (system notification) channel, and through
+/// [foldWorkingSessions] to reconcile the ongoing per-session work
+/// notifications.
 ///
-/// Channel selection is a pure lifecycle decision made here at emit time:
-/// an app the user is actively looking at gets a tappable toast, an app
-/// that is not resumed gets a system notification. The one product carve-out
-/// — a selected session's own turn completing while the app is foregrounded
-/// — is silent because the user is already watching it.
+/// Channel selection for transient events is a pure lifecycle decision made
+/// here at emit time: an app the user is actively looking at gets a
+/// tappable toast, an app that is not resumed gets a system notification.
+/// The one product carve-out — a selected session's own turn completing
+/// while the app is foregrounded — is silent because the user is already
+/// watching it.
+///
+/// Ongoing notifications are declarative: the fold says what each session's
+/// row should look like now, and the center posts, updates, promotes, or
+/// cancels only where the desired state differs from what it last applied.
+/// That diff is also what makes a user-swiped-away completion notice stay
+/// away — an OS dismiss is not observable here, and an unchanged desired
+/// state produces no re-post. Selection and lifecycle changes reach the
+/// center as invalidation signals; the fold re-reads both facts from the
+/// polling closures, so a dropped signal self-heals on the next snapshot.
 library;
 
 import 'dart:async';
@@ -15,11 +27,12 @@ import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import 'notification_events.dart';
+import 'system_notifier.dart';
+import 'working_sessions_fold.dart';
 
 /// Decides whether the app is currently in the foreground.
 typedef ForegroundCheck = bool Function();
 
-/// Navigation target carried with a foreground toast event.
 class AppNotificationCenter {
   AppNotificationCenter({
     required this._repository,
@@ -27,8 +40,13 @@ class AppNotificationCenter {
     required this._isForegrounded,
     required this._selectedSessionIdOf,
     required this._onBackground,
+    required this._notifier,
+    Stream<void>? selectionChanges,
+    Stream<void>? foregroundChanges,
   }) {
     _subscription = _repository.observeSessions().listen(_onSessions);
+    _selectionSub = selectionChanges?.listen((_) => _reconcileWorking());
+    _foregroundSub = foregroundChanges?.listen((_) => _reconcileWorking());
   }
 
   final ChatRepository _repository;
@@ -36,7 +54,17 @@ class AppNotificationCenter {
   final ForegroundCheck _isForegrounded;
   final String? Function() _selectedSessionIdOf;
   final void Function(AppNotificationEvent event) _onBackground;
+  final SystemNotifier _notifier;
   final NotificationDetector _detector = NotificationDetector();
+
+  /// Latest session snapshot; the invalidation-driven reconciles re-fold it
+  /// with the current selection/foreground facts.
+  List<SessionSummary> _lastSessions = const <SessionSummary>[];
+
+  /// The last decision applied to the OS per session id. Only present for
+  /// sessions whose desired state is non-gone.
+  final Map<String, WorkingSessionDecision> _applied =
+      <String, WorkingSessionDecision>{};
 
   /// Foreground channel: events the UI should surface as tappable toasts.
   /// A broadcast so multiple surfaces can listen without re-running the fold.
@@ -44,6 +72,8 @@ class AppNotificationCenter {
       StreamController<AppNotificationEvent>.broadcast();
 
   StreamSubscription<List<SessionSummary>>? _subscription;
+  StreamSubscription<void>? _selectionSub;
+  StreamSubscription<void>? _foregroundSub;
 
   /// The foreground channel stream (in-app toasts).
   Stream<AppNotificationEvent> get foregroundEvents => _foreground.stream;
@@ -51,10 +81,13 @@ class AppNotificationCenter {
   /// Stops folding; no further events are emitted.
   void dispose() {
     unawaited(_subscription?.cancel());
+    unawaited(_selectionSub?.cancel());
+    unawaited(_foregroundSub?.cancel());
     unawaited(_foreground.close());
   }
 
   void _onSessions(List<SessionSummary> sessions) {
+    _lastSessions = sessions;
     final events = _detector.fold(
       sessions: sessions,
       selectedSessionId: _selectedSessionIdOf(),
@@ -63,6 +96,7 @@ class AppNotificationCenter {
     for (final event in events) {
       _route(event);
     }
+    _reconcileWorking();
   }
 
   void _route(AppNotificationEvent event) {
@@ -75,9 +109,63 @@ class AppNotificationCenter {
         break;
     }
   }
+
+  /// Applies the fold's desired per-session states as notifier calls,
+  /// touching only the sessions whose state changed.
+  void _reconcileWorking() {
+    final decisions = foldWorkingSessions(
+      sessions: _lastSessions,
+      selectedSessionId: _selectedSessionIdOf(),
+      isForegrounded: _isForegrounded(),
+    );
+    final live = <String>{};
+    for (final decision in decisions) {
+      live.add(decision.sessionId);
+      final applied = _applied[decision.sessionId];
+      final nothingToShow = decision.state == WorkingSessionState.gone;
+      if (applied == decision || (nothingToShow && applied == null)) {
+        continue;
+      }
+      switch (decision.state) {
+        case WorkingSessionState.gone:
+          _applied.remove(decision.sessionId);
+          unawaited(
+            _notifier.cancelWork(
+              backendId: _backendId,
+              sessionId: decision.sessionId,
+            ),
+          );
+        case WorkingSessionState.working || WorkingSessionState.waiting:
+          _applied[decision.sessionId] = decision;
+          if (applied == null || applied.state == WorkingSessionState.done) {
+            unawaited(
+              _notifier.showWork(backendId: _backendId, work: decision),
+            );
+          } else {
+            unawaited(
+              _notifier.updateWorkBody(backendId: _backendId, work: decision),
+            );
+          }
+        case WorkingSessionState.done:
+          _applied[decision.sessionId] = decision;
+          unawaited(
+            _notifier.promoteWorkToDone(backendId: _backendId, work: decision),
+          );
+      }
+    }
+    for (final sessionId in _applied.keys.toList()) {
+      if (live.contains(sessionId)) continue;
+      // Deleted or archived sessions drop out of the snapshot; their row
+      // goes with them.
+      _applied.remove(sessionId);
+      unawaited(
+        _notifier.cancelWork(backendId: _backendId, sessionId: sessionId),
+      );
+    }
+  }
 }
 
-/// Where one event should surface, decided at emit time.
+/// Where one transient event should surface, decided at emit time.
 enum NotificationChannel { foregroundToast, systemNotification, none }
 
 /// Selects the channel for [event]: backgrounded events are always system

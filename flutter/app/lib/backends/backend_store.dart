@@ -33,6 +33,11 @@ final class BackendStoreData {
 
   final List<BackendConfig> backends;
   final String? activeId;
+
+  /// The connected slice of [backends] (see
+  /// `BackendRegistryState.enabledBackends`).
+  List<BackendConfig> get enabledBackends =>
+      backends.where((backend) => backend.enabled).toList(growable: false);
 }
 
 /// JSON file store for the backend registry.
@@ -78,11 +83,23 @@ class BackendStore {
         if (id is! String || label is! String || baseUrl is! String) {
           throw const BackendStoreException('backends.json: malformed entry');
         }
+        // `enabled` is optional for backward compatibility: documents
+        // written before the enable/disable feature decode as enabled;
+        // any other non-null value is malformed.
+        final enabled = switch (obj?['enabled']) {
+          null => true,
+          final bool flag => flag,
+          _ => throw const BackendStoreException(
+            'backends.json: malformed entry',
+          ),
+        };
         final uri = Uri.tryParse(baseUrl);
         if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
           throw BackendStoreException('backends.json: bad baseUrl "$baseUrl"');
         }
-        backends.add(BackendConfig(id: id, label: label, baseUri: uri));
+        backends.add(
+          BackendConfig(id: id, label: label, baseUri: uri, enabled: enabled),
+        );
       }
       if (backends.isEmpty) {
         throw const BackendStoreException('backends.json: empty backend list');
@@ -110,6 +127,7 @@ class BackendStore {
             'id': backend.id,
             'label': backend.label,
             'baseUrl': backend.baseUri.toString(),
+            'enabled': backend.enabled,
           },
       ],
       'activeId': data.activeId,

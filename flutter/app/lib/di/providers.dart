@@ -2,16 +2,20 @@
 /// adapter (import-gate exemption, mirroring the legacy `app/di`).
 ///
 /// Everything backend-dependent is a provider FAMILY keyed by the
-/// backend id: each configured backend owns a live connection
-/// (created when configured, stopped when removed) and one controller
-/// set — switching the active backend rebinds the UI without dropping
-/// the other backends' connections or state.
+/// backend id: each enabled backend owns a live connection (created when
+/// configured, stopped when removed or disabled) and one controller set —
+/// switching the active backend rebinds the UI without dropping the other
+/// backends' connections or state. Disabling a backend drops it from the
+/// watch sets below; with no watcher left, Riverpod's default
+/// auto-dispose releases its connection, repository, and controllers, and
+/// re-enabling lazily rebuilds them.
 library;
 
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -157,17 +161,17 @@ final backendConnectionProvider = Provider.family
       return manager;
     });
 
-/// Keep-alive for every configured backend's connection: watches each
-/// one so all backends stay connected simultaneously (the requirement);
-/// a removed backend drops out of the watch set and its connection
-/// stops. Read by the connection-status surfaces.
+/// Keep-alive for every enabled backend's connection: watches each one
+/// so all connected backends stay connected simultaneously (the
+/// requirement); a removed or disabled backend drops out of the watch
+/// set and its connection stops. Read by the connection-status surfaces.
 final allBackendConnectionsProvider =
     Provider<Map<String, DshConnectionManager>>((ref) {
       final state =
           ref.watch(backendRegistryStateProvider).value ??
           const BackendRegistryState();
       return <String, DshConnectionManager>{
-        for (final backend in state.backends)
+        for (final backend in state.enabledBackends)
           backend.id: ref.watch(
             backendConnectionProvider((backend.id, backend.baseUri)),
           ),
@@ -177,8 +181,9 @@ final allBackendConnectionsProvider =
 /// One backend's live connection state — the manager's phase and host
 /// description (version, cwd) as a watchable stream. The Settings
 /// Backends rows read it to show the connected host's version; the
-/// keep-alive map above guarantees the member exists for every
-/// configured backend.
+/// keep-alive map above guarantees the member exists for every enabled
+/// backend (a disabled backend's rows show their disabled state without
+/// reading this).
 final backendConnectionStateProvider = StreamProvider.family
     .autoDispose<ConnectionState, String>((ref, backendId) async* {
       final manager = ref.watch(allBackendConnectionsProvider)[backendId];
@@ -207,27 +212,67 @@ final systemNotifierProvider = Provider<SystemNotifier>((ref) {
 
 /// Per-backend notification center: folds the session list into
 /// notification events and routes them to the foreground toast channel or
-/// the background system channel. The app-root toast host keeps every
-/// configured backend's center alive so backgrounded turns still notify.
+/// the background system channel, and reconciles each session's ongoing
+/// work notification. The app-root toast host keeps every enabled
+/// backend's center alive so backgrounded turns still notify.
+///
+/// The center watches the backend's chat controller (the selection stream
+/// it listens to and the selected-session poll both read that live
+/// instance), so the controller stays alive with its center — per backend
+/// that is for the app's lifetime, matching the connection keep-alive
+/// requirement.
 final appNotificationCenterProvider = Provider.family
     .autoDispose<AppNotificationCenter, String>((ref, backendId) {
       final systemNotifier = ref.watch(systemNotifierProvider);
+      final chatController = ref.watch(chatControllerProvider(backendId));
       final center = AppNotificationCenter(
         repository: ref.watch(chatRepositoryProvider(backendId)),
         backendId: backendId,
         isForegrounded: () =>
             WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
-        selectedSessionIdOf: () =>
-            ref.read(chatControllerProvider(backendId)).state.selectedSessionId,
+        selectedSessionIdOf: () => chatController.state.selectedSessionId,
         onBackground: systemNotifier.show,
+        notifier: systemNotifier,
+        selectionChanges: chatController.uiState
+            .map((state) => state.selectedSessionId)
+            .distinct()
+            .map((_) {}),
+        foregroundChanges: ref.watch(appLifecycleChangesProvider),
       );
       ref.onDispose(center.dispose);
       return center;
     });
 
-/// Merged foreground channel across every configured backend: the app-root
+/// Broadcast invalidation signal fired on every app lifecycle transition.
+/// The ongoing work notifications re-reconcile on it; the signal carries no
+/// value because the `lifecycleState == resumed` poll is the source of
+/// truth (the binding updates it before notifying observers).
+final appLifecycleChangesProvider = Provider<Stream<void>>((ref) {
+  final controller = StreamController<void>.broadcast();
+  final observer = _LifecycleSignal(controller);
+  WidgetsBinding.instance.addObserver(observer);
+  ref.onDispose(() {
+    WidgetsBinding.instance.removeObserver(observer);
+    unawaited(controller.close());
+  });
+  return controller.stream;
+});
+
+class _LifecycleSignal with WidgetsBindingObserver {
+  _LifecycleSignal(this._controller);
+
+  final StreamController<void> _controller;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_controller.isClosed) _controller.add(null);
+  }
+}
+
+/// Merged foreground channel across every enabled backend: the app-root
 /// toast host listens here and watches the family, which keeps every
-/// backend's center (and its session fold) alive for the app's lifetime.
+/// connected backend's center (and its session fold) alive for the
+/// app's lifetime.
 final foregroundNotificationEventsProvider =
     StreamProvider<AppNotificationEvent>((ref) async* {
       final registry =
@@ -235,7 +280,7 @@ final foregroundNotificationEventsProvider =
           const BackendRegistryState();
       final controller = StreamController<AppNotificationEvent>.broadcast();
       final subscriptions = <StreamSubscription<AppNotificationEvent>>[];
-      for (final backend in registry.backends) {
+      for (final backend in registry.enabledBackends) {
         subscriptions.add(
           ref
               .watch(appNotificationCenterProvider(backend.id))
@@ -301,23 +346,25 @@ final chatUiStateProvider = StreamProvider.family<ChatUiState, String>(
   (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
 );
 
-/// Every configured backend's sidebar slice, keyed by the backend the
-/// chat surface presents (the slice's active flag follows it). Each
-/// slice is SELECTED out of its host's chat state — only the roster
+/// Every enabled backend's sidebar slice, keyed by the backend the
+/// chat surface presents (the slice's active flag follows it). Disabled
+/// backends get no slice — dropping their watch releases the backend's
+/// chat controller (and its connection) until re-enablement rebuilds it.
+/// Each slice is SELECTED out of its host's chat state — only the roster
 /// facts, never the timeline — so a slice whose sessions and workspaces
 /// did not change compares equal and a streaming publish on ANY backend
 /// (each backend's restored session now streams while the app is open)
 /// recomputes nothing and rebuilds no surface (the reference web client
 /// renders the sidebar from per-node subscriptions, not a whole-tree
-/// rebuild). Watching here also keeps every backend's chat controller
-/// alive for the app's lifetime.
+/// rebuild). Watching here also keeps every enabled backend's chat
+/// controller alive for the app's lifetime.
 final backendSessionSlicesProvider =
     Provider.family<List<BackendSessionSlice>, String>((ref, activeBackendId) {
       final registry =
           ref.watch(backendRegistryStateProvider).value ??
           const BackendRegistryState();
       return <BackendSessionSlice>[
-        for (final backend in registry.backends)
+        for (final backend in registry.enabledBackends)
           ref.watch(
             chatUiStateProvider(backend.id).select(
               (uiState) => BackendSessionSlice(

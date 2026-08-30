@@ -87,7 +87,8 @@ void main() {
     expect(data.backends[1].label, 'Build box');
     expect(data.activeId, 'b1');
 
-    // The document is the documented JSON shape.
+    // The document is the documented JSON shape; `enabled` is always
+    // written.
     final decoded =
         jsonDecode(await file.readAsString()) as Map<String, Object?>;
     expect(decoded['activeId'], 'b1');
@@ -95,7 +96,54 @@ void main() {
       'id': 'default',
       'label': 'Laptop',
       'baseUrl': 'http://10.0.2.2:3080',
+      'enabled': true,
     });
+  });
+
+  test('a disabled backend round-trips its enabled flag', () async {
+    final file = fileFor('disabled');
+    final store = BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080');
+    await store.save(
+      BackendStoreData(
+        backends: [
+          BackendConfig(
+            id: 'default',
+            label: 'Laptop',
+            baseUri: Uri.parse('http://10.0.2.2:3080'),
+          ),
+          BackendConfig(
+            id: 'b1',
+            label: 'Build box',
+            baseUri: Uri.parse('http://10.0.2.2:3081'),
+            enabled: false,
+          ),
+        ],
+        activeId: 'default',
+      ),
+    );
+
+    final data = await BackendStore(
+      file,
+      seedBaseUrl: 'http://10.0.2.2:3080',
+    ).load();
+    expect(data.backends.first.enabled, isTrue);
+    expect(data.backends.last.enabled, isFalse);
+    expect(data.enabledBackends.map((b) => b.id), ['default']);
+  });
+
+  test('a document without the enabled key decodes as enabled (pre-disable '
+      'format)', () async {
+    final file = fileFor('legacy');
+    await file.writeAsString(
+      '{"backends": ['
+      '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"}'
+      '], "activeId": "default"}',
+    );
+    final data = await BackendStore(
+      file,
+      seedBaseUrl: 'http://10.0.2.2:3080',
+    ).load();
+    expect(data.backends.single.enabled, isTrue);
   });
 
   test('a dangling active id survives a load (the controller resolves it)', () async {
@@ -117,6 +165,12 @@ void main() {
     ('root is not an object', '[]'),
     ('backends is not an array', '{"backends": {}}'),
     ('malformed entry', '{"backends": [{"id": "default"}], "activeId": null}'),
+    (
+      'non-bool enabled',
+      '{"backends": [{"id": "default", "label": "L",'
+          ' "baseUrl": "http://10.0.2.2:3080", "enabled": "yes"}],'
+          ' "activeId": null}',
+    ),
     (
       'bad baseUrl',
       '{"backends": [{"id": "default", "label": "L", "baseUrl": "not-a-url"}]}',

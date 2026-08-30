@@ -5,17 +5,27 @@
 /// tap can deep-link back into it. Copy resolves once at [initialize] from
 /// the platform locale — an app restart is what picks up a device-language
 /// change, which matches how the plugin caches its Android channel metadata.
+///
+/// Also owns the ongoing per-session work lifecycle ([showWork],
+/// [updateWorkBody], [promoteWorkToDone], [cancelWork]): a silent
+/// persistent row while a session works or waits, replaced in place by a
+/// dismissible completion notice when it finishes. Every row addresses the
+/// session through the deterministic (id, tag) of `notification_key.dart`
+/// and carries the same deep-link payload as the transient posts.
 library;
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:domain/model/session.dart' show SessionPendingInteraction;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'notification_events.dart';
+import 'notification_key.dart';
+import 'working_sessions_fold.dart';
 
 /// Where a notification tap should take the user.
 final class NotificationTarget {
@@ -55,10 +65,19 @@ final class NotificationTarget {
 }
 
 class SystemNotifier {
-  SystemNotifier();
+  /// [plugin] is the injection seam for tests and headless hosts; production
+  /// wiring (main, DI) leaves it null and gets the real plugin.
+  SystemNotifier({FlutterLocalNotificationsPlugin? plugin})
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  /// The silent, low-importance channel hosting ongoing work notifications.
+  static const String _workingChannelId = 'working';
+
+  /// The turn-completion channel the promoted done notice rides (shared with
+  /// the [AppNotificationKind] turn-complete posts).
+  static const String _turnsChannelId = 'turns';
+
+  final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
   int _nextId = 1;
 
@@ -102,6 +121,22 @@ class SystemNotifier {
     _l10n = lookupAppLocalizations(
       WidgetsBinding.instance.platformDispatcher.locale,
     );
+    // Create the working channel explicitly: its silent low importance must
+    // not depend on which show call happens to bootstrap it first.
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          AndroidNotificationChannel(
+            _workingChannelId,
+            _l10n.workingChannel,
+            description: _l10n.workingChannelDescription,
+            importance: Importance.low,
+            playSound: false,
+            enableVibration: false,
+          ),
+        );
     try {
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       if (launchDetails?.didNotificationLaunchApp == true) {
@@ -156,6 +191,129 @@ class SystemNotifier {
     if (target != null) _targets.add(target);
   }
 
+  /// Arms the silent ongoing notification for a running or waiting session
+  /// ([work] carries the desired working/waiting state and the session
+  /// title). Posting and re-posting share the deterministic (id, tag) of
+  /// [work.sessionId], so a process restart replaces the previous process's
+  /// row instead of stranding an orphan.
+  Future<void> showWork({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) => _postOngoing(backendId: backendId, work: work);
+
+  /// Updates an already-armed ongoing notification in place: the same
+  /// (id, tag) with `onlyAlertOnce` keeps it silent and non-bumping as the
+  /// WORKING body turns WAITING (or a rename lands).
+  Future<void> updateWorkBody({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) => _postOngoing(backendId: backendId, work: work);
+
+  /// Replaces the session's ongoing notification — under the same id and
+  /// tag — with a non-ongoing, swipe-away, auto-canceling completion notice
+  /// on the turns channel. Re-showing an existing id replaces it in place
+  /// including the ongoing flag; `onlyAlertOnce` keeps the promotion silent
+  /// because the transient turn-complete event already announces it.
+  Future<void> promoteWorkToDone({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) async {
+    if (kDebugMode && !_initialized) return;
+    await _postWork(
+      backendId: backendId,
+      work: work,
+      details: AndroidNotificationDetails(
+        _turnsChannelId,
+        _l10n.turnCompletionChannel,
+        channelDescription: _l10n.turnCompletionChannelDescription,
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        ongoing: false,
+        autoCancel: true,
+        onlyAlertOnce: true,
+        tag: workingNotificationTag(backendId, work.sessionId),
+      ),
+    );
+  }
+
+  /// Cancels the session's ongoing/done notification by (id, tag). Safe on
+  /// an already-swiped row: the OS dismiss is unobservable, so cancellation
+  /// is how the fold's `gone` (and session removal) tears the row down.
+  Future<void> cancelWork({
+    required String backendId,
+    required String sessionId,
+  }) async {
+    if (kDebugMode && !_initialized) return;
+    try {
+      await _plugin.cancel(
+        workingNotificationId(backendId, sessionId),
+        tag: workingNotificationTag(backendId, sessionId),
+      );
+    } catch (_) {
+      // Notification failures never surface in the chat UI.
+    }
+  }
+
+  Future<void> _postOngoing({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) async {
+    if (kDebugMode && !_initialized) return;
+    await _postWork(
+      backendId: backendId,
+      work: work,
+      details: AndroidNotificationDetails(
+        _workingChannelId,
+        _l10n.workingChannel,
+        channelDescription: _l10n.workingChannelDescription,
+        importance: Importance.low,
+        priority: Priority.low,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: true,
+        tag: workingNotificationTag(backendId, work.sessionId),
+      ),
+    );
+  }
+
+  Future<void> _postWork({
+    required String backendId,
+    required WorkingSessionDecision work,
+    required AndroidNotificationDetails details,
+  }) async {
+    try {
+      await _plugin.show(
+        workingNotificationId(backendId, work.sessionId),
+        work.sessionTitle,
+        _workingBody(work),
+        NotificationDetails(android: details),
+        payload: NotificationTarget(
+          backendId: backendId,
+          sessionId: work.sessionId,
+        ).encode(),
+      );
+    } catch (_) {
+      // Notification failures never surface in the chat UI.
+    }
+  }
+
+  /// The localized body for one ongoing/done decision: the waiting substate
+  /// names what the session waits on; done reuses the turn-complete copy.
+  String _workingBody(WorkingSessionDecision work) {
+    if (work.state == WorkingSessionState.done) {
+      return _l10n.turnCompleteTitle;
+    }
+    final pending = work.pending;
+    if (work.state == WorkingSessionState.waiting && pending != null) {
+      return switch (pending) {
+        SessionPendingInteraction.approval => _l10n.waitingApprovalBody,
+        SessionPendingInteraction.planReview => _l10n.waitingPlanReviewBody,
+        SessionPendingInteraction.question => _l10n.waitingAnswerBody,
+      };
+    }
+    return _l10n.workingNotificationBody;
+  }
+
   ({String title, String Function(String sessionTitle) body}) _copyFor(
     AppNotificationKind kind,
   ) => switch (kind) {
@@ -179,7 +337,7 @@ class SystemNotifier {
 
   String _channelFor(AppNotificationKind kind) => switch (kind) {
     AppNotificationKind.selectedTurnComplete ||
-    AppNotificationKind.otherTurnComplete => 'turns',
+    AppNotificationKind.otherTurnComplete => _turnsChannelId,
     AppNotificationKind.approvalRequested => 'approvals',
     AppNotificationKind.planReviewRequested => 'reviews',
   };

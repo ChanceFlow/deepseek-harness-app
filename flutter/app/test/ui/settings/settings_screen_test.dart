@@ -21,6 +21,7 @@ import 'package:app/ui/settings/locale_preference.dart';
 import 'package:app/ui/settings/settings_controller.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
+import 'package:app/ui/shared/state_dot.dart';
 
 import '../../l10n_app.dart';
 
@@ -988,5 +989,203 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('host switch disables the active host and relocates Active', (
+    WidgetTester tester,
+  ) async {
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
+
+    final Finder sheet = find.byType(BottomSheet);
+    final Finder switches = find.descendant(
+      of: sheet,
+      matching: find.byType(Switch),
+    );
+    expect(switches, findsNWidgets(2));
+    expect(tester.widget<Switch>(switches.at(0)).value, isTrue);
+
+    // Switch the active (Laptop) row off: its connection verb lands on
+    // the build box, its row states the disabled badge without an
+    // error, and no registry refusal rides the sheet.
+    await tester.tap(switches.at(0));
+    await tester.pumpAndSettle();
+
+    final Finder laptopRow = find.ancestor(
+      of: find.descendant(of: sheet, matching: find.text('Laptop')),
+      matching: find.byType(InkWell),
+    );
+    final Finder buildBoxRow = find.ancestor(
+      of: find.descendant(of: sheet, matching: find.text('Build box')),
+      matching: find.byType(InkWell),
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Disabled')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Active')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    expect(tester.widget<Switch>(switches.at(0)).value, isFalse);
+    expect(
+      find.descendant(of: sheet, matching: find.byIcon(Icons.error_outline)),
+      findsNothing,
+    );
+    // The disabled row's dot is the neutral "off by choice" state.
+    expect(
+      find.descendant(
+        of: laptopRow,
+        matching: find.byWidgetPredicate(
+          (Widget w) => w is StateDot && w.state == StateDotState.disabled,
+        ),
+      ),
+      findsOneWidget,
+    );
+    // The edit verbs stay in place: both rows keep their pencil.
+    expect(find.byTooltip('Edit host'), findsNWidgets(2));
+
+    // Re-enabling does not steal the active seat back.
+    await tester.tap(switches.at(0));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(switches.at(0)).value, isTrue);
+    expect(
+      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: laptopRow, matching: find.text('Active')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'a disabled host is inert to scope taps and hides Set as chat host',
+    (WidgetTester tester) async {
+      await pumpHostSettings(tester);
+      await openHostSheet(tester, 'Laptop');
+
+      final Finder sheet = find.byType(BottomSheet);
+      final Finder switches = find.descendant(
+        of: sheet,
+        matching: find.byType(Switch),
+      );
+      // Disable the standby (Build box) row; Laptop keeps active and
+      // scope.
+      await tester.tap(switches.at(1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(of: sheet, matching: find.text('Build box')),
+      );
+      await tester.pumpAndSettle();
+      // The disabled row cannot pin the settings scope: the sheet is
+      // still open and the check stays on the Laptop row.
+      expect(find.byType(BottomSheet), findsOneWidget);
+      final Finder laptopRow = find.ancestor(
+        of: find.descendant(of: sheet, matching: find.text('Laptop')),
+        matching: find.byType(InkWell),
+      );
+      expect(
+        find.descendant(of: laptopRow, matching: find.byIcon(Icons.check)),
+        findsOneWidget,
+      );
+
+      // Its edit sheet offers removal but never the chat-host switch.
+      await tester.tap(find.byTooltip('Edit host').at(1));
+      await tester.pumpAndSettle();
+      expect(find.text('Set as chat host'), findsNothing);
+      expect(find.text('Remove'), findsOneWidget);
+    },
+  );
+
+  testWidgets('disabling every host leaves the manage sheet reachable from the '
+      'fallback card', (WidgetTester tester) async {
+    final _RecordingSettingsRepository laptop = _RecordingSettingsRepository(
+      snapshot: _snapshot,
+      roster: _roster,
+    );
+    final _RecordingSettingsRepository buildBox = _RecordingSettingsRepository(
+      snapshot: const SettingsSnapshot(
+        writable: false,
+        hasDocument: false,
+        namespaces: <SettingsNamespace>[],
+        credentialRefs: <String>[],
+      ),
+      roster: const AgentPresetRoster(),
+    );
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendStoreProvider.overrideWith(
+            (Ref ref) async => _backendStore(document: twoBackendsDoc),
+          ),
+          chatRepositoryProvider('default').overrideWithValue(laptop),
+          chatRepositoryProvider('b1').overrideWithValue(buildBox),
+          for (final Uri uri in <Uri>[
+            Uri.parse('http://10.0.2.2:3080'),
+            Uri.parse('http://10.0.2.2:3081'),
+          ]) ...[
+            dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
+            dshEventSocketProvider(uri).overrideWithValue(_QuietSocket()),
+          ],
+          localStateStoreProvider.overrideWith(
+            (Ref ref) async => LocalStateStore(_storeFile()),
+          ),
+        ],
+        child: l10nApp(home: const SettingsRoute()),
+      ),
+    );
+    await _letRegistryLoad(tester);
+    await tester.pumpAndSettle();
+
+    // Switch both hosts off from the manage sheet.
+    await tester.tap(find.text('Laptop').hitTestable());
+    await tester.pumpAndSettle();
+    final Finder switches = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(Switch),
+    );
+    await tester.tap(switches.at(0));
+    await tester.pumpAndSettle();
+    await tester.tap(switches.at(1));
+    await tester.pumpAndSettle();
+
+    // Close the sheet: the tab shows the host card, not a dead-end
+    // spinner (no active backend exists).
+    await tester.tapAt(const Offset(400, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('Host settings unavailable'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    // The same card opens the manage sheet, which lists the disabled
+    // hosts for re-enabling.
+    await tester.tap(find.widgetWithText(FilledButton, 'Host'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a host'), findsOneWidget);
+    expect(find.text('Disabled'), findsNWidgets(2));
+
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Switch),
+          )
+          .at(0),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(switches.at(0)).value, isTrue);
+    await tester.tapAt(const Offset(400, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Writable'), findsOneWidget);
   });
 }

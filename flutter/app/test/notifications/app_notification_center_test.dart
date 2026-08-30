@@ -1,12 +1,19 @@
 /// AppNotificationCenter wiring tests: the center folds the session stream
 /// and routes events to the foreground (toast) stream or the background
-/// callback per the app's foreground state. The repository double only
-/// implements `observeSessions`; every other member falls through to
-/// `noSuchMethod` (this test never touches them).
+/// callback per the app's foreground state, and reconciles the ongoing
+/// per-session work notifications through the notifier seam (posting,
+/// updating, promoting, and cancelling only where the desired state
+/// changed). The repository double only implements `observeSessions` and
+/// the notifier double only implements the work methods; every other member
+/// falls through to `noSuchMethod` (this test never touches them).
 library;
+
+import 'dart:async';
 
 import 'package:app/notifications/app_notification_center.dart';
 import 'package:app/notifications/notification_events.dart';
+import 'package:app/notifications/system_notifier.dart';
+import 'package:app/notifications/working_sessions_fold.dart';
 import 'package:app/ui/state_stream.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
@@ -17,12 +24,26 @@ SessionSummary _session(
   String? title,
   bool running = false,
   SessionPendingInteraction? pending,
+  bool completed = false,
 }) => SessionSummary(
   id: id,
   title: title,
   running: running,
   blank: false,
   pendingInteraction: pending,
+  completed: completed,
+);
+
+WorkingSessionDecision _decision(
+  String id, {
+  required WorkingSessionState state,
+  String title = 'Work',
+  SessionPendingInteraction? pending,
+}) => WorkingSessionDecision(
+  sessionId: id,
+  sessionTitle: title,
+  state: state,
+  pending: pending,
 );
 
 /// Session-list-only repository double.
@@ -34,6 +55,41 @@ class _SessionsRepository implements ChatRepository {
 
   @override
   Stream<List<SessionSummary>> observeSessions() => sessions.stream;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Work-lifecycle-only notifier double.
+class _RecordingNotifier implements SystemNotifier {
+  final shown = <WorkingSessionDecision>[];
+  final updated = <WorkingSessionDecision>[];
+  final promoted = <WorkingSessionDecision>[];
+  final cancelled = <String>[];
+
+  @override
+  Future<void> showWork({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) async => shown.add(work);
+
+  @override
+  Future<void> updateWorkBody({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) async => updated.add(work);
+
+  @override
+  Future<void> promoteWorkToDone({
+    required String backendId,
+    required WorkingSessionDecision work,
+  }) async => promoted.add(work);
+
+  @override
+  Future<void> cancelWork({
+    required String backendId,
+    required String sessionId,
+  }) async => cancelled.add(sessionId);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -53,6 +109,7 @@ void main() {
       isForegrounded: () => true,
       selectedSessionIdOf: () => 's1',
       onBackground: background.add,
+      notifier: _RecordingNotifier(),
     );
   });
 
@@ -125,6 +182,7 @@ void main() {
       isForegrounded: () => false,
       selectedSessionIdOf: () => 's1',
       onBackground: background.add,
+      notifier: _RecordingNotifier(),
     );
     repository.sessions.value = [
       _session(
@@ -150,6 +208,7 @@ void main() {
         isForegrounded: () => false,
         selectedSessionIdOf: () => 's1',
         onBackground: background.add,
+        notifier: _RecordingNotifier(),
       );
       repository.sessions.value = [
         _session('s1', title: 'Selected', running: true),
@@ -189,4 +248,279 @@ void main() {
       expect(second, isEmpty);
     },
   );
+
+  group('ongoing work reconciliation', () {
+    late _RecordingNotifier notifier;
+    late bool foreground;
+    late String? selected;
+    late StreamController<void> selectionChanges;
+    late StreamController<void> foregroundChanges;
+    late AppNotificationCenter ongoingCenter;
+
+    setUp(() {
+      notifier = _RecordingNotifier();
+      foreground = true;
+      selected = 's1';
+      selectionChanges = StreamController<void>.broadcast();
+      foregroundChanges = StreamController<void>.broadcast();
+    });
+
+    tearDown(() async {
+      ongoingCenter.dispose();
+      await selectionChanges.close();
+      await foregroundChanges.close();
+    });
+
+    /// Builds a center over [initial]; the state-stream seed reconciles.
+    void start(List<SessionSummary> initial) {
+      ongoingCenter = AppNotificationCenter(
+        repository: _SessionsRepository(initial),
+        backendId: 'b1',
+        isForegrounded: () => foreground,
+        selectedSessionIdOf: () => selected,
+        onBackground: (_) {},
+        notifier: notifier,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+    }
+
+    test(
+      'a snapshot that is already running arms the ongoing row (cold start)',
+      () async {
+        start([_session('s2', title: 'Other', running: true)]);
+        await pumpEventQueue();
+        expect(notifier.shown, [
+          _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+        ]);
+        expect(notifier.cancelled, isEmpty);
+      },
+    );
+
+    test(
+      'a completed-unviewed session at cold start shows done directly',
+      () async {
+        start([_session('s2', title: 'Other', completed: true)]);
+        await pumpEventQueue();
+        expect(notifier.promoted, [
+          _decision('s2', state: WorkingSessionState.done, title: 'Other'),
+        ]);
+        expect(notifier.shown, isEmpty);
+      },
+    );
+
+    test('the foregrounded selected session arms nothing; others do', () async {
+      start([
+        _session('s1', title: 'Viewed', running: true),
+        _session('s2', title: 'Other', running: true),
+      ]);
+      await pumpEventQueue();
+      expect(notifier.shown, [
+        _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+      ]);
+      expect(notifier.cancelled, isEmpty);
+    });
+
+    test(
+      'backgrounding arms the selected session; returning foregrounds cancels '
+      'it and leaves the rest applied',
+      () async {
+        start([
+          _session('s1', title: 'Viewed', running: true),
+          _session('s2', title: 'Other', running: true),
+        ]);
+        await pumpEventQueue();
+        expect(notifier.shown, hasLength(1)); // only s2 while foregrounded
+
+        foreground = false;
+        foregroundChanges.add(null);
+        await pumpEventQueue();
+        expect(notifier.shown, [
+          _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+          _decision('s1', state: WorkingSessionState.working, title: 'Viewed'),
+        ]);
+
+        foreground = true;
+        foregroundChanges.add(null);
+        await pumpEventQueue();
+        expect(notifier.cancelled, ['s1']);
+        // s2 keeps its applied row: identical desired state posts nothing.
+        expect(notifier.shown, hasLength(2));
+      },
+    );
+
+    test('pending turns the row into waiting exactly once', () async {
+      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      ongoingCenter = AppNotificationCenter(
+        repository: repository2,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => 's1',
+        onBackground: (_) {},
+        notifier: notifier,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = [
+        _session(
+          's2',
+          title: 'Other',
+          running: true,
+          pending: SessionPendingInteraction.approval,
+        ),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = [
+        _session(
+          's2',
+          title: 'Other',
+          running: true,
+          pending: SessionPendingInteraction.approval,
+        ),
+      ];
+      await pumpEventQueue();
+
+      expect(notifier.shown, [
+        _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+      ]);
+      expect(notifier.updated, [
+        _decision(
+          's2',
+          state: WorkingSessionState.waiting,
+          title: 'Other',
+          pending: SessionPendingInteraction.approval,
+        ),
+      ]);
+    });
+
+    test('working → done promotes once; re-snapshots do not re-post '
+        '(swiped-away stays away)', () async {
+      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      ongoingCenter = AppNotificationCenter(
+        repository: repository2,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => 's1',
+        onBackground: (_) {},
+        notifier: notifier,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', completed: true),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', completed: true),
+      ];
+      await pumpEventQueue();
+      selectionChanges.add(null);
+      await pumpEventQueue();
+
+      expect(notifier.promoted, [
+        _decision('s2', state: WorkingSessionState.done, title: 'Other'),
+      ]);
+      expect(notifier.shown, hasLength(1));
+      expect(notifier.cancelled, isEmpty);
+    });
+
+    test(
+      'reading the done session (openSession clears completed) cancels it',
+      () async {
+        final repository2 = _SessionsRepository(const <SessionSummary>[]);
+        ongoingCenter = AppNotificationCenter(
+          repository: repository2,
+          backendId: 'b1',
+          isForegrounded: () => true,
+          selectedSessionIdOf: () => 's1',
+          onBackground: (_) {},
+          notifier: notifier,
+          selectionChanges: selectionChanges.stream,
+          foregroundChanges: foregroundChanges.stream,
+        );
+        repository2.sessions.value = [
+          _session('s2', title: 'Other', completed: true),
+        ];
+        await pumpEventQueue();
+        expect(notifier.promoted, hasLength(1));
+
+        // The user selects s2: the selection signal fires, then openSession
+        // re-publishes the snapshot with the completed bit consumed.
+        selected = 's2';
+        selectionChanges.add(null);
+        await pumpEventQueue();
+        repository2.sessions.value = [_session('s2', title: 'Other')];
+        await pumpEventQueue();
+
+        expect(notifier.cancelled, ['s2']);
+        expect(notifier.promoted, hasLength(1));
+      },
+    );
+
+    test('a running again after done re-arms the ongoing row', () async {
+      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      ongoingCenter = AppNotificationCenter(
+        repository: repository2,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => 's1',
+        onBackground: (_) {},
+        notifier: notifier,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', completed: true),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+
+      expect(notifier.promoted, hasLength(1));
+      expect(notifier.shown, [
+        _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+      ]);
+      expect(notifier.updated, isEmpty);
+    });
+
+    test('a deleted or archived session cancels its row', () async {
+      final repository2 = _SessionsRepository(const <SessionSummary>[]);
+      ongoingCenter = AppNotificationCenter(
+        repository: repository2,
+        backendId: 'b1',
+        isForegrounded: () => true,
+        selectedSessionIdOf: () => 's1',
+        onBackground: (_) {},
+        notifier: notifier,
+        selectionChanges: selectionChanges.stream,
+        foregroundChanges: foregroundChanges.stream,
+      );
+      repository2.sessions.value = [
+        _session('s2', title: 'Other', running: true),
+      ];
+      await pumpEventQueue();
+      repository2.sessions.value = const <SessionSummary>[];
+      await pumpEventQueue();
+
+      expect(notifier.shown, hasLength(1));
+      expect(notifier.cancelled, ['s2']);
+    });
+
+    test('a gone session that never had a row is not cancelled', () async {
+      start([_session('s3', title: 'Idle')]);
+      await pumpEventQueue();
+      expect(notifier.cancelled, isEmpty);
+      expect(notifier.shown, isEmpty);
+    });
+  });
 }

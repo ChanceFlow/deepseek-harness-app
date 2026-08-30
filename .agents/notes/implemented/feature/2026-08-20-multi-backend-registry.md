@@ -29,11 +29,12 @@ state (re-reading the same file would throw again — the fallback's
 fixed dead loop).
 
 `BackendRegistryController` is the UDF stream over the store:
-Add/Rename/UpdateUrl/Remove/Select, all guarded — the active backend
-cannot be removed, the list never drops below one, labels non-empty,
-URLs http(s) with a host. Refusals ride
+Add/Rename/UpdateUrl/Remove/Select/SetBackendEnabled, all guarded — the
+active backend cannot be removed, the list never drops below one,
+labels non-empty, URLs http(s) with a host, disabled backends
+unselectable. Refusals ride
 `BackendRegistryState.errorMessage`; the next successful mutation
-clears them.
+clears them. Details: [enable/disable](2026-08-29-backend-enable-disable.md).
 
 ### DI: everything backend-dependent is a family
 
@@ -41,30 +42,32 @@ clears them.
 `(id, url)` (a URL edit reconnects; reads create running connections),
 the repository, and the six UI controllers by backend id.
 `allBackendConnectionsProvider` is the keep-alive watching every
-configured backend's connection — all stay connected; removal stops the
-connection. The chat sidebar additionally watches each backend's
-`chatUiStateProvider`, keeping every backend's chat controller alive:
-live session lists everywhere, browsing state surviving switch-back
-(one bounded state per backend).
+enabled backend's connection — all stay connected; disable/removal
+stops it. The chat sidebar additionally watches each backend's
+`chatUiStateProvider`, keeping every connected backend's chat
+controller alive: live session lists everywhere, browsing state
+surviving switch-back.
 
 ### Surfaces
 
-- **Workspaces — aggregate.** One section per backend: live connection
-  dot + label + host + Active marker over that backend's embedded
-  browsing region. Tapping a header or starting a session in a
+- **Workspaces — aggregate.** One section per enabled backend: live
+  connection dot + label + host + Active marker over that backend's
+  embedded browsing region. Tapping a header or starting a session in a
   non-active backend selects it.
 - **Settings — the Backends page.** A mobile-only section ahead of the
   web nav order: one row per backend (live dot, label, `host:port`,
-  Active/Standby pill), an add/edit bottom sheet (label + base URL with
-  the registry validation mirrored inline; the controller re-checks),
-  and removal guards stated as visible copy instead of dead controls.
+  Active/Standby pill, enable switch), an add/edit bottom sheet (label +
+  base URL with the registry validation mirrored inline; the controller
+  re-checks), and removal guards stated as visible copy instead of dead
+  controls.
   The section stays reachable when the active host is not — host pages
   gate behind a snapshot placeholder that routes to Backends (repointing
   the unreachable host must not dead-end).
 - **Chat sidebar — grouped by backend.** With >1 backend the browsing
-  region renders per-backend sections (the Workspaces header vocabulary)
-  over each backend's own workspace-grouped tree. The active slice keeps
-  raw group keys (single-backend-era persisted overrides stay valid);
+  region renders per-enabled-backend sections (the Workspaces header
+  vocabulary) over each backend's own workspace-grouped tree. The
+  active slice keeps raw group keys
+  (single-backend-era persisted overrides stay valid);
   others namespace keys under their backend id and default collapsed.
   Tapping another backend's header or session dispatches `SelectBackend`
   on the registry AND `SelectSession` on the target backend's own
@@ -75,7 +78,7 @@ live session lists everywhere, browsing state surviving switch-back
 
 The live dot is shared vocabulary
 (`flutter/app/lib/ui/shared/backend_connection_dot.dart`): connection
-phases mapped onto the StateDot vocabulary for all three surfaces.
+phases mapped onto the StateDot vocabulary.
 
 ### Tests
 
@@ -106,7 +109,7 @@ the atomic write lands.
 ## Consequences
 
 A build targets any number of hosts; `DSH_BASE_URL` becomes the seed
-backend's URL only. All configured backends stay connected for the
+backend's URL only. All enabled backends stay connected for the
 app's lifetime. Backend ids are device-local; non-active backends'
 sidebar toggles key on them, so a reinstall resets those (the active
 backend's raw keys survive). Settings' host pages render inside a

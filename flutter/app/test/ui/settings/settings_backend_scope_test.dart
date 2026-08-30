@@ -159,4 +159,37 @@ void main() {
       expect(notifier.isPinned, isFalse);
     },
   );
+
+  test(
+    'disabling the pinned backend resets the scope to follow-active',
+    () async {
+      final h = await _pump();
+      final notifier = h.container.read(settingsBackendScopeProvider.notifier);
+
+      notifier.select('b1');
+      expect(h.container.read(settingsBackendScopeProvider), 'b1');
+
+      // A disabled backend has no live connection for the host pages to
+      // describe; the scope falls back to following the (enabled)
+      // active one.
+      await _act(h, const SetBackendEnabled('b1', false));
+      expect(h.container.read(settingsBackendScopeProvider), 'default');
+      expect(notifier.isPinned, isFalse);
+
+      // Re-enabling does not pull the scope back to the old pin.
+      await _act(h, const SetBackendEnabled('b1', true));
+      expect(h.container.read(settingsBackendScopeProvider), 'default');
+    },
+  );
+
+  test('disabling every backend empties the scope', () async {
+    final h = await _pump();
+
+    await _act(h, const SetBackendEnabled('default', false));
+    // The active id relocated to b1; the scope follows.
+    expect(h.container.read(settingsBackendScopeProvider), 'b1');
+
+    await _act(h, const SetBackendEnabled('b1', false));
+    expect(h.container.read(settingsBackendScopeProvider), '');
+  });
 }

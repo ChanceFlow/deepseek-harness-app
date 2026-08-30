@@ -28,10 +28,12 @@ chat-active backend:
   chat-active switches no longer move it.
 - **Follow-active entry.** While pinned, the picker offers "Follow the
   active backend", which clears the pin.
-- **Gone pin resets.** A pinned backend that leaves the registry (removed
-  on any surface) resets the scope to follow-active; the registry's
-  guards keep the active backend removable-proof, so the fallback target
-  is always configured.
+- **Gone pin resets.** A pinned backend that leaves the registry or gets
+  disabled (on any surface) resets the scope to follow-active; the
+  registry's guards keep the active backend removable-proof and always
+  enabled, so the fallback target is a configured backend or empty
+  (every backend disabled — see
+  [enable/disable](2026-08-29-backend-enable-disable.md)).
 - **Session-scoped.** The pin lives in memory only; the app restarts to
   follow-active. Persisting it would imply the settings scope is a
   durable preference when it is a navigation aid.
