@@ -430,14 +430,17 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       ),
       const SizedBox(height: kRailControlGap),
       Expanded(
-        child: ListView(
-          padding: const EdgeInsets.only(top: 4, bottom: 16),
-          children: [
-            for (final session in widget.sessions.where(
-              (session) => sessionVisible(session, widget.selectedSessionId),
-            ))
-              _buildRailAvatar(context, scheme, session),
-          ],
+        child: ScrollConfiguration(
+          behavior: _SidebarScrollBehavior(glowColor: scheme.outlineVariant),
+          child: ListView(
+            padding: const EdgeInsets.only(top: 4, bottom: 16),
+            children: [
+              for (final session in widget.sessions.where(
+                (session) => sessionVisible(session, widget.selectedSessionId),
+              ))
+                _buildRailAvatar(context, scheme, session),
+            ],
+          ),
         ),
       ),
     ];
@@ -498,19 +501,22 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         // dissolves into the panel surface at its own edge, so no
         // overlay band reads as a stuck-on banner the row accents
         // bleed through.
-        child: EdgeFade(
-          surface: scheme.surfaceContainerLow,
-          child: _queryController.text.trim().isEmpty
-              ? _buildSessionTree(
-                  context,
-                  scheme,
-                  currentGroupKeyOf(
-                    widget.sessions,
-                    widget.workspaces,
-                    widget.selectedSessionId,
-                  ),
-                )
-              : _buildSearchResults(context, scheme),
+        child: ScrollConfiguration(
+          behavior: _SidebarScrollBehavior(glowColor: scheme.outlineVariant),
+          child: EdgeFade(
+            surface: scheme.surfaceContainerLow,
+            child: _queryController.text.trim().isEmpty
+                ? _buildSessionTree(
+                    context,
+                    scheme,
+                    currentGroupKeyOf(
+                      widget.sessions,
+                      widget.workspaces,
+                      widget.selectedSessionId,
+                    ),
+                  )
+                : _buildSearchResults(context, scheme),
+          ),
         ),
       ),
     ];
@@ -741,6 +747,54 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Local scroll behavior for the sidebar's browsing lists (the tree, search
+/// results, and rail avatars): neutralizes the Android overscroll glow to
+/// [scheme.outlineVariant] (a quiet hairline tone) rather than the default
+/// [scheme.secondary] brand blue, so overscrolling at the top of the list
+/// never paints a saturated blue arc across the boundary between the header
+/// banner and the list content.
+class _SidebarScrollBehavior extends MaterialScrollBehavior {
+  const _SidebarScrollBehavior({required this.glowColor});
+
+  final Color glowColor;
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    final AndroidOverscrollIndicator indicator = Theme.of(context).useMaterial3
+        ? AndroidOverscrollIndicator.stretch
+        : AndroidOverscrollIndicator.glow;
+    switch (getPlatform(context)) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return child;
+      case TargetPlatform.android:
+        switch (indicator) {
+          case AndroidOverscrollIndicator.stretch:
+            return StretchingOverscrollIndicator(
+              axisDirection: details.direction,
+              clipBehavior: details.decorationClipBehavior ?? Clip.hardEdge,
+              child: child,
+            );
+          case AndroidOverscrollIndicator.glow:
+            break;
+        }
+      case TargetPlatform.fuchsia:
+        break;
+    }
+    return GlowingOverscrollIndicator(
+      axisDirection: details.direction,
+      color: glowColor,
+      child: child,
     );
   }
 }
