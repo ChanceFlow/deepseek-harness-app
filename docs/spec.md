@@ -103,7 +103,11 @@ binary plan-review intent classifies as `planReview`), and the matching
 rows then carry a derived `SessionSummary.pendingInteraction`
 (`approval` / `planReview` / `question`), which notification detection and
 navigation surfaces read. Replays are idempotent by key; keys for sessions
-that disappear from `session.list` are pruned.
+that disappear from `session.list` are pruned, and a session's keys
+re-baseline in-band on its mux-generation `session/subscribed` frame — the
+generation's replay follows that frame on the same stream, so clearing on
+the connected publish would race the burst and wipe a baseline that already
+landed.
 
 ## 5. Connection Lifecycle
 
@@ -128,6 +132,12 @@ After a new generation connects, the repository:
 3. Refetches `session.history` for each open session.
 4. Replays buffered mux frames that arrived while history was loading.
 
+The mux-open burst flows before the `CONNECTED` publish, so no live mirror is
+re-baselined in this list: each session's `session/subscribed` frame drops
+its pending-interaction keys, its queue projection, and its buffered queue
+snapshot in-band, and the generation's replayed frames rebuild them after it
+on the same stream.
+
 ## 6. Timeline Folding
 
 Raw dsh session events are folded by `TimelineReducer` into neutral items.
@@ -144,7 +154,7 @@ Raw dsh session events are folded by `TimelineReducer` into neutral items.
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
-| `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries |
+| `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only baseline: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
 | `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
 | `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
 
@@ -288,9 +298,17 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 ## 11. Subagent Ownership
 
 - A subagent is addressed by `parentSessionId` + `childSessionId`, never by display label.
-- `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`.
-- `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent.
+- `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`. `mode` is the domain enum `SubagentMode` (`oneShot` / `continuable`), required on child rows: a child row with a missing or unknown wire mode fails loud at decode; diagnostic rows carry none.
+- `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent; its `parentAvailable` gates the composer for the rows of that catalog level only.
 - MVP supports `subagent.list`, `subagent.history`, `subagent.prompt`, and `subagent.interrupt`.
+- `subagent.history` carries the addressed row's own `mode` in the request; the host matches it against the durable entry and answers a mismatch as `subagent-not-found`. `subagent.prompt` and `subagent.interrupt` are pinned to `'continuable'` by the request schemas.
+- The catalog tree is a host-reported fact: `subagent.list` reads durable
+  state, so a cold host answers the parent's complete child tree.
+  `SubagentController` seeds the pre-selected parent's catalog once the
+  host's `session.list` includes that session; each landed snapshot
+  replaces the tree, and live events never merge catalog rows.
+- `session.list` rows carry the spawning parent as `SessionSummary.parentSessionId`. A child appearing under — or leaving — the selected parent or an expanded branch schedules one debounced `subagent.list` re-pull for that parent (web manager `scheduleCatalogRefresh`); a removal or a running-state flip folds that child's catalog-row activity locally first (lit or dimmed, web `updateCatalogActivity`). Event re-pulls are independent of the cold seed's once-per-parent gate.
+- Subagent children never surface as selectable parents: the picker sheet applies the app-wide `sessionVisible` rule alongside the sidebar.
 
 ## 12. Session Titles
 

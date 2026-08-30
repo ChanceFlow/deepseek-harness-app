@@ -18,10 +18,18 @@ class StateStream<T> {
   bool _closed = false;
 
   /// Current value; setting it publishes to every active listener.
+  ///
+  /// A write that is value-equal (`==`) to the current value publishes
+  /// nothing: the stats/pressure folds mint a fresh equal instance on
+  /// every folded event, and re-assigning unchanged facts downstream
+  /// would rebuild the whole UI for no observable change. Lists and other
+  /// identity-compared types pass the gate unless the same instance is
+  /// re-assigned, so collection-backed state keeps publishing normally.
   T get value => _value;
 
   set value(T next) {
     if (_closed) return;
+    if (_value == next) return;
     _value = next;
     _controller.add(next);
   }

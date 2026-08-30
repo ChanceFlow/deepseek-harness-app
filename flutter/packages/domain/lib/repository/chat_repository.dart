@@ -225,13 +225,27 @@ abstract class ChatRepository {
 
   Future<SubagentCatalog> loadSubagents(String parentSessionId);
 
+  /// Stop one running continuable child (`subagent.interrupt`). The verb
+  /// exists only for [SubagentMode.continuable] rows — the host pins the
+  /// request to that mode and answers a misaddressed row with
+  /// `subagent-not-found`.
   Future<void> interruptSubagent(String parentSessionId, String childSessionId);
 
+  /// Read one child's transcript (`subagent.history`). [mode] is the
+  /// addressed row's own catalog mode: the host matches the request mode
+  /// against the durable entry and rejects a mismatch as
+  /// `subagent-not-found`, so a one-shot row never opens under the
+  /// continuable mode (and vice versa).
   Future<List<TimelineItem>> loadSubagentHistory(
     String parentSessionId,
     String childSessionId,
+    SubagentMode mode,
   );
 
+  /// Follow up with one continuable child (`subagent.prompt`). The verb
+  /// exists only for [SubagentMode.continuable] rows — the host pins the
+  /// request to that mode and answers a misaddressed row with
+  /// `subagent-not-found`.
   Future<String> sendSubagentPrompt(
     String parentSessionId,
     String childSessionId,

@@ -123,9 +123,9 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// Fed from the raw approval/question frame stream BEFORE the per-session
   /// fan-out, so sessions never instantiated in the app still light the
   /// sidebar's amber dot and notification detection (web SessionManager
-  /// parity). Cleared per
-  /// connection generation — the reopen replay re-adds still-pending
-  /// requests.
+  /// parity). A session's statuses re-baseline in-band on its
+  /// `session/subscribed` frame — the generation's replay re-adds
+  /// still-pending requests after it.
   final StateStream<Map<String, SessionPendingInteraction>>
   _pendingInteractions = StateStream<Map<String, SessionPendingInteraction>>(
     const <String, SessionPendingInteraction>{},
@@ -133,8 +133,13 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   /// Session id -> per-key pending status (`a:<approvalId>` /
   /// `q:<rpcId>`); a session may wait on several interactions at once.
-  /// [StateStream.value] of [_pendingInteractions] is the last-status-per-
-  /// session projection of this map.
+  /// [StateStream.value] of [_pendingInteractions] is the priority
+  /// projection of this map (web SessionManager: a non-approval
+  /// interaction — question or plan-review — outranks an approval).
+  /// A session's keys drop when its new mux generation's
+  /// `session/subscribed` frame lands — in-band, because that frame
+  /// precedes the generation's replayed requested frames on the same
+  /// stream; dropping them on the connected publish would race the burst.
   final Map<String, Map<String, SessionPendingInteraction>> _pendingBySession =
       <String, Map<String, SessionPendingInteraction>>{};
 
@@ -162,7 +167,9 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// enter `_pending` until `ensureLoaded`, which replays them after the
   /// history reset — the same ordering as a frame arriving live). Matching
   /// `* /resolved` frames compact the buffer so an already-answered request is
-  /// never replayed.
+  /// never replayed, and a session's buffered `session/queue` entry is
+  /// truncated in-band by its next `session/subscribed` frame (web
+  /// manager.ts:714-732): the host omits the baseline for an emptied queue.
   final Map<String, List<ServerRequest>> _pendingBuffers =
       <String, List<ServerRequest>>{};
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
@@ -729,7 +736,7 @@ class HarnessRepositoryImpl implements ChatRepository {
             (entry) => SubagentEntry(
               id: entry.id,
               kind: entry.kind,
-              mode: entry.mode,
+              mode: _subagentModeFromWire(entry),
               activity: entry.activity,
               hasChildren: entry.hasChildren,
               label: entry.label,
@@ -741,6 +748,34 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
+  /// Maps one catalog row's `mode` onto the domain enum. Child rows carry
+  /// it per `subagentListEntrySchema` (only `'one-shot'` /
+  /// `'continuable'`); a child row with a missing or unknown mode fails
+  /// loud naming the field. Diagnostic rows carry none and map to null.
+  SubagentMode? _subagentModeFromWire(SubagentEntryWire entry) {
+    if (entry.kind != 'child') return null;
+    return switch (entry.mode) {
+      'one-shot' => SubagentMode.oneShot,
+      'continuable' => SubagentMode.continuable,
+      null => throw FormatException(
+        'required field "mode" missing or mistyped in ${entry.id}',
+      ),
+      final other => throw FormatException(
+        'field "mode" has unknown value "$other" for subagent child '
+        '${entry.id}',
+      ),
+    };
+  }
+
+  /// The `subagent.history` request carries the addressed row's own mode:
+  /// the host matches it against the durable entry (`catalogChild`,
+  /// api-proxy.ts) and answers a mismatch with `subagent-not-found`. The
+  /// prompt and interrupt verbs are pinned to `'continuable'` by the wire
+  /// schema (`subagentPromptRequestSchema`, `subagentInterruptRequestSchema`);
+  /// the UI surfaces those controls only for continuable rows.
+  static String _subagentModeToWire(SubagentMode mode) =>
+      mode == SubagentMode.oneShot ? 'one-shot' : 'continuable';
+
   @override
   Future<void> interruptSubagent(
     String parentSessionId,
@@ -749,7 +784,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     await _call(_subagentInterrupt, _subagentInterrupt, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
-      'mode': 'continuable',
+      'mode': _subagentModeToWire(SubagentMode.continuable),
     }).valueOrThrow();
   }
 
@@ -757,11 +792,12 @@ class HarnessRepositoryImpl implements ChatRepository {
   Future<List<TimelineItem>> loadSubagentHistory(
     String parentSessionId,
     String childSessionId,
+    SubagentMode mode,
   ) async {
     final value = await _call(_subagentHistory, _subagentHistory, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
-      'mode': 'continuable',
+      'mode': _subagentModeToWire(mode),
     }).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
     final reducer = TimelineReducer(childSessionId);
@@ -778,7 +814,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     final value = await _call(_subagentPrompt, _subagentPrompt, {
       'parentSessionId': parentSessionId,
       'childSessionId': childSessionId,
-      'mode': 'continuable',
+      'mode': _subagentModeToWire(SubagentMode.continuable),
       'content': <Object?>[
         <String, Object?>{'type': 'text', 'text': text},
       ],
@@ -1053,6 +1089,15 @@ class HarnessRepositoryImpl implements ChatRepository {
           _handleProjection(frame);
           return;
         }
+        final sessionId = _frameSessionId(frame);
+        if (type == 'session/subscribed' && sessionId != null) {
+          // New mux-generation baseline, in-band: this frame precedes the
+          // generation's replayed requested/queue frames on the same stream
+          // (reference api-proxy.ts mux burst), so the previous generation's
+          // mirrors drop here — never on the connected publish, which the
+          // burst outruns (web SessionManager `session/subscribed` parity).
+          _dropGenerationMirrors(sessionId);
+        }
         // Registry-global pending-interaction fold: tracked for every
         // session, instantiated or not, before the per-session fan-out
         // (web SessionManager parity — the sidebar's amber dot and
@@ -1060,7 +1105,6 @@ class HarnessRepositoryImpl implements ChatRepository {
         // here). Stable keys make replays
         // idempotent.
         _foldPendingFrame(frame);
-        final sessionId = _frameSessionId(frame);
         if (sessionId == null) return;
         final state = _sessionStates[sessionId];
         if (state == null) {
@@ -1075,6 +1119,28 @@ class HarnessRepositoryImpl implements ChatRepository {
         unawaited(state.handleFrame(frame));
       }),
     );
+  }
+
+  /// Drops one session's stale live mirrors at its new generation's
+  /// `session/subscribed` boundary: the sidebar pending-status keys (the
+  /// burst re-pushes still-pending requests after this frame, so replays
+  /// re-track them), and the buffered `session/queue` snapshot — the host
+  /// omits the baseline when the queue emptied, so a mirror kept across the
+  /// gap would replay stale work on instantiation (web manager.ts:714-732).
+  void _dropGenerationMirrors(String sessionId) {
+    final hadPending = _pendingBySession.remove(sessionId) != null;
+    final buffer = _pendingBuffers[sessionId];
+    if (buffer != null) {
+      final kept = buffer
+          .where((frame) => wireType(frame.payload) != 'session/queue')
+          .toList();
+      if (kept.isEmpty) {
+        _pendingBuffers.remove(sessionId);
+      } else if (kept.length != buffer.length) {
+        _pendingBuffers[sessionId] = kept;
+      }
+    }
+    if (hadPending) _publishPending();
   }
 
   /// Web SessionManager list-level pending fold: `approval/requested`
@@ -1166,8 +1232,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     _publishPending();
   }
 
-  /// Re-derives the per-session last-status projection from the key map
-  /// and publishes it (list rows read the per-session status).
+  /// Re-derives the per-session status projection from the key map and
+  /// publishes it (list rows read the per-session status).
   void _publishPending() {
     _pendingInteractions.value = _projectPending();
   }
@@ -1184,6 +1250,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     cwd: session.cwd,
     agentPreset: session.agentPreset,
     origin: session.origin,
+    parentSessionId: session.parentSessionId,
     pendingInteraction: pending ?? session.pendingInteraction,
     completed: session.completed,
   );
@@ -1456,46 +1523,46 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   Future<void> _resync(ConnectionState connection) async {
     await _resyncMutex.synchronized(() async {
+      // The only out-of-band prep left is the per-session window re-arm.
+      // Every live mirror (pending statuses, the queue projection and the
+      // queue entries in the frame buffer) re-baselines in-band on the
+      // generation's `session/subscribed` frames: `DshConnectionManager`
+      // forwards the mux-open burst before this connected publish, so
+      // clearing here would race — and wipe — a baseline that already
+      // landed (web author comment, reference session.ts:419-426).
       for (final state in _sessionStates.values) {
         state.prepareResync();
       }
-      // New connection generation: the reopen replay re-adds still-pending
-      // approval/question frames, so the old mirror is dropped first (web
-      // SessionManager parity).
-      _pendingBySession.clear();
-      _pendingInteractions.value = const <String, SessionPendingInteraction>{};
-      // Same re-baseline for the frame buffer: the new generation replays a
-      // fresh queue snapshot, so a stale buffered `session/queue` must not
-      // survive (web `session/subscribed` truncates it there). Pending
-      // approval/question frames are re-pushed by the mux-open replay and
-      // re-buffered by `_bufferPendingFrame`.
-      for (final entry in _pendingBuffers.entries.toList()) {
-        final kept = entry.value
-            .where(
-              (frame) => wireString(frame.payload, 'type') != 'session/queue',
-            )
-            .toList();
-        if (kept.isEmpty) {
-          _pendingBuffers.remove(entry.key);
-        } else {
-          _pendingBuffers[entry.key] = kept;
-        }
-      }
-      try {
-        await refreshSessions();
-        await refreshWorkspaces();
-      } catch (_) {
-        // List failure does not block timeline recovery.
-      }
-      for (final state in _sessionStates.values) {
-        try {
-          await state.ensureLoaded(
-            (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
-          );
-        } catch (_) {
-          // Pending state retries on the next generation.
-        }
-      }
+      // Web SessionManager `handleConnected` parity: the list pull and every
+      // opened window's rebuild fire concurrently, so a slow history load on
+      // one session no longer holds back the roster or the other sessions'
+      // re-release from `_pending`. The generation snapshot is taken up
+      // front: a session instantiated during recovery loads through its own
+      // `openSession`, never through this loop. Each per-session load stays
+      // on that session's `_mutex`; the resync mutex still serializes
+      // generations, and this action awaits the whole batch, so a following
+      // generation's prep never overlaps an in-flight branch.
+      final states = _sessionStates.values.toList();
+      await Future.wait<void>(<Future<void>>[
+        () async {
+          try {
+            await refreshSessions();
+            await refreshWorkspaces();
+          } catch (_) {
+            // List failure does not block timeline recovery.
+          }
+        }(),
+        for (final state in states)
+          () async {
+            try {
+              await state.ensureLoaded(
+                (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
+              );
+            } catch (_) {
+              // Pending state retries on the next generation.
+            }
+          }(),
+      ]);
     });
   }
 
@@ -1554,12 +1621,20 @@ class HarnessRepositoryImpl implements ChatRepository {
     return result;
   }
 
-  /// Re-derives the per-session last-status projection from the key map.
+  /// Rebuilds the per-session projection the list rows read. Web
+  /// SessionManager `buildListSnapshot` (sessions/manager.ts:1033-1039)
+  /// takes the first non-approval status, falling back to the first:
+  /// the composer answers questions ahead of approvals, so the sidebar
+  /// dot names the interaction the user can act on.
   Map<String, SessionPendingInteraction> _projectPending() {
     final next = <String, SessionPendingInteraction>{};
     for (final entry in _pendingBySession.entries) {
-      if (entry.value.isEmpty) continue;
-      next[entry.key] = entry.value.values.last;
+      final statuses = entry.value.values;
+      if (statuses.isEmpty) continue;
+      next[entry.key] = statuses.firstWhere(
+        (status) => status != SessionPendingInteraction.approval,
+        orElse: () => statuses.first,
+      );
     }
     return next;
   }
@@ -1576,6 +1651,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     cwd: wire.cwd,
     agentPreset: wire.agentPreset,
     origin: wire.origin,
+    parentSessionId: wire.parentSessionId,
   );
 
   /// `imageLimits` is a host-config projection; one value serves all
@@ -1784,6 +1860,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     cwd: session.cwd,
     agentPreset: agentPreset ?? session.agentPreset,
     origin: session.origin,
+    parentSessionId: session.parentSessionId,
     completed: completed ?? session.completed,
   );
 
@@ -1945,13 +2022,11 @@ final class _SessionState {
   final StateStream<ContextBreakdown?> contextBreakdown =
       StateStream<ContextBreakdown?>(null);
   final StateStream<SessionWindowStats> sessionStats =
-      const SessionWindowStats() == const SessionWindowStats()
-      ? StateStream<SessionWindowStats>(const SessionWindowStats())
-      : StateStream<SessionWindowStats>(const SessionWindowStats());
+      StateStream<SessionWindowStats>(const SessionWindowStats());
   final SessionStatsFold _statsFold = SessionStatsFold();
   final ContextPressureFold _contextFold = ContextPressureFold();
   final Mutex _mutex = Mutex();
-  TimelineReducer _reducer = TimelineReducer('');
+  late final TimelineReducer _reducer = TimelineReducer(sessionId);
   bool _ready = false;
   bool _loading = false;
   bool _hasMoreOlder = false;
@@ -1980,7 +2055,9 @@ final class _SessionState {
           (event) => wireLong(event, 'seq'),
         );
         _hasMoreOlder = page.hasMore;
-        _reducer = TimelineReducer(sessionId);
+        // Reuse the reducer across the rebuild: its queue mirror is a live
+        // baseline the host only pushes once per generation, so a fresh
+        // instance would silently empty the dock (see TimelineReducer.reset).
         _reducer.reset(_history);
         _contextFold.reset(_history);
         _statsFold.reset(_history);
@@ -2009,7 +2086,12 @@ final class _SessionState {
     _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
-    _framesAfterOpen = <ServerRequest>[];
+    // `_framesAfterOpen` keeps its stale entries on purpose: after this prep
+    // every arriving frame parks in `_pending` until `ensureLoaded` replaces
+    // the list with the replayed generation's frames, so no out-of-band
+    // truncation is needed — and a queue baseline that rode the list no
+    // longer lives there at all (it survives the rebuild inside the
+    // reducer's mirror).
   }
 
   Future<void> handleFrame(ServerRequest frame) {
@@ -2081,7 +2163,6 @@ final class _SessionState {
   }
 
   void _rebuild() {
-    _reducer = TimelineReducer(sessionId);
     _reducer.reset(_history);
     _contextFold.reset(_history);
     _statsFold.reset(_history);
