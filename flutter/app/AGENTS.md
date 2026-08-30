@@ -29,9 +29,10 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 | Divider, hairline border | `outlineVariant`, `outline` |
 | Accent, selection, active state | `primary`, `primaryContainer` |
 | User bubble | `secondaryContainer` / `onSecondaryContainer` |
-| Failure, destructive, warning | `error`, `errorContainer` |
+| Failure, destructive | `error`, `errorContainer` |
 | Modal scrim | `scrim` |
-| Success, completed state | `success` (the one non-role color, see below) |
+| Warning, waiting-on-user | `warning` (a non-role color, see below) |
+| Success, completed state | `success` (a non-role color, see below) |
 | Ink host that must stay invisible | `Colors.transparent` |
 
 - **`theme.dart` is the home for a color Material 3 has no role for.** It

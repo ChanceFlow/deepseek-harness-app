@@ -7,7 +7,8 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../shared/menu_sheet.dart';
+
 import 'fish_logo.dart';
 import 'preset_seat.dart';
 
@@ -209,36 +210,17 @@ class WorkspaceChip extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 440),
-              child: _WorkspaceSheet(
-                workspaces: workspaces,
-                currentLabel: label,
-                onPickWorkspace: (workspaceId) {
-                  Navigator.of(sheetContext).pop();
-                  onPickWorkspace(workspaceId);
-                },
-              ),
-            ),
-          ),
-        );
-      },
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 440,
+      builder: (sheetContext) => _WorkspaceSheet(
+        workspaces: workspaces,
+        currentLabel: label,
+        onPickWorkspace: (workspaceId) {
+          Navigator.of(sheetContext).pop();
+          onPickWorkspace(workspaceId);
+        },
+      ),
     );
   }
 }

@@ -14,6 +14,7 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import 'state_dot.dart';
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
 /// workspace before the local overflow control.
@@ -413,9 +414,9 @@ class _SessionVerbButton extends StatelessWidget {
 }
 
 /// Web Menu (figma MenuDropdown) as a bottom sheet for the session-verb
-/// menu: the same menu surface as the workspace action sheet — r12 card,
-/// inverted hairline, lv3 shadow — with the row's title as a caption and
-/// one row per provided verb.
+/// menu: the same menu surface as the workspace action sheet — the shared
+/// [kShapeMenuSheet] card, inverted hairline, lv3 shadow — with the row's
+/// title as a caption and one row per provided verb.
 class _SessionVerbsSheet extends StatelessWidget {
   const _SessionVerbsSheet({required this.title, required this.items});
 
@@ -432,7 +433,7 @@ class _SessionVerbsSheet extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(kShapeMenuSheet),
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: kM3ShadowElevation3,
         ),
@@ -531,73 +532,29 @@ class SessionStatusDot extends StatelessWidget {
   }
 }
 
-/// Web StateDot 'done' (static form): success-primary halo plus solid
-/// core, the green idle/completed indicator.
+/// Web StateDot 'done': the named seat for the green completed indicator
+/// on session rows; the geometry and colors live in the shared [StateDot].
 class DoneDot extends StatelessWidget {
   const DoneDot({super.key, this.size = 10});
 
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.success;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Center(
-            child: Container(
-              width: size * 0.6,
-              height: size * 0.6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      StateDot(state: StateDotState.done, size: size);
 }
 
-/// Web StateDot 'warning' (static form): warn-primary halo plus solid
-/// core, the amber "needs the user" indicator (approval / plan-review /
-/// question).
+/// Web StateDot 'warning': the named seat for the "needs the user"
+/// indicator (approval / plan-review / question) on session rows; the
+/// geometry and colors live in the shared [StateDot].
 class WarningDot extends StatelessWidget {
   const WarningDot({super.key, this.size = 10});
 
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.error;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Center(
-            child: Container(
-              width: size * 0.6,
-              height: size * 0.6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      StateDot(state: StateDotState.warning, size: size);
 }
 
 /// Web WorkspaceBrowser `.sessionOverflowButton`: the local overflow
@@ -689,7 +646,11 @@ class SessionSearchResultRow extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: SizedBox(
         width: 16,
-        child: session.running ? const RunningDot(size: 8) : null,
+        // Web `SearchResultItem` runs the same `sessionStatuses` state
+        // machine as the main session row: pending interaction is the
+        // amber warning dot, running the blue ongoing dot, a finished
+        // session the green done dot, idle stays empty.
+        child: SessionStatusDot(session: session),
       ),
       title: Text(
         title,
@@ -736,36 +697,14 @@ class SessionSearchResultRow extends StatelessWidget {
   }
 }
 
-/// Web StateDot 'ongoing' (static form): deepseek-450 halo plus solid
-/// core, the blue running indicator on session rows.
+/// Web StateDot 'ongoing': the named seat for the blue running indicator
+/// on session rows; the geometry and colors live in the shared [StateDot].
 class RunningDot extends StatelessWidget {
   const RunningDot({super.key, this.size = 10});
 
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-          ),
-          Center(
-            child: Container(
-              width: size * 0.6,
-              height: size * 0.6,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      StateDot(state: StateDotState.ongoing, size: size);
 }

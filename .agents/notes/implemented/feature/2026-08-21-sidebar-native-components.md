@@ -100,3 +100,7 @@ values; the generated deepsuite tokens stay the identity.
   [2026-08-20-workspaces-tab-web-alignment.md](2026-08-20-workspaces-tab-web-alignment.md)
   where they describe the hand-rolled rows; their behavior contracts still
   stand.
+- The collapsed rail's icon seats — stock IconButtons, the shared
+  `secondaryContainer` selection role, and the pane-width constants — are
+  owned by
+  [2026-08-29-sidebar-rail-native-seats.md](../simplification/2026-08-29-sidebar-rail-native-seats.md).

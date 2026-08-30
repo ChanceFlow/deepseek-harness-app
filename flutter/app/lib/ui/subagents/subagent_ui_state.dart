@@ -62,31 +62,40 @@ final class SubagentUiState {
   final bool isLoading;
   final String? errorMessage;
 
-  /// The opened child's catalog entry: the root catalog first, then any
-  /// loaded branch (a child opened from an expanded branch row).
-  SubagentEntry? get selectedChildEntry {
+  /// The catalog that owns the opened child's row: the root tree or the
+  /// expanded branch the row was loaded from. Availability and addressing
+  /// are facts of that level, not of the tree root.
+  SubagentCatalog? get selectedChildCatalog {
     final id = selectedChildId;
     if (id == null) return null;
-    for (final entry in catalog.entries) {
-      if (entry.id == id) return entry;
-    }
+    if (catalog.entries.any((entry) => entry.id == id)) return catalog;
     for (final branch in branchCatalogs.values) {
-      for (final entry in branch.entries) {
-        if (entry.id == id) return entry;
-      }
+      if (branch.entries.any((entry) => entry.id == id)) return branch;
     }
     return null;
   }
 
+  /// The opened child's catalog entry, looked up in its owning catalog.
+  SubagentEntry? get selectedChildEntry {
+    final id = selectedChildId;
+    if (id == null) return null;
+    return selectedChildCatalog?.entries
+        .where((entry) => entry.id == id)
+        .firstOrNull;
+  }
+
   /// Read-only composer reason for the opened child: one-shot records
-  /// never accept input, and a continuable child needs its parent session
-  /// online (web `selectReadOnlySubagent`; mobile keeps the simple rule —
-  /// only continuable + parent-available keeps the message field).
+  /// never accept input, and a continuable child needs the parent of the
+  /// catalog its row lives in online (web `selectReadOnlySubagent`;
+  /// mobile keeps the simple rule — only continuable + parent-available
+  /// keeps the message field).
   SubagentReadOnlyReason? get childReadOnlyReason {
     final entry = selectedChildEntry;
     if (entry == null) return null;
-    if (entry.mode == 'one-shot') return SubagentReadOnlyReason.oneShot;
-    if (!catalog.parentAvailable) {
+    if (entry.mode == SubagentMode.oneShot) {
+      return SubagentReadOnlyReason.oneShot;
+    }
+    if (selectedChildCatalog?.parentAvailable == false) {
       return SubagentReadOnlyReason.parentUnavailable;
     }
     return null;
@@ -123,16 +132,23 @@ final class SelectParent extends SubagentAction {
 }
 
 final class OpenChild extends SubagentAction {
-  const OpenChild(this.childSessionId);
+  const OpenChild(this.childSessionId, this.mode);
 
   final String childSessionId;
 
-  @override
-  bool operator ==(Object other) =>
-      other is OpenChild && other.childSessionId == childSessionId;
+  /// The addressed row's catalog mode. `subagent.history` must request a
+  /// child under its own mode — the host matches the request mode against
+  /// the durable entry and answers a mismatch with `subagent-not-found`.
+  final SubagentMode mode;
 
   @override
-  int get hashCode => childSessionId.hashCode;
+  bool operator ==(Object other) =>
+      other is OpenChild &&
+      other.childSessionId == childSessionId &&
+      other.mode == mode;
+
+  @override
+  int get hashCode => Object.hash(childSessionId, mode);
 }
 
 final class SendSubagentPrompt extends SubagentAction {

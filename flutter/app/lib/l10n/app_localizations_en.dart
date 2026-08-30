@@ -113,6 +113,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get contextLabel => 'Context';
+
+  @override
   String get systemPromptLabel => 'System prompt';
 
   @override
@@ -578,6 +581,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backendStatusStandby => 'Standby';
+
+  @override
+  String get backendStatusDisabled => 'Disabled';
+
+  @override
+  String get backendEnableTooltip => 'Enable this host';
+
+  @override
+  String get backendDisableTooltip => 'Disable this host';
 
   @override
   String get hostSettingsUnavailable => 'Host settings unavailable';
@@ -1048,6 +1060,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runStatusRunning => 'Running…';
 
   @override
+  String get turnStatusWorking => 'Deep diving…';
+
+  @override
   String get runStatusDone => 'Done';
 
   @override
@@ -1087,6 +1102,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get steer => 'Steer';
+
+  @override
+  String get steeringPending => 'Steering';
 
   @override
   String get removeQueuedMessage => 'Remove queued message';
@@ -1169,12 +1187,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commandsTooltip => 'Commands';
 
   @override
-  String get searchCommandsHint => 'Search commands';
-
-  @override
-  String get noMatchingCommands => 'No matching commands';
-
-  @override
   String get attachImages => 'Attach images';
 
   @override
@@ -1187,12 +1199,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String beforeFirstTurnHeader(int count) {
-    return 'Before first turn · $count messages';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages',
+      one: '1 message',
+    );
+    return 'Before first turn · $_temp0';
   }
 
   @override
   String turnHeader(int count, int toolCount, int turn) {
-    return 'Turn $turn · $count messages · $toolCount tools';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages',
+      one: '1 message',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      toolCount,
+      locale: localeName,
+      other: '$toolCount tools',
+      one: '1 tool',
+    );
+    return 'Turn $turn · $_temp0 · $_temp1';
+  }
+
+  @override
+  String turnFailedCount(int count) {
+    return '$count failed';
   }
 
   @override
@@ -1340,6 +1375,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => 'Dismiss notification';
+
+  @override
+  String get workingChannel => 'Working sessions';
+
+  @override
+  String get workingChannelDescription =>
+      'Shows a silent, persistent notice while a session is working or waiting on you.';
+
+  @override
+  String get workingNotificationBody => 'Working…';
+
+  @override
+  String get waitingApprovalBody => 'Waiting for your approval';
+
+  @override
+  String get waitingPlanReviewBody => 'Waiting for your plan review';
+
+  @override
+  String get waitingAnswerBody => 'Waiting for your answer';
 
   @override
   String get jumpToBottomTooltip => 'Jump to bottom';

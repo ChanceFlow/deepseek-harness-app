@@ -55,7 +55,10 @@ estimator. `ChatPanel` passes the two projections to `ComposerBar`.
 ## Consequences
 
 Subagent children vanish from the sidebar tree, rail, and search; only the
-selected blank session shows. The ring renders once a provider reports a
-usage sample and a route capacity, moves with the surface during streaming,
-and drops after compaction. The token-drift gate flakes on first run
-(generator map ordering); regeneration settles it byte-identical.
+selected blank session shows. The ring is a permanent composer seat — an
+empty track until a usage sample and a route capacity exist — moves with
+the surface during streaming, and drops after compaction; its visibility
+and tap-open popup are decided in
+[the ring visibility and popup note](../bug-fix/2026-08-29-context-ring-always-on-and-anchored-popup.md).
+The token-drift gate flakes on first run (generator map ordering);
+regeneration settles it byte-identical.

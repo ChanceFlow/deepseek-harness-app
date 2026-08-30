@@ -39,6 +39,17 @@ import 'chat_ui_state.dart';
 /// count.
 const int _attachmentCacheLimit = 24;
 
+/// Frame-rate window for upstream-driven [ChatUiState] rebuilds: repository
+/// stream events landing inside one window fold into a single publish at its
+/// end (the app-side port of the adapter's `kStreamPublishWindow` in
+/// `packages/harness_adapter/lib/src/harness_repository_impl.dart`; the web
+/// client batches these per animation frame in its runtime Notifier, and the
+/// import gate keeps `app` from importing the adapter constant, so the value
+/// is restated here). Actions and one-shot RPC completions keep publishing
+/// immediately; upstream stream facts land in `uiState` one window at most
+/// behind arrival.
+const Duration kUiPublishWindow = Duration(milliseconds: 16);
+
 class ChatController {
   ChatController(
     this._repository, {
@@ -47,7 +58,6 @@ class ChatController {
   }) {
     _refresh();
     _subscribeBaselines();
-    _observeSelectedSessionRemoval();
     _loadAgentPresets();
     _loadModelPreferences(modelPreferences);
     _loadSessionSelection(sessionSelection);
@@ -114,6 +124,16 @@ class ChatController {
       LinkedHashMap<String, Uint8List>();
   Future<void> _attachmentLock = Future<void>.value();
 
+  /// Pending upstream-driven publish ([kUiPublishWindow] trailing edge);
+  /// null when the next publish goes out immediately.
+  Timer? _upstreamPublish;
+
+  /// [_timelineJobs] memo: the scan result for the cached timeline item
+  /// list, reused while the same window instance is current (a publish
+  /// driven by any other field must not rescan the whole table).
+  List<TimelineItem>? _jobsSourceItems;
+  List<JobView>? _jobsCache;
+
   StreamSubscription<void>? _timelineSub;
   StreamSubscription<void>? _planSub;
   StreamSubscription<void>? _todosSub;
@@ -126,19 +146,31 @@ class ChatController {
   ChatUiState get state => _state.value;
 
   /// Background jobs ride the timeline's TimelineJobs items (web keeps them
-  /// in a session store; our reducer already folds them there).
+  /// in a session store; our reducer already folds them there). The scan is
+  /// memoized on the timeline list instance: the same window snapshot
+  /// yields the same job roster, so publishes driven by other fields reuse
+  /// the previous result instead of rescanning every item.
   List<JobView> _timelineJobs() {
+    final source = _timelineWindow.items;
+    if (identical(_jobsSourceItems, source) && _jobsCache != null) {
+      return _jobsCache!;
+    }
     final items = <JobView>[];
-    for (final item in _timelineWindow.items) {
+    for (final item in source) {
       if (item is TimelineJobs) items.addAll(item.jobs);
     }
-    return List<JobView>.unmodifiable(items);
+    final jobs = List<JobView>.unmodifiable(items);
+    _jobsSourceItems = source;
+    _jobsCache = jobs;
+    return jobs;
   }
 
   Stream<ChatUiState> get uiState => _state.stream;
 
   void dispose() {
     _disposed = true;
+    _upstreamPublish?.cancel();
+    _upstreamPublish = null;
     for (final sub in _subs) {
       unawaited(sub.cancel());
     }
@@ -189,29 +221,55 @@ class ChatController {
     );
   }
 
+  /// Publish triggered by an upstream repository stream: the rebuild folds
+  /// into the current frame window ([kUiPublishWindow] trailing edge). The
+  /// flush reads the fields as they are then, so no state is ever lost —
+  /// an approval, question or plan landing in a window is in `uiState` at
+  /// the window's end, one window behind arrival at the latest. Actions and
+  /// one-shot completions keep calling [_publish] directly.
+  void _publishUpstream() {
+    _upstreamPublish ??= Timer(kUiPublishWindow, () {
+      _upstreamPublish = null;
+      if (_disposed) return;
+      _publish();
+    });
+  }
+
   void _subscribeBaselines() {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
-        _publish();
+        _publishUpstream();
         // The restore pass waits on the stored id resolving together with
         // a session list that either contains it or rules it out.
         _maybeRestoreSelectedSession();
         // A blank session's summary can land after its model directory;
         // the remembered-selection apply waits on both.
         _maybeApplyModelPreferences();
+        // A selected session vanishing from the list unbinds it (same
+        // listener: one combine-latest chain over the roster, never a
+        // second subscription re-folding the same three sources).
+        final selected = _selectedSessionId;
+        if (selected == null) return;
+        if (!sessions.any((session) => session.id == selected)) {
+          _selectedSessionId = null;
+          _rememberSelectedSession(null);
+          _timelineWindow = const TimelineWindow();
+          _bindSelected(null);
+          _publishUpstream();
+        }
       }),
     );
     _subs.add(
       _repository.observeWorkspaces().listen((workspaces) {
         _workspaces = workspaces;
-        _publish();
+        _publishUpstream();
       }),
     );
     _subs.add(
       _repository.observeImageLimits().listen((limits) {
         _imageLimits = limits ?? const ImageLimits();
-        _publish();
+        _publishUpstream();
       }),
     );
   }
@@ -345,35 +403,35 @@ class ChatController {
       window,
     ) {
       _timelineWindow = window;
-      _publish();
+      _publishUpstream();
     });
     _planSub = _repository.observePlan(sessionId).listen((plan) {
       _plan = plan;
-      _publish();
+      _publishUpstream();
     });
     _todosSub = _repository.observeTodos(sessionId).listen((todos) {
       _todos = todos;
-      _publish();
+      _publishUpstream();
     });
     _contextSub = _repository.observeContextPressure(sessionId).listen((
       pressure,
     ) {
       _contextPressure = pressure;
-      _publish();
+      _publishUpstream();
     });
     _statsSub = _repository.observeSessionStats(sessionId).listen((stats) {
       _sessionStats = stats;
-      _publish();
+      _publishUpstream();
     });
     _goalSub = _repository.observeGoal(sessionId).listen((goal) {
       _goal = goal;
-      _publish();
+      _publishUpstream();
     });
     _permissionsSub = _repository.observePermissions(sessionId).listen((
       permissions,
     ) {
       _permissions = permissions;
-      _publish();
+      _publishUpstream();
     });
   }
 
@@ -444,27 +502,17 @@ class ChatController {
     }());
   }
 
-  void _observeSelectedSessionRemoval() {
-    _subs.add(
-      _repository.observeSessions().listen((sessions) {
-        final selected = _selectedSessionId;
-        if (selected == null) return;
-        if (!sessions.any((session) => session.id == selected)) {
-          _selectedSessionId = null;
-          _rememberSelectedSession(null);
-          _timelineWindow = const TimelineWindow();
-          _bindSelected(null);
-          _publish();
-        }
-      }),
-    );
-  }
-
   void _sendPrompt(SendPrompt action) {
     final sessionId = _selectedSessionId;
-    if (sessionId == null) return;
+    if (sessionId == null) {
+      action.onSettled?.call(false);
+      return;
+    }
     final images = _pendingImages;
-    if (action.text.trim().isEmpty && images.isEmpty) return;
+    if (action.text.trim().isEmpty && images.isEmpty) {
+      action.onSettled?.call(false);
+      return;
+    }
     // Web CommandUiRuntime submit table: a submitted line whose leading
     // token names a known host command routes through `commands/execute`
     // — never the prompt channel (the host does not parse commands out of
@@ -474,14 +522,15 @@ class ChatController {
     // to the prompt channel (the model serves them).
     final commandLine = hostCommandLineFor(action.text.trim());
     if (commandLine != null) {
-      unawaited(
-        _executeHostCommand(
+      unawaited(() async {
+        final accepted = await _executeHostCommand(
           sessionId,
           commandLine,
           images,
           detached: hostCommandIsBare(action.text.trim()),
-        ),
-      );
+        );
+        action.onSettled?.call(accepted);
+      }());
       return;
     }
     final prompt = action.text.trim();
@@ -498,20 +547,26 @@ class ChatController {
     unawaited(() async {
       _isSending = true;
       _publish();
+      final bool sent;
       try {
-        final sent = await _runCatchingForUi<bool>(() async {
-          await _repository.sendMessage(
-            SendMessageRequest(
-              sessionId: sessionId,
-              text: prompt,
-              mode: action.mode,
-              images: images,
-            ),
-          );
-          return true;
-        });
-        // Keep drafts only on failure, mirroring the text composer.
-        if (sent != null) {
+        sent =
+            await _runCatchingForUi<bool>(() async {
+              await _repository.sendMessage(
+                SendMessageRequest(
+                  sessionId: sessionId,
+                  text: prompt,
+                  mode: action.mode,
+                  images: images,
+                ),
+              );
+              return true;
+            }) !=
+            null;
+        // Keep the draft's material only on failure: the composer clears
+        // it (and writes the cleared marker) on the acceptance notice
+        // below, mirroring the web input machine's "restore while
+        // untouched" on a failed submit.
+        if (sent) {
           _pendingImages = const <PendingImage>[];
         } else {
           _telemetry?.count('chat.message.send_failed');
@@ -524,6 +579,7 @@ class ChatController {
         _isSending = false;
         _publish();
       }
+      action.onSettled?.call(sent);
     }());
   }
 
@@ -555,7 +611,12 @@ class ChatController {
   /// leaves the session untouched and a fresh-connection re-dispatch is
   /// a clean re-run. The first attempt's aborted `command/done` still
   /// folds into its card; the retry's success folds into a second one.
-  Future<void> _executeHostCommand(
+  ///
+  /// The result is the acceptance notice a composer dispatch waits on:
+  /// true when the command settled without an error outcome, false on a
+  /// dispatch failure or an error result — anything else keeps the
+  /// reader's draft.
+  Future<bool> _executeHostCommand(
     String sessionId,
     String line,
     List<PendingImage> images, {
@@ -597,20 +658,23 @@ class ChatController {
             'error': error.toString(),
           },
         );
-        return;
+        return false;
       }
       if (execution == null) {
-        await _runCatchingForUi(() async {
-          await _repository.sendMessage(
-            SendMessageRequest(
-              sessionId: sessionId,
-              text: line,
-              mode: PromptMode.queue,
-            ),
-          );
-        });
+        final sent =
+            await _runCatchingForUi<bool>(() async {
+              await _repository.sendMessage(
+                SendMessageRequest(
+                  sessionId: sessionId,
+                  text: line,
+                  mode: PromptMode.queue,
+                ),
+              );
+              return true;
+            }) !=
+            null;
         _pendingImages = const <PendingImage>[];
-        return;
+        return sent;
       }
       if (execution.kind == CommandOutcomeKind.error) {
         _errorMessage = execution.text;
@@ -623,9 +687,10 @@ class ChatController {
             'result': execution.text ?? '',
           },
         );
-        return;
+        return false;
       }
       _pendingImages = const <PendingImage>[];
+      return true;
     } finally {
       if (!detached) {
         _isSending = false;

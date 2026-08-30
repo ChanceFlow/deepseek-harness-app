@@ -23,9 +23,14 @@ import 'dart:async';
 
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
+import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/shared/dock_anchor.dart';
+import 'package:app/ui/chat/sweep_highlight.dart';
+import 'package:app/ui/chat/turn_status_row.dart';
+import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -119,6 +124,8 @@ Future<void> _pump(
   List<ChatAction> actions, {
   double width = 800,
   ChatLocalState? localState,
+  ThemeData? theme,
+  Key? screenKey,
 }) {
   // Phone-scale logical surface so both panes and rows lay out naturally.
   tester.view.physicalSize = Size(width, 1280);
@@ -136,7 +143,9 @@ Future<void> _pump(
             .overrideWithValue(_NeverSocket()),
       ],
       child: l10nApp(
+        theme: theme,
         home: ChatScreen(
+          key: screenKey,
           uiState: uiState,
           onAction: actions.add,
           localState: localState,
@@ -145,6 +154,12 @@ Future<void> _pump(
     ),
   );
 }
+
+/// The shared state dot carrying one run state (the subagents test's
+/// finder, for asserting the outline header's turn state).
+Finder _dot(StateDotState state) => find.byWidgetPredicate(
+  (widget) => widget is StateDot && widget.state == state,
+);
 
 void main() {
   testWidgets('chat surface shows no persistent connection status', (
@@ -620,8 +635,194 @@ void main() {
     expect(find.text('This operation was aborted'), findsOneWidget);
     expect(find.byIcon(Icons.error_outline), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
-    // The running row has no settled icon and no text.
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // A running command row wears the activity dot under the row sweep —
+    // never a spinner.
+    expect(find.byType(ActivityDot), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('a running tool row carries the sweep and the activity dot', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineToolCall(id: 'c-run', name: 'bash', arguments: 'ls -la'),
+          TimelineToolCall(
+            id: 'c-ok',
+            name: 'read',
+            arguments: 'README.md',
+            result: 'ok',
+            status: ToolRunStatus.completed,
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+    // Running and settled share the one 14px leading geometry — dot, then
+    // check — and the timeline body wears no spinner anywhere.
+    expect(find.byType(ActivityDot), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    // The sweep is the only running motion: exactly one row glares.
+    expect(
+      tester
+          .widgetList<SweepHighlight>(find.byType(SweepHighlight))
+          .where((s) => s.controller != null),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('the running turn speaks once at the timeline tail', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    Future<void> pumpTimeline(
+      List<TimelineItem> timeline, {
+      bool running = true,
+    }) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              blank: false,
+              running: running,
+            ),
+          ],
+          selectedSessionId: 's1',
+          timeline: timeline,
+        ),
+        actions,
+      );
+      await tester.pump();
+    }
+
+    // Waiting on the first token: the status line is the one voice — no
+    // spinner under the user bubble.
+    await pumpTimeline(const [
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'm1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'go',
+          streaming: true,
+        ),
+      ),
+    ]);
+    expect(find.byType(TurnStatusRow), findsOneWidget);
+    // The label hops letter by letter; joined, it reads the l10n copy.
+    expect(
+      tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byType(TurnStatusRow),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((text) => text.data ?? '')
+          .join(),
+      'Deep diving…',
+    );
+    // The shared sweep glare glides over the hopping letters too.
+    expect(
+      tester
+          .widget<SweepHighlight>(
+            find.descendant(
+              of: find.byType(TurnStatusRow),
+              matching: find.byType(SweepHighlight),
+            ),
+          )
+          .controller,
+      isNotNull,
+    );
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    // The outline mode keeps the tail line, too.
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pump();
+    expect(find.byType(TurnStatusRow), findsOneWidget);
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pump();
+
+    // Once assistant text flows the caret takes the tail and the status
+    // line stands down — one signal per moment.
+    await pumpTimeline(const [
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'm2',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text: 'working',
+          streaming: true,
+        ),
+      ),
+    ]);
+    expect(find.byType(TurnStatusRow), findsNothing);
+    expect(find.byKey(const ValueKey('streaming-caret')), findsOneWidget);
+
+    // A settled turn falls silent.
+    await pumpTimeline(const [
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'm2',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text: 'done',
+        ),
+      ),
+    ], running: false);
+    expect(find.byType(TurnStatusRow), findsNothing);
+  });
+
+  testWidgets('the approval seat holds the wait, not the status line', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false, running: true),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.assistant,
+              text: 'needs approval to run',
+            ),
+          ),
+          TimelineApprovalRequest(
+            requestId: 'rpc-1',
+            sessionId: 's1',
+            approvalId: 'a-1',
+            toolName: 'bash',
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+    // The wait belongs to the user now: the approval card speaks, the
+    // turn-status line stands down.
+    expect(find.text('Approve tool: bash'), findsOneWidget);
+    expect(find.byType(TurnStatusRow), findsNothing);
   });
 
   testWidgets('approval without reason falls back to the escalation title', (
@@ -905,6 +1106,255 @@ void main() {
       contains(
         const UpdateQueueAction(itemId: 'q1', kind: QueueUpdateKind.steer),
       ),
+    );
+  });
+
+  testWidgets('pending steering renders at the conversation tail', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'the prompt',
+            ),
+          ),
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'q1',
+                placement: QueuePlacement.queued,
+                text: 'queued later',
+              ),
+              SessionQueueItem(
+                itemId: 'st1',
+                placement: QueuePlacement.steering,
+                text: 'steer now',
+              ),
+              SessionQueueItem(
+                itemId: 'c1',
+                placement: QueuePlacement.context,
+                text: 'injected context',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    // The running status line and the steering glare repeat forever: pump
+    // by hand (the streaming-follow test's convention), never settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Web parity (ChatView pendingSteering): the steered word rides the
+    // transcript tail with the pending-row language; queued rows stay in
+    // the dock; pending context renders nowhere until its durable
+    // injection row.
+    expect(find.byType(PendingSteeringRow), findsOneWidget);
+    expect(find.text('steer now'), findsOneWidget);
+    expect(find.text('Steering'), findsOneWidget);
+    expect(find.text('injected context'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(QueueDock),
+        matching: find.text('steer now'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(QueueDock),
+        matching: find.text('queued later'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(PendingSteeringRow),
+        matching: find.byType(ActivityDot),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(PendingSteeringRow),
+        matching: find.byType(SweepHighlight),
+      ),
+      findsOneWidget,
+    );
+    // Tail order: the steering row sits below the last flow row.
+    expect(
+      tester.getTopLeft(find.text('steer now')).dy,
+      greaterThan(tester.getTopLeft(find.text('the prompt')).dy),
+    );
+  });
+
+  testWidgets('a claimed steering row yields to its durable message', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          // The host's claim landed the same message id durably; the
+          // transient row must not double-render the reader's words.
+          TimelineMessage(
+            ChatMessage(
+              id: 'st1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'steer now',
+            ),
+          ),
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'st1',
+                placement: QueuePlacement.steering,
+                text: 'steer now',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+    expect(find.byType(PendingSteeringRow), findsNothing);
+    expect(find.text('steer now'), findsOneWidget);
+  });
+
+  testWidgets('a steering-only queue renders at the tail, not the dock', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'st1',
+                placement: QueuePlacement.steering,
+                text: 'steer now',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(PendingSteeringRow), findsOneWidget);
+    expect(find.byType(QueueDock), findsNothing);
+  });
+
+  testWidgets('the outline mode carries the steering tail too', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineTurnBoundary(1),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'the prompt',
+            ),
+          ),
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'st1',
+                placement: QueuePlacement.steering,
+                text: 'steer now',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Outline'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('steer now'), findsOneWidget);
+    expect(find.byType(PendingSteeringRow), findsOneWidget);
+  });
+
+  testWidgets('the queue dock rides alongside the approval card', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', running: true, blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineApprovalRequest(
+            requestId: 'rpc-1',
+            sessionId: 's1',
+            approvalId: 'a-1',
+            toolName: 'bash',
+            reason: 'Would run a command',
+          ),
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'q1',
+                placement: QueuePlacement.queued,
+                text: 'first',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pump();
+
+    // The approval panel holds the composer seat, but the queued rows
+    // stay visible: the dock is a display strip, not a filled seat (web
+    // renders both at once).
+    expect(find.text('Waiting for approval'), findsOneWidget);
+    expect(find.byType(QueueDock), findsOneWidget);
+    expect(find.text('first'), findsOneWidget);
+    expect(find.byType(ComposerBar), findsNothing);
+    expect(
+      tester.getBottomLeft(find.byType(QueueDock)).dy,
+      lessThan(tester.getTopLeft(find.text('Waiting for approval')).dy),
     );
   });
 
@@ -1630,15 +2080,18 @@ void main() {
     await tester.tap(find.byTooltip('Commands'));
     await tester.pumpAndSettle();
 
-    // Web slash-menu form: search field, the host command roster (real
-    // commands, not just skills), then skills, with the mobile-only
-    // attach row demoted to the tail.
-    final searchField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField &&
-          widget.decoration?.hintText == 'Search commands',
+    // The full roster shows at once — host slash commands, then skills,
+    // with the mobile-only attach row demoted to the tail. No search
+    // field: the focused query box raised the keyboard onto the rows it
+    // filtered.
+    expect(find.text('Search commands'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('menu-sheet-card')),
+        matching: find.byType(TextField),
+      ),
+      findsNothing,
     );
-    expect(searchField, findsOneWidget);
     expect(find.text('/plan'), findsOneWidget);
     expect(find.text('/goal'), findsOneWidget);
     expect(find.text('/compact'), findsOneWidget);
@@ -1649,14 +2102,16 @@ void main() {
     expect(find.text('Attach images'), findsOneWidget);
     expect(find.text('Pick from gallery'), findsOneWidget);
 
-    // Typing filters the roster locally (web search input).
-    await tester.enterText(searchField, 'rust');
-    await tester.pump();
-    expect(find.text('/review'), findsNothing);
-    expect(find.text('/plan'), findsNothing);
-    expect(find.text('/rust'), findsOneWidget);
-    await tester.enterText(searchField, '');
-    await tester.pump();
+    // The card floats above the composer dock, not on the screen's
+    // bottom edge: its bottom clears the dock's top.
+    final anchor = tester.widget<DockAnchor>(find.byType(DockAnchor));
+    final dockBox =
+        anchor.dockKey.currentContext!.findRenderObject()! as RenderBox;
+    final dockTop = dockBox.localToGlobal(Offset.zero).dy;
+    expect(
+      tester.getRect(find.byKey(const ValueKey('menu-sheet-card'))).bottom,
+      lessThanOrEqualTo(dockTop),
+    );
 
     // Picking a host command lands the literal text like a skill does.
     await tester.tap(find.text('/plan'));
@@ -1933,26 +2388,136 @@ void main() {
     }
 
     await pump(true);
-    expect(find.text('▾ Turn 1 · 1 messages · 3 tools'), findsOneWidget);
+    // A ledger micro-line, not a frame: the title rides the fixed
+    // plurals — singular "1 message", plural "3 tools" in one string.
+    final header = find.widgetWithText(
+      ListTile,
+      'Turn 1 · 1 message · 3 tools',
+    );
+    expect(header, findsOneWidget);
+    // Expanded: the subtitle echoes the prompt (metadata tone, not the
+    // primary accent) and the disclosure arrow reads "open".
     expect(find.text('“first prompt”'), findsOneWidget);
-    expect(find.text('bash 1✓ 1✗ · edit 1✓'), findsOneWidget);
+    expect(
+      find.descendant(of: header, matching: find.byIcon(Icons.expand_more)),
+      findsOneWidget,
+    );
+    // The turn holds a failed tool: the shared dot reads error.
+    expect(
+      find.descendant(of: header, matching: _dot(StateDotState.error)),
+      findsOneWidget,
+    );
 
-    // Collapse hides the group rows.
-    await tester.tap(find.text('▾ Turn 1 · 1 messages · 3 tools'));
+    // Tapping the row collapses the group: the body disappears, the
+    // subtitle trades the echo for plain per-tool counts with a failure
+    // count, and the arrow swaps to chevron_right.
+    await tester.tap(header);
     await tester.pumpAndSettle();
-    expect(find.text('▸ Turn 1 · 1 messages · 3 tools'), findsOneWidget);
-    // The header echo stays; the collapsed body rows disappear.
     expect(find.text('first prompt', findRichText: true), findsNothing);
+    expect(find.text('bash 2 · edit 1'), findsOneWidget);
+    expect(find.textContaining('1 failed'), findsOneWidget);
+    expect(
+      find.descendant(of: header, matching: find.byIcon(Icons.chevron_right)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: header, matching: find.byIcon(Icons.expand_more)),
+      findsNothing,
+    );
 
-    // Expand all restores them.
+    // Expand all restores them, echo and arrow back to the open set.
     await tester.tap(find.text('Expand all'));
     await tester.pumpAndSettle();
     expect(find.text('first prompt', findRichText: true), findsOneWidget);
+    expect(find.text('“first prompt”'), findsOneWidget);
 
     // Outline off returns the plain ledger.
     await tester.tap(find.byTooltip('Outline'));
     await tester.pumpAndSettle();
     expect(find.text('Turn 1'), findsOneWidget);
+  });
+
+  testWidgets('collapsed outline header dots and failure ink ride '
+      'theme roles under both brightnesses', (tester) async {
+    final actions = <ChatAction>[];
+    const timeline = [
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'm1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'first prompt',
+        ),
+      ),
+      TimelineToolCall(
+        id: 'call-1',
+        name: 'bash',
+        status: ToolRunStatus.failed,
+      ),
+    ];
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      // A per-theme screen key starts each pump on a fresh state: the
+      // outline toggle and the collapse below never leak across rounds.
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: timeline,
+        ),
+        actions,
+        theme: theme,
+        screenKey: ValueKey(theme.brightness),
+      );
+      // Pump past the theme lerp before reading colors back.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byTooltip('Outline'));
+      await tester.pumpAndSettle();
+      final header = find.widgetWithText(
+        ListTile,
+        'Turn 1 · 1 message · 1 tool',
+      );
+      // The expanded echo is metadata, not accent: the primary-ink frame
+      // was the violation; the role map reads it back here.
+      expect(
+        tester.widget<Text>(find.text('“first prompt”')).style?.color,
+        theme.colorScheme.onSurfaceVariant,
+      );
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+
+      // The dot's core runs on the error role — a hard-coded red would
+      // pass one brightness and fail the other.
+      final core = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.descendant(
+                of: header,
+                matching: _dot(StateDotState.error),
+              ),
+              matching: find.byType(Container),
+            )
+            .last,
+      );
+      expect(
+        (core.decoration! as BoxDecoration).color,
+        theme.colorScheme.error,
+      );
+      // The failure count is error ink; the summary it trails stays on
+      // the metadata tone.
+      expect(
+        tester.widget<Text>(find.textContaining('1 failed')).style?.color,
+        theme.colorScheme.error,
+      );
+      expect(
+        tester.widget<Text>(find.text('bash 1')).style?.color,
+        theme.colorScheme.onSurfaceVariant,
+      );
+    }
   });
 
   testWidgets('outline scrolls lazily to later turns', (tester) async {
@@ -1994,7 +2559,7 @@ void main() {
 
     // The first turn header is visible; later turns are reachable by
     // scrolling the outline's own scroll surface.
-    expect(find.textContaining('▾ Turn 1'), findsOneWidget);
+    expect(find.text('Turn 1 · 1 message · 0 tools'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('prompt 5', findRichText: true),
       200,
@@ -2179,8 +2744,10 @@ void main() {
     expect(position().maxScrollExtent, greaterThan(0));
     expect(position().pixels, position().maxScrollExtent);
     // Streaming assistant text ends in the blinking caret, not the
-    // pre-first-token loader.
+    // pre-first-token loader: the caret owns the tail, so the turn-status
+    // line stands down and no spinner appears anywhere in the body.
     expect(find.byKey(const ValueKey('streaming-caret')), findsOneWidget);
+    expect(find.byType(TurnStatusRow), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     // Streaming growth follows while pinned. The driven glide's ticker
@@ -2493,6 +3060,8 @@ void main() {
 
       await tester.tap(find.byTooltip('Open navigation menu'));
       await tester.pumpAndSettle();
+      // The drawer is the shared sidebar width, not a drawer-local number.
+      expect(tester.widget<Drawer>(find.byType(Drawer)).width, kSidebarWidth);
       expect(find.text('New session'), findsOneWidget);
       expect(find.byTooltip('Search sessions'), findsOneWidget);
       expect(
@@ -2541,6 +3110,8 @@ void main() {
 
       final chatFinder = find.byType(ChatPanel);
       final wideWidth = tester.getSize(chatFinder).width;
+      // The wide pane is the shared sidebar width the drawer also uses.
+      expect(tester.getSize(find.byType(SessionPanel)).width, kSidebarWidth);
       expect(find.byTooltip('Search sessions'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Collapse sidebar'));
@@ -2548,6 +3119,9 @@ void main() {
 
       // The pane really gives its width back to the chat column.
       expect(tester.getSize(chatFinder).width, greaterThan(wideWidth + 200));
+      // Both rail widths share one source: the host's animated column
+      // settles on the same theme.dart constant the panel declares.
+      expect(tester.getSize(find.byType(SessionPanel)).width, kRailWidth);
       // The rail keeps a search entry but no capsule field.
       expect(find.byTooltip('Search sessions'), findsOneWidget);
       expect(

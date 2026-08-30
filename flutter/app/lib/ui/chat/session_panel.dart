@@ -26,6 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 import '../shared/backend_connection_dot.dart';
+import '../shared/edge_fade.dart';
 import '../shared/session_tree.dart';
 import '../theme/theme.dart';
 import 'brand_wordmark.dart';
@@ -335,8 +336,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   }
 
   /// Web logo row (60px): wordmark doubles as a New Session shortcut; the
-  /// toggle collapses to the icon rail.
-  Widget _buildBrandRow(BuildContext context, ColorScheme scheme) {
+  /// toggle collapses the pane to the icon rail. Both forms ride the stock
+  /// [IconButton]: the framework's own seat (a 48px interactive region) and
+  /// default ink, and the seat fits the rail exactly (rail padding 4 + 48 =
+  /// [kRailWidth]).
+  Widget _buildBrandRow(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final rail = !widget.inDrawer && _collapsedToRail;
     return SizedBox(
@@ -361,17 +365,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           if (!widget.inDrawer)
             IconButton(
               tooltip: rail ? l10n.openSidebar : l10n.collapseSidebar,
-              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-              padding: EdgeInsets.zero,
               onPressed: () {
                 setState(() => _collapsedToRail = !rail);
                 widget.onRailChanged?.call(_collapsedToRail);
               },
-              icon: Icon(
-                rail ? Icons.menu : Icons.view_sidebar_outlined,
-                size: rail ? 22 : 16,
-                color: scheme.onSurfaceVariant,
-              ),
+              icon: Icon(rail ? Icons.menu : Icons.view_sidebar_outlined),
             ),
         ],
       ),
@@ -403,29 +401,34 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// top-down order — new session, then search (which expands the pane and
   /// lands in the box) — above the icon-per-session list. Rail avatars
   /// follow the same tree.ts `sessionVisible` rule as the grouped tree.
+  ///
+  /// The web rail carries no session seats (the shell's rail holds nav
+  /// icons and the browser's two controls), so the avatar list is this
+  /// app's own idiom and follows the tree's role pair: a selected seat
+  /// wears the same `secondaryContainer` fill the tile's `selectedTileColor`
+  /// uses, with its `onSecondaryContainer` ink (a filled seat pairs, never
+  /// keeps quiet ink), and rides the stock [IconButton.isSelected] so the
+  /// selection reads as selected semantics, not only as a tint. Status
+  /// stays the expanded row's business: the rail switches sessions, it does
+  /// not report them.
   List<Widget> _buildRailChildren(BuildContext context, ColorScheme scheme) {
     final l10n = AppLocalizations.of(context)!;
     return [
       IconButton(
         tooltip: l10n.newSession,
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-        padding: EdgeInsets.zero,
         onPressed: _showNewSessionDialog,
-        icon: Icon(
-          Icons.chat_bubble_outline,
-          size: 20,
-          color: scheme.onSurfaceVariant,
-        ),
+        // The expanded pane's filled button owns this verb with this
+        // glyph; the rail repeats the verb, so it repeats the glyph (the
+        // composer-➕ distinction is recorded there).
+        icon: const Icon(Icons.add_comment_outlined),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: kRailControlGap),
       IconButton(
         tooltip: l10n.searchSessions,
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-        padding: EdgeInsets.zero,
         onPressed: _openSearchFromRail,
-        icon: Icon(Icons.search, size: 20, color: scheme.onSurfaceVariant),
+        icon: const Icon(Icons.search),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: kRailControlGap),
       Expanded(
         child: ListView(
           padding: const EdgeInsets.only(top: 4, bottom: 16),
@@ -433,25 +436,41 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             for (final session in widget.sessions.where(
               (session) => sessionVisible(session, widget.selectedSessionId),
             ))
-              IconButton(
-                tooltip: session.displayTitle,
-                onPressed: () => widget.onSelectSession(session.id),
-                icon: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: session.id == widget.selectedSessionId
-                      ? scheme.secondaryContainer
-                      : scheme.surfaceContainerHigh,
-                  child: Text(
-                    session.displayTitle.substring(0, 1),
-                    style: Theme.of(context).textTheme.labelSmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ),
-              ),
+              _buildRailAvatar(context, scheme, session),
           ],
         ),
       ),
     ];
+  }
+
+  Widget _buildRailAvatar(
+    BuildContext context,
+    ColorScheme scheme,
+    SessionSummary session,
+  ) {
+    final selected = session.id == widget.selectedSessionId;
+    return IconButton(
+      tooltip: session.displayTitle,
+      isSelected: selected,
+      onPressed: () => widget.onSelectSession(session.id),
+      icon: CircleAvatar(
+        radius: 14,
+        backgroundColor: selected
+            ? scheme.secondaryContainer
+            : scheme.surfaceContainerHigh,
+        child: Text(
+          // displayTitle never falls empty (title → cwd basename → id),
+          // so the initial always exists; a CJK title reads its first
+          // character.
+          session.displayTitle.substring(0, 1),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: selected
+                ? scheme.onSecondaryContainer
+                : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Wide/drawer form: the browsing region below the brand row — New
@@ -473,45 +492,25 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onCollapse: _collapseSearch,
         ),
       Expanded(
-        child: Stack(
-          children: [
-            // Web listArea: a non-empty query replaces the tree with the
-            // flat result list; clearing restores the tree.
-            if (_queryController.text.trim().isEmpty)
-              _buildSessionTree(
-                context,
-                scheme,
-                currentGroupKeyOf(
-                  widget.sessions,
-                  widget.workspaces,
-                  widget.selectedSessionId,
-                ),
-              )
-            else
-              _buildSearchResults(context, scheme),
-            // Web WorkspaceBrowser `.fade`: bottom continuation hint
-            // tracking the sidebar fill across themes.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  height: 24,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        scheme.surfaceContainerLow.withValues(alpha: 0),
-                        scheme.surfaceContainerLow,
-                      ],
-                    ),
+        // Web listArea: a non-empty query replaces the tree with the
+        // flat result list; clearing restores the tree. The web
+        // `.fade` continuation hint rides as EdgeFade: the list
+        // dissolves into the panel surface at its own edge, so no
+        // overlay band reads as a stuck-on banner the row accents
+        // bleed through.
+        child: EdgeFade(
+          surface: scheme.surfaceContainerLow,
+          child: _queryController.text.trim().isEmpty
+              ? _buildSessionTree(
+                  context,
+                  scheme,
+                  currentGroupKeyOf(
+                    widget.sessions,
+                    widget.workspaces,
+                    widget.selectedSessionId,
                   ),
-                ),
-              ),
-            ),
-          ],
+                )
+              : _buildSearchResults(context, scheme),
         ),
       ),
     ];
@@ -721,10 +720,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     _seedBrowsingStateFromStore();
     final scheme = Theme.of(context).colorScheme;
     final rail = !widget.inDrawer && _collapsedToRail;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-      width: rail ? 56 : null,
+    // The pane's own width is fixed geometry, not an animation: the
+    // collapse slide belongs to the two-pane row's single AnimatedContainer
+    // in chat_screen.dart, which owns the 320 ↔ 56 transition.
+    return Container(
+      width: rail ? kRailWidth : null,
       color: scheme.surfaceContainerLow,
       child: Material(
         color: Colors.transparent,
@@ -732,7 +732,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           padding: EdgeInsets.all(rail ? 4 : 8),
           child: Column(
             children: [
-              _buildBrandRow(context, scheme),
+              _buildBrandRow(context),
               if (rail)
                 ..._buildRailChildren(context, scheme)
               else

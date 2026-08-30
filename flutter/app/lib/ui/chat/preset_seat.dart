@@ -12,7 +12,7 @@ import 'package:domain/model/session.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
-import '../theme/theme.dart';
+import '../shared/menu_sheet.dart';
 
 /// The roster a picker may offer: every entry that can compose a
 /// session (broken ones cannot — offering one would only defer the
@@ -121,38 +121,17 @@ class AgentPresetSeat extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context, List<AgentPresetEntry> options) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      // Menu-surface sheet (ModelSelect vocabulary): surface fill, 12px
-      // radius, lv3 elevation, 4px inner padding.
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 440),
-              child: _PresetSheet(
-                options: options,
-                currentId: currentId,
-                onSelect: (presetId) {
-                  Navigator.of(sheetContext).pop();
-                  onSelect(presetId);
-                },
-              ),
-            ),
-          ),
-        );
-      },
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 440,
+      builder: (sheetContext) => _PresetSheet(
+        options: options,
+        currentId: currentId,
+        onSelect: (presetId) {
+          Navigator.of(sheetContext).pop();
+          onSelect(presetId);
+        },
+      ),
     );
   }
 }

@@ -46,8 +46,11 @@ import 'approval_panel.dart';
 import '../goal/goal_screen.dart';
 import '../subagents/subagent_screen.dart';
 
+import 'activity_dot.dart';
 import 'context_ring.dart';
 import 'stats_line.dart';
+import '../shared/dock_anchor.dart';
+import '../shared/menu_sheet.dart';
 import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
@@ -55,7 +58,9 @@ import 'sweep_highlight.dart';
 import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'tool_row_model.dart';
+import 'turn_status_row.dart';
 import '../theme/theme.dart';
+import '../shared/state_dot.dart';
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
@@ -396,9 +401,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Row(
                       children: [
                         AnimatedContainer(
+                          // The sidebar's one slide: width tweens between
+                          // the wide pane and the rail when the panel's
+                          // toggle flips (the panel itself reports the
+                          // state through onRailChanged). The 200ms
+                          // ease-in-out is a recorded per-change decision —
+                          // the default linear reads as a snap at both
+                          // ends of a row this wide.
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeInOut,
-                          width: _rail ? 56 : 320,
+                          width: _rail ? kRailWidth : kSidebarWidth,
                           child: SessionPanel(
                             onRailChanged: (rail) =>
                                 setState(() => _rail = rail),
@@ -450,7 +462,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return Scaffold(
           appBar: _chatAppBar(context, uiState, onAction, compact: true),
           drawer: Drawer(
-            width: 320,
+            width: kSidebarWidth,
             // Chrome tone: the drawer is the same frame family as the bar
             // and the dock, so it takes their surface rather than the
             // stock drawer's own step.
@@ -702,6 +714,10 @@ class ChatHeaderActions extends StatelessWidget {
 /// Session verbs the phone bar keeps behind its overflow menu.
 enum _SessionVerb { subagents, rename, fork, archive }
 
+/// Sentinel for the turn-status row in the transcript's row list: not a
+/// timeline item, only a row the gap math and the builder dispatch on.
+const Object _turnStatusSlot = Object();
+
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
     required this.uiState,
@@ -736,6 +752,10 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   Set<int> _collapsedTurns = const <int>{};
+
+  /// Binds the dock element so sheets opened from composer seats can
+  /// measure it and float above it (see DockAnchor).
+  final GlobalKey _dockKey = GlobalKey();
 
   /// Web ChatView follow contract: while the reader sits within
   /// [kFollowThreshold] of the bottom the view is "pinned" and follows new
@@ -853,17 +873,30 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   /// Content-growth signal over the displayed flow: row count, the tail
-  /// row's identity, and the streaming text length.
+  /// row's identity, the streaming text length, and the pending-steering
+  /// tail (a steered word is flow content too).
   String? _followSignature() {
     final items = _timelineItems;
-    if (items.isEmpty) return null;
-    final last = items.last;
-    final growth = last is TimelineMessage ? ':${last.value.text.length}' : '';
-    return '${items.length}:${timelineKey(last)}$growth';
+    final steering = _pendingSteering;
+    if (items.isEmpty && steering.isEmpty) return null;
+    final buffer = StringBuffer();
+    if (items.isNotEmpty) {
+      final last = items.last;
+      final growth = last is TimelineMessage
+          ? ':${last.value.text.length}'
+          : '';
+      buffer.write('${items.length}:${timelineKey(last)}$growth');
+    }
+    if (steering.isNotEmpty) {
+      buffer.write('|steered:${steering.length}:${steering.last.itemId}');
+    }
+    return buffer.toString();
   }
 
   /// The displayed tail is a user message (web `lastNode.kind === 'user'`).
   String? get _trailingUserKey {
+    final steering = _pendingSteering;
+    if (steering.isNotEmpty) return 'steering:${steering.last.itemId}';
     final items = _timelineItems;
     if (items.isEmpty) return null;
     final last = items.last;
@@ -1098,8 +1131,22 @@ class _ChatPanelState extends State<ChatPanel> {
     return null;
   }
 
-  /// Timeline without the queue rows (they ride the composer dock) and the
-  /// approval that took over the composer seat.
+  /// Whether the transient inbox holds queued rows — the dock's subject.
+  /// Steering rows render at the transcript tail and context rows wait
+  /// invisible for their durable injection form, so neither mounts the
+  /// dock (web QueueDock.tsx:33 filters the same placement).
+  bool get _hasQueuedRows {
+    for (final queue in widget.uiState.timeline.whereType<TimelineQueue>()) {
+      if (queue.items.any((item) => item.placement == QueuePlacement.queued)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Timeline without the queue rows (queued ones ride the composer dock,
+  /// steering ones the transcript tail below) and the approval that took
+  /// over the composer seat.
   List<TimelineItem> get _timelineItems => widget.uiState.timeline
       .where(
         (item) =>
@@ -1108,6 +1155,37 @@ class _ChatPanelState extends State<ChatPanel> {
             item != _pendingApproval,
       )
       .toList();
+
+  /// Transient steering rows of the queue snapshot, rendered at the
+  /// conversation tail — the port of the web ChatView's pending-steering
+  /// bubbles (`ChatView.tsx:454-460`; `api/events.ts:81-82`: "queued items
+  /// render in QueueDock, while pending steering renders at the
+  /// conversation tail"). A steered word has no durable event until the
+  /// running turn claims it; the tail is the only place it can show. Rows
+  /// whose claim already landed as a durable user message of the same id
+  /// drop out, so one utterance never renders twice across the transient
+  /// and durable frames. Context placements stay invisible while
+  /// transient, exactly as on the web: their durable form is the
+  /// injection row.
+  List<SessionQueueItem> get _pendingSteering {
+    final steering = <SessionQueueItem>[];
+    for (final queue in widget.uiState.timeline.whereType<TimelineQueue>()) {
+      for (final item in queue.items) {
+        if (item.placement == QueuePlacement.steering) steering.add(item);
+      }
+    }
+    if (steering.isEmpty) return const <SessionQueueItem>[];
+    final durableIds = <String>{
+      for (final item in widget.uiState.timeline)
+        if (item is TimelineMessage && item.value.role == MessageRole.user)
+          item.value.id,
+    };
+    final seen = <String>{};
+    return [
+      for (final item in steering)
+        if (!durableIds.contains(item.itemId) && seen.add(item.itemId)) item,
+    ];
+  }
 
   /// Collapsed-turn set mutation: state and persistence move together.
   void _setCollapsedTurns(Set<int> next) {
@@ -1131,6 +1209,32 @@ class _ChatPanelState extends State<ChatPanel> {
       return;
     }
     setState(() => _stagedPreset = presetId);
+  }
+
+  /// The one turn-level activity line, riding the timeline tail while the
+  /// session's turn runs: `session.running` is the host's word, a
+  /// streaming message the local echo before the host confirms. It yields
+  /// to the louder tail signals — the streaming caret once assistant text
+  /// flows — and to the approval seat, where the wait belongs to the user,
+  /// not the agent.
+  bool _turnStatusVisible(ChatUiState uiState) {
+    final sessionId = uiState.selectedSessionId;
+    final session = uiState.sessions
+        .where((item) => item.id == sessionId)
+        .firstOrNull;
+    final busy =
+        (session?.running ?? false) ||
+        uiState.timeline.any(
+          (item) => item is TimelineMessage && item.value.streaming,
+        );
+    if (!busy || _pendingApproval != null) return false;
+    return !uiState.timeline.any(
+      (item) =>
+          item is TimelineMessage &&
+          item.value.streaming &&
+          item.value.role == MessageRole.assistant &&
+          item.value.text.isNotEmpty,
+    );
   }
 
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
@@ -1164,6 +1268,20 @@ class _ChatPanelState extends State<ChatPanel> {
         onPickPreset: (presetId) => _pickPreset(session, presetId),
       );
     }
+    final items = _timelineItems;
+    final steering = _pendingSteering;
+    // The status line rides the tail of the transcript: with nothing
+    // visible to be a tail after (a queue-only window), it renders nothing
+    // — the queue dock and the composer seat already carry the run.
+    final showTurnStatus = _turnStatusVisible(uiState) && items.isNotEmpty;
+    // The web's tail order: flow rows, the turn-status line, then the
+    // pending steering bubbles (ChatView.tsx:446-460). Steering rides both
+    // render modes the same way.
+    final rows = <Object>[
+      ...items,
+      if (showTurnStatus) _turnStatusSlot,
+      ...steering,
+    ];
     return widget.outline
         ? OutlineTimeline(
             timeline: uiState.timeline,
@@ -1176,25 +1294,36 @@ class _ChatPanelState extends State<ChatPanel> {
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
             expansion: _sessionState,
+            turnStatusVisible: showTurnStatus,
+            pendingSteering: steering,
           )
         : ListView.separated(
             controller: _timelineScroll,
-            itemCount: _timelineItems.length,
+            itemCount: rows.length,
             separatorBuilder: (_, index) => SizedBox(
               height: _gapAfter(
-                _timelineItems[index],
-                _timelineItems[index + 1],
+                rows[index],
+                index + 1 < rows.length ? rows[index + 1] : null,
               ),
             ),
             itemBuilder: (context, index) {
-              final item = _timelineItems[index];
-              return TimelineRow(
-                key: ValueKey(timelineKey(item)),
-                item: item,
-                onAction: widget.onAction,
-                loadAttachment: widget.loadAttachment,
-                expansion: _sessionState,
-              );
+              final row = rows[index];
+              if (row is TimelineItem) {
+                return TimelineRow(
+                  key: ValueKey(timelineKey(row)),
+                  item: row,
+                  onAction: widget.onAction,
+                  loadAttachment: widget.loadAttachment,
+                  expansion: _sessionState,
+                );
+              }
+              if (row is SessionQueueItem) {
+                return PendingSteeringRow(
+                  key: ValueKey('steering:${row.itemId}'),
+                  text: row.text,
+                );
+              }
+              return const TurnStatusRow(key: ValueKey('turn-status'));
             },
           );
   }
@@ -1202,16 +1331,25 @@ class _ChatPanelState extends State<ChatPanel> {
   /// Vertical rhythm between two transcript rows. A run of steps is one
   /// paragraph and closes up; a message opens a new one. Equal gaps
   /// everywhere read as a list of unrelated lines, which is what the
-  /// transcript stopped looking like a conversation.
-  static double _gapAfter(TimelineItem above, TimelineItem below) {
+  /// transcript stopped looking like a conversation. The tail signals —
+  /// the turn-status line and a pending steering row — open their own
+  /// block like a message does (steering is the reader's own words). A
+  /// null `below` is the tail: block.
+  static double _gapAfter(Object above, Object? below) {
     const double step = 6;
     const double block = 16;
     const double turn = 24;
+    if (below == null) return block;
     if (below is TimelineTurnBoundary) return turn;
-    final bool aboveIsStep = above is! TimelineMessage;
-    final bool belowIsStep = below is! TimelineMessage;
+    final bool aboveIsStep = !_opensBlock(above);
+    final bool belowIsStep = !_opensBlock(below);
     return aboveIsStep && belowIsStep ? step : block;
   }
+
+  static bool _opensBlock(Object row) =>
+      row is TimelineMessage ||
+      row is SessionQueueItem ||
+      identical(row, _turnStatusSlot);
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
   /// neutral selector fill (the composer's idle circle convention), so it
@@ -1247,152 +1385,182 @@ class _ChatPanelState extends State<ChatPanel> {
         .firstOrNull;
     final isSessionRunning = selectedSession?.running ?? false;
 
-    return Padding(
-      // No inset at the top: the transcript runs to the bar and slides
-      // under it. A gap there is a blank strip that also clips the first
-      // row mid-line, which reads as a rendering fault.
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Column(
-        children: [
-          if (uiState.errorMessage case final error?) ...[
-            Text(
-              error,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 8),
-          ] else if (uiState.commandFailed) ...[
-            Text(
-              l10n.commandFailed,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 8),
-          ],
-          for (final rejection in uiState.imageRejections)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(switch (rejection) {
-                UnsupportedImageType(:final name, :final mediaType) =>
-                  l10n.imageRejectionUnsupported(
-                    name ?? l10n.attachmentName,
-                    mediaType,
+    // DockAnchor publishes the keyed dock (below) to every sheet opener
+    // in the panel — model seat, permission seat, preset seat, the ➕
+    // roster, the workspace picker: the sheets float above the dock's
+    // top edge instead of hugging the screen bottom (see showMenuSheet).
+    return DockAnchor(
+      dockKey: _dockKey,
+      child: Padding(
+        // No inset at the top: the transcript runs to the bar and slides
+        // under it. A gap there is a blank strip that also clips the first
+        // row mid-line, which reads as a rendering fault.
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Column(
+          children: [
+            if (uiState.errorMessage case final error?) ...[
+              Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+            ] else if (uiState.commandFailed) ...[
+              Text(
+                l10n.commandFailed,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+            ],
+            for (final rejection in uiState.imageRejections)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  switch (rejection) {
+                    UnsupportedImageType(:final name, :final mediaType) =>
+                      l10n.imageRejectionUnsupported(
+                        name ?? l10n.attachmentName,
+                        mediaType,
+                      ),
+                    ImageTooLarge(:final name, :final maxBytes) =>
+                      l10n.imageRejectionTooLarge(
+                        name ?? l10n.attachmentName,
+                        maxBytes,
+                      ),
+                    NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
+                  },
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            if (widget.outline && _collapsedTurns.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _setCollapsedTurns(const <int>{}),
+                  child: Text(l10n.expandAll),
+                ),
+              ),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: _timelineBody(uiState, selectedSession),
                   ),
-                ImageTooLarge(:final name, :final maxBytes) =>
-                  l10n.imageRejectionTooLarge(
-                    name ?? l10n.attachmentName,
-                    maxBytes,
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: animation, child: child),
+                      ),
+                      child: _showJumpToBottom
+                          ? _jumpToBottomFab()
+                          : const SizedBox.shrink(),
+                    ),
                   ),
-                NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
-              }, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-          if (widget.outline && _collapsedTurns.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => _setCollapsedTurns(const <int>{}),
-                child: Text(l10n.expandAll),
+                ],
               ),
             ),
-          Expanded(
-            child: Stack(
+            // The session's counters are the transcript's footer, not dock
+            // chrome: they caption the conversation above the input surface
+            // rather than wedge between two of its strips.
+            if (_pendingApproval == null)
+              StatsLine(stats: uiState.sessionStats),
+            // Web input-dock order 0: the plan strip before the goal and
+            // queue entries. While an approval is pending the ApprovalPanel
+            // takes the composer seat, so the todo/goal chrome stands down —
+            // the decision moment keeps the transcript room instead of
+            // stacking chrome above it. Every strip shares one raised
+            // surface; the parts divide with hairlines, never with borders
+            // of their own.
+            _InputDock(
+              key: _dockKey,
               children: [
-                Positioned.fill(child: _timelineBody(uiState, selectedSession)),
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(scale: animation, child: child),
-                    ),
-                    child: _showJumpToBottom
-                        ? _jumpToBottomFab()
-                        : const SizedBox.shrink(),
+                if (_pendingApproval == null) ...[
+                  TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
+                  GoalBarStrip(
+                    goal: uiState.goal,
+                    onAction: widget.onAction,
+                    onOpen: widget.onOpenGoal,
                   ),
-                ),
-              ],
-            ),
-          ),
-          // The session's counters are the transcript's footer, not dock
-          // chrome: they caption the conversation above the input surface
-          // rather than wedge between two of its strips.
-          if (_pendingApproval == null) StatsLine(stats: uiState.sessionStats),
-          // Web input-dock order 0: the plan strip before the goal and
-          // queue entries. While an approval is pending the ApprovalPanel
-          // takes the composer seat, so the todo/goal chrome stands down —
-          // the decision moment keeps the transcript room instead of
-          // stacking chrome above it. Every strip shares one raised
-          // surface; the parts divide with hairlines, never with borders
-          // of their own.
-          _InputDock(
-            children: [
-              if (_pendingApproval == null) ...[
-                TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-                GoalBarStrip(
-                  goal: uiState.goal,
-                  onAction: widget.onAction,
-                  onOpen: widget.onOpenGoal,
-                ),
-              ],
-              if (_pendingApproval case final approval?)
-                ApprovalPanel(request: approval, onAction: widget.onAction)
-              else if (uiState.timeline.whereType<TimelineQueue>().any(
-                (dock) => dock.items.isNotEmpty,
-              ))
-                QueueDock(
-                  items: [
-                    for (final dock
-                        in uiState.timeline.whereType<TimelineQueue>())
-                      ...dock.items,
-                  ],
-                  running: isSessionRunning,
-                  onAction: widget.onAction,
-                ),
-              if (_pendingApproval == null)
-                Row(
-                  children: [
-                    Expanded(
-                      child: ComposerBar(
-                        onStop: selectedSessionId == null
-                            ? null
-                            : () => widget.onAction(const CancelTurnAction()),
-                        enabled:
-                            selectedSessionId != null && !uiState.isSending,
-                        isSending: uiState.isSending,
-                        running: isSessionRunning,
-                        plan: uiState.plan,
-                        models: widget.models,
-                        onSelectModel: widget.onSelectModel,
-                        onRefreshModels: widget.onRefreshModels,
-                        modelPrefs: uiState.modelPrefs,
-                        pendingImages: uiState.pendingImages,
-                        imageLimits: uiState.imageLimits,
-                        skills: uiState.skills,
-                        contextPressure: uiState.contextPressure,
-                        contextBreakdown: uiState.contextBreakdown,
-                        onAction: widget.onAction,
-                        sessionId: selectedSessionId,
-                        sessionState: _sessionState,
-                        permissions: uiState.permissions,
-                        // Web ComposerSubmissionPolicy: queue outside a
-                        // running turn; inside it the persisted busy-Enter
-                        // preference decides (the send button is the only
-                        // submit gesture on a soft keyboard).
-                        onSend: (text) => widget.onAction(
-                          SendPrompt(
-                            text,
-                            mode: _promptModeFor(isSessionRunning),
-                          ),
+                ],
+                // The queue dock is a display strip, not a filled seat:
+                // it rides alongside the approval card the way web's
+                // `conversation.input.dock` slot does (QueueDock is
+                // registered per-session and stays mounted while an
+                // approval panel owns the composer). An approval must
+                // never hide the queued rows the reader is waiting to
+                // send after the decision.
+                if (_hasQueuedRows)
+                  QueueDock(
+                    items: [
+                      for (final dock
+                          in uiState.timeline.whereType<TimelineQueue>())
+                        ...dock.items,
+                    ],
+                    running: isSessionRunning,
+                    onAction: widget.onAction,
+                  ),
+                if (_pendingApproval case final approval?)
+                  ApprovalPanel(request: approval, onAction: widget.onAction)
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ComposerBar(
+                          onStop: selectedSessionId == null
+                              ? null
+                              : () => widget.onAction(const CancelTurnAction()),
+                          enabled:
+                              selectedSessionId != null && !uiState.isSending,
+                          isSending: uiState.isSending,
+                          running: isSessionRunning,
+                          plan: uiState.plan,
+                          models: widget.models,
+                          onSelectModel: widget.onSelectModel,
+                          onRefreshModels: widget.onRefreshModels,
+                          modelPrefs: uiState.modelPrefs,
+                          pendingImages: uiState.pendingImages,
+                          imageLimits: uiState.imageLimits,
+                          skills: uiState.skills,
+                          contextPressure: uiState.contextPressure,
+                          contextBreakdown: uiState.contextBreakdown,
+                          onAction: widget.onAction,
+                          sessionId: selectedSessionId,
+                          sessionState: _sessionState,
+                          permissions: uiState.permissions,
+                          // Web ComposerSubmissionPolicy: queue outside a
+                          // running turn; inside it the persisted busy-Enter
+                          // preference decides (the send button is the only
+                          // submit gesture on a soft keyboard). The future
+                          // resolves with the host's acceptance: the
+                          // composer clears its draft only then.
+                          onSend: (text) {
+                            final settled = Completer<bool>();
+                            widget.onAction(
+                              SendPrompt(
+                                text,
+                                mode: _promptModeFor(isSessionRunning),
+                                onSettled: (accepted) {
+                                  if (!settled.isCompleted) {
+                                    settled.complete(accepted);
+                                  }
+                                },
+                              ),
+                            );
+                            return settled.future;
+                          },
                         ),
                       ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ],
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1404,7 +1572,7 @@ class _ChatPanelState extends State<ChatPanel> {
 /// nested boxes at the screen's busiest edge; the surface belongs to the
 /// dock, and the strips divide with hairlines.
 class _InputDock extends StatelessWidget {
-  const _InputDock({required this.children});
+  const _InputDock({required this.children, super.key});
 
   final List<Widget> children;
 
@@ -1620,12 +1788,6 @@ class MessageRow extends StatelessWidget {
               ref: ref,
               loadAttachment: loadAttachment,
             ),
-          if (message.streaming)
-            const SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
         ],
       );
     }
@@ -1643,17 +1805,13 @@ class MessageRow extends StatelessWidget {
             ref: ref,
             loadAttachment: loadAttachment,
           ),
-        if (message.streaming)
-          // Pre-first-token shows the small loader; once text flows the
-          // streaming tail is the blinking caret.
-          message.text.isEmpty
-              ? const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const _StreamingCaret(key: ValueKey('streaming-caret'))
-        else if (message.text.isNotEmpty)
+        if (message.streaming) ...[
+          // Once text flows the streaming tail is the blinking caret;
+          // the pre-first-token wait is said once, by the turn-status
+          // line at the timeline tail — not a loader here too.
+          if (message.text.isNotEmpty)
+            const _StreamingCaret(key: ValueKey('streaming-caret')),
+        ] else if (message.text.isNotEmpty)
           MessageIconActions(
             text: message.text,
             timeEpochMs: message.createdAtEpochMs,
@@ -1776,8 +1934,90 @@ class _UserBubbleState extends State<_UserBubble> {
 
 enum _BubbleVerb { copy, fork }
 
-/// Streaming assistant tail: a 2×18 business-blue caret blinking at 1s,
-/// the flat-flow stand-in for the web turn-status line.
+/// Pending steering at the conversation tail — the port of the web's
+/// `PendingSteeringBubble` (`ChatView.tsx:454-460`, `MessageItem.tsx:257-
+/// 278`). The web shows it as a plain user bubble with no decoration; on a
+/// phone an undecorated bubble cannot be told from a delivered message, so
+/// the row wears this client's existing pending-row language — the
+/// activity dot and sweep glare of a running step, with the host's steer
+/// verb as the caption — while keeping the reader's right-aligned bubble
+/// geometry so it still reads as their own words. The row is transient by
+/// nature: the host's claim replaces it with the durable user message.
+class PendingSteeringRow extends StatefulWidget {
+  const PendingSteeringRow({required this.text, super.key});
+
+  final String text;
+
+  @override
+  State<PendingSteeringRow> createState() => _PendingSteeringRowState();
+}
+
+class _PendingSteeringRowState extends State<PendingSteeringRow>
+    with SingleTickerProviderStateMixin {
+  /// The glare band's pass — the shared in-flight period (turn-status row,
+  /// reasoning and tool rows).
+  static const Duration _glarePeriod = Duration(milliseconds: 1800);
+
+  late final AnimationController _glare = AnimationController(
+    vsync: this,
+    duration: _glarePeriod,
+  )..repeat();
+
+  @override
+  void dispose() {
+    _glare.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 525),
+        child: FractionallySizedBox(
+          widthFactor: 0.82,
+          alignment: Alignment.centerRight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ActivityDot(),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.steeringPending,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SweepHighlight(
+                controller: reduced ? null : _glare,
+                child: _UserBubble(text: widget.text),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Streaming assistant tail: a 2×18 primary caret blinking at 1s once
+/// text flows. Before the first token the turn's wait belongs to the
+/// [TurnStatusRow] at the timeline tail, so the transcript never carries
+/// two tail signals at once.
 class _StreamingCaret extends StatefulWidget {
   const _StreamingCaret({super.key});
 
@@ -1954,8 +2194,10 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
 /// Tool summary row — port of the web ToolRow (figma 122:9479): one 24px
 /// line [leading state slot] gap6 [title] dot [summary FILL truncate]; the
 /// details (arguments + result) expand below on tap. Running rows carry the
-/// shared sweep glare. The leading slot carries a state-colored glyph
-/// (success check / business spinner / error cross) and the title sets the
+/// shared sweep glare — the web row's contract, where the sweep, not a
+/// spinner, is the in-flight motion. The leading slot keeps one 14px
+/// geometry across the run (activity dot / success check / error cross) so
+/// the row's left edge never jumps at settle, and the title sets the
 /// monospace stack; the expanded details render as the web IN/OUT card
 /// (bordered code surface with gutter labels and a hairline divider).
 class ToolCallRow extends StatefulWidget {
@@ -2210,14 +2452,7 @@ class _ToolCallRowState extends State<ToolCallRow>
     final scheme = Theme.of(context).colorScheme;
     switch (state) {
       case ToolRowState.running:
-        return SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: scheme.primary,
-          ),
-        );
+        return const ActivityDot();
       case ToolRowState.ok:
         return Icon(Icons.check, size: 14, color: scheme.success);
       case ToolRowState.error:
@@ -3727,7 +3962,11 @@ class ComposerBar extends ConsumerStatefulWidget {
   final ImageLimits imageLimits;
   final List<SkillEntry> skills;
   final void Function(ChatAction) onAction;
-  final void Function(String text) onSend;
+
+  /// Submit [text] and resolve with the host's acceptance: the composer
+  /// keeps the draft (and its persisted value) until this future settles
+  /// true, and never clears on false.
+  final Future<bool> Function(String text) onSend;
   final VoidCallback? onStop;
 
   /// The session whose draft this composer edits; drives draft
@@ -3768,6 +4007,12 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   final TextEditingController _draftController = TextEditingController();
   String _preRecordingDraft = '';
 
+  /// Counts reader keystrokes on the field (the [TextField] onChanged
+  /// path; programmatic writes never touch it), so an in-flight draft
+  /// read can tell "untouched" from "the reader is already typing here"
+  /// — see [_restoreDraft].
+  int _draftEdits = 0;
+
   @override
   void initState() {
     super.initState();
@@ -3793,7 +4038,9 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   }
 
   /// Load the selected session's saved draft into the field; an absent
-  /// draft clears it.
+  /// draft clears it. The read is async, so the answer can land after the
+  /// reader moved on: a later session switch or any keystroke (the edit
+  /// counter) voids the restore instead of clobbering live input.
   void _restoreDraft() {
     final sessionState = widget.sessionState;
     final sessionId = widget.sessionId;
@@ -3802,9 +4049,14 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       setState(() {});
       return;
     }
+    final editsAtStart = _draftEdits;
     unawaited(
       sessionState.readDraft().then((draft) {
         if (!mounted) return;
+        if (widget.sessionId != sessionId || _draftEdits != editsAtStart) {
+          return;
+        }
+        _draftEdits++;
         _draftController
           ..text = draft ?? ''
           ..selection = TextSelection.collapsed(
@@ -3925,6 +4177,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             // only submit gesture.
             textInputAction: TextInputAction.newline,
             onChanged: (_) {
+              _draftEdits++;
               _persistDraft();
               setState(() {});
             },
@@ -4147,12 +4400,21 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
         return;
       }
     }
-    widget.onSend(_draftController.text);
-    _draftController.clear();
-    // A sent draft is consumed: persist the cleared marker so a remount
-    // does not resurrect it.
-    _persistDraft();
-    setState(() {});
+    final submitted = _draftController.text;
+    unawaited(() async {
+      final accepted = await widget.onSend(submitted);
+      if (!mounted || !accepted) return;
+      // A host acceptance consumes the draft: clear the field and persist
+      // the cleared marker so a remount does not resurrect it. A failed
+      // send never reaches this line — the reader's words stay in the
+      // field, already persisted. If the field moved on while the send
+      // was in flight (a detached command dispatch never holds the
+      // composer), the reader's newer text wins and stays.
+      if (_draftController.text != submitted) return;
+      _draftController.clear();
+      _persistDraft();
+      setState(() {});
+    }());
   }
 }
 
@@ -4312,129 +4574,115 @@ class PopupMenuEntryShim extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 240,
       builder: (sheetContext) {
         final scheme = Theme.of(sheetContext).colorScheme;
         final theme = Theme.of(sheetContext);
         final l10n = AppLocalizations.of(sheetContext)!;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+              child: Text(l10n.delivery, style: theme.textTheme.titleSmall),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-                  child: Text(l10n.delivery, style: theme.textTheme.titleSmall),
-                ),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onModeChange(PromptMode.queue);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onModeChange(PromptMode.queue);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_send_outlined,
+                        size: 18,
+                        color: effectiveMode == PromptMode.queue
+                            ? scheme.primary
+                            : scheme.onSurfaceVariant,
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.schedule_send_outlined,
-                            size: 18,
-                            color: effectiveMode == PromptMode.queue
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.queue,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: effectiveMode == PromptMode.queue
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              l10n.queue,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: effectiveMode == PromptMode.queue
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          if (effectiveMode == PromptMode.queue)
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 18,
-                              color: scheme.primary,
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
+                      if (effectiveMode == PromptMode.queue)
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: scheme.primary,
+                        ),
+                    ],
                   ),
                 ),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: running
-                        ? () {
-                            Navigator.of(sheetContext).pop();
-                            onModeChange(PromptMode.steer);
-                          }
-                        : null,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: running
+                    ? () {
+                        Navigator.of(sheetContext).pop();
+                        onModeChange(PromptMode.steer);
+                      }
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.bolt_outlined,
+                        size: 18,
+                        color: !running
+                            ? scheme.outline
+                            : effectiveMode == PromptMode.steer
+                            ? scheme.primary
+                            : scheme.onSurfaceVariant,
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.bolt_outlined,
-                            size: 18,
-                            color: !running
-                                ? scheme.outline
-                                : effectiveMode == PromptMode.steer
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.steer,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: !running ? scheme.outline : scheme.onSurface,
+                            fontWeight: effectiveMode == PromptMode.steer
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              l10n.steer,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: !running
-                                    ? scheme.outline
-                                    : scheme.onSurface,
-                                fontWeight: effectiveMode == PromptMode.steer
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          if (effectiveMode == PromptMode.steer)
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 18,
-                              color: scheme.primary,
-                            ),
-                        ],
+                        ),
                       ),
-                    ),
+                      if (effectiveMode == PromptMode.steer)
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: scheme.primary,
+                        ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         );
       },
     );
@@ -4443,10 +4691,12 @@ class PopupMenuEntryShim extends StatelessWidget {
 
 /// The composer's ➕ — web form (InputBar `.add`): a 28px circle on the
 /// selector fill with a 14px plus glyph. It opens the slash-command menu
-/// (web `toggleCommandMenu` seeds the '/' trigger with an empty query):
-/// a menu-surface bottom sheet listing the host command roster and the
-/// session's skills, with the mobile-only Attach-images row at the tail
-/// (web relies on paste/drop, which mobile keyboards cannot do).
+/// as a menu-surface sheet seated above the dock, listing the host
+/// command roster and the session's skills, with the mobile-only
+/// Attach-images row at the tail (web relies on paste/drop, which mobile
+/// keyboards cannot do). The web roster's search box is not ported:
+/// mobile's roster is short and an autofocused query box raises the
+/// keyboard onto the rows it filters.
 class _PlusButton extends StatelessWidget {
   const _PlusButton({
     required this.enabled,
@@ -4480,42 +4730,24 @@ class _PlusButton extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      // Menu-surface sheet (PopupSelectView .card): menu fill, 12px radius,
-      // lv3 elevation, 4px inner padding.
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 440),
-              child: _CommandSheet(
-                canPickImages: onPickImages != null,
-                skills: skills,
-                onInsertCommand: (name) {
-                  Navigator.of(sheetContext).pop();
-                  onInsertCommand(name);
-                },
-                onPickImagesNow: () {
-                  Navigator.of(sheetContext).pop();
-                  onPickImages?.call();
-                },
-              ),
-            ),
-          ),
-        );
-      },
+    // The house menu sheet (PopupSelectView .card family), seated above
+    // the composer dock so the roster never covers or competes with the
+    // field the reader stands in.
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 440,
+      builder: (sheetContext) => _CommandSheet(
+        canPickImages: onPickImages != null,
+        skills: skills,
+        onInsertCommand: (name) {
+          Navigator.of(sheetContext).pop();
+          onInsertCommand(name);
+        },
+        onPickImagesNow: () {
+          Navigator.of(sheetContext).pop();
+          onPickImages?.call();
+        },
+      ),
     );
   }
 }
@@ -4604,12 +4836,13 @@ class _CommandRow extends StatelessWidget {
   }
 }
 
-/// Web PopupSelectView body: search input on top, filtered option rows
-/// below, status line when empty. The roster is the real
-/// command set — host slash commands first (web slash-menu sources),
-/// then the session's skills — with the mobile-only Attach-images row
-/// demoted to the tail (web relies on paste/drop).
-class _CommandSheet extends StatefulWidget {
+/// The roster is the real command set — host slash commands first (web
+/// slash-menu sources), then the session's skills — with the
+/// mobile-only Attach-images row demoted to the tail (web relies on
+/// paste/drop). No search field: the roster is short, and the old
+/// autofocused query box raised the keyboard straight onto the thumb's
+/// own target list (the sheet-float decision note records the removal).
+class _CommandSheet extends StatelessWidget {
   const _CommandSheet({
     required this.canPickImages,
     required this.skills,
@@ -4623,30 +4856,11 @@ class _CommandSheet extends StatefulWidget {
   final VoidCallback onPickImagesNow;
 
   @override
-  State<_CommandSheet> createState() => _CommandSheetState();
-}
-
-class _CommandSheetState extends State<_CommandSheet> {
-  String _search = '';
-
-  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final query = _search.trim().toLowerCase();
-    bool matches(String label, String detail) =>
-        query.isEmpty ||
-        label.toLowerCase().contains(query) ||
-        detail.toLowerCase().contains(query);
-    final commands = hostCommands(l10n)
-        .where((command) => matches(command.name, command.description))
-        .toList();
-    final skills = widget.skills
-        .where((skill) => matches(skill.name, skill.description))
-        .toList();
-    final showAttach = query.isEmpty || 'attach images'.contains(query);
-    final int visibleCount =
-        commands.length + skills.length + (showAttach ? 1 : 0);
+    final commands = hostCommands(l10n);
+    final int visibleCount = commands.length + skills.length + 1;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4688,81 +4902,35 @@ class _CommandSheetState extends State<_CommandSheet> {
             ],
           ),
         ),
-        // The web search box (PopupSelectView .search): hairline border,
-        // no focus accent — focus never repaints it.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 2, 2, 4),
-          child: TextField(
-            autofocus: true,
-            onChanged: (value) => setState(() => _search = value),
-            style: Theme.of(context).textTheme.bodyMedium,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: l10n.searchCommandsHint,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: scheme.outlineVariant),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: scheme.outlineVariant),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: scheme.outlineVariant),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 6,
-              ),
-            ),
-          ),
-        ),
         Flexible(
-          child: (commands.isEmpty && skills.isEmpty && !showAttach)
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  // PopupSelectView .status: the empty roster line.
-                  child: Text(
-                    l10n.noMatchingCommands,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                )
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final command in commands)
-                      _CommandRow(
-                        icon: Icons.terminal,
-                        label: '/${command.name}',
-                        detail: command.hint ?? command.description,
-                        onTap: () => widget.onInsertCommand(command.name),
-                      ),
-                    for (final skill in skills)
-                      _CommandRow(
-                        icon: Icons.auto_awesome,
-                        label: '/${skill.name}',
-                        detail: skill.description.isEmpty
-                            ? null
-                            : skill.description,
-                        onTap: () => widget.onInsertCommand(skill.name),
-                      ),
-                    // Mobile-only tail row: image intake (web uses
-                    // paste/drop) — demoted below the command roster.
-                    if (showAttach)
-                      _CommandRow(
-                        icon: Icons.image_outlined,
-                        label: l10n.attachImages,
-                        detail: l10n.pickFromGallery,
-                        enabled: widget.canPickImages,
-                        onTap: widget.onPickImagesNow,
-                      ),
-                  ],
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final command in commands)
+                _CommandRow(
+                  icon: Icons.terminal,
+                  label: '/${command.name}',
+                  detail: command.hint ?? command.description,
+                  onTap: () => onInsertCommand(command.name),
                 ),
+              for (final skill in skills)
+                _CommandRow(
+                  icon: Icons.auto_awesome,
+                  label: '/${skill.name}',
+                  detail: skill.description.isEmpty ? null : skill.description,
+                  onTap: () => onInsertCommand(skill.name),
+                ),
+              // Mobile-only tail row: image intake (web uses paste/drop)
+              // — demoted below the command roster.
+              _CommandRow(
+                icon: Icons.image_outlined,
+                label: l10n.attachImages,
+                detail: l10n.pickFromGallery,
+                enabled: canPickImages,
+                onTap: onPickImagesNow,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -4889,8 +5057,10 @@ class OutlineTimeline extends StatelessWidget {
     required this.onToggle,
     required this.onAction,
     required this.loadAttachment,
+    required this.turnStatusVisible,
     super.key,
     this.expansion,
+    this.pendingSteering = const <SessionQueueItem>[],
   });
 
   final List<TimelineItem> timeline;
@@ -4899,12 +5069,22 @@ class OutlineTimeline extends StatelessWidget {
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
 
+  /// Whether the session's turn is running and no louder tail signal (the
+  /// streaming caret, the approval seat) owns the tail: the turn-status
+  /// line rides after the last turn, visible even under collapsed groups.
+  final bool turnStatusVisible;
+
   /// Tool-row expansion persistence of the selected session.
   final ToolExpansionPersistence? expansion;
 
+  /// Transient steering rows riding the tail after the status line (the
+  /// web's tail order), visible even under collapsed turns.
+  final List<SessionQueueItem> pendingSteering;
+
   @override
   Widget build(BuildContext context) {
-    // Queue rides the composer dock, not the timeline body.
+    // Queued rows ride the composer dock and steering rows the tail
+    // below; the timeline body carries neither in its turn groups.
     final groups = groupTimelineByTurn(
       timeline
           .where(
@@ -4953,6 +5133,25 @@ class OutlineTimeline extends StatelessWidget {
         );
       }
     }
+    // The turn-status line rides outside the groups: a collapsed turn
+    // still shows its live signal, and the tail speaks once per turn.
+    if (turnStatusVisible) {
+      elements.add(
+        const SliverToBoxAdapter(
+          key: ValueKey('turn-status'),
+          child: TurnStatusRow(),
+        ),
+      );
+    }
+    // Pending steering follows the status line — the web's tail order.
+    for (final row in pendingSteering) {
+      elements.add(
+        SliverToBoxAdapter(
+          key: ValueKey('steering:${row.itemId}'),
+          child: PendingSteeringRow(text: row.text),
+        ),
+      );
+    }
     // The ledger rhythm is one 8px gap between elements; the last element
     // sits flush at the bottom, matching the previous separator layout.
     final slivers = <Widget>[
@@ -4966,6 +5165,16 @@ class OutlineTimeline extends StatelessWidget {
   }
 }
 
+/// The outline's ledger line for a turn group: the `TurnBoundaryRow`
+/// voice — a 14px hairline tick, one line, no frame — as a plain
+/// `ListTile`. The transcript is content and chrome wears no border
+/// around it (two tones separate content from chrome), so this row takes
+/// no outline the way the flow mode's boundary label takes none. The
+/// group's run state rides the shared `StateDot` (failed outranks running
+/// outranks done); the expanded subtitle echoes the prompt, the collapsed
+/// subtitle trades the echo for plain per-tool counts with an error-ink
+/// failure tail; the disclosure arrow swaps `chevron_right` ↔
+/// `expand_more` the way the subagents page does, with no custom curve.
 class TurnGroupHeader extends StatelessWidget {
   const TurnGroupHeader({
     required this.turn,
@@ -4983,68 +5192,106 @@ class TurnGroupHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final messages = items.whereType<TimelineMessage>().length;
     final tools = items.whereType<TimelineToolCall>().toList();
-    final turnLabel = switch (turn) {
+    final title = switch (turn) {
       null => l10n.beforeFirstTurnHeader(messages),
       final int value => l10n.turnHeader(messages, tools.length, value),
     };
-    final label = turnLabel;
 
-    final statusByName = <String, List<ToolRunStatus>>{};
+    var failed = 0;
+    var running = 0;
+    final countByName = <String, int>{};
     for (final tool in tools) {
-      statusByName.putIfAbsent(tool.name, () => []).add(tool.status);
+      countByName[tool.name] = (countByName[tool.name] ?? 0) + 1;
+      switch (tool.status) {
+        case ToolRunStatus.running:
+          running++;
+        case ToolRunStatus.completed:
+          break;
+        case ToolRunStatus.failed:
+          failed++;
+      }
     }
-    final names = statusByName.keys.toList()..sort();
-    final toolSummary = names
-        .map((name) {
-          final statuses = statusByName[name]!;
-          final completed = statuses
-              .where((status) => status == ToolRunStatus.completed)
-              .length;
-          final failed = statuses
-              .where((status) => status == ToolRunStatus.failed)
-              .length;
-          final running = statuses
-              .where((status) => status == ToolRunStatus.running)
-              .length;
-          final buffer = StringBuffer('$name $completed✓');
-          if (failed > 0) buffer.write(' $failed✗');
-          if (running > 0) buffer.write(' $running…');
-          return buffer.toString();
-        })
-        .join(' · ');
+    final names = countByName.keys.toList()..sort();
+    final toolSummary = names.map((n) => '$n ${countByName[n]}').join(' · ');
+    final state = failed > 0
+        ? StateDotState.error
+        : running > 0
+        ? StateDotState.ongoing
+        : StateDotState.done;
+
+    // The subtitle speaks once. Expanded, it echoes the prompt (the body
+    // carries the rest); collapsed, the body is gone and the tool counts
+    // are the useful facts — with the failure count kept on its own Text
+    // so a crowded summary ellipsizes before the error ink does.
+    final echo = promptPreview(items);
+    final summaryVisible = collapsed && toolSummary.isNotEmpty;
+    final subtitle = switch ((summaryVisible, echo)) {
+      (true, _) => toolSummary,
+      (false, final String? text) when text != null => '“$text”',
+      _ => null,
+    };
 
     final resolvedTurn = turn;
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: resolvedTurn == null ? null : () => onToggle(resolvedTurn),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return IconTheme.merge(
+      data: const IconThemeData(size: 18),
+      child: ListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 30,
+        // The same 2px column the tool rows ride (their ExpansionTile's
+        // tilePadding lands here as the inner ListTile's contentPadding).
+        contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+        // The before-first-turn group has no turn to fold: no tap target,
+        // no disclosure arrow — the tile is inert the way a boundary
+        // notice is.
+        onTap: resolvedTurn == null ? null : () => onToggle(resolvedTurn),
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(collapsed ? '▸ $label' : '▾ $label'),
-            if (promptPreview(items) case final String prompt)
-              Text(
-                '“$prompt”',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            if (toolSummary.isNotEmpty)
-              Text(
-                toolSummary,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                maxLines: collapsed ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Container(width: 14, height: 1, color: scheme.outlineVariant),
+            const SizedBox(width: 10),
+            // The dot states a tool fact; with no tools there is none.
+            if (tools.isNotEmpty) StateDot(state: state),
           ],
         ),
+        title: Text(
+          title,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
+        ),
+        subtitle: subtitle == null
+            ? null
+            : Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (summaryVisible && failed > 0)
+                    Text(
+                      ' · ${l10n.turnFailedCount(failed)}',
+                      maxLines: 1,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                      ),
+                    ),
+                ],
+              ),
+        trailing: resolvedTurn == null
+            ? null
+            : Icon(collapsed ? Icons.chevron_right : Icons.expand_more),
       ),
     );
   }
@@ -5130,68 +5377,80 @@ class CompactionRow extends StatelessWidget {
 }
 
 /// Host slash-command card — port of the web command flow node. The run
-/// append renders the command name with a running indicator; the done
-/// event resolves it with the host's own result text (success in the
-/// label tone, an error like "This operation was aborted" in the error
-/// tone). No UI copy is composed here: the name and text are host facts.
-class CommandRow extends StatelessWidget {
+/// append renders the command name with the activity dot under the shared
+/// sweep glare (web `dsh-command-row-sweep`); the done event resolves it
+/// with the host's own result text (success in the label tone, an error
+/// like "This operation was aborted" in the error tone). No UI copy is
+/// composed here: the name and text are host facts.
+class CommandRow extends StatefulWidget {
   const CommandRow({required this.command, super.key});
 
   final TimelineCommand command;
 
   @override
+  State<CommandRow> createState() => _CommandRowState();
+}
+
+class _CommandRowState extends State<CommandRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.command.status == CommandRunStatus.running) _sweep.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant CommandRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final running = widget.command.status == CommandRunStatus.running;
+    if (running && oldWidget.command.status != CommandRunStatus.running) {
+      _sweep.repeat();
+    }
+    if (!running && oldWidget.command.status == CommandRunStatus.running) {
+      _sweep.stop(canceled: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final command = widget.command;
     final status = command.status;
     final running = status == CommandRunStatus.running;
     final failed = status == CommandRunStatus.failed;
     final text = command.text;
-    return SizedBox(
-      height: 24,
-      child: Row(
-        children: [
-          if (running)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: scheme.onSurfaceVariant,
-              ),
-            )
-          else
-            Icon(
-              failed ? Icons.error_outline : Icons.check_circle_outline,
-              size: 14,
-              color: failed ? scheme.error : scheme.primary,
-            ),
-          const SizedBox(width: 6),
-          Text(
-            '/${command.name}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: failed
-                  ? scheme.error
-                  : running
-                  ? scheme.onSurfaceVariant
-                  : scheme.onSurface,
-            ),
-          ),
-          if (text != null && text.isNotEmpty) ...[
-            Container(
-              width: 2,
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: scheme.outline,
-                shape: BoxShape.circle,
-              ),
-            ),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    return ClipRect(
+      child: SweepHighlight(
+        controller: running && !MediaQuery.disableAnimationsOf(context)
+            ? _sweep
+            : null,
+        child: SizedBox(
+          height: 24,
+          child: Row(
+            children: [
+              if (running)
+                const ActivityDot()
+              else
+                Icon(
+                  failed ? Icons.error_outline : Icons.check_circle_outline,
+                  size: 14,
+                  color: failed ? scheme.error : scheme.primary,
+                ),
+              const SizedBox(width: 6),
+              Text(
+                '/${command.name}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: failed
                       ? scheme.error
@@ -5200,9 +5459,34 @@ class CommandRow extends StatelessWidget {
                       : scheme.onSurface,
                 ),
               ),
-            ),
-          ],
-        ],
+              if (text != null && text.isNotEmpty) ...[
+                Container(
+                  width: 2,
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: scheme.outline,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                Flexible(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: failed
+                          ? scheme.error
+                          : running
+                          ? scheme.onSurfaceVariant
+                          : scheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -25,6 +25,7 @@ import '../chat/chat_ui_state.dart';
 import '../../di/providers.dart';
 import '../root/app_destination.dart';
 import '../shared/backend_connection_dot.dart';
+import '../shared/edge_fade.dart';
 import '../shared/session_tree.dart';
 import '../theme/theme.dart';
 import 'workspace_ui_state.dart';
@@ -34,7 +35,7 @@ class WorkspaceRoute extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watching the keep-alive here pins every configured backend's
+    // Watching the keep-alive here pins every enabled backend's
     // connection while this tab exists.
     ref.watch(allBackendConnectionsProvider);
     final registry = ref.watch(backendRegistryStateProvider);
@@ -44,7 +45,10 @@ class WorkspaceRoute extends ConsumerWidget {
       error: (error, _) =>
           Scaffold(body: Center(child: Text(error.toString()))),
       data: (state) => _BackendAggregateScreen(
-        backends: state.backends,
+        // A disabled backend has no browsing region to aggregate:
+        // switching (header tap) and starting a session are switcher
+        // entries, and switchers list enabled backends only.
+        backends: state.enabledBackends,
         activeId: state.activeId,
         onAction: (action) => ref
             .read(backendRegistryProvider.future)
@@ -54,7 +58,7 @@ class WorkspaceRoute extends ConsumerWidget {
   }
 }
 
-/// The aggregate Workspaces surface: every configured backend's browsing
+/// The aggregate Workspaces surface: every enabled backend's browsing
 /// region, grouped under a backend header (label + live connection dot +
 /// active marker). Tapping a header makes that backend active; starting
 /// a session in a workspace switches there too.
@@ -576,33 +580,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         if (widget.embedded)
           results
         else
+          // Web `.fade` as EdgeFade: the list content itself dissolves
+          // into the surface at its bottom edge (a dstIn mask), so no
+          // overlay band sits above the rows — an accent row passing
+          // the edge fades with its own pixels, never through a film.
           Expanded(
-            child: Stack(
-              children: [
-                results,
-                // Web `.fade`: bottom continuation hint tracking the
-                // sidebar fill across themes.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: IgnorePointer(
-                    child: Container(
-                      height: 24,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            scheme.surfaceContainerLow.withValues(alpha: 0),
-                            scheme.surfaceContainerLow,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: EdgeFade(
+              surface: scheme.surfaceContainerLow,
+              child: results,
             ),
           ),
       ],

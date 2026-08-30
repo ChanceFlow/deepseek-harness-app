@@ -28,6 +28,8 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/settings/settings_screen.dart';
+import 'package:app/ui/subagents/subagent_screen.dart';
+import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:asr/asr.dart';
 import 'package:flutter/material.dart';
@@ -106,6 +108,20 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The collapsed rail: a ≥720dp-only form the phone viewport can never
+  // show. The act moves this one shot's viewport to a tablet width (the
+  // catalog device stays the phone; _kPhone belongs to every other shot)
+  // and folds the sidebar, so the rail's seats render as readers see them.
+  DesignShot(
+    name: 'sidebar-rail',
+    state: busyState(),
+    act: (tester) async {
+      tester.view.physicalSize = const Size(1440, 1688);
+      await settle(tester);
+      await tester.tap(find.byTooltip('Collapse sidebar'));
+      await settle(tester);
+    },
+  ),
   DesignShot(
     name: 'message-menu',
     state: busyState(),
@@ -122,6 +138,32 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'question-zh',
     state: questionState(),
     locale: const Locale('zh'),
+  ),
+  // The trajectory outline: the ledger-style turn-group headers over a
+  // two-turn fold (a failed tool in the first turn, a running tool in
+  // the second). The collapse twin folds the first group so its
+  // subtitle carries the tool-count summary and the error-ink failure
+  // count instead of the prompt echo.
+  DesignShot(
+    name: 'outline',
+    state: outlineState(),
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'outline-collapsed',
+    state: outlineState(),
+    dark: false,
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.view_list_outlined));
+      await settle(tester);
+      // Matches the turn-1 header under both the old ▾-glyph button and
+      // the new borderless tile, so this pass renders a real before.
+      await tester.tap(find.textContaining('Turn 1 · 2'));
+      await settle(tester);
+    },
   ),
   // Settings shots: the two-category surface (App / Host) on a
   // two-host registry fixture. The default view (Host settings,
@@ -186,6 +228,29 @@ final List<DesignShot> shots = <DesignShot>[
     locale: const Locale('zh'),
     host: (theme, locale) => _settingsAsrHost(theme, locale, true),
     dark: false,
+  ),
+  // The Subagents screen: the catalog tree (running child, settled
+  // one-shot, diagnostic row) with a branch expanded, the host-error
+  // banner over the crowded tree, and the one-shot read-only record.
+  DesignShot(
+    name: 'subagents',
+    host: (theme, locale) => _subagentsHost(theme, locale, subagentsState()),
+    act: (tester) async {
+      // The web toggleBranch seat: expanding a node renders the branch
+      // loading row in the same frame.
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'subagents-error',
+    host: (theme, locale) =>
+        _subagentsHost(theme, locale, subagentsErrorState()),
+  ),
+  DesignShot(
+    name: 'subagents-child',
+    host: (theme, locale) =>
+        _subagentsHost(theme, locale, subagentsChildState()),
   ),
 ];
 
@@ -519,6 +584,20 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
     locale: locale,
     theme: _withRealFonts(theme),
     home: AsrModelsScreen(uiState: state, onAction: (_) {}),
+  );
+}
+
+/// Full-tree builder for the Subagents screen shots. The surface takes a
+/// `SubagentUiState` and an action sink like `ChatScreen` does, so the
+/// shot pumps the screen directly — no route push, no controller fake.
+Widget _subagentsHost(ThemeData theme, Locale? locale, SubagentUiState state) {
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: SubagentScreen(uiState: state, onAction: (_) {}),
   );
 }
 

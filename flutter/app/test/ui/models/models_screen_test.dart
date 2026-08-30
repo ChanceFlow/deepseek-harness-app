@@ -56,10 +56,12 @@ const _catalog = SessionModels(
 Future<void> _pump(
   WidgetTester tester,
   ModelsUiState uiState,
-  List<ModelsAction> actions,
-) {
-  tester.view.physicalSize = const Size(800, 1600);
-  tester.view.devicePixelRatio = 1.0;
+  List<ModelsAction> actions, {
+  Size physicalSize = const Size(800, 1600),
+  double devicePixelRatio = 1.0,
+}) {
+  tester.view.physicalSize = physicalSize;
+  tester.view.devicePixelRatio = devicePixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
@@ -68,6 +70,85 @@ Future<void> _pump(
     ),
   );
 }
+
+/// A catalog with more rows than any phone or tablet viewport shows:
+/// five groups of six models.
+const _longCatalog = SessionModels(
+  current: ModelSelection(provider: 'p0', model: 'm0-0'),
+  routable: true,
+  groups: [
+    ModelProviderGroup(
+      id: 'p0',
+      name: 'Provider Zero',
+      models: [
+        ModelCatalogModel(id: 'm0-0', name: 'Model 0-0'),
+        ModelCatalogModel(id: 'm0-1', name: 'Model 0-1'),
+        ModelCatalogModel(id: 'm0-2', name: 'Model 0-2'),
+        ModelCatalogModel(id: 'm0-3', name: 'Model 0-3'),
+        ModelCatalogModel(id: 'm0-4', name: 'Model 0-4'),
+        ModelCatalogModel(id: 'm0-5', name: 'Model 0-5'),
+      ],
+    ),
+    ModelProviderGroup(
+      id: 'p1',
+      name: 'Provider One',
+      models: [
+        ModelCatalogModel(id: 'm1-0', name: 'Model 1-0'),
+        ModelCatalogModel(id: 'm1-1', name: 'Model 1-1'),
+        ModelCatalogModel(id: 'm1-2', name: 'Model 1-2'),
+        ModelCatalogModel(id: 'm1-3', name: 'Model 1-3'),
+        ModelCatalogModel(id: 'm1-4', name: 'Model 1-4'),
+        ModelCatalogModel(id: 'm1-5', name: 'Model 1-5'),
+      ],
+    ),
+    ModelProviderGroup(
+      id: 'p2',
+      name: 'Provider Two',
+      models: [
+        ModelCatalogModel(id: 'm2-0', name: 'Model 2-0'),
+        ModelCatalogModel(id: 'm2-1', name: 'Model 2-1'),
+        ModelCatalogModel(id: 'm2-2', name: 'Model 2-2'),
+        ModelCatalogModel(id: 'm2-3', name: 'Model 2-3'),
+        ModelCatalogModel(id: 'm2-4', name: 'Model 2-4'),
+        ModelCatalogModel(id: 'm2-5', name: 'Model 2-5'),
+      ],
+    ),
+    ModelProviderGroup(
+      id: 'p3',
+      name: 'Provider Three',
+      models: [
+        ModelCatalogModel(id: 'm3-0', name: 'Model 3-0'),
+        ModelCatalogModel(id: 'm3-1', name: 'Model 3-1'),
+        ModelCatalogModel(id: 'm3-2', name: 'Model 3-2'),
+        ModelCatalogModel(id: 'm3-3', name: 'Model 3-3'),
+        ModelCatalogModel(id: 'm3-4', name: 'Model 3-4'),
+        ModelCatalogModel(id: 'm3-5', name: 'Model 3-5'),
+      ],
+    ),
+    ModelProviderGroup(
+      id: 'p4',
+      name: 'Provider Four',
+      models: [
+        ModelCatalogModel(id: 'm4-0', name: 'Model 4-0'),
+        ModelCatalogModel(id: 'm4-1', name: 'Model 4-1'),
+        ModelCatalogModel(id: 'm4-2', name: 'Model 4-2'),
+        ModelCatalogModel(id: 'm4-3', name: 'Model 4-3'),
+        ModelCatalogModel(id: 'm4-4', name: 'Model 4-4'),
+        ModelCatalogModel(id: 'm4-5', name: 'Model 4-5'),
+      ],
+    ),
+  ],
+  failures: [],
+);
+
+const _phoneUiState = ModelsUiState(
+  sessions: [
+    SessionSummary(id: 's0', title: 'Session zero', blank: false),
+    SessionSummary(id: 's1', title: 'Session one', blank: false),
+  ],
+  selectedSessionId: 's0',
+  models: _longCatalog,
+);
 
 void main() {
   testWidgets('renders groups, current model, and provider failures', (
@@ -184,5 +265,94 @@ void main() {
       [],
     );
     expect(find.text('catalog unreachable'), findsOneWidget);
+  });
+
+  testWidgets('the page is one scrolling viewport at phone size', (
+    tester,
+  ) async {
+    // 360x844dp — the reported device: 720x1688 physical at dpr 2.
+    await _pump(
+      tester,
+      _phoneUiState,
+      [],
+      physicalSize: const Size(720, 1688),
+      devicePixelRatio: 2.0,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // A single scroll view owns the page: the old two-pane split gave the
+    // Scaffold's one primary scroll controller to two sibling ListViews
+    // ('ScrollController attached to multiple scroll views').
+    expect(find.byType(ListView), findsOneWidget);
+    expect(
+      tester.widget<Scrollable>(find.byType(Scrollable)).controller!.positions,
+      hasLength(1),
+    );
+
+    // The tail of the catalog starts offscreen. The first swipe begins on
+    // the session picker — the region that used to be a pinned, dead third
+    // of the screen — and already scrolls the page.
+    expect(find.text('Model 4-5'), findsNothing);
+    await tester.drag(find.text('Session zero'), const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Scrollable>(find.byType(Scrollable)).controller!.offset,
+      greaterThan(0),
+    );
+
+    // More page drags bring the tail into view.
+    await tester.dragUntilVisible(
+      find.text('Model 4-5'),
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    expect(find.text('Model 4-5'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the page scrolls at tablet size without overflow', (
+    tester,
+  ) async {
+    // 800x1280dp tablet portrait.
+    await _pump(
+      tester,
+      _phoneUiState,
+      [],
+      physicalSize: const Size(1600, 2560),
+      devicePixelRatio: 2.0,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ListView), findsOneWidget);
+
+    expect(find.text('Model 4-5'), findsNothing);
+    await tester.dragUntilVisible(
+      find.text('Model 4-5'),
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
+    expect(find.text('Model 4-5'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('taps still dispatch after the page is scrolled', (tester) async {
+    final actions = <ModelsAction>[];
+    await _pump(
+      tester,
+      _phoneUiState,
+      actions,
+      physicalSize: const Size(720, 1688),
+      devicePixelRatio: 2.0,
+    );
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('Model 1-3'),
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    await tester.tap(find.text('Model 1-3'));
+    await tester.pump();
+    expect(actions, contains(const SelectModelAction('p1', 'm1-3')));
   });
 }

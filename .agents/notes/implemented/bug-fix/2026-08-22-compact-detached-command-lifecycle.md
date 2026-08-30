@@ -66,8 +66,11 @@ Three changes close the loop:
   `command/done` resolves the card in place by `commandId` (`success`
   with `text`, else `failed`); a done whose run fell outside the folded
   window appends the settled card with name `unknown`. `CommandRow`
-  renders `/name` plus the host-authored outcome text — running shows a
-  12 px progress indicator, success a check icon, failure an error icon
+  renders `/name` plus the host-authored outcome text — running leads
+  with the timeline's `ActivityDot` while the row sweep carries the
+  in-flight signal
+  ([timeline in-flight signal is sweep and status line](2026-08-29-timeline-inflight-sweep-only.md)),
+  success a check icon, failure an error icon
   tinted with the error scheme. The cards land in the current turn group.
 
 Spec §6 documents the two event folds; spec §16 documents the detached

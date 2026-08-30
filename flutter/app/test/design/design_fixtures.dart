@@ -14,12 +14,14 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/workspace.dart';
 
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
+import 'package:app/ui/subagents/subagent_ui_state.dart';
 
 /// Fixed clock so a re-render diffs on the design, not on the hour.
 const int kNow = 1755000000000;
@@ -41,6 +43,7 @@ const List<SessionSummary> kSessions = <SessionSummary>[
     id: 's2',
     title: 'wire parity for session/fork',
     blank: false,
+    pendingInteraction: SessionPendingInteraction.question,
     updatedAtEpochMs: kNow - 3600000,
     cwd: '/home/user/Projects/deepseek-harness-app',
   ),
@@ -48,6 +51,7 @@ const List<SessionSummary> kSessions = <SessionSummary>[
     id: 's3',
     title: 'telemetry sampling',
     blank: false,
+    completed: true,
     updatedAtEpochMs: kNow - 86400000,
     cwd: '/home/user/Projects/signoz-stack',
   ),
@@ -127,21 +131,40 @@ const List<TimelineItem> _conversation = <TimelineItem>[
     arguments: '{"path":"flutter/app/lib/ui/chat/chat_screen.dart"}',
     status: ToolRunStatus.running,
   ),
+  // A crowded day the reader actually sees: one queued wait riding the
+  // dock, one steering line pending at the conversation tail (host
+  // claimed it mid-turn), and the turn-status line still on.
+  TimelineQueue(
+    items: [
+      SessionQueueItem(
+        itemId: 'dq1',
+        placement: QueuePlacement.queued,
+        text: 'Also re-measure the composer ceiling on a 3-line draft',
+      ),
+      SessionQueueItem(
+        itemId: 'dq2',
+        placement: QueuePlacement.steering,
+        text: 'hold on - the plan strip is closed there, use the open one',
+      ),
+    ],
+  ),
 ];
 
 /// A turn in flight: steps, a plan, stats, and a reply long enough to push
-/// the transcript past the viewport.
-ChatUiState busyState() {
-  return const ChatUiState(
+/// the transcript past the viewport. [timeline] swaps the conversation for
+/// a shot that needs a different fold (the outline's turn groups) while
+/// keeping the session chrome identical.
+ChatUiState busyState({List<TimelineItem>? timeline}) {
+  return ChatUiState(
     sessions: kSessions,
     selectedSessionId: 's1',
-    timeline: _conversation,
-    todos: <TodoItem>[
+    timeline: timeline ?? _conversation,
+    todos: const <TodoItem>[
       TodoItem(content: 'measure the dock', status: TodoStatus.completed),
       TodoItem(content: 'cap the composer', status: TodoStatus.inProgress),
       TodoItem(content: 'land the gate', status: TodoStatus.pending),
     ],
-    sessionStats: SessionWindowStats(
+    sessionStats: const SessionWindowStats(
       turns: 12,
       steps: 47,
       llmMs: 84000,
@@ -150,11 +173,11 @@ ChatUiState busyState() {
       outputTokens: 9100,
       cacheReadTokens: 96000,
     ),
-    contextPressure: ContextPressure(
+    contextPressure: const ContextPressure(
       pressureTokens: 128400,
       contextWindow: 200000,
     ),
-    models: SessionModels(
+    models: const SessionModels(
       current: ModelSelection(
         provider: 'deepseek',
         model: 'glm-x',
@@ -171,6 +194,69 @@ ChatUiState busyState() {
         ),
       ],
     ),
+  );
+}
+
+/// The outline's own fold: one settled turn carrying a failed tool (the
+/// ledger header wears the error dot and an error-ink failure count) and
+/// one still-running turn (the ongoing dot; singular counts too). The
+/// session chrome rides [busyState] unchanged so the shot diffs on the
+/// turn-group header alone.
+ChatUiState outlineState() {
+  return busyState(
+    timeline: const <TimelineItem>[
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'o1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'why does the dock eat half the screen? measure it',
+          createdAtEpochMs: kNow,
+          seq: 11,
+        ),
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'o2',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text:
+              'Four strips stack above the composer: the todo panel, the '
+              'goal line, the stats line, and the eight-line composer.',
+          createdAtEpochMs: kNow + 1000,
+          seq: 12,
+        ),
+      ),
+      TimelineToolCall(
+        id: 'ot1',
+        name: 'read',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineToolCall(
+        id: 'ot2',
+        name: 'bash',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineToolCall(id: 'ot3', name: 'bash', status: ToolRunStatus.failed),
+      TimelineToolCall(
+        id: 'ot4',
+        name: 'edit',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineTurnBoundary(2),
+      TimelineMessage(
+        ChatMessage(
+          id: 'o3',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'cap it, then land the gate',
+          createdAtEpochMs: kNow + 2000,
+          seq: 21,
+        ),
+      ),
+      TimelineToolCall(id: 'ot5', name: 'grep', status: ToolRunStatus.running),
+    ],
   );
 }
 
@@ -454,4 +540,111 @@ SettingsUiState settingsUiState() => const SettingsUiState(
   snapshot: kSettingsSnapshot,
   credentials: kSettingsCredentials,
   roster: kSettingsRoster,
+);
+
+/// The Subagents screen's catalog fixture: the same family the widget
+/// test tree renders — a running continuable child with an expandable
+/// branch, a settled one-shot child, and a corrupt diagnostic row.
+const String kSubagentWorkerId = 'child-12345678abcd';
+
+const SubagentCatalog kSubagentCatalog = SubagentCatalog(
+  parentSessionId: 'p1',
+  parentAvailable: true,
+  entries: [
+    SubagentEntry(
+      id: kSubagentWorkerId,
+      kind: 'child',
+      mode: SubagentMode.continuable,
+      activity: 'running',
+      hasChildren: true,
+      label: 'Worker',
+    ),
+    SubagentEntry(
+      id: 'one-shot-1',
+      kind: 'child',
+      mode: SubagentMode.oneShot,
+      activity: 'inactive',
+    ),
+    SubagentEntry(id: 'broken-1', kind: 'diagnostic', reason: 'corrupt'),
+  ],
+);
+
+const List<SessionSummary> kSubagentSessions = <SessionSummary>[
+  SessionSummary(
+    id: 'p1',
+    title: 'Porting the catalog surface',
+    running: true,
+    blank: false,
+    updatedAtEpochMs: kNow,
+  ),
+  SessionSummary(
+    id: 'p2',
+    title: 'Reviewing the wire contract',
+    blank: false,
+    updatedAtEpochMs: kNow - 3600000,
+  ),
+  SessionSummary(
+    id: kSubagentWorkerId,
+    title: 'Porting tests',
+    blank: false,
+    updatedAtEpochMs: kNow - 60000,
+  ),
+];
+
+SubagentUiState subagentsState() => const SubagentUiState(
+  sessions: kSubagentSessions,
+  selectedParentId: 'p1',
+  catalog: kSubagentCatalog,
+);
+
+/// The catalog with a host failure on top: the banner is the surface
+/// under review, so the error rides the same crowded tree.
+SubagentUiState subagentsErrorState() => const SubagentUiState(
+  sessions: kSubagentSessions,
+  selectedParentId: 'p1',
+  catalog: kSubagentCatalog,
+  errorMessage: 'subagent.interrupt: child-12345678abcd not found on host',
+);
+
+/// The one-shot child's read-only record: a real transcript row, a
+/// queued message riding the read-only dock, and the notice replacing
+/// the message field.
+SubagentUiState subagentsChildState() => const SubagentUiState(
+  sessions: kSubagentSessions,
+  selectedParentId: 'p1',
+  catalog: kSubagentCatalog,
+  selectedChildId: 'one-shot-1',
+  childTimeline: [
+    TimelineMessage(
+      ChatMessage(
+        id: 'm1',
+        sessionId: 'one-shot-1',
+        role: MessageRole.user,
+        text: 'Audit the import boundary and report violations.',
+        createdAtEpochMs: kNow - 120000,
+        seq: 1,
+      ),
+    ),
+    TimelineMessage(
+      ChatMessage(
+        id: 'm2',
+        sessionId: 'one-shot-1',
+        role: MessageRole.assistant,
+        text:
+            'Boundary holds: no app import crosses into the adapter '
+            'outside lib/di/. Two dev-package leaves verified.',
+        createdAtEpochMs: kNow - 60000,
+        seq: 2,
+      ),
+    ),
+    TimelineQueue(
+      items: [
+        SessionQueueItem(
+          itemId: 'q1',
+          placement: QueuePlacement.queued,
+          text: 'Also check the asr package leaf',
+        ),
+      ],
+    ),
+  ],
 );

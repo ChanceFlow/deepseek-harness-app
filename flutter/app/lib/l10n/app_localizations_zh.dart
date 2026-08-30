@@ -113,6 +113,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get contextLabel => '上下文';
+
+  @override
   String get systemPromptLabel => '系统提示词';
 
   @override
@@ -575,6 +578,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendStatusStandby => '待机';
 
   @override
+  String get backendStatusDisabled => '已停用';
+
+  @override
+  String get backendEnableTooltip => '启用该主机';
+
+  @override
+  String get backendDisableTooltip => '停用该主机';
+
+  @override
   String get hostSettingsUnavailable => '主机设置不可用';
 
   @override
@@ -1021,6 +1033,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get runStatusRunning => '运行中…';
 
   @override
+  String get turnStatusWorking => '正在深入研究…';
+
+  @override
   String get runStatusDone => '已完成';
 
   @override
@@ -1060,6 +1075,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get steer => '插话发送';
+
+  @override
+  String get steeringPending => '插话发送';
 
   @override
   String get removeQueuedMessage => '删除排队消息';
@@ -1141,12 +1159,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commandsTooltip => '命令';
 
   @override
-  String get searchCommandsHint => '搜索命令';
-
-  @override
-  String get noMatchingCommands => '无匹配命令';
-
-  @override
   String get attachImages => '附加图片';
 
   @override
@@ -1159,12 +1171,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String beforeFirstTurnHeader(int count) {
-    return '首轮之前 · $count 条消息';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条消息',
+    );
+    return '首轮之前 · $_temp0';
   }
 
   @override
   String turnHeader(int count, int toolCount, int turn) {
-    return '第 $turn 轮 · $count 条消息 · $toolCount 个工具';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条消息',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      toolCount,
+      locale: localeName,
+      other: '$toolCount 个工具',
+    );
+    return '第 $turn 轮 · $_temp0 · $_temp1';
+  }
+
+  @override
+  String turnFailedCount(int count) {
+    return '$count 个失败';
   }
 
   @override
@@ -1306,6 +1338,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => '关闭通知';
+
+  @override
+  String get workingChannel => '工作中的会话';
+
+  @override
+  String get workingChannelDescription => '会话正在执行或等待你处理时，显示不发声的常驻通知。';
+
+  @override
+  String get workingNotificationBody => '正在执行…';
+
+  @override
+  String get waitingApprovalBody => '等待你审批';
+
+  @override
+  String get waitingPlanReviewBody => '等待你审阅 plan';
+
+  @override
+  String get waitingAnswerBody => '等待你的回答';
 
   @override
   String get jumpToBottomTooltip => '跳到底部';

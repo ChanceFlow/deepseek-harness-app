@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/shared/session_tree.dart';
+import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/theme/theme.dart';
 
 import '../../l10n_app.dart';
@@ -217,6 +218,73 @@ void main() {
           theme.colorScheme.success,
         );
       }
+    });
+
+    testWidgets('the warning dot paints amber from the theme, not error red', (
+      tester,
+    ) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        await tester.pumpWidget(
+          l10nApp(
+            theme: theme,
+            home: const Scaffold(body: WarningDot()),
+          ),
+        );
+        // MaterialApp lerps between themes; land on the new one.
+        await tester.pump(const Duration(milliseconds: 400));
+        final core = tester.widget<Container>(
+          find
+              .descendant(
+                of: find.byType(WarningDot),
+                matching: find.byType(Container),
+              )
+              .last,
+        );
+        final painted = (core.decoration! as BoxDecoration).color;
+        expect(painted, theme.colorScheme.warning);
+        expect(
+          painted,
+          isNot(theme.colorScheme.error),
+          reason: 'waiting-on-user stays out of failure red (web warn token)',
+        );
+      }
+    });
+  });
+
+  group('SessionSearchResultRow status', () {
+    Widget searchRow(SessionSummary session) => l10nApp(
+      home: Scaffold(
+        body: SessionSearchResultRow(
+          session: session,
+          snippet: 'a matching line',
+          workspaceLabel: 'A',
+          selected: false,
+          onSelect: () {},
+        ),
+      ),
+    );
+
+    testWidgets('pending interaction, running, and completed ride the main '
+        'row state machine; idle stays empty', (tester) async {
+      await tester.pumpWidget(
+        searchRow(
+          _session('a', pendingInteraction: SessionPendingInteraction.question),
+        ),
+      );
+      expect(find.byType(WarningDot), findsOneWidget);
+      expect(find.byType(RunningDot), findsNothing);
+      expect(find.byType(DoneDot), findsNothing);
+
+      await tester.pumpWidget(searchRow(_session('a', running: true)));
+      expect(find.byType(RunningDot), findsOneWidget);
+      expect(find.byType(WarningDot), findsNothing);
+
+      await tester.pumpWidget(searchRow(_session('a', completed: true)));
+      expect(find.byType(DoneDot), findsOneWidget);
+      expect(find.byType(RunningDot), findsNothing);
+
+      await tester.pumpWidget(searchRow(_session('a')));
+      expect(find.byType(StateDot), findsNothing);
     });
   });
 }

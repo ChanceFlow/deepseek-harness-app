@@ -24,7 +24,9 @@ system, changing presentation only:
   tile — `Icons.terminal` for host commands, `Icons.auto_awesome` for
   skills, `Icons.image_outlined` for the attach-images tail row — above
   the bold `/name` label with the description as its secondary line. The
-  search field, filtering, roster order, and insert behavior are unchanged.
+  roster order and insert behavior are unchanged; the search field was
+  later removed and the sheet now floats above the dock
+  ([composer sheets float above the dock](../feature/2026-08-29-composer-sheets-float-above-dock.md)).
 - **`ModelSelect` (`model_select.dart`)**: pane headers paint their glyph
   in `primary`; the root navigation cells (`Model`, `Effort`) and the
   model/effort option rows gained the same 36px tile (`Icons.memory`,
@@ -49,5 +51,8 @@ system, changing presentation only:
 
 All bottom-sheet pickers — workspaces, prompt mode, speech model, agent
 preset, commands, and the model seat — share one row language. The
-composer sheet tests (`chat_screen_test.dart`, `model_select_test.dart`)
+parent-session picker on the Subagents screen rides the same menu-surface
+chrome; its row/widget language is owned by the
+[subagent screen component pass](../simplification/2026-08-29-subagent-screen-framework-component-pass.md).
+The composer sheet tests (`chat_screen_test.dart`, `model_select_test.dart`)
 keep passing unchanged because every text and behavior contract held.

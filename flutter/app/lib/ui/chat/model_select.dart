@@ -9,7 +9,8 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart';
+import '../shared/menu_sheet.dart';
+
 import 'chat_local_state.dart';
 
 /// The catalog's display name for the session's current model, falling back
@@ -77,38 +78,17 @@ class ModelSelect extends StatelessWidget {
   Future<void> _open(BuildContext context) {
     onRefresh();
     final root = Navigator.of(context);
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      // Menu-surface sheet (MenuDropdown family): surface fill, 12px
-      // radius, lv3 elevation, 4px inner padding.
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 520),
-              child: _ModelSelectSheet(
-                models: models,
-                modelPrefs: modelPrefs,
-                onSelect: (selection) {
-                  onSelect(selection);
-                  root.pop();
-                },
-              ),
-            ),
-          ),
-        );
-      },
+    return showMenuSheet<void>(
+      context,
+      maxHeight: 520,
+      builder: (sheetContext) => _ModelSelectSheet(
+        models: models,
+        modelPrefs: modelPrefs,
+        onSelect: (selection) {
+          onSelect(selection);
+          root.pop();
+        },
+      ),
     );
   }
 }

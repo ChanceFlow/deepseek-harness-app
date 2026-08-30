@@ -21,6 +21,6 @@ Replaced raw dropdown menus and button-stacked dialogs with dedicated Material 3
 
 ## Consequences
 
-- All dropdown and selection interactions across the app follow the uniform `surfaceContainer` + `kM3ShadowElevation3` + 12px/14px radius bottom sheet design system.
+- All dropdown and selection interactions across the app follow the uniform `surfaceContainer` + `kM3ShadowElevation3` + 12px/14px radius bottom sheet design system. The menu-sheet card's radius and height ceiling are the named constants `kShapeMenuSheet`/`kMenuSheetMaxHeight` in `theme.dart` ([subagent screen component pass](../simplification/2026-08-29-subagent-screen-framework-component-pass.md)).
 - Tests in `empty_hero_test.dart`, `preset_seat_test.dart`, and `chat_screen_test.dart` assert the structured title/path widgets rather than compound strings.
 - Design shots (`workspace-sheet`) visually track the new workspace selection surface.
