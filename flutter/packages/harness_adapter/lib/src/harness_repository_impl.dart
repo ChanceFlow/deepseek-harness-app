@@ -33,7 +33,6 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
 import 'dsh_connection_manager.dart';
-import 'context_pressure_fold.dart';
 import 'session_stats_fold.dart';
 import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
@@ -1258,6 +1257,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   void _handleProjection(ServerRequest frame) {
     final sessionId = _frameSessionId(frame);
     if (sessionId == null) return;
+    final seq = wireLong(frame.payload, 'seq');
     switch (wireString(frame.payload, 'key')) {
       case 'title':
         final title = wireString(frame.payload, 'value');
@@ -1323,6 +1323,20 @@ class HarnessRepositoryImpl implements ChatRepository {
           });
         }
         _permissionProjectionStateFor(sessionId).value = select;
+      case 'contextPressure':
+        final value = frame.payload['value'];
+        ContextPressure? pressure;
+        if (value != null && value != 'null') {
+          pressure = _parseContextPressureProjection(value);
+        }
+        _sessionStateFor(sessionId).updateContextPressure(pressure, seq);
+      case 'contextBreakdown':
+        final value = frame.payload['value'];
+        ContextBreakdown? breakdown;
+        if (value != null && value != 'null') {
+          breakdown = _parseContextBreakdownProjection(value);
+        }
+        _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
     }
   }
 
@@ -1691,7 +1705,29 @@ class HarnessRepositoryImpl implements ChatRepository {
         todosValue,
       );
     }
+    final pressureValue = history.projectionValues?['contextPressure'];
+    if (pressureValue != null) {
+      final pressure = _parseContextPressureProjection(pressureValue);
+      _sessionStateFor(sessionId)
+          .updateContextPressure(pressure, history.asOfSeq);
+    }
+    final breakdownValue = history.projectionValues?['contextBreakdown'];
+    if (breakdownValue != null) {
+      final breakdown = _parseContextBreakdownProjection(breakdownValue);
+      _sessionStateFor(sessionId)
+          .updateContextBreakdown(breakdown, history.asOfSeq);
+    }
     return _HistoryPage(events: history.events, hasMore: history.hasMore);
+  }
+
+  ContextPressure? _parseContextPressureProjection(Object? value) {
+    if (value == null || value == 'null') return null;
+    return _tryDecode(() => decodeContextPressureProjection(value));
+  }
+
+  ContextBreakdown? _parseContextBreakdownProjection(Object? value) {
+    if (value == null || value == 'null') return null;
+    return _tryDecode(() => decodeContextBreakdownProjection(value));
   }
 
   GoalProjection? _parseGoalProjection(Object? value) {
@@ -2021,10 +2057,11 @@ final class _SessionState {
       StateStream<ContextPressure?>(null);
   final StateStream<ContextBreakdown?> contextBreakdown =
       StateStream<ContextBreakdown?>(null);
+  int _contextPressureSeq = -1;
+  int _contextBreakdownSeq = -1;
   final StateStream<SessionWindowStats> sessionStats =
       StateStream<SessionWindowStats>(const SessionWindowStats());
   final SessionStatsFold _statsFold = SessionStatsFold();
-  final ContextPressureFold _contextFold = ContextPressureFold();
   final Mutex _mutex = Mutex();
   late final TimelineReducer _reducer = TimelineReducer(sessionId);
   bool _ready = false;
@@ -2034,6 +2071,18 @@ final class _SessionState {
   List<JsonMap> _history = <JsonMap>[];
   List<ServerRequest> _pending = <ServerRequest>[];
   List<ServerRequest> _framesAfterOpen = <ServerRequest>[];
+
+  void updateContextPressure(ContextPressure? value, int seq) {
+    if (seq < _contextPressureSeq) return;
+    _contextPressureSeq = seq;
+    contextPressure.value = value;
+  }
+
+  void updateContextBreakdown(ContextBreakdown? value, int seq) {
+    if (seq < _contextBreakdownSeq) return;
+    _contextBreakdownSeq = seq;
+    contextBreakdown.value = value;
+  }
 
   /// Pending frame-cadence publish (streaming chunks); null when the next
   /// publish goes out immediately.
@@ -2059,18 +2108,14 @@ final class _SessionState {
         // baseline the host only pushes once per generation, so a fresh
         // instance would silently empty the dock (see TimelineReducer.reset).
         _reducer.reset(_history);
-        _contextFold.reset(_history);
         _statsFold.reset(_history);
         _framesAfterOpen = List.of(_pending);
         for (final frame in _pending) {
           _reducer.ingestFrame(frame);
           if (wireType(frame.payload) == 'session/event') {
-            _contextFold.ingestEvent(frame.payload['event']);
             _statsFold.ingestEvent(frame.payload['event']);
           }
         }
-        contextPressure.value = _contextFold.value;
-        contextBreakdown.value = _contextFold.breakdown;
         sessionStats.value = _statsFold.value;
         _pending = <ServerRequest>[];
         _ready = true;
@@ -2086,6 +2131,8 @@ final class _SessionState {
     _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
+    _contextPressureSeq = -1;
+    _contextBreakdownSeq = -1;
     // `_framesAfterOpen` keeps its stale entries on purpose: after this prep
     // every arriving frame parks in `_pending` until `ensureLoaded` replaces
     // the list with the replayed generation's frames, so no out-of-band
@@ -2102,10 +2149,7 @@ final class _SessionState {
       }
       _reducer.ingestFrame(frame);
       if (wireType(frame.payload) == 'session/event') {
-        _contextFold.ingestEvent(frame.payload['event']);
         _statsFold.ingestEvent(frame.payload['event']);
-        contextPressure.value = _contextFold.value;
-        contextBreakdown.value = _contextFold.breakdown;
         sessionStats.value = _statsFold.value;
       }
       _framesAfterOpen.add(frame);
@@ -2164,17 +2208,13 @@ final class _SessionState {
 
   void _rebuild() {
     _reducer.reset(_history);
-    _contextFold.reset(_history);
     _statsFold.reset(_history);
     for (final frame in _framesAfterOpen) {
       _reducer.ingestFrame(frame);
       if (wireType(frame.payload) == 'session/event') {
-        _contextFold.ingestEvent(frame.payload['event']);
         _statsFold.ingestEvent(frame.payload['event']);
       }
     }
-    contextPressure.value = _contextFold.value;
-    contextBreakdown.value = _contextFold.breakdown;
     sessionStats.value = _statsFold.value;
   }
 

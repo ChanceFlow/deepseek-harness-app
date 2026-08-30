@@ -1829,6 +1829,45 @@ void main() {
     expect(find.bySemanticsLabel('17% of context used'), findsNothing);
   });
 
+  testWidgets(
+    'chat screen renders active context ring with secondary color and outlineVariant track on live host projection',
+    (tester) async {
+      for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+        final actions = <ChatAction>[];
+        await _pump(
+          tester,
+          const ChatUiState(
+            sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+            selectedSessionId: 's1',
+            contextPressure: ContextPressure(
+              pressureTokens: 390103,
+              projectedTokens: 390450,
+              contextWindow: 1000000,
+            ),
+            contextBreakdown: ContextBreakdown(
+              systemTokens: 1582,
+              toolsTokens: 6475,
+              messageTokens: 269949,
+            ),
+          ),
+          actions,
+          theme: theme,
+        );
+        // MaterialApp lerps between themes; land on the new one.
+        await tester.pump(const Duration(milliseconds: 400));
+
+        // Occupancy is 39% (390450/1000000 -> 39%)
+        expect(find.bySemanticsLabel('39% of context used'), findsOneWidget);
+        final ring = tester.widget<CircularProgressIndicator>(
+          find.byType(CircularProgressIndicator),
+        );
+        expect(ring.value, closeTo(0.39045, 1e-4));
+        expect(ring.color, theme.colorScheme.secondary);
+        expect(ring.backgroundColor, theme.colorScheme.outlineVariant);
+      }
+    },
+  );
+
   testWidgets('running session: primary becomes Stop; submit queues', (
     tester,
   ) async {

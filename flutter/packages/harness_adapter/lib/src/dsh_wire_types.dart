@@ -6,6 +6,7 @@
 library;
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/settings.dart';
 
 import 'rpc_map.dart';
@@ -328,6 +329,9 @@ final class SessionHistoryValueWire {
   final bool hasMore;
   final JsonMap? projections;
 
+  int get asOfSeq =>
+      projections == null ? -1 : wireLong(projections!, 'asOfSeq');
+
   JsonMap? get projectionValues =>
       projections == null ? null : asJsonObject(projections!['values']);
 
@@ -527,6 +531,35 @@ PlanProjectionWire? decodePlanProjection(Object? value) {
   final json = asJsonObject(value);
   if (json == null) return null;
   return (active: _reqBool(json, 'active'), pending: _reqBool(json, 'pending'));
+}
+
+/// `contextPressure` session projection: provider-reported prompt pressure,
+/// route capacity, and projected tokens (reference token-meter
+/// usage-projection.ts).
+ContextPressure decodeContextPressureProjection(Object? value) {
+  final json = asJsonObject(value);
+  if (json == null) {
+    throw const FormatException('contextPressure: not an object');
+  }
+  return ContextPressure(
+    pressureTokens: wireLongOrNull(json, 'pressureTokens'),
+    projectedTokens: wireLongOrNull(json, 'projectedTokens'),
+    contextWindow: wireLongOrNull(json, 'contextWindow'),
+  );
+}
+
+/// `contextBreakdown` session projection: system, tools, and message tokens
+/// (reference token-meter breakdown-projection.ts).
+ContextBreakdown decodeContextBreakdownProjection(Object? value) {
+  final json = asJsonObject(value);
+  if (json == null) {
+    throw const FormatException('contextBreakdown: not an object');
+  }
+  return ContextBreakdown(
+    systemTokens: wireLong(json, 'systemTokens'),
+    toolsTokens: wireLong(json, 'toolsTokens'),
+    messageTokens: wireLong(json, 'messageTokens'),
+  );
 }
 
 final class SkillEntryWire {

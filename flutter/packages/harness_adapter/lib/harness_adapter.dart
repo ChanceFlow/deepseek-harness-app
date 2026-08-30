@@ -4,8 +4,8 @@
 /// UI code must import `domain` instead.
 library;
 
-export 'src/context_pressure_fold.dart';
 export 'src/dsh_connection_manager.dart';
+export 'src/dsh_wire_types.dart';
 export 'src/harness_repository_impl.dart';
 export 'src/rpc_map.dart';
 export 'src/session_stats_fold.dart';

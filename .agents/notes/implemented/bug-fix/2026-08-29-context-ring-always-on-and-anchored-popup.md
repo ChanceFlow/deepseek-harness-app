@@ -57,9 +57,9 @@ cited a section that exists in no doc; the deviations live here.
 - **`showModalBottomSheet`/`showDialog` kept**: rejected — the reference
   is an anchored popover; `MenuAnchor` is the framework's popup with
   outside-tap and Escape dismissal, no custom chrome.
-- **Fixing the null window in the adapter/controller**: out of scope —
-  the per-session reset on rebind is deliberate (the leaving session's
-  reading must not flash under the entering one's header).
+- **Fixing the null window in the adapter/controller**: resolved in
+  [the context projection consumption note](2026-08-30-context-pressure-host-projection-consumption.md)
+  by consuming host projections directly rather than folding events.
 
 ## Consequences
 
@@ -69,8 +69,11 @@ determinate track (`CircularProgressIndicator.backgroundColor`) explicitly
 render the `scheme.outlineVariant` role, and the occupancy arc renders
 `scheme.secondary`, verified under both brightnesses. Partially supersedes
 [the sidebar/context-ring note](../feature/2026-08-19-sidebar-visibility-context-ring.md):
-its occupancy formula and fold port stand; its "renders once a provider
-reports" visibility sentence and the dialog panel are this note's facts
-now. New ARB key `contextLabel` in both locales. The web's segmented
-breakdown bar stays unported (panel content unchanged); a permanently
-visible meter now shows an empty circle even in sessions that never bill.
+its occupancy formula stands; its self-folding port is superseded by host
+projection consumption in
+[the context projection consumption note](2026-08-30-context-pressure-host-projection-consumption.md);
+its "renders once a provider reports" visibility sentence and the dialog
+panel are this note's facts now. New ARB key `contextLabel` in both
+locales. The web's segmented breakdown bar stays unported (panel content
+unchanged); a permanently visible meter now shows an empty circle even in
+sessions that never bill.
