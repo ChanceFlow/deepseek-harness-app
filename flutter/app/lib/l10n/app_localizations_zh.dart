@@ -572,6 +572,48 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cannotRemoveLastBackend => '无法移除最后一个主机。';
 
   @override
+  String get backendErrorInvalidJson => '主机配置文件包含无效的 JSON。';
+
+  @override
+  String get backendErrorMalformedEntry => '主机配置文件包含格式不正确的数据。';
+
+  @override
+  String backendErrorBadBaseUrl(String baseUrl) {
+    return '无效的主机地址：$baseUrl';
+  }
+
+  @override
+  String get backendErrorInvalidBaseUrl => '无效的主机地址。';
+
+  @override
+  String get backendErrorEmptyList => '主机配置列表为空。';
+
+  @override
+  String get backendErrorReadFailed => '读取主机配置文件失败。';
+
+  @override
+  String get backendErrorWriteFailed => '保存主机配置文件失败。';
+
+  @override
+  String get backendErrorEmptyLabel => '主机名称不能为空。';
+
+  @override
+  String backendErrorUnknownBackend(String id) {
+    return '未知主机：$id';
+  }
+
+  @override
+  String get backendErrorUnknown => '未知主机。';
+
+  @override
+  String get backendErrorDisabled => '请先启用该主机，然后再将其激活。';
+
+  @override
+  String backendErrorDuplicateId(String id) {
+    return '已存在 ID 为“$id”的主机。';
+  }
+
+  @override
   String get backendStatusActive => '当前';
 
   @override

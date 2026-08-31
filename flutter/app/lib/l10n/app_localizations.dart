@@ -1010,6 +1010,78 @@ abstract class AppLocalizations {
   /// **'The last host cannot be removed.'**
   String get cannotRemoveLastBackend;
 
+  /// Error displayed when the host registry JSON file is unparseable.
+  ///
+  /// In en, this message translates to:
+  /// **'Host configuration file contains invalid JSON.'**
+  String get backendErrorInvalidJson;
+
+  /// Error displayed when the host registry JSON has invalid fields or shape.
+  ///
+  /// In en, this message translates to:
+  /// **'Host configuration file contains malformed data.'**
+  String get backendErrorMalformedEntry;
+
+  /// Error displayed when a host URL is invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid host base URL: {baseUrl}'**
+  String backendErrorBadBaseUrl(String baseUrl);
+
+  /// Error displayed when a host URL is invalid without detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid host base URL.'**
+  String get backendErrorInvalidBaseUrl;
+
+  /// Error displayed when the host registry contains no entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Host configuration list is empty.'**
+  String get backendErrorEmptyList;
+
+  /// Error displayed when reading the host registry file fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to read host configuration file.'**
+  String get backendErrorReadFailed;
+
+  /// Error displayed when writing the host registry file fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save host configuration file.'**
+  String get backendErrorWriteFailed;
+
+  /// Error displayed when a host label is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Host label cannot be empty.'**
+  String get backendErrorEmptyLabel;
+
+  /// Error displayed when referring to an unknown host ID.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown host: {id}'**
+  String backendErrorUnknownBackend(String id);
+
+  /// Error displayed when referring to an unknown host.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown host.'**
+  String get backendErrorUnknown;
+
+  /// Error displayed when attempting to activate a disabled host.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable the host before activating it.'**
+  String get backendErrorDisabled;
+
+  /// Error displayed when a host ID is duplicated.
+  ///
+  /// In en, this message translates to:
+  /// **'A host with ID “{id}” already exists.'**
+  String backendErrorDuplicateId(String id);
+
   /// No description provided for @backendStatusActive.
   ///
   /// In en, this message translates to:

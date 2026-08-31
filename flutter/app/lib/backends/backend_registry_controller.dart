@@ -116,7 +116,7 @@ class BackendRegistryController {
       _state = BackendRegistryState(
         backends: seed.backends,
         activeId: seed.backends.first.id,
-        errorMessage: error.toString(),
+        errorMessage: _encodeError(error),
       );
     } finally {
       if (!_loadedCompleter.isCompleted) _loadedCompleter.complete();
@@ -161,12 +161,12 @@ class BackendRegistryController {
   void _add(String label, String baseUrl) {
     final uri = _parseBaseUrl(baseUrl);
     if (uri == null) {
-      _fail('Invalid backend URL: $baseUrl');
+      _fail(BackendErrorCode.badBaseUrl, detail: baseUrl);
       return;
     }
     final trimmed = label.trim();
     if (trimmed.isEmpty) {
-      _fail('Backend label cannot be empty');
+      _fail(BackendErrorCode.emptyLabel);
       return;
     }
     final backend = BackendConfig(id: _mintId(), label: trimmed, baseUri: uri);
@@ -178,7 +178,7 @@ class BackendRegistryController {
   void _rename(String backendId, String label) {
     final trimmed = label.trim();
     if (trimmed.isEmpty) {
-      _fail('Backend label cannot be empty');
+      _fail(BackendErrorCode.emptyLabel);
       return;
     }
     _state = _state.withBackends([
@@ -192,7 +192,7 @@ class BackendRegistryController {
   void _updateUrl(String backendId, String baseUrl) {
     final uri = _parseBaseUrl(baseUrl);
     if (uri == null) {
-      _fail('Invalid backend URL: $baseUrl');
+      _fail(BackendErrorCode.badBaseUrl, detail: baseUrl);
       return;
     }
     _state = _state.withBackends([
@@ -205,11 +205,11 @@ class BackendRegistryController {
 
   void _remove(String backendId) {
     if (_state.backends.length <= 1) {
-      _fail('The last backend cannot be removed');
+      _fail(BackendErrorCode.cannotRemoveLast);
       return;
     }
     if (backendId == _state.activeId) {
-      _fail('Switch away before removing the active backend');
+      _fail(BackendErrorCode.removeActiveFirst);
       return;
     }
     _state = _state.withBackends([
@@ -223,11 +223,11 @@ class BackendRegistryController {
   void _select(String backendId) {
     final target = _state.backends.where((b) => b.id == backendId).firstOrNull;
     if (target == null) {
-      _fail('Unknown backend: $backendId');
+      _fail(BackendErrorCode.unknownBackend, detail: backendId);
       return;
     }
     if (!target.enabled) {
-      _fail('Enable the backend before activating it');
+      _fail(BackendErrorCode.backendDisabled);
       return;
     }
     if (backendId == _state.activeId) return;
@@ -239,7 +239,7 @@ class BackendRegistryController {
   void _setEnabled(String backendId, bool enabled) {
     final index = _state.backends.indexWhere((b) => b.id == backendId);
     if (index < 0) {
-      _fail('Unknown backend: $backendId');
+      _fail(BackendErrorCode.unknownBackend, detail: backendId);
       return;
     }
     if (_state.backends[index].enabled == enabled) return;
@@ -262,10 +262,17 @@ class BackendRegistryController {
     _persist();
   }
 
-  void _fail(String message) {
-    _state = _state.withError(message);
+  void _fail(BackendErrorCode code, {String? detail}) {
+    _state = _state.withError(
+      detail != null && detail.isNotEmpty ? '${code.name}:$detail' : code.name,
+    );
     _publish();
   }
+
+  static String _encodeError(BackendStoreException error) =>
+      error.detail != null && error.detail!.isNotEmpty
+      ? '${error.code.name}:${error.detail}'
+      : error.code.name;
 
   void _publish() {
     _states.value = _state;
@@ -285,7 +292,10 @@ class BackendRegistryController {
             _publish();
           })
           .catchError((Object error) {
-            _state = _state.withError(error.toString());
+            final encoded = error is BackendStoreException
+                ? _encodeError(error)
+                : BackendErrorCode.writeFailed.name;
+            _state = _state.withError(encoded);
             _publish();
           }),
     );
