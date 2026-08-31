@@ -50,6 +50,14 @@ const int _attachmentCacheLimit = 24;
 /// behind arrival.
 const Duration kUiPublishWindow = Duration(milliseconds: 16);
 
+/// Pause between the latest keystroke and a Host content-search request
+/// (matches reference `WorkspaceBrowser.tsx` line 35 `SEARCH_DEBOUNCE_MS`).
+const Duration _searchDebounceDelay = Duration(milliseconds: 250);
+
+/// `session.search` wire bound, measured in JavaScript UTF-16 code units
+/// (matches reference `WorkspaceBrowser.tsx` line 37 `SEARCH_QUERY_MAX_CODE_UNITS`).
+const int _searchQueryMaxCodeUnits = 500;
+
 class ChatController {
   ChatController(
     this._repository, {
@@ -84,6 +92,16 @@ class ChatController {
   bool _commandFailed = false;
   List<ImageRejection> _imageRejections = const <ImageRejection>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
+  Timer? _searchTimer;
+
+  /// Monotonic sequence counter for session searches.
+  ///
+  /// The controller cannot abort an in-flight HTTP request directly
+  /// (Dart's repository interface does not take an AbortSignal/CancellationToken);
+  /// this monotonic sequence guard is the semantic equivalent of the reference's
+  /// per-query AbortController (WorkspaceBrowser.tsx lines 872 & 900), ensuring that
+  /// only responses from the newest dispatched query may assign [_searchResults].
+  int _searchSeq = 0;
   List<PendingImage> _pendingImages = const <PendingImage>[];
   PlanState? _plan;
   List<TodoItem>? _todos;
@@ -169,6 +187,8 @@ class ChatController {
 
   void dispose() {
     _disposed = true;
+    _searchTimer?.cancel();
+    _searchTimer = null;
     _upstreamPublish?.cancel();
     _upstreamPublish = null;
     for (final sub in _subs) {
@@ -1136,20 +1156,130 @@ class ChatController {
     );
   }
 
+  String _workspaceLabelForSession(SessionSummary session) {
+    for (final workspace in _workspaces) {
+      if (workspace.sessionIds.contains(session.id)) {
+        return workspace.title;
+      }
+    }
+    final cwd = session.cwd;
+    if (cwd != null && cwd.isNotEmpty) {
+      final segments = cwd.split(RegExp(r'[/\\]+'));
+      for (final segment in segments.reversed) {
+        if (segment.isNotEmpty) return segment;
+      }
+      return cwd;
+    }
+    return '';
+  }
+
+  /// Merges client-side metadata matches (session title and workspace label/title substring
+  /// match, case-insensitive, ranked by recency) ahead of host content-search results
+  /// de-duplicated by sessionId (matches reference `tree.ts` lines 321-393
+  /// `deriveSearchResults`).
+  List<SessionSearchResult> _mergeSearchResults(
+    String normalizedQuery,
+    List<SessionSearchResult> hostResults,
+  ) {
+    final q = normalizedQuery.toLowerCase();
+    if (q.isEmpty) return const <SessionSearchResult>[];
+
+    final hostSnippetBySession = <String, String>{};
+    for (final item in hostResults) {
+      hostSnippetBySession.putIfAbsent(item.sessionId, () => item.snippet);
+    }
+
+    final sessionsById = <String, SessionSummary>{
+      for (final s in _sessions) s.id: s,
+    };
+
+    final localSessions = <SessionSummary>[];
+    for (final session in _sessions) {
+      // Mirroring reference tree.ts sessionVisible & deriveSearchResults:
+      // blank placeholders and subagent children never enter search.
+      if (session.blank || session.origin == 'subagent') {
+        continue;
+      }
+      final titleMatch = session.displayTitle.toLowerCase().contains(q);
+      final workspaceMatch = _workspaceLabelForSession(session)
+          .toLowerCase()
+          .contains(q);
+      if (titleMatch || workspaceMatch) {
+        localSessions.add(session);
+      }
+    }
+
+    // Rank local matches by recency (newest first, tie-break by id)
+    // matching reference tree.ts line 107 `byRecency`.
+    localSessions.sort((a, b) {
+      final delta = b.updatedAtEpochMs - a.updatedAtEpochMs;
+      if (delta != 0) return delta;
+      return a.id.compareTo(b.id);
+    });
+
+    final results = <SessionSearchResult>[];
+    final includedSessionIds = <String>{};
+
+    // 1. Client-side local matches first
+    for (final session in localSessions) {
+      includedSessionIds.add(session.id);
+      final snippet = hostSnippetBySession[session.id] ?? '';
+      results.add(SessionSearchResult(sessionId: session.id, snippet: snippet));
+    }
+
+    // 2. Host content search matches
+    for (final item in hostResults) {
+      if (includedSessionIds.contains(item.sessionId)) continue;
+      final session = sessionsById[item.sessionId];
+      if (session == null || (!session.blank && session.origin != 'subagent')) {
+        includedSessionIds.add(item.sessionId);
+        results.add(item);
+      }
+    }
+
+    return results;
+  }
+
   void _searchSessions(String query) {
-    if (query.trim().isEmpty) {
+    _searchTimer?.cancel();
+    _searchTimer = null;
+    final seq = ++_searchSeq;
+
+    final sanitized = _sanitizeSearchQuery(query).trim();
+    if (sanitized.isEmpty) {
       _searchResults = const <SessionSearchResult>[];
       _publish();
       return;
     }
-    _telemetry?.count('chat.session.search');
-    unawaited(() async {
-      final results = await _runCatchingForUi(
-        () => _repository.searchSessions(query),
-      );
-      _searchResults = results ?? const <SessionSearchResult>[];
-      _publish();
-    }());
+
+    // Surface local matches immediately while debounce / network request is pending.
+    _searchResults = _mergeSearchResults(
+      sanitized,
+      const <SessionSearchResult>[],
+    );
+    _publish();
+
+    _searchTimer = Timer(_searchDebounceDelay, () {
+      _searchTimer = null;
+      if (_disposed) return;
+      _telemetry?.count('chat.session.search');
+      unawaited(() async {
+        final results = await _runCatchingForUi(
+          () => _repository.searchSessions(sanitized),
+        );
+        // Latest-wins sequence guard: the controller cannot abort the in-flight HTTP
+        // call directly (no AbortController on Dart HTTP repo interface); this monotonic
+        // sequence check is the semantic equivalent of the reference's per-query
+        // AbortController (WorkspaceBrowser.tsx lines 872 & 900), ensuring that
+        // only responses from the newest dispatched query may assign [_searchResults].
+        if (_disposed || seq != _searchSeq) return;
+        _searchResults = _mergeSearchResults(
+          sanitized,
+          results ?? const <SessionSearchResult>[],
+        );
+        _publish();
+      }());
+    });
   }
 
   void _forkSession(String sessionId, int? atSeq) {
@@ -1213,6 +1343,22 @@ class ChatController {
       return null;
     }
   }
+}
+
+/// Keep controlled input and RPC payload inside the session.search wire contract
+/// (matches reference `WorkspaceBrowser.tsx` lines 42-50 `sanitizeSearchQuery`).
+String _sanitizeSearchQuery(String value) {
+  final withoutNul = value.replaceAll('\x00', '');
+  if (withoutNul.length <= _searchQueryMaxCodeUnits) {
+    return withoutNul;
+  }
+  var end = _searchQueryMaxCodeUnits;
+  final last = withoutNul.codeUnitAt(end - 1);
+  final next = withoutNul.codeUnitAt(end);
+  if (last >= 0xD800 && last <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
+    end--;
+  }
+  return withoutNul.substring(0, end);
 }
 
 extension<T> on Iterable<T> {
