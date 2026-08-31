@@ -4272,7 +4272,11 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                     enabled: widget.enabled,
                     onPickImages: attachAllowed ? _pickImages : null,
                     skills: widget.skills,
-                    onInsertCommand: (name) {
+                    onPickCommand: (name) {
+                      if (hostCommandIsBare('/$name')) {
+                        widget.onAction(SendPrompt('/$name'));
+                        return;
+                      }
                       _draftController.text = '/$name ';
                       setState(() {});
                     },
@@ -4702,13 +4706,13 @@ class _PlusButton extends StatelessWidget {
     required this.enabled,
     required this.onPickImages,
     required this.skills,
-    required this.onInsertCommand,
+    required this.onPickCommand,
   });
 
   final bool enabled;
   final VoidCallback? onPickImages;
   final List<SkillEntry> skills;
-  final void Function(String name) onInsertCommand;
+  final void Function(String name) onPickCommand;
 
   @override
   Widget build(BuildContext context) {
@@ -4739,9 +4743,9 @@ class _PlusButton extends StatelessWidget {
       builder: (sheetContext) => _CommandSheet(
         canPickImages: onPickImages != null,
         skills: skills,
-        onInsertCommand: (name) {
+        onPickCommand: (name) {
           Navigator.of(sheetContext).pop();
-          onInsertCommand(name);
+          onPickCommand(name);
         },
         onPickImagesNow: () {
           Navigator.of(sheetContext).pop();
@@ -4846,13 +4850,13 @@ class _CommandSheet extends StatelessWidget {
   const _CommandSheet({
     required this.canPickImages,
     required this.skills,
-    required this.onInsertCommand,
+    required this.onPickCommand,
     required this.onPickImagesNow,
   });
 
   final bool canPickImages;
   final List<SkillEntry> skills;
-  final void Function(String name) onInsertCommand;
+  final void Function(String name) onPickCommand;
   final VoidCallback onPickImagesNow;
 
   @override
@@ -4911,14 +4915,14 @@ class _CommandSheet extends StatelessWidget {
                   icon: Icons.terminal,
                   label: '/${command.name}',
                   detail: command.hint ?? command.description,
-                  onTap: () => onInsertCommand(command.name),
+                  onTap: () => onPickCommand(command.name),
                 ),
               for (final skill in skills)
                 _CommandRow(
                   icon: Icons.auto_awesome,
                   label: '/${skill.name}',
                   detail: skill.description.isEmpty ? null : skill.description,
-                  onTap: () => onInsertCommand(skill.name),
+                  onTap: () => onPickCommand(skill.name),
                 ),
               // Mobile-only tail row: image intake (web uses paste/drop)
               // — demoted below the command roster.

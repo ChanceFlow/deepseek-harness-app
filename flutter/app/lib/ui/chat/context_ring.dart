@@ -160,11 +160,6 @@ class _ContextRingState extends State<ContextRing> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final breakdown = widget.breakdown;
-    final rows = <(String, int, Color)>[
-      (l10n.systemPromptLabel, breakdown?.systemTokens ?? 0, scheme.outline),
-      (l10n.toolsLabel, breakdown?.toolsTokens ?? 0, scheme.tertiary),
-      (l10n.conversationLabel, breakdown?.messageTokens ?? 0, scheme.primary),
-    ];
     return SizedBox(
       width: 264,
       child: Padding(
@@ -185,33 +180,44 @@ class _ContextRingState extends State<ContextRing> {
                 fontWeight: FontWeight.w500,
               ),
             ),
+            const SizedBox(height: 10),
+            _breakdownBar(
+              context,
+              breakdown: breakdown,
+              used: used,
+              window: window,
+            ),
             if (breakdown != null) ...[
-              const SizedBox(height: 10),
-              _breakdownBar(
-                context,
-                breakdown: breakdown,
-                used: used,
-                window: window,
-              ),
               const SizedBox(height: 12),
-            ] else
-              const SizedBox(height: 6),
-            for (final (label, tokens, color) in rows)
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
+              for (final (label, tokens, color) in [
+                (
+                  l10n.systemPromptLabel,
+                  breakdown.systemTokens,
+                  scheme.outline,
+                ),
+                (l10n.toolsLabel, breakdown.toolsTokens, scheme.tertiary),
+                (
+                  l10n.conversationLabel,
+                  breakdown.messageTokens,
+                  scheme.primary,
+                ),
+              ])
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(label)),
-                  Text('$tokens'),
-                ],
-              ),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(label)),
+                    Text('~${formatTokens(tokens)}'),
+                  ],
+                ),
+            ],
           ],
         ),
       ),
@@ -220,60 +226,77 @@ class _ContextRingState extends State<ContextRing> {
 
   Widget _breakdownBar(
     BuildContext context, {
-    required ContextBreakdown breakdown,
+    required ContextBreakdown? breakdown,
     required int used,
     required int window,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final breakdownTotal =
-        breakdown.systemTokens +
-        breakdown.toolsTokens +
-        breakdown.messageTokens;
-    final systemFlex = breakdownTotal > 0
-        ? (used * breakdown.systemTokens / breakdownTotal).round()
-        : 0;
-    final toolsFlex = breakdownTotal > 0
-        ? (used * breakdown.toolsTokens / breakdownTotal).round()
-        : 0;
-    final messageFlex = breakdownTotal > 0
-        ? (used * breakdown.messageTokens / breakdownTotal).round()
-        : 0;
-    final remainingFlex = (window - (systemFlex + toolsFlex + messageFlex))
-        .clamp(0, window);
+    final breakdownTotal = breakdown == null
+        ? 0
+        : breakdown.systemTokens +
+              breakdown.toolsTokens +
+              breakdown.messageTokens;
 
-    final segments = <Widget>[
-      // System prompt segment: M3 outline role (aligned with web
-      // --dsw-static-neutral-bluish-400 slate tone).
-      if (systemFlex > 0)
-        Expanded(
-          flex: systemFlex,
-          child: ColoredBox(color: scheme.outline),
-        ),
-      // Tools segment: M3 tertiary role (aligned with web violet-400
-      // rgb(167, 139, 250) tool tint).
-      if (toolsFlex > 0)
-        Expanded(
-          flex: toolsFlex,
-          child: ColoredBox(color: scheme.tertiary),
-        ),
-      // Conversation/messages segment: M3 primary role (aligned with
-      // web --dsw-static-blue-450 primary brand blue).
-      if (messageFlex > 0)
-        Expanded(
-          flex: messageFlex,
-          child: ColoredBox(color: scheme.primary),
-        ),
-      // Remaining window track: M3 outlineVariant role (aligned with
-      // web --dsw-alias-interactive-bg-hover track background).
-      if (remainingFlex > 0)
-        Expanded(
-          flex: remainingFlex,
-          child: ColoredBox(color: scheme.outlineVariant),
-        ),
-    ];
+    final List<Widget> segments;
+    if (breakdown == null || breakdownTotal == 0) {
+      // Without breakdown data (or when all breakdown parts are 0), the bar
+      // renders as a single fallback segment of the total used fraction in
+      // scheme.outline (M3 outline tone mapping to web
+      // --dsw-alias-label-tertiary fallback tint) followed by the track
+      // remainder (web ContextMeter.tsx:87-88).
+      final usedFlex = used.clamp(0, window);
+      final remainingFlex = (window - usedFlex).clamp(0, window);
+      segments = <Widget>[
+        if (usedFlex > 0)
+          Expanded(
+            flex: usedFlex,
+            child: ColoredBox(color: scheme.outline),
+          ),
+        if (remainingFlex > 0)
+          Expanded(
+            flex: remainingFlex,
+            child: ColoredBox(color: scheme.outlineVariant),
+          ),
+      ];
+    } else {
+      final systemFlex = (used * breakdown.systemTokens / breakdownTotal)
+          .round();
+      final toolsFlex = (used * breakdown.toolsTokens / breakdownTotal).round();
+      final messageFlex = (used * breakdown.messageTokens / breakdownTotal)
+          .round();
+      final remainingFlex = (window - (systemFlex + toolsFlex + messageFlex))
+          .clamp(0, window);
 
-    if (segments.isEmpty) {
-      return const SizedBox.shrink();
+      segments = <Widget>[
+        // System prompt segment: M3 outline role (aligned with web
+        // --dsw-static-neutral-bluish-400 slate tone).
+        if (systemFlex > 0)
+          Expanded(
+            flex: systemFlex,
+            child: ColoredBox(color: scheme.outline),
+          ),
+        // Tools segment: M3 tertiary role (aligned with web violet-400
+        // rgb(167, 139, 250) tool tint).
+        if (toolsFlex > 0)
+          Expanded(
+            flex: toolsFlex,
+            child: ColoredBox(color: scheme.tertiary),
+          ),
+        // Conversation/messages segment: M3 primary role (aligned with
+        // web --dsw-static-blue-450 primary brand blue).
+        if (messageFlex > 0)
+          Expanded(
+            flex: messageFlex,
+            child: ColoredBox(color: scheme.primary),
+          ),
+        // Remaining window track: M3 outlineVariant role (aligned with
+        // web --dsw-alias-interactive-bg-hover track background).
+        if (remainingFlex > 0)
+          Expanded(
+            flex: remainingFlex,
+            child: ColoredBox(color: scheme.outlineVariant),
+          ),
+      ];
     }
 
     return ClipRRect(
@@ -281,9 +304,12 @@ class _ContextRingState extends State<ContextRing> {
       // Capsule/pill clip with radius = height / 2 (2px), matching web
       // ContextMeter.module.css .bar border-radius: 999px.
       borderRadius: BorderRadius.circular(kContextBreakdownBarHeight / 2),
-      child: SizedBox(
-        height: kContextBreakdownBarHeight,
-        child: Row(mainAxisSize: MainAxisSize.max, children: segments),
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: scheme.outlineVariant),
+        child: SizedBox(
+          height: kContextBreakdownBarHeight,
+          child: Row(mainAxisSize: MainAxisSize.max, children: segments),
+        ),
       ),
     );
   }

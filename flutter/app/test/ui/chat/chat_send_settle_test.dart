@@ -45,6 +45,7 @@ class _SettleRepository extends Fake implements ChatRepository {
   final AppStateStream<List<SessionSummary>> sessions =
       AppStateStream<List<SessionSummary>>(<SessionSummary>[session]);
   final List<SendMessageRequest> sentMessages = <SendMessageRequest>[];
+  final List<String> executedCommands = <String>[];
 
   /// When true, `sendMessage` and any command dispatch fail.
   bool failSend = false;
@@ -123,6 +124,7 @@ class _SettleRepository extends Fake implements ChatRepository {
     bool retryOnTransportAbort = false,
   }) async {
     if (failSend) throw StateError('transport aborted');
+    executedCommands.add(line);
     return commandExecution;
   }
 }
@@ -337,5 +339,35 @@ void main() {
       expect(localState.values.containsKey(chatDraftKey('s1')), isFalse);
       controller.dispose();
     });
+
+    testWidgets(
+      'picking /compact from the plus menu executes detached and leaves draft intact',
+      (tester) async {
+        await pump(tester);
+        repository.commandExecution = const CommandExecution(
+          commandId: 'cmd-c1',
+          kind: CommandOutcomeKind.success,
+        );
+
+        await tester.enterText(find.byType(TextField), 'working draft');
+        await tester.pump();
+        expect(localState.values[chatDraftKey('s1')], 'working draft');
+
+        // Open plus menu and pick /compact
+        await tester.tap(find.byTooltip('Commands'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('/compact'));
+        await _settle(tester);
+
+        // The draft remains completely intact on screen and on disk.
+        expect(fieldText(tester), 'working draft');
+        expect(localState.values[chatDraftKey('s1')], 'working draft');
+        // The command execution was dispatched to the repository.
+        expect(repository.executedCommands, <String>['/compact']);
+        expect(repository.sentMessages, isEmpty);
+        controller.dispose();
+      },
+    );
   });
 }

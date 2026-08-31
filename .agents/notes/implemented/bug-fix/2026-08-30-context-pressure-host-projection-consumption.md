@@ -16,6 +16,7 @@ The mobile client aligns with the reference web client by consuming host project
 2. **History seeding**: `_loadHistory` extracts `contextPressure` and `contextBreakdown` from the tail page's `projections.values` block and seeds `_SessionState` with `asOfSeq`.
 3. **Push frames**: `_handleProjection` routes `contextPressure` and `contextBreakdown` keys, updating `_SessionState` under higher-seq-wins rules (`seq >= current`).
 4. **Retire custom fold**: Retired `ContextPressureFold` completely from `_SessionState`, `harness_repository_impl.dart`, and package exports.
+5. **Panel composition bar parity**: Aligned `ContextRing._panel` and `_breakdownBar` with web reference `ContextMeter.tsx:83-90,127-148`. The horizontal breakdown bar renders unconditionally whenever the panel is open (falling back to a single used-fraction segment in `scheme.outline` when `breakdown == null` or total parts equal 0), while legend breakdown rows render conditionally only when `breakdown != null` with tilde-prefixed compact token counts (`~${formatTokens(tokens)}`), eliminating synthetic `?? 0` rows.
 
 ## Alternatives considered
 
@@ -25,4 +26,4 @@ The mobile client aligns with the reference web client by consuming host project
 
 ## Consequences
 
-Opening an existing session or receiving push frames immediately populates `ContextPressure` (including `contextWindow=1000000` on standard models) and `ContextBreakdown`. The composer's `ContextRing` transitions from empty track placeholder to active determinate arc painted with `scheme.secondary` and `scheme.outlineVariant` track, and tap opens the composition panel with token figures. Supersedes the client folding mechanism in [the sidebar and context ring note](../feature/2026-08-19-sidebar-visibility-context-ring.md) and repairs the data pipeline referenced in [the context ring visibility note](2026-08-29-context-ring-always-on-and-anchored-popup.md).
+Opening an existing session or receiving push frames immediately populates `ContextPressure` (including `contextWindow=1000000` on standard models) and `ContextBreakdown`. The composer's `ContextRing` transitions from empty track placeholder to active determinate arc painted with `scheme.secondary` and `scheme.outlineVariant` track, and tap opens the composition panel with token figures and the always-rendered breakdown composition bar. Supersedes the client folding mechanism in [the sidebar and context ring note](../feature/2026-08-19-sidebar-visibility-context-ring.md) and repairs the data pipeline referenced in [the context ring visibility note](2026-08-29-context-ring-always-on-and-anchored-popup.md).
