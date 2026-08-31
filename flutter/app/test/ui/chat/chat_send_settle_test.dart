@@ -88,6 +88,10 @@ class _SettleRepository extends Fake implements ChatRepository {
       Stream.value(null);
 
   @override
+  Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
+      Stream.value(null);
+
+  @override
   Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
       Stream.value(const SessionWindowStats());
 
