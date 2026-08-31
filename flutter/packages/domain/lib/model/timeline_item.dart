@@ -50,19 +50,39 @@ final class TimelineTurnBoundary extends TimelineItem {
 
 /// Context compaction from a logged `compaction/summary` event.
 final class TimelineCompaction extends TimelineItem {
-  const TimelineCompaction({required this.id, required this.shadowedCount});
+  const TimelineCompaction({
+    required this.id,
+    this.shadowedCount,
+    this.shadowedTokens,
+    this.summary,
+  });
 
   final String id;
-  final int shadowedCount;
+
+  /// Number of history items shadowed by this compaction; null if unavailable.
+  final int? shadowedCount;
+
+  /// Estimated tokens shadowed by this compaction; null if unavailable.
+  final int? shadowedTokens;
+
+  /// Markdown summary of compacted context; null if unavailable.
+  /// Expandability is derived from `summary != null`.
+  final String? summary;
+
+  /// Whether this compaction summary can be expanded in the UI.
+  bool get isExpandable => summary != null;
 
   @override
   bool operator ==(Object other) =>
       other is TimelineCompaction &&
       other.id == id &&
-      other.shadowedCount == shadowedCount;
+      other.shadowedCount == shadowedCount &&
+      other.shadowedTokens == shadowedTokens &&
+      other.summary == summary;
 
   @override
-  int get hashCode => Object.hash('compaction', id, shadowedCount);
+  int get hashCode =>
+      Object.hash('compaction', id, shadowedCount, shadowedTokens, summary);
 }
 
 /// One host slash command from its logged `command/run` + `command/done`

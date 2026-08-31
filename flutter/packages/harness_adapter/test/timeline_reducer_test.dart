@@ -426,19 +426,99 @@ void main() {
     );
   });
 
-  test('compaction summary folds into a shadowed-count marker', () {
+  test('compaction summary folds into a complete timeline marker', () {
     final history = <JsonMap>[
       event(1, 'compaction/summary', <String, Object?>{
         'compactionId': 'c-1',
         'shadowedSeqs': <Object?>[1, 2, 3, 4],
+        'shadowedTokenCount': 1250,
+        'summary': <Object?>[
+          <String, Object?>{
+            'type': 'text',
+            'text': 'Conversation summary markdown',
+          },
+        ],
+      }),
+      event(2, 'user/message', <String, Object?>{
+        'id': 'msg-cp',
+        'source': <String, Object?>{
+          'kind': 'plugin',
+          'plugin': 'compact',
+          'compactionId': 'c-1',
+        },
+        'content': <Object?>[
+          <String, Object?>{
+            'type': 'text',
+            'text': 'Conversation summary markdown',
+          },
+        ],
       }),
     ];
 
     final reducer = TimelineReducer('s1');
     reducer.reset(history);
 
-    final marker = reducer.snapshot().single as TimelineCompaction;
+    final snapshot = reducer.snapshot();
+    expect(snapshot.length, 1);
+    final marker = snapshot.single as TimelineCompaction;
+    expect(marker.id, 'compaction:1');
     expect(marker.shadowedCount, 4);
+    expect(marker.shadowedTokens, 1250);
+    expect(marker.summary, 'Conversation summary markdown');
+    expect(marker.isExpandable, isTrue);
+  });
+
+  test(
+    'compaction summary with empty or missing summary yields null summary',
+    () {
+      final history = <JsonMap>[
+        event(1, 'compaction/summary', <String, Object?>{
+          'compactionId': 'c-1',
+          'shadowedSeqs': <Object?>[1, 2],
+          'shadowedTokenCount': 300,
+          'summary': <Object?>[
+            <String, Object?>{'type': 'text', 'text': '   '},
+          ],
+        }),
+        event(2, 'compaction/summary', <String, Object?>{
+          'compactionId': 'c-2',
+        }),
+      ];
+
+      final reducer = TimelineReducer('s1');
+      reducer.reset(history);
+
+      final items = reducer.snapshot().cast<TimelineCompaction>();
+      expect(items[0].summary, isNull);
+      expect(items[0].isExpandable, isFalse);
+      expect(items[0].shadowedCount, 2);
+      expect(items[0].shadowedTokens, 300);
+
+      expect(items[1].shadowedCount, isNull);
+      expect(items[1].shadowedTokens, isNull);
+      expect(items[1].summary, isNull);
+      expect(items[1].isExpandable, isFalse);
+    },
+  );
+
+  test('compaction summary fails loud on malformed fields', () {
+    void expectFormatError(JsonMap data) {
+      final history = <JsonMap>[event(1, 'compaction/summary', data)];
+      final reducer = TimelineReducer('s1');
+      expect(() => reducer.reset(history), throwsA(isA<FormatException>()));
+    }
+
+    expectFormatError(<String, Object?>{'shadowedSeqs': 'not-an-array'});
+    expectFormatError(<String, Object?>{
+      'shadowedSeqs': <Object?>[-1],
+    });
+    expectFormatError(<String, Object?>{
+      'shadowedSeqs': <Object?>['str'],
+    });
+    expectFormatError(<String, Object?>{'shadowedTokenCount': 'not-a-number'});
+    expectFormatError(<String, Object?>{'shadowedTokenCount': -5});
+    expectFormatError(<String, Object?>{'shadowedTokenCount': 12.5});
+    expectFormatError(<String, Object?>{'summary': 'not-an-array'});
   });
 
   // Wire shapes transcribed from the running host's command system
