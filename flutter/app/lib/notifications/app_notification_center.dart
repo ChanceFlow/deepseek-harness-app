@@ -2,7 +2,9 @@
 /// [NotificationDetector] and routes each event to the foreground (in-app
 /// toast) or background (system notification) channel, and through
 /// [foldWorkingSessions] to reconcile the ongoing per-session work
-/// notifications.
+/// notifications. Only root sessions are ever notification subjects: a
+/// subagent child's progress is its parent's story (_onSessions drops child
+/// rows before either fold).
 ///
 /// Channel selection for transient events is a pure lifecycle decision made
 /// here at emit time: an app the user is actively looking at gets a
@@ -87,9 +89,19 @@ class AppNotificationCenter {
   }
 
   void _onSessions(List<SessionSummary> sessions) {
-    _lastSessions = sessions;
+    // Subagent child sessions are not first-class notification subjects: a
+    // delegated turn speaks through its root parent (the host keeps the
+    // parent running while its children work), so child rows never reach
+    // the transient detector or the ongoing fold — no toast, no system
+    // notice, no ongoing row. Filtering here means their ids also leave
+    // `live` in the reconcile below, so an ongoing row a pre-filter build
+    // left posted is cancelled on the next snapshot.
+    _lastSessions = <SessionSummary>[
+      for (final session in sessions)
+        if (session.parentSessionId == null) session,
+    ];
     final events = _detector.fold(
-      sessions: sessions,
+      sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),
       backendId: _backendId,
     );

@@ -25,6 +25,7 @@ SessionSummary _session(
   bool running = false,
   SessionPendingInteraction? pending,
   bool completed = false,
+  String? parent,
 }) => SessionSummary(
   id: id,
   title: title,
@@ -32,6 +33,7 @@ SessionSummary _session(
   blank: false,
   pendingInteraction: pending,
   completed: completed,
+  parentSessionId: parent,
 );
 
 WorkingSessionDecision _decision(
@@ -133,6 +135,55 @@ void main() {
       expect(events, hasLength(1));
       expect(events.single.kind, AppNotificationKind.otherTurnComplete);
       expect(events.single.sessionTitle, 'Other');
+      expect(background, isEmpty);
+    },
+  );
+
+  test('turn completion of a subagent child is silent (not a first-class '
+      'notification subject)', () async {
+    repository.sessions.value = [
+      _session('s2', title: 'Root', running: true),
+      _session('c1', title: 'Child', running: true, parent: 's2'),
+    ];
+    await pumpEventQueue();
+    final events = <AppNotificationEvent>[];
+    center.foregroundEvents.listen(events.add);
+
+    repository.sessions.value = [
+      _session('s2', title: 'Root', running: false),
+      _session('c1', title: 'Child', running: false, parent: 's2'),
+    ];
+    await pumpEventQueue();
+
+    // Only the root's completion surfaces; the child's transition never
+    // enters the detector.
+    expect(events.map((e) => e.sessionId), ['s2']);
+    expect(background, isEmpty);
+  });
+
+  test(
+    'the approval of a subagent child never raises a transient notice',
+    () async {
+      repository.sessions.value = [
+        _session('s1', title: 'Root'),
+        _session('c1', title: 'Child', parent: 's1'),
+      ];
+      await pumpEventQueue();
+      final events = <AppNotificationEvent>[];
+      center.foregroundEvents.listen(events.add);
+
+      repository.sessions.value = [
+        _session('s1', title: 'Root'),
+        _session(
+          'c1',
+          title: 'Child',
+          parent: 's1',
+          pending: SessionPendingInteraction.approval,
+        ),
+      ];
+      await pumpEventQueue();
+
+      expect(events, isEmpty);
       expect(background, isEmpty);
     },
   );
@@ -296,6 +347,34 @@ void main() {
         expect(notifier.cancelled, isEmpty);
       },
     );
+
+    test('a subagent child arms nothing; its root carries the story', () async {
+      start([
+        _session('s2', title: 'Root', running: true),
+        _session('c1', title: 'Child', running: true, parent: 's2'),
+        _session(
+          'c2',
+          title: 'Waiting child',
+          pending: SessionPendingInteraction.approval,
+          parent: 's2',
+        ),
+      ]);
+      await pumpEventQueue();
+      expect(notifier.shown, [
+        _decision('s2', state: WorkingSessionState.working, title: 'Root'),
+      ]);
+      expect(notifier.cancelled, isEmpty);
+    });
+
+    test('a completed child at cold start promotes nothing', () async {
+      start([
+        _session('s2', title: 'Root'),
+        _session('c1', title: 'Child', completed: true, parent: 's2'),
+      ]);
+      await pumpEventQueue();
+      expect(notifier.promoted, isEmpty);
+      expect(notifier.shown, isEmpty);
+    });
 
     test(
       'a completed-unviewed session at cold start shows done directly',
