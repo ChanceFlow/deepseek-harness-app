@@ -23,7 +23,9 @@ Widget _host(
   ContextPressure? pressure, {
   ContextBreakdown? breakdown,
   ThemeData? theme,
+  Locale? locale,
 }) => l10nApp(
+  locale: locale,
   theme: theme,
   home: Scaffold(
     body: Center(
@@ -47,7 +49,7 @@ final Finder _ringTrack = find.descendant(
   matching: find.byKey(const ValueKey('context-ring-track')),
 );
 
-Finder get _panel => find.text('System prompt');
+Finder get _panel => find.byKey(const ValueKey('context-breakdown-bar'));
 
 void main() {
   testWidgets('the ring stays present as an empty track without data', (
@@ -153,10 +155,10 @@ void main() {
     expect(find.text('Tools'), findsOneWidget);
     expect(find.text('Messages'), findsOneWidget);
 
-    // True figures render in the legend rows rather than constant 0s.
-    expect(find.text('4000'), findsOneWidget);
-    expect(find.text('1000'), findsOneWidget);
-    expect(find.text('10000'), findsOneWidget);
+    // True figures render in the legend rows with compact token formatting.
+    expect(find.text('~4K'), findsOneWidget);
+    expect(find.text('~1K'), findsOneWidget);
+    expect(find.text('~10K'), findsOneWidget);
 
     // The segmented breakdown bar exists with proportional segment flexes.
     final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
@@ -203,15 +205,125 @@ void main() {
     expect(trackBox.color, theme.colorScheme.outlineVariant);
   });
 
-  testWidgets('missing breakdown omits the bar and shows 0 counts', (
+  testWidgets(
+    'missing breakdown renders the fallback bar and omits legend rows',
+    (tester) async {
+      final theme = DshTheme.light();
+      await tester.pumpWidget(_host(_half, breakdown: null, theme: theme));
+      await tester.tap(find.byType(ContextRing));
+      await tester.pumpAndSettle();
+
+      // The bar always renders with the single fallback segment (used fraction).
+      final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
+      expect(barFinder, findsOneWidget);
+      final segments = tester
+          .widgetList<Expanded>(
+            find.descendant(of: barFinder, matching: find.byType(Expanded)),
+          )
+          .toList();
+      expect(segments, hasLength(2));
+      expect(segments[0].flex, 15000); // Used total
+      expect(segments[1].flex, 15000); // Remaining window track
+
+      final usedBox = tester.widget<ColoredBox>(
+        find.descendant(
+          of: find.byWidget(segments[0]),
+          matching: find.byType(ColoredBox),
+        ),
+      );
+      expect(usedBox.color, theme.colorScheme.outline);
+
+      final trackBox = tester.widget<ColoredBox>(
+        find.descendant(
+          of: find.byWidget(segments[1]),
+          matching: find.byType(ColoredBox),
+        ),
+      );
+      expect(trackBox.color, theme.colorScheme.outlineVariant);
+
+      // Legend rows are gated on breakdown presence and omitted when null.
+      expect(find.text('System prompt'), findsNothing);
+      expect(find.text('Tools'), findsNothing);
+      expect(find.text('Messages'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'all-zero breakdown parts render fallback single segment with legend rows',
+    (tester) async {
+      final theme = DshTheme.light();
+      await tester.pumpWidget(
+        _host(
+          _half,
+          breakdown: const ContextBreakdown(
+            systemTokens: 0,
+            toolsTokens: 0,
+            messageTokens: 0,
+          ),
+          theme: theme,
+        ),
+      );
+      await tester.tap(find.byType(ContextRing));
+      await tester.pumpAndSettle();
+
+      final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
+      expect(barFinder, findsOneWidget);
+      final segments = tester
+          .widgetList<Expanded>(
+            find.descendant(of: barFinder, matching: find.byType(Expanded)),
+          )
+          .toList();
+      // Breakdown total is 0, so the bar falls back to the single used segment.
+      expect(segments, hasLength(2));
+      expect(segments[0].flex, 15000); // Used total
+      expect(segments[1].flex, 15000); // Remaining window track
+
+      // Legend rows render because breakdown is non-null.
+      expect(find.text('System prompt'), findsOneWidget);
+      expect(find.text('Tools'), findsOneWidget);
+      expect(find.text('Messages'), findsOneWidget);
+      expect(find.text('~0'), findsNWidgets(3));
+    },
+  );
+
+  testWidgets('bilingual composition panel rendering (en and zh)', (
     tester,
   ) async {
-    await tester.pumpWidget(_host(_half, breakdown: null));
-    await tester.tap(find.byType(ContextRing));
-    await tester.pumpAndSettle();
+    for (final (locale, usedText, tokensText, sysLabel) in [
+      (
+        const Locale('en'),
+        '50% of context used',
+        '~15K / 30K',
+        'System prompt',
+      ),
+      (const Locale('zh'), '上下文已用 50%', '约 15K / 30K', '系统提示词'),
+    ]) {
+      await tester.pumpWidget(
+        _host(
+          _half,
+          breakdown: const ContextBreakdown(
+            systemTokens: 4000,
+            toolsTokens: 1000,
+            messageTokens: 10000,
+          ),
+          locale: locale,
+        ),
+      );
+      await tester.tap(find.byType(ContextRing));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('context-breakdown-bar')), findsNothing);
-    expect(find.text('0'), findsNWidgets(3));
+      expect(find.text(usedText), findsOneWidget);
+      expect(find.text(tokensText), findsOneWidget);
+      expect(find.text(sysLabel), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('context-breakdown-bar')),
+        findsOneWidget,
+      );
+
+      // Close for next iteration
+      await tester.tap(find.byType(ContextRing));
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('0-token breakdown parts are omitted from the segmented bar', (
@@ -242,6 +354,11 @@ void main() {
     expect(segments[0].flex, 2000); // Tools
     expect(segments[1].flex, 8000); // Messages
     expect(segments[2].flex, 30000); // Remaining window track (40000 - 10000)
+
+    // Legend rows display formatted token numbers with ~ prefix.
+    expect(find.text('~0'), findsOneWidget);
+    expect(find.text('~2K'), findsOneWidget);
+    expect(find.text('~8K'), findsOneWidget);
   });
 
   testWidgets('the popup floats on the house menu-surface card', (

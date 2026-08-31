@@ -2151,7 +2151,7 @@ void main() {
       lessThanOrEqualTo(dockTop),
     );
 
-    // Picking a host command lands the literal text like a skill does.
+    // Picking an input-hinted host command lands the literal text like a skill does.
     await tester.tap(find.text('/plan'));
     await tester.pumpAndSettle();
     expect(find.text('Attach images'), findsNothing);
@@ -2163,6 +2163,89 @@ void main() {
         )
         .first;
     expect(tester.widget<TextField>(composerField).controller?.text, '/plan ');
+    expect(actions.whereType<SendPrompt>(), isEmpty);
+  });
+
+  testWidgets(
+    'plus menu: picking bare /compact dispatches SendPrompt and preserves draft',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+          selectedSessionId: 's1',
+          skills: [
+            SkillEntry(name: 'review', description: 'Review conversations'),
+          ],
+        ),
+        actions,
+      );
+
+      final composerField = find
+          .descendant(
+            of: find.byType(ComposerBar),
+            matching: find.byType(TextField),
+          )
+          .first;
+      await tester.enterText(composerField, 'preserve this draft');
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Commands'));
+      await tester.pumpAndSettle();
+
+      // Picking a bare host command (/compact) pops the sheet and dispatches
+      // SendPrompt('/compact') directly without touching the draft.
+      await tester.tap(find.text('/compact'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Attach images'), findsNothing);
+      expect(
+        actions,
+        contains(const SendPrompt('/compact', mode: PromptMode.queue)),
+      );
+      expect(
+        tester.widget<TextField>(composerField).controller?.text,
+        'preserve this draft',
+      );
+    },
+  );
+
+  testWidgets('plus menu: picking a skill prefills /skill into draft', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+        selectedSessionId: 's1',
+        skills: [
+          SkillEntry(name: 'review', description: 'Review conversations'),
+        ],
+      ),
+      actions,
+    );
+
+    await tester.tap(find.byTooltip('Commands'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('/review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Attach images'), findsNothing);
+    expect(actions.whereType<SendPrompt>(), isEmpty);
+
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    expect(
+      tester.widget<TextField>(composerField).controller?.text,
+      '/review ',
+    );
   });
 
   testWidgets('composer model seat shows the current model and menu', (
