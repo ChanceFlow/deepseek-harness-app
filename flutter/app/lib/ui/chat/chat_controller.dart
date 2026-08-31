@@ -419,6 +419,12 @@ class ChatController {
       _contextPressure = pressure;
       _publishUpstream();
     });
+    _breakdownSub = _repository.observeContextBreakdown(sessionId).listen((
+      breakdown,
+    ) {
+      _contextBreakdown = breakdown;
+      _publishUpstream();
+    });
     _statsSub = _repository.observeSessionStats(sessionId).listen((stats) {
       _sessionStats = stats;
       _publishUpstream();

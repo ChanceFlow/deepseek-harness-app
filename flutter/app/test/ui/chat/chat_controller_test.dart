@@ -422,7 +422,12 @@ class FakeChatRepository implements ChatRepository {
 
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
+      contextBreakdownSource?.call(sessionId) ??
       AppStateStream<ContextBreakdown?>(null).stream;
+
+  /// Optional scripted context-breakdown source; when set it replaces the
+  /// always-null stream so tests can drive the contextBreakdown field upstream.
+  Stream<ContextBreakdown?>? Function(String sessionId)? contextBreakdownSource;
 
   @override
   Stream<SessionWindowStats> observeSessionStats(String sessionId) =>
@@ -1542,6 +1547,49 @@ void main() {
     // The leaving session's projection does not leak across the switch.
     expect(controller.state.permissions, isNull);
   });
+
+  test(
+    'context breakdown projection binds and resets across session switch',
+    () async {
+      final repository = FakeChatRepository();
+      final bySession = <String, AppStateStream<ContextBreakdown?>>{};
+      AppStateStream<ContextBreakdown?> streamFor(String sessionId) =>
+          bySession.putIfAbsent(
+            sessionId,
+            () => AppStateStream<ContextBreakdown?>(null),
+          );
+      repository.contextBreakdownSource = (sessionId) =>
+          streamFor(sessionId).stream;
+      final controller = ChatController(repository);
+      await pumpEventQueue();
+      expect(controller.state.contextBreakdown, isNull);
+
+      controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+      await pumpEventQueue();
+      expect(controller.state.contextBreakdown, isNull);
+
+      streamFor(FakeChatRepository.initialSession.id)
+          .value = const ContextBreakdown(
+        systemTokens: 1000,
+        toolsTokens: 500,
+        messageTokens: 2000,
+      );
+      await settlePublish();
+      expect(
+        controller.state.contextBreakdown,
+        const ContextBreakdown(
+          systemTokens: 1000,
+          toolsTokens: 500,
+          messageTokens: 2000,
+        ),
+      );
+
+      controller.onAction(const SelectSession('other'));
+      await pumpEventQueue();
+      // Rebinding to a session without breakdown resets to null without stale leakage.
+      expect(controller.state.contextBreakdown, isNull);
+    },
+  );
 
   test('create in workspace carries the staged preset', () async {
     final repository = FakeChatRepository();

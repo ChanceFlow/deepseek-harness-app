@@ -74,6 +74,10 @@ projection consumption in
 [the context projection consumption note](2026-08-30-context-pressure-host-projection-consumption.md);
 its "renders once a provider reports" visibility sentence and the dialog
 panel are this note's facts now. New ARB key `contextLabel` in both
-locales. The web's segmented breakdown bar stays unported (panel content
-unchanged); a permanently visible meter now shows an empty circle even in
-sessions that never bill.
+locales. The web's segmented breakdown bar is ported into the popup panel above the
+legend rows, rendering proportional segment flexes from `ContextBreakdown`
+and track space from remaining capacity over the projection pipeline
+repaired in
+[the context projection consumption note](2026-08-30-context-pressure-host-projection-consumption.md);
+a permanently visible meter shows an empty circle in sessions that never
+bill.

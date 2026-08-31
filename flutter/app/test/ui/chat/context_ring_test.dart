@@ -130,6 +130,7 @@ void main() {
   });
 
   testWidgets('tap opens the anchored composition popup', (tester) async {
+    final theme = DshTheme.light();
     await tester.pumpWidget(
       _host(
         _half,
@@ -138,8 +139,10 @@ void main() {
           toolsTokens: 1000,
           messageTokens: 10000,
         ),
+        theme: theme,
       ),
     );
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byType(ContextRing));
     await tester.pumpAndSettle();
 
@@ -149,6 +152,96 @@ void main() {
     expect(_panel, findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
     expect(find.text('Messages'), findsOneWidget);
+
+    // True figures render in the legend rows rather than constant 0s.
+    expect(find.text('4000'), findsOneWidget);
+    expect(find.text('1000'), findsOneWidget);
+    expect(find.text('10000'), findsOneWidget);
+
+    // The segmented breakdown bar exists with proportional segment flexes.
+    final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
+    expect(barFinder, findsOneWidget);
+    final segments = tester
+        .widgetList<Expanded>(
+          find.descendant(of: barFinder, matching: find.byType(Expanded)),
+        )
+        .toList();
+    expect(segments, hasLength(4));
+    expect(segments[0].flex, 4000); // System prompt
+    expect(segments[1].flex, 1000); // Tools
+    expect(segments[2].flex, 10000); // Messages / conversation
+    expect(segments[3].flex, 15000); // Remaining window track
+
+    // Segment colors map to stock M3 scheme roles.
+    final systemBox = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byWidget(segments[0]),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(systemBox.color, theme.colorScheme.outline);
+    final toolsBox = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byWidget(segments[1]),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(toolsBox.color, theme.colorScheme.tertiary);
+    final messagesBox = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byWidget(segments[2]),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(messagesBox.color, theme.colorScheme.primary);
+    final trackBox = tester.widget<ColoredBox>(
+      find.descendant(
+        of: find.byWidget(segments[3]),
+        matching: find.byType(ColoredBox),
+      ),
+    );
+    expect(trackBox.color, theme.colorScheme.outlineVariant);
+  });
+
+  testWidgets('missing breakdown omits the bar and shows 0 counts', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(_half, breakdown: null));
+    await tester.tap(find.byType(ContextRing));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('context-breakdown-bar')), findsNothing);
+    expect(find.text('0'), findsNWidgets(3));
+  });
+
+  testWidgets('0-token breakdown parts are omitted from the segmented bar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        const ContextPressure(pressureTokens: 10000, contextWindow: 40000),
+        breakdown: const ContextBreakdown(
+          systemTokens: 0,
+          toolsTokens: 2000,
+          messageTokens: 8000,
+        ),
+      ),
+    );
+    await tester.tap(find.byType(ContextRing));
+    await tester.pumpAndSettle();
+
+    final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
+    expect(barFinder, findsOneWidget);
+    final segments = tester
+        .widgetList<Expanded>(
+          find.descendant(of: barFinder, matching: find.byType(Expanded)),
+        )
+        .toList();
+    // System part with 0 tokens is dropped; tools, messages, remaining remain.
+    expect(segments, hasLength(3));
+    expect(segments[0].flex, 2000); // Tools
+    expect(segments[1].flex, 8000); // Messages
+    expect(segments[2].flex, 30000); // Remaining window track (40000 - 10000)
   });
 
   testWidgets('the popup floats on the house menu-surface card', (

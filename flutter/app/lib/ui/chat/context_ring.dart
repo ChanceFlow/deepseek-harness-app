@@ -6,15 +6,15 @@
 /// whole meter in that state (`ContextMeter.tsx` returns null on missing
 /// occupancy); always-drawing the empty track is a mobile deviation
 /// recorded in
-/// [the ring visibility and popup note](../../../../../.agents/notes/implemented/bug-fix/2026-08-30-context-ring-always-on-and-anchored-popup.md).
+/// [the ring visibility and popup note](../../../../../.agents/notes/implemented/bug-fix/2026-08-29-context-ring-always-on-and-anchored-popup.md).
 /// Occupancy prefers the projected sample (web ui-conversation
 /// StatsLine.tsx `contextOccupancy`: `projectedTokens ?? pressureTokens`),
 /// so the ring moves while a turn streams instead of holding still at the
 /// last usage sample. Tap opens the composition panel (system / tools /
-/// conversation legend) as an anchored popup from the ring's own position
-/// — the web meter's popover (`ContextMeter.module.css` `.panel`: menu
-/// surface, r12, inverted hairline, lv3 shadow), delivered by the native
-/// [MenuAnchor].
+/// conversation legend and segmented breakdown bar) as an anchored popup
+/// from the ring's own position — the web meter's popover
+/// (`ContextMeter.module.css` `.panel`: menu surface, r12, inverted
+/// hairline, lv3 shadow), delivered by the native [MenuAnchor].
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -23,6 +23,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/theme.dart' show kShapeMenuSheet;
 import 'stats_line.dart' show formatTokens;
+
+/// Breakdown bar height: 4px, matching web ContextMeter.module.css .bar.
+const double kContextBreakdownBarHeight = 4;
 
 class ContextRing extends StatefulWidget {
   const ContextRing({required this.pressure, super.key, this.breakdown});
@@ -156,18 +159,11 @@ class _ContextRingState extends State<ContextRing> {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final breakdown = widget.breakdown;
     final rows = <(String, int, Color)>[
-      (
-        l10n.systemPromptLabel,
-        widget.breakdown?.systemTokens ?? 0,
-        scheme.outline,
-      ),
-      (l10n.toolsLabel, widget.breakdown?.toolsTokens ?? 0, scheme.tertiary),
-      (
-        l10n.conversationLabel,
-        widget.breakdown?.messageTokens ?? 0,
-        scheme.primary,
-      ),
+      (l10n.systemPromptLabel, breakdown?.systemTokens ?? 0, scheme.outline),
+      (l10n.toolsLabel, breakdown?.toolsTokens ?? 0, scheme.tertiary),
+      (l10n.conversationLabel, breakdown?.messageTokens ?? 0, scheme.primary),
     ];
     return SizedBox(
       width: 264,
@@ -189,7 +185,17 @@ class _ContextRingState extends State<ContextRing> {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 6),
+            if (breakdown != null) ...[
+              const SizedBox(height: 10),
+              _breakdownBar(
+                context,
+                breakdown: breakdown,
+                used: used,
+                window: window,
+              ),
+              const SizedBox(height: 12),
+            ] else
+              const SizedBox(height: 6),
             for (final (label, tokens, color) in rows)
               Row(
                 children: [
@@ -208,6 +214,76 @@ class _ContextRingState extends State<ContextRing> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _breakdownBar(
+    BuildContext context, {
+    required ContextBreakdown breakdown,
+    required int used,
+    required int window,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final breakdownTotal =
+        breakdown.systemTokens +
+        breakdown.toolsTokens +
+        breakdown.messageTokens;
+    final systemFlex = breakdownTotal > 0
+        ? (used * breakdown.systemTokens / breakdownTotal).round()
+        : 0;
+    final toolsFlex = breakdownTotal > 0
+        ? (used * breakdown.toolsTokens / breakdownTotal).round()
+        : 0;
+    final messageFlex = breakdownTotal > 0
+        ? (used * breakdown.messageTokens / breakdownTotal).round()
+        : 0;
+    final remainingFlex = (window - (systemFlex + toolsFlex + messageFlex))
+        .clamp(0, window);
+
+    final segments = <Widget>[
+      // System prompt segment: M3 outline role (aligned with web
+      // --dsw-static-neutral-bluish-400 slate tone).
+      if (systemFlex > 0)
+        Expanded(
+          flex: systemFlex,
+          child: ColoredBox(color: scheme.outline),
+        ),
+      // Tools segment: M3 tertiary role (aligned with web violet-400
+      // rgb(167, 139, 250) tool tint).
+      if (toolsFlex > 0)
+        Expanded(
+          flex: toolsFlex,
+          child: ColoredBox(color: scheme.tertiary),
+        ),
+      // Conversation/messages segment: M3 primary role (aligned with
+      // web --dsw-static-blue-450 primary brand blue).
+      if (messageFlex > 0)
+        Expanded(
+          flex: messageFlex,
+          child: ColoredBox(color: scheme.primary),
+        ),
+      // Remaining window track: M3 outlineVariant role (aligned with
+      // web --dsw-alias-interactive-bg-hover track background).
+      if (remainingFlex > 0)
+        Expanded(
+          flex: remainingFlex,
+          child: ColoredBox(color: scheme.outlineVariant),
+        ),
+    ];
+
+    if (segments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return ClipRRect(
+      key: const ValueKey('context-breakdown-bar'),
+      // Capsule/pill clip with radius = height / 2 (2px), matching web
+      // ContextMeter.module.css .bar border-radius: 999px.
+      borderRadius: BorderRadius.circular(kContextBreakdownBarHeight / 2),
+      child: SizedBox(
+        height: kContextBreakdownBarHeight,
+        child: Row(mainAxisSize: MainAxisSize.max, children: segments),
       ),
     );
   }
