@@ -24,6 +24,7 @@ import 'dart:async';
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/activity_dot.dart';
+import 'package:app/ui/chat/approval_panel.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
@@ -865,6 +866,111 @@ void main() {
       ),
     );
   });
+
+  testWidgets(
+    'approval renders paired tool call command line under justification',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              running: true,
+              blank: false,
+            ),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineToolCall(
+              id: 'call-bash-1',
+              name: 'bash',
+              arguments: '{"command":"rm -rf build"}',
+              status: ToolRunStatus.running,
+            ),
+            TimelineApprovalRequest(
+              requestId: 'rpc-1',
+              sessionId: 's1',
+              approvalId: 'a-1',
+              toolName: 'bash',
+              callId: 'call-bash-1',
+              reason: 'Clean workspace',
+            ),
+          ],
+        ),
+        actions,
+      );
+      await tester.pump();
+
+      expect(find.text('Waiting for approval'), findsOneWidget);
+      expect(find.text('Clean workspace'), findsOneWidget);
+      expect(
+        find.text('Tool bash requests privileged execution'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(ApprovalPanel),
+          matching: find.text('rm -rf build'),
+        ),
+        findsOneWidget,
+      );
+
+      final selectable = tester.widget<SelectableText>(
+        find.widgetWithText(SelectableText, 'rm -rf build'),
+      );
+      expect(selectable.style?.fontFamily, 'monospace');
+    },
+  );
+
+  testWidgets(
+    'approval with non-shell or unextractable tool call renders panel without command line',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              running: true,
+              blank: false,
+            ),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineToolCall(
+              id: 'call-write-1',
+              name: 'write',
+              arguments: '{"file_path":"output.txt"}',
+              status: ToolRunStatus.running,
+            ),
+            TimelineApprovalRequest(
+              requestId: 'rpc-2',
+              sessionId: 's1',
+              approvalId: 'a-2',
+              toolName: 'write',
+              callId: 'call-write-1',
+              reason: 'Write config',
+            ),
+          ],
+        ),
+        actions,
+      );
+      await tester.pump();
+
+      expect(find.text('Waiting for approval'), findsOneWidget);
+      expect(find.text('Write config'), findsOneWidget);
+      expect(
+        find.text('Tool write requests privileged execution'),
+        findsOneWidget,
+      );
+      expect(find.byType(SelectableText), findsNothing);
+    },
+  );
 
   testWidgets('tool row restores a persisted expansion on load', (
     tester,
