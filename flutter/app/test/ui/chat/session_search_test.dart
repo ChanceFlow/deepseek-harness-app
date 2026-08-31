@@ -7,7 +7,6 @@ import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
-import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
@@ -421,7 +420,7 @@ void main() {
         isNot(contains('s1')),
       );
 
-      sub.cancel();
+      unawaited(sub.cancel());
       controller.dispose();
     });
   });
@@ -507,7 +506,7 @@ void main() {
           's1',
         ]);
 
-        sub.cancel();
+        unawaited(sub.cancel());
         controller.dispose();
       });
     },
@@ -567,7 +566,7 @@ void main() {
         expect(results[1].sessionId, 's2');
         expect(results[1].snippet, 'Discussion about Flutter');
 
-        sub.cancel();
+        unawaited(sub.cancel());
         controller.dispose();
       });
     },
@@ -598,7 +597,7 @@ void main() {
       async.elapse(const Duration(milliseconds: 500));
       expect(repo.searchCalls, isEmpty);
 
-      sub.cancel();
+      unawaited(sub.cancel());
       controller.dispose();
     });
   });
