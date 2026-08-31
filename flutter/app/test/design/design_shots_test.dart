@@ -108,6 +108,26 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  DesignShot(
+    name: 'sidebar-scroll-bleed',
+    host: (theme, locale) => _sidebarMultiBackendHost(theme, locale),
+    act: (tester) async {
+      await _loadRegistry(tester);
+      await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+      final listFinder = find.descendant(
+        of: find.byType(SessionPanel),
+        matching: find.byType(ListView),
+      );
+      final scrollableFinder = find.descendant(
+        of: listFinder,
+        matching: find.byType(Scrollable),
+      );
+      final scrollableState = tester.state<ScrollableState>(scrollableFinder);
+      scrollableState.position.jumpTo(28.0);
+      await settle(tester);
+    },
+  ),
   // The collapsed rail: a ≥720dp-only form the phone viewport can never
   // show. The act moves this one shot's viewport to a tablet width (the
   // catalog device stays the phone; _kPhone belongs to every other shot)
@@ -598,6 +618,66 @@ Widget _subagentsHost(ThemeData theme, Locale? locale, SubagentUiState state) {
     locale: locale,
     theme: _withRealFonts(theme),
     home: SubagentScreen(uiState: state, onAction: (_) {}),
+  );
+}
+
+/// Full-tree builder for the multi-backend sidebar scroll shot: mounts
+/// ChatScreen with multi-backend slices and the fake rpc/socket providers.
+Widget _sidebarMultiBackendHost(ThemeData theme, Locale? locale) {
+  final registryDir = Directory.systemTemp.createTempSync(
+    'dsh-design-registry',
+  );
+  addTearDown(() => registryDir.deleteSync(recursive: true));
+  final registryFile = File('${registryDir.path}/backends.json');
+  registryFile.writeAsStringSync(kSettingsRegistryDoc);
+  final stateDir = Directory.systemTemp.createTempSync('dsh-design-state');
+  addTearDown(() => stateDir.deleteSync(recursive: true));
+  final stateFile = File('${stateDir.path}/local_state.json');
+  stateFile.writeAsStringSync('''
+{
+  "sidebar.groupOverrides": {
+    "w1": true,
+    "w2": true,
+    "b1\\u0000wb1": true,
+    "b2\\u0000wg1": true,
+    "b2\\u0000wg2": true
+  },
+  "sidebar.overflowExpanded": ["w1", "w2", "b1\\u0000wb1"]
+}
+''');
+  return ProviderScope(
+    overrides: [
+      backendStoreProvider.overrideWith(
+        (ref) async => BackendStore(registryFile, seedBaseUrl: kDshBaseUrl),
+      ),
+      localStateStoreProvider.overrideWith(
+        (ref) async => LocalStateStore(stateFile),
+      ),
+      dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+          .overrideWithValue(_FakeRpc()),
+      dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+          .overrideWithValue(_SilentSocket()),
+      for (final uri in [
+        Uri.parse('http://10.0.2.2:3080'),
+        Uri.parse('http://10.0.2.2:3081'),
+        Uri.parse('http://10.0.2.2:3082'),
+      ]) ...[
+        dshRpcClientProvider(uri).overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(uri).overrideWithValue(_SilentSocket()),
+      ],
+    ],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: _withRealFonts(theme),
+      home: ChatScreen(
+        uiState: multiBackendDrawerState(),
+        backendSlices: kCrowdedBackendSlices,
+        onAction: (_) {},
+      ),
+    ),
   );
 }
 

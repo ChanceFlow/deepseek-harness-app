@@ -41,4 +41,6 @@ The sidebar's pull-to-overscroll glow matches the neutral outline-variant
 hairline tone in both light and dark themes. Widget tests in `session_panel_test.dart`
 assert the overscroll indicator color against `scheme.outlineVariant` under both
 brightnesses and verify that `StretchingOverscrollIndicator` continues to build
-under Material 3 defaults.
+under Material 3 defaults. (Note: upward scroll tile fill bleed across the top
+boundary is separately clipped via a local `Material` ink host in
+[2026-08-31-sidebar-ink-host-clip.md](2026-08-31-sidebar-ink-host-clip.md).)

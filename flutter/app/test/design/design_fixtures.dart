@@ -8,6 +8,7 @@
 library;
 
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -20,6 +21,7 @@ import 'package:domain/model/todo.dart';
 import 'package:domain/model/workspace.dart';
 
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/settings/settings_ui_state.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 
@@ -647,4 +649,217 @@ SubagentUiState subagentsChildState() => const SubagentUiState(
       ],
     ),
   ],
+);
+
+/// ── Multi-backend sidebar scroll fixture ──────────────────────────────────
+/// Crowded multi-backend session tree where the active backend's blue header
+/// sits at the top of the scrolling list.
+
+final BackendConfig kBackendLaptop = BackendConfig(
+  id: 'default',
+  label: 'Laptop',
+  baseUri: Uri.parse('http://10.0.2.2:3080'),
+);
+
+final BackendConfig kBackendBuildBox = BackendConfig(
+  id: 'b1',
+  label: 'Build box',
+  baseUri: Uri.parse('http://10.0.2.2:3081'),
+);
+
+final BackendConfig kBackendGpuServer = BackendConfig(
+  id: 'b2',
+  label: 'GPU Cluster',
+  baseUri: Uri.parse('http://10.0.2.2:3082'),
+);
+
+final List<BackendSessionSlice> kCrowdedBackendSlices = <BackendSessionSlice>[
+  BackendSessionSlice(
+    backend: kBackendLaptop,
+    active: true,
+    sessions: const <SessionSummary>[
+      SessionSummary(
+        id: 's1',
+        title: 'dock vertical budget',
+        running: true,
+        blank: false,
+        updatedAtEpochMs: kNow,
+        cwd: '/home/user/Projects/deepseek-harness-app',
+      ),
+      SessionSummary(
+        id: 's2',
+        title: 'wire parity for session/fork',
+        blank: false,
+        pendingInteraction: SessionPendingInteraction.question,
+        updatedAtEpochMs: kNow - 3600000,
+        cwd: '/home/user/Projects/deepseek-harness-app',
+      ),
+      SessionSummary(
+        id: 's3',
+        title: 'telemetry sampling',
+        blank: false,
+        completed: true,
+        updatedAtEpochMs: kNow - 86400000,
+        cwd: '/home/user/Projects/signoz-stack',
+      ),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'w1',
+        title: 'deepseek-harness-app',
+        path: '/home/user/Projects/deepseek-harness-app',
+        sessionIds: <String>['s1', 's2'],
+      ),
+      WorkspaceSummary(
+        workspaceId: 'w2',
+        title: 'signoz-stack',
+        path: '/home/user/Projects/signoz-stack',
+        sessionIds: <String>['s3'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: kBackendBuildBox,
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(
+        id: 'sb1',
+        title: 'nightly release verification',
+        blank: false,
+        updatedAtEpochMs: kNow - 7200000,
+        cwd: '/opt/builds/release',
+      ),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wb1',
+        title: 'builds',
+        path: '/opt/builds',
+        sessionIds: <String>['sb1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: kBackendGpuServer,
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(
+        id: 'sg1',
+        title: 'eval benchmark run 42',
+        running: true,
+        blank: false,
+        updatedAtEpochMs: kNow - 1800000,
+        cwd: '/srv/models/eval',
+      ),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wg1',
+        title: 'eval',
+        path: '/srv/models/eval',
+        sessionIds: <String>['sg1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: BackendConfig(
+      id: 'b3',
+      label: 'Staging Host',
+      baseUri: Uri.parse('http://10.0.2.2:3083'),
+    ),
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(id: 'st1', title: 'integration tests', blank: false),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wst1',
+        title: 'staging',
+        path: '/opt/stage',
+        sessionIds: ['st1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: BackendConfig(
+      id: 'b4',
+      label: 'QA Matrix Box',
+      baseUri: Uri.parse('http://10.0.2.2:3084'),
+    ),
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(id: 'qa1', title: 'regression run', blank: false),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wqa1',
+        title: 'qa',
+        path: '/opt/qa',
+        sessionIds: ['qa1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: BackendConfig(
+      id: 'b5',
+      label: 'US East Cluster',
+      baseUri: Uri.parse('http://10.0.2.2:3085'),
+    ),
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(id: 'us1', title: 'cluster telemetry sync', blank: false),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wus1',
+        title: 'useast',
+        path: '/srv/us',
+        sessionIds: ['us1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: BackendConfig(
+      id: 'b6',
+      label: 'EU Central Node',
+      baseUri: Uri.parse('http://10.0.2.2:3086'),
+    ),
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(id: 'eu1', title: 'replica replication', blank: false),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'weu1',
+        title: 'eucentral',
+        path: '/srv/eu',
+        sessionIds: ['eu1'],
+      ),
+    ],
+  ),
+  BackendSessionSlice(
+    backend: BackendConfig(
+      id: 'b7',
+      label: 'APAC Edge Gateway',
+      baseUri: Uri.parse('http://10.0.2.2:3087'),
+    ),
+    active: false,
+    sessions: const <SessionSummary>[
+      SessionSummary(id: 'ap1', title: 'edge gateway health', blank: false),
+    ],
+    workspaces: const <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'wap1',
+        title: 'apac',
+        path: '/srv/apac',
+        sessionIds: ['ap1'],
+      ),
+    ],
+  ),
+];
+
+ChatUiState multiBackendDrawerState() => const ChatUiState(
+  sessions: kSessions,
+  selectedSessionId: 's1',
+  timeline: _conversation,
 );
