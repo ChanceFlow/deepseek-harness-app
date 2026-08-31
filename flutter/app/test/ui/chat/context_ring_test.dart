@@ -160,49 +160,35 @@ void main() {
     expect(find.text('~1K'), findsOneWidget);
     expect(find.text('~10K'), findsOneWidget);
 
-    // The segmented breakdown bar exists with proportional segment flexes.
+    // The segmented breakdown bar exists with web's px geometry:
+    // region = 240 × percent%, parts by share with a 2px min-width and
+    // 1px gaps.
     final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
     expect(barFinder, findsOneWidget);
+    final segmentBoxes = find.descendant(
+      of: barFinder,
+      matching: find.byType(ColoredBox),
+    );
     final segments = tester
-        .widgetList<Expanded>(
-          find.descendant(of: barFinder, matching: find.byType(Expanded)),
-        )
-        .toList();
-    expect(segments, hasLength(4));
-    expect(segments[0].flex, 4000); // System prompt
-    expect(segments[1].flex, 1000); // Tools
-    expect(segments[2].flex, 10000); // Messages / conversation
-    expect(segments[3].flex, 15000); // Remaining window track
+        .widgetList<ColoredBox>(segmentBoxes)
+        .toList(growable: false);
+    expect(segments, hasLength(3)); // remaining window is the track itself
+    // used=15000 of 30000 → percent 50 → region 120px; shares
+    // 4000/15000, 1000/15000, 10000/15000 → 32 + 8 + 80 (+2px of gaps).
+    expect(tester.getSize(segmentBoxes.at(0)).width, closeTo(32, 0.5));
+    expect(tester.getSize(segmentBoxes.at(1)).width, closeTo(8, 0.5));
+    expect(tester.getSize(segmentBoxes.at(2)).width, closeTo(80, 0.5));
 
     // Segment colors map to stock M3 scheme roles.
-    final systemBox = tester.widget<ColoredBox>(
-      find.descendant(
-        of: find.byWidget(segments[0]),
-        matching: find.byType(ColoredBox),
-      ),
+    expect(segments[0].color, theme.colorScheme.outline); // System prompt
+    expect(segments[1].color, theme.colorScheme.tertiary); // Tools
+    expect(segments[2].color, theme.colorScheme.primary); // Messages
+    // The bar's own background is the remaining-window track.
+    final barBox = tester.widget<DecoratedBox>(
+      find.descendant(of: barFinder, matching: find.byType(DecoratedBox)),
     );
-    expect(systemBox.color, theme.colorScheme.outline);
-    final toolsBox = tester.widget<ColoredBox>(
-      find.descendant(
-        of: find.byWidget(segments[1]),
-        matching: find.byType(ColoredBox),
-      ),
-    );
-    expect(toolsBox.color, theme.colorScheme.tertiary);
-    final messagesBox = tester.widget<ColoredBox>(
-      find.descendant(
-        of: find.byWidget(segments[2]),
-        matching: find.byType(ColoredBox),
-      ),
-    );
-    expect(messagesBox.color, theme.colorScheme.primary);
-    final trackBox = tester.widget<ColoredBox>(
-      find.descendant(
-        of: find.byWidget(segments[3]),
-        matching: find.byType(ColoredBox),
-      ),
-    );
-    expect(trackBox.color, theme.colorScheme.outlineVariant);
+    final track = (barBox.decoration as BoxDecoration).color;
+    expect(track, theme.colorScheme.outlineVariant);
   });
 
   testWidgets(
@@ -213,33 +199,20 @@ void main() {
       await tester.tap(find.byType(ContextRing));
       await tester.pumpAndSettle();
 
-      // The bar always renders with the single fallback segment (used fraction).
+      // The bar always renders with the single fallback segment (used
+      // fraction): 50% of 240 = 120px of outline tint.
       final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
       expect(barFinder, findsOneWidget);
-      final segments = tester
-          .widgetList<Expanded>(
-            find.descendant(of: barFinder, matching: find.byType(Expanded)),
-          )
-          .toList();
-      expect(segments, hasLength(2));
-      expect(segments[0].flex, 15000); // Used total
-      expect(segments[1].flex, 15000); // Remaining window track
-
-      final usedBox = tester.widget<ColoredBox>(
-        find.descendant(
-          of: find.byWidget(segments[0]),
-          matching: find.byType(ColoredBox),
-        ),
+      final segmentBoxes = find.descendant(
+        of: barFinder,
+        matching: find.byType(ColoredBox),
       );
-      expect(usedBox.color, theme.colorScheme.outline);
-
-      final trackBox = tester.widget<ColoredBox>(
-        find.descendant(
-          of: find.byWidget(segments[1]),
-          matching: find.byType(ColoredBox),
-        ),
+      expect(segmentBoxes, findsOneWidget);
+      expect(tester.getSize(segmentBoxes).width, closeTo(120, 0.5));
+      expect(
+        tester.widget<ColoredBox>(segmentBoxes).color,
+        theme.colorScheme.outline,
       );
-      expect(trackBox.color, theme.colorScheme.outlineVariant);
 
       // Legend rows are gated on breakdown presence and omitted when null.
       expect(find.text('System prompt'), findsNothing);
@@ -266,17 +239,16 @@ void main() {
       await tester.tap(find.byType(ContextRing));
       await tester.pumpAndSettle();
 
+      // Breakdown total is 0, so the bar falls back to the single used
+      // segment: 120px of outline tint, and no colored Expanded.
       final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
       expect(barFinder, findsOneWidget);
-      final segments = tester
-          .widgetList<Expanded>(
-            find.descendant(of: barFinder, matching: find.byType(Expanded)),
-          )
-          .toList();
-      // Breakdown total is 0, so the bar falls back to the single used segment.
-      expect(segments, hasLength(2));
-      expect(segments[0].flex, 15000); // Used total
-      expect(segments[1].flex, 15000); // Remaining window track
+      final segmentBoxes = find.descendant(
+        of: barFinder,
+        matching: find.byType(ColoredBox),
+      );
+      expect(segmentBoxes, findsOneWidget);
+      expect(tester.getSize(segmentBoxes).width, closeTo(120, 0.5));
 
       // Legend rows render because breakdown is non-null.
       expect(find.text('System prompt'), findsOneWidget);
@@ -326,6 +298,43 @@ void main() {
     }
   });
 
+  testWidgets('a low-occupancy 1M-window session still shows hairline color '
+      '(the web min-width rule)', (tester) async {
+    // Real post-compaction figures from the live host: ~13K tokens in a
+    // 1048576 window → 1% occupancy. The old integer-flex port rounded
+    // every part to zero width and rendered a colorless bar.
+    final theme = DshTheme.light();
+    await tester.pumpWidget(
+      _host(
+        const ContextPressure(pressureTokens: 13409, contextWindow: 1048576),
+        breakdown: const ContextBreakdown(
+          systemTokens: 1600,
+          toolsTokens: 6500,
+          messageTokens: 5309,
+        ),
+        theme: theme,
+      ),
+    );
+    await tester.tap(find.byType(ContextRing));
+    await tester.pumpAndSettle();
+
+    final segmentBoxes = find.descendant(
+      of: find.byKey(const ValueKey('context-breakdown-bar')),
+      matching: find.byType(ColoredBox),
+    );
+    // Region = 240 × 1% = 2.4px; shares would put system at 0.29px and
+    // tools at 1.2px — the web `.segment` min-width 2px keeps each a
+    // visible hairline instead of dropping it.
+    expect(segmentBoxes, findsNWidgets(3));
+    for (final width in [
+      tester.getSize(segmentBoxes.at(0)).width,
+      tester.getSize(segmentBoxes.at(1)).width,
+      tester.getSize(segmentBoxes.at(2)).width,
+    ]) {
+      expect(width, greaterThanOrEqualTo(2.0));
+    }
+  });
+
   testWidgets('0-token breakdown parts are omitted from the segmented bar', (
     tester,
   ) async {
@@ -344,16 +353,19 @@ void main() {
 
     final barFinder = find.byKey(const ValueKey('context-breakdown-bar'));
     expect(barFinder, findsOneWidget);
-    final segments = tester
-        .widgetList<Expanded>(
-          find.descendant(of: barFinder, matching: find.byType(Expanded)),
-        )
-        .toList();
-    // System part with 0 tokens is dropped; tools, messages, remaining remain.
-    expect(segments, hasLength(3));
-    expect(segments[0].flex, 2000); // Tools
-    expect(segments[1].flex, 8000); // Messages
-    expect(segments[2].flex, 30000); // Remaining window track (40000 - 10000)
+    final segmentBoxes = find.descendant(
+      of: barFinder,
+      matching: find.byType(ColoredBox),
+    );
+    final colors = tester
+        .widgetList<ColoredBox>(segmentBoxes)
+        .map((box) => box.color)
+        .toList(growable: false);
+    // The 0-token system part is dropped; tools and messages remain,
+    // sized by their share of the 25% used region (60px).
+    expect(colors, hasLength(2));
+    expect(tester.getSize(segmentBoxes.at(0)).width, closeTo(12, 0.5));
+    expect(tester.getSize(segmentBoxes.at(1)).width, closeTo(48, 0.5));
 
     // Legend rows display formatted token numbers with ~ prefix.
     expect(find.text('~0'), findsOneWidget);
