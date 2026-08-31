@@ -157,6 +157,23 @@ GATES: list[dict] = [
     },
 ]
 
+# The forge CI runner shares its host: `flutter test` defaults to one
+# flutter_tester per CPU, and on a loaded box that OOM-kills the suite
+# (exit 137). DSH_TEST_CONCURRENCY caps the suite's parallelism where the
+# CI job sets it; local runs leave it unset and keep the framework default.
+_TEST_CONCURRENCY = os.environ.get("DSH_TEST_CONCURRENCY")
+if _TEST_CONCURRENCY:
+    for _gate in GATES:
+        if _gate["name"] == "flutter-test":
+            # The flag belongs to `flutter test` (after the subcommand):
+            # before it is a global-option position and exits 64.
+            _gate["cmd"] = [
+                _gate["cmd"][0],
+                _gate["cmd"][1],
+                f"--concurrency={_TEST_CONCURRENCY}",
+                *_gate["cmd"][2:],
+            ]
+
 
 def run_group(group: str) -> int:
     ensure_flutter_on_path()
