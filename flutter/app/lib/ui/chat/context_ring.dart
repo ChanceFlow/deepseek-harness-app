@@ -27,6 +27,13 @@ import 'stats_line.dart' show formatTokens;
 /// Breakdown bar height: 4px, matching web ContextMeter.module.css .bar.
 const double kContextBreakdownBarHeight = 4;
 
+/// The panel's inner width (264 card − 2×12 padding). The bar's region
+/// math runs on this exact value: MenuAnchor sizes its menu through an
+/// `IntrinsicWidth`, which a LayoutBuilder inside the panel cannot serve,
+/// so the track width is the panel's own constant rather than a measured
+/// constraint.
+const double _kContextPanelInnerWidth = 264 - 24;
+
 class ContextRing extends StatefulWidget {
   const ContextRing({required this.pressure, super.key, this.breakdown});
 
@@ -181,12 +188,7 @@ class _ContextRingState extends State<ContextRing> {
               ),
             ),
             const SizedBox(height: 10),
-            _breakdownBar(
-              context,
-              breakdown: breakdown,
-              used: used,
-              window: window,
-            ),
+            _breakdownBar(context, breakdown: breakdown, percent: percent),
             if (breakdown != null) ...[
               const SizedBox(height: 12),
               for (final (label, tokens, color) in [
@@ -224,11 +226,19 @@ class _ContextRingState extends State<ContextRing> {
     );
   }
 
+  /// Web `.bar` geometry ported literally: the track is the bar's own
+  /// background; each part is `percent × share` of the width with the
+  /// `.segment` **min-width 2px** (the web comment: "a hairline part
+  /// stays visible") and `gap: 1px` between parts; only parts whose
+  /// share is exactly zero drop (`parts.filter(width > 0)`). Integer
+  /// `Expanded` flexes cannot express this: at 1M-token capacity a
+  /// compacted session sits at ~1% occupancy and every part rounds to
+  /// sub-pixel, so the bar rendered as pure track — the reported
+  /// "bar with no color".
   Widget _breakdownBar(
     BuildContext context, {
     required ContextBreakdown? breakdown,
-    required int used,
-    required int window,
+    required int percent,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final breakdownTotal = breakdown == null
@@ -237,78 +247,58 @@ class _ContextRingState extends State<ContextRing> {
               breakdown.toolsTokens +
               breakdown.messageTokens;
 
-    final List<Widget> segments;
+    // (share of the used region, tint) in web ROWS order. With no usable
+    // breakdown the whole region is one label-tertiary part (web's
+    // `[{ key: 'total', color: undefined, width: percent }]`).
+    final List<(double, Color)> parts;
     if (breakdown == null || breakdownTotal == 0) {
-      // Without breakdown data (or when all breakdown parts are 0), the bar
-      // renders as a single fallback segment of the total used fraction in
-      // scheme.outline (M3 outline tone mapping to web
-      // --dsw-alias-label-tertiary fallback tint) followed by the track
-      // remainder (web ContextMeter.tsx:87-88).
-      final usedFlex = used.clamp(0, window);
-      final remainingFlex = (window - usedFlex).clamp(0, window);
-      segments = <Widget>[
-        if (usedFlex > 0)
-          Expanded(
-            flex: usedFlex,
-            child: ColoredBox(color: scheme.outline),
-          ),
-        if (remainingFlex > 0)
-          Expanded(
-            flex: remainingFlex,
-            child: ColoredBox(color: scheme.outlineVariant),
-          ),
-      ];
+      parts = <(double, Color)>[(1.0, scheme.outline)];
     } else {
-      final systemFlex = (used * breakdown.systemTokens / breakdownTotal)
-          .round();
-      final toolsFlex = (used * breakdown.toolsTokens / breakdownTotal).round();
-      final messageFlex = (used * breakdown.messageTokens / breakdownTotal)
-          .round();
-      final remainingFlex = (window - (systemFlex + toolsFlex + messageFlex))
-          .clamp(0, window);
-
-      segments = <Widget>[
-        // System prompt segment: M3 outline role (aligned with web
-        // --dsw-static-neutral-bluish-400 slate tone).
-        if (systemFlex > 0)
-          Expanded(
-            flex: systemFlex,
-            child: ColoredBox(color: scheme.outline),
-          ),
-        // Tools segment: M3 tertiary role (aligned with web violet-400
-        // rgb(167, 139, 250) tool tint).
-        if (toolsFlex > 0)
-          Expanded(
-            flex: toolsFlex,
-            child: ColoredBox(color: scheme.tertiary),
-          ),
-        // Conversation/messages segment: M3 primary role (aligned with
-        // web --dsw-static-blue-450 primary brand blue).
-        if (messageFlex > 0)
-          Expanded(
-            flex: messageFlex,
-            child: ColoredBox(color: scheme.primary),
-          ),
-        // Remaining window track: M3 outlineVariant role (aligned with
-        // web --dsw-alias-interactive-bg-hover track background).
-        if (remainingFlex > 0)
-          Expanded(
-            flex: remainingFlex,
-            child: ColoredBox(color: scheme.outlineVariant),
-          ),
+      parts = <(double, Color)>[
+        // System prompt: web neutral-bluish-400 → M3 outline.
+        if (breakdown.systemTokens > 0)
+          (breakdown.systemTokens / breakdownTotal, scheme.outline),
+        // Tools: web violet-400 → M3 tertiary.
+        if (breakdown.toolsTokens > 0)
+          (breakdown.toolsTokens / breakdownTotal, scheme.tertiary),
+        // Conversation: web blue-450 → M3 primary.
+        if (breakdown.messageTokens > 0)
+          (breakdown.messageTokens / breakdownTotal, scheme.primary),
       ];
     }
 
+    final region = _kContextPanelInnerWidth * percent / 100.0;
+    final List<Widget> children = <Widget>[];
+    if (region > 0) {
+      for (final (share, tint) in parts) {
+        final raw = region * share;
+        final width = raw < 2.0 ? 2.0 : raw;
+        if (children.isNotEmpty) {
+          children.add(const SizedBox(width: 1)); // `.bar` gap
+        }
+        children.add(
+          SizedBox(
+            width: width,
+            child: ColoredBox(color: tint),
+          ),
+        );
+      }
+    }
     return ClipRRect(
       key: const ValueKey('context-breakdown-bar'),
       // Capsule/pill clip with radius = height / 2 (2px), matching web
       // ContextMeter.module.css .bar border-radius: 999px.
       borderRadius: BorderRadius.circular(kContextBreakdownBarHeight / 2),
       child: DecoratedBox(
+        // Web `.bar` background (interactive-bg-hover): the remaining
+        // window is the track itself, never a painted segment.
         decoration: BoxDecoration(color: scheme.outlineVariant),
         child: SizedBox(
+          // The track spans the panel's inner width; the colored parts
+          // sit on it from the left, the rest reads as remaining window.
+          width: _kContextPanelInnerWidth,
           height: kContextBreakdownBarHeight,
-          child: Row(mainAxisSize: MainAxisSize.max, children: segments),
+          child: Row(mainAxisSize: MainAxisSize.max, children: children),
         ),
       ),
     );
