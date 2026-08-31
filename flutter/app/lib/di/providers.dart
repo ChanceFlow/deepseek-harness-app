@@ -46,6 +46,7 @@ import '../backends/backend_store.dart';
 import '../config.dart';
 import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
+import '../notifications/notification_ledger.dart';
 import '../notifications/system_notifier.dart';
 import '../local_state/local_state_providers.dart';
 import '../ui/chat/chat_controller.dart';
@@ -86,6 +87,20 @@ final backendRegistryProvider = FutureProvider<BackendRegistryController>((
   );
   ref.onDispose(controller.dispose);
   return controller;
+});
+
+/// Startup boot sweep for posted notification rows: once the local state
+/// store and backend registry are loaded, attaches the ledger to the
+/// [SystemNotifier] and cancels any leftover ongoing rows for disabled or
+/// removed backends.
+final postedRowsSweepProvider = FutureProvider<void>((ref) async {
+  final localStore = await ref.watch(localStateStoreProvider.future);
+  final notifier = ref.watch(systemNotifierProvider);
+  notifier.attachLedger(StoreNotificationLedger(localStore));
+  final controller = await ref.watch(backendRegistryProvider.future);
+  await controller.loaded;
+  final enabledIds = controller.state.enabledBackends.map((b) => b.id).toSet();
+  await notifier.sweepStaleRows(enabledBackendIds: enabledIds);
 });
 
 /// The registry's state stream, mapped for widgets.
@@ -274,27 +289,66 @@ class _LifecycleSignal with WidgetsBindingObserver {
 /// connected backend's center (and its session fold) alive for the
 /// app's lifetime.
 final foregroundNotificationEventsProvider =
-    StreamProvider<AppNotificationEvent>((ref) async* {
-      final registry =
-          ref.watch(backendRegistryStateProvider).value ??
-          const BackendRegistryState();
+    StreamProvider<AppNotificationEvent>((ref) {
+      // Trigger the startup boot sweep for posted notification rows.
+      ref.watch(postedRowsSweepProvider);
       final controller = StreamController<AppNotificationEvent>.broadcast();
-      final subscriptions = <StreamSubscription<AppNotificationEvent>>[];
-      for (final backend in registry.enabledBackends) {
-        subscriptions.add(
-          ref
-              .watch(appNotificationCenterProvider(backend.id))
-              .foregroundEvents
-              .listen(controller.add),
-        );
-      }
-      ref.onDispose(() {
-        for (final subscription in subscriptions) {
-          unawaited(subscription.cancel());
+      final centerSubs =
+          <String, ProviderSubscription<AppNotificationCenter>>{};
+      final eventSubs = <String, StreamSubscription<AppNotificationEvent>>{};
+
+      void reconcile(BackendRegistryState registry) {
+        final enabledIds = registry.enabledBackends.map((b) => b.id).toSet();
+        // Teardown disabled/removed backends
+        for (final id in centerSubs.keys.toList()) {
+          if (!enabledIds.contains(id)) {
+            unawaited(eventSubs.remove(id)?.cancel());
+            centerSubs.remove(id)?.close();
+          }
         }
+        // Setup newly enabled backends
+        for (final backend in registry.enabledBackends) {
+          if (!centerSubs.containsKey(backend.id)) {
+            final sub = ref.listen<AppNotificationCenter>(
+              appNotificationCenterProvider(backend.id),
+              (previous, next) {
+                unawaited(eventSubs[backend.id]?.cancel());
+                eventSubs[backend.id] = next.foregroundEvents.listen(
+                  controller.add,
+                );
+              },
+              fireImmediately: true,
+            );
+            centerSubs[backend.id] = sub;
+          }
+        }
+      }
+
+      final registrySub = ref.listen<AsyncValue<BackendRegistryState>>(
+        backendRegistryStateProvider,
+        (previous, next) {
+          final state = next.value;
+          if (state != null) {
+            reconcile(state);
+          }
+        },
+        fireImmediately: true,
+      );
+
+      ref.onDispose(() {
+        registrySub.close();
+        for (final sub in eventSubs.values) {
+          unawaited(sub.cancel());
+        }
+        eventSubs.clear();
+        for (final sub in centerSubs.values) {
+          sub.close();
+        }
+        centerSubs.clear();
         unawaited(controller.close());
       });
-      yield* controller.stream;
+
+      return controller.stream;
     });
 
 /// System-notification tap destinations (running-app taps plus cold-start
@@ -342,9 +396,10 @@ final sessionSelectionPersistenceProvider = FutureProvider.family
     });
 
 /// Chat UI state stream for widgets.
-final chatUiStateProvider = StreamProvider.family<ChatUiState, String>(
-  (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
-);
+final chatUiStateProvider = StreamProvider.family
+    .autoDispose<ChatUiState, String>(
+      (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
+    );
 
 /// Every enabled backend's sidebar slice, keyed by the backend the
 /// chat surface presents (the slice's active flag follows it). Disabled
@@ -358,8 +413,8 @@ final chatUiStateProvider = StreamProvider.family<ChatUiState, String>(
 /// renders the sidebar from per-node subscriptions, not a whole-tree
 /// rebuild). Watching here also keeps every enabled backend's chat
 /// controller alive for the app's lifetime.
-final backendSessionSlicesProvider =
-    Provider.family<List<BackendSessionSlice>, String>((ref, activeBackendId) {
+final backendSessionSlicesProvider = Provider.family
+    .autoDispose<List<BackendSessionSlice>, String>((ref, activeBackendId) {
       final registry =
           ref.watch(backendRegistryStateProvider).value ??
           const BackendRegistryState();

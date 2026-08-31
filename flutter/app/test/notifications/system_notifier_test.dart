@@ -8,6 +8,7 @@ library;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/notifications/notification_key.dart';
+import 'package:app/notifications/notification_ledger.dart';
 import 'package:app/notifications/system_notifier.dart'
     show NotificationTarget, SystemNotifier;
 import 'package:app/notifications/working_sessions_fold.dart';
@@ -220,4 +221,105 @@ void main() {
       );
     });
   });
+
+  group('posted-rows ledger integration and boot sweep', () {
+    late _InMemoryLedger ledger;
+
+    setUp(() {
+      ledger = _InMemoryLedger();
+      notifier.attachLedger(ledger);
+    });
+
+    test('showWork and updateWorkBody record to the ledger', () async {
+      await notifier.showWork(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.working),
+      );
+      expect(ledger.entries, [
+        const NotificationRowEntry(backendId: 'b1', sessionId: 's1'),
+      ]);
+
+      await notifier.updateWorkBody(
+        backendId: 'b1',
+        work: _work(
+          's1',
+          state: WorkingSessionState.waiting,
+          pending: SessionPendingInteraction.approval,
+        ),
+      );
+      expect(ledger.entries, [
+        const NotificationRowEntry(backendId: 'b1', sessionId: 's1'),
+      ]);
+    });
+
+    test('promoteWorkToDone records to the ledger', () async {
+      await notifier.promoteWorkToDone(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.done),
+      );
+      expect(ledger.entries, [
+        const NotificationRowEntry(backendId: 'b1', sessionId: 's1'),
+      ]);
+    });
+
+    test('cancelWork evicts from the ledger', () async {
+      await notifier.showWork(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.working),
+      );
+      expect(ledger.entries, [
+        const NotificationRowEntry(backendId: 'b1', sessionId: 's1'),
+      ]);
+
+      await notifier.cancelWork(backendId: 'b1', sessionId: 's1');
+      expect(ledger.entries, isEmpty);
+    });
+
+    test('sweepStaleRows cancels rows for disabled and removed backends, preserving enabled', () async {
+      // Seed the ledger with rows from an enabled, a disabled, and a removed backend.
+      ledger.entries.addAll([
+        const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
+        const NotificationRowEntry(backendId: 'b_disabled', sessionId: 's2'),
+        const NotificationRowEntry(backendId: 'b_removed', sessionId: 's3'),
+      ]);
+
+      await notifier.sweepStaleRows(enabledBackendIds: {'b_enabled'});
+
+      // Only disabled and removed backends are cancelled at startup.
+      expect(plugin.cancelled, [
+        (id: workingNotificationId('b_disabled', 's2'), tag: 'b_disabled/s2'),
+        (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
+      ]);
+
+      // Only the enabled backend's row remains in the ledger.
+      expect(ledger.entries, [
+        const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
+      ]);
+    });
+  });
+}
+
+class _InMemoryLedger implements NotificationLedger {
+  final entries = <NotificationRowEntry>[];
+
+  @override
+  List<NotificationRowEntry> readEntries() => List.of(entries);
+
+  @override
+  void record({required String backendId, required String sessionId}) {
+    final entry = NotificationRowEntry(
+      backendId: backendId,
+      sessionId: sessionId,
+    );
+    if (!entries.contains(entry)) {
+      entries.add(entry);
+    }
+  }
+
+  @override
+  void remove({required String backendId, required String sessionId}) {
+    entries.remove(
+      NotificationRowEntry(backendId: backendId, sessionId: sessionId),
+    );
+  }
 }

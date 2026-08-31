@@ -80,8 +80,15 @@ class AppNotificationCenter {
   /// The foreground channel stream (in-app toasts).
   Stream<AppNotificationEvent> get foregroundEvents => _foreground.stream;
 
-  /// Stops folding; no further events are emitted.
+  /// Stops folding; cancels any ongoing rows posted by this center and
+  /// closes channels.
   void dispose() {
+    for (final sessionId in _applied.keys.toList()) {
+      unawaited(
+        _notifier.cancelWork(backendId: _backendId, sessionId: sessionId),
+      );
+    }
+    _applied.clear();
     unawaited(_subscription?.cancel());
     unawaited(_selectionSub?.cancel());
     unawaited(_foregroundSub?.cancel());

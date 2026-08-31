@@ -84,6 +84,12 @@ class BackendRegistryController {
 
   BackendRegistryState _state = const BackendRegistryState();
 
+  final Completer<void> _loadedCompleter = Completer<void>();
+
+  /// Resolves once the initial disk load completes (successfully or via
+  /// fallback).
+  Future<void> get loaded => _loadedCompleter.future;
+
   int _idCounter = 0;
 
   Future<void> _load() async {
@@ -112,6 +118,8 @@ class BackendRegistryController {
         activeId: seed.backends.first.id,
         errorMessage: error.toString(),
       );
+    } finally {
+      if (!_loadedCompleter.isCompleted) _loadedCompleter.complete();
     }
     _publish();
   }

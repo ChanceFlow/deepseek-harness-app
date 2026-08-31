@@ -601,5 +601,32 @@ void main() {
       expect(notifier.cancelled, isEmpty);
       expect(notifier.shown, isEmpty);
     });
+
+    test(
+      'disposing the center cancels all currently applied ongoing rows',
+      () async {
+        start([
+          _session('s2', title: 'Other', running: true),
+          _session('s3', title: 'Done session', completed: true),
+        ]);
+        await pumpEventQueue();
+        expect(notifier.shown, [
+          _decision('s2', state: WorkingSessionState.working, title: 'Other'),
+        ]);
+        expect(notifier.promoted, [
+          _decision(
+            's3',
+            state: WorkingSessionState.done,
+            title: 'Done session',
+          ),
+        ]);
+        expect(notifier.cancelled, isEmpty);
+
+        ongoingCenter.dispose();
+        await pumpEventQueue();
+
+        expect(notifier.cancelled, containsAll(<String>['s2', 's3']));
+      },
+    );
   });
 }
