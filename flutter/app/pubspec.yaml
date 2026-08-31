@@ -29,6 +29,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  fake_async: ^1.3.3  # test-only: deterministic debounce/cancel timing (session search)
   dartastic_opentelemetry: ^0.9.8  # test-only: in-memory OTel harness for telemetry instrumentation tests
 
 flutter:
