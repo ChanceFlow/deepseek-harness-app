@@ -178,6 +178,15 @@ void main() {
     expect(tester.getSize(segmentBoxes.at(0)).width, closeTo(32, 0.5));
     expect(tester.getSize(segmentBoxes.at(1)).width, closeTo(8, 0.5));
     expect(tester.getSize(segmentBoxes.at(2)).width, closeTo(80, 0.5));
+    // Every part carries the bar's full height: a loose Row cross-axis
+    // collapsed height-less boxes and painted nothing — the live
+    // colorless-bar regression this pins out.
+    for (final i in [0, 1, 2]) {
+      expect(
+        tester.getSize(segmentBoxes.at(i)).height,
+        kContextBreakdownBarHeight,
+      );
+    }
 
     // Segment colors map to stock M3 scheme roles.
     expect(segments[0].color, theme.colorScheme.outline); // System prompt
@@ -209,6 +218,7 @@ void main() {
       );
       expect(segmentBoxes, findsOneWidget);
       expect(tester.getSize(segmentBoxes).width, closeTo(120, 0.5));
+      expect(tester.getSize(segmentBoxes).height, kContextBreakdownBarHeight);
       expect(
         tester.widget<ColoredBox>(segmentBoxes).color,
         theme.colorScheme.outline,
@@ -249,6 +259,7 @@ void main() {
       );
       expect(segmentBoxes, findsOneWidget);
       expect(tester.getSize(segmentBoxes).width, closeTo(120, 0.5));
+      expect(tester.getSize(segmentBoxes).height, kContextBreakdownBarHeight);
 
       // Legend rows render because breakdown is non-null.
       expect(find.text('System prompt'), findsOneWidget);
@@ -326,12 +337,10 @@ void main() {
     // tools at 1.2px — the web `.segment` min-width 2px keeps each a
     // visible hairline instead of dropping it.
     expect(segmentBoxes, findsNWidgets(3));
-    for (final width in [
-      tester.getSize(segmentBoxes.at(0)).width,
-      tester.getSize(segmentBoxes.at(1)).width,
-      tester.getSize(segmentBoxes.at(2)).width,
-    ]) {
-      expect(width, greaterThanOrEqualTo(2.0));
+    for (final i in [0, 1, 2]) {
+      final size = tester.getSize(segmentBoxes.at(i));
+      expect(size.width, greaterThanOrEqualTo(2.0));
+      expect(size.height, kContextBreakdownBarHeight);
     }
   });
 
@@ -366,6 +375,14 @@ void main() {
     expect(colors, hasLength(2));
     expect(tester.getSize(segmentBoxes.at(0)).width, closeTo(12, 0.5));
     expect(tester.getSize(segmentBoxes.at(1)).width, closeTo(48, 0.5));
+    expect(
+      tester.getSize(segmentBoxes.at(0)).height,
+      kContextBreakdownBarHeight,
+    );
+    expect(
+      tester.getSize(segmentBoxes.at(1)).height,
+      kContextBreakdownBarHeight,
+    );
 
     // Legend rows display formatted token numbers with ~ prefix.
     expect(find.text('~0'), findsOneWidget);

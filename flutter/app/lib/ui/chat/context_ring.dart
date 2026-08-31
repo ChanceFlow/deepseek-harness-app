@@ -277,8 +277,13 @@ class _ContextRingState extends State<ContextRing> {
           children.add(const SizedBox(width: 1)); // `.bar` gap
         }
         children.add(
+          // Height is explicit: the Row's cross-axis constraint is loose,
+          // and a height-less box collapses the ColoredBox to zero —
+          // widths were right, paint was nothing (the live bar rendered
+          // as a pure track: the reported colorless bar, round two).
           SizedBox(
             width: width,
+            height: kContextBreakdownBarHeight,
             child: ColoredBox(color: tint),
           ),
         );
