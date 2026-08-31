@@ -17,7 +17,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 /// Pass [theme] to pump a surface under a specific [ColorScheme]: a test that
 /// pumps the same widget under two themes and reads the painted color back
 /// fails the moment the widget names a color instead of a role.
-Widget l10nApp({required Widget home, ThemeData? theme}) {
+Widget l10nApp({required Widget home, ThemeData? theme, Locale? locale}) {
   return MaterialApp(
     localizationsDelegates: const [
       AppLocalizations.delegate,
@@ -26,6 +26,7 @@ Widget l10nApp({required Widget home, ThemeData? theme}) {
       GlobalCupertinoLocalizations.delegate,
     ],
     supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
     theme: theme,
     home: home,
   );

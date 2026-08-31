@@ -521,7 +521,7 @@ void main() {
             toolName: 'bash',
             reason: 'Would run a command',
           ),
-          TimelineCompaction(id: 'c1', shadowedCount: 3),
+          TimelineCompaction(id: 'c1', shadowedCount: 3, shadowedTokens: 150),
           TimelineError(id: 'e1', message: 'boom'),
         ],
       ),
@@ -556,7 +556,10 @@ void main() {
     expect(find.text('Message the agent'), findsNothing);
     // Web compaction row: dim title + count fragment.
     expect(find.text('Context compacted'), findsOneWidget);
-    expect(find.text('Compacted 3 history items'), findsOneWidget);
+    expect(
+      find.text('Compacted 3 history items (~150 tokens)'),
+      findsOneWidget,
+    );
     expect(find.text('boom'), findsOneWidget);
     // Jobs live in the session-header pill now, not the timeline.
     expect(find.text('Background jobs'), findsNothing);

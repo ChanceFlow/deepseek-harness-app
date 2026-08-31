@@ -2143,11 +2143,29 @@ abstract class AppLocalizations {
   /// **'Context compacted'**
   String get contextCompacted;
 
-  /// Compaction notice line count.
+  /// Running state summary for /compact command.
   ///
   /// In en, this message translates to:
-  /// **'Compacted {count} history items'**
-  String compactedHistoryCount(int count);
+  /// **'Compacting context…'**
+  String get compactionRunning;
+
+  /// Completed compaction caption with items and tokens counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Compacted {items} history items (~{tokens} tokens)'**
+  String compactionCompleted(int items, int tokens);
+
+  /// Fallback summary label when compaction counts are missing but summary is expandable.
+  ///
+  /// In en, this message translates to:
+  /// **'View compaction summary'**
+  String get compactionViewSummary;
+
+  /// Fallback summary label when both compaction counts and summary are unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Compaction summary unavailable'**
+  String get compactionSummaryUnavailable;
 
   /// No description provided for @recallLabel.
   ///

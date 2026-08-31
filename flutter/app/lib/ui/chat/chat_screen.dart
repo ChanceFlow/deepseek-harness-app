@@ -1704,8 +1704,8 @@ class TimelineRow extends StatelessWidget {
             : () => onAction(ForkSession(value.sessionId, atSeq: value.seq)),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
-      TimelineCompaction(:final shadowedCount) => CompactionRow(
-        shadowedCount: shadowedCount,
+      TimelineCompaction() => CompactionRow(
+        compaction: item as TimelineCompaction,
       ),
       TimelineCommand() => CommandRow(command: item as TimelineCommand),
       TimelineContextInjection() => ContextInjectionRow(
@@ -5330,46 +5330,89 @@ class TurnBoundaryRow extends StatelessWidget {
 }
 
 /// Context-compaction marker — port of the web CompactionItem: one dim
-/// 24px row (leading context icon + title + count), a boundary notice
-/// rather than conversation content.
+/// row (leading context icon + title + count/summary caption), expandable to
+/// markdown body when summary text is present.
 class CompactionRow extends StatelessWidget {
-  const CompactionRow({required this.shadowedCount, super.key});
+  const CompactionRow({required this.compaction, super.key});
 
-  final int shadowedCount;
+  final TimelineCompaction compaction;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return SizedBox(
-      height: 24,
-      child: Row(
+    final expandable = compaction.isExpandable;
+
+    final String caption;
+    if (compaction.shadowedCount != null && compaction.shadowedTokens != null) {
+      caption = l10n.compactionCompleted(
+        compaction.shadowedCount!,
+        compaction.shadowedTokens!,
+      );
+    } else if (expandable) {
+      caption = l10n.compactionViewSummary;
+    } else {
+      caption = l10n.compactionSummaryUnavailable;
+    }
+
+    return IconTheme.merge(
+      data: const IconThemeData(size: 18),
+      child: ExpansionTile(
+        enabled: expandable,
+        showTrailingIcon: expandable,
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 28,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        title: Row(
+          children: [
+            Icon(
+              Icons.layers_outlined,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              l10n.contextCompacted,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            Container(
+              width: 2,
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: scheme.outline,
+                shape: BoxShape.circle,
+              ),
+            ),
+            Flexible(
+              child: Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
         children: [
-          Icon(Icons.layers_outlined, size: 14, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            l10n.contextCompacted,
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-          Container(
-            width: 2,
-            height: 2,
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: scheme.outline,
-              shape: BoxShape.circle,
+          if (expandable && compaction.summary != null)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: 20,
+                right: 8,
+                top: 2,
+                bottom: 4,
+              ),
+              child: MarkdownText(text: compaction.summary!),
             ),
-          ),
-          Flexible(
-            child: Text(
-              l10n.compactedHistoryCount(shadowedCount),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
         ],
       ),
     );
@@ -5426,11 +5469,17 @@ class _CommandRowState extends State<CommandRow>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final command = widget.command;
     final status = command.status;
     final running = status == CommandRunStatus.running;
     final failed = status == CommandRunStatus.failed;
     final text = command.text;
+    final summaryText = switch (status) {
+      CommandRunStatus.running =>
+        command.name == 'compact' ? l10n.compactionRunning : text,
+      CommandRunStatus.success || CommandRunStatus.failed => text,
+    };
     return ClipRect(
       child: SweepHighlight(
         controller: running && !MediaQuery.disableAnimationsOf(context)
@@ -5459,7 +5508,7 @@ class _CommandRowState extends State<CommandRow>
                       : scheme.onSurface,
                 ),
               ),
-              if (text != null && text.isNotEmpty) ...[
+              if (summaryText != null && summaryText.isNotEmpty) ...[
                 Container(
                   width: 2,
                   height: 2,
@@ -5471,7 +5520,7 @@ class _CommandRowState extends State<CommandRow>
                 ),
                 Flexible(
                   child: Text(
-                    text,
+                    summaryText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(

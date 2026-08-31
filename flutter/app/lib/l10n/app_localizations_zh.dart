@@ -1203,9 +1203,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contextCompacted => '上下文已压缩';
 
   @override
-  String compactedHistoryCount(int count) {
-    return '已压缩 $count 条历史记录';
+  String get compactionRunning => '正在压缩…';
+
+  @override
+  String compactionCompleted(int items, int tokens) {
+    return '已压缩 $items 条历史记录（约 $tokens tokens）';
   }
+
+  @override
+  String get compactionViewSummary => '点击查看压缩摘要';
+
+  @override
+  String get compactionSummaryUnavailable => '压缩摘要不可用';
 
   @override
   String get recallLabel => '跨会话召回';

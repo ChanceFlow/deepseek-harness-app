@@ -1234,9 +1234,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contextCompacted => 'Context compacted';
 
   @override
-  String compactedHistoryCount(int count) {
-    return 'Compacted $count history items';
+  String get compactionRunning => 'Compacting context…';
+
+  @override
+  String compactionCompleted(int items, int tokens) {
+    return 'Compacted $items history items (~$tokens tokens)';
   }
+
+  @override
+  String get compactionViewSummary => 'View compaction summary';
+
+  @override
+  String get compactionSummaryUnavailable => 'Compaction summary unavailable';
 
   @override
   String get recallLabel => 'Session recall';

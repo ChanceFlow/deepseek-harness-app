@@ -194,12 +194,73 @@ class TimelineReducer {
     _items.add(TimelineTurnBoundary(turn));
   }
 
-  /// A summary shadows its range; the marker keeps only the count.
+  /// A summary shadows its range; the marker captures counts and optional summary.
   void _appendCompaction(JsonMap event) {
-    final shadowed =
-        asJsonArray(_eventData(event)['shadowedSeqs'])?.length ?? 0;
+    final data = _eventData(event);
+    final int? shadowedCount;
+    if (data.containsKey('shadowedSeqs')) {
+      final raw = data['shadowedSeqs'];
+      if (raw is! List) {
+        throw const FormatException(
+          'compaction/summary "shadowedSeqs" must be an array',
+        );
+      }
+      for (final item in raw) {
+        if (item is! int || item < 0) {
+          throw const FormatException(
+            'compaction/summary "shadowedSeqs" entries must be non-negative integers',
+          );
+        }
+      }
+      shadowedCount = raw.length;
+    } else {
+      shadowedCount = null;
+    }
+
+    final int? shadowedTokens;
+    if (data.containsKey('shadowedTokenCount')) {
+      final raw = data['shadowedTokenCount'];
+      if (raw is! num ||
+          raw < 0 ||
+          (raw is double && raw != raw.truncateToDouble())) {
+        throw const FormatException(
+          'compaction/summary "shadowedTokenCount" must be a non-negative integer',
+        );
+      }
+      shadowedTokens = raw.toInt();
+    } else {
+      shadowedTokens = null;
+    }
+
+    final String? summaryText;
+    if (data.containsKey('summary')) {
+      final raw = data['summary'];
+      if (raw is! List) {
+        throw const FormatException(
+          'compaction/summary "summary" must be an array',
+        );
+      }
+      final buffer = StringBuffer();
+      for (final block in raw) {
+        final blockObj = asJsonObject(block);
+        if (blockObj != null && wireType(blockObj) == 'text') {
+          final text = wireString(blockObj, 'text');
+          if (text != null) buffer.write(text);
+        }
+      }
+      final str = buffer.toString();
+      summaryText = str.trim().isEmpty ? null : str;
+    } else {
+      summaryText = null;
+    }
+
     _items.add(
-      TimelineCompaction(id: 'compaction:$_lastSeq', shadowedCount: shadowed),
+      TimelineCompaction(
+        id: 'compaction:$_lastSeq',
+        shadowedCount: shadowedCount,
+        shadowedTokens: shadowedTokens,
+        summary: summaryText,
+      ),
     );
   }
 
@@ -270,6 +331,16 @@ class TimelineReducer {
     // never a user bubble.
     final source = asJsonObject(data['source']);
     final kind = wireString(source ?? const <String, Object?>{}, 'kind');
+    if (kind == 'plugin' &&
+        wireString(source ?? const <String, Object?>{}, 'plugin') ==
+            'compact' &&
+        wireString(source ?? const <String, Object?>{}, 'compactionId') !=
+            null) {
+      // Compaction replacement checkpoint user/message: written for model
+      // history, not rendered as context injection (compaction/summary
+      // already rendered the marker).
+      return;
+    }
     if (kind != 'user') {
       _items.add(_contextInjection(messageId, data, source, kind));
       return;

@@ -597,7 +597,10 @@
   "turnHeader": "Turn {turn} · {count, plural, =1{1 message} other{{count} messages}} · {toolCount, plural, =1{1 tool} other{{toolCount} tools}}",
   "turnFailedCount": "{count} failed",
   "contextCompacted": "Context compacted",
-  "compactedHistoryCount": "Compacted {count} history items",
+  "compactionRunning": "Compacting context…",
+  "compactionCompleted": "Compacted {items} history items (~{tokens} tokens)",
+  "compactionViewSummary": "View compaction summary",
+  "compactionSummaryUnavailable": "Compaction summary unavailable",
   "recallLabel": "Session recall",
   "contextInjectionLabel": "Context injection",
   "chatGoalPhaseActive": "Active",
@@ -1102,13 +1105,25 @@
       }
     }
   },
-  "@compactedHistoryCount": {
-    "description": "Compaction notice line count.",
+  "@compactionRunning": {
+    "description": "Running state summary for /compact command."
+  },
+  "@compactionCompleted": {
+    "description": "Completed compaction caption with items and tokens counts.",
     "placeholders": {
-      "count": {
+      "items": {
+        "type": "int"
+      },
+      "tokens": {
         "type": "int"
       }
     }
+  },
+  "@compactionViewSummary": {
+    "description": "Fallback summary label when compaction counts are missing but summary is expandable."
+  },
+  "@compactionSummaryUnavailable": {
+    "description": "Fallback summary label when both compaction counts and summary are unavailable."
   },
   "parentSession": "Parent session",
   "addWorkspace": "Add workspace",
