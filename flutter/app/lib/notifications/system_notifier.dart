@@ -25,6 +25,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'notification_events.dart';
 import 'notification_key.dart';
+import 'notification_ledger.dart';
 import 'working_sessions_fold.dart';
 
 /// Where a notification tap should take the user.
@@ -67,8 +68,12 @@ final class NotificationTarget {
 class SystemNotifier {
   /// [plugin] is the injection seam for tests and headless hosts; production
   /// wiring (main, DI) leaves it null and gets the real plugin.
-  SystemNotifier({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  SystemNotifier({
+    FlutterLocalNotificationsPlugin? plugin,
+    NotificationLedger? ledger,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin() {
+    _ledger = ledger;
+  }
 
   /// The silent, low-importance channel hosting ongoing work notifications.
   static const String _workingChannelId = 'working';
@@ -78,8 +83,15 @@ class SystemNotifier {
   static const String _turnsChannelId = 'turns';
 
   final FlutterLocalNotificationsPlugin _plugin;
+  NotificationLedger? _ledger;
   bool _initialized = false;
   int _nextId = 1;
+
+  /// Attaches a [NotificationLedger] to record posted ongoing rows across
+  /// app restarts.
+  void attachLedger(NotificationLedger ledger) {
+    _ledger = ledger;
+  }
 
   /// Tap and launch-destination notifications, emitted when the user
   /// interacts with a posted notification. Fed by the plugin's response
@@ -199,7 +211,10 @@ class SystemNotifier {
   Future<void> showWork({
     required String backendId,
     required WorkingSessionDecision work,
-  }) => _postOngoing(backendId: backendId, work: work);
+  }) async {
+    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
+    await _postOngoing(backendId: backendId, work: work);
+  }
 
   /// Updates an already-armed ongoing notification in place: the same
   /// (id, tag) with `onlyAlertOnce` keeps it silent and non-bumping as the
@@ -207,7 +222,10 @@ class SystemNotifier {
   Future<void> updateWorkBody({
     required String backendId,
     required WorkingSessionDecision work,
-  }) => _postOngoing(backendId: backendId, work: work);
+  }) async {
+    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
+    await _postOngoing(backendId: backendId, work: work);
+  }
 
   /// Replaces the session's ongoing notification — under the same id and
   /// tag — with a non-ongoing, swipe-away, auto-canceling completion notice
@@ -218,6 +236,7 @@ class SystemNotifier {
     required String backendId,
     required WorkingSessionDecision work,
   }) async {
+    _ledger?.record(backendId: backendId, sessionId: work.sessionId);
     if (kDebugMode && !_initialized) return;
     await _postWork(
       backendId: backendId,
@@ -243,6 +262,7 @@ class SystemNotifier {
     required String backendId,
     required String sessionId,
   }) async {
+    _ledger?.remove(backendId: backendId, sessionId: sessionId);
     if (kDebugMode && !_initialized) return;
     try {
       await _plugin.cancel(
@@ -251,6 +271,24 @@ class SystemNotifier {
       );
     } catch (_) {
       // Notification failures never surface in the chat UI.
+    }
+  }
+
+  /// Sweeps the posted-rows ledger at startup: cancels any ongoing/done
+  /// notification belonging to a backend that is NOT in [enabledBackendIds]
+  /// (disabled or removed backends) so orphaned rows do not survive process
+  /// restarts.
+  Future<void> sweepStaleRows({required Set<String> enabledBackendIds}) async {
+    final ledger = _ledger;
+    if (ledger == null) return;
+    final entries = ledger.readEntries();
+    for (final entry in entries) {
+      if (!enabledBackendIds.contains(entry.backendId)) {
+        await cancelWork(
+          backendId: entry.backendId,
+          sessionId: entry.sessionId,
+        );
+      }
     }
   }
 
