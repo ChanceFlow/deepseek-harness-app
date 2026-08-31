@@ -275,7 +275,13 @@ void main() {
       await pumpEventQueue();
       controller.onAction(const LoadSubagentBranch('child-1'));
       await pumpEventQueue();
-      controller.onAction(const OpenChild('grand-1', SubagentMode.continuable));
+      controller.onAction(
+        const OpenChild(
+          'grand-1',
+          SubagentMode.continuable,
+          parentSessionId: 'child-1',
+        ),
+      );
       await pumpEventQueue();
 
       // The root tree reports its parent online; grand-1's owning level
@@ -284,6 +290,242 @@ void main() {
       expect(
         controller.state.childReadOnlyReason,
         SubagentReadOnlyReason.parentUnavailable,
+      );
+    },
+  );
+
+  test(
+    'opening a nested (grandchild) row requests history under direct parent id',
+    () async {
+      const rootCatalog = SubagentCatalog(
+        parentSessionId: 'p1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'child-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'inactive',
+            hasChildren: true,
+          ),
+        ],
+      );
+      const branchCatalog = SubagentCatalog(
+        parentSessionId: 'child-1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'grand-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+          ),
+        ],
+      );
+      final repository = _FakeRepository(catalog: rootCatalog)
+        ..branchCatalog = (parent) =>
+            parent == 'child-1' ? branchCatalog : null;
+      final controller = SubagentController(repository, initialSessionId: 'p1');
+      addTearDown(controller.dispose);
+
+      repository.sessions.value = <SessionSummary>[
+        _parent,
+        _childOf('child-1'),
+      ];
+      await pumpEventQueue();
+      controller.onAction(const LoadSubagentBranch('child-1'));
+      await pumpEventQueue();
+      controller.onAction(
+        const OpenChild(
+          'grand-1',
+          SubagentMode.continuable,
+          parentSessionId: 'child-1',
+        ),
+      );
+      await pumpEventQueue();
+
+      final call = repository.historyRequests.single;
+      expect(
+        (call.parentSessionId, call.childSessionId, call.mode),
+        ('child-1', 'grand-1', SubagentMode.continuable),
+      );
+      expect(controller.state.selectedChildId, 'grand-1');
+      expect(controller.state.selectedChildParentId, 'child-1');
+    },
+  );
+
+  test(
+    'prompt and interrupt on a nested (grandchild) address the direct parent',
+    () async {
+      const rootCatalog = SubagentCatalog(
+        parentSessionId: 'p1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'child-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'inactive',
+            hasChildren: true,
+          ),
+        ],
+      );
+      const branchCatalog = SubagentCatalog(
+        parentSessionId: 'child-1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'grand-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+          ),
+        ],
+      );
+      final repository = _FakeRepository(catalog: rootCatalog)
+        ..branchCatalog = (parent) =>
+            parent == 'child-1' ? branchCatalog : null;
+      final controller = SubagentController(repository, initialSessionId: 'p1');
+      addTearDown(controller.dispose);
+
+      repository.sessions.value = <SessionSummary>[
+        _parent,
+        _childOf('child-1'),
+      ];
+      await pumpEventQueue();
+      controller.onAction(const LoadSubagentBranch('child-1'));
+      await pumpEventQueue();
+      controller.onAction(
+        const OpenChild(
+          'grand-1',
+          SubagentMode.continuable,
+          parentSessionId: 'child-1',
+        ),
+      );
+      await pumpEventQueue();
+
+      // Sending a prompt uses the direct parent 'child-1', NOT root 'p1'.
+      controller.onAction(const SendSubagentPrompt('hello grandchild'));
+      await pumpEventQueue();
+      final promptCall = repository.promptRequests.single;
+      expect(
+        (
+          promptCall.parentSessionId,
+          promptCall.childSessionId,
+          promptCall.text,
+        ),
+        ('child-1', 'grand-1', 'hello grandchild'),
+      );
+      // History reload following prompt also uses direct parent 'child-1'.
+      expect(
+        repository.historyRequests
+            .map((c) => (c.parentSessionId, c.childSessionId, c.mode))
+            .toList(),
+        <(String, String, SubagentMode)>[
+          ('child-1', 'grand-1', SubagentMode.continuable),
+          ('child-1', 'grand-1', SubagentMode.continuable),
+        ],
+      );
+
+      // Interrupt uses the direct parent 'child-1', NOT root 'p1'.
+      controller.onAction(
+        const InterruptSubagent('grand-1', parentSessionId: 'child-1'),
+      );
+      await pumpEventQueue();
+      final interruptCall = repository.interruptRequests.single;
+      expect(
+        (interruptCall.parentSessionId, interruptCall.childSessionId),
+        ('child-1', 'grand-1'),
+      );
+      // Interrupt reloads the branch catalog for 'child-1'.
+      expect(repository.catalogRequests, contains('child-1'));
+    },
+  );
+
+  test(
+    're-opening a different child rebinds both child and direct parent',
+    () async {
+      const rootCatalog = SubagentCatalog(
+        parentSessionId: 'p1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'child-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'inactive',
+            hasChildren: true,
+          ),
+          SubagentEntry(
+            id: 'child-2',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+          ),
+        ],
+      );
+      const branchCatalog = SubagentCatalog(
+        parentSessionId: 'child-1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'grand-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+          ),
+        ],
+      );
+      final repository = _FakeRepository(catalog: rootCatalog)
+        ..branchCatalog = (parent) =>
+            parent == 'child-1' ? branchCatalog : null;
+      final controller = SubagentController(repository, initialSessionId: 'p1');
+      addTearDown(controller.dispose);
+
+      repository.sessions.value = <SessionSummary>[
+        _parent,
+        _childOf('child-1'),
+        _childOf('child-2'),
+      ];
+      await pumpEventQueue();
+      controller.onAction(const LoadSubagentBranch('child-1'));
+      await pumpEventQueue();
+
+      // Open grandchild first: direct parent is 'child-1'
+      controller.onAction(
+        const OpenChild(
+          'grand-1',
+          SubagentMode.continuable,
+          parentSessionId: 'child-1',
+        ),
+      );
+      await pumpEventQueue();
+      expect(controller.state.selectedChildId, 'grand-1');
+      expect(controller.state.selectedChildParentId, 'child-1');
+
+      // Now open depth-1 child-2: direct parent is 'p1'
+      controller.onAction(
+        const OpenChild(
+          'child-2',
+          SubagentMode.continuable,
+          parentSessionId: 'p1',
+        ),
+      );
+      await pumpEventQueue();
+      expect(controller.state.selectedChildId, 'child-2');
+      expect(controller.state.selectedChildParentId, 'p1');
+
+      // Send prompt targets 'p1', 'child-2'
+      controller.onAction(const SendSubagentPrompt('for child 2'));
+      await pumpEventQueue();
+      final promptCall = repository.promptRequests.single;
+      expect(
+        (
+          promptCall.parentSessionId,
+          promptCall.childSessionId,
+          promptCall.text,
+        ),
+        ('p1', 'child-2', 'for child 2'),
       );
     },
   );
@@ -388,6 +630,21 @@ class _HistoryCall {
   final SubagentMode mode;
 }
 
+class _PromptCall {
+  _PromptCall(this.parentSessionId, this.childSessionId, this.text);
+
+  final String parentSessionId;
+  final String childSessionId;
+  final String text;
+}
+
+class _InterruptCall {
+  _InterruptCall(this.parentSessionId, this.childSessionId);
+
+  final String parentSessionId;
+  final String childSessionId;
+}
+
 class _FakeRepository implements ChatRepository {
   _FakeRepository({required this.catalog});
 
@@ -397,6 +654,8 @@ class _FakeRepository implements ChatRepository {
       AppStateStream<List<SessionSummary>>(const <SessionSummary>[]);
   final List<String> catalogRequests = <String>[];
   final List<_HistoryCall> historyRequests = <_HistoryCall>[];
+  final List<_PromptCall> promptRequests = <_PromptCall>[];
+  final List<_InterruptCall> interruptRequests = <_InterruptCall>[];
   Object? failCatalogWith;
   Object? failHistoryWith;
 
@@ -421,6 +680,24 @@ class _FakeRepository implements ChatRepository {
     final failure = failHistoryWith;
     if (failure != null) throw failure;
     return const <TimelineItem>[];
+  }
+
+  @override
+  Future<String> sendSubagentPrompt(
+    String parentSessionId,
+    String childSessionId,
+    String text,
+  ) async {
+    promptRequests.add(_PromptCall(parentSessionId, childSessionId, text));
+    return 'msg-1';
+  }
+
+  @override
+  Future<void> interruptSubagent(
+    String parentSessionId,
+    String childSessionId,
+  ) async {
+    interruptRequests.add(_InterruptCall(parentSessionId, childSessionId));
   }
 
   @override

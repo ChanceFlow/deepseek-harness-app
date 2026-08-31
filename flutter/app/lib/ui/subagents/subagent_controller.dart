@@ -67,6 +67,10 @@ class SubagentController {
   final Set<String> _branchFailures = <String>{};
   String? _selectedChildId;
 
+  /// Direct parent session id of the opened child (web
+  /// `SubagentAddress.parentSessionId`).
+  String? _selectedChildParentId;
+
   /// The opened child's catalog mode; `subagent.history` must request the
   /// child under its own mode (host `subagent-not-found` on mismatch).
   SubagentMode? _selectedChildMode;
@@ -118,6 +122,7 @@ class SubagentController {
       branchCatalogs: Map.unmodifiable(_branchCatalogs),
       branchFailures: Set.unmodifiable(_branchFailures),
       selectedChildId: _selectedChildId,
+      selectedChildParentId: _selectedChildParentId,
       childTimeline: _childTimeline,
       childPlan: _childPlan,
       isChildLoading: _isChildLoading,
@@ -132,11 +137,11 @@ class SubagentController {
       case SelectParent():
         _selectParent(action.sessionId);
       case OpenChild():
-        _openChild(action.childSessionId, action.mode);
+        _openChild(action.childSessionId, action.mode, action.parentSessionId);
       case SendSubagentPrompt():
         _sendPrompt(action.text);
       case InterruptSubagent():
-        _interrupt(action.childSessionId);
+        _interrupt(action.childSessionId, action.parentSessionId);
       case LoadSubagentBranch():
         unawaited(_loadBranch(action.childSessionId));
       case CloseChildView():
@@ -283,6 +288,7 @@ class SubagentController {
     if (_selectedParentId == sessionId) return;
     _selectedParentId = sessionId;
     _selectedChildId = null;
+    _selectedChildParentId = null;
     _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
     _isChildLoading = false;
@@ -298,10 +304,15 @@ class SubagentController {
     unawaited(_loadCatalog(sessionId));
   }
 
-  void _openChild(String childSessionId, SubagentMode mode) {
-    final parentId = _selectedParentId;
-    if (parentId == null) return;
+  void _openChild(
+    String childSessionId,
+    SubagentMode mode, [
+    String? parentSessionId,
+  ]) {
+    final directParentId = parentSessionId ?? _selectedParentId;
+    if (directParentId == null) return;
     _selectedChildId = childSessionId;
+    _selectedChildParentId = directParentId;
     _selectedChildMode = mode;
     _childTimeline = const <TimelineItem>[];
     _bindChildPlan(childSessionId);
@@ -314,7 +325,11 @@ class SubagentController {
       _publish();
       try {
         final result = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(parentId, childSessionId, mode),
+          () => _repository.loadSubagentHistory(
+            directParentId,
+            childSessionId,
+            mode,
+          ),
         );
         if (seq != _childLoadSeq) return;
         if (result == null) {
@@ -337,6 +352,7 @@ class SubagentController {
   void _closeChild() {
     if (_selectedChildId == null) return;
     _selectedChildId = null;
+    _selectedChildParentId = null;
     _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
     _isChildLoading = false;
@@ -361,20 +377,24 @@ class SubagentController {
   }
 
   void _sendPrompt(String text) {
-    final parentId = _selectedParentId;
+    final directParentId = _selectedChildParentId ?? _selectedParentId;
     final childId = _selectedChildId;
     final mode = _selectedChildMode;
-    if (parentId == null || childId == null || mode == null) return;
+    if (directParentId == null || childId == null || mode == null) return;
     if (text.trim().isEmpty) return;
     unawaited(() async {
       _isSendingChild = true;
       _publish();
       try {
         await _runCatchingForUi(
-          () => _repository.sendSubagentPrompt(parentId, childId, text.trim()),
+          () => _repository.sendSubagentPrompt(
+            directParentId,
+            childId,
+            text.trim(),
+          ),
         );
         final reloaded = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(parentId, childId, mode),
+          () => _repository.loadSubagentHistory(directParentId, childId, mode),
         );
         if (reloaded != null && _selectedChildId == childId) {
           _childTimeline = reloaded;
@@ -386,14 +406,19 @@ class SubagentController {
     }());
   }
 
-  void _interrupt(String childSessionId) {
-    final parentId = _selectedParentId;
-    if (parentId == null) return;
+  void _interrupt(String childSessionId, [String? parentSessionId]) {
+    final directParentId =
+        parentSessionId ?? _selectedChildParentId ?? _selectedParentId;
+    if (directParentId == null) return;
     unawaited(() async {
       await _runCatchingForUi(
-        () => _repository.interruptSubagent(parentId, childSessionId),
+        () => _repository.interruptSubagent(directParentId, childSessionId),
       );
-      await _loadCatalog(parentId);
+      if (directParentId == _selectedParentId) {
+        await _loadCatalog(directParentId);
+      } else if (_branchCatalogs.containsKey(directParentId)) {
+        await _loadBranch(directParentId);
+      }
     }());
   }
 

@@ -207,7 +207,15 @@ class _SubagentScreenState extends State<SubagentScreen> {
               IconButton(
                 tooltip: l10n.stopTooltip,
                 icon: const Icon(Icons.stop_circle_outlined),
-                onPressed: () => widget.onAction(InterruptSubagent(childId)),
+                onPressed: () => widget.onAction(
+                  InterruptSubagent(
+                    childId,
+                    parentSessionId:
+                        uiState.selectedChildCatalog?.parentSessionId ??
+                        uiState.selectedChildParentId ??
+                        uiState.selectedParentId,
+                  ),
+                ),
               ),
           ],
         ),
@@ -543,7 +551,15 @@ class _CatalogBranch extends StatelessWidget {
                 // child rows with a required mode, so only a row lacking
                 // one — impossible past fail-loud decode — stays closed.
                 final mode = entry.mode;
-                if (mode != null) onAction(OpenChild(entry.id, mode));
+                if (mode != null) {
+                  onAction(
+                    OpenChild(
+                      entry.id,
+                      mode,
+                      parentSessionId: catalog.parentSessionId,
+                    ),
+                  );
+                }
               },
               onToggleBranch: entry.hasChildren
                   ? () => onToggleBranch(entry.id)

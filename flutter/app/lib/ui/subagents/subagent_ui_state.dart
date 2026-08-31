@@ -31,6 +31,7 @@ final class SubagentUiState {
     this.branchCatalogs = const <String, SubagentCatalog>{},
     this.branchFailures = const <String>{},
     this.selectedChildId,
+    this.selectedChildParentId,
     this.childTimeline = const <TimelineItem>[],
     this.childPlan,
     this.isChildLoading = false,
@@ -51,6 +52,11 @@ final class SubagentUiState {
   final Set<String> branchFailures;
 
   final String? selectedChildId;
+
+  /// Direct parent session id of the opened child (web
+  /// `SubagentAddress.parentSessionId`).
+  final String? selectedChildParentId;
+
   final List<TimelineItem> childTimeline;
 
   /// Plan projection of the opened child (the composer plan seat on the
@@ -68,6 +74,17 @@ final class SubagentUiState {
   SubagentCatalog? get selectedChildCatalog {
     final id = selectedChildId;
     if (id == null) return null;
+    final parentId = selectedChildParentId;
+    if (parentId != null) {
+      if (catalog.parentSessionId == parentId &&
+          catalog.entries.any((entry) => entry.id == id)) {
+        return catalog;
+      }
+      final branch = branchCatalogs[parentId];
+      if (branch != null && branch.entries.any((entry) => entry.id == id)) {
+        return branch;
+      }
+    }
     if (catalog.entries.any((entry) => entry.id == id)) return catalog;
     for (final branch in branchCatalogs.values) {
       if (branch.entries.any((entry) => entry.id == id)) return branch;
@@ -132,7 +149,7 @@ final class SelectParent extends SubagentAction {
 }
 
 final class OpenChild extends SubagentAction {
-  const OpenChild(this.childSessionId, this.mode);
+  const OpenChild(this.childSessionId, this.mode, {this.parentSessionId});
 
   final String childSessionId;
 
@@ -141,14 +158,20 @@ final class OpenChild extends SubagentAction {
   /// the durable entry and answers a mismatch with `subagent-not-found`.
   final SubagentMode mode;
 
+  /// Direct parent session id that produced the catalog entry
+  /// (web `SubagentAddress.parentSessionId`). When omitted, controller
+  /// falls back to the selected parent id for depth-1 parity.
+  final String? parentSessionId;
+
   @override
   bool operator ==(Object other) =>
       other is OpenChild &&
       other.childSessionId == childSessionId &&
-      other.mode == mode;
+      other.mode == mode &&
+      other.parentSessionId == parentSessionId;
 
   @override
-  int get hashCode => Object.hash(childSessionId, mode);
+  int get hashCode => Object.hash(childSessionId, mode, parentSessionId);
 }
 
 final class SendSubagentPrompt extends SubagentAction {
@@ -165,16 +188,22 @@ final class SendSubagentPrompt extends SubagentAction {
 }
 
 final class InterruptSubagent extends SubagentAction {
-  const InterruptSubagent(this.childSessionId);
+  const InterruptSubagent(this.childSessionId, {this.parentSessionId});
 
   final String childSessionId;
 
-  @override
-  bool operator ==(Object other) =>
-      other is InterruptSubagent && other.childSessionId == childSessionId;
+  /// Direct parent session id that produced the catalog entry
+  /// (web `SubagentAddress.parentSessionId`).
+  final String? parentSessionId;
 
   @override
-  int get hashCode => childSessionId.hashCode;
+  bool operator ==(Object other) =>
+      other is InterruptSubagent &&
+      other.childSessionId == childSessionId &&
+      other.parentSessionId == parentSessionId;
+
+  @override
+  int get hashCode => Object.hash(childSessionId, parentSessionId);
 }
 
 /// Load (or retry) the catalog of one expanded branch node — the child
