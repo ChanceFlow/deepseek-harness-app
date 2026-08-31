@@ -500,22 +500,30 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         // `.fade` continuation hint rides as EdgeFade: the list
         // dissolves into the panel surface at its own edge, so no
         // overlay band reads as a stuck-on banner the row accents
-        // bleed through.
-        child: ScrollConfiguration(
-          behavior: _SidebarScrollBehavior(glowColor: scheme.outlineVariant),
-          child: EdgeFade(
-            surface: scheme.surfaceContainerLow,
-            child: _queryController.text.trim().isEmpty
-                ? _buildSessionTree(
-                    context,
-                    scheme,
-                    currentGroupKeyOf(
-                      widget.sessions,
-                      widget.workspaces,
-                      widget.selectedSessionId,
-                    ),
-                  )
-                : _buildSearchResults(context, scheme),
+        // bleed through. A clipped transparency Material gives the list
+        // its own ink host so ancestor ListTile fills cannot bleed
+        // past the viewport boundaries on scroll.
+        child: EdgeFade(
+          surface: scheme.surfaceContainerLow,
+          child: Material(
+            type: MaterialType.transparency,
+            clipBehavior: Clip.hardEdge,
+            child: ScrollConfiguration(
+              behavior: _SidebarScrollBehavior(
+                glowColor: scheme.outlineVariant,
+              ),
+              child: _queryController.text.trim().isEmpty
+                  ? _buildSessionTree(
+                      context,
+                      scheme,
+                      currentGroupKeyOf(
+                        widget.sessions,
+                        widget.workspaces,
+                        widget.selectedSessionId,
+                      ),
+                    )
+                  : _buildSearchResults(context, scheme),
+            ),
           ),
         ),
       ),

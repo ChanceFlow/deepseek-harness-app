@@ -584,10 +584,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           // into the surface at its bottom edge (a dstIn mask), so no
           // overlay band sits above the rows — an accent row passing
           // the edge fades with its own pixels, never through a film.
+          // Saturated ListTile fills are bounded by a region-local
+          // clipped transparent Material.
           Expanded(
             child: EdgeFade(
               surface: scheme.surfaceContainerLow,
-              child: results,
+              child: Material(
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: results,
+              ),
             ),
           ),
       ],

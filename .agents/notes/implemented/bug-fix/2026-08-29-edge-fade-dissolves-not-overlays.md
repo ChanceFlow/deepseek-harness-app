@@ -53,4 +53,7 @@ scroll region (tree or search-result list) in `EdgeFade` instead.
   rest of the panel.
 - Widget evidence: the scroll region in both screens sits inside a
   `ShaderMask` with `blendMode: BlendMode.dstIn`, and the overlay band
-  form is gone from the tree.
+  form is gone from the tree. (Note: unclipped `ListTile` ancestor `Ink`
+  fills that escaped the viewport boundary during upward scroll are separately
+  bounded by a region-local clipped `Material` in
+  [2026-08-31-sidebar-ink-host-clip.md](2026-08-31-sidebar-ink-host-clip.md).)

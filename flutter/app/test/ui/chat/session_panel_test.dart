@@ -24,6 +24,7 @@ import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/session_panel.dart';
 import 'package:app/ui/root/app_destination.dart';
+import 'package:app/ui/shared/edge_fade.dart';
 import 'package:app/ui/shared/session_tree.dart';
 import 'package:app/ui/theme/theme.dart';
 
@@ -145,6 +146,39 @@ void main() {
         ),
         findsWidgets,
       );
+    },
+  );
+
+  testWidgets(
+    'the tree scroll region is hosted in a clipped transparency Material inside EdgeFade',
+    (tester) async {
+      await _pumpPanel(tester);
+      final edgeFadeFinder = find.byType(EdgeFade);
+      expect(edgeFadeFinder, findsOneWidget);
+
+      final inkHostFinder = find.descendant(
+        of: edgeFadeFinder,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Material &&
+              widget.type == MaterialType.transparency &&
+              widget.clipBehavior == Clip.hardEdge,
+        ),
+      );
+      expect(inkHostFinder, findsOneWidget);
+
+      // The Material ink host sits between EdgeFade and ScrollConfiguration / ListView
+      final scrollConfigFinder = find.descendant(
+        of: inkHostFinder,
+        matching: find.byType(ScrollConfiguration),
+      );
+      expect(scrollConfigFinder, findsOneWidget);
+
+      final listViewFinder = find.descendant(
+        of: scrollConfigFinder,
+        matching: find.byType(ListView),
+      );
+      expect(listViewFinder, findsOneWidget);
     },
   );
 
