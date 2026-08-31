@@ -672,6 +672,7 @@ void main() {
     WidgetTester tester, {
     String document = twoBackendsDoc,
     SettingsUiState uiState = const SettingsUiState(snapshot: _snapshot),
+    Locale? locale,
   }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -684,6 +685,7 @@ void main() {
             (Ref ref) async => _backendStore(document: document),
           ),
           for (final Uri uri in <Uri>[
+            Uri.parse(kDshBaseUrl),
             Uri.parse('http://10.0.2.2:3080'),
             Uri.parse('http://10.0.2.2:3081'),
             Uri.parse('http://10.0.2.2:3082'),
@@ -696,6 +698,7 @@ void main() {
           ),
         ],
         child: l10nApp(
+          locale: locale,
           home: SettingsScreen(
             uiState: uiState,
             onAction: (SettingsAction _) {},
@@ -708,7 +711,7 @@ void main() {
   }
 
   Future<void> openHostSheet(WidgetTester tester, String barLabel) async {
-    await tester.tap(find.text(barLabel).hitTestable());
+    await tester.tap(find.text(barLabel).hitTestable().first);
     await tester.pumpAndSettle();
   }
 
@@ -1188,4 +1191,33 @@ void main() {
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Writable'), findsOneWidget);
   });
+
+  testWidgets(
+    'corrupt store document surfaces localized English error in host sheet',
+    (WidgetTester tester) async {
+      await pumpHostSettings(tester, document: '{"backends": [');
+      await openHostSheet(tester, '127.0.0.1:3080');
+
+      expect(
+        find.text('Host configuration file contains invalid JSON.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('backends.json'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'corrupt store document surfaces localized Chinese error in host sheet',
+    (WidgetTester tester) async {
+      await pumpHostSettings(
+        tester,
+        document: '{"backends": [',
+        locale: const Locale('zh'),
+      );
+      await openHostSheet(tester, '127.0.0.1:3080');
+
+      expect(find.text('主机配置文件包含无效的 JSON。'), findsOneWidget);
+      expect(find.textContaining('backends.json'), findsNothing);
+    },
+  );
 }

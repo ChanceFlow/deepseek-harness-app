@@ -387,7 +387,13 @@ void main() {
     await tester.pump();
     expect(
       actions,
-      contains(const OpenChild(_workerId, SubagentMode.continuable)),
+      contains(
+        const OpenChild(
+          _workerId,
+          SubagentMode.continuable,
+          parentSessionId: 'p1',
+        ),
+      ),
     );
   });
 
@@ -705,7 +711,10 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.stop_circle_outlined));
     await tester.pump();
-    expect(actions, contains(const InterruptSubagent(_workerId)));
+    expect(
+      actions,
+      contains(const InterruptSubagent(_workerId, parentSessionId: 'p1')),
+    );
 
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pump();
@@ -713,6 +722,129 @@ void main() {
     // The catalog is back.
     expect(find.text('Worker'), findsOneWidget);
   });
+
+  testWidgets(
+    'tapping nested (grandchild) row dispatches OpenChild with direct parent id',
+    (tester) async {
+      const rootCatalog = SubagentCatalog(
+        parentSessionId: 'p1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'child-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+            hasChildren: true,
+            label: 'Branch Child',
+          ),
+        ],
+      );
+      const branchCatalog = SubagentCatalog(
+        parentSessionId: 'child-1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'grand-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+            label: 'Grandchild Worker',
+          ),
+        ],
+      );
+
+      final actions = <SubagentAction>[];
+      await _pump(
+        tester,
+        const SubagentUiState(
+          sessions: _sessions,
+          selectedParentId: 'p1',
+          catalog: rootCatalog,
+          branchCatalogs: {'child-1': branchCatalog},
+        ),
+        actions,
+      );
+
+      // Expand branch child-1
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+
+      // Grandchild is now visible
+      expect(find.text('Grandchild Worker'), findsOneWidget);
+
+      // Tap grandchild row
+      await tester.tap(find.text('Grandchild Worker'));
+      await tester.pump();
+
+      expect(
+        actions,
+        contains(
+          const OpenChild(
+            'grand-1',
+            SubagentMode.continuable,
+            parentSessionId: 'child-1',
+          ),
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'opened grandchild detail stop button dispatches InterruptSubagent with direct parent',
+    (tester) async {
+      const rootCatalog = SubagentCatalog(
+        parentSessionId: 'p1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'child-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+            hasChildren: true,
+            label: 'Branch Child',
+          ),
+        ],
+      );
+      const branchCatalog = SubagentCatalog(
+        parentSessionId: 'child-1',
+        parentAvailable: true,
+        entries: [
+          SubagentEntry(
+            id: 'grand-1',
+            kind: 'child',
+            mode: SubagentMode.continuable,
+            activity: 'running',
+            label: 'Grandchild Worker',
+          ),
+        ],
+      );
+
+      final actions = <SubagentAction>[];
+      await _pump(
+        tester,
+        const SubagentUiState(
+          sessions: _sessions,
+          selectedParentId: 'p1',
+          catalog: rootCatalog,
+          branchCatalogs: {'child-1': branchCatalog},
+          selectedChildId: 'grand-1',
+          selectedChildParentId: 'child-1',
+        ),
+        actions,
+      );
+
+      await tester.tap(find.byIcon(Icons.stop_circle_outlined));
+      await tester.pump();
+      expect(
+        actions,
+        contains(
+          const InterruptSubagent('grand-1', parentSessionId: 'child-1'),
+        ),
+      );
+    },
+  );
 
   testWidgets('catalog refresh dispatches from the app bar', (tester) async {
     final actions = <SubagentAction>[];

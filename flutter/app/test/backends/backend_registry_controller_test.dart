@@ -115,7 +115,7 @@ void main() {
 
       final state = await loadedState(controller);
       expect(state.backends.single.id, 'default');
-      expect(state.errorMessage, contains('backends.json'));
+      expect(state.errorMessage, equals(BackendErrorCode.invalidJson.name));
     },
   );
 
@@ -150,11 +150,17 @@ void main() {
       final before = controller.state;
 
       controller.onAction(const AddBackend('Bad', 'ftp://nope'));
-      expect(controller.state.errorMessage, contains('Invalid backend URL'));
+      expect(
+        controller.state.errorMessage,
+        equals('${BackendErrorCode.badBaseUrl.name}:ftp://nope'),
+      );
       expect(controller.state.backends, before.backends);
 
       controller.onAction(const AddBackend('  ', 'http://10.0.2.2:3081'));
-      expect(controller.state.errorMessage, contains('label'));
+      expect(
+        controller.state.errorMessage,
+        equals(BackendErrorCode.emptyLabel.name),
+      );
 
       // The next successful mutation clears the refusal.
       controller.onAction(const AddBackend('OK', 'http://10.0.2.2:3081'));
@@ -201,7 +207,10 @@ void main() {
       await loadedState(controller);
 
       controller.onAction(const RemoveBackend('default'));
-      expect(controller.state.errorMessage, contains('active backend'));
+      expect(
+        controller.state.errorMessage,
+        equals(BackendErrorCode.removeActiveFirst.name),
+      );
       expect(controller.state.backends, hasLength(2));
 
       controller.onAction(const RemoveBackend('unknown-id'));
@@ -212,7 +221,10 @@ void main() {
       expect(controller.state.backends, hasLength(1));
 
       controller.onAction(const RemoveBackend('default'));
-      expect(controller.state.errorMessage, contains('last backend'));
+      expect(
+        controller.state.errorMessage,
+        equals(BackendErrorCode.cannotRemoveLast.name),
+      );
       expect(controller.state.backends, hasLength(1));
     },
   );
@@ -238,7 +250,10 @@ void main() {
     expect(controller.state.errorMessage, isNull);
 
     controller.onAction(const SelectBackend('unknown'));
-    expect(controller.state.errorMessage, contains('Unknown backend'));
+    expect(
+      controller.state.errorMessage,
+      equals('${BackendErrorCode.unknownBackend.name}:unknown'),
+    );
     expect(controller.state.activeId, 'b1');
 
     await letPersistLand(fileFor('select'), '"activeId":"b1"');
@@ -321,10 +336,16 @@ void main() {
 
     controller.onAction(const SelectBackend('b1'));
     expect(controller.state.activeId, 'default');
-    expect(controller.state.errorMessage, contains('Enable the backend'));
+    expect(
+      controller.state.errorMessage,
+      equals(BackendErrorCode.backendDisabled.name),
+    );
 
     controller.onAction(const SetBackendEnabled('unknown', false));
-    expect(controller.state.errorMessage, contains('Unknown backend'));
+    expect(
+      controller.state.errorMessage,
+      equals('${BackendErrorCode.unknownBackend.name}:unknown'),
+    );
     expect(controller.state.backends, hasLength(2));
   });
 

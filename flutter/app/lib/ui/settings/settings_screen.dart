@@ -20,6 +20,7 @@ import 'package:domain/model/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../backends/describe_backend_error.dart';
 import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
@@ -995,7 +996,7 @@ class _HostSheet extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         if (registry.errorMessage case final String message)
-          _RegistryErrorLine(message: message),
+          _RegistryErrorLine(message: describeBackendError(l10n, message)),
         if (pinned && registry.backends.length > 1)
           _HostSheetRow(
             leading: Icon(

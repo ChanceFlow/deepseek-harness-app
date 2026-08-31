@@ -577,6 +577,52 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cannotRemoveLastBackend => 'The last host cannot be removed.';
 
   @override
+  String get backendErrorInvalidJson =>
+      'Host configuration file contains invalid JSON.';
+
+  @override
+  String get backendErrorMalformedEntry =>
+      'Host configuration file contains malformed data.';
+
+  @override
+  String backendErrorBadBaseUrl(String baseUrl) {
+    return 'Invalid host base URL: $baseUrl';
+  }
+
+  @override
+  String get backendErrorInvalidBaseUrl => 'Invalid host base URL.';
+
+  @override
+  String get backendErrorEmptyList => 'Host configuration list is empty.';
+
+  @override
+  String get backendErrorReadFailed =>
+      'Failed to read host configuration file.';
+
+  @override
+  String get backendErrorWriteFailed =>
+      'Failed to save host configuration file.';
+
+  @override
+  String get backendErrorEmptyLabel => 'Host label cannot be empty.';
+
+  @override
+  String backendErrorUnknownBackend(String id) {
+    return 'Unknown host: $id';
+  }
+
+  @override
+  String get backendErrorUnknown => 'Unknown host.';
+
+  @override
+  String get backendErrorDisabled => 'Enable the host before activating it.';
+
+  @override
+  String backendErrorDuplicateId(String id) {
+    return 'A host with ID “$id” already exists.';
+  }
+
+  @override
   String get backendStatusActive => 'Active';
 
   @override

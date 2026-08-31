@@ -753,7 +753,11 @@ void main() {
       // The seed emission only: every chunk deferred to the window timer.
       expect(windows, hasLength(1));
 
-      await Future<void>.delayed(const Duration(milliseconds: 24));
+      // The coalescing timer is wall-clock; under CI load it can lag any
+      // fixed bet. Wait (bounded) for the coalesced publish to land.
+      for (var i = 0; i < 100 && windows.length < 2; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
       // One coalesced publish carried all five chunks at once.
       expect(windows, hasLength(2));
       final published = windows.last.items;

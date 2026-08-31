@@ -409,7 +409,14 @@ void main() {
     );
     // Let the registry load and both backends' controllers pull their
     // rosters (each real dart:io turn needs a runAsync round + pump).
-    for (var i = 0; i < 8; i++) {
+    // Condition-bounded, not a fixed round count: under load the rosters
+    // (and with them each backend's Ungrouped header) can need more
+    // rounds than a bet assumed.
+    for (
+      var i = 0;
+      i < 30 && find.text('Ungrouped').evaluate().length < 2;
+      i++
+    ) {
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       });
