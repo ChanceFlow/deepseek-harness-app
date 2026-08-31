@@ -40,7 +40,11 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   notifier 调用。OS 滑掉不可观测，diff 语义保证已显示的 done 不因快照
   重放而复活；重新 running 会重新挂常驻。前台且正在看的会话不挂
   （沿用 selected 静默规则，done 不受此抑制——completed 位本就不为打开
-  态arming）。已读单一挂接点 = SelectSession→`repository.openSession`
+  态arming）。**子代理会话不是一等通知主体**：`_onSessions` 先按
+  `parentSessionId == null` 过滤，瞬时 detector 与常驻 fold 都只见根会话
+  （被委托的回合由根会话的 running/pending 说话），child 从 `live` 集合
+  离场顺带触发孤儿清理，旧版留下的 child 常驻行会被自动 cancel。已读单
+  一挂接点 = SelectSession→`repository.openSession`
   （清 completed 位），三个入口（列表点击、通知 tap、冷启动 target）
   全部汇于此处，中心只是观察 selectedSessionId/快照变化。
 - **l10n**：新键 `workingChannel`（对齐既有 `approvalChannel` 命名习惯，
