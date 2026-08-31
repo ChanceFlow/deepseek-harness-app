@@ -406,6 +406,69 @@
   "editBackend": "Edit host",
   "removeActiveBackendFirst": "Switch away before removing the active host.",
   "cannotRemoveLastBackend": "The last host cannot be removed.",
+  "backendErrorInvalidJson": "Host configuration file contains invalid JSON.",
+  "@backendErrorInvalidJson": {
+    "description": "Error displayed when the host registry JSON file is unparseable."
+  },
+  "backendErrorMalformedEntry": "Host configuration file contains malformed data.",
+  "@backendErrorMalformedEntry": {
+    "description": "Error displayed when the host registry JSON has invalid fields or shape."
+  },
+  "backendErrorBadBaseUrl": "Invalid host base URL: {baseUrl}",
+  "@backendErrorBadBaseUrl": {
+    "description": "Error displayed when a host URL is invalid.",
+    "placeholders": {
+      "baseUrl": {
+        "type": "String"
+      }
+    }
+  },
+  "backendErrorInvalidBaseUrl": "Invalid host base URL.",
+  "@backendErrorInvalidBaseUrl": {
+    "description": "Error displayed when a host URL is invalid without detail."
+  },
+  "backendErrorEmptyList": "Host configuration list is empty.",
+  "@backendErrorEmptyList": {
+    "description": "Error displayed when the host registry contains no entries."
+  },
+  "backendErrorReadFailed": "Failed to read host configuration file.",
+  "@backendErrorReadFailed": {
+    "description": "Error displayed when reading the host registry file fails."
+  },
+  "backendErrorWriteFailed": "Failed to save host configuration file.",
+  "@backendErrorWriteFailed": {
+    "description": "Error displayed when writing the host registry file fails."
+  },
+  "backendErrorEmptyLabel": "Host label cannot be empty.",
+  "@backendErrorEmptyLabel": {
+    "description": "Error displayed when a host label is empty."
+  },
+  "backendErrorUnknownBackend": "Unknown host: {id}",
+  "@backendErrorUnknownBackend": {
+    "description": "Error displayed when referring to an unknown host ID.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "backendErrorUnknown": "Unknown host.",
+  "@backendErrorUnknown": {
+    "description": "Error displayed when referring to an unknown host."
+  },
+  "backendErrorDisabled": "Enable the host before activating it.",
+  "@backendErrorDisabled": {
+    "description": "Error displayed when attempting to activate a disabled host."
+  },
+  "backendErrorDuplicateId": "A host with ID “{id}” already exists.",
+  "@backendErrorDuplicateId": {
+    "description": "Error displayed when a host ID is duplicated.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
   "backendStatusActive": "Active",
   "backendStatusStandby": "Standby",
   "backendStatusDisabled": "Disabled",

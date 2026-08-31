@@ -13,18 +13,55 @@ import 'dart:io';
 
 import 'package:domain/model/backend.dart';
 
-/// Load/save errors surface as [BackendStoreException] with the cause in
-/// the message; the controller decides whether to fall back to the seed.
-class BackendStoreException implements Exception {
-  const BackendStoreException(this.message, [this.cause]);
+/// Load/save errors surface as [BackendStoreException] with a machine [code]
+/// and developer-facing [message]; the controller decides whether to fall back
+/// to the seed.
+enum BackendErrorCode {
+  invalidJson,
+  malformedEntry,
+  badBaseUrl,
+  emptyList,
+  readFailed,
+  writeFailed,
+  emptyLabel,
+  cannotRemoveLast,
+  removeActiveFirst,
+  unknownBackend,
+  backendDisabled,
+  duplicateId,
+}
 
-  final String message;
+/// Load/save errors surface as [BackendStoreException] with a machine [code]
+/// and developer-facing [message]; the controller decides whether to fall back
+/// to the seed.
+class BackendStoreException implements Exception {
+  const BackendStoreException(
+    this.code, {
+    this.message,
+    this.cause,
+    this.detail,
+  });
+
+  final BackendErrorCode code;
+  final String? message;
   final Object? cause;
+  final String? detail;
 
   @override
-  String toString() => cause == null
-      ? 'BackendStoreException: $message'
-      : 'BackendStoreException: $message ($cause)';
+  String toString() {
+    final buffer = StringBuffer('BackendStoreException(${code.name}');
+    if (message != null && message!.isNotEmpty) {
+      buffer.write(': $message');
+    }
+    if (detail != null && detail!.isNotEmpty) {
+      buffer.write(' [detail: $detail]');
+    }
+    if (cause != null) {
+      buffer.write(' ($cause)');
+    }
+    buffer.write(')');
+    return buffer.toString();
+  }
 }
 
 /// One persisted registry document.
@@ -65,13 +102,15 @@ class BackendStore {
       final decoded = jsonDecode(await _file.readAsString());
       if (decoded is! Map<String, Object?>) {
         throw const BackendStoreException(
-          'backends.json: root is not an object',
+          BackendErrorCode.malformedEntry,
+          message: 'backends.json: root is not an object',
         );
       }
       final rawList = decoded['backends'];
       if (rawList is! List<Object?>) {
         throw const BackendStoreException(
-          'backends.json: backends is not an array',
+          BackendErrorCode.malformedEntry,
+          message: 'backends.json: backends is not an array',
         );
       }
       final backends = <BackendConfig>[];
@@ -81,7 +120,10 @@ class BackendStore {
         final label = obj?['label'];
         final baseUrl = obj?['baseUrl'];
         if (id is! String || label is! String || baseUrl is! String) {
-          throw const BackendStoreException('backends.json: malformed entry');
+          throw const BackendStoreException(
+            BackendErrorCode.malformedEntry,
+            message: 'backends.json: malformed entry',
+          );
         }
         // `enabled` is optional for backward compatibility: documents
         // written before the enable/disable feature decode as enabled;
@@ -90,19 +132,27 @@ class BackendStore {
           null => true,
           final bool flag => flag,
           _ => throw const BackendStoreException(
-            'backends.json: malformed entry',
+            BackendErrorCode.malformedEntry,
+            message: 'backends.json: malformed entry',
           ),
         };
         final uri = Uri.tryParse(baseUrl);
         if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-          throw BackendStoreException('backends.json: bad baseUrl "$baseUrl"');
+          throw BackendStoreException(
+            BackendErrorCode.badBaseUrl,
+            message: 'backends.json: bad baseUrl "$baseUrl"',
+            detail: baseUrl,
+          );
         }
         backends.add(
           BackendConfig(id: id, label: label, baseUri: uri, enabled: enabled),
         );
       }
       if (backends.isEmpty) {
-        throw const BackendStoreException('backends.json: empty backend list');
+        throw const BackendStoreException(
+          BackendErrorCode.emptyList,
+          message: 'backends.json: empty backend list',
+        );
       }
       final activeId = decoded['activeId'];
       return BackendStoreData(
@@ -112,9 +162,17 @@ class BackendStore {
     } on BackendStoreException {
       rethrow;
     } on FileSystemException catch (error) {
-      throw BackendStoreException('backends.json: read failed', error);
+      throw BackendStoreException(
+        BackendErrorCode.readFailed,
+        message: 'backends.json: read failed',
+        cause: error,
+      );
     } on FormatException catch (error) {
-      throw BackendStoreException('backends.json: invalid JSON', error);
+      throw BackendStoreException(
+        BackendErrorCode.invalidJson,
+        message: 'backends.json: invalid JSON',
+        cause: error,
+      );
     }
   }
 
@@ -138,7 +196,11 @@ class BackendStore {
       await temp.writeAsString(payload, flush: true);
       await temp.rename(_file.path);
     } on FileSystemException catch (error) {
-      throw BackendStoreException('backends.json: write failed', error);
+      throw BackendStoreException(
+        BackendErrorCode.writeFailed,
+        message: 'backends.json: write failed',
+        cause: error,
+      );
     }
   }
 

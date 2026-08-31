@@ -57,6 +57,9 @@ jobs:
       https_proxy: ${{ vars.EGRESS_PROXY }}
       NO_PROXY: gitea,localhost,127.0.0.1
       no_proxy: gitea,localhost,127.0.0.1
+      # This runner shares the host's core count; uncapped, `flutter test`
+      # spawns one tester per CPU and the suite gets OOM-killed (exit 137).
+      DSH_TEST_CONCURRENCY: '4'
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4

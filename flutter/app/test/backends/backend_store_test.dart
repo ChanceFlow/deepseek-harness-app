@@ -161,29 +161,52 @@ void main() {
     expect(data.backends.single.id, 'default');
   });
 
-  for (final (name, payload) in [
-    ('root is not an object', '[]'),
-    ('backends is not an array', '{"backends": {}}'),
-    ('malformed entry', '{"backends": [{"id": "default"}], "activeId": null}'),
+  for (final (name, payload, expectedCode) in [
+    ('root is not an object', '[]', BackendErrorCode.malformedEntry),
+    (
+      'backends is not an array',
+      '{"backends": {}}',
+      BackendErrorCode.malformedEntry,
+    ),
+    (
+      'malformed entry',
+      '{"backends": [{"id": "default"}], "activeId": null}',
+      BackendErrorCode.malformedEntry,
+    ),
     (
       'non-bool enabled',
       '{"backends": [{"id": "default", "label": "L",'
           ' "baseUrl": "http://10.0.2.2:3080", "enabled": "yes"}],'
           ' "activeId": null}',
+      BackendErrorCode.malformedEntry,
     ),
     (
       'bad baseUrl',
       '{"backends": [{"id": "default", "label": "L", "baseUrl": "not-a-url"}]}',
+      BackendErrorCode.badBaseUrl,
     ),
-    ('empty backend list', '{"backends": [], "activeId": null}'),
-    ('invalid JSON', '{"backends": ['),
+    (
+      'empty backend list',
+      '{"backends": [], "activeId": null}',
+      BackendErrorCode.emptyList,
+    ),
+    ('invalid JSON', '{"backends": [', BackendErrorCode.invalidJson),
   ]) {
     test('a malformed document fails loud: $name', () async {
       final file = fileFor('bad-${name.hashCode}');
       await file.writeAsString(payload);
       final store = BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080');
 
-      await expectLater(store.load(), throwsA(isA<BackendStoreException>()));
+      await expectLater(
+        store.load(),
+        throwsA(
+          isA<BackendStoreException>().having(
+            (e) => e.code,
+            'code',
+            equals(expectedCode),
+          ),
+        ),
+      );
     });
   }
 }
