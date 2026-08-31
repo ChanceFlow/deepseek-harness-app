@@ -1131,6 +1131,18 @@ class _ChatPanelState extends State<ChatPanel> {
     return null;
   }
 
+  /// Extract the command from the tool call paired with the pending approval.
+  String? _commandForApproval(TimelineApprovalRequest approval) {
+    final callId = approval.callId;
+    if (callId == null) return null;
+    for (final item in widget.uiState.timeline) {
+      if (item is TimelineToolCall && item.id == callId) {
+        return commandOf(item);
+      }
+    }
+    return null;
+  }
+
   /// Whether the transient inbox holds queued rows — the dock's subject.
   /// Steering rows render at the transcript tail and context rows wait
   /// invisible for their durable injection form, so neither mounts the
@@ -1505,7 +1517,11 @@ class _ChatPanelState extends State<ChatPanel> {
                     onAction: widget.onAction,
                   ),
                 if (_pendingApproval case final approval?)
-                  ApprovalPanel(request: approval, onAction: widget.onAction)
+                  ApprovalPanel(
+                    request: approval,
+                    command: _commandForApproval(approval),
+                    onAction: widget.onAction,
+                  )
                 else
                   Row(
                     children: [
