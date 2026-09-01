@@ -52,6 +52,7 @@ docs/flutter-migration-analysis.md
 !.agents/notes/implemented/process/2026-08-29-release-apk-concurrency.md
 !.agents/notes/implemented/process/2026-08-31-ci-test-concurrency-cap.md
 !.agents/notes/implemented/process/2026-09-01-gradle-proxy-egress-rewrite.md
+!.agents/notes/implemented/process/2026-09-01-shadow-release-direct-egress.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/
