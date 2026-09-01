@@ -300,6 +300,20 @@ jobs:
       - name: Publish GitHub shadow Release (mirror)
         env:
           GH_PUB_TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
+          # The LAN egress proxy resets large request bodies (~16 MB in on a
+          # 139 MB APK upload) while small JSON API calls sail through — that
+          # mid-stream reset is the empty-shadow-release failure this step's
+          # hard-fail exists to catch. GitHub is reachable directly from the
+          # runner network, so this step runs proxy-less; clearing every
+          # proxy variable beats fighting the image-baked NO_PROXY.
+          HTTP_PROXY: ""
+          HTTPS_PROXY: ""
+          http_proxy: ""
+          https_proxy: ""
+          ALL_PROXY: ""
+          all_proxy: ""
+          NO_PROXY: "*"
+          no_proxy: "*"
         run: |
           set -u
           if [[ -z "$GH_PUB_TOKEN" ]]; then
