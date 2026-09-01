@@ -144,6 +144,45 @@ jobs:
         working-directory: flutter
         run: flutter analyze
 
+      # The build image carries /root/.gradle/gradle.properties with
+      # systemProp.http(s).proxyHost baked from a build arg, and Gradle's
+      # JVM reads those lines and ignores the HTTP_PROXY env above it —
+      # unlike curl and pub, the Gradle JVM has no env-proxy fallback. A
+      # baked host that has since moved off the network fails every
+      # cold-cache artifact download (warm-cache runs never notice).
+      # Rewrite host and port from the repo's EGRESS_PROXY var so the
+      # value Gradle uses is always the live one; drop the proxy lines
+      # entirely when the var is absent.
+      - name: Align Gradle proxy with EGRESS_PROXY
+        env:
+          EGRESS: ${{ vars.EGRESS_PROXY }}
+        run: |
+          set -eu
+          GP=/root/.gradle/gradle.properties
+          mkdir -p /root/.gradle
+          if [[ -z "$EGRESS" ]]; then
+            sed -i -E '/^systemProp\.(http|https)\.proxy(Host|Port)=/d' "$GP" 2>/dev/null || true
+            echo "EGRESS_PROXY unset: Gradle proxy lines removed"
+            exit 0
+          fi
+          HOSTPORT=${EGRESS#*://}
+          HOST=${HOSTPORT%%:*}
+          PORT=7890
+          if [[ "$HOSTPORT" == *:* ]]; then PORT=${HOSTPORT##*:}; fi
+          touch "$GP"
+          for scheme in http https; do
+            for kv in "proxyHost=$HOST" "proxyPort=$PORT"; do
+              key="systemProp.${scheme}.${kv%%=*}"
+              if grep -q "^${key}=" "$GP"; then
+                sed -i -E "s|^${key}=.*|${key}=${kv#*=}|" "$GP"
+              else
+                echo "${key}=${kv#*=}" >> "$GP"
+              fi
+            done
+          done
+          echo "Gradle proxy set to $HOST:$PORT"
+          cat "$GP"
+
       - name: Build signed release APK
         working-directory: flutter/app
         env:
