@@ -1,0 +1,5 @@
+• Context visibility: the context ring reads the host's projections, the segment bar matches the web client, and the breakdown panel shows real numbers.
+• Foreground UX batch: activity language, queued-message visibility, per-host enable/disable, working notifications.
+• Chat fixes: session search debounces and matches locally, the approval card names the command it approves, compaction markers follow the reference lifecycle.
+• Notification fixes: disabled hosts stay quiescent, subagent children no longer notify.
+• Localized backend registry errors and a composition bar that finally paints at every occupancy.
