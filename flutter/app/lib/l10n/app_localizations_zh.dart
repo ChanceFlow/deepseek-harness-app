@@ -1520,6 +1520,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputDone => '完成';
 
   @override
+  String get voiceInputSlideToSend => '松开发送 · 上滑取消';
+
+  @override
+  String get voiceInputReleaseToCancel => '松开取消';
+
+  @override
+  String get voiceInputTapToFinish => '点按麦克风结束';
+
+  @override
   String get voiceInputInitializing => '正在准备…';
 
   @override

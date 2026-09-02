@@ -124,6 +124,23 @@ class MainActivity : FlutterActivity() {
                         stopAudioCapture()
                         result.success(true)
                     }
+                    // Earcons for the three boundaries of a capture, taken from
+                    // the platform's own UI-sound set (the dialpad/switch path)
+                    // rather than shipped assets: they follow the device's
+                    // sound-effects setting, stay audible while the microphone
+                    // is hot, and cost the APK no bytes. A rising tone means the
+                    // audio was taken, a falling one that it was dropped.
+                    "playSoundEffect" -> {
+                        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+                        val effect = when (call.argument<String>("effect")) {
+                            "start" -> AudioManager.FX_TOGGLE_ON
+                            "send" -> AudioManager.FX_ADD
+                            "cancel" -> AudioManager.FX_REMOVE
+                            else -> null
+                        }
+                        if (effect != null) am.playSoundEffect(effect)
+                        result.success(effect != null)
+                    }
                     else -> result.notImplemented()
                 }
             }
