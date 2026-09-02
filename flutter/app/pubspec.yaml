@@ -20,6 +20,8 @@ dependencies:
   asr: ^0.1.0
   sherpa_onnx: ^1.13.6
   flutter_riverpod: ^3.4.2
+  cronet_http: ^1.9.0
+  http: ^1.5.0 # direct: di engine factory types http.Client (also via cronet_http/network)
   image_picker: ^1.2.3
   path_provider: ^2.1.5
   flutter_local_notifications: ^19.0.0
