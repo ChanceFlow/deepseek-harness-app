@@ -161,4 +161,15 @@ jobs:
 
       - name: Kotlin type check (compileDebugKotlin)
         working-directory: flutter/app/android
-        run: ./gradlew :app:compileDebugKotlin
+        # Gradle's downloads and the runner's cache service both flake
+        # through the LAN egress (the release channel's history is the same
+        # story), so the check is bounded and retried like the pub resolve
+        # above: a real compile error fails three fast attempts, a flake
+        # self-heals on the next one.
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew :app:compileDebugKotlin && exit 0
+            echo "kotlin check attempt $attempt failed; retrying"
+            sleep 10
+          done
+          exit 1

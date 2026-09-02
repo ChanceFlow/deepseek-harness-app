@@ -25,11 +25,13 @@ public mirror:
   `assembleDebug`/`assembleRelease` are all skipped. Warm, the task is
   seconds; the job stays bounded for a cold gradle.
 - The forge job rides the prebaked `flutter-android` image (SDK, JDK and
-  Flutter on PATH) and shares the release build's `gradle-v1-` cache
-  (`actions/cache`, keyed on `flutter/pubspec.lock`), so it restores what
-  release builds already warmed. The Flutter embedding resolves through
-  gradle from `download.flutter.io` — no `flutter precache` and no
-  `bin/cache` engine artifacts are involved.
+  Flutter on PATH, dependency caches baked at image build) and restores the
+  release build's `gradle-v1-` cache (`actions/cache`, keyed on
+  `flutter/pubspec.lock`) when the cache service answers — a miss falls
+  back to the baked cache and egress downloads, which flake, so the
+  compile is bounded and retried like the pub resolve above. The Flutter
+  embedding resolves through gradle from `download.flutter.io` — no
+  `flutter precache` and no `bin/cache` engine artifacts are involved.
 - `flutter pub get` runs before the compile because its outputs are compile
   inputs: `android/local.properties` (the plugin's `flutter.sdk`),
   `.flutter-plugins-dependencies` (the plugin projects `settings.gradle`
