@@ -31,9 +31,13 @@ public mirror:
   gradle from `download.flutter.io` — no `flutter precache` and no
   `bin/cache` engine artifacts are involved.
 - `flutter pub get` runs before the compile because its outputs are compile
-  inputs: `android/local.properties` (the plugin's `flutter.sdk`) and
+  inputs: `android/local.properties` (the plugin's `flutter.sdk`),
   `.flutter-plugins-dependencies` (the plugin projects `settings.gradle`
-  includes).
+  includes), and the SDK cache's universal `gradle_wrapper` artifact — the
+  wrapper scripts are deliberately untracked
+  (`flutter/app/android/.gitignore`), so the job mirrors
+  `GradleUtils.injectGradleWrapperIfNeeded` in one shell step instead of
+  letting gradle bootstrap itself.
 - The mirror job is the same shape on `ubuntu-latest` with `setup-java`
   temurin 17; ubuntu-latest carries the Android SDK.
 

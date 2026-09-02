@@ -145,6 +145,20 @@ jobs:
           key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
           restore-keys: gradle-v1-
 
+      - name: Inject gradle wrapper
+        working-directory: flutter/app/android
+        run: |
+          # The wrapper scripts are deliberately untracked
+          # (flutter/app/android/.gitignore); `flutter build` injects them
+          # from the SDK's universal gradle_wrapper artifact
+          # (GradleUtils.injectGradleWrapperIfNeeded), which is how the
+          # release build launches gradle without them. pub get in the step
+          # above is what materialized the artifact in the SDK cache.
+          WRAPPER="$(dirname "$(dirname "$(which flutter)")")/bin/cache/artifacts/gradle_wrapper"
+          cp -n "$WRAPPER/gradlew" gradlew
+          cp -n "$WRAPPER/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
+
       - name: Kotlin type check (compileDebugKotlin)
         working-directory: flutter/app/android
         run: ./gradlew :app:compileDebugKotlin

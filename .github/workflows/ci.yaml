@@ -92,6 +92,19 @@ jobs:
       - name: Resolve packages
         run: cd flutter && flutter pub get
 
+      - name: Inject gradle wrapper
+        working-directory: flutter/app/android
+        run: |
+          # The wrapper scripts are deliberately untracked
+          # (flutter/app/android/.gitignore); `flutter build` injects them
+          # from the SDK's universal gradle_wrapper artifact
+          # (GradleUtils.injectGradleWrapperIfNeeded). pub get in the step
+          # above is what materialized the artifact in the SDK cache.
+          WRAPPER="$(dirname "$(dirname "$(which flutter)")")/bin/cache/artifacts/gradle_wrapper"
+          cp -n "$WRAPPER/gradlew" gradlew
+          cp -n "$WRAPPER/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
+
       - name: Kotlin type check (compileDebugKotlin)
         working-directory: flutter/app/android
         run: ./gradlew :app:compileDebugKotlin
