@@ -9,9 +9,11 @@
 /// Channel selection for transient events is a pure lifecycle decision made
 /// here at emit time: an app the user is actively looking at gets a
 /// tappable toast, an app that is not resumed gets a system notification.
-/// The one product carve-out — a selected session's own turn completing
+/// The one product carve-out — the watched session's own turn completing
 /// while the app is foregrounded — is silent because the user is already
-/// watching it.
+/// watching it: the watched fact is the selection only while the Chat
+/// destination covers the screen (`watchedSessionId`), so the same turn
+/// finishing while the user reads another destination still surfaces.
 ///
 /// Ongoing notifications are declarative: the fold says what each session's
 /// row should look like now, and the center posts, updates, promotes, or
@@ -188,7 +190,7 @@ class AppNotificationCenter {
 enum NotificationChannel { foregroundToast, systemNotification, none }
 
 /// Selects the channel for [event]: backgrounded events are always system
-/// notifications; a foregrounded app toasts everything except the selected
+/// notifications; a foregrounded app toasts everything except the watched
 /// session's own turn completing, which is silent because the user is
 /// already watching it.
 NotificationChannel channelFor(

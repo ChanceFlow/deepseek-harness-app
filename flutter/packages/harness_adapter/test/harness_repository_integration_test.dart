@@ -2842,6 +2842,90 @@ void main() {
     );
   });
 
+  // Web SessionManager parity (runtime/tests/manager.client.spec.ts
+  // "a list refresh carrying the running→idle transition arms the
+  // reminder"): the edge fold runs on every observation source, not only
+  // on host/session-status frames — a pull that arrives after the turn
+  // finished (WS gap, app process death) must arm the reminder too.
+  test(
+    'a list pull carrying the running→idle transition arms the reminder',
+    () async {
+      JsonMap sessionRow(String id, int updatedAt, bool running) =>
+          <String, Object?>{
+            'sessionId': id,
+            'updatedAt': updatedAt,
+            'running': running,
+            'blank': false,
+          };
+      final rpc = HarnessFakeRpc(<Object?>[
+        sessionRow('session-a', 3, true),
+        sessionRow('session-b', 3, false),
+      ]);
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+      await repository.openSession('session-b');
+      await pumpEventQueue();
+
+      // The turn finished on the host while the client saw no frame; the
+      // next pull is the first observation of the idle state.
+      rpc.sessionsValue = <Object?>[
+        sessionRow('session-a', 4, false),
+        sessionRow('session-b', 3, false),
+      ];
+      await repository.refreshSessions();
+      await pumpEventQueue();
+
+      final sessions = await repository.observeSessions().first;
+      expect(
+        sessions.firstWhere((item) => item.id == 'session-a').completed,
+        isTrue,
+      );
+    },
+  );
+
+  // Web SessionManager parity ("arms a completion that happened during an
+  // in-flight first pull"): a session already running at the client's
+  // first observation must arm when its completion frame arrives — the
+  // pull records the running baseline even though no running:true frame
+  // was ever seen.
+  test(
+    'a completion frame after a running first pull arms the reminder',
+    () async {
+      JsonMap sessionRow(String id, int updatedAt, bool running) =>
+          <String, Object?>{
+            'sessionId': id,
+            'updatedAt': updatedAt,
+            'running': running,
+            'blank': false,
+          };
+      final rpc = HarnessFakeRpc(<Object?>[
+        sessionRow('session-a', 3, true),
+        sessionRow('session-b', 3, false),
+      ]);
+      final socket = ScriptedHarnessSocket(
+        hostFrames: <ServerRequest>[
+          _hostFrame('host/session-status', <String, Object?>{
+            'type': 'host/session-status',
+            'sessionId': 'session-a',
+            'running': false,
+          }),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      await repository.openSession('session-b');
+      await pumpEventQueue();
+      socket.releaseHostFrames();
+      await pumpEventQueue();
+
+      final sessions = await repository.observeSessions().first;
+      expect(
+        sessions.firstWhere((item) => item.id == 'session-a').completed,
+        isTrue,
+      );
+    },
+  );
+
   // Wire shape: agentPreset.list roster
   // (reference/deepseek-harness/packages/host/apiproxy/src/api/
   // agent-presets.schema.ts).
