@@ -68,7 +68,7 @@ PUBLIC_EXTRA = re.compile(
     # NOTE: the word "gitea" is NOT a signal — .gitea/ workflows ship in
     # the public tree (the forge software is public knowledge); what stays
     # secret is the internal addressing and identity below.
-    r"10\.10\.0\.|" + _ACT + "|" + _PROXY + "|" + _HOME + "|"
+    r"10\.(?:10|100)\.0\.|" + _ACT + "|" + _PROXY + "|" + _HOME + "|"
     r"gulugulu1103@qq\.com|chance@10\.10\.0\.1|"
     r"@10\.10\.0\.1"
 )

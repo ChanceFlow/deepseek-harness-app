@@ -31,7 +31,10 @@ public mirror:
   back to the baked cache and egress downloads, which flake, so the
   compile is bounded and retried like the pub resolve above. The Flutter
   embedding resolves through gradle from `download.flutter.io` — no
-  `flutter precache` and no `bin/cache` engine artifacts are involved.
+  `flutter precache` and no `bin/cache` engine artifacts are involved. The
+  egress address rides `vars.EGRESS_PROXY` and the compile step rebuilds
+  gradle's JVM system properties from it at runtime — an internal address
+  is never committed, and the leak rule covers both internal subnets.
 - `flutter pub get` runs before the compile because its outputs are compile
   inputs: `android/local.properties` (the plugin's `flutter.sdk`),
   `.flutter-plugins-dependencies` (the plugin projects `settings.gradle`
