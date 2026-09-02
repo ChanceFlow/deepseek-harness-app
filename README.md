@@ -142,6 +142,16 @@ with `--dart-define=DSH_BASE_URL=...` (see
 [§Point the app at it](#3-point-the-app-at-it) for the emulator-only
 `10.0.2.2` route).
 
+RPC transport rides embedded Cronet on Android: HTTP/2 with opportunistic
+HTTP/3 (QUIC upgrades via Alt-Svc; automatic h2/h1 fallback when UDP 443
+is blocked). Every Android build must pass
+`--dart-define=cronetHttpNoPlay=true` so Cronet ships embedded: it removes
+the Google Play Services dependency (the F-Droid channel stays clean) and
+sidesteps the play-services-cronet chain, whose cronet-api/cronet-shared
+pair fails AGP 9's namespace check. The engine self-identifies as
+`dsh-android/<version> http3` in `User-Agent`, so HTTP/3 adoption reads
+straight off the gateway's Caddy access log per UA group.
+
 The canonical command list and the aggregate verification gates live in
 [AGENTS.md §Commands](AGENTS.md#commands); Flutter 3.47.1 stable is
 expected on PATH. Real-host e2e is opt-in — see

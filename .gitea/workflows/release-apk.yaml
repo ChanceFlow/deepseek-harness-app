@@ -193,6 +193,7 @@ jobs:
         run: |
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
           flutter build apk --release \
+            --dart-define=cronetHttpNoPlay=true \
             --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
             --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \

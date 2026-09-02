@@ -21,6 +21,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:app/platform/disk_space.dart';
 
+import 'http_engine.dart';
+
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart' show SessionSummary;
@@ -150,10 +152,32 @@ final backendByIdProvider = StreamProvider.family
     });
 
 /// Raw transport seams, overridable in tests (one per backend URL).
+///
+/// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
+/// `http_engine.dart`); non-Android hosts and engine-construction failure
+/// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
+/// The engine lives and dies with the backend configuration: autoDispose
+/// tears it down when the last watcher drops (backend removed, disabled,
+/// or its URL edited).
 final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
-  (ref, uri) => HttpDshRpcClient(uri),
+  _buildRpcClient,
   name: 'dshRpcClient',
 );
+
+/// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
+/// `http_engine.dart`); non-Android hosts and engine-construction failure
+/// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
+/// The engine lives and dies with the backend configuration: autoDispose
+/// tears it down when the last watcher drops (backend removed, disabled,
+/// or its URL edited).
+DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
+  final engine = dshHttp3Engine();
+  if (engine == null) {
+    return HttpDshRpcClient(uri);
+  }
+  ref.onDispose(engine.close);
+  return HttpDshRpcClient(uri, httpClient: engine);
+}
 
 final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
   (ref, uri) => WebSocketDshEventSocket(uri),
