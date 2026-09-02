@@ -117,10 +117,11 @@ jobs:
       # which the image bakes stale: with the baked address no longer
       # answering, run 983 timed out every egress download and disabled the
       # Google repository with no compile error anywhere. Pin the JVM to the
-      # same egress the env vars carry; the JVM's default nonProxyHosts keeps
-      # localhost traffic direct.
-      JAVA_TOOL_OPTIONS: '-Dhttp.proxyHost=localhost -Dhttp.proxyPort=7890 -Dhttps.proxyHost=localhost -Dhttps.proxyPort=7890'
-      GRADLE_OPTS: '-Dhttp.proxyHost=localhost -Dhttp.proxyPort=7890 -Dhttps.proxyHost=localhost -Dhttps.proxyPort=7890'
+      # working egress address (the one EGRESS_PROXY carries — localhost is
+      # unreachable from inside the job container, run 988); the JVM's
+      # default nonProxyHosts keeps localhost traffic direct.
+      JAVA_TOOL_OPTIONS: '-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890'
+      GRADLE_OPTS: '-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890'
       # The cache service must bypass the proxy or restore/save dies on
       # connection reset.
       NO_PROXY: gitea,localhost,127.0.0.1
