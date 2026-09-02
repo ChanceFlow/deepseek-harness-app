@@ -73,6 +73,7 @@ defaults:
 jobs:
   build:
     runs-on: flutter-android
+    timeout-minutes: 90
     container:
       image: flutter-3.47-android:latest
     env:
@@ -138,7 +139,15 @@ jobs:
 
       - name: Pub get (workspace)
         working-directory: flutter
-        run: flutter pub get
+        # A stalled resolve never times out on its own: this step once hung for
+        # 1h49m and held the single runner while every PR queued behind it.
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 flutter pub get && exit 0
+            echo "pub resolve attempt $attempt stalled or failed; retrying"
+            sleep 5
+          done
+          exit 1
 
       - name: Analyze (fail before the slow build)
         working-directory: flutter
