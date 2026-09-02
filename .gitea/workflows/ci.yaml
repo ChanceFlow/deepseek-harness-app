@@ -180,6 +180,15 @@ jobs:
             echo "EGRESS proxy missing: HTTPS_PROXY is not set for this job"
             exit 1
           fi
+          # The image baked the egress into /root/.gradle/gradle.properties
+          # at build time, and gradle.properties systemProp outranks every
+          # env layer (run 989: fresh GRADLE_OPTS/JAVA_TOOL_OPTIONS still
+          # rode the baked, since-dead address). Rewrite it from the live
+          # egress env — the same injection the Dockerfile performs at
+          # build time, with the address the variable carries now.
+          printf 'systemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\n' \
+            "$EGRESS_HOST" "$EGRESS_PORT" "$EGRESS_HOST" "$EGRESS_PORT" \
+            > /root/.gradle/gradle.properties
           export GRADLE_OPTS="-Dhttp.proxyHost=$EGRESS_HOST -Dhttp.proxyPort=$EGRESS_PORT -Dhttps.proxyHost=$EGRESS_HOST -Dhttps.proxyPort=$EGRESS_PORT"
           for attempt in 1 2 3; do
             ./gradlew :app:compileDebugKotlin && exit 0
