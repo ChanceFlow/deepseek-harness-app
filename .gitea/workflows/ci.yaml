@@ -1,12 +1,17 @@
-# CI for deepseek-harness-app — runs the gate aggregate as two parallel
-# jobs so a doc-only change fails in seconds instead of behind the Flutter
-# suite. Both are required statuses on `master`
-# (`CI / docs (pull_request)`, `CI / code (pull_request)`).
+# CI for deepseek-harness-app — runs the gates as three parallel jobs so a
+# doc-only change fails in seconds instead of behind the Flutter suite. All
+# three are required statuses on `master`
+# (`CI / docs (pull_request)`, `CI / code (pull_request)`,
+# `CI / android (pull_request)`).
 #
-#   docs  python3 scripts/verify_all.py docs — python only; needs the
-#         reference submodule (the launcher-icon drift gate reads it)
-#   code  python3 scripts/verify_all.py code — flutter analyze, dart format
-#         check, the full test suite, the import gate, unused deps
+#   docs    python3 scripts/verify_all.py docs — python only; needs the
+#           reference submodule (the launcher-icon drift gate reads it)
+#   code    python3 scripts/verify_all.py code — flutter analyze, dart format
+#           check, the full test suite, the import gate, unused deps
+#   android :app:compileDebugKotlin — the only gate that type-checks the
+#           Android host's Kotlin; lint and the Dart gates cannot see an
+#           unresolved platform reference. Decision:
+#           .agents/notes/implemented/process/2026-09-03-kotlin-compile-gate.md
 #
 # Requirements for the runner:
 #   - network access (fetches Flutter 3.47.1 via subosito/flutter-action and
@@ -93,3 +98,53 @@ jobs:
 
       - name: Code gates (analyze, format, tests, imports)
         run: python3 scripts/verify_all.py code
+
+  android:
+    # The compiler is the only check that sees an unresolved platform
+    # symbol — how #153 shipped AudioManager constants no API has and left
+    # the red to the release channel. compileDebugKotlin is that check
+    # alone: no Dart AOT, asset merge, R8 or packaging. Same prebaked image
+    # as `code`; the gradle cache key is the release build's, so a warmed
+    # cache is the common case.
+    runs-on: flutter-android
+    timeout-minutes: 20
+    env:
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      # The cache service must bypass the proxy or restore/save dies on
+      # connection reset.
+      NO_PROXY: gitea,localhost,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1
+    steps:
+      - name: Checkout (with reference submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # pub get's outputs are compile inputs: android/local.properties (the
+      # plugin's flutter.sdk) and .flutter-plugins-dependencies (the plugin
+      # projects settings.gradle includes).
+      - name: Resolve packages
+        working-directory: flutter
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 flutter pub get && exit 0
+            echo "pub resolve attempt $attempt stalled or failed; retrying"
+            sleep 5
+          done
+          exit 1
+
+      - name: Restore Gradle & pub caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            /root/.gradle/caches
+            /root/.pub-cache
+          key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
+          restore-keys: gradle-v1-
+
+      - name: Kotlin type check (compileDebugKotlin)
+        working-directory: flutter/app/android
+        run: ./gradlew :app:compileDebugKotlin
