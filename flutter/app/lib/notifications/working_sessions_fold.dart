@@ -67,13 +67,14 @@ final class WorkingSessionDecision {
 /// is still open); else `running` is [WorkingSessionState.working]; else the
 /// domain's `completed` bit is [WorkingSessionState.done]; else gone.
 ///
-/// While the app is foregrounded, the selected session — the one the user
-/// is watching — is suppressed to gone for [WorkingSessionState.working]
-/// and [WorkingSessionState.waiting] (the standing "selected stays silent"
-/// rule). [WorkingSessionState.done] is exempt: the `completed` bit already
-/// never arms for the session the adapter has open, and opening the session
-/// clears the bit, which routes the done notice to gone (the cancel side is
-/// idempotent).
+/// While the app is foregrounded, the watched session — the one the user
+/// is watching ([watchedSessionId]: the selection only while the Chat
+/// destination covers the screen) — is suppressed to gone for
+/// [WorkingSessionState.working] and [WorkingSessionState.waiting] (the
+/// standing "selected stays silent" rule). [WorkingSessionState.done] is
+/// exempt: the `completed` bit already never arms for the session the
+/// adapter has open, and opening the session clears the bit, which routes
+/// the done notice to gone (the cancel side is idempotent).
 List<WorkingSessionDecision> foldWorkingSessions({
   required List<SessionSummary> sessions,
   required String? selectedSessionId,

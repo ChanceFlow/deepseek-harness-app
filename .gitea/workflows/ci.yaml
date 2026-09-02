@@ -66,5 +66,14 @@ jobs:
         with:
           submodules: recursive
 
+      # Warm the pub cache outside any gate timeout: `flutter analyze` (the
+      # first gate) resolves dependencies implicitly, and a cold or
+      # flaky-proxied resolve stalls until the gate timeout kills it — the
+      # GitHub mirror carries this step for exactly that reason. Without it
+      # the analyzer dies inside "Resolving dependencies..." while the test
+      # gate's later resolve succeeds in seconds.
+      - name: Warm pub cache
+        run: cd flutter && flutter pub get
+
       - name: Code gates (analyze, format, tests, imports)
         run: python3 scripts/verify_all.py code

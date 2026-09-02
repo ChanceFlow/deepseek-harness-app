@@ -28,9 +28,15 @@ plan 审阅四类事件，前台用可点击跳转的 toast，后台用系统通
 - **通知中心**（`app/lib/notifications/app_notification_center.dart`）：
   每 backend 一个实例，订阅 `observeSessions()` 折叠事件，按
   `channelFor(event, isForegrounded)` 路由：后台一律走系统通知；前台除
-  "选中会话自己 turn 完成"（用户正在看，静默）外走 toast 流。
+  "被观看会话自己 turn 完成"（用户正在看，静默）外走 toast 流。
   `shouldNotifyForeground` 三态拆成显式 `NotificationChannel` 枚举，
   避免"前台选中完成被误发系统通知"的歧义。
+  **"被观看"事实**（`app/lib/notifications/watched_session.dart` +
+  `watchedSessionIdProvider`）：web 的"选中即静默"假设会话面板常驻
+  屏幕，手机的三 destination 互斥全屏——选中会话仅在 Chat destination
+  激活时才算被观看；用户在 Workspaces/Settings 页时选中会话的 turn
+  完成照常 toast。中心的 `selectedSessionIdOf` 轮询该事实，其变化
+  （选择 + destination 切换）同时是 reconcile 的失效信号。
 - **系统通知**（`app/lib/notifications/system_notifier.dart`，由
   `TurnCompleteNotifier` 扩展）：按事件类型分区（turns/approvals/reviews），
   高重要度给待审批/待审阅；`NotificationTarget` 把 backend+session 编码进
@@ -65,7 +71,9 @@ plan 审阅四类事件，前台用可点击跳转的 toast，后台用系统通
   逐消息跟踪需要为所有会话常驻 timeline 订阅，成本高且参考客户端也没有
   该语义；采用"非选中会话 turn 完成 = 有新内容"作为可靠可观测代理。
 - **前台选中完成也 toast**：用户选择"正在看的不通知"；toast 只覆盖其他
-  会话/审批/plan，避免打扰正在盯着的会话。
+  会话/审批/plan，避免打扰正在盯着的会话。"正在看"由 watched 事实定义
+  （选中 + Chat destination 激活）：destination 切走后同一会话的完成
+  照常通知，web 假设在手机上不成立。
 - **保留 ChatController.onTurnComplete**：会让 turn 完成检测分散两处
   （controller 钩子 + 中心），可能重复通知；统一收进中心。
 - **浏览器 Notification API（web）**：本客户端只有 Android 平台目录，
