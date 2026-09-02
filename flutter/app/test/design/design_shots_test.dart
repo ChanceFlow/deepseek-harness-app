@@ -18,6 +18,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show max;
 
 import 'package:app/backends/backend_store.dart';
 import 'package:app/config.dart';
@@ -230,6 +231,18 @@ final List<DesignShot> shots = <DesignShot>[
     dark: false,
   ),
   DesignShot(
+    name: 'voice-transcribing',
+    state: busyState(),
+    host: (theme, locale) => _voiceRecordingHost(
+      theme,
+      locale,
+      false,
+      endPhase: VoiceInputPhase.finalizing,
+    ),
+    act: _settleVoiceShot,
+    dark: false,
+  ),
+  DesignShot(
     name: 'voice-nomodel-dialog',
     host: (theme, locale) => _voiceNoModelDialogHost(theme, locale, false),
   ),
@@ -247,6 +260,40 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'settings-asr-models-zh',
     locale: const Locale('zh'),
     host: (theme, locale) => _settingsAsrHost(theme, locale, true),
+    dark: false,
+  ),
+  // The online voice-input mode: the new card with the Volcengine
+  // credential form (dark) and the Tencent one (light), each scrolled to
+  // bring the card's fields into frame.
+  DesignShot(
+    name: 'settings-asr-online',
+    host: (theme, locale) => _settingsAsrOnlineHost(
+      theme,
+      locale,
+      const OnlineAsrSettings(
+        mode: VoiceInputMode.online,
+        provider: OnlineAsrProvider.volcengineDoubao,
+        volcengine: VolcengineDoubaoAsrConfig(apiKey: 'vk-demo-4f8a-9c2e-77b1'),
+      ),
+    ),
+    act: _scrollToVoiceInputModeCard,
+  ),
+  DesignShot(
+    name: 'settings-asr-online-tencent',
+    host: (theme, locale) => _settingsAsrOnlineHost(
+      theme,
+      locale,
+      const OnlineAsrSettings(
+        mode: VoiceInputMode.online,
+        provider: OnlineAsrProvider.tencentHunyuan,
+        tencent: TencentHunyuanAsrConfig(
+          appId: '1900000000',
+          secretId: 'AKIDzrJyc0mZdB6demoExample',
+          secretKey: 'c2VjcmV0S2V5RGVtbw==',
+        ),
+      ),
+    ),
+    act: _scrollToVoiceInputModeCard,
     dark: false,
   ),
   // The Subagents screen: the catalog tree (running child, settled
@@ -442,22 +489,59 @@ Widget _settingsHost(ThemeData theme, Locale? locale) {
   );
 }
 
-class _StaticVoiceInputController extends VoiceInputController {
-  _StaticVoiceInputController({
+/// A spoken phrase as the capture stream reports it: one group of per-window
+/// peaks per 100ms chunk. The input meter draws every band, so a still of a
+/// live session reviews a sliding trail rather than one flat bar.
+const List<List<double>> _kVoicePhraseBands = <List<double>>[
+  [0.16, 0.62, 0.94, 0.71],
+  [0.35, 0.78, 0.52, 0.24],
+  [0.90, 0.66, 0.31, 0.12],
+  [0.22, 0.45, 0.83, 0.58],
+  [0.51, 0.29, 0.14, 0.37],
+  [0.86, 0.94, 0.63, 0.40],
+  [0.27, 0.15, 0.44, 0.69],
+  [0.58, 0.72, 0.36, 0.19],
+  [0.93, 0.47, 0.22, 0.55],
+  [0.31, 0.64, 0.80, 0.42],
+];
+
+/// Voice controller that hands the dock one capture chunk per 100ms of pumped
+/// time, so a shot renders a session with history instead of a mounted frame.
+class _ScriptedVoiceInputController extends VoiceInputController {
+  _ScriptedVoiceInputController({
     required super.manager,
-    required this.initialState,
-  }) : super(
+    required List<VoiceInputUiState> frames,
+  }) : _frames = frames,
+       _current = frames.first,
+       super(
          audioRecorder: MockAudioInputSource(simulatedDuration: Duration.zero),
        );
 
-  final VoiceInputUiState initialState;
+  final List<VoiceInputUiState> _frames;
+  final StreamController<VoiceInputUiState> _out =
+      StreamController<VoiceInputUiState>.broadcast();
+
+  VoiceInputUiState _current;
+  int _played = 0;
+
+  /// How many capture chunks the phrase holds.
+  int get frameCount => _frames.length;
 
   @override
-  VoiceInputUiState get state => initialState;
+  VoiceInputUiState get state => _current;
 
   @override
-  Stream<VoiceInputUiState> get uiState =>
-      Stream<VoiceInputUiState>.value(initialState);
+  Stream<VoiceInputUiState> get uiState => _out.stream;
+
+  /// Hands over the next capture frame. Once the phrase is spent the session
+  /// keeps whatever it last showed, as a live but silent capture does.
+  void playNextFrame() {
+    if (_played >= _frames.length) return;
+    _current = _frames[_played++];
+    if (!_out.isClosed) _out.add(_current);
+  }
+
+  void stop() => unawaited(_out.close());
 
   @override
   Future<void> startRecording() async {}
@@ -469,13 +553,39 @@ class _StaticVoiceInputController extends VoiceInputController {
   Future<void> cancelRecording() async {}
 }
 
+/// The scripted voice session the voice shots render. A shot's `act` callback
+/// receives only the tester, so the fixture registers itself here for the
+/// pumping loop to speak through.
+_ScriptedVoiceInputController? _voiceSession;
+
+/// Settles the chrome, then plays the phrase one capture chunk per pumped
+/// frame: the meter's trail is made of the chunks it actually saw, so the
+/// still reviews a spoken sentence rather than a couple of coalesced frames.
 Future<void> _settleVoiceShot(WidgetTester tester) async {
   await settle(tester);
+  final session = _voiceSession;
+  if (session != null) {
+    for (var i = 0; i < session.frameCount; i++) {
+      session.playNextFrame();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+  await tester.pump();
 }
 
-/// Full-tree builder for the voice recording state: initializes a static ASR state
-/// so the VoiceRecordingDock and active soundwave render deterministically.
-Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
+/// Full-tree builder for a live voice session: a scripted capture stream so
+/// the dock, its input meter and the microphone seat all render mid-session.
+///
+/// With [endPhase] the phrase stops short and its tail belongs to that phase,
+/// carrying the same envelope — no new audio, which is what a session waiting
+/// on the engine looks like: the trail runs out to the floor and the seat
+/// changes its mind.
+Widget _voiceRecordingHost(
+  ThemeData theme,
+  Locale? locale,
+  bool zh, {
+  VoiceInputPhase? endPhase,
+}) {
   final tempDir = Directory.systemTemp.createTempSync('dsh-design-voice');
   addTearDown(() => tempDir.deleteSync(recursive: true));
   final registryFile = File('${tempDir.path}/models_registry.json');
@@ -491,19 +601,38 @@ Widget _voiceRecordingHost(ThemeData theme, Locale? locale, bool zh) {
     ),
   );
   final manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
-  final controller = _StaticVoiceInputController(
+
+  final transcription = zh
+      ? '端侧语音识别实时转写测试'
+      : 'On-device speech recognition live transcription test';
+  final spokenChunks = endPhase == null ? _kVoicePhraseBands.length : 7;
+  final spoken = <VoiceInputUiState>[
+    for (var i = 0; i < spokenChunks; i++)
+      VoiceInputUiState(
+        phase: VoiceInputPhase.recording,
+        duration: Duration(milliseconds: 100 * (i + 1)),
+        amplitude: _kVoicePhraseBands[i].reduce(max),
+        envelope: _kVoicePhraseBands[i],
+        liveTranscription: transcription,
+        activeModel: AsrModelManifest.senseVoiceSmall,
+        hasInstalledModels: true,
+      ),
+  ];
+  final last = spoken.last;
+  final frames = <VoiceInputUiState>[
+    ...spoken,
+    // The tail carries the same envelope object, so the meter learns no new
+    // audio arrived and lets its trail run out.
+    if (endPhase != null)
+      for (var i = 0; i < 3; i++) last.copyWith(phase: endPhase),
+  ];
+
+  final controller = _ScriptedVoiceInputController(
     manager: manager,
-    initialState: VoiceInputUiState(
-      phase: VoiceInputPhase.recording,
-      duration: const Duration(seconds: 5),
-      amplitude: 0.65,
-      activeModel: AsrModelManifest.senseVoiceSmall,
-      hasInstalledModels: true,
-      liveTranscription: zh
-          ? '端侧语音识别实时转写测试'
-          : 'On-device speech recognition live transcription test',
-    ),
+    frames: frames,
   );
+  _voiceSession = controller;
+  addTearDown(controller.stop);
 
   return ProviderScope(
     overrides: [
@@ -555,6 +684,56 @@ Widget _voiceNoModelDialogHost(ThemeData theme, Locale? locale, bool zh) {
 
 /// Full-tree builder for the ASR Models management screen shot showing downloaded
 /// SenseVoice model, Active Speech Model selector, and catalog cards.
+/// The ASR settings screen with the voice-input mode card switched to the
+/// [settings] provider, so the credential form under review is on screen.
+Widget _settingsAsrOnlineHost(
+  ThemeData theme,
+  Locale? locale,
+  OnlineAsrSettings settings,
+) {
+  const cards = <AsrModelCardState>[
+    AsrModelCardState(
+      info: AsrModelManifest.senseVoiceSmall,
+      entry: ModelRegistryEntry(
+        modelId: 'sensevoice-small',
+        source: ModelSource.hfMirror,
+        localDir: '/data/models/sensevoice-small',
+        status: AsrModelStatus.downloaded,
+      ),
+      diskUsageBytes: 237431441,
+    ),
+  ];
+
+  final state = AsrModelsUiState(
+    models: cards,
+    defaultSource: ModelSource.hfMirror,
+    installedCount: 1,
+    totalCount: 5,
+    activeModelId: 'sensevoice-small',
+    cloud: settings,
+  );
+
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: AsrModelsScreen(uiState: state, onAction: (_) {}),
+  );
+}
+
+/// Brings the voice-input mode card into frame: the card sits below the
+/// download-source preferences, off the top of the viewport.
+Future<void> _scrollToVoiceInputModeCard(WidgetTester tester) async {
+  await tester.dragUntilVisible(
+    find.text('Voice input mode'),
+    find.byType(ListView),
+    const Offset(0, -240),
+  );
+  await settle(tester);
+}
+
 Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
   const cards = <AsrModelCardState>[
     AsrModelCardState(
@@ -564,17 +743,17 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
         source: ModelSource.hfMirror,
         localDir: '/data/models/sensevoice-small',
         status: AsrModelStatus.downloaded,
-        downloadedBytes: 239549735,
-        totalBytes: 239549735,
+        downloadedBytes: 237431441,
+        totalBytes: 237431441,
       ),
-      diskUsageBytes: 239549735,
+      diskUsageBytes: 237431441,
     ),
     AsrModelCardState(
-      info: AsrModelManifest.paraformerBilingualStreaming,
+      info: AsrModelManifest.streamingZipformerZh,
       entry: ModelRegistryEntry(
-        modelId: 'paraformer-bilingual-streaming',
+        modelId: 'streaming-zipformer-zh',
         source: ModelSource.hfMirror,
-        localDir: '/data/models/paraformer-bilingual-streaming',
+        localDir: '/data/models/streaming-zipformer-zh',
         status: AsrModelStatus.idle,
       ),
     ),
@@ -584,16 +763,17 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
         modelId: 'whisper-large-v3-turbo',
         source: ModelSource.huggingFace,
         localDir: '/data/models/whisper-large-v3-turbo',
-        status: AsrModelStatus.idle,
+        status: AsrModelStatus.downloaded,
       ),
+      diskUsageBytes: 1036613791,
     ),
   ];
 
   const state = AsrModelsUiState(
     models: cards,
     defaultSource: ModelSource.hfMirror,
-    installedCount: 1,
-    totalCount: 3,
+    installedCount: 2,
+    totalCount: 5,
     activeModelId: 'sensevoice-small',
   );
 

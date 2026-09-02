@@ -5,12 +5,18 @@
 /// sherpa-onnx FFI bindings. Offline only by design (no network).
 ///
 /// Supported models (see `packages/asr` manifest):
-/// - `paraformer-bilingual-streaming`: `OnlineParaformerModelConfig` (encoder.int8.onnx +
-///   decoder.int8.onnx + tokens.txt) with real-time partial drafts.
-/// - `sensevoice-small`: `OfflineSenseVoiceModelConfig` (model.int8.onnx +
-///   tokens.txt), auto language.
-/// - `whisper-large-v3-turbo`: `OfflineWhisperModelConfig`
-///   (turbo-encoder.int8.onnx + turbo-decoder.int8.onnx + turbo-tokens.txt).
+/// - Streaming (`OnlineRecognizer`): the transducer Zipformers
+///   (`streaming-zipformer-zh`, `streaming-zipformer-multilingual`) via
+///   `OnlineTransducerModelConfig` with manifest-resolved file names, plus
+///   `paraformer-bilingual-streaming` (discontinued) via
+///   `OnlineParaformerModelConfig` — all with real-time partial drafts.
+/// - `sensevoice-small`, `funasr-nano-ctc`: `OfflineSenseVoiceModelConfig`
+///   (model.int8.onnx + tokens.txt), auto language. Fun-ASR-Nano 2512's CTC
+///   export is a SenseVoice-pipeline model (k2-fsa PR #2906) and loads
+///   through the same config.
+/// - `whisper-large-v3-turbo` (discontinued): `OfflineWhisperModelConfig`
+///   (turbo-encoder.int8.onnx + turbo-decoder.int8.onnx + turbo-tokens.txt);
+///   kept so an installed copy from an older release keeps working.
 library;
 
 import 'dart:async';
@@ -49,7 +55,12 @@ class SherpaOfflineAsrEngine implements AsrEngine {
       _chunkController.stream;
 
   @override
-  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
+    // On-device inference has no default: a missing model or weights
+    // directory is a caller bug, not a fallback opportunity.
+    if (model == null || modelDir == null) {
+      throw ArgumentError('sherpa-onnx engines require a model and modelDir');
+    }
     if (_state != AsrEngineState.uninitialized &&
         _state != AsrEngineState.ready) {
       return;
@@ -202,23 +213,34 @@ class SherpaOfflineAsrEngine implements AsrEngine {
   }
 
   /// Whether the [model] runs in real-time streaming mode via [sherpa.OnlineRecognizer].
-  static bool isStreamingModel(AsrModelInfo model) => switch (model.id) {
-    'paraformer-bilingual-streaming' => true,
-    _ => false,
-  };
+  ///
+  /// Manifest-driven: every entry flagged `isStreaming` decodes incrementally
+  /// through the online recognizer, everything else decodes whole-utterance.
+  static bool isStreamingModel(AsrModelInfo model) => model.isStreaming;
 
   /// The single ONNX file that identifies the model family, used for the
   /// download-completeness check and to reject unsupported models loudly.
   ///
-  /// Public for pure-Dart tests (no native load).
+  /// Sense-voice-family exports identify by their single model file; every
+  /// other family identifies by its encoder file (resolved from the manifest
+  /// file list). Public for pure-Dart tests (no native load).
   static String modelFileNameFor(AsrModelInfo model) => switch (model.id) {
-    'sensevoice-small' => 'model.int8.onnx',
+    'sensevoice-small' || 'funasr-nano-ctc' => 'model.int8.onnx',
     'whisper-large-v3-turbo' => 'turbo-encoder.int8.onnx',
     'paraformer-bilingual-streaming' => 'encoder.int8.onnx',
-    _ => throw UnsupportedError(
-      'Model ${model.id} is not supported by the ASR engine',
-    ),
+    _ => _requiredFile(model, 'encoder').name,
   };
+
+  /// Resolves the manifest file whose name starts with [prefix], or throws
+  /// loudly — a model whose manifest lacks its identifying files cannot run.
+  static AsrModelFile _requiredFile(AsrModelInfo model, String prefix) {
+    for (final AsrModelFile file in model.files) {
+      if (file.name.startsWith(prefix)) return file;
+    }
+    throw UnsupportedError(
+      'Model ${model.id} has no "$prefix" file in its manifest entry',
+    );
+  }
 
   /// Builds the sherpa-onnx offline recognizer configuration for offline [model].
   static sherpa.OfflineRecognizerConfig offlineModelConfigFor(
@@ -227,6 +249,7 @@ class SherpaOfflineAsrEngine implements AsrEngine {
   ) {
     switch (model.id) {
       case 'sensevoice-small':
+      case 'funasr-nano-ctc':
         return sherpa.OfflineRecognizerConfig(
           model: sherpa.OfflineModelConfig(
             senseVoice: sherpa.OfflineSenseVoiceModelConfig(
@@ -275,6 +298,29 @@ class SherpaOfflineAsrEngine implements AsrEngine {
             paraformer: sherpa.OnlineParaformerModelConfig(
               encoder: '${modelDir.path}/encoder.int8.onnx',
               decoder: '${modelDir.path}/decoder.int8.onnx',
+            ),
+            tokens: '${modelDir.path}/tokens.txt',
+            numThreads: 1,
+            debug: false,
+          ),
+          enableEndpoint: true,
+          rule1MinTrailingSilence: 2.4,
+          rule2MinTrailingSilence: 1.2,
+          rule3MinUtteranceLength: 20,
+          decodingMethod: 'greedy_search',
+        );
+      case 'streaming-zipformer-zh':
+      case 'streaming-zipformer-multilingual':
+        // Transducer Zipformers: encoder/decoder/joiner file names vary per
+        // export (epoch-tagged names), so resolve them from the manifest.
+        return sherpa.OnlineRecognizerConfig(
+          model: sherpa.OnlineModelConfig(
+            transducer: sherpa.OnlineTransducerModelConfig(
+              encoder:
+                  '${modelDir.path}/${_requiredFile(model, 'encoder').name}',
+              decoder:
+                  '${modelDir.path}/${_requiredFile(model, 'decoder').name}',
+              joiner: '${modelDir.path}/${_requiredFile(model, 'joiner').name}',
             ),
             tokens: '${modelDir.path}/tokens.txt',
             numThreads: 1,

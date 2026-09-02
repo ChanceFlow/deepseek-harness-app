@@ -28,6 +28,14 @@ paths = [
     # pattern in gitleaks' default ruleset.
     '''flutter/pubspec.lock''',
 ]
+# Demo credentials rendered inside design-shot fixtures. These are
+# deliberately fake values (the secret below is base64 of "secretKeyDemo")
+# shown as placeholder text in widget screenshots; the generic-api-key
+# default rule flags their key/value shape, so the exact sentinel strings
+# are exempted instead of weakening any rule.
+stopwords = [
+    '''c2VjcmV0S2V5RGVtbw==''',
+]
 
 [[rules]]
 id = "dsha-internal-lan-ip"

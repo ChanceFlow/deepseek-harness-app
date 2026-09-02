@@ -494,6 +494,20 @@ final asrModelsDirectoryProvider = FutureProvider<Directory>((ref) async {
   return modelsDir;
 });
 
+/// Voice-input mode/credentials store (online/offline input selection),
+/// persisted next to the ASR model registry.
+final onlineAsrSettingsStoreProvider = FutureProvider<OnlineAsrSettingsStore>((
+  ref,
+) async {
+  final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
+  final store = OnlineAsrSettingsStore(
+    File('${modelsDir.path}/online_asr_settings.json'),
+  );
+  await store.load();
+  ref.onDispose(store.dispose);
+  return store;
+});
+
 /// ASR models registry provider.
 final asrModelsRegistryProvider = FutureProvider<ModelsRegistry>((ref) async {
   final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
@@ -521,7 +535,11 @@ final asrModelsControllerProvider = Provider.autoDispose<AsrModelsController>((
   ref,
 ) {
   final managerAsync = ref.watch(asrModelManagerProvider);
-  final controller = AsrModelsController(manager: managerAsync.value);
+  final settingsAsync = ref.watch(onlineAsrSettingsStoreProvider);
+  final controller = AsrModelsController(
+    manager: managerAsync.value,
+    cloudSettings: settingsAsync.value,
+  );
   ref.onDispose(controller.dispose);
   return controller;
 });
@@ -548,7 +566,10 @@ final voiceInputControllerProvider = Provider.autoDispose<VoiceInputController>(
             ),
           ),
         );
-    final controller = VoiceInputController(manager: manager);
+    final controller = VoiceInputController(
+      manager: manager,
+      cloudSettings: ref.watch(onlineAsrSettingsStoreProvider).value,
+    );
     ref.onDispose(controller.dispose);
     return controller;
   },

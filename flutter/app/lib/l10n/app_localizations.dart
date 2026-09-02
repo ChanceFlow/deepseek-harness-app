@@ -2599,6 +2599,12 @@ abstract class AppLocalizations {
   /// **'Canceled'**
   String get asrModelStatusCanceled;
 
+  /// No description provided for @asrModelDiscontinued.
+  ///
+  /// In en, this message translates to:
+  /// **'Discontinued · local copy only'**
+  String get asrModelDiscontinued;
+
   /// No description provided for @asrDownloadButton.
   ///
   /// In en, this message translates to:
@@ -2707,6 +2713,18 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get voiceInputDone;
 
+  /// No description provided for @voiceInputInitializing.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting ready…'**
+  String get voiceInputInitializing;
+
+  /// No description provided for @voiceInputFinalizing.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribing…'**
+  String get voiceInputFinalizing;
+
   /// No description provided for @voiceInputPermissionDenied.
   ///
   /// In en, this message translates to:
@@ -2754,6 +2772,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'None (download a model below)'**
   String get asrNoModelInstalled;
+
+  /// No description provided for @asrVoiceInputModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input mode'**
+  String get asrVoiceInputModeTitle;
+
+  /// No description provided for @asrVoiceInputModeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose whether speech recognition runs on-device or via an online speech service.'**
+  String get asrVoiceInputModeDesc;
+
+  /// No description provided for @asrVoiceInputModeOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device'**
+  String get asrVoiceInputModeOffline;
+
+  /// No description provided for @asrVoiceInputModeOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get asrVoiceInputModeOnline;
+
+  /// No description provided for @asrOnlineProviderVolcengine.
+  ///
+  /// In en, this message translates to:
+  /// **'Volcengine · Doubao'**
+  String get asrOnlineProviderVolcengine;
+
+  /// No description provided for @asrOnlineProviderVolcengineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Doubao streaming speech recognition, authenticated with an X-Api-Key.'**
+  String get asrOnlineProviderVolcengineHint;
+
+  /// No description provided for @asrOnlineProviderTencent.
+  ///
+  /// In en, this message translates to:
+  /// **'Tencent Cloud · Hunyuan'**
+  String get asrOnlineProviderTencent;
+
+  /// No description provided for @asrOnlineProviderTencentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Real-time speech recognition Hy-ASR-3.0-preview, authenticated with signed credentials.'**
+  String get asrOnlineProviderTencentHint;
+
+  /// No description provided for @asrOnlineVolcengineApiKeyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'API Key'**
+  String get asrOnlineVolcengineApiKeyLabel;
+
+  /// No description provided for @asrOnlineVolcengineApiKeyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'From the Volcengine speech console'**
+  String get asrOnlineVolcengineApiKeyHint;
+
+  /// No description provided for @asrOnlineTencentAppIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'AppID'**
+  String get asrOnlineTencentAppIdLabel;
+
+  /// No description provided for @asrOnlineTencentSecretIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SecretId'**
+  String get asrOnlineTencentSecretIdLabel;
+
+  /// No description provided for @asrOnlineTencentSecretKeyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SecretKey'**
+  String get asrOnlineTencentSecretKeyLabel;
+
+  /// No description provided for @asrOnlineEndpointLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint (optional)'**
+  String get asrOnlineEndpointLabel;
+
+  /// No description provided for @asrOnlineTencentLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'The Hunyuan preview accepts 16 kHz mono PCM only and recognizes at most 1 minute per session.'**
+  String get asrOnlineTencentLimit;
+
+  /// No description provided for @asrOnlinePrivacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys are stored on this device only; audio is sent only to the selected provider.'**
+  String get asrOnlinePrivacyNote;
+
+  /// No description provided for @asrOnlineSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice input settings saved'**
+  String get asrOnlineSaved;
+
+  /// No description provided for @voiceInputCloudSetupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Online Speech Setup Required'**
+  String get voiceInputCloudSetupTitle;
+
+  /// No description provided for @voiceInputCloudSetupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your online speech service credentials in Settings to enable online voice input.'**
+  String get voiceInputCloudSetupBody;
+
+  /// No description provided for @voiceInputCloudNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Online voice input needs credentials. Add them in Settings → Speech recognition.'**
+  String get voiceInputCloudNotConfigured;
+
+  /// No description provided for @voiceInputCloudConnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the online speech service. Check your network and credentials, then try again.'**
+  String get voiceInputCloudConnectFailed;
+
+  /// No description provided for @voiceInputCloudFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Online speech recognition failed. Check your credentials and try again.'**
+  String get voiceInputCloudFailed;
 }
 
 class _AppLocalizationsDelegate

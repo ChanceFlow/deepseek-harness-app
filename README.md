@@ -82,8 +82,11 @@ box, a tunneled remote dsh.
   approvals, questions, plan-review cards, background jobs, image
   attachments, skill candidates.
 - **Voice input & on-device ASR** — 100% client-side speech recognition
-  (SenseVoice, Paraformer, Whisper) with live waveform dock, timer, and
-  direct transcription stream into the composer.
+  (streaming Zipformer, offline SenseVoice and Fun-ASR-Nano) with live
+  waveform dock, timer, and direct transcription stream into the
+  composer; an opt-in online mode can stream the same mic audio to
+  Volcengine Doubao or Tencent Hunyuan real-time ASR with the user's own
+  credentials.
 - **Multiple hosts** — keep several dsh hosts configured on this
   device and switch which one drives the chat.
 - **Workspaces** — create from a path or the in-app host directory

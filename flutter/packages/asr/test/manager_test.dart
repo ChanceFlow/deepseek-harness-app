@@ -97,7 +97,7 @@ void main() {
 
       // Try starting second download while first is in-flight
       await expectLater(
-        manager.startDownload('paraformer-bilingual-streaming'),
+        manager.startDownload('streaming-zipformer-zh'),
         throwsA(isA<StateError>()),
       );
 
@@ -164,6 +164,57 @@ void main() {
       expect(manager.activeModelId, equals('sensevoice-small'));
       expect(manager.getActiveModel()?.id, equals('sensevoice-small'));
     });
+
+    test(
+      'refuses to download a discontinued model without state changes',
+      () async {
+        manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
+
+        await expectLater(
+          manager.startDownload('whisper-large-v3-turbo'),
+          throwsA(
+            isA<ArgumentError>().having(
+              (ArgumentError e) => e.message,
+              'message',
+              contains('discontinued'),
+            ),
+          ),
+        );
+
+        // The refusal happens before any registry mutation: the entry stays
+        // idle (not failed), so a pre-existing installed copy is untouched.
+        final ModelRegistryEntry entry = manager.getStatus(
+          'whisper-large-v3-turbo',
+        );
+        expect(entry.status, equals(AsrModelStatus.idle));
+        expect(manager.activeDownloadingModelId, isNull);
+      },
+    );
+
+    test(
+      'keeps an installed discontinued model active and resolvable',
+      () async {
+        manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);
+
+        final Directory modelDir = Directory(
+          '${tempDir.path}/whisper-large-v3-turbo',
+        );
+        await modelDir.create(recursive: true);
+        await registry.updateEntry(
+          ModelRegistryEntry(
+            modelId: 'whisper-large-v3-turbo',
+            source: ModelSource.hfMirror,
+            localDir: modelDir.path,
+            status: AsrModelStatus.downloaded,
+          ),
+        );
+        await manager.setActiveModelId('whisper-large-v3-turbo');
+
+        // A discontinued entry stays in the manifest: its installed copy is
+        // still returned as the active model after an app upgrade.
+        expect(manager.getActiveModel()?.id, equals('whisper-large-v3-turbo'));
+      },
+    );
 
     test('stale active model id falls back to first installed model', () async {
       manager = AsrModelManager(baseModelsDir: tempDir, registry: registry);

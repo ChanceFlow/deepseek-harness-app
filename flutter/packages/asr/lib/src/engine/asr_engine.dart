@@ -43,16 +43,27 @@ class AsrTranscriptionChunk {
 /// Lifecycle state of an [AsrEngine].
 enum AsrEngineState { uninitialized, ready, listening, transcribing, disposed }
 
-/// Abstract interface for on-device speech recognition engines.
+/// Abstract interface for speech recognition engines.
+///
+/// Implementations are either on-device ([SherpaOfflineAsrEngine]-style,
+/// backed by local model weights) or cloud-backed streaming engines that
+/// ship audio to an online service. On-device engines require both the
+/// model info and its local weights directory; cloud engines ignore both
+/// (their identity lives in the constructor config) and fail loud if
+/// handed credentials that are not configured.
 abstract interface class AsrEngine {
   /// Current lifecycle state of the engine.
   AsrEngineState get state;
 
   /// Stream of recognized text chunks.
+  ///
+  /// Engines report failures through [finish] (throwing) rather than
+  /// [Stream.addError]: consumers listen without an [onError] handler.
   Stream<AsrTranscriptionChunk> get transcriptionStream;
 
-  /// Initializes the engine with the model configuration and local weights directory.
-  Future<void> initialize(AsrModelInfo model, Directory modelDir);
+  /// Initializes the engine. On-device engines use [model] (catalog entry)
+  /// and [modelDir] (local weights directory); cloud engines ignore both.
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir);
 
   /// Accepts incoming PCM audio samples (16 kHz, 16-bit Mono, float32 normalized [-1.0, 1.0]).
   void acceptAudio(Float32List samples);

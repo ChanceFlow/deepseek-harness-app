@@ -4145,6 +4145,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       }
       final error = next.value?.errorMessage;
       if (error != null && error != prev?.value?.errorMessage) {
+        // A capture that dies mid-session is the one voice event the reader
+        // may not be looking at, so it lands on the skin as well as the
+        // screen — the same weight the dock uses for its own boundaries.
+        unawaited(HapticFeedback.heavyImpact());
         if (error == 'PERMISSION_DENIED') {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputPermissionDenied)),
@@ -4165,6 +4169,18 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.voiceInputModelUnsupported)),
           );
+        } else if (error == 'ONLINE_NOT_CONFIGURED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputCloudNotConfigured)),
+          );
+        } else if (error == 'ONLINE_CONNECT_FAILED') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.voiceInputCloudConnectFailed)),
+          );
+        } else if (error == 'ONLINE_ASR_FAILED') {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.voiceInputCloudFailed)));
         }
       }
     });
@@ -4251,20 +4267,22 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
               setState(() {});
             },
           ),
-          if (voiceInputState.isRecording)
-            VoiceRecordingDock(
-              uiState: voiceInputState,
-              onCancel: () {
-                unawaited(voiceController.cancelRecording());
-                _draftController.text = _preRecordingDraft;
-                _draftController.selection = TextSelection.collapsed(
-                  offset: _draftController.text.length,
-                );
-                _persistDraft();
-                setState(() {});
-              },
-              onDone: () => unawaited(voiceController.stopRecording()),
-            ),
+          // Mounted with the composer rather than inserted per session: the
+          // dock animates its own height, so a recording grows out of the
+          // input row and collapses back into it.
+          VoiceRecordingDock(
+            uiState: voiceInputState,
+            onCancel: () {
+              unawaited(voiceController.cancelRecording());
+              _draftController.text = _preRecordingDraft;
+              _draftController.selection = TextSelection.collapsed(
+                offset: _draftController.text.length,
+              );
+              _persistDraft();
+              setState(() {});
+            },
+            onDone: () => unawaited(voiceController.stopRecording()),
+          ),
           // Space, not a rule, separates the draft from the control row:
           // the dock already spends one hairline on the plan strip, and a
           // second inside the same card reads as ruling for its own sake.
@@ -4299,9 +4317,16 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                   ),
                   const SizedBox(width: 8),
                   VoiceMicButton(
-                    enabled: widget.enabled && !voiceInputState.isBusy,
+                    // Live whenever the reader, rather than the engine, holds
+                    // the turn: tapping the seat starts a capture and stops
+                    // one, and only a loading or decoding session declines.
+                    enabled:
+                        widget.enabled && !voiceInputState.isWaitingOnEngine,
                     isRecording: voiceInputState.isRecording,
                     hasInstalledModels: voiceInputState.hasInstalledModels,
+                    inputMode: voiceInputState.inputMode,
+                    onlineReady: voiceInputState.onlineReady,
+                    amplitude: voiceInputState.amplitude,
                     onTap: () {
                       if (voiceInputState.isRecording) {
                         unawaited(voiceController.stopRecording());

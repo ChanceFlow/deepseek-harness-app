@@ -45,7 +45,7 @@ class StreamingParaformerEngine implements AsrEngine {
       _streamController.stream;
 
   @override
-  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
     _state = AsrEngineState.ready;
     reset();
   }

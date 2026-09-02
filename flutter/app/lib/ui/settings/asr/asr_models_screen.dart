@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../di/providers.dart';
 import '../../theme/theme.dart';
+import 'asr_online_settings_card.dart';
 
 /// Route widget wrapping [AsrModelsScreen] with the Riverpod stream.
 class AsrModelsRoute extends ConsumerWidget {
@@ -230,6 +231,10 @@ class AsrModelsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
+            // Voice-input mode: on-device or an online provider.
+            AsrOnlineSettingsCard(cloud: uiState.cloud, onAction: onAction),
+            const SizedBox(height: 24),
+
             // Section Heading
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -335,6 +340,11 @@ class _ModelCard extends StatelessWidget {
                             label: info.license,
                             icon: Icons.gavel_outlined,
                           ),
+                          if (info.isDiscontinued)
+                            _Chip(
+                              label: l10n.asrModelDiscontinued,
+                              icon: Icons.archive_outlined,
+                            ),
                         ],
                       ),
                     ],

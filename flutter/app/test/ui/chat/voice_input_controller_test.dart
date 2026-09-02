@@ -107,6 +107,44 @@ void main() {
       },
     );
 
+    test(
+      'pairs each capture chunk with its sub-peak envelope for the meter',
+      () async {
+        final modelDir = Directory('${tempDir.path}/sensevoice-small');
+        await modelDir.create(recursive: true);
+        await registry.updateEntry(
+          ModelRegistryEntry(
+            modelId: 'sensevoice-small',
+            source: ModelSource.hfMirror,
+            localDir: modelDir.path,
+            status: AsrModelStatus.downloaded,
+          ),
+        );
+
+        final controller = VoiceInputController(
+          manager: manager,
+          audioRecorder: _ShapedAudioSource(),
+          engine: MockAsrEngine(),
+        );
+
+        await controller.startRecording();
+        await pumpEventQueue();
+
+        final envelope = controller.state.envelope;
+        expect(envelope, hasLength(kVoiceEnvelopeBands));
+        // The chunk's own level rides on the band that holds its peak, and the
+        // quiet windows keep their real proportion of it: the meter draws the
+        // shape inside the chunk, not one flat bar.
+        expect(controller.state.amplitude, closeTo(0.5, 0.001));
+        expect(envelope.first, closeTo(0.5, 0.001));
+        for (final quiet in envelope.skip(1)) {
+          expect(quiet, closeTo(0.125, 0.001));
+        }
+
+        controller.dispose();
+      },
+    );
+
     test('cancelRecording discards in-flight buffers cleanly', () async {
       final modelDir = Directory('${tempDir.path}/sensevoice-small');
       await modelDir.create(recursive: true);
@@ -342,7 +380,126 @@ void main() {
 
       controller.dispose();
     });
+
+    test(
+      'online mode starts through the cloud engine without models',
+      () async {
+        final store = OnlineAsrSettingsStore(
+          File('${tempDir.path}/online_asr_settings.json'),
+        );
+        await store.load();
+        await store.setMode(VoiceInputMode.online);
+        await store.setVolcengine(
+          const VolcengineDoubaoAsrConfig(apiKey: 'k-online'),
+        );
+
+        final cloudEngine = _ScriptedCloudEngine();
+        OnlineAsrSettings? captured;
+        final controller = VoiceInputController(
+          manager: manager,
+          audioRecorder: MockAudioInputSource(),
+          cloudSettings: store,
+          cloudEngineFactory: (settings) {
+            captured = settings;
+            return cloudEngine;
+          },
+        );
+
+        // No on-device model is installed, yet online voice input is armed:
+        // the state reflects the mode and the provider's readiness.
+        expect(controller.state.inputMode, equals(VoiceInputMode.online));
+        expect(controller.state.onlineReady, isTrue);
+        expect(controller.state.hasInstalledModels, isFalse);
+
+        await controller.startRecording();
+        expect(controller.state.phase, equals(VoiceInputPhase.recording));
+        expect(captured?.provider, equals(OnlineAsrProvider.volcengineDoubao));
+        expect(captured?.volcengine.apiKey, equals('k-online'));
+        expect(cloudEngine.initializeCalls, 1);
+
+        final text = await controller.stopRecording();
+        expect(text, equals('在线识别结果'));
+        expect(cloudEngine.finishCalls, 1);
+        expect(controller.state.isRecording, isFalse);
+
+        controller.dispose();
+        await store.dispose();
+      },
+    );
+
+    test('online mode without credentials reports a stable error', () async {
+      final store = OnlineAsrSettingsStore(
+        File('${tempDir.path}/online_asr_settings.json'),
+      );
+      await store.load();
+      await store.setMode(VoiceInputMode.online);
+      // No provider configured.
+
+      var factoryCalled = false;
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        cloudSettings: store,
+        cloudEngineFactory: (_) {
+          factoryCalled = true;
+          return _ScriptedCloudEngine();
+        },
+      );
+
+      expect(controller.state.onlineReady, isFalse);
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.error));
+      expect(controller.state.errorMessage, equals('ONLINE_NOT_CONFIGURED'));
+      expect(factoryCalled, isFalse);
+
+      controller.dispose();
+      await store.dispose();
+    });
   });
+}
+
+/// [AsrEngine] standing in for an online-session engine: records how it
+/// was initialized and what [finish] returns.
+class _ScriptedCloudEngine implements AsrEngine {
+  int initializeCalls = 0;
+  int finishCalls = 0;
+  AsrEngineState _state = AsrEngineState.uninitialized;
+
+  final StreamController<AsrTranscriptionChunk> _chunks =
+      StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
+
+  @override
+  AsrEngineState get state => _state;
+
+  @override
+  Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
+
+  @override
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
+    expect(model, isNull, reason: 'online engines carry no on-device model');
+    expect(modelDir, isNull);
+    initializeCalls++;
+    _state = AsrEngineState.ready;
+  }
+
+  @override
+  void acceptAudio(Float32List samples) {}
+
+  @override
+  Future<String> finish() async {
+    finishCalls++;
+    _state = AsrEngineState.ready;
+    return '在线识别结果';
+  }
+
+  @override
+  void reset() {}
+
+  @override
+  Future<void> dispose() async {
+    _state = AsrEngineState.disposed;
+    await _chunks.close();
+  }
 }
 
 /// [AsrEngine] that records how much audio it received before [finish],
@@ -365,7 +522,7 @@ class _TrackingEngine implements AsrEngine {
   Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
 
   @override
-  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
     _state = AsrEngineState.ready;
   }
 
@@ -412,7 +569,10 @@ class _UnsupportedModelEngine implements AsrEngine {
   Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
 
   @override
-  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
+    if (model == null) {
+      throw UnsupportedError('Model is required');
+    }
     throw UnsupportedError('Model ${model.id} is not supported');
   }
 
@@ -428,5 +588,45 @@ class _UnsupportedModelEngine implements AsrEngine {
   @override
   Future<void> dispose() async {
     await _chunks.close();
+  }
+}
+
+/// [AudioInputSource] that emits exactly one chunk of known shape: its first
+/// quarter at 0.8 and the rest at 0.2, followed by the level event the real
+/// recorder emits for the same frame.
+class _ShapedAudioSource implements AudioInputSource {
+  final StreamController<Float32List> _audio =
+      StreamController<Float32List>.broadcast();
+  final StreamController<double> _levels = StreamController<double>.broadcast();
+
+  bool _recording = false;
+
+  @override
+  Stream<Float32List> get audioStream => _audio.stream;
+
+  @override
+  Stream<double> get amplitudeStream => _levels.stream;
+
+  @override
+  bool get isRecording => _recording;
+
+  @override
+  Future<void> start({int sampleRate = 16000}) async {
+    _recording = true;
+    final chunk = Float32List(1600);
+    for (var i = 0; i < chunk.length; i++) {
+      chunk[i] = i < 400 ? 0.8 : 0.2;
+    }
+    _audio.add(chunk);
+    _levels.add(0.5);
+  }
+
+  @override
+  Future<void> stop() async => _recording = false;
+
+  @override
+  Future<void> dispose() async {
+    await _audio.close();
+    await _levels.close();
   }
 }

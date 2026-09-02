@@ -922,7 +922,7 @@ class _AsrModelsEntryRow extends ConsumerWidget {
               child: Text(
                 l10n.asrInstalledCount(
                   asrState.installedCount,
-                  asrState.totalCount > 0 ? asrState.totalCount : 3,
+                  asrState.totalCount > 0 ? asrState.totalCount : 4,
                 ),
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
