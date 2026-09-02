@@ -101,7 +101,11 @@ GATES: list[dict] = [
         "groups": ["code"],
         "cmd": ["flutter", "analyze"],
         "cwd": FLUTTER_ROOT,
-        "timeout": 600,
+        # Same scale as flutter-test: in CI the analyzer starts cold (fresh
+        # container, fresh analysis server, full pub-workspace resolution) on a
+        # host that also runs APK builds and dev suites, and two green-everywhere
+        # runs failed only on this ceiling.
+        "timeout": 1800,
     },
     {
         "name": "dart-format",
