@@ -125,17 +125,20 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     // Earcons for the three boundaries of a capture, taken from
-                    // the platform's own UI-sound set (the dialpad/switch path)
-                    // rather than shipped assets: they follow the device's
-                    // sound-effects setting, stay audible while the microphone
-                    // is hot, and cost the APK no bytes. A rising tone means the
-                    // audio was taken, a falling one that it was dropped.
+                    // the platform's own UI-sound set — the switch tick, the
+                    // dialpad key, the delete key — rather than shipped assets:
+                    // they follow the device's sound-effects setting, stay
+                    // audible while the microphone is hot, and cost the APK no
+                    // bytes. The public AudioManager FX_ ids are the whole
+                    // vocabulary playSoundEffect accepts, so the mapping stays
+                    // inside it; a device without an id leaves that boundary
+                    // silent, which the Dart side reads as success.
                     "playSoundEffect" -> {
                         val am = getSystemService(AUDIO_SERVICE) as AudioManager
                         val effect = when (call.argument<String>("effect")) {
-                            "start" -> AudioManager.FX_TOGGLE_ON
-                            "send" -> AudioManager.FX_ADD
-                            "cancel" -> AudioManager.FX_REMOVE
+                            "start" -> AudioManager.FX_FOCUS_NAVIGATION_UP
+                            "send" -> AudioManager.FX_KEYPRESS_STANDARD
+                            "cancel" -> AudioManager.FX_KEYPRESS_DELETE
                             else -> null
                         }
                         if (effect != null) am.playSoundEffect(effect)
