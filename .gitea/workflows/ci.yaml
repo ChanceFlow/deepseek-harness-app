@@ -1,12 +1,17 @@
-# CI for deepseek-harness-app — runs the gate aggregate as two parallel
-# jobs so a doc-only change fails in seconds instead of behind the Flutter
-# suite. Both are required statuses on `master`
-# (`CI / docs (pull_request)`, `CI / code (pull_request)`).
+# CI for deepseek-harness-app — runs the gates as three parallel jobs so a
+# doc-only change fails in seconds instead of behind the Flutter suite. All
+# three are required statuses on `master`
+# (`CI / docs (pull_request)`, `CI / code (pull_request)`,
+# `CI / android (pull_request)`).
 #
-#   docs  python3 scripts/verify_all.py docs — python only; needs the
-#         reference submodule (the launcher-icon drift gate reads it)
-#   code  python3 scripts/verify_all.py code — flutter analyze, dart format
-#         check, the full test suite, the import gate, unused deps
+#   docs    python3 scripts/verify_all.py docs — python only; needs the
+#           reference submodule (the launcher-icon drift gate reads it)
+#   code    python3 scripts/verify_all.py code — flutter analyze, dart format
+#           check, the full test suite, the import gate, unused deps
+#   android :app:compileDebugKotlin — the only gate that type-checks the
+#           Android host's Kotlin; lint and the Dart gates cannot see an
+#           unresolved platform reference. Decision:
+#           .agents/notes/implemented/process/2026-09-03-kotlin-compile-gate.md
 #
 # Requirements for the runner:
 #   - network access (fetches Flutter 3.47.1 via subosito/flutter-action and
@@ -45,12 +50,11 @@ jobs:
   code:
     # Runs on the prebaked builder image, not ubuntu-latest: the image
     # carries Flutter 3.47.1 on PATH and has the LAN egress proxy baked in
-    # (ENV HTTP_PROXY=http://127.0.0.1:7890) — exactly how release-apk
-    # reaches pub.dev. A plain ubuntu-latest job cannot rely on the
-    # workflow env's `vars.EGRESS_PROXY`: this Gitea Actions build does not
-    # resolve `vars.*` in env, so the job ran proxy-less and pub's large
-    # package downloads hung. The proxy env is still declared here for a
-    # runner that does resolve vars.
+    # as an env default — exactly how release-apk reaches pub.dev. The
+    # proxy env is additionally declared from `vars.EGRESS_PROXY` below:
+    # the variable is the single source of truth for the egress address
+    # (it lives in the repo's Actions settings, never in git), so a job is
+    # only ever proxy-less if the image env and the variable both fail it.
     # Toolchain pin (verify_toolchain_pin.py reads this file as source):
     # flutter-version: 3.47.1 — baked into the flutter-android image.
     runs-on: flutter-android
@@ -93,3 +97,102 @@ jobs:
 
       - name: Code gates (analyze, format, tests, imports)
         run: python3 scripts/verify_all.py code
+
+  android:
+    # The compiler is the only check that sees an unresolved platform
+    # symbol — how #153 shipped AudioManager constants no API has and left
+    # the red to the release channel. compileDebugKotlin is that check
+    # alone: no Dart AOT, asset merge, R8 or packaging. Same prebaked image
+    # as `code`; the gradle cache key is the release build's, so a warmed
+    # cache is the common case.
+    runs-on: flutter-android
+    timeout-minutes: 20
+    env:
+      HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
+      HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
+      http_proxy: ${{ vars.EGRESS_PROXY }}
+      https_proxy: ${{ vars.EGRESS_PROXY }}
+      # The gradle JVM ignores HTTP_PROXY env and rides system properties —
+      # which the image bakes stale: with the baked address no longer
+      # answering, run 983 timed out every egress download and disabled the
+      # Google repository with no compile error anywhere. The compile step
+      # below rebuilds those properties from the egress above at runtime,
+      # so no internal address is ever committed; the JVM's default
+      # nonProxyHosts keeps localhost traffic direct.
+      NO_PROXY: gitea,localhost,127.0.0.1
+      no_proxy: gitea,localhost,127.0.0.1
+    steps:
+      - name: Checkout (with reference submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # pub get's outputs are compile inputs: android/local.properties (the
+      # plugin's flutter.sdk) and .flutter-plugins-dependencies (the plugin
+      # projects settings.gradle includes).
+      - name: Resolve packages
+        working-directory: flutter
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 flutter pub get && exit 0
+            echo "pub resolve attempt $attempt stalled or failed; retrying"
+            sleep 5
+          done
+          exit 1
+
+      - name: Restore Gradle & pub caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            /root/.gradle/caches
+            /root/.pub-cache
+          key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
+          restore-keys: gradle-v1-
+
+      - name: Inject gradle wrapper
+        working-directory: flutter/app/android
+        run: |
+          # The wrapper scripts are deliberately untracked
+          # (flutter/app/android/.gitignore); `flutter build` injects them
+          # from the SDK's universal gradle_wrapper artifact
+          # (GradleUtils.injectGradleWrapperIfNeeded), which is how the
+          # release build launches gradle without them. pub get in the step
+          # above is what materialized the artifact in the SDK cache.
+          WRAPPER="$(dirname "$(dirname "$(which flutter)")")/bin/cache/artifacts/gradle_wrapper"
+          cp -n "$WRAPPER/gradlew" gradlew
+          cp -n "$WRAPPER/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar
+          chmod +x gradlew
+
+      - name: Kotlin type check (compileDebugKotlin)
+        working-directory: flutter/app/android
+        # Gradle's downloads and the runner's cache service both flake
+        # through the LAN egress (the release channel's history is the same
+        # story), so the check is bounded and retried like the pub resolve
+        # above: a real compile error fails three fast attempts, a flake
+        # self-heals on the next one. The proxy rides the system properties
+        # gradle's JVM actually reads, derived from the egress env above at
+        # runtime — an internal address never enters a committed file.
+        run: |
+          EGRESS_HOST="${HTTPS_PROXY#http://}"
+          EGRESS_HOST="${EGRESS_HOST%%:*}"
+          EGRESS_PORT="${HTTPS_PROXY##*:}"
+          if [ -z "$EGRESS_HOST" ] || [ "$EGRESS_HOST" = "$HTTPS_PROXY" ]; then
+            echo "EGRESS proxy missing: HTTPS_PROXY is not set for this job"
+            exit 1
+          fi
+          # The image baked the egress into /root/.gradle/gradle.properties
+          # at build time, and gradle.properties systemProp outranks every
+          # env layer (run 989: fresh GRADLE_OPTS/JAVA_TOOL_OPTIONS still
+          # rode the baked, since-dead address). Rewrite it from the live
+          # egress env — the same injection the Dockerfile performs at
+          # build time, with the address the variable carries now.
+          printf 'systemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\n' \
+            "$EGRESS_HOST" "$EGRESS_PORT" "$EGRESS_HOST" "$EGRESS_PORT" \
+            > /root/.gradle/gradle.properties
+          export GRADLE_OPTS="-Dhttp.proxyHost=$EGRESS_HOST -Dhttp.proxyPort=$EGRESS_PORT -Dhttps.proxyHost=$EGRESS_HOST -Dhttps.proxyPort=$EGRESS_PORT"
+          for attempt in 1 2 3; do
+            ./gradlew :app:compileDebugKotlin && exit 0
+            echo "kotlin check attempt $attempt failed; retrying"
+            sleep 10
+          done
+          exit 1
