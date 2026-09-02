@@ -205,7 +205,7 @@ void main() {
       expect(sounds, <String?>['start']);
     });
 
-    testWidgets('a tap on a live seat sends with the rising earcon', (
+    testWidgets('a tap on a live seat plays the send earcon', (
       WidgetTester tester,
     ) async {
       final sounds = await _captureSounds(tester);

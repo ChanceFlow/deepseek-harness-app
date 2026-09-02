@@ -50,12 +50,14 @@ In the slot the hold wins while a tap still falls through; `iconSize` and
 drop the intent when a release beats the controller's first state change, leaving
 a capture running with nobody holding it.
 
-**Earcons are the platform's.** `playVoiceSound(VoiceSound)` rides the existing
+**Earcons are the platform's.** `playVoiceSound(VoiceSound)` rides the
 `dsh/audio_record` channel to `AudioManager.playSoundEffect` — `start` →
-`FX_TOGGLE_ON`, `send` → `FX_ADD`, `cancel` → `FX_REMOVE`. No asset ships, the
-device's sound-effects setting governs them, and they stay audible while the
-microphone is hot. A host without the effect goes silent: a missing earcon must
-never read as a failed capture.
+`FX_FOCUS_NAVIGATION_UP` (the switch tick), `send` → `FX_KEYPRESS_STANDARD`
+(the dialpad key), `cancel` → `FX_KEYPRESS_DELETE` (the delete key), the
+closest distinct entries in the public `FX_` list, all `playSoundEffect`
+accepts. No asset ships, the device's sound-effects setting governs them, and
+they stay audible while the microphone is hot. A host without an effect goes
+silent: a missing earcon never reads as a failed capture.
 
 **Both edges animate.** Entrance and exit are one `AnimatedSwitcher` keyed on
 presence — `Easing.emphasizedDecelerate` in, `standardAccelerate` out — scaled
@@ -80,8 +82,8 @@ zero box so an outgoing bubble has something to cross-fade against. Under
 
 `VoiceMicButton` takes `uiState` plus `onStart`/`onFinish`/`onCancel` instead of
 flags and one `onTap`; the composer's draft-restore cancel moved onto `onCancel`,
-and with the dock gone there is exactly one recording surface. Tests can no longer
-reach the bubble under the seat — it is in the `Overlay` — so
+and with the dock gone there is exactly one recording surface. Tests cannot
+reach the bubble in the `Overlay`, so
 `voice_record_bubble_test.dart` asserts through text and geometry, drives holds
 with `startGesture`/`moveBy`, and reads earcons back from a mocked
 `dsh/audio_record`. A live session never settles while motion is allowed, and the
