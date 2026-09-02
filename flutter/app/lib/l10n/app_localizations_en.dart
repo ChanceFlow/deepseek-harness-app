@@ -1565,6 +1565,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceInputDone => 'Done';
 
   @override
+  String get voiceInputSlideToSend => 'Release to send · slide up to cancel';
+
+  @override
+  String get voiceInputReleaseToCancel => 'Release to cancel';
+
+  @override
+  String get voiceInputTapToFinish => 'Tap the mic to finish';
+
+  @override
   String get voiceInputInitializing => 'Getting ready…';
 
   @override

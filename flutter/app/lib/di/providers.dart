@@ -72,7 +72,7 @@ export '../ui/settings/asr/asr_models_controller.dart';
 export '../ui/settings/asr/asr_models_screen.dart';
 export '../ui/chat/voice_input/voice_input_controller.dart';
 export '../ui/chat/voice_input/voice_input_ui_state.dart';
-export '../ui/chat/voice_input/voice_recording_dock.dart';
+export '../ui/chat/voice_input/voice_record_bubble.dart';
 
 /// Backend registry (device-local store + UDF stream).
 final backendStoreProvider = FutureProvider<BackendStore>((ref) async {

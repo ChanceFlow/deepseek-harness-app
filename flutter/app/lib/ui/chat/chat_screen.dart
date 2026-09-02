@@ -4267,22 +4267,9 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
               setState(() {});
             },
           ),
-          // Mounted with the composer rather than inserted per session: the
-          // dock animates its own height, so a recording grows out of the
-          // input row and collapses back into it.
-          VoiceRecordingDock(
-            uiState: voiceInputState,
-            onCancel: () {
-              unawaited(voiceController.cancelRecording());
-              _draftController.text = _preRecordingDraft;
-              _draftController.selection = TextSelection.collapsed(
-                offset: _draftController.text.length,
-              );
-              _persistDraft();
-              setState(() {});
-            },
-            onDone: () => unawaited(voiceController.stopRecording()),
-          ),
+          // The recording surface is not here: it is the bubble the microphone
+          // seat anchors, so a session never pushes the input row around or
+          // covers the draft the live transcript is landing in.
           // Space, not a rule, separates the draft from the control row:
           // the dock already spends one hairline on the plan strip, and a
           // second inside the same card reads as ruling for its own sake.
@@ -4318,22 +4305,26 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                   const SizedBox(width: 8),
                   VoiceMicButton(
                     // Live whenever the reader, rather than the engine, holds
-                    // the turn: tapping the seat starts a capture and stops
-                    // one, and only a loading or decoding session declines.
+                    // the turn: a tap or a hold opens a capture, and only a
+                    // loading or decoding session declines.
                     enabled:
                         widget.enabled && !voiceInputState.isWaitingOnEngine,
-                    isRecording: voiceInputState.isRecording,
-                    hasInstalledModels: voiceInputState.hasInstalledModels,
-                    inputMode: voiceInputState.inputMode,
-                    onlineReady: voiceInputState.onlineReady,
-                    amplitude: voiceInputState.amplitude,
-                    onTap: () {
-                      if (voiceInputState.isRecording) {
-                        unawaited(voiceController.stopRecording());
-                      } else {
-                        _preRecordingDraft = _draftController.text;
-                        unawaited(voiceController.startRecording());
-                      }
+                    uiState: voiceInputState,
+                    onStart: () {
+                      _preRecordingDraft = _draftController.text;
+                      unawaited(voiceController.startRecording());
+                    },
+                    onFinish: () => unawaited(voiceController.stopRecording()),
+                    // A discarded capture leaves no trace: the draft it was
+                    // building goes back to whatever was there before.
+                    onCancel: () {
+                      unawaited(voiceController.cancelRecording());
+                      _draftController.text = _preRecordingDraft;
+                      _draftController.selection = TextSelection.collapsed(
+                        offset: _draftController.text.length,
+                      );
+                      _persistDraft();
+                      setState(() {});
                     },
                     onOpenSettings: () {
                       Navigator.of(context).push(

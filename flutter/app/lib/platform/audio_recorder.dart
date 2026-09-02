@@ -263,3 +263,29 @@ String? formatDebugStats(AudioDebugStats s) {
       'sent=${s.eventsSent} got=${s.eventsReceived} '
       'src=${s.sourceUsed} muted=${s.micMuted}';
 }
+
+/// The boundaries of a capture that the reader should hear as well as feel.
+///
+/// The names are the contract with the Android side's effect mapping; they are
+/// not sound files, so nothing here carries an asset.
+enum VoiceSound { start, send, cancel }
+
+/// Plays [sound] through the platform's own UI-sound path.
+///
+/// Rides the capture control channel rather than shipping recorded effects: the
+/// system's set follows the device's sound settings, stays audible while the
+/// microphone is hot, and costs the APK no bytes. Any host that cannot answer —
+/// desktop, a widget test, a device profile without the effect — goes silent,
+/// because a missing earcon must never read to the reader as a failed capture.
+Future<void> playVoiceSound(VoiceSound sound) async {
+  try {
+    await const MethodChannel(kAudioRecordChannel).invokeMethod<void>(
+      'playSoundEffect',
+      <String, Object?>{'effect': sound.name},
+    );
+  } on MissingPluginException {
+    // No Android embedder to ask.
+  } on PlatformException {
+    // The device refused the effect; silence is the only sane answer.
+  }
+}

@@ -2713,6 +2713,24 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get voiceInputDone;
 
+  /// No description provided for @voiceInputSlideToSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Release to send · slide up to cancel'**
+  String get voiceInputSlideToSend;
+
+  /// No description provided for @voiceInputReleaseToCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Release to cancel'**
+  String get voiceInputReleaseToCancel;
+
+  /// No description provided for @voiceInputTapToFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the mic to finish'**
+  String get voiceInputTapToFinish;
+
   /// No description provided for @voiceInputInitializing.
   ///
   /// In en, this message translates to:
