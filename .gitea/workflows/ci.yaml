@@ -29,6 +29,10 @@ jobs:
     # job stalls on `git submodule update` exactly like pub did). The
     # prebaked image has the proxy baked in, so run docs there as well.
     runs-on: flutter-android
+    # A wedged job must not own the single runner for hours: the release-APK
+    # job once hung on pub's dependency resolution for 1h49m and queued every
+    # PR behind it.
+    timeout-minutes: 15
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
@@ -60,11 +64,32 @@ jobs:
       # This runner shares the host's core count; uncapped, `flutter test`
       # spawns one tester per CPU and the suite gets OOM-killed (exit 137).
       DSH_TEST_CONCURRENCY: '4'
+    # Bound the job the same way: a hung pub resolve inside any step must end
+    # in a failed run, not a two-hour runner occupation.
+    timeout-minutes: 60
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      # Resolution happens exactly here, once, at a named step, and bounded:
+      # pub's network resolve has hung inside this runner — the release build
+      # sat on "Resolving dependencies..." for 1h49m, and an analyze gate
+      # burned its whole 1800s ceiling on the same line — while the resolve
+      # seconds later in the same job finished in 5s. A stalled resolve never
+      # times out on its own, so each attempt is bounded and retried. With the
+      # package config settled up front, the gates' own implicit resolves
+      # become no-ops that never touch the network.
+      - name: Resolve packages
+        working-directory: flutter
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 flutter pub get && exit 0
+            echo "pub resolve attempt $attempt stalled or failed; retrying"
+            sleep 5
+          done
+          exit 1
 
       - name: Code gates (analyze, format, tests, imports)
         run: python3 scripts/verify_all.py code

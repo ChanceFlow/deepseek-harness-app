@@ -38,8 +38,10 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   `appLifecycleChangesProvider`（providers.dart 的 WidgetsBindingObserver
   失效信号），每次全量跑 fold 与"上次已应用态"做 diff，只在变化处发
   notifier 调用。OS 滑掉不可观测，diff 语义保证已显示的 done 不因快照
-  重放而复活；重新 running 会重新挂常驻。前台且正在看的会话不挂
-  （沿用 selected 静默规则，done 不受此抑制——completed 位本就不为打开
+  重放而复活；重新 running 会重新挂常驻。前台且被观看的会话不挂
+  （沿用 selected 静默规则，"被观看" = 选中 + Chat destination 激活，
+  见 [通知中心](2026-08-20-notification-center.md) 的 watched 事实；
+  done 不受此抑制——completed 位本就不为打开
   态arming）。**子代理会话不是一等通知主体**：`_onSessions` 先按
   `parentSessionId == null` 过滤，瞬时 detector 与常驻 fold 都只见根会话
   （被委托的回合由根会话的 running/pending 说话），child 从 `live` 集合

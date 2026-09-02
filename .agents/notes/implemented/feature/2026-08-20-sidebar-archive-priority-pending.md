@@ -55,13 +55,14 @@ sessions.
   session via the `workspace.archiveSession` RPC, so workspace rows
   keep their existing sheet (move/delete controls only).
 - **Finished-but-unviewed fold** (harness_repository_impl.dart): the
-  adapter tracks last-seen `running` per session and folds
-  `host/session-status` true→false edges while the session is not the
-  one being viewed into a `completed` bit on `SessionSummary` (web
-  SessionManager `completedNotifications`). Opening the session or it
-  running again clears the bit; `refreshSessions` rebuilds preserve it
-  from the live list. The `observeSessions` projection must forward
-  the bit (a dropped field here silently reset it).
+  adapter tracks last-seen `running` per session and folds the
+  running→idle edge from every observation source (frames and pulls;
+  web `syncCompletedNotifications`) into a `completed` bit on
+  `SessionSummary` (web `completedNotifications`) while the session is
+  unviewed. First observation records the baseline without arming;
+  running or opening clears the bit; refreshes preserve and extend it.
+  The `observeSessions` projection forwards the bit (dropping it
+  silently resets).
 
 ## Alternatives considered
 
@@ -88,16 +89,17 @@ both surfaces; archive stays per-session (no workspace-level concept,
 matching the reference). The pending status is only as current as the
 last frame — a cold session shows no pending until its frames replay;
 unarchive remains unexposed. The completed bit is client-derived: it
-survives list refreshes but resets on reconnect.
+survives refreshes and reconnect pulls; idle-at-first-observation never
+arms.
 
 ## Testing
 
 Adapter integration tests cover the pending fold (approval
 requested/resolved, plan-review vs plain question classification,
 question resolution by rpcId, never-opened session lights up) and the
-completed fold (finished-while-unviewed arms and survives a list
-refresh, opening/running again clears it, finished-while-viewed never
-arms). session_tree_test.dart covers the priority ordering, empty-group
+completed fold (finished-while-unviewed arms, opening/running again
+clears it, finished-while-viewed never arms, pull-carried transitions
+arm). session_tree_test.dart covers the priority ordering, empty-group
 hiding, management-surface account order, the status-dot mapping (idle
 no dot, pending amber, running blue, completed green) and the long-press
 sheet verbs. session_panel_test.dart assertions move to the priority

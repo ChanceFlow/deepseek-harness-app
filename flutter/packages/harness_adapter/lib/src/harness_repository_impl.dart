@@ -1619,18 +1619,44 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (pendingChanged) {
       _pendingInteractions.value = _projectPending();
     }
+    // Web SessionManager `syncCompletedNotifications` parity: the
+    // running→idle edge folds on every observation source, not only on
+    // `host/session-status` frames. A pull arriving after the turn
+    // finished (WS gap, app process death) arms the reminder, and a
+    // session running at the first observation records its baseline so
+    // its later completion frame arms. The first observation seeds only.
+    final armedByPull = <String>{};
+    for (final session in listing) {
+      final wasRunning = _prevRunningBySession[session.sessionId];
+      if (wasRunning == null) {
+        _prevRunningBySession[session.sessionId] = session.running;
+        continue;
+      }
+      if (wasRunning && !session.running) {
+        if (session.sessionId != _openSessionId) {
+          armedByPull.add(session.sessionId);
+        }
+      }
+      _prevRunningBySession[session.sessionId] = session.running;
+    }
     // A list refresh rebuilds from the wire summaries, which carry no
     // completion fact — preserve the folded bit for sessions that still
     // hold it (web SessionManager keeps completedNotifications across
-    // list pulls).
+    // list pulls), extend it with the edges this pull armed, and clear it
+    // wherever the wire reports the session running again (web
+    // `else if (s.running)` — the same rule the frame handler applies).
     final completedById = <String, bool>{
       for (final item in _sessions.value)
         if (item.completed) item.id: true,
     };
     final result = listing.map((wire) {
       final session = _toDomainSession(wire);
-      final completed = completedById[session.id] ?? false;
-      return completed ? _copySession(session, completed: true) : session;
+      final armed =
+          (completedById[session.id] ?? false) ||
+          armedByPull.contains(session.id);
+      return armed && !session.running
+          ? _copySession(session, completed: true)
+          : session;
     }).toList();
     return result;
   }

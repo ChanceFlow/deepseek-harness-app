@@ -21,6 +21,8 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:app/platform/disk_space.dart';
 
+import 'http_engine.dart';
+
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart' show SessionSummary;
@@ -48,6 +50,7 @@ import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
 import '../notifications/system_notifier.dart';
+import '../notifications/watched_session.dart';
 import '../local_state/local_state_providers.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_local_state.dart';
@@ -55,6 +58,7 @@ import '../ui/chat/chat_ui_state.dart';
 import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
+import '../ui/root/app_destination.dart';
 import '../ui/settings/settings_controller.dart';
 import '../ui/settings/asr/asr_models_controller.dart';
 import '../ui/chat/voice_input/voice_input_controller.dart';
@@ -150,10 +154,32 @@ final backendByIdProvider = StreamProvider.family
     });
 
 /// Raw transport seams, overridable in tests (one per backend URL).
+///
+/// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
+/// `http_engine.dart`); non-Android hosts and engine-construction failure
+/// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
+/// The engine lives and dies with the backend configuration: autoDispose
+/// tears it down when the last watcher drops (backend removed, disabled,
+/// or its URL edited).
 final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
-  (ref, uri) => HttpDshRpcClient(uri),
+  _buildRpcClient,
   name: 'dshRpcClient',
 );
+
+/// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
+/// `http_engine.dart`); non-Android hosts and engine-construction failure
+/// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
+/// The engine lives and dies with the backend configuration: autoDispose
+/// tears it down when the last watcher drops (backend removed, disabled,
+/// or its URL edited).
+DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
+  final engine = dshHttp3Engine();
+  if (engine == null) {
+    return HttpDshRpcClient(uri);
+  }
+  ref.onDispose(engine.close);
+  return HttpDshRpcClient(uri, httpClient: engine);
+}
 
 final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
   (ref, uri) => WebSocketDshEventSocket(uri),
@@ -231,32 +257,66 @@ final systemNotifierProvider = Provider<SystemNotifier>((ref) {
 /// work notification. The app-root toast host keeps every enabled
 /// backend's center alive so backgrounded turns still notify.
 ///
-/// The center watches the backend's chat controller (the selection stream
-/// it listens to and the selected-session poll both read that live
-/// instance), so the controller stays alive with its center — per backend
-/// that is for the app's lifetime, matching the connection keep-alive
-/// requirement.
+/// The center watches the backend's chat controller (its uiState feeds the
+/// watched-session fact below), so the controller stays alive with its
+/// center — per backend that is for the app's lifetime, matching the
+/// connection keep-alive requirement.
 final appNotificationCenterProvider = Provider.family
     .autoDispose<AppNotificationCenter, String>((ref, backendId) {
       final systemNotifier = ref.watch(systemNotifierProvider);
-      final chatController = ref.watch(chatControllerProvider(backendId));
+      // Keep the controller alive with its center (doc above); its uiState
+      // feeds the watched-session fact the center polls and listens to.
+      ref.watch(chatControllerProvider(backendId));
+      // The watched-session fact (selection only while Chat covers the
+      // screen) drives both the selected-turn silence rule and the ongoing
+      // suppression; its changes — selection AND destination switches —
+      // invalidate the reconcile.
+      final watchedChanges = StreamController<void>.broadcast();
+      ref.onDispose(watchedChanges.close);
+      ref.listen<String?>(watchedSessionIdProvider(backendId), (_, _) {
+        if (!watchedChanges.isClosed) watchedChanges.add(null);
+      });
       final center = AppNotificationCenter(
         repository: ref.watch(chatRepositoryProvider(backendId)),
         backendId: backendId,
         isForegrounded: () =>
             WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
-        selectedSessionIdOf: () => chatController.state.selectedSessionId,
+        selectedSessionIdOf: () =>
+            ref.read(watchedSessionIdProvider(backendId)),
         onBackground: systemNotifier.show,
         notifier: systemNotifier,
-        selectionChanges: chatController.uiState
-            .map((state) => state.selectedSessionId)
-            .distinct()
-            .map((_) {}),
+        selectionChanges: watchedChanges.stream,
         foregroundChanges: ref.watch(appLifecycleChangesProvider),
       );
       ref.onDispose(center.dispose);
       return center;
     });
+
+/// The session the user is actually watching on this backend: the chat
+/// controller's selection only while the Chat destination is the active
+/// one ([watchedSessionId]). A turn finishing in the selected session
+/// while the user reads Workspaces or Settings is NOT watched — the web's
+/// "selected stays silent" carve-out assumes the conversation pane is
+/// always on screen, and the phone's full-screen destinations are not.
+///
+/// Selection changes republish the controller's uiState (watched for
+/// invalidation); the value itself polls the controller's live state, so
+/// a fold can never see a stale or pre-first-emission cache.
+final watchedSessionIdProvider = Provider.family.autoDispose<String?, String>((
+  ref,
+  backendId,
+) {
+  final chatDestinationActive =
+      ref.watch(appDestinationProvider) == AppDestination.chat;
+  ref.watch(chatUiStateProvider(backendId));
+  return watchedSessionId(
+    chatDestinationActive: chatDestinationActive,
+    selectedSessionId: ref
+        .watch(chatControllerProvider(backendId))
+        .state
+        .selectedSessionId,
+  );
+});
 
 /// Broadcast invalidation signal fired on every app lifecycle transition.
 /// The ongoing work notifications re-reconcile on it; the signal carries no
