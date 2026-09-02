@@ -75,6 +75,8 @@ class AsrModelManager {
   /// A persisted [activeModelId] that no longer exists in [AsrModelManifest]
   /// (e.g. a model removed by an app upgrade) is treated as unset: it falls
   /// through to the first-installed-model fallback instead of yielding null.
+  /// Discontinued entries stay in the manifest, so their installed copies
+  /// resolve here and remain selectable.
   AsrModelInfo? getActiveModel() {
     final activeId = registry.activeModelId;
     if (activeId != null) {
@@ -99,6 +101,10 @@ class AsrModelManager {
   Stream<Map<String, ModelRegistryEntry>> get updates => registry.updates;
 
   /// Starts downloading [modelId] using [sourceOverride] or [defaultSource].
+  ///
+  /// Discontinued models ([AsrModelInfo.isDiscontinued], e.g. Whisper) are
+  /// refused before any state changes: their installed copies keep working,
+  /// but the artifacts are no longer offered for download.
   Future<void> startDownload(
     String modelId, {
     ModelSource? sourceOverride,
@@ -107,6 +113,11 @@ class AsrModelManager {
     final AsrModelInfo? model = AsrModelManifest.findById(modelId);
     if (model == null) {
       throw ArgumentError('Unknown ASR model id: $modelId');
+    }
+    if (model.isDiscontinued) {
+      throw ArgumentError(
+        'ASR model $modelId is discontinued and cannot be downloaded',
+      );
     }
 
     if (_activeDownloadingModelId != null &&

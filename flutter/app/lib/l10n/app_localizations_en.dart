@@ -1497,6 +1497,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get asrModelStatusCanceled => 'Canceled';
 
   @override
+  String get asrModelDiscontinued => 'Discontinued · local copy only';
+
+  @override
   String get asrDownloadButton => 'Download';
 
   @override
@@ -1562,6 +1565,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceInputDone => 'Done';
 
   @override
+  String get voiceInputInitializing => 'Getting ready…';
+
+  @override
+  String get voiceInputFinalizing => 'Transcribing…';
+
+  @override
   String get voiceInputPermissionDenied =>
       'Microphone permission is required for voice input.';
 
@@ -1590,4 +1599,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get asrNoModelInstalled => 'None (download a model below)';
+
+  @override
+  String get asrVoiceInputModeTitle => 'Voice input mode';
+
+  @override
+  String get asrVoiceInputModeDesc =>
+      'Choose whether speech recognition runs on-device or via an online speech service.';
+
+  @override
+  String get asrVoiceInputModeOffline => 'On-device';
+
+  @override
+  String get asrVoiceInputModeOnline => 'Online';
+
+  @override
+  String get asrOnlineProviderVolcengine => 'Volcengine · Doubao';
+
+  @override
+  String get asrOnlineProviderVolcengineHint =>
+      'Doubao streaming speech recognition, authenticated with an X-Api-Key.';
+
+  @override
+  String get asrOnlineProviderTencent => 'Tencent Cloud · Hunyuan';
+
+  @override
+  String get asrOnlineProviderTencentHint =>
+      'Real-time speech recognition Hy-ASR-3.0-preview, authenticated with signed credentials.';
+
+  @override
+  String get asrOnlineVolcengineApiKeyLabel => 'API Key';
+
+  @override
+  String get asrOnlineVolcengineApiKeyHint =>
+      'From the Volcengine speech console';
+
+  @override
+  String get asrOnlineTencentAppIdLabel => 'AppID';
+
+  @override
+  String get asrOnlineTencentSecretIdLabel => 'SecretId';
+
+  @override
+  String get asrOnlineTencentSecretKeyLabel => 'SecretKey';
+
+  @override
+  String get asrOnlineEndpointLabel => 'Endpoint (optional)';
+
+  @override
+  String get asrOnlineTencentLimit =>
+      'The Hunyuan preview accepts 16 kHz mono PCM only and recognizes at most 1 minute per session.';
+
+  @override
+  String get asrOnlinePrivacyNote =>
+      'Keys are stored on this device only; audio is sent only to the selected provider.';
+
+  @override
+  String get asrOnlineSaved => 'Voice input settings saved';
+
+  @override
+  String get voiceInputCloudSetupTitle => 'Online Speech Setup Required';
+
+  @override
+  String get voiceInputCloudSetupBody =>
+      'Add your online speech service credentials in Settings to enable online voice input.';
+
+  @override
+  String get voiceInputCloudNotConfigured =>
+      'Online voice input needs credentials. Add them in Settings → Speech recognition.';
+
+  @override
+  String get voiceInputCloudConnectFailed =>
+      'Could not reach the online speech service. Check your network and credentials, then try again.';
+
+  @override
+  String get voiceInputCloudFailed =>
+      'Online speech recognition failed. Check your credentials and try again.';
 }

@@ -139,7 +139,21 @@ class ModelsRegistry {
       .where((ModelRegistryEntry e) => e.status == AsrModelStatus.downloaded)
       .length;
 
-  int get totalCount => AsrModelManifest.all.length;
+  /// Catalog size for the "installed / total" counter: downloadable models
+  /// plus installed discontinued ones. A discontinued entry only exists to
+  /// keep an installed copy manageable, so counting it before installation
+  /// would advertise a card the list never shows.
+  int get totalCount {
+    final int downloadable = AsrModelManifest.downloadable.length;
+    final int installedDiscontinued = _entries.values
+        .where((ModelRegistryEntry e) => e.isDownloaded)
+        .where(
+          (ModelRegistryEntry e) =>
+              AsrModelManifest.findById(e.modelId)?.isDiscontinued ?? false,
+        )
+        .length;
+    return downloadable + installedDiscontinued;
+  }
 
   /// Loads registry from disk. Rebuilds cleanly on file corruption.
   Future<void> load() async {

@@ -41,6 +41,7 @@ class AsrModelsUiState {
     this.activeModelId,
     this.errorMessage,
     this.isLoading = false,
+    this.cloud,
   });
 
   final List<AsrModelCardState> models;
@@ -53,6 +54,10 @@ class AsrModelsUiState {
   final String? errorMessage;
   final bool isLoading;
 
+  /// Voice-input mode and online provider credentials; null before the
+  /// settings store loads (or when the surface runs without one).
+  final OnlineAsrSettings? cloud;
+
   AsrModelsUiState copyWith({
     List<AsrModelCardState>? models,
     ModelSource? defaultSource,
@@ -64,6 +69,7 @@ class AsrModelsUiState {
     String? errorMessage,
     bool clearError = false,
     bool? isLoading,
+    OnlineAsrSettings? cloud,
   }) {
     return AsrModelsUiState(
       models: models ?? this.models,
@@ -75,6 +81,7 @@ class AsrModelsUiState {
       activeModelId: activeModelId ?? this.activeModelId,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isLoading: isLoading ?? this.isLoading,
+      cloud: cloud ?? this.cloud,
     );
   }
 }
@@ -129,24 +136,53 @@ class RefreshAsrStateAction extends AsrModelsAction {
   const RefreshAsrStateAction();
 }
 
+/// Switches voice input between on-device and online transcription.
+class SetVoiceInputModeAction extends AsrModelsAction {
+  const SetVoiceInputModeAction(this.mode);
+  final VoiceInputMode mode;
+}
+
+/// Selects which online provider voice input uses.
+class SetCloudProviderAction extends AsrModelsAction {
+  const SetCloudProviderAction(this.provider);
+  final OnlineAsrProvider provider;
+}
+
+/// Persists the Volcengine Doubao credentials/endpoint.
+class SaveVolcengineConfigAction extends AsrModelsAction {
+  const SaveVolcengineConfigAction(this.config);
+  final VolcengineDoubaoAsrConfig config;
+}
+
+/// Persists the Tencent Hunyuan credentials/endpoint.
+class SaveTencentConfigAction extends AsrModelsAction {
+  const SaveTencentConfigAction(this.config);
+  final TencentHunyuanAsrConfig config;
+}
+
 /// Controller managing ASR models UI lifecycle.
 class AsrModelsController {
-  AsrModelsController({this.manager}) {
+  AsrModelsController({this.manager, this._cloudSettings}) {
     _init();
   }
 
   final AsrModelManager? manager;
+  final OnlineAsrSettingsStore? _cloudSettings;
   final StreamController<AsrModelsUiState> _stateController =
       StreamController<AsrModelsUiState>.broadcast();
   StreamSubscription<Map<String, ModelRegistryEntry>>? _registrySub;
+  StreamSubscription<OnlineAsrSettings>? _cloudSettingsSub;
 
   AsrModelsUiState _state = const AsrModelsUiState(isLoading: true);
   AsrModelsUiState get state => _state;
   Stream<AsrModelsUiState> get uiState => _stateController.stream;
 
   void _init() {
+    _cloudSettingsSub = _cloudSettings?.updates.listen((OnlineAsrSettings s) {
+      _emit(_state.copyWith(cloud: s));
+    });
     if (manager == null) {
-      _emit(_state.copyWith(isLoading: false));
+      _emit(_state.copyWith(isLoading: false, cloud: _cloudSettings?.settings));
       return;
     }
 
@@ -162,6 +198,9 @@ class AsrModelsController {
     final List<AsrModelCardState> cards = <AsrModelCardState>[];
     for (final AsrModelInfo info in AsrModelManifest.all) {
       final ModelRegistryEntry entry = manager!.getStatus(info.id);
+      // Discontinued models (e.g. Whisper) are download-refused: a copy that
+      // was never installed can never become usable, so it stays hidden.
+      if (info.isDiscontinued && !entry.isDownloaded) continue;
       int? diskBytes;
       if (entry.isDownloaded) {
         diskBytes = await manager!.getActualDiskUsage(info.id);
@@ -181,6 +220,7 @@ class AsrModelsController {
         activeDownloadingId: manager!.activeDownloadingModelId,
         activeModelId: manager!.activeModelId,
         isLoading: false,
+        cloud: _cloudSettings?.settings,
       ),
     );
   }
@@ -218,7 +258,35 @@ class AsrModelsController {
         _emit(_state.copyWith(clearError: true));
       case RefreshAsrStateAction():
         unawaited(_refresh());
+      case SetVoiceInputModeAction(:final VoiceInputMode mode):
+        unawaited(_setVoiceInputMode(mode));
+      case SetCloudProviderAction(:final OnlineAsrProvider provider):
+        unawaited(_setCloudProvider(provider));
+      case SaveVolcengineConfigAction(:final VolcengineDoubaoAsrConfig config):
+        unawaited(_saveVolcengine(config));
+      case SaveTencentConfigAction(:final TencentHunyuanAsrConfig config):
+        unawaited(_saveTencent(config));
     }
+  }
+
+  Future<void> _setVoiceInputMode(VoiceInputMode mode) async {
+    if (_cloudSettings == null) return;
+    await _cloudSettings.setMode(mode);
+  }
+
+  Future<void> _setCloudProvider(OnlineAsrProvider provider) async {
+    if (_cloudSettings == null) return;
+    await _cloudSettings.setProvider(provider);
+  }
+
+  Future<void> _saveVolcengine(VolcengineDoubaoAsrConfig config) async {
+    if (_cloudSettings == null) return;
+    await _cloudSettings.setVolcengine(config);
+  }
+
+  Future<void> _saveTencent(TencentHunyuanAsrConfig config) async {
+    if (_cloudSettings == null) return;
+    await _cloudSettings.setTencent(config);
   }
 
   Future<void> _setActiveModel(String? modelId) async {
@@ -276,6 +344,7 @@ class AsrModelsController {
 
   void dispose() {
     unawaited(_registrySub?.cancel());
+    unawaited(_cloudSettingsSub?.cancel());
     unawaited(_stateController.close());
   }
 }

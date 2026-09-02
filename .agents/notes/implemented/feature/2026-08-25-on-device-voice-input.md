@@ -37,7 +37,7 @@ In `flutter/app/lib/ui/chat/`:
 
 ## Alternatives considered
 
-- **Cloud ASR proxy fallback**: Rejected because DeepSeek Harness is an offline-first, privacy-focused client; sending raw microphone audio to third-party endpoints violates user privacy expectations.
+- **Cloud ASR proxy fallback**: Rejected because DeepSeek Harness is an offline-first, privacy-focused client; sending raw microphone audio to third-party endpoints violates user privacy expectations. (Partially superseded on 2026-09-02: offline remains the default mode, but the user can now opt into online voice input with their own provider credentials — see [online ASR providers](2026-09-02-online-asr-providers.md).)
 - **Floating voice overlay / modal bottom sheet**: Rejected because modal sheets obscure the conversation transcript and disrupt the flow of message drafting. The dock-integrated `VoiceRecordingDock` keeps context visible while dictating.
 - **Monolithic engine tied to Flutter UI**: Rejected to maintain absolute package boundaries: `packages/asr` handles models, engines, and audio streams independently of Flutter widgets.
 

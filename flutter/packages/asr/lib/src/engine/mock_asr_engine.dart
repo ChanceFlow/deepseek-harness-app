@@ -35,7 +35,7 @@ class MockAsrEngine implements AsrEngine {
       _chunkController.stream;
 
   @override
-  Future<void> initialize(AsrModelInfo model, Directory modelDir) async {
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
     _state = AsrEngineState.ready;
   }
 

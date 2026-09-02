@@ -1453,6 +1453,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get asrModelStatusCanceled => '已取消';
 
   @override
+  String get asrModelDiscontinued => '已下架 · 仅本地可用';
+
+  @override
   String get asrDownloadButton => '下载';
 
   @override
@@ -1517,6 +1520,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputDone => '完成';
 
   @override
+  String get voiceInputInitializing => '正在准备…';
+
+  @override
+  String get voiceInputFinalizing => '正在转写…';
+
+  @override
   String get voiceInputPermissionDenied => '需要麦克风权限才能进行语音输入。';
 
   @override
@@ -1539,4 +1548,71 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get asrNoModelInstalled => '无（请在下方下载模型）';
+
+  @override
+  String get asrVoiceInputModeTitle => '语音输入方式';
+
+  @override
+  String get asrVoiceInputModeDesc => '选择语音识别在端侧离线执行，或调用在线语音服务。';
+
+  @override
+  String get asrVoiceInputModeOffline => '离线端侧';
+
+  @override
+  String get asrVoiceInputModeOnline => '在线服务';
+
+  @override
+  String get asrOnlineProviderVolcengine => '火山引擎 · 豆包';
+
+  @override
+  String get asrOnlineProviderVolcengineHint => '豆包流式语音识别，X-Api-Key 鉴权。';
+
+  @override
+  String get asrOnlineProviderTencent => '腾讯云 · 混元';
+
+  @override
+  String get asrOnlineProviderTencentHint =>
+      '实时语音识别 Hy-ASR-3.0-preview，密钥签名鉴权。';
+
+  @override
+  String get asrOnlineVolcengineApiKeyLabel => 'API Key';
+
+  @override
+  String get asrOnlineVolcengineApiKeyHint => '在火山引擎语音控制台获取';
+
+  @override
+  String get asrOnlineTencentAppIdLabel => 'AppID';
+
+  @override
+  String get asrOnlineTencentSecretIdLabel => 'SecretId';
+
+  @override
+  String get asrOnlineTencentSecretKeyLabel => 'SecretKey';
+
+  @override
+  String get asrOnlineEndpointLabel => '接入点（可选）';
+
+  @override
+  String get asrOnlineTencentLimit => '混元内测版仅支持 16k 单声道 PCM，单次识别不超过 1 分钟。';
+
+  @override
+  String get asrOnlinePrivacyNote => '密钥仅保存在本机，语音只会发送到所选服务商。';
+
+  @override
+  String get asrOnlineSaved => '语音输入设置已保存';
+
+  @override
+  String get voiceInputCloudSetupTitle => '需要配置在线语音识别';
+
+  @override
+  String get voiceInputCloudSetupBody => '请在设置中填写在线语音服务的密钥，即可开启在线语音输入。';
+
+  @override
+  String get voiceInputCloudNotConfigured => '在线语音输入需要先配置密钥，请前往 设置 → 语音识别。';
+
+  @override
+  String get voiceInputCloudConnectFailed => '无法连接在线语音服务，请检查网络与密钥后重试。';
+
+  @override
+  String get voiceInputCloudFailed => '在线语音识别失败，请检查密钥配置后重试。';
 }
