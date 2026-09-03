@@ -54,6 +54,7 @@ docs/flutter-migration-analysis.md
 !.agents/notes/implemented/process/2026-09-01-gradle-proxy-egress-rewrite.md
 !.agents/notes/implemented/process/2026-09-01-shadow-release-direct-egress.md
 !.agents/notes/implemented/process/2026-09-03-kotlin-compile-gate.md
+!.agents/notes/implemented/process/2026-09-03-egress-host-resanitize.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/
