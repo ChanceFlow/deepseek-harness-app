@@ -44,10 +44,20 @@ class DownloadCanceledException implements Exception {
 
 /// Error during download execution.
 class DownloadFailedException implements Exception {
-  const DownloadFailedException(this.message, {this.statusCode});
+  const DownloadFailedException(
+    this.message, {
+    this.statusCode,
+    this.transient = false,
+  });
 
   final String message;
   final int? statusCode;
+
+  /// Whether the failure is a network-level hiccup a resumable retry can
+  /// plausibly heal: a dropped body, a stalled connection, a server error.
+  /// The downloader retries transient failures automatically; permanent
+  /// ones (4xx, checksum mismatch) fail immediately.
+  final bool transient;
 
   @override
   String toString() => statusCode != null
@@ -55,13 +65,33 @@ class DownloadFailedException implements Exception {
       : 'DownloadFailedException($message)';
 }
 
-/// Downloads model artifacts with HTTP Range resumption, SHA-256 verification,
-/// and throttled progress reporting.
+/// Downloads model artifacts with HTTP Range resumption, bounded automatic
+/// retries where every retry resumes from the bytes already on disk,
+/// SHA-256 verification, and throttled progress reporting.
 class AsrDownloader {
-  AsrDownloader({http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client();
+  AsrDownloader({
+    http.Client? httpClient,
+    this.maxAttemptsPerFile = defaultMaxAttemptsPerFile,
+    this.stallTimeout = defaultStallTimeout,
+    Future<void> Function(int failedAttempt)? retryDelayHandler,
+  }) : assert(maxAttemptsPerFile >= 1),
+       _httpClient = httpClient ?? http.Client(),
+       _retryDelayHandler = retryDelayHandler ?? _defaultRetryDelay;
+
+  /// Retry budget per file before the download fails outright. Each retry
+  /// resumes from the partial `.downloading` file, so the budget bounds
+  /// wasted attempts, never already-transferred bytes.
+  static const int defaultMaxAttemptsPerFile = 4;
+
+  /// A response body that stays silent for this long counts as a stalled
+  /// connection and fails the attempt into a resumable retry instead of
+  /// hanging the progress bar forever.
+  static const Duration defaultStallTimeout = Duration(seconds: 45);
 
   final http.Client _httpClient;
+  final int maxAttemptsPerFile;
+  final Duration stallTimeout;
+  final Future<void> Function(int failedAttempt) _retryDelayHandler;
   bool _isCanceled = false;
 
   /// Cancels the in-flight download.
@@ -69,9 +99,54 @@ class AsrDownloader {
     _isCanceled = true;
   }
 
+  /// Default wait before the next attempt: linear backoff capped at 4 s.
+  static Future<void> _defaultRetryDelay(int failedAttempt) async {
+    final int milliseconds = (500 * failedAttempt).clamp(500, 4000);
+    await Future<void>.delayed(Duration(milliseconds: milliseconds));
+  }
+
+  /// Sums bytes already on disk for [files]: finished files plus partial
+  /// `.downloading` files. This is the single source of progress truth; a
+  /// failed attempt reconciles against it so resuming never double-counts.
+  static Future<int> _existingBytes(
+    Directory targetDir,
+    List<AsrModelFile> files,
+  ) async {
+    int total = 0;
+    for (final AsrModelFile file in files) {
+      final File finished = File('${targetDir.path}/${file.name}');
+      if (await finished.exists()) {
+        total += await finished.length();
+        continue;
+      }
+      final File partial = File('${targetDir.path}/${file.name}.downloading');
+      if (await partial.exists()) {
+        total += await partial.length();
+      }
+    }
+    return total;
+  }
+
+  /// Whether [error] is worth retrying: raw network exceptions
+  /// (`ClientException`, `SocketException`, `TimeoutException`), a
+  /// truncated body, or a transient status (5xx, 408, 429). Permanent
+  /// failures — 4xx, checksum mismatch — rethrow immediately.
+  static bool _isRetryableFailure(Object error) {
+    if (error is! DownloadFailedException) return true;
+    final int? statusCode = error.statusCode;
+    if (statusCode != null) {
+      return statusCode >= 500 || statusCode == 408 || statusCode == 429;
+    }
+    return error.transient;
+  }
+
   /// Downloads all files for [model] from [sourceClient] into [targetDir].
   ///
-  /// Emits progress via [onProgress] at most once every 500ms (and upon completion).
+  /// Emits progress via [onProgress] at most once every 500ms (and upon
+  /// completion). A failed attempt (connection drop mid-body, stalled
+  /// stream, transient HTTP status) is retried up to [maxAttemptsPerFile]
+  /// times per file with backoff, each retry resuming via HTTP Range from
+  /// the bytes already on disk.
   Future<void> downloadModel({
     required AsrModelInfo model,
     required ModelSourceClient sourceClient,
@@ -89,19 +164,7 @@ class AsrDownloader {
       (int sum, AsrModelFile f) => sum + f.sizeBytes,
     );
 
-    int modelDownloadedBytes = 0;
-    // Calculate already-downloaded bytes from previously completed files and partial downloads
-    for (final AsrModelFile file in model.files) {
-      final File finishedFile = File('${targetDir.path}/${file.name}');
-      final File partialFile = File(
-        '${targetDir.path}/${file.name}.downloading',
-      );
-      if (await finishedFile.exists()) {
-        modelDownloadedBytes += await finishedFile.length();
-      } else if (await partialFile.exists()) {
-        modelDownloadedBytes += await partialFile.length();
-      }
-    }
+    int modelDownloadedBytes = await _existingBytes(targetDir, model.files);
 
     DateTime lastEmitTime = DateTime.now();
     int lastEmitBytes = modelDownloadedBytes;
@@ -155,130 +218,201 @@ class AsrDownloader {
       }
 
       final String fileUrl = sourceClient.buildFileUrl(model, fileSpec);
-      int startByte = 0;
-      if (await partialFile.exists()) {
-        startByte = await partialFile.length();
-        if (startByte > fileSpec.sizeBytes) {
-          // Truncate or reset if temp file is somehow bigger than expected
-          await partialFile.delete();
-          startByte = 0;
+
+      for (int attempt = 1; ; attempt++) {
+        if (_isCanceled) throw const DownloadCanceledException();
+
+        // Re-derive the resume position and byte accounting from disk
+        // before every attempt: the previous attempt left the partial
+        // file behind, and resuming must neither double-count nor lose
+        // those bytes.
+        int startByte = 0;
+        if (await partialFile.exists()) {
+          startByte = await partialFile.length();
+          if (startByte > fileSpec.sizeBytes) {
+            // Truncate or reset if temp file is somehow bigger than expected
+            await partialFile.delete();
+            startByte = 0;
+          }
+        }
+        modelDownloadedBytes = await _existingBytes(targetDir, model.files);
+
+        try {
+          await _attemptFile(
+            fileSpec: fileSpec,
+            fileUrl: fileUrl,
+            headers: sourceClient.getHeaders(),
+            startByte: startByte,
+            partialFile: partialFile,
+            finishedFile: finishedFile,
+            onChunk: (int chunkBytes) {
+              modelDownloadedBytes += chunkBytes;
+              emitProgress(fileSpec.name, completedCount);
+            },
+            onRestart: (int discardedBytes) {
+              modelDownloadedBytes -= discardedBytes;
+            },
+          );
+          break;
+        } catch (e) {
+          if (_isCanceled || e is DownloadCanceledException) {
+            throw const DownloadCanceledException();
+          }
+          if (attempt >= maxAttemptsPerFile || !_isRetryableFailure(e)) {
+            rethrow;
+          }
+          await _retryDelayHandler(attempt);
+          if (_isCanceled) throw const DownloadCanceledException();
         }
       }
 
+      completedCount++;
+      emitProgress(fileSpec.name, completedCount, force: true);
+    }
+  }
+
+  /// One download attempt for [fileSpec]: send the request (with a Range
+  /// header when [startByte] > 0), stream the body into [partialFile], and
+  /// verify + promote on completion. Throws on failure; transient failures
+  /// are classified by [_isRetryableFailure] by the caller.
+  Future<void> _attemptFile({
+    required AsrModelFile fileSpec,
+    required String fileUrl,
+    required Map<String, String> headers,
+    required int startByte,
+    required File partialFile,
+    required File finishedFile,
+    required void Function(int chunkBytes) onChunk,
+    required void Function(int discardedBytes) onRestart,
+  }) async {
+    http.StreamedResponse response;
+    try {
       final http.Request request = http.Request('GET', Uri.parse(fileUrl));
-      request.headers.addAll(sourceClient.getHeaders());
+      request.headers.addAll(headers);
       if (startByte > 0) {
         request.headers['Range'] = 'bytes=$startByte-';
       }
-
-      http.StreamedResponse response;
-      try {
-        response = await _httpClient.send(request);
-      } catch (e) {
-        if (_isCanceled) throw const DownloadCanceledException();
-        throw DownloadFailedException('Connection failed: $e');
-      }
-
+      response = await _httpClient.send(request);
+    } catch (e) {
       if (_isCanceled) throw const DownloadCanceledException();
+      throw DownloadFailedException('Connection failed: $e', transient: true);
+    }
 
-      FileMode writeMode = FileMode.write;
-      if (response.statusCode == 206) {
-        // Range accepted, append to partial file
-        writeMode = FileMode.append;
-      } else if (response.statusCode == 200) {
-        // Full response, restart from 0
-        writeMode = FileMode.write;
-        if (startByte > 0) {
-          modelDownloadedBytes -= startByte;
-          startByte = 0;
-        }
-      } else if (response.statusCode == 416) {
-        // Range not satisfiable, reset partial file and re-request full
-        if (await partialFile.exists()) {
-          await partialFile.delete();
-        }
-        modelDownloadedBytes -= startByte;
-        startByte = 0;
+    if (_isCanceled) throw const DownloadCanceledException();
+
+    FileMode writeMode;
+    if (response.statusCode == 206) {
+      // Range accepted, append to partial file
+      writeMode = FileMode.append;
+    } else if (response.statusCode == 200) {
+      // Full response, restart from 0
+      writeMode = FileMode.write;
+      if (startByte > 0) {
+        onRestart(startByte);
+      }
+    } else if (response.statusCode == 416) {
+      // Range not satisfiable: the partial is stale. Drop it and re-request
+      // the whole body within this same attempt.
+      if (await partialFile.exists()) {
+        await partialFile.delete();
+      }
+      if (startByte > 0) {
+        onRestart(startByte);
+      }
+      try {
         final http.Request freshRequest = http.Request(
           'GET',
           Uri.parse(fileUrl),
         );
-        freshRequest.headers.addAll(sourceClient.getHeaders());
+        freshRequest.headers.addAll(headers);
         response = await _httpClient.send(freshRequest);
-        if (response.statusCode != 200) {
-          throw DownloadFailedException(
-            'HTTP error',
-            statusCode: response.statusCode,
-          );
-        }
-        writeMode = FileMode.write;
-      } else {
+      } catch (e) {
+        if (_isCanceled) throw const DownloadCanceledException();
+        throw DownloadFailedException('Connection failed: $e', transient: true);
+      }
+      if (_isCanceled) throw const DownloadCanceledException();
+      if (response.statusCode != 200) {
         throw DownloadFailedException(
           response.reasonPhrase ?? 'HTTP Error',
           statusCode: response.statusCode,
         );
       }
+      writeMode = FileMode.write;
+    } else {
+      throw DownloadFailedException(
+        response.reasonPhrase ?? 'HTTP Error',
+        statusCode: response.statusCode,
+        transient: response.statusCode >= 500,
+      );
+    }
 
-      final IOSink sink = partialFile.openWrite(mode: writeMode);
+    final IOSink sink = partialFile.openWrite(mode: writeMode);
 
-      try {
-        await for (final List<int> chunk in response.stream) {
-          if (_isCanceled) {
-            throw const DownloadCanceledException();
-          }
-          sink.add(chunk);
-          modelDownloadedBytes += chunk.length;
-          emitProgress(fileSpec.name, completedCount);
-        }
-        await sink.flush();
-      } catch (e) {
-        if (_isCanceled || e is DownloadCanceledException) {
+    try {
+      // A body that stays silent beyond [stallTimeout] is a stalled
+      // connection: surface it as a retryable failure instead of hanging
+      // the session forever.
+      await for (final List<int> chunk in response.stream.timeout(
+        stallTimeout,
+      )) {
+        if (_isCanceled) {
           throw const DownloadCanceledException();
         }
-        rethrow;
-      } finally {
-        await sink.close();
+        sink.add(chunk);
+        onChunk(chunk.length);
       }
-
-      if (_isCanceled) {
+      await sink.flush();
+    } catch (e) {
+      if (_isCanceled || e is DownloadCanceledException) {
         throw const DownloadCanceledException();
       }
-
-      // Verification: Check size and rename .downloading -> final filename
-      if (_isCanceled) {
-        throw const DownloadCanceledException();
-      }
-
-      final int partialLen = await partialFile.length();
-      if (partialLen != fileSpec.sizeBytes) {
-        throw DownloadFailedException(
-          'File size mismatch for ${fileSpec.name}: expected ${fileSpec.sizeBytes}, got $partialLen',
-        );
-      }
-
-      // Content verification: runs only when the manifest carries a real
-      // checksum; an unprovisioned (empty) hash falls back to the size
-      // check above. A failed digest deletes the partial file so a retry
-      // downloads from scratch instead of resuming corrupt bytes.
-      if (fileSpec.sha256.isNotEmpty &&
-          !await verifySha256(partialFile, fileSpec.sha256)) {
-        try {
-          await partialFile.delete();
-        } catch (_) {
-          // Best-effort cleanup; a stale partial is truncated on retry.
-        }
-        throw DownloadFailedException(
-          'SHA-256 mismatch for ${fileSpec.name}: expected ${fileSpec.sha256}',
-        );
-      }
-
-      if (await finishedFile.exists()) {
-        await finishedFile.delete();
-      }
-      await partialFile.rename(finishedFile.path);
-      completedCount++;
-      emitProgress(fileSpec.name, completedCount, force: true);
+      // Chunks received this attempt are already flushed into the partial
+      // file (the finally below closes the sink first); the next attempt
+      // resumes from there via Range.
+      throw DownloadFailedException(
+        'Connection interrupted while receiving ${fileSpec.name}: $e',
+        transient: true,
+      );
+    } finally {
+      await sink.close();
     }
+
+    if (_isCanceled) {
+      throw const DownloadCanceledException();
+    }
+
+    // Verification: Check size and rename .downloading -> final filename
+    final int partialLen = await partialFile.length();
+    if (partialLen != fileSpec.sizeBytes) {
+      // A body that ended early without an exception still leaves a
+      // resumable partial: retrying continues from here.
+      throw DownloadFailedException(
+        'File size mismatch for ${fileSpec.name}: expected ${fileSpec.sizeBytes}, got $partialLen',
+        transient: true,
+      );
+    }
+
+    // Content verification: runs only when the manifest carries a real
+    // checksum; an unprovisioned (empty) hash falls back to the size
+    // check above. A failed digest deletes the partial file so a retry
+    // downloads from scratch instead of resuming corrupt bytes — and it
+    // is not transient: deterministic corruption will not heal itself.
+    if (fileSpec.sha256.isNotEmpty &&
+        !await verifySha256(partialFile, fileSpec.sha256)) {
+      try {
+        await partialFile.delete();
+      } catch (_) {
+        // Best-effort cleanup; a stale partial is truncated on retry.
+      }
+      throw DownloadFailedException(
+        'SHA-256 mismatch for ${fileSpec.name}: expected ${fileSpec.sha256}',
+      );
+    }
+
+    if (await finishedFile.exists()) {
+      await finishedFile.delete();
+    }
+    await partialFile.rename(finishedFile.path);
   }
 
   /// Verifies the SHA-256 checksum of an on-disk file against the expected hash.
