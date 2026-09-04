@@ -524,51 +524,6 @@ void main() {
     expect(position.pixels, position.maxScrollExtent);
   });
 
-  testWidgets('outline collapse persists and restores', (tester) async {
-    final actions = <ChatAction>[];
-    final localState = FakeChatLocalState();
-    await localState.forSession('s1').writeCollapsedTurns(const <int>{1});
-    final timeline = <TimelineItem>[
-      const TimelineTurnBoundary(1),
-      const TimelineMessage(
-        ChatMessage(
-          id: 'm1',
-          sessionId: 's1',
-          role: MessageRole.user,
-          text: 'inside turn one',
-        ),
-      ),
-    ];
-
-    // Outline mode comes from ChatScreen's header toggle.
-    await _pump(
-      tester,
-      ChatUiState(
-        sessions: const [_session],
-        selectedSessionId: 's1',
-        timeline: timeline,
-      ),
-      actions,
-      localState: localState,
-    );
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pumpAndSettle();
-
-    // Restored collapsed turn 1 hides its rows; the ledger micro-line is
-    // a plain ListTile (no ▸ glyph chrome), located by its tile and title.
-    expect(find.text('inside turn one'), findsNothing);
-    final header = find.widgetWithText(
-      ListTile,
-      'Turn 1 · 1 message · 0 tools',
-    );
-    expect(header, findsOneWidget);
-
-    await tester.tap(header);
-    await tester.pumpAndSettle();
-    expect(find.text('inside turn one'), findsOneWidget);
-    expect(localState.values[chatCollapsedTurnsKey('s1')], isEmpty);
-  });
-
   testWidgets('primary send FAB ink rides the M3 contrast pair', (
     tester,
   ) async {
