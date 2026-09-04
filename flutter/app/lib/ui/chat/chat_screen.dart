@@ -39,12 +39,8 @@ import 'session_panel.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../goal/goal_controller.dart';
-import '../models/models_controller.dart';
 import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
-import '../goal/goal_screen.dart';
-import '../models/models_screen.dart';
 import '../subagents/subagent_screen.dart';
 
 import 'activity_dot.dart';
@@ -56,7 +52,6 @@ import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
-import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'tool_row_model.dart';
 import 'turn_status_row.dart';
@@ -202,7 +197,6 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   bool _rail = false;
-  bool _outline = false;
 
   /// Shared-store persistence resolved from the enclosing
   /// [ProviderScope]; a [ChatScreen] mounted without a scope (bare test
@@ -242,31 +236,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Session-scoped tool pages (web embeds them into conversation context;
-  /// mobile pushes them as full routes with the current session preloaded).
-  void _openSessionTool(Widget Function(String? sessionId) page) {
+  /// Subagent tool page (web embeds it into conversation context;
+  /// mobile pushes it as a route with the current session preloaded).
+  void _openSubagents() {
     final sessionId = widget.uiState.selectedSessionId;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (scopeContext) {
           final backendId = widget.backendId;
           if (sessionId == null || backendId == null) {
-            return page(sessionId);
+            return const SubagentRoute();
           }
           return ProviderScope(
             overrides: [
-              modelsControllerProvider(backendId).overrideWith(
-                (ref) => ModelsController(
-                  ref.watch(chatRepositoryProvider(backendId)),
-                  initialSessionId: sessionId,
-                ),
-              ),
-              goalControllerProvider(backendId).overrideWith(
-                (ref) => GoalController(
-                  ref.watch(chatRepositoryProvider(backendId)),
-                  initialSessionId: sessionId,
-                ),
-              ),
               subagentControllerProvider(backendId).overrideWith(
                 (ref) => SubagentController(
                   ref.watch(chatRepositoryProvider(backendId)),
@@ -274,7 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ],
-            child: page(sessionId),
+            child: const SubagentRoute(),
           );
         },
       ),
@@ -376,11 +358,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ChatHeaderActions(
           uiState: uiState,
           onAction: onAction,
-          outline: _outline,
-          onToggleOutline: () => setState(() => _outline = !_outline),
-          onOpenModels: () => _openSessionTool((_) => const ModelsRoute()),
-          onOpenGoal: () => _openSessionTool((_) => const GoalRoute()),
-          onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
+          onOpenSubagents: _openSubagents,
           compact: compact,
         ),
       ],
@@ -442,9 +420,6 @@ class _ChatScreenState extends State<ChatScreen> {
                             uiState: uiState,
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
-                            outline: _outline,
-                            onOpenGoal: () =>
-                                _openSessionTool((_) => const GoalRoute()),
                             models: uiState.models,
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
@@ -508,9 +483,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     uiState: uiState,
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
-                    outline: _outline,
-                    onOpenGoal: () =>
-                        _openSessionTool((_) => const GoalRoute()),
                     models: uiState.models,
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
@@ -554,30 +526,18 @@ class ChatHeaderActions extends StatelessWidget {
   const ChatHeaderActions({
     required this.uiState,
     required this.onAction,
-    required this.onToggleOutline,
-    required this.outline,
     super.key,
-    this.onOpenModels,
-    this.onOpenGoal,
     this.onOpenSubagents,
     this.compact = false,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
-  final VoidCallback onToggleOutline;
-  final bool outline;
 
-  /// Phone bars carry the two glanceable seats — running jobs and the
-  /// outline — and fold the session verbs into an overflow menu; a 400dp
-  /// bar cannot spend six icon seats and still name the session.
+  /// Phone bars carry the glanceable seats — running jobs — and fold the
+  /// session verbs into an overflow menu; a 400dp bar cannot spend six
+  /// icon seats and still name the session.
   final bool compact;
-
-  /// Web Session models seat: opens the model directory for this session.
-  final VoidCallback? onOpenModels;
-
-  /// Web Goal seat: opens the goal management screen for this session.
-  final VoidCallback? onOpenGoal;
 
   /// Web SubagentCatalogAction seat: opens the subagent catalog for this
   /// session.
@@ -633,23 +593,12 @@ class ChatHeaderActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         JobListAction(jobs: uiState.jobs),
-        IconButton(
-          tooltip: l10n.outlineTooltip,
-          isSelected: outline,
-          onPressed: onToggleOutline,
-          icon: const Icon(Icons.view_list_outlined),
-          selectedIcon: const Icon(Icons.view_list),
-        ),
         if (compact)
           PopupMenuButton<_SessionVerb>(
             tooltip: l10n.sessionMenuTooltip,
             icon: const Icon(Icons.more_vert),
             onSelected: (verb) {
               switch (verb) {
-                case _SessionVerb.models:
-                  onOpenModels?.call();
-                case _SessionVerb.goals:
-                  onOpenGoal?.call();
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
@@ -661,24 +610,6 @@ class ChatHeaderActions extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
-              if (onOpenModels != null)
-                PopupMenuItem(
-                  value: _SessionVerb.models,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.dataset_outlined),
-                    title: Text(l10n.modelsTitle),
-                  ),
-                ),
-              if (onOpenGoal != null)
-                PopupMenuItem(
-                  value: _SessionVerb.goals,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.flag_outlined),
-                    title: Text(l10n.goalTitle),
-                  ),
-                ),
               if (onOpenSubagents != null)
                 PopupMenuItem(
                   value: _SessionVerb.subagents,
@@ -717,18 +648,6 @@ class ChatHeaderActions extends StatelessWidget {
             ],
           )
         else ...[
-          if (onOpenModels != null)
-            IconButton(
-              tooltip: l10n.modelsTitle,
-              onPressed: onOpenModels,
-              icon: const Icon(Icons.dataset_outlined),
-            ),
-          if (onOpenGoal != null)
-            IconButton(
-              tooltip: l10n.goalTitle,
-              onPressed: onOpenGoal,
-              icon: const Icon(Icons.flag_outlined),
-            ),
           if (onOpenSubagents != null)
             IconButton(
               tooltip: l10n.subagentsTooltip,
@@ -757,7 +676,7 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { models, goals, subagents, rename, fork, archive }
+enum _SessionVerb { subagents, rename, fork, archive }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.
@@ -770,7 +689,6 @@ class ChatPanel extends StatefulWidget {
     required this.loadAttachment,
     super.key,
     this.outline = false,
-    this.onOpenGoal,
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
@@ -782,7 +700,6 @@ class ChatPanel extends StatefulWidget {
   final AttachmentLoader loadAttachment;
 
   final bool outline;
-  final VoidCallback? onOpenGoal;
   final SessionModels? models;
   final void Function(ModelSelection selection)? onSelectModel;
   final VoidCallback? onRefreshModels;
@@ -796,8 +713,6 @@ class ChatPanel extends StatefulWidget {
 }
 
 class _ChatPanelState extends State<ChatPanel> {
-  Set<int> _collapsedTurns = const <int>{};
-
   /// Binds the dock element so sheets opened from composer seats can
   /// measure it and float above it (see DockAnchor).
   final GlobalKey _dockKey = GlobalKey();
@@ -862,7 +777,6 @@ class _ChatPanelState extends State<ChatPanel> {
       _flushReadOffset();
       _readOffsetSave?.cancel();
       _readOffsetSave = null;
-      _collapsedTurns = const <int>{};
       _pinned = true;
       _showJumpToBottom = false;
       _lastFollowSignature = null;
@@ -871,17 +785,6 @@ class _ChatPanelState extends State<ChatPanel> {
       _scheduleFollow();
       return;
     }
-    // The outline is its own skim surface; the jump button's visibility
-    // must not linger over it, and the list that remounts when outline
-    // closes starts at the top (nothing pins it yet). Re-derive after the
-    // frame so whichever body is live reports its true position.
-    if (oldWidget.outline != widget.outline) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _syncJumpToBottomButton();
-      });
-      return;
-    }
-    if (widget.outline) return;
     if (oldWidget.localState != widget.localState) {
       _bindSession();
       return;
@@ -1022,12 +925,6 @@ class _ChatPanelState extends State<ChatPanel> {
         : widget.localState?.forSession(sessionId);
     _sessionState = sessionState;
     if (sessionState == null) return;
-    unawaited(
-      sessionState.readCollapsedTurns().then((turns) {
-        if (!mounted || _sessionState != sessionState) return;
-        setState(() => _collapsedTurns = turns);
-      }),
-    );
     unawaited(
       widget.localState?.busyEnterBehavior().then((behavior) {
         if (!mounted) return;
@@ -1244,12 +1141,6 @@ class _ChatPanelState extends State<ChatPanel> {
     ];
   }
 
-  /// Collapsed-turn set mutation: state and persistence move together.
-  void _setCollapsedTurns(Set<int> next) {
-    setState(() => _collapsedTurns = next);
-    unawaited(_sessionState?.writeCollapsedTurns(next));
-  }
-
   /// Preset staged for the next session (web seat's stage); spent by the
   /// workspace pick that creates the session.
   String? _stagedPreset;
@@ -1340,76 +1231,57 @@ class _ChatPanelState extends State<ChatPanel> {
       if (showTurnStatus) _turnStatusSlot,
       ...steering,
     ];
-    return widget.outline
-        ? OutlineTimeline(
-            timeline: uiState.timeline,
-            collapsedTurns: _collapsedTurns,
-            onToggle: (turn) {
-              final next = Set<int>.of(_collapsedTurns);
-              if (!next.add(turn)) next.remove(turn);
-              _setCollapsedTurns(next);
-            },
+    return ListView.separated(
+      controller: _timelineScroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: rows.length,
+      separatorBuilder: (_, index) => SizedBox(
+        height: _gapAfter(
+          rows[index],
+          index + 1 < rows.length ? rows[index + 1] : null,
+        ),
+      ),
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        if (row is TimelineToolGroup) {
+          return ToolGroupRow(
+            key: ValueKey('tool-group:${row.id}:${row.calls.length}'),
+            group: row,
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
             expansion: _sessionState,
-            turnStatusVisible: showTurnStatus,
-            pendingSteering: steering,
-          )
-        : ListView.separated(
-            controller: _timelineScroll,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            itemCount: rows.length,
-            separatorBuilder: (_, index) => SizedBox(
-              height: _gapAfter(
-                rows[index],
-                index + 1 < rows.length ? rows[index + 1] : null,
-              ),
-            ),
-            itemBuilder: (context, index) {
-              final row = rows[index];
-              if (row is TimelineToolGroup) {
-                return ToolGroupRow(
-                  key: ValueKey('tool-group:${row.id}:${row.calls.length}'),
-                  group: row,
-                  onAction: widget.onAction,
-                  loadAttachment: widget.loadAttachment,
-                  expansion: _sessionState,
-                );
-              }
-              if (row is TimelineItem) {
-                return TimelineRow(
-                  key: ValueKey(timelineKey(row)),
-                  item: row,
-                  onAction: widget.onAction,
-                  loadAttachment: widget.loadAttachment,
-                  expansion: _sessionState,
-                );
-              }
-              if (row is SessionQueueItem) {
-                return PendingSteeringRow(
-                  key: ValueKey('steering:${row.itemId}'),
-                  text: row.text,
-                );
-              }
-              return const TurnStatusRow(key: ValueKey('turn-status'));
-            },
           );
+        }
+        if (row is TimelineItem) {
+          return TimelineRow(
+            key: ValueKey(timelineKey(row)),
+            item: row,
+            onAction: widget.onAction,
+            loadAttachment: widget.loadAttachment,
+            expansion: _sessionState,
+          );
+        }
+        if (row is SessionQueueItem) {
+          return PendingSteeringRow(
+            key: ValueKey('steering:${row.itemId}'),
+            text: row.text,
+          );
+        }
+        return const TurnStatusRow(key: ValueKey('turn-status'));
+      },
+    );
   }
 
-  /// Groups consecutive completed tool calls into [TimelineToolGroup]s so that
-  /// settled multi-step tool runs collapse into a single cursor-style summary row.
-  /// Running runs remain expanded so in-flight tools and sweep indicators stay visible.
+  /// Groups consecutive tool calls into [TimelineToolGroup]s so that tool runs
+  /// collapse into a single real-time updating summary row by default.
   static List<Object> _groupConsecutiveTools(List<TimelineItem> items) {
     final result = <Object>[];
     var currentGroup = <TimelineToolCall>[];
 
     void flush() {
       if (currentGroup.isEmpty) return;
-      final anyRunning = currentGroup.any(
-        (call) => call.status == ToolRunStatus.running,
-      );
-      if (currentGroup.length == 1 || anyRunning) {
-        result.addAll(currentGroup);
+      if (currentGroup.length == 1) {
+        result.add(currentGroup.single);
       } else {
         result.add(
           TimelineToolGroup(
@@ -1536,14 +1408,6 @@ class _ChatPanelState extends State<ChatPanel> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-            if (widget.outline && _collapsedTurns.isNotEmpty)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => _setCollapsedTurns(const <int>{}),
-                  child: Text(l10n.expandAll),
-                ),
-              ),
             Expanded(
               child: Stack(
                 children: [
@@ -1595,11 +1459,7 @@ class _ChatPanelState extends State<ChatPanel> {
               children: [
                 if (_pendingApproval == null) ...[
                   TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-                  GoalBarStrip(
-                    goal: uiState.goal,
-                    onAction: widget.onAction,
-                    onOpen: widget.onOpenGoal,
-                  ),
+                  GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
                 ],
                 // The queue dock is a display strip, not a filled seat:
                 // it rides alongside the approval card the way web's
@@ -2415,9 +2275,35 @@ class _ToolGroupRowState extends State<ToolGroupRow>
     final names = countByName.keys.toList()..sort();
     final toolSummary = names.map((n) => '$n ${countByName[n]}').join(' · ');
 
-    final title = isZh
-        ? '调用了 ${calls.length} 个工具'
-        : '${calls.length} tool calls';
+    final String title;
+    final String subtitle;
+
+    final runningCall = calls
+        .where((c) => c.status == ToolRunStatus.running)
+        .firstOrNull;
+    if (runningCall != null) {
+      final runningModel = deriveToolRowModel(runningCall, l10n);
+      final activeAction = switch (runningCall.name) {
+        'read' => isZh ? '正在读取' : 'Reading',
+        'write' => isZh ? '正在写入' : 'Writing',
+        'edit' => isZh ? '正在编辑' : 'Editing',
+        'bash' => isZh ? '正在运行 bash' : 'Running bash',
+        _ =>
+          isZh ? '正在执行 ${runningModel.title}' : 'Running ${runningModel.title}',
+      };
+      final target = runningModel.summary.isNotEmpty
+          ? runningModel.summary
+          : runningModel.title;
+      title = calls.length > 1
+          ? (isZh
+                ? '执行中 (${calls.length} 步)'
+                : 'Working (${calls.length} steps)')
+          : (isZh ? '执行中' : 'Working');
+      subtitle = '$activeAction: $target';
+    } else {
+      title = isZh ? '已执行 ${calls.length} 个操作' : '${calls.length} operations';
+      subtitle = toolSummary.isNotEmpty ? toolSummary : (isZh ? '完成' : 'Done');
+    }
 
     final state = failed > 0
         ? StateDotState.error
@@ -2425,21 +2311,35 @@ class _ToolGroupRowState extends State<ToolGroupRow>
         ? StateDotState.ongoing
         : StateDotState.done;
 
-    final leadingWidget = switch (state) {
-      StateDotState.ongoing => const ActivityDot(),
-      StateDotState.error => Icon(Icons.close, size: 14, color: scheme.error),
-      StateDotState.done => Icon(Icons.check, size: 14, color: scheme.success),
-      StateDotState.warning => Icon(
-        Icons.warning_amber_rounded,
-        size: 14,
-        color: scheme.warning,
-      ),
-      StateDotState.disabled => Icon(
-        Icons.remove,
-        size: 14,
-        color: scheme.onSurfaceVariant,
-      ),
-    };
+    final settledCount = calls.length - running - failed;
+    final leadingWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (running > 0) const ActivityDot(),
+        if (running > 0 && settledCount > 0) const SizedBox(width: 4),
+        if (settledCount > 0 && running > 0)
+          Icon(Icons.check, size: 14, color: scheme.success),
+        if (running == 0)
+          switch (state) {
+            StateDotState.error => Icon(
+              Icons.close,
+              size: 14,
+              color: scheme.error,
+            ),
+            StateDotState.done => Icon(
+              Icons.check,
+              size: 14,
+              color: scheme.success,
+            ),
+            StateDotState.warning => Icon(
+              Icons.warning_amber_rounded,
+              size: 14,
+              color: scheme.warning,
+            ),
+            _ => Icon(Icons.check, size: 14, color: scheme.success),
+          },
+      ],
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -2477,7 +2377,7 @@ class _ToolGroupRowState extends State<ToolGroupRow>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        toolSummary,
+                        subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -2837,36 +2737,157 @@ String toolRunStatusLabel(ToolRunStatus status, AppLocalizations l10n) =>
       ToolRunStatus.failed => l10n.runStatusFailed,
     };
 
-class GoalBarStrip extends StatelessWidget {
-  const GoalBarStrip({
-    required this.goal,
-    required this.onAction,
-    super.key,
-    this.onOpen,
-  });
+/// The goal indicator docked above the message composer (web GoalBar).
+/// A present goal shows a goal glyph, a phase label, the truncated
+/// objective, and icon actions: pause / resume, inline edit in the same
+/// strip, and clear. Renders nothing when goal is null or complete.
+class GoalBarStrip extends StatefulWidget {
+  const GoalBarStrip({required this.goal, required this.onAction, super.key});
 
   final GoalProjection? goal;
   final void Function(ChatAction) onAction;
-  final VoidCallback? onOpen;
+
+  @override
+  State<GoalBarStrip> createState() => _GoalBarStripState();
+}
+
+class _GoalBarStripState extends State<GoalBarStrip> {
+  bool _editing = false;
+  late final TextEditingController _editController = TextEditingController();
+  String? _lastGoalId;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncDraft();
+  }
+
+  @override
+  void didUpdateWidget(covariant GoalBarStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentId = widget.goal?.goal.id;
+    if (currentId != _lastGoalId) {
+      _editing = false;
+      _syncDraft();
+    }
+  }
+
+  void _syncDraft() {
+    _lastGoalId = widget.goal?.goal.id;
+    final objective = widget.goal?.goal.objective ?? '';
+    _editController.text = objective;
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  void _submitEdit() {
+    final trimmed = _editController.text.trim();
+    if (trimmed.isEmpty) return;
+    widget.onAction(EditGoal(trimmed));
+    setState(() => _editing = false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final projection = goal;
+    final projection = widget.goal;
     if (projection == null) return const SizedBox.shrink();
     final snapshot = projection.goal;
     if (snapshot.phase == GoalPhase.complete) return const SizedBox.shrink();
+
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
+
+    // Inline edit form in the exact same strip (reference GoalBar.tsx)
+    if (_editing) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            border: Border(
+              top: BorderSide(color: scheme.outlineVariant),
+              left: BorderSide(color: scheme.outlineVariant),
+              right: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.track_changes_outlined,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _editController,
+                  autofocus: true,
+                  style: theme.textTheme.bodySmall,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onSubmitted: (_) => _submitEdit(),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.save,
+                onPressed: _submitEdit,
+                icon: Icon(Icons.check, size: 14, color: scheme.primary),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.cancel,
+                onPressed: () {
+                  _syncDraft();
+                  setState(() => _editing = false);
+                },
+                icon: Icon(
+                  Icons.close,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final phaseLabel = switch (snapshot.phase) {
       GoalPhase.active => l10n.chatGoalPhaseActive,
       GoalPhase.paused => l10n.chatGoalPhasePaused,
       GoalPhase.blocked => l10n.chatGoalPhaseBlocked,
       GoalPhase.complete => '',
     };
+
+    final phaseColor = switch (snapshot.phase) {
+      GoalPhase.active => scheme.secondary,
+      GoalPhase.paused => scheme.onSurfaceVariant,
+      GoalPhase.blocked => scheme.error,
+      GoalPhase.complete => scheme.onSurfaceVariant,
+    };
+
+    final tooltipText = snapshot.phase == GoalPhase.blocked
+        ? snapshot.blockedReason
+        : null;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
+        height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
@@ -2879,58 +2900,80 @@ class GoalBarStrip extends StatelessWidget {
         ),
         child: Row(
           children: [
+            Icon(
+              Icons.track_changes_outlined,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
             Text(
               phaseLabel,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: snapshot.phase == GoalPhase.active
-                    ? theme.colorScheme.secondary
-                    : scheme.onSurfaceVariant,
+                color: phaseColor,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                snapshot.objective,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
+              child: Tooltip(
+                message: tooltipText ?? snapshot.objective,
+                child: Text(
+                  snapshot.objective,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
             ),
+            if (snapshot.phase == GoalPhase.active)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.pauseGoal,
+                onPressed: () => widget.onAction(const ToggleGoalPause()),
+                icon: Icon(
+                  Icons.pause_outlined,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            if (snapshot.phase == GoalPhase.paused)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.resumeGoal,
+                onPressed: () => widget.onAction(const ToggleGoalPause()),
+                icon: Icon(
+                  Icons.play_arrow_outlined,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 14,
-              tooltip: snapshot.phase == GoalPhase.active
-                  ? l10n.pauseGoal
-                  : l10n.resumeGoal,
-              onPressed: () => onAction(const ToggleGoalPause()),
+              tooltip: l10n.edit,
+              onPressed: () {
+                _syncDraft();
+                setState(() => _editing = true);
+              },
               icon: Icon(
-                snapshot.phase == GoalPhase.active
-                    ? Icons.pause_outlined
-                    : Icons.play_arrow_outlined,
+                Icons.edit_outlined,
+                size: 14,
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            // Web GoalBar ships the trash action beside pause/resume —
-            // deleting works from any phase (`/goal clear` semantics).
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 14,
               tooltip: l10n.clearGoal,
-              onPressed: () => onAction(const ClearGoal()),
+              onPressed: () => widget.onAction(const ClearGoal()),
               icon: Icon(
                 Icons.delete_outline,
                 size: 14,
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            if (onOpen != null)
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 14,
-                tooltip: l10n.openGoal,
-                onPressed: onOpen,
-                icon: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-              ),
           ],
         ),
       ),
@@ -5433,257 +5476,6 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineJobs() => 'jobs',
   TimelineError(:final id) => 'error:$id',
 };
-
-/// Ledger-style outline: turn-group headers collapse their rows on tap.
-class OutlineTimeline extends StatelessWidget {
-  const OutlineTimeline({
-    required this.timeline,
-    required this.collapsedTurns,
-    required this.onToggle,
-    required this.onAction,
-    required this.loadAttachment,
-    required this.turnStatusVisible,
-    super.key,
-    this.expansion,
-    this.pendingSteering = const <SessionQueueItem>[],
-  });
-
-  final List<TimelineItem> timeline;
-  final Set<int> collapsedTurns;
-  final void Function(int turn) onToggle;
-  final void Function(ChatAction) onAction;
-  final AttachmentLoader loadAttachment;
-
-  /// Whether the session's turn is running and no louder tail signal (the
-  /// streaming caret, the approval seat) owns the tail: the turn-status
-  /// line rides after the last turn, visible even under collapsed groups.
-  final bool turnStatusVisible;
-
-  /// Tool-row expansion persistence of the selected session.
-  final ToolExpansionPersistence? expansion;
-
-  /// Transient steering rows riding the tail after the status line (the
-  /// web's tail order), visible even under collapsed turns.
-  final List<SessionQueueItem> pendingSteering;
-
-  @override
-  Widget build(BuildContext context) {
-    // Queued rows ride the composer dock and steering rows the tail
-    // below; the timeline body carries neither in its turn groups.
-    final groups = groupTimelineByTurn(
-      timeline
-          .where(
-            (item) =>
-                item is! TimelineQueue && item is! TimelineApprovalRequest,
-          )
-          .toList(),
-    );
-    // One sliver per rendered element — the group header, then its rows.
-    // Headers and rows are separate slivers so off-screen elements stay
-    // unbuilt: a long outline materializes only the visible turn.
-    final elements = <Widget>[];
-    for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-      final group = groups[groupIndex];
-      final turn = group.turn;
-      final collapsed = turn != null && collapsedTurns.contains(turn);
-      elements.add(
-        SliverToBoxAdapter(
-          key: ValueKey('group-${turn ?? groupIndex}'),
-          child: TurnGroupHeader(
-            turn: turn,
-            items: group.items,
-            collapsed: collapsed,
-            onToggle: onToggle,
-          ),
-        ),
-      );
-      if (!collapsed) {
-        elements.add(
-          // Lazily built rows: only the visible slice is laid out, and a
-          // collapsed turn contributes no row slivers at all.
-          SliverList.separated(
-            itemCount: group.items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final item = group.items[index];
-              return TimelineRow(
-                key: ValueKey(timelineKey(item)),
-                item: item,
-                onAction: onAction,
-                loadAttachment: loadAttachment,
-                expansion: expansion,
-              );
-            },
-          ),
-        );
-      }
-    }
-    // The turn-status line rides outside the groups: a collapsed turn
-    // still shows its live signal, and the tail speaks once per turn.
-    if (turnStatusVisible) {
-      elements.add(
-        const SliverToBoxAdapter(
-          key: ValueKey('turn-status'),
-          child: TurnStatusRow(),
-        ),
-      );
-    }
-    // Pending steering follows the status line — the web's tail order.
-    for (final row in pendingSteering) {
-      elements.add(
-        SliverToBoxAdapter(
-          key: ValueKey('steering:${row.itemId}'),
-          child: PendingSteeringRow(text: row.text),
-        ),
-      );
-    }
-    // The ledger rhythm is one 8px gap between elements; the last element
-    // sits flush at the bottom, matching the previous separator layout.
-    final slivers = <Widget>[
-      for (var i = 0; i < elements.length; i++)
-        SliverPadding(
-          padding: EdgeInsets.only(bottom: i == elements.length - 1 ? 0 : 8),
-          sliver: elements[i],
-        ),
-    ];
-    return CustomScrollView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      slivers: slivers,
-    );
-  }
-}
-
-/// The outline's ledger line for a turn group: the `TurnBoundaryRow`
-/// voice — a 14px hairline tick, one line, no frame — as a plain
-/// `ListTile`. The transcript is content and chrome wears no border
-/// around it (two tones separate content from chrome), so this row takes
-/// no outline the way the flow mode's boundary label takes none. The
-/// group's run state rides the shared `StateDot` (failed outranks running
-/// outranks done); the expanded subtitle echoes the prompt, the collapsed
-/// subtitle trades the echo for plain per-tool counts with an error-ink
-/// failure tail; the disclosure arrow swaps `chevron_right` ↔
-/// `expand_more` the way the subagents page does, with no custom curve.
-class TurnGroupHeader extends StatelessWidget {
-  const TurnGroupHeader({
-    required this.turn,
-    required this.items,
-    required this.collapsed,
-    required this.onToggle,
-    super.key,
-  });
-
-  final int? turn;
-  final List<TimelineItem> items;
-  final bool collapsed;
-  final void Function(int turn) onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    final messages = items.whereType<TimelineMessage>().length;
-    final tools = items.whereType<TimelineToolCall>().toList();
-    final title = switch (turn) {
-      null => l10n.beforeFirstTurnHeader(messages),
-      final int value => l10n.turnHeader(messages, tools.length, value),
-    };
-
-    var failed = 0;
-    var running = 0;
-    final countByName = <String, int>{};
-    for (final tool in tools) {
-      countByName[tool.name] = (countByName[tool.name] ?? 0) + 1;
-      switch (tool.status) {
-        case ToolRunStatus.running:
-          running++;
-        case ToolRunStatus.completed:
-          break;
-        case ToolRunStatus.failed:
-          failed++;
-      }
-    }
-    final names = countByName.keys.toList()..sort();
-    final toolSummary = names.map((n) => '$n ${countByName[n]}').join(' · ');
-    final state = failed > 0
-        ? StateDotState.error
-        : running > 0
-        ? StateDotState.ongoing
-        : StateDotState.done;
-
-    // The subtitle speaks once. Expanded, it echoes the prompt (the body
-    // carries the rest); collapsed, the body is gone and the tool counts
-    // are the useful facts — with the failure count kept on its own Text
-    // so a crowded summary ellipsizes before the error ink does.
-    final echo = promptPreview(items);
-    final summaryVisible = collapsed && toolSummary.isNotEmpty;
-    final subtitle = switch ((summaryVisible, echo)) {
-      (true, _) => toolSummary,
-      (false, final String? text) when text != null => '“$text”',
-      _ => null,
-    };
-
-    final resolvedTurn = turn;
-    return IconTheme.merge(
-      data: const IconThemeData(size: 18),
-      child: ListTile(
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 30,
-        // The same 2px column the tool rows ride (their ExpansionTile's
-        // tilePadding lands here as the inner ListTile's contentPadding).
-        contentPadding: const EdgeInsets.symmetric(horizontal: 2),
-        // The before-first-turn group has no turn to fold: no tap target,
-        // no disclosure arrow — the tile is inert the way a boundary
-        // notice is.
-        onTap: resolvedTurn == null ? null : () => onToggle(resolvedTurn),
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 14, height: 1, color: scheme.outlineVariant),
-            const SizedBox(width: 10),
-            // The dot states a tool fact; with no tools there is none.
-            if (tools.isNotEmpty) StateDot(state: state),
-          ],
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurface,
-          ),
-        ),
-        subtitle: subtitle == null
-            ? null
-            : Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  if (summaryVisible && failed > 0)
-                    Text(
-                      ' · ${l10n.turnFailedCount(failed)}',
-                      maxLines: 1,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.error,
-                      ),
-                    ),
-                ],
-              ),
-        trailing: resolvedTurn == null
-            ? null
-            : Icon(collapsed ? Icons.chevron_right : Icons.expand_more),
-      ),
-    );
-  }
-}
 
 /// Ledger-style turn divider: a left-aligned micro label (14px hairline
 /// tick + letterspaced caption text) marking where a turn begins — quiet
