@@ -63,8 +63,8 @@ jobs:
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
-      NO_PROXY: gitea,localhost,127.0.0.1
-      no_proxy: gitea,localhost,127.0.0.1
+      NO_PROXY: gitea,localhost,127.0.0.1,172.16.0.0/12,172.*,10.0.0.0/8
+      no_proxy: gitea,localhost,127.0.0.1,172.16.0.0/12,172.*,10.0.0.0/8
       # This runner shares the host's core count; uncapped, `flutter test`
       # spawns one tester per CPU and the suite gets OOM-killed (exit 137).
       DSH_TEST_CONCURRENCY: '4'
@@ -119,8 +119,8 @@ jobs:
       # below rebuilds those properties from the egress above at runtime,
       # so no internal address is ever committed; the JVM's default
       # nonProxyHosts keeps localhost traffic direct.
-      NO_PROXY: gitea,localhost,127.0.0.1
-      no_proxy: gitea,localhost,127.0.0.1
+      NO_PROXY: gitea,localhost,127.0.0.1,172.16.0.0/12,172.*,10.0.0.0/8
+      no_proxy: gitea,localhost,127.0.0.1,172.16.0.0/12,172.*,10.0.0.0/8
     steps:
       - name: Checkout (with reference submodule)
         uses: actions/checkout@v4
