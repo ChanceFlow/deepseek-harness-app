@@ -32,7 +32,6 @@ import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/turn_status_row.dart';
-import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -156,12 +155,6 @@ Future<void> _pump(
     ),
   );
 }
-
-/// The shared state dot carrying one run state (the subagents test's
-/// finder, for asserting the outline header's turn state).
-Finder _dot(StateDotState state) => find.byWidgetPredicate(
-  (widget) => widget is StateDot && widget.state == state,
-);
 
 void main() {
   testWidgets('chat surface shows no persistent connection status', (
@@ -411,7 +404,6 @@ void main() {
     expect(find.byTooltip('Rename session'), findsOneWidget);
     expect(find.byTooltip('Fork session'), findsOneWidget);
     expect(find.byTooltip('Archive session'), findsOneWidget);
-    expect(find.byTooltip('Outline'), findsOneWidget);
     expect(find.byTooltip('Subagents'), findsOneWidget);
     // Web plan seat: the warn pill renders only while the plan target is
     // active (null plan here → nothing).
@@ -749,13 +741,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(CircularProgressIndicator), findsNothing);
-
-    // The outline mode keeps the tail line, too.
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pump();
-    expect(find.byType(TurnStatusRow), findsOneWidget);
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pump();
 
     // Once assistant text flows the caret takes the tail and the status
     // line stands down — one signal per moment.
@@ -1409,8 +1394,6 @@ void main() {
       ),
       actions,
     );
-    await tester.pump();
-    await tester.tap(find.byTooltip('Outline'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('steer now'), findsOneWidget);
@@ -2647,238 +2630,6 @@ void main() {
     );
   });
 
-  testWidgets('outline groups turns, collapses, and expands all', (
-    tester,
-  ) async {
-    final actions = <ChatAction>[];
-    Future<void> pump([bool withOutline = false]) async {
-      // Outline toggle is local state; pump once, then toggle.
-      await _pump(
-        tester,
-        _state(
-          sessions: const [
-            SessionSummary(id: 's1', title: 'Alpha', blank: false),
-          ],
-          selectedSessionId: 's1',
-          timeline: const [
-            TimelineTurnBoundary(1),
-            TimelineMessage(
-              ChatMessage(
-                id: 'm1',
-                sessionId: 's1',
-                role: MessageRole.user,
-                text: 'first prompt',
-              ),
-            ),
-            TimelineToolCall(
-              id: 'call-1',
-              name: 'bash',
-              status: ToolRunStatus.completed,
-            ),
-            TimelineToolCall(
-              id: 'call-2',
-              name: 'bash',
-              status: ToolRunStatus.failed,
-            ),
-            TimelineToolCall(
-              id: 'call-3',
-              name: 'edit',
-              status: ToolRunStatus.completed,
-            ),
-          ],
-        ),
-        actions,
-      );
-      if (withOutline) {
-        await tester.tap(find.byTooltip('Outline'));
-        await tester.pumpAndSettle();
-      }
-    }
-
-    await pump(true);
-    // A ledger micro-line, not a frame: the title rides the fixed
-    // plurals — singular "1 message", plural "3 tools" in one string.
-    final header = find.widgetWithText(
-      ListTile,
-      'Turn 1 · 1 message · 3 tools',
-    );
-    expect(header, findsOneWidget);
-    // Expanded: the subtitle echoes the prompt (metadata tone, not the
-    // primary accent) and the disclosure arrow reads "open".
-    expect(find.text('“first prompt”'), findsOneWidget);
-    expect(
-      find.descendant(of: header, matching: find.byIcon(Icons.expand_more)),
-      findsOneWidget,
-    );
-    // The turn holds a failed tool: the shared dot reads error.
-    expect(
-      find.descendant(of: header, matching: _dot(StateDotState.error)),
-      findsOneWidget,
-    );
-
-    // Tapping the row collapses the group: the body disappears, the
-    // subtitle trades the echo for plain per-tool counts with a failure
-    // count, and the arrow swaps to chevron_right.
-    await tester.tap(header);
-    await tester.pumpAndSettle();
-    expect(find.text('first prompt', findRichText: true), findsNothing);
-    expect(find.text('bash 2 · edit 1'), findsOneWidget);
-    expect(find.textContaining('1 failed'), findsOneWidget);
-    expect(
-      find.descendant(of: header, matching: find.byIcon(Icons.chevron_right)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: header, matching: find.byIcon(Icons.expand_more)),
-      findsNothing,
-    );
-
-    // Expand all restores them, echo and arrow back to the open set.
-    await tester.tap(find.text('Expand all'));
-    await tester.pumpAndSettle();
-    expect(find.text('first prompt', findRichText: true), findsOneWidget);
-    expect(find.text('“first prompt”'), findsOneWidget);
-
-    // Outline off returns the plain ledger.
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pumpAndSettle();
-    expect(find.text('Turn 1'), findsOneWidget);
-  });
-
-  testWidgets('collapsed outline header dots and failure ink ride '
-      'theme roles under both brightnesses', (tester) async {
-    final actions = <ChatAction>[];
-    const timeline = [
-      TimelineTurnBoundary(1),
-      TimelineMessage(
-        ChatMessage(
-          id: 'm1',
-          sessionId: 's1',
-          role: MessageRole.user,
-          text: 'first prompt',
-        ),
-      ),
-      TimelineToolCall(
-        id: 'call-1',
-        name: 'bash',
-        status: ToolRunStatus.failed,
-      ),
-    ];
-    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
-      // A per-theme screen key starts each pump on a fresh state: the
-      // outline toggle and the collapse below never leak across rounds.
-      await _pump(
-        tester,
-        _state(
-          sessions: const [
-            SessionSummary(id: 's1', title: 'Alpha', blank: false),
-          ],
-          selectedSessionId: 's1',
-          timeline: timeline,
-        ),
-        actions,
-        theme: theme,
-        screenKey: ValueKey(theme.brightness),
-      );
-      // Pump past the theme lerp before reading colors back.
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.byTooltip('Outline'));
-      await tester.pumpAndSettle();
-      final header = find.widgetWithText(
-        ListTile,
-        'Turn 1 · 1 message · 1 tool',
-      );
-      // The expanded echo is metadata, not accent: the primary-ink frame
-      // was the violation; the role map reads it back here.
-      expect(
-        tester.widget<Text>(find.text('“first prompt”')).style?.color,
-        theme.colorScheme.onSurfaceVariant,
-      );
-      await tester.tap(header);
-      await tester.pumpAndSettle();
-
-      // The dot's core runs on the error role — a hard-coded red would
-      // pass one brightness and fail the other.
-      final core = tester.widget<Container>(
-        find
-            .descendant(
-              of: find.descendant(
-                of: header,
-                matching: _dot(StateDotState.error),
-              ),
-              matching: find.byType(Container),
-            )
-            .last,
-      );
-      expect(
-        (core.decoration! as BoxDecoration).color,
-        theme.colorScheme.error,
-      );
-      // The failure count is error ink; the summary it trails stays on
-      // the metadata tone.
-      expect(
-        tester.widget<Text>(find.textContaining('1 failed')).style?.color,
-        theme.colorScheme.error,
-      );
-      expect(
-        tester.widget<Text>(find.text('bash 1')).style?.color,
-        theme.colorScheme.onSurfaceVariant,
-      );
-    }
-  });
-
-  testWidgets('outline scrolls lazily to later turns', (tester) async {
-    final actions = <ChatAction>[];
-    final items = <TimelineItem>[
-      for (var turn = 1; turn <= 5; turn++) ...[
-        TimelineTurnBoundary(turn),
-        TimelineMessage(
-          ChatMessage(
-            id: 'm$turn',
-            sessionId: 's1',
-            role: MessageRole.user,
-            text: 'prompt $turn',
-          ),
-        ),
-      ],
-    ];
-    await _pump(
-      tester,
-      _state(
-        sessions: const [
-          SessionSummary(id: 's1', title: 'Alpha', blank: false),
-        ],
-        selectedSessionId: 's1',
-        timeline: items,
-      ),
-      actions,
-    );
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pumpAndSettle();
-
-    // Shrink the viewport height so the outline must actually scroll;
-    // keep the width wide enough for the app bar title.
-    tester.view.physicalSize = const Size(600, 320);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpAndSettle();
-
-    // The first turn header is visible; later turns are reachable by
-    // scrolling the outline's own scroll surface.
-    expect(find.text('Turn 1 · 1 message · 0 tools'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('prompt 5', findRichText: true),
-      200,
-      scrollable: find.descendant(
-        of: find.byType(CustomScrollView),
-        matching: find.byType(Scrollable),
-      ),
-    );
-    expect(find.text('prompt 5', findRichText: true), findsOneWidget);
-  });
-
   testWidgets('attachment placeholder shows metadata and retries', (
     tester,
   ) async {
@@ -3237,46 +2988,6 @@ void main() {
     expect(find.byTooltip('Jump to bottom'), findsNothing);
   });
 
-  testWidgets('jump-to-bottom FAB does not appear in outline mode', (
-    tester,
-  ) async {
-    final actions = <ChatAction>[];
-    final items = <TimelineItem>[
-      // Enough turns to overflow the viewport: the FAB is a scroll-position
-      // affordance, so the fixture has to out-measure the transcript pane.
-      for (var turn = 1; turn <= 16; turn++) ...[
-        TimelineTurnBoundary(turn),
-        TimelineMessage(
-          ChatMessage(
-            id: 'm$turn',
-            sessionId: 's1',
-            role: MessageRole.user,
-            text: 'prompt $turn',
-          ),
-        ),
-      ],
-    ];
-    await _pump(
-      tester,
-      _state(
-        sessions: const [SessionSummary(id: 's1', title: 'Alpha')],
-        selectedSessionId: 's1',
-        timeline: items,
-      ),
-      actions,
-    );
-    expect(find.byTooltip('Jump to bottom'), findsNothing);
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pumpAndSettle();
-    // The outline is its own skim surface: no jump-to-bottom affordance.
-    expect(find.byTooltip('Jump to bottom'), findsNothing);
-    // Closing the outline remounts the list at the top: the FAB offers the
-    // one-click way back to the newest content.
-    await tester.tap(find.byTooltip('Outline'));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('Jump to bottom'), findsOneWidget);
-  });
-
   group('compact drawer layout', () {
     Future<void> pumpCompact(
       WidgetTester tester,
@@ -3329,9 +3040,7 @@ void main() {
         find.descendant(of: find.byType(AppBar), matching: find.text('dsha')),
         findsOneWidget,
       );
-      // Six icon seats do not fit beside a session name: the verbs fold
-      // into the overflow, and only the outline keeps a seat.
-      expect(find.byTooltip('Outline'), findsOneWidget);
+      // The verbs fold into the overflow menu on narrow screens.
       expect(find.byTooltip('Rename session'), findsNothing);
       expect(find.byTooltip('Archive session'), findsNothing);
 
@@ -3696,14 +3405,14 @@ void main() {
         );
 
         // Collapsed summary row is visible by default.
-        expect(find.text('3 tool calls'), findsOneWidget);
+        expect(find.text('3 operations'), findsOneWidget);
         expect(find.text('bash 1 · edit 1 · read 1'), findsOneWidget);
 
         // Child tool call rows are hidden behind the collapse by default.
         expect(find.text('cargo check'), findsNothing);
 
         // Tap to expand.
-        await tester.tap(find.text('3 tool calls'));
+        await tester.tap(find.text('3 operations'));
         await tester.pumpAndSettle();
 
         // Individual tool rows are now disclosed.
@@ -3711,10 +3420,49 @@ void main() {
         expect(find.text('src/main.rs'), findsWidgets);
 
         // Tap again to collapse.
-        await tester.tap(find.text('3 tool calls'));
+        await tester.tap(find.text('3 operations'));
         await tester.pumpAndSettle();
 
         expect(find.text('cargo check'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'in-flight tool calls update on the collapsed single-line summary in real time',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Alpha', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: const [
+              TimelineToolCall(
+                id: 't-read',
+                name: 'read',
+                arguments: '{"file_path":"pubspec.yaml"}',
+                result: 'name: app',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't-run',
+                name: 'bash',
+                arguments: '{"command":"flutter test"}',
+                status: ToolRunStatus.running,
+              ),
+            ],
+          ),
+          <ChatAction>[],
+        );
+
+        // Real-time updating single-line status:
+        expect(find.text('Working (2 steps)'), findsOneWidget);
+        expect(
+          find.textContaining('Running bash: flutter test'),
+          findsOneWidget,
+        );
+        expect(find.byType(ActivityDot), findsOneWidget);
       },
     );
   });

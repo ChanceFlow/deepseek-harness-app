@@ -160,32 +160,6 @@ final List<DesignShot> shots = <DesignShot>[
     state: questionState(),
     locale: const Locale('zh'),
   ),
-  // The trajectory outline: the ledger-style turn-group headers over a
-  // two-turn fold (a failed tool in the first turn, a running tool in
-  // the second). The collapse twin folds the first group so its
-  // subtitle carries the tool-count summary and the error-ink failure
-  // count instead of the prompt echo.
-  DesignShot(
-    name: 'outline',
-    state: outlineState(),
-    act: (tester) async {
-      await tester.tap(find.byIcon(Icons.view_list_outlined));
-      await settle(tester);
-    },
-  ),
-  DesignShot(
-    name: 'outline-collapsed',
-    state: outlineState(),
-    dark: false,
-    act: (tester) async {
-      await tester.tap(find.byIcon(Icons.view_list_outlined));
-      await settle(tester);
-      // Matches the turn-1 header under both the old ▾-glyph button and
-      // the new borderless tile, so this pass renders a real before.
-      await tester.tap(find.textContaining('Turn 1 · 2'));
-      await settle(tester);
-    },
-  ),
   // Settings shots: the two-category surface (App / Host) on a
   // two-host registry fixture. The default view (Host settings,
   // General) and the registry page pair with the same-named before
