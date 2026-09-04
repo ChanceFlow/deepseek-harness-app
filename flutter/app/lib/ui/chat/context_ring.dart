@@ -111,7 +111,7 @@ class _ContextRingState extends State<ContextRing> {
         label: available ? l10n.contextUsedPercent(percent) : l10n.contextLabel,
         button: available,
         child: InkWell(
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(18),
           // The web trigger toggles the panel on tap; outside taps and
           // Escape close through MenuAnchor natively.
           onTap: available
@@ -124,33 +124,39 @@ class _ContextRingState extends State<ContextRing> {
                 }
               : null,
           child: SizedBox(
-            width: 14,
-            height: 14,
-            // Two states, one footprint. The reading is the native
-            // determinate M3 indicator; the empty seat is a bare
-            // outline-variant circle — the indicator's own track,
-            // drawn as a static placeholder so the always-present ring
-            // never reads as a spinner (activity spinners elsewhere
-            // assert their absence through this same type finder, and
-            // a 0-value indicator animates its track-in).
-            child: available
-                ? CircularProgressIndicator(
-                    value: occupancy,
-                    strokeWidth: 2,
-                    color: scheme.secondary,
-                    backgroundColor: scheme.outlineVariant,
-                  )
-                : DecoratedBox(
-                    key: const ValueKey('context-ring-track'),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: scheme.outlineVariant,
-                        width: 2,
+            width: 36,
+            height: 36,
+            child: Center(
+              child: SizedBox(
+                width: 14,
+                height: 14,
+                // Two states, one footprint. The reading is the native
+                // determinate M3 indicator; the empty seat is a bare
+                // outline-variant circle — the indicator's own track,
+                // drawn as a static placeholder so the always-present ring
+                // never reads as a spinner (activity spinners elsewhere
+                // assert their absence through this same type finder, and
+                // a 0-value indicator animates its track-in).
+                child: available
+                    ? CircularProgressIndicator(
+                        value: occupancy,
+                        strokeWidth: 2,
+                        color: scheme.secondary,
+                        backgroundColor: scheme.outlineVariant,
+                      )
+                    : DecoratedBox(
+                        key: const ValueKey('context-ring-track'),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: scheme.outlineVariant,
+                            width: 2,
+                          ),
+                        ),
+                        child: const SizedBox.expand(),
                       ),
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
+              ),
+            ),
           ),
         ),
       ),

@@ -7,6 +7,8 @@
 /// and the sweep.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
@@ -32,24 +34,66 @@ class _ReasoningRowState extends State<ReasoningRow>
     vsync: this,
     duration: const Duration(milliseconds: 2600),
   );
+  DateTime? _startedAt;
+  Duration? _elapsed;
+  Timer? _ticker;
 
   @override
   void initState() {
     super.initState();
-    if (widget.running) _sweep.repeat();
+    if (widget.running) {
+      _sweep.repeat();
+      _startedAt = DateTime.now();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted && widget.running) setState(() {});
+      });
+    }
   }
 
   @override
   void didUpdateWidget(covariant ReasoningRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.running && !oldWidget.running) _sweep.repeat();
-    if (!widget.running && oldWidget.running) _sweep.stop(canceled: true);
+    if (widget.running && !oldWidget.running) {
+      _sweep.repeat();
+      _startedAt = DateTime.now();
+      _ticker?.cancel();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted && widget.running) setState(() {});
+      });
+    }
+    if (!widget.running && oldWidget.running) {
+      _sweep.stop(canceled: true);
+      _ticker?.cancel();
+      _ticker = null;
+      if (_startedAt != null) {
+        _elapsed = DateTime.now().difference(_startedAt!);
+      }
+    }
   }
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _sweep.dispose();
     super.dispose();
+  }
+
+  String _thinkTitle(AppLocalizations l10n) {
+    if (widget.running && _startedAt != null) {
+      final seconds = DateTime.now().difference(_startedAt!).inSeconds;
+      return l10n.localeName.startsWith('zh')
+          ? '思考中 · $seconds秒'
+          : 'Thinking · ${seconds}s';
+    }
+    if (_elapsed case final elapsed?) {
+      final seconds = elapsed.inSeconds;
+      if (seconds > 0) {
+        return l10n.localeName.startsWith('zh')
+            ? '已思考 $seconds秒'
+            : 'Thought for ${seconds}s';
+      }
+    }
+    return l10n.thinkLabel;
   }
 
   String get _summary =>
@@ -107,7 +151,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                     // the payload — so a step reads as a step whether the
                     // agent was thinking or calling.
                     Text(
-                      l10n.thinkLabel,
+                      _thinkTitle(l10n),
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: scheme.onSurface,

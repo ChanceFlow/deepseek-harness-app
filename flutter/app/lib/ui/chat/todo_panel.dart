@@ -127,32 +127,37 @@ class _TodoPanelState extends State<TodoPanel> {
             if (!_collapsed)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final item in widget.todos)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(width: 2),
-                            _StatusGlyph(status: item.status),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                item.content,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: item.status == TodoStatus.completed
-                                      ? scheme.onSurfaceVariant
-                                      : null,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final item in widget.todos)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(width: 2),
+                                _StatusGlyph(status: item.status),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    item.content,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: item.status == TodoStatus.completed
+                                          ? scheme.onSurfaceVariant
+                                          : null,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                  ],
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
           ],

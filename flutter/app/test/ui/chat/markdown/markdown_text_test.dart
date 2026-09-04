@@ -124,4 +124,25 @@ void main() {
     final dark = tester.widget<Text>(find.text('one')).style;
     expect(dark, isNot(light));
   });
+
+  testWidgets(
+    'a multi-column table wraps in horizontal scroll on narrow view',
+    (tester) async {
+      const tableText =
+          '| Col 1 | Col 2 | Col 3 | Col 4 | Col 5 |\n'
+          '| --- | --- | --- | --- | --- |\n'
+          '| Alpha | Beta | Gamma | Delta | Epsilon |';
+      await _pump(tester, tableText);
+
+      expect(find.text('Col 1'), findsOneWidget);
+      expect(find.text('Delta'), findsOneWidget);
+      // Finds the horizontal scroll view hosting the wide table.
+      final horizontalScroll = find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.horizontal,
+      );
+      expect(horizontalScroll, findsOneWidget);
+    },
+  );
 }

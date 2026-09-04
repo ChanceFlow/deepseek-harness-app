@@ -104,4 +104,28 @@ void main() {
     );
     expect(find.byType(Text), findsNothing);
   });
+
+  testWidgets(
+    'tapping stats line opens detailed stats sheet with all metrics',
+    (tester) async {
+      await pumpAt(tester, 400);
+
+      // On 400dp width, TTFT and tokens/s were dropped from the single line.
+      expect(find.textContaining('TTFT avg 1s'), findsNothing);
+
+      // Tap the stats line to open the full breakdown sheet.
+      await tester.tap(find.byType(StatsLine));
+      await tester.pumpAndSettle();
+
+      // The modal sheet now reveals all metrics.
+      expect(find.textContaining('3 turns · 5 steps'), findsWidgets);
+      expect(find.textContaining('Input 12.2K tok'), findsOneWidget);
+      expect(find.textContaining('Output 900 tok'), findsOneWidget);
+      expect(find.textContaining('Cache hit 50%'), findsOneWidget);
+      expect(find.textContaining('LLM 42s'), findsOneWidget);
+      expect(find.textContaining('Tool call 8s'), findsOneWidget);
+      expect(find.textContaining('TTFT avg 1s'), findsOneWidget);
+      expect(find.textContaining('15 tok/s'), findsOneWidget);
+    },
+  );
 }

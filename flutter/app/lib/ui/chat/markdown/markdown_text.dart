@@ -247,7 +247,8 @@ class _MarkdownTextState extends State<MarkdownText> {
     );
   }
 
-  /// Pipe table: header row plus body rows, equal-weight columns.
+  /// Pipe table: header row plus body rows, equal-weight columns with
+  /// horizontal scroll protection on compact screens so cells are not crushed.
   Widget _tableBlock(BuildContext context, TableBlock block) {
     final theme = Theme.of(context);
     final columns = block.header.length > 1 ? block.header.length : 1;
@@ -259,56 +260,78 @@ class _MarkdownTextState extends State<MarkdownText> {
         borderRadius: BorderRadius.circular(kShapeCard),
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final cell in block.header)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    child: Text.rich(
-                      _inlineSpan(context, cell),
-                      style: theme.textTheme.labelLarge,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          Container(
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-            color: theme.colorScheme.outlineVariant,
-          ),
-          for (final row in block.rows)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var columnIndex = 0; columnIndex < columns; columnIndex++)
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      child: Text.rich(
-                        _inlineSpan(
-                          context,
-                          columnIndex < row.length
-                              ? row[columnIndex]
-                              : const <MarkdownInline>[],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const double minCellWidth = 84.0;
+          final double totalMinWidth = columns * minCellWidth;
+          final double tableWidth = constraints.maxWidth > totalMinWidth
+              ? constraints.maxWidth - 8
+              : totalMinWidth;
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: tableWidth,
+              child: Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final cell in block.header)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            child: Text.rich(
+                              _inlineSpan(context, cell),
+                              style: theme.textTheme.labelLarge,
+                            ),
+                          ),
                         ),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
+                    ],
                   ),
-              ],
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    color: theme.colorScheme.outlineVariant,
+                  ),
+                  for (final row in block.rows)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (
+                          var columnIndex = 0;
+                          columnIndex < columns;
+                          columnIndex++
+                        )
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              child: Text.rich(
+                                _inlineSpan(
+                                  context,
+                                  columnIndex < row.length
+                                      ? row[columnIndex]
+                                      : const <MarkdownInline>[],
+                                ),
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
             ),
-        ],
+          );
+        },
       ),
     );
   }

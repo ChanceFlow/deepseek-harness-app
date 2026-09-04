@@ -44,6 +44,7 @@ import '../models/models_controller.dart';
 import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
 import '../goal/goal_screen.dart';
+import '../models/models_screen.dart';
 import '../subagents/subagent_screen.dart';
 
 import 'activity_dot.dart';
@@ -377,6 +378,8 @@ class _ChatScreenState extends State<ChatScreen> {
           onAction: onAction,
           outline: _outline,
           onToggleOutline: () => setState(() => _outline = !_outline),
+          onOpenModels: () => _openSessionTool((_) => const ModelsRoute()),
+          onOpenGoal: () => _openSessionTool((_) => const GoalRoute()),
           onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
           compact: compact,
         ),
@@ -554,6 +557,8 @@ class ChatHeaderActions extends StatelessWidget {
     required this.onToggleOutline,
     required this.outline,
     super.key,
+    this.onOpenModels,
+    this.onOpenGoal,
     this.onOpenSubagents,
     this.compact = false,
   });
@@ -567,6 +572,12 @@ class ChatHeaderActions extends StatelessWidget {
   /// outline — and fold the session verbs into an overflow menu; a 400dp
   /// bar cannot spend six icon seats and still name the session.
   final bool compact;
+
+  /// Web Session models seat: opens the model directory for this session.
+  final VoidCallback? onOpenModels;
+
+  /// Web Goal seat: opens the goal management screen for this session.
+  final VoidCallback? onOpenGoal;
 
   /// Web SubagentCatalogAction seat: opens the subagent catalog for this
   /// session.
@@ -635,6 +646,10 @@ class ChatHeaderActions extends StatelessWidget {
             icon: const Icon(Icons.more_vert),
             onSelected: (verb) {
               switch (verb) {
+                case _SessionVerb.models:
+                  onOpenModels?.call();
+                case _SessionVerb.goals:
+                  onOpenGoal?.call();
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
@@ -646,6 +661,24 @@ class ChatHeaderActions extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
+              if (onOpenModels != null)
+                PopupMenuItem(
+                  value: _SessionVerb.models,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.dataset_outlined),
+                    title: Text(l10n.modelsTitle),
+                  ),
+                ),
+              if (onOpenGoal != null)
+                PopupMenuItem(
+                  value: _SessionVerb.goals,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.flag_outlined),
+                    title: Text(l10n.goalTitle),
+                  ),
+                ),
               if (onOpenSubagents != null)
                 PopupMenuItem(
                   value: _SessionVerb.subagents,
@@ -684,6 +717,18 @@ class ChatHeaderActions extends StatelessWidget {
             ],
           )
         else ...[
+          if (onOpenModels != null)
+            IconButton(
+              tooltip: l10n.modelsTitle,
+              onPressed: onOpenModels,
+              icon: const Icon(Icons.dataset_outlined),
+            ),
+          if (onOpenGoal != null)
+            IconButton(
+              tooltip: l10n.goalTitle,
+              onPressed: onOpenGoal,
+              icon: const Icon(Icons.flag_outlined),
+            ),
           if (onOpenSubagents != null)
             IconButton(
               tooltip: l10n.subagentsTooltip,
@@ -712,7 +757,7 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { subagents, rename, fork, archive }
+enum _SessionVerb { models, goals, subagents, rename, fork, archive }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.
@@ -1281,6 +1326,7 @@ class _ChatPanelState extends State<ChatPanel> {
       );
     }
     final items = _timelineItems;
+    final groupedItems = _groupConsecutiveTools(items);
     final steering = _pendingSteering;
     // The status line rides the tail of the transcript: with nothing
     // visible to be a tail after (a queue-only window), it renders nothing
@@ -1290,7 +1336,7 @@ class _ChatPanelState extends State<ChatPanel> {
     // pending steering bubbles (ChatView.tsx:446-460). Steering rides both
     // render modes the same way.
     final rows = <Object>[
-      ...items,
+      ...groupedItems,
       if (showTurnStatus) _turnStatusSlot,
       ...steering,
     ];
@@ -1311,6 +1357,7 @@ class _ChatPanelState extends State<ChatPanel> {
           )
         : ListView.separated(
             controller: _timelineScroll,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             itemCount: rows.length,
             separatorBuilder: (_, index) => SizedBox(
               height: _gapAfter(
@@ -1320,6 +1367,15 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
             itemBuilder: (context, index) {
               final row = rows[index];
+              if (row is TimelineToolGroup) {
+                return ToolGroupRow(
+                  key: ValueKey('tool-group:${row.id}:${row.calls.length}'),
+                  group: row,
+                  onAction: widget.onAction,
+                  loadAttachment: widget.loadAttachment,
+                  expansion: _sessionState,
+                );
+              }
               if (row is TimelineItem) {
                 return TimelineRow(
                   key: ValueKey(timelineKey(row)),
@@ -1338,6 +1394,43 @@ class _ChatPanelState extends State<ChatPanel> {
               return const TurnStatusRow(key: ValueKey('turn-status'));
             },
           );
+  }
+
+  /// Groups consecutive completed tool calls into [TimelineToolGroup]s so that
+  /// settled multi-step tool runs collapse into a single cursor-style summary row.
+  /// Running runs remain expanded so in-flight tools and sweep indicators stay visible.
+  static List<Object> _groupConsecutiveTools(List<TimelineItem> items) {
+    final result = <Object>[];
+    var currentGroup = <TimelineToolCall>[];
+
+    void flush() {
+      if (currentGroup.isEmpty) return;
+      final anyRunning = currentGroup.any(
+        (call) => call.status == ToolRunStatus.running,
+      );
+      if (currentGroup.length == 1 || anyRunning) {
+        result.addAll(currentGroup);
+      } else {
+        result.add(
+          TimelineToolGroup(
+            id: currentGroup.first.id,
+            calls: List<TimelineToolCall>.unmodifiable(currentGroup),
+          ),
+        );
+      }
+      currentGroup = <TimelineToolCall>[];
+    }
+
+    for (final item in items) {
+      if (item is TimelineToolCall) {
+        currentGroup.add(item);
+      } else {
+        flush();
+        result.add(item);
+      }
+    }
+    flush();
+    return result;
   }
 
   /// Vertical rhythm between two transcript rows. A run of steps is one
@@ -1455,7 +1548,16 @@ class _ChatPanelState extends State<ChatPanel> {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: _timelineBody(uiState, selectedSession),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () {
+                        final primaryFocus = FocusManager.instance.primaryFocus;
+                        if (primaryFocus != null && primaryFocus.hasFocus) {
+                          primaryFocus.unfocus();
+                        }
+                      },
+                      child: _timelineBody(uiState, selectedSession),
+                    ),
                   ),
                   Positioned(
                     right: 8,
@@ -1780,8 +1882,10 @@ class MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.role == MessageRole.user) {
-      // The reader's own words: a quiet container, right-aligned at 82%,
-      // with the tail corner tightened so the bubble points at its author.
+      // The reader's own words: a quiet container, right-aligned,
+      // with maxWidth capped at 82% (up to 525dp) so short messages fit
+      // their content while long runs wrap cleanly, with the tail corner
+      // tightened so the bubble points at its author.
       // No action row rides under it — long-press copies, and the reply's
       // row already dates the turn.
       return Column(
@@ -1789,13 +1893,15 @@ class MessageRow extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerRight,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 525),
-              child: FractionallySizedBox(
-                widthFactor: 0.82,
-                alignment: Alignment.centerRight,
-                child: _UserBubble(text: message.text, onFork: onFork),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double cap = constraints.maxWidth * 0.82;
+                final double maxWidth = cap > 525 ? 525 : cap;
+                return ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: _UserBubble(text: message.text, onFork: onFork),
+                );
+              },
             ),
           ),
           for (final ref in message.images)
@@ -1993,38 +2099,40 @@ class _PendingSteeringRowState extends State<PendingSteeringRow>
     final reduced = MediaQuery.disableAnimationsOf(context);
     return Align(
       alignment: Alignment.centerRight,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 525),
-        child: FractionallySizedBox(
-          widthFactor: 0.82,
-          alignment: Alignment.centerRight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const ActivityDot(),
-                    const SizedBox(width: 8),
-                    Text(
-                      l10n.steeringPending,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurfaceVariant,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double cap = constraints.maxWidth * 0.82;
+          final double maxWidth = cap > 525 ? 525 : cap;
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const ActivityDot(),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.steeringPending,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              SweepHighlight(
-                controller: reduced ? null : _glare,
-                child: _UserBubble(text: widget.text),
-              ),
-            ],
-          ),
-        ),
+                SweepHighlight(
+                  controller: reduced ? null : _glare,
+                  child: _UserBubble(text: widget.text),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -2203,6 +2311,222 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
           child: Text(l10n.retry),
         ),
       ],
+    );
+  }
+}
+
+/// A group of consecutive tool calls in a turn, rendered as a compact,
+/// cursor-style collapsible section that is collapsed by default.
+final class TimelineToolGroup {
+  const TimelineToolGroup({required this.id, required this.calls});
+
+  final String id;
+  final List<TimelineToolCall> calls;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TimelineToolGroup &&
+      other.id == id &&
+      _listEquals(other.calls, calls);
+
+  @override
+  int get hashCode => Object.hash(id, Object.hashAll(calls));
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/// Cursor-style collapsible tool execution block: groups multiple consecutive
+/// tool calls into a single summary line (e.g. "4 tool calls · bash 2 · edit 2")
+/// that is collapsed by default and expands on demand to reveal individual tool rows.
+class ToolGroupRow extends StatefulWidget {
+  const ToolGroupRow({
+    required this.group,
+    required this.onAction,
+    required this.loadAttachment,
+    super.key,
+    this.expansion,
+  });
+
+  final TimelineToolGroup group;
+  final void Function(ChatAction) onAction;
+  final AttachmentLoader loadAttachment;
+  final ToolExpansionPersistence? expansion;
+
+  @override
+  State<ToolGroupRow> createState() => _ToolGroupRowState();
+}
+
+class _ToolGroupRowState extends State<ToolGroupRow>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  bool get _isRunning =>
+      widget.group.calls.any((call) => call.status == ToolRunStatus.running);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isRunning) _sweep.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant ToolGroupRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_isRunning && !_sweep.isAnimating) {
+      _sweep.repeat();
+    } else if (!_isRunning && _sweep.isAnimating) {
+      _sweep.stop(canceled: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final calls = widget.group.calls;
+    final isZh = l10n.localeName.startsWith('zh');
+
+    var failed = 0;
+    var running = 0;
+    final countByName = <String, int>{};
+    for (final call in calls) {
+      countByName[call.name] = (countByName[call.name] ?? 0) + 1;
+      if (call.status == ToolRunStatus.failed) failed++;
+      if (call.status == ToolRunStatus.running) running++;
+    }
+
+    final names = countByName.keys.toList()..sort();
+    final toolSummary = names.map((n) => '$n ${countByName[n]}').join(' · ');
+
+    final title = isZh
+        ? '调用了 ${calls.length} 个工具'
+        : '${calls.length} tool calls';
+
+    final state = failed > 0
+        ? StateDotState.error
+        : running > 0
+        ? StateDotState.ongoing
+        : StateDotState.done;
+
+    final leadingWidget = switch (state) {
+      StateDotState.ongoing => const ActivityDot(),
+      StateDotState.error => Icon(Icons.close, size: 14, color: scheme.error),
+      StateDotState.done => Icon(Icons.check, size: 14, color: scheme.success),
+      StateDotState.warning => Icon(
+        Icons.warning_amber_rounded,
+        size: 14,
+        color: scheme.warning,
+      ),
+      StateDotState.disabled => Icon(
+        Icons.remove,
+        size: 14,
+        color: scheme.onSurfaceVariant,
+      ),
+    };
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: SweepHighlight(
+              controller:
+                  running > 0 && !MediaQuery.disableAnimationsOf(context)
+                  ? _sweep
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    leadingWidget,
+                    const SizedBox(width: 8),
+                    Text(
+                      title,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        toolSummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (failed > 0) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        l10n.turnFailedCount(failed),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.error,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      _expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            Container(height: 1, color: scheme.outlineVariant),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+              child: Column(
+                children: [
+                  for (final call in calls)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: ToolCallRow(
+                        key: ValueKey(timelineKey(call)),
+                        call: call,
+                        expansion: widget.expansion,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -2435,6 +2759,7 @@ class _ToolCallRowState extends State<ToolCallRow>
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
@@ -2449,15 +2774,39 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              payload,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: failed
-                    ? theme.colorScheme.error
-                    : scheme.onSurfaceVariant,
-                fontFamily: 'monospace',
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: Text(
+                  payload,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: failed
+                        ? theme.colorScheme.error
+                        : scheme.onSurfaceVariant,
+                    fontFamily: 'monospace',
+                  ),
+                ),
               ),
             ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            tooltip: l10n.copyTooltip,
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await Clipboard.setData(ClipboardData(text: payload));
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(l10n.copiedTooltip),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(milliseconds: 1400),
+                ),
+              );
+            },
+            icon: Icon(Icons.copy_outlined, color: scheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -5197,7 +5546,10 @@ class OutlineTimeline extends StatelessWidget {
           sliver: elements[i],
         ),
     ];
-    return CustomScrollView(slivers: slivers);
+    return CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: slivers,
+    );
   }
 }
 
