@@ -17,6 +17,7 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'dart:async';
@@ -3494,5 +3495,210 @@ void main() {
     test('no facts means no second line', () {
       expect(sessionContextLine(const SessionSummary(id: 's1'), null), isNull);
     });
+  });
+
+  group('UI/UX interactions', () {
+    testWidgets('timeline list view dismisses keyboard on drag', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineMessage(
+              ChatMessage(
+                id: 'm1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'hello',
+              ),
+            ),
+          ],
+        ),
+        <ChatAction>[],
+      );
+
+      final listFinder = find.descendant(
+        of: find.byType(ChatPanel),
+        matching: find.byType(ListView),
+      );
+      final list = tester.widget<ListView>(listFinder);
+      expect(
+        list.keyboardDismissBehavior,
+        ScrollViewKeyboardDismissBehavior.onDrag,
+      );
+    });
+
+    testWidgets('user bubble width hugs short message instead of rigid 82%', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineMessage(
+              ChatMessage(
+                id: 'm1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'ok',
+              ),
+            ),
+          ],
+        ),
+        <ChatAction>[],
+        width: 800,
+      );
+
+      final bubbleFinder = find.ancestor(
+        of: find.text('ok'),
+        matching: find.byType(Material),
+      );
+      expect(bubbleFinder, findsWidgets);
+      final size = tester.getSize(bubbleFinder.first);
+      // Under rigid FractionallySizedBox(0.82), on 800dp width (clamped to 525),
+      // the bubble width would have been >= 520. With adaptive maxWidth it hugs 'ok' + padding.
+      expect(size.width, lessThan(150));
+    });
+
+    testWidgets('compact phone bar overflow menu offers Models and Goals', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+        ),
+        <ChatAction>[],
+        width: 360,
+      );
+
+      // Open the overflow menu.
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Models'), findsOneWidget);
+      expect(find.text('Goal'), findsOneWidget);
+      expect(find.text('Subagents'), findsOneWidget);
+    });
+
+    testWidgets('expanded tool call offers a copy button for its payload', (
+      tester,
+    ) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add(
+              (call.arguments as Map<Object?, Object?>)['text']! as String,
+            );
+          }
+          return null;
+        },
+      );
+
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineToolCall(
+              id: 't1',
+              name: 'bash',
+              arguments: '{"command":"ls -la"}',
+              result: 'total 0\n-rw-r--r-- 1 user user 0 file.txt',
+              status: ToolRunStatus.completed,
+            ),
+          ],
+        ),
+        <ChatAction>[],
+      );
+
+      // Expand the tool call row.
+      await tester.tap(find.text('Bash'));
+      await tester.pumpAndSettle();
+
+      final copyButtons = find.byIcon(Icons.copy_outlined);
+      expect(copyButtons, findsWidgets);
+
+      await tester.tap(copyButtons.first);
+      await tester.pumpAndSettle();
+      expect(copied, isNotEmpty);
+    });
+
+    testWidgets(
+      'multiple completed tool calls collapse into ToolGroupRow by default and expand on tap',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Session 1', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: const [
+              TimelineToolCall(
+                id: 't1',
+                name: 'bash',
+                arguments: '{"command":"cargo check"}',
+                result: 'Finished dev [unoptimized + debuginfo] target(s)',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't2',
+                name: 'read',
+                arguments: '{"file_path":"src/main.rs"}',
+                result: 'fn main() {}',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't3',
+                name: 'edit',
+                arguments: '{"file_path":"src/main.rs"}',
+                result: 'success',
+                status: ToolRunStatus.completed,
+              ),
+            ],
+          ),
+          <ChatAction>[],
+        );
+
+        // Collapsed summary row is visible by default.
+        expect(find.text('3 tool calls'), findsOneWidget);
+        expect(find.text('bash 1 · edit 1 · read 1'), findsOneWidget);
+
+        // Child tool call rows are hidden behind the collapse by default.
+        expect(find.text('cargo check'), findsNothing);
+
+        // Tap to expand.
+        await tester.tap(find.text('3 tool calls'));
+        await tester.pumpAndSettle();
+
+        // Individual tool rows are now disclosed.
+        expect(find.text('cargo check'), findsOneWidget);
+        expect(find.text('src/main.rs'), findsWidgets);
+
+        // Tap again to collapse.
+        await tester.tap(find.text('3 tool calls'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('cargo check'), findsNothing);
+      },
+    );
   });
 }

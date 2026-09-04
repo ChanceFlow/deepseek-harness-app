@@ -131,4 +131,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Todos written'), findsOneWidget);
   });
+
+  testWidgets(
+    'expanded todo panel limits height to 200dp with internal scroll',
+    (tester) async {
+      final manyTodos = <TodoItem>[
+        for (var i = 1; i <= 30; i++)
+          TodoItem(
+            content: 'Task number $i to complete',
+            status: TodoStatus.pending,
+          ),
+      ];
+
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(body: TodoPanel(todos: manyTodos)),
+        ),
+      );
+
+      // Expand the panel
+      await tester.tap(find.text('To-dos'));
+      await tester.pumpAndSettle();
+
+      // Verify SingleChildScrollView exists within the expanded panel
+      final scrollFinder = find.descendant(
+        of: find.byType(TodoPanel),
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(scrollFinder, findsOneWidget);
+
+      final scrollSize = tester.getSize(scrollFinder);
+      expect(scrollSize.height, lessThanOrEqualTo(200.0));
+    },
+  );
 }
