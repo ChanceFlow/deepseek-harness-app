@@ -437,6 +437,20 @@ final class ClearGoal extends ChatAction {
   int get hashCode => 'clear-goal-chat'.hashCode;
 }
 
+/// GoalBar edit objective (composer dock strip — web GoalBar inline edit).
+final class EditGoal extends ChatAction {
+  const EditGoal(this.objective);
+
+  final String objective;
+
+  @override
+  bool operator ==(Object other) =>
+      other is EditGoal && other.objective == objective;
+
+  @override
+  int get hashCode => Object.hash('edit-goal', objective);
+}
+
 /// Picker/read failures surface in the shared error strip.
 final class ImagePickError extends ChatAction {
   const ImagePickError(this.message);

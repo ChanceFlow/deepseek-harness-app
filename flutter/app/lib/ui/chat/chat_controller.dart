@@ -355,6 +355,8 @@ class ChatController {
         _toggleGoalPause();
       case ClearGoal():
         _clearGoal();
+      case EditGoal():
+        _editGoal(action.objective);
       case ImagePickError():
         _errorMessage = action.message;
         _publish();
@@ -1029,6 +1031,19 @@ class ChatController {
     if (goal == null) return;
     final ref = GoalRef(id: goal.id, revision: goal.revision);
     unawaited(_runCatchingForUi(() => _repository.clearGoal(sessionId, ref)));
+  }
+
+  /// GoalBar strip action: edit the objective of the current goal
+  /// (web GoalBar inline edit).
+  void _editGoal(String objective) {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    final goal = _goal?.goal;
+    if (goal == null) return;
+    final ref = GoalRef(id: goal.id, revision: goal.revision);
+    unawaited(
+      _runCatchingForUi(() => _repository.editGoal(sessionId, ref, objective)),
+    );
   }
 
   void _cancelTurn() {

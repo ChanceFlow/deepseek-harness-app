@@ -39,12 +39,8 @@ import 'session_panel.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../goal/goal_controller.dart';
-import '../models/models_controller.dart';
 import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
-import '../goal/goal_screen.dart';
-import '../models/models_screen.dart';
 import '../subagents/subagent_screen.dart';
 
 import 'activity_dot.dart';
@@ -242,31 +238,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Session-scoped tool pages (web embeds them into conversation context;
-  /// mobile pushes them as full routes with the current session preloaded).
-  void _openSessionTool(Widget Function(String? sessionId) page) {
+  /// Subagent tool page (web embeds it into conversation context;
+  /// mobile pushes it as a route with the current session preloaded).
+  void _openSubagents() {
     final sessionId = widget.uiState.selectedSessionId;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (scopeContext) {
           final backendId = widget.backendId;
           if (sessionId == null || backendId == null) {
-            return page(sessionId);
+            return const SubagentRoute();
           }
           return ProviderScope(
             overrides: [
-              modelsControllerProvider(backendId).overrideWith(
-                (ref) => ModelsController(
-                  ref.watch(chatRepositoryProvider(backendId)),
-                  initialSessionId: sessionId,
-                ),
-              ),
-              goalControllerProvider(backendId).overrideWith(
-                (ref) => GoalController(
-                  ref.watch(chatRepositoryProvider(backendId)),
-                  initialSessionId: sessionId,
-                ),
-              ),
               subagentControllerProvider(backendId).overrideWith(
                 (ref) => SubagentController(
                   ref.watch(chatRepositoryProvider(backendId)),
@@ -274,7 +258,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ],
-            child: page(sessionId),
+            child: const SubagentRoute(),
           );
         },
       ),
@@ -378,9 +362,7 @@ class _ChatScreenState extends State<ChatScreen> {
           onAction: onAction,
           outline: _outline,
           onToggleOutline: () => setState(() => _outline = !_outline),
-          onOpenModels: () => _openSessionTool((_) => const ModelsRoute()),
-          onOpenGoal: () => _openSessionTool((_) => const GoalRoute()),
-          onOpenSubagents: () => _openSessionTool((_) => const SubagentRoute()),
+          onOpenSubagents: _openSubagents,
           compact: compact,
         ),
       ],
@@ -443,8 +425,6 @@ class _ChatScreenState extends State<ChatScreen> {
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
                             outline: _outline,
-                            onOpenGoal: () =>
-                                _openSessionTool((_) => const GoalRoute()),
                             models: uiState.models,
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
@@ -509,8 +489,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
                     outline: _outline,
-                    onOpenGoal: () =>
-                        _openSessionTool((_) => const GoalRoute()),
                     models: uiState.models,
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
@@ -557,8 +535,6 @@ class ChatHeaderActions extends StatelessWidget {
     required this.onToggleOutline,
     required this.outline,
     super.key,
-    this.onOpenModels,
-    this.onOpenGoal,
     this.onOpenSubagents,
     this.compact = false,
   });
@@ -572,12 +548,6 @@ class ChatHeaderActions extends StatelessWidget {
   /// outline — and fold the session verbs into an overflow menu; a 400dp
   /// bar cannot spend six icon seats and still name the session.
   final bool compact;
-
-  /// Web Session models seat: opens the model directory for this session.
-  final VoidCallback? onOpenModels;
-
-  /// Web Goal seat: opens the goal management screen for this session.
-  final VoidCallback? onOpenGoal;
 
   /// Web SubagentCatalogAction seat: opens the subagent catalog for this
   /// session.
@@ -646,10 +616,6 @@ class ChatHeaderActions extends StatelessWidget {
             icon: const Icon(Icons.more_vert),
             onSelected: (verb) {
               switch (verb) {
-                case _SessionVerb.models:
-                  onOpenModels?.call();
-                case _SessionVerb.goals:
-                  onOpenGoal?.call();
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
@@ -661,24 +627,6 @@ class ChatHeaderActions extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
-              if (onOpenModels != null)
-                PopupMenuItem(
-                  value: _SessionVerb.models,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.dataset_outlined),
-                    title: Text(l10n.modelsTitle),
-                  ),
-                ),
-              if (onOpenGoal != null)
-                PopupMenuItem(
-                  value: _SessionVerb.goals,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.flag_outlined),
-                    title: Text(l10n.goalTitle),
-                  ),
-                ),
               if (onOpenSubagents != null)
                 PopupMenuItem(
                   value: _SessionVerb.subagents,
@@ -717,18 +665,6 @@ class ChatHeaderActions extends StatelessWidget {
             ],
           )
         else ...[
-          if (onOpenModels != null)
-            IconButton(
-              tooltip: l10n.modelsTitle,
-              onPressed: onOpenModels,
-              icon: const Icon(Icons.dataset_outlined),
-            ),
-          if (onOpenGoal != null)
-            IconButton(
-              tooltip: l10n.goalTitle,
-              onPressed: onOpenGoal,
-              icon: const Icon(Icons.flag_outlined),
-            ),
           if (onOpenSubagents != null)
             IconButton(
               tooltip: l10n.subagentsTooltip,
@@ -757,7 +693,7 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { models, goals, subagents, rename, fork, archive }
+enum _SessionVerb { subagents, rename, fork, archive }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.
@@ -770,7 +706,6 @@ class ChatPanel extends StatefulWidget {
     required this.loadAttachment,
     super.key,
     this.outline = false,
-    this.onOpenGoal,
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
@@ -782,7 +717,6 @@ class ChatPanel extends StatefulWidget {
   final AttachmentLoader loadAttachment;
 
   final bool outline;
-  final VoidCallback? onOpenGoal;
   final SessionModels? models;
   final void Function(ModelSelection selection)? onSelectModel;
   final VoidCallback? onRefreshModels;
@@ -1595,11 +1529,7 @@ class _ChatPanelState extends State<ChatPanel> {
               children: [
                 if (_pendingApproval == null) ...[
                   TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-                  GoalBarStrip(
-                    goal: uiState.goal,
-                    onAction: widget.onAction,
-                    onOpen: widget.onOpenGoal,
-                  ),
+                  GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
                 ],
                 // The queue dock is a display strip, not a filled seat:
                 // it rides alongside the approval card the way web's
@@ -2837,36 +2767,157 @@ String toolRunStatusLabel(ToolRunStatus status, AppLocalizations l10n) =>
       ToolRunStatus.failed => l10n.runStatusFailed,
     };
 
-class GoalBarStrip extends StatelessWidget {
-  const GoalBarStrip({
-    required this.goal,
-    required this.onAction,
-    super.key,
-    this.onOpen,
-  });
+/// The goal indicator docked above the message composer (web GoalBar).
+/// A present goal shows a goal glyph, a phase label, the truncated
+/// objective, and icon actions: pause / resume, inline edit in the same
+/// strip, and clear. Renders nothing when goal is null or complete.
+class GoalBarStrip extends StatefulWidget {
+  const GoalBarStrip({required this.goal, required this.onAction, super.key});
 
   final GoalProjection? goal;
   final void Function(ChatAction) onAction;
-  final VoidCallback? onOpen;
+
+  @override
+  State<GoalBarStrip> createState() => _GoalBarStripState();
+}
+
+class _GoalBarStripState extends State<GoalBarStrip> {
+  bool _editing = false;
+  late final TextEditingController _editController = TextEditingController();
+  String? _lastGoalId;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncDraft();
+  }
+
+  @override
+  void didUpdateWidget(covariant GoalBarStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentId = widget.goal?.goal.id;
+    if (currentId != _lastGoalId) {
+      _editing = false;
+      _syncDraft();
+    }
+  }
+
+  void _syncDraft() {
+    _lastGoalId = widget.goal?.goal.id;
+    final objective = widget.goal?.goal.objective ?? '';
+    _editController.text = objective;
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  void _submitEdit() {
+    final trimmed = _editController.text.trim();
+    if (trimmed.isEmpty) return;
+    widget.onAction(EditGoal(trimmed));
+    setState(() => _editing = false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final projection = goal;
+    final projection = widget.goal;
     if (projection == null) return const SizedBox.shrink();
     final snapshot = projection.goal;
     if (snapshot.phase == GoalPhase.complete) return const SizedBox.shrink();
+
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
+
+    // Inline edit form in the exact same strip (reference GoalBar.tsx)
+    if (_editing) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            border: Border(
+              top: BorderSide(color: scheme.outlineVariant),
+              left: BorderSide(color: scheme.outlineVariant),
+              right: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.track_changes_outlined,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _editController,
+                  autofocus: true,
+                  style: theme.textTheme.bodySmall,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onSubmitted: (_) => _submitEdit(),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.save,
+                onPressed: _submitEdit,
+                icon: Icon(Icons.check, size: 14, color: scheme.primary),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.cancel,
+                onPressed: () {
+                  _syncDraft();
+                  setState(() => _editing = false);
+                },
+                icon: Icon(
+                  Icons.close,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final phaseLabel = switch (snapshot.phase) {
       GoalPhase.active => l10n.chatGoalPhaseActive,
       GoalPhase.paused => l10n.chatGoalPhasePaused,
       GoalPhase.blocked => l10n.chatGoalPhaseBlocked,
       GoalPhase.complete => '',
     };
+
+    final phaseColor = switch (snapshot.phase) {
+      GoalPhase.active => scheme.secondary,
+      GoalPhase.paused => scheme.onSurfaceVariant,
+      GoalPhase.blocked => scheme.error,
+      GoalPhase.complete => scheme.onSurfaceVariant,
+    };
+
+    final tooltipText = snapshot.phase == GoalPhase.blocked
+        ? snapshot.blockedReason
+        : null;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
+        height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
@@ -2879,58 +2930,80 @@ class GoalBarStrip extends StatelessWidget {
         ),
         child: Row(
           children: [
+            Icon(
+              Icons.track_changes_outlined,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
             Text(
               phaseLabel,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: snapshot.phase == GoalPhase.active
-                    ? theme.colorScheme.secondary
-                    : scheme.onSurfaceVariant,
+                color: phaseColor,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                snapshot.objective,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
+              child: Tooltip(
+                message: tooltipText ?? snapshot.objective,
+                child: Text(
+                  snapshot.objective,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
             ),
+            if (snapshot.phase == GoalPhase.active)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.pauseGoal,
+                onPressed: () => widget.onAction(const ToggleGoalPause()),
+                icon: Icon(
+                  Icons.pause_outlined,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            if (snapshot.phase == GoalPhase.paused)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 14,
+                tooltip: l10n.resumeGoal,
+                onPressed: () => widget.onAction(const ToggleGoalPause()),
+                icon: Icon(
+                  Icons.play_arrow_outlined,
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 14,
-              tooltip: snapshot.phase == GoalPhase.active
-                  ? l10n.pauseGoal
-                  : l10n.resumeGoal,
-              onPressed: () => onAction(const ToggleGoalPause()),
+              tooltip: l10n.edit,
+              onPressed: () {
+                _syncDraft();
+                setState(() => _editing = true);
+              },
               icon: Icon(
-                snapshot.phase == GoalPhase.active
-                    ? Icons.pause_outlined
-                    : Icons.play_arrow_outlined,
+                Icons.edit_outlined,
+                size: 14,
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            // Web GoalBar ships the trash action beside pause/resume —
-            // deleting works from any phase (`/goal clear` semantics).
             IconButton(
               visualDensity: VisualDensity.compact,
               iconSize: 14,
               tooltip: l10n.clearGoal,
-              onPressed: () => onAction(const ClearGoal()),
+              onPressed: () => widget.onAction(const ClearGoal()),
               icon: Icon(
                 Icons.delete_outline,
                 size: 14,
                 color: scheme.onSurfaceVariant,
               ),
             ),
-            if (onOpen != null)
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 14,
-                tooltip: l10n.openGoal,
-                onPressed: onOpen,
-                icon: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-              ),
           ],
         ),
       ),

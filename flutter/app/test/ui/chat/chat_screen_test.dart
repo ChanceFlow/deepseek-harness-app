@@ -2066,11 +2066,23 @@ void main() {
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('Ship the MVP'), findsOneWidget);
     expect(find.byTooltip('Pause goal'), findsOneWidget);
-    expect(find.byTooltip('Open goal'), findsOneWidget);
+    expect(find.byTooltip('Edit goal'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Pause goal'));
     await tester.pump();
     expect(actions, contains(const ToggleGoalPause()));
+
+    // Inline edit form: tap Edit goal, enter new objective, submit.
+    await tester.tap(find.byTooltip('Edit goal'));
+    await tester.pump();
+    expect(find.byType(TextField), findsWidgets);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Ship the MVP'),
+      'Ship v1.0',
+    );
+    await tester.tap(find.byTooltip('Save'));
+    await tester.pump();
+    expect(actions, contains(const EditGoal('Ship v1.0')));
 
     // Web GoalBar ships the trash action beside pause/resume: clearing
     // works from any phase.
@@ -3569,29 +3581,34 @@ void main() {
       expect(size.width, lessThan(150));
     });
 
-    testWidgets('compact phone bar overflow menu offers Models and Goals', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        _state(
-          sessions: const [
-            SessionSummary(id: 's1', title: 'Session 1', blank: false),
-          ],
-          selectedSessionId: 's1',
-        ),
-        <ChatAction>[],
-        width: 360,
-      );
+    testWidgets(
+      'compact phone bar overflow menu offers session verbs without redundant models or goal seats',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Session 1', blank: false),
+            ],
+            selectedSessionId: 's1',
+          ),
+          <ChatAction>[],
+          width: 360,
+        );
 
-      // Open the overflow menu.
-      await tester.tap(find.byIcon(Icons.more_vert));
-      await tester.pumpAndSettle();
+        // Open the overflow menu.
+        await tester.tap(find.byIcon(Icons.more_vert));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Models'), findsOneWidget);
-      expect(find.text('Goal'), findsOneWidget);
-      expect(find.text('Subagents'), findsOneWidget);
-    });
+        expect(find.text('Subagents'), findsOneWidget);
+        expect(find.text('Rename session'), findsOneWidget);
+        expect(find.text('Fork session'), findsOneWidget);
+        expect(find.text('Archive session'), findsOneWidget);
+        // Models and Goal are removed: model selection lives in composer, goal lives in GoalBar.
+        expect(find.text('Models'), findsNothing);
+        expect(find.text('Goal'), findsNothing);
+      },
+    );
 
     testWidgets('expanded tool call offers a copy button for its payload', (
       tester,
