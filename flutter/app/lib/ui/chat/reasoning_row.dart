@@ -15,13 +15,21 @@ import 'package:flutter/material.dart';
 import 'sweep_highlight.dart';
 
 class ReasoningRow extends StatefulWidget {
-  const ReasoningRow({required this.text, required this.running, super.key});
+  const ReasoningRow({
+    required this.text,
+    required this.running,
+    this.elapsedDuration,
+    super.key,
+  });
 
   /// Complete or streaming reasoning text.
   final String text;
 
   /// Whether this block is the streaming tail.
   final bool running;
+
+  /// Optional pre-computed elapsed duration for settled thoughts.
+  final Duration? elapsedDuration;
 
   @override
   State<ReasoningRow> createState() => _ReasoningRowState();
@@ -78,19 +86,17 @@ class _ReasoningRowState extends State<ReasoningRow>
     super.dispose();
   }
 
+  Duration? get _effectiveElapsed => _elapsed ?? widget.elapsedDuration;
+
   String _thinkTitle(AppLocalizations l10n) {
     if (widget.running && _startedAt != null) {
       final seconds = DateTime.now().difference(_startedAt!).inSeconds;
-      return l10n.localeName.startsWith('zh')
-          ? '思考中 · $seconds秒'
-          : 'Thinking · ${seconds}s';
+      return l10n.thinkingDuration('${seconds}s');
     }
-    if (_elapsed case final elapsed?) {
+    if (_effectiveElapsed case final elapsed?) {
       final seconds = elapsed.inSeconds;
       if (seconds > 0) {
-        return l10n.localeName.startsWith('zh')
-            ? '已思考 $seconds秒'
-            : 'Thought for ${seconds}s';
+        return l10n.thoughtDuration('${seconds}s');
       }
     }
     return l10n.thinkLabel;
@@ -157,7 +163,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                         color: scheme.onSurface,
                       ),
                     ),
-                    if (!_expanded) ...[
+                    if (!_expanded && _effectiveElapsed == null) ...[
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -176,12 +182,20 @@ class _ReasoningRowState extends State<ReasoningRow>
             ),
           ),
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(left: 6, top: 4, bottom: 6),
+              padding: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: scheme.outlineVariant, width: 1.5),
+                ),
+              ),
               child: Text(
                 widget.text,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
+                  height: 1.45,
                 ),
               ),
             ),

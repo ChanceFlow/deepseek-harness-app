@@ -366,6 +366,121 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String thoughtDuration(String duration) {
+    return 'Thought $duration';
+  }
+
+  @override
+  String thinkingDuration(String duration) {
+    return 'Thinking · $duration';
+  }
+
+  @override
+  String exploredFilesAndSearches(int files, int searches) {
+    String _temp0 = intl.Intl.pluralLogic(
+      files,
+      locale: localeName,
+      other: 'Explored $files files',
+      one: 'Explored 1 file',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      searches,
+      locale: localeName,
+      other: '$searches searches',
+      one: '1 search',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String exploredFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Explored $count files',
+      one: 'Explored 1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String exploringFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Exploring $count files',
+      one: 'Exploring 1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String searchedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count searches',
+      one: '1 search',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String modifiedFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Modified $count files',
+      one: 'Modified 1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ranCommands(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ran $count commands',
+      one: 'Ran 1 command',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runningCommands(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Running $count commands',
+      one: 'Running 1 command',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String toolGroupOperations(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations',
+      one: '1 operation',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String toolWorkingSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count steps',
+      one: '1 step',
+    );
+    return 'Working ($_temp0)';
+  }
+
+  @override
   String statsTurnsSteps(int steps, int turns) {
     return '$turns turns · $steps steps';
   }

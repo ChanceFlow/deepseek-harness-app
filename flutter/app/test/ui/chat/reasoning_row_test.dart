@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/reasoning_row.dart';
 
 import '../../l10n_app.dart';
 
@@ -147,5 +148,28 @@ void main() {
       [],
     );
     expect(find.text('Think'), findsNothing);
+  });
+
+  testWidgets('renders Thought 10s header when duration is elapsed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      l10nApp(
+        home: const Scaffold(
+          body: ReasoningRow(
+            text: 'my deep thought',
+            running: false,
+            elapsedDuration: Duration(seconds: 10),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Thought 10s'), findsOneWidget);
+    expect(find.text('my deep thought'), findsNothing);
+
+    await tester.tap(find.text('Thought 10s'));
+    await tester.pumpAndSettle();
+    expect(find.text('my deep thought'), findsOneWidget);
   });
 }

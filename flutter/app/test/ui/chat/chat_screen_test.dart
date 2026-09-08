@@ -3465,5 +3465,70 @@ void main() {
         expect(find.byType(ActivityDot), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'Cursor/Windsurf style: groups file exploration and searches into Explored 3 files, 2 searches',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Session 1', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: const [
+              TimelineToolCall(
+                id: 't1',
+                name: 'read',
+                arguments: '{"file_path":"AGENTS.md"}',
+                result: '# AGENTS.md',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't2',
+                name: 'read',
+                arguments: '{"file_path":"README.md"}',
+                result: '# README.md',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't3',
+                name: 'read',
+                arguments: '{"file_path":"pubspec.yaml"}',
+                result: 'name: app',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't4',
+                name: 'grep',
+                arguments: '{"pattern":"TimelineItem"}',
+                result: 'match',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 't5',
+                name: 'glob',
+                arguments: '{"pattern":"*.dart"}',
+                result: 'app.dart',
+                status: ToolRunStatus.completed,
+              ),
+            ],
+          ),
+          <ChatAction>[],
+        );
+
+        // Collapsed semantic action chip matching screenshot
+        expect(find.text('Explored 3 files, 2 searches'), findsOneWidget);
+
+        // Tap to expand
+        await tester.tap(find.text('Explored 3 files, 2 searches'));
+        await tester.pumpAndSettle();
+
+        // Individual steps disclosed
+        expect(find.text('AGENTS.md'), findsOneWidget);
+        expect(find.text('README.md'), findsOneWidget);
+        expect(find.text('pubspec.yaml'), findsOneWidget);
+      },
+    );
   });
 }
