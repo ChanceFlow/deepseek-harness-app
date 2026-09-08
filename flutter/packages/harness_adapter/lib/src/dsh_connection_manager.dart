@@ -17,6 +17,7 @@ import 'state_stream.dart';
 import 'wire_json.dart';
 
 const String _remoteMuxPath = '/api/remote.mux';
+const String _legacyEventsMuxPath = '/api/events.mux';
 const String _eventsHostPath = '/api/events.host';
 const Duration _streamOpenTimeout = Duration(milliseconds: 3000);
 
@@ -224,43 +225,56 @@ class DshConnectionManager {
     List<StreamSubscription<ServerRequest>> generationSubs, {
     bool isOptional = false,
   }) {
-    final stream = _eventSocket.connect(
-      path,
-      onOpen: () {
-        final socket = _eventSocket;
-        if (path == _remoteMuxPath && socket is DshWritableEventSocket) {
-          socket.send(
-            path,
-            jsonEncode(<String, Object?>{
-              'type': 'open',
-              'streamId': 'workspace-follow',
-              'endpoint': 'workspace/follow',
-              'payload': <String, Object?>{'args': <String, Object?>{}},
-            }),
-          );
-        }
-        if (!opened.isCompleted) opened.complete();
-      },
-    );
-    final sub = stream.listen(
-      sink.add,
-      onError: (Object error) {
-        if (isOptional) {
+    StreamSubscription<ServerRequest>? sub;
+    void connectPath(String currentPath) {
+      final stream = _eventSocket.connect(
+        currentPath,
+        onOpen: () {
+          final socket = _eventSocket;
+          if (currentPath == _remoteMuxPath &&
+              socket is DshWritableEventSocket) {
+            socket.send(
+              currentPath,
+              jsonEncode(<String, Object?>{
+                'type': 'open',
+                'streamId': 'workspace-follow',
+                'endpoint': 'workspace/follow',
+                'payload': <String, Object?>{'args': <String, Object?>{}},
+              }),
+            );
+          }
           if (!opened.isCompleted) opened.complete();
-          return;
-        }
-        if (!failure.isCompleted) failure.complete(error);
-      },
-      onDone: () {
-        if (isOptional) {
-          if (!opened.isCompleted) opened.complete();
-          return;
-        }
-        if (!failure.isCompleted) failure.complete(null);
-      },
-      cancelOnError: true,
-    );
-    generationSubs.add(sub);
-    _activeSubs.add(sub);
+        },
+      );
+      sub = stream.listen(
+        sink.add,
+        onError: (Object error) {
+          if (currentPath == _remoteMuxPath &&
+              !opened.isCompleted &&
+              error.toString().contains('404')) {
+            unawaited(sub?.cancel());
+            connectPath(_legacyEventsMuxPath);
+            return;
+          }
+          if (isOptional) {
+            if (!opened.isCompleted) opened.complete();
+            return;
+          }
+          if (!failure.isCompleted) failure.complete(error);
+        },
+        onDone: () {
+          if (isOptional) {
+            if (!opened.isCompleted) opened.complete();
+            return;
+          }
+          if (!failure.isCompleted) failure.complete(null);
+        },
+        cancelOnError: true,
+      );
+      generationSubs.add(sub!);
+      _activeSubs.add(sub!);
+    }
+
+    connectPath(path);
   }
 }

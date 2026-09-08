@@ -20,13 +20,18 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
   - `DshRemoteInvoker` decouples repository business logic from wire transport details, implementing transparent version fallback via `kDshEndpointFallbacks` when a 404 is encountered against an older API Proxy backend.
 - **Payload packaging & descriptor matching**:
   - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation, while unwrapping on fallback to legacy flat endpoints.
-  - `session/modelCatalog` takes no parameters in DSH 0.1.2; stripped legacy `sessionId` argument to avoid gateway descriptor rejection.
-  - `session/page` replaces `session.history` in DSH 0.1.2; `DshRemoteInvoker` translates backwards-history requests to `session/page` with session/subagent address and `throughSeq` cursor.
+  - `session/prompt` (`sendMessage`) injects required client-minted `'requestId'` (`req-...`), avoiding gateway descriptor boundary rejection.
+  - `session/modelCatalog` takes no parameters in DSH 0.1.2; maps `default` and `routableProviders` without legacy `sessionId` argument.
+  - `session/page` replaces `session.history` in DSH 0.1.2; `DshRemoteInvoker` translates backwards-history requests to `session/page` with session/subagent address, live cursor discovery, and `throughSeq` cursor.
+  - `SessionHistoryValueWire` automatically unrolls packed `chunkrow/*` delta rows into standard `assistant/chunk` events.
   - `decodeGoalRefValue` parses top-level `{ id, revision }` from DSH 0.1.2 mutations (`edit`, `pause`, `resume`, `complete`, `clear`).
-  - `AgentPresetListValueWire` treats `hasDocument` as optional (`wireBool` default false) matching DSH 0.1.2 `AgentPresetRoster`.
+  - `AgentPresetListValueWire` treats `hasDocument` as optional (`wireBool` default false) matching DSH 0.1.2 `AgentPresetRoster`, and `agentPresets/select` supports scalar string response values.
+  - `credentials/set` and `credentials/unset` support void results (`allowVoid: true`), and `credentials/describe` unboxes direct map payloads.
+  - `SettingPathOp` supports empty root paths `path: []` for section root mutations.
+  - `ImageLimits` domain model decodes `maxImageDimension` from the session projection.
   - `RpcResult.fromJson` accepts non-map primitives (e.g. string path from `directoryPicker/createDirectory`) without throwing `FormatException`.
   - `executeCommand` strips its ad-hoc manual `'args'` wrapper.
-  - `dsh_connection_manager.dart` treats `/api/events.host` as optional and uses `DshRemoteInvoker.invokeOrNullOnNotFound` for `host/describe`, achieving readiness on DSH 0.1.2.
+  - `dsh_connection_manager.dart` treats `/api/events.host` as optional, falls back to `/api/events.mux` for DSH 0.1.1, and uses `DshRemoteInvoker.invokeOrNullOnNotFound` for `host/describe`, achieving readiness across DSH 0.1.2 and 0.1.1.
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
 - **Workspace streaming and auto-grouping**:
   - DSH 0.1.2 provides workspace state via the `workspace/follow` stream over `/api/remote.mux`. `DshConnectionManager` subscribes via `workspace-follow` stream id upon WebSocket connect; `HarnessRepositoryImpl` decodes the `baseline` and increment frames (`upsert`, `remove`, `order`, `archived`) to populate `_workspaces` and `_archivedSessionIds`.
