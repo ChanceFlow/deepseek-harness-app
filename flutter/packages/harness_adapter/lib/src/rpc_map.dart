@@ -131,7 +131,15 @@ const Map<String, List<String>> kDshEndpointFallbacks = <String, List<String>>{
   DshRpcEndpoints.sessionFork: <String>['session.fork'],
   DshRpcEndpoints.sessionUpdateQueue: <String>['session.updateQueue'],
   DshRpcEndpoints.sessionSelectModel: <String>['session.selectModel'],
-  DshRpcEndpoints.sessionHistory: <String>['session.history'],
+  DshRpcEndpoints.sessionHistory: <String>[
+    'session.history',
+    DshRpcEndpoints.sessionPage,
+  ],
+  DshRpcEndpoints.subagentsHistory: <String>[
+    'subagents/history',
+    'subagent.history',
+    DshRpcEndpoints.sessionPage,
+  ],
   DshRpcEndpoints.hostDescribe: <String>['host.describe'],
   DshRpcEndpoints.settingsDescribe: <String>['settings.describe'],
   DshRpcEndpoints.settingsUpdate: <String>['settings.update'],

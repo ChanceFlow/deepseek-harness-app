@@ -155,22 +155,35 @@ class DshConnectionManager {
 
     _pump(_remoteMuxPath, muxOpened, failure, _muxFrames, generationSubs);
     if (_stopped) return false;
-    _pump(_eventsHostPath, hostOpened, failure, _hostFrames, generationSubs);
+    _pump(
+      _eventsHostPath,
+      hostOpened,
+      failure,
+      _hostFrames,
+      generationSubs,
+      isOptional: true,
+    );
 
     try {
       final invoker = DshRemoteInvoker(_rpcClient);
-      final value = await invoker.invoke(
+      final value = await invoker.invokeOrNullOnNotFound(
         DshRpcEndpoints.hostDescribe,
         <String, Object?>{},
       );
-      final description = HostDescription(
-        version: wireString(value, 'version') ?? '',
-        cwd: wireString(value, 'cwd') ?? '',
-        provider: wireString(value, 'provider'),
-        model: wireString(value, 'model'),
-        attachedSessions: wireLong(value, 'attachedSessions'),
-        canOpenPath: wireBool(value, 'canOpenPath'),
-      );
+      final description = value != null
+          ? HostDescription(
+              version: wireString(value, 'version') ?? '',
+              cwd: wireString(value, 'cwd') ?? '',
+              provider: wireString(value, 'provider'),
+              model: wireString(value, 'model'),
+              attachedSessions: wireLong(value, 'attachedSessions'),
+              canOpenPath: wireBool(value, 'canOpenPath'),
+            )
+          : const HostDescription(
+              version: '0.1.2',
+              cwd: '',
+              attachedSessions: 0,
+            );
 
       await Future.wait(<Future<void>>[
         muxOpened.future.timeout(_streamOpenTimeout),
@@ -207,8 +220,9 @@ class DshConnectionManager {
     Completer<void> opened,
     Completer<Object?> failure,
     StreamController<ServerRequest> sink,
-    List<StreamSubscription<ServerRequest>> generationSubs,
-  ) {
+    List<StreamSubscription<ServerRequest>> generationSubs, {
+    bool isOptional = false,
+  }) {
     final stream = _eventSocket.connect(
       path,
       onOpen: () {
@@ -218,9 +232,17 @@ class DshConnectionManager {
     final sub = stream.listen(
       sink.add,
       onError: (Object error) {
+        if (isOptional) {
+          if (!opened.isCompleted) opened.complete();
+          return;
+        }
         if (!failure.isCompleted) failure.complete(error);
       },
       onDone: () {
+        if (isOptional) {
+          if (!opened.isCompleted) opened.complete();
+          return;
+        }
         if (!failure.isCompleted) failure.complete(null);
       },
       cancelOnError: true,

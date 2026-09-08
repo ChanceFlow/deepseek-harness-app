@@ -81,6 +81,9 @@ final class SessionWire {
   final String? agentPreset;
   final JsonMap? projections;
 
+  int get asOfSeq =>
+      projections == null ? 0 : wireLong(projections!, 'asOfSeq');
+
   JsonMap? get projectionValues =>
       projections == null ? null : asJsonObject(projections!['values']);
 }
@@ -325,8 +328,10 @@ final class GoalProjectionWire {
   final int updatedAt;
 }
 
-GoalRefWire decodeGoalRefValue(JsonMap value) =>
-    GoalRefWire.fromJson(_reqObject(value, 'ref'));
+GoalRefWire decodeGoalRefValue(JsonMap value) {
+  final refObj = asJsonObject(value['ref']) ?? value;
+  return GoalRefWire.fromJson(refObj);
+}
 
 // ---------------------------------------------------------------------------
 // History
@@ -334,9 +339,11 @@ GoalRefWire decodeGoalRefValue(JsonMap value) =>
 
 final class SessionHistoryValueWire {
   SessionHistoryValueWire.fromJson(JsonMap json)
-    : events = (asJsonArray(json['events']) ?? const <Object?>[])
-          .map(_reqEvent)
-          .toList(),
+    : events =
+          (asJsonArray(json['events'] ?? json['records']) ?? const <Object?>[])
+              .map(_reqEvent)
+              .whereType<JsonMap>()
+              .toList(),
       hasMore = wireBool(json, 'hasMore'),
       projections = asJsonObject(json['projections']);
 
@@ -350,12 +357,13 @@ final class SessionHistoryValueWire {
   JsonMap? get projectionValues =>
       projections == null ? null : asJsonObject(projections!['values']);
 
-  static JsonMap _reqEvent(Object? json) {
-    final event = asJsonObject(asJsonObject(json)?['event']);
-    if (event == null) {
-      throw const FormatException('history entry missing "event" object');
-    }
-    return event;
+  static JsonMap? _reqEvent(Object? json) {
+    if (json is! Map) return null;
+    final map = json.cast<String, Object?>();
+    final event = asJsonObject(map['event']);
+    if (event != null) return event;
+    if (map.containsKey('seq') && map.containsKey('type')) return map;
+    return null;
   }
 }
 

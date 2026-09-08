@@ -218,6 +218,8 @@ class HarnessFakeRpc implements DshRpcClient {
       final mergedArgs = <String, Object?>{
         ...request,
         ...args,
+        if (args['agentId'] != null) 'sessionId': args['agentId'],
+        if (args['sessionId'] != null) 'agentId': args['sessionId'],
         if (request != args) 'request': request,
       };
       return <String, Object?>{...p, ...mergedArgs, 'args': mergedArgs};
@@ -450,17 +452,27 @@ class HarnessFakeRpc implements DshRpcClient {
         };
       case 'session.history':
       case 'session/history':
+      case 'session/page':
+        final address = asJsonObject(request['address']);
+        if (address?['kind'] == 'subagent') {
+          return subagentHistoryValue;
+        }
         // History entries ride the `historyEntrySchema` envelope: the log
         // event nests under 'event' (sessions.schema.ts).
         final sessionId =
-            (request['sessionId'] ?? args['sessionId'] ?? payload['sessionId'])
+            (address?['sessionId'] ??
+                    request['sessionId'] ??
+                    args['sessionId'] ??
+                    payload['sessionId'])
                 as String?;
         final scripted = historyEvents[sessionId];
         final scriptedProjections = historyProjections[sessionId];
+        final records = (scripted ?? <Object?>[])
+            .map((event) => <String, Object?>{'type': 'event', 'event': event})
+            .toList();
         return <String, Object?>{
-          'events': (scripted ?? <Object?>[])
-              .map((event) => <String, Object?>{'event': event})
-              .toList(),
+          'events': records,
+          'records': records,
           'hasMore': false,
           if (scriptedProjections != null)
             'projections': scriptedProjections
@@ -3187,10 +3199,8 @@ void main() {
     expect(echoed, 'minimal');
     final selectPayload = rpc.payloads('agentPreset/select').single;
     final selectArgs = asJsonObject(selectPayload['args']) ?? selectPayload;
-    expect(selectArgs, <String, Object?>{
-      'sessionId': 'session-1',
-      'agentPreset': 'minimal',
-    });
+    expect(selectArgs['agentPreset'], 'minimal');
+    expect(selectArgs['agentId'] ?? selectArgs['sessionId'], 'session-1');
   });
 
   test('agentPreset.select surfaces the host refusal', () async {
