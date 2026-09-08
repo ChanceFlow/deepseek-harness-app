@@ -8,28 +8,76 @@ import 'package:network/rpc_envelope.dart';
 import 'rpc_map.dart';
 
 /// Invokes Typert Remote endpoints through [DshRpcClient] with automatic
-/// `{ args: ... }` envelope packaging and transparent 0.1.2 -> 0.1.1 fallback.
+/// `{ args: ... }` and `{ request: ... }` envelope packaging and transparent
+/// 0.1.2 -> 0.1.1 fallback.
 final class DshRemoteInvoker {
   const DshRemoteInvoker(this._rpcClient);
 
   final DshRpcClient _rpcClient;
 
+  static const Set<String> _requestWrappedEndpoints = <String>{
+    DshRpcEndpoints.sessionPrompt,
+    DshRpcEndpoints.sessionAttachment,
+    DshRpcEndpoints.sessionCancel,
+    DshRpcEndpoints.sessionSearch,
+    DshRpcEndpoints.sessionRename,
+    DshRpcEndpoints.sessionFork,
+    DshRpcEndpoints.sessionSelectModel,
+    DshRpcEndpoints.sessionUpdateQueue,
+    DshRpcEndpoints.skillsList,
+    DshRpcEndpoints.workspaceCreate,
+    DshRpcEndpoints.workspaceRename,
+    DshRpcEndpoints.workspaceDelete,
+    DshRpcEndpoints.workspaceInsertBefore,
+    DshRpcEndpoints.workspaceInsertSessionBefore,
+    DshRpcEndpoints.workspaceArchiveSession,
+    DshRpcEndpoints.subagentsPrompt,
+  };
+
+  static JsonMap _prepareArgs(String endpoint, JsonMap payload) {
+    if (endpoint == DshRpcEndpoints.sessionList) {
+      if (payload.containsKey('_request')) return payload;
+      return <String, Object?>{'_request': payload};
+    }
+    if (_requestWrappedEndpoints.contains(endpoint)) {
+      if (payload.containsKey('request')) return payload;
+      return <String, Object?>{'request': payload};
+    }
+    return payload;
+  }
+
+  static JsonMap _unwrapArgsForFallback(JsonMap payload) {
+    if (payload.containsKey('request') && payload.length == 1) {
+      final inner = asJsonObject(payload['request']);
+      if (inner != null) return inner;
+    }
+    if (payload.containsKey('_request') && payload.length == 1) {
+      final inner = asJsonObject(payload['_request']);
+      if (inner != null) return inner;
+    }
+    return payload;
+  }
+
   /// Executes one Remote unary call against [endpoint], attempting legacy
   /// fallback aliases if the primary endpoint returns HTTP 404.
   Future<RpcResult> call(String endpoint, JsonMap payload) async {
-    final wrapped = payload.containsKey('args') && payload.length == 1
-        ? payload
-        : <String, Object?>{'args': payload};
+    final rawArgs = payload.containsKey('args') && payload.length == 1
+        ? (asJsonObject(payload['args']) ?? payload)
+        : payload;
+    final primaryArgs = _prepareArgs(endpoint, rawArgs);
+    final primaryWrapped = <String, Object?>{'args': primaryArgs};
 
     try {
-      return await _rpcClient.call(endpoint, endpoint, wrapped);
+      return await _rpcClient.call(endpoint, endpoint, primaryWrapped);
     } on DshTransportException catch (e) {
       if (e.message.contains('404')) {
         final fallbacks = kDshEndpointFallbacks[endpoint];
         if (fallbacks != null) {
+          final fallbackArgs = _unwrapArgsForFallback(rawArgs);
+          final fallbackWrapped = <String, Object?>{'args': fallbackArgs};
           for (final fallback in fallbacks) {
             try {
-              return await _rpcClient.call(fallback, fallback, wrapped);
+              return await _rpcClient.call(fallback, fallback, fallbackWrapped);
             } on DshTransportException catch (fe) {
               if (fe.message.contains('404')) continue;
               rethrow;

@@ -631,7 +631,7 @@ final class AgentPresetListValueWire {
           .map(AgentPresetEntryWire.fromJson)
           .toList(),
       authorable = _reqBool(json, 'authorable'),
-      hasDocument = _reqBool(json, 'hasDocument');
+      hasDocument = wireBool(json, 'hasDocument');
 
   final List<AgentPresetEntryWire> presets;
   final bool authorable;

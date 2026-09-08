@@ -171,26 +171,57 @@ class HarnessFakeRpc implements DshRpcClient {
   }
 
   List<JsonMap> payloads(String endpoint) {
+    List<JsonMap>? raw;
     final direct = _payloadsByEndpoint[endpoint];
-    if (direct != null && direct.isNotEmpty) return List<JsonMap>.of(direct);
-    final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
-    if (slash != null && slash.isNotEmpty) return List<JsonMap>.of(slash);
-    final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
-    if (dot != null && dot.isNotEmpty) return List<JsonMap>.of(dot);
-    final fallbacks = kDshEndpointFallbacks[endpoint];
-    if (fallbacks != null) {
-      for (final fb in fallbacks) {
-        final list = _payloadsByEndpoint[fb];
-        if (list != null && list.isNotEmpty) return List<JsonMap>.of(list);
+    if (direct != null && direct.isNotEmpty) {
+      raw = direct;
+    } else {
+      final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
+      if (slash != null && slash.isNotEmpty) {
+        raw = slash;
+      } else {
+        final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
+        if (dot != null && dot.isNotEmpty) {
+          raw = dot;
+        } else {
+          final fallbacks = kDshEndpointFallbacks[endpoint];
+          if (fallbacks != null) {
+            for (final fb in fallbacks) {
+              final list = _payloadsByEndpoint[fb];
+              if (list != null && list.isNotEmpty) {
+                raw = list;
+                break;
+              }
+            }
+          }
+          if (raw == null) {
+            for (final entry in kDshEndpointFallbacks.entries) {
+              if (entry.value.contains(endpoint)) {
+                final list = _payloadsByEndpoint[entry.key];
+                if (list != null && list.isNotEmpty) {
+                  raw = list;
+                  break;
+                }
+              }
+            }
+          }
+        }
       }
     }
-    for (final entry in kDshEndpointFallbacks.entries) {
-      if (entry.value.contains(endpoint)) {
-        final list = _payloadsByEndpoint[entry.key];
-        if (list != null && list.isNotEmpty) return List<JsonMap>.of(list);
-      }
-    }
-    return const <JsonMap>[];
+    if (raw == null || raw.isEmpty) return const <JsonMap>[];
+    return raw.map((p) {
+      final args = asJsonObject(p['args']) ?? p;
+      final request =
+          asJsonObject(args['request']) ??
+          asJsonObject(args['_request']) ??
+          args;
+      final mergedArgs = <String, Object?>{
+        ...request,
+        ...args,
+        if (request != args) 'request': request,
+      };
+      return <String, Object?>{...p, ...mergedArgs, 'args': mergedArgs};
+    }).toList();
   }
 
   List<(String, RpcResult)> receivedResponses() =>
@@ -376,6 +407,8 @@ class HarnessFakeRpc implements DshRpcClient {
 
   JsonMap _valueFor(String endpoint, JsonMap payload) {
     final args = asJsonObject(payload['args']) ?? payload;
+    final request =
+        asJsonObject(args['request']) ?? asJsonObject(args['_request']) ?? args;
     switch (endpoint) {
       case 'host.describe':
       case 'host/describe':
@@ -418,7 +451,8 @@ class HarnessFakeRpc implements DshRpcClient {
         // History entries ride the `historyEntrySchema` envelope: the log
         // event nests under 'event' (sessions.schema.ts).
         final sessionId =
-            (args['sessionId'] ?? payload['sessionId']) as String?;
+            (request['sessionId'] ?? args['sessionId'] ?? payload['sessionId'])
+                as String?;
         final scripted = historyEvents[sessionId];
         final scriptedProjections = historyProjections[sessionId];
         return <String, Object?>{
