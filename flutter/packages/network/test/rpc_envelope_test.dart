@@ -8,8 +8,10 @@ void main() {
   test('client request keeps rpc identity', () {
     final request = ClientRequest(
       rpcId: 'rpc-1',
-      method: 'session.prompt',
-      payload: <String, Object?>{'sessionId': 's1'},
+      method: 'session/prompt',
+      payload: <String, Object?>{
+        'args': <String, Object?>{'sessionId': 's1'},
+      },
     );
 
     final wire = jsonEncode(request.toJson());

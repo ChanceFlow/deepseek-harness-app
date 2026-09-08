@@ -14,9 +14,9 @@ import 'package:network/rpc_envelope.dart';
 import 'state_stream.dart';
 import 'wire_json.dart';
 
-const String _eventsMuxPath = '/api/events.mux';
+const String _remoteMuxPath = '/api/remote.mux';
 const String _eventsHostPath = '/api/events.host';
-const String _hostDescribe = 'host.describe';
+const String _hostDescribe = 'host/describe';
 const Duration _streamOpenTimeout = Duration(milliseconds: 3000);
 
 /// Retry-time policy seam. The product uses randomized exponential backoff;
@@ -153,7 +153,7 @@ class DshConnectionManager {
     final failure = Completer<Object?>();
     final generationSubs = <StreamSubscription<ServerRequest>>[];
 
-    _pump(_eventsMuxPath, muxOpened, failure, _muxFrames, generationSubs);
+    _pump(_remoteMuxPath, muxOpened, failure, _muxFrames, generationSubs);
     if (_stopped) return false;
     _pump(_eventsHostPath, hostOpened, failure, _hostFrames, generationSubs);
 
@@ -161,19 +161,19 @@ class DshConnectionManager {
       final result = await _rpcClient.call(
         _hostDescribe,
         _hostDescribe,
-        <String, Object?>{},
+        <String, Object?>{'args': <String, Object?>{}},
       );
       if (!result.ok) {
         throw DshBusinessException(
           code: result.error?.code ?? 'internal',
-          message: result.error?.message ?? 'host.describe failed',
+          message: result.error?.message ?? 'host/describe failed',
         );
       }
       final value = result.value;
       if (value == null) {
         throw DshBusinessException(
           code: 'bad-response',
-          message: 'host.describe missing value',
+          message: 'host/describe missing value',
         );
       }
       final description = HostDescription(

@@ -16,8 +16,9 @@ void main() {
     final client = HttpDshRpcClient(
       Uri.parse('http://127.0.0.1:3080'),
       httpClient: MockClient((request) async {
-        expect(request.url.path, '/api/session.list');
+        expect(request.url.path, '/api/session/list');
         final sent = jsonDecode(request.body) as Map<String, Object?>;
+        expect(sent['payload'], <String, Object?>{'args': <String, Object?>{}});
         return http.Response(
           jsonEncode(
             ServerResponse(
@@ -34,7 +35,7 @@ void main() {
       }),
     );
 
-    final result = await client.call('session.list', 'session.list', {});
+    final result = await client.call('session/list', 'session/list', {});
     expect(result.ok, isTrue);
     expect(result.value, <String, Object?>{'sessions': <Object?>[]});
   });
@@ -46,7 +47,7 @@ void main() {
     );
 
     await expectLater(
-      client.call('session.list', 'session.list', {}),
+      client.call('session/list', 'session/list', {}),
       throwsA(isA<DshTransportException>()),
     );
   });
@@ -58,7 +59,7 @@ void main() {
     );
 
     await expectLater(
-      client.call('session.list', 'session.list', {}),
+      client.call('session/list', 'session/list', {}),
       throwsA(isA<DshTransportException>()),
     );
   });
@@ -80,7 +81,7 @@ void main() {
     );
 
     await expectLater(
-      client.call('session.list', 'session.list', {}),
+      client.call('session/list', 'session/list', {}),
       throwsA(isA<DshTransportException>()),
     );
   });

@@ -15,12 +15,12 @@ legacy Gradle modules frozen until parity).
 `harness_adapter` is the only package that knows dsh wire vocabulary.
 
 ## Wire Contract
-- Unary: `POST /api/<method>` with `client-request`, answer with `server-response`.
-- Events: downlink-only WebSockets `/api/events.mux` and `/api/events.host`.
+- Unary: `POST /api/<domain>/<method>` with `client-request` carrying payload wrapped in `args`, answer with `server-response`.
+- Events: downlink-only WebSockets `/api/remote.mux` and `/api/events.host`.
 - Interactive frames answer via `POST /api/respond`.
 
 ## Connection Lifecycle
-Connected means `host.describe` success plus both WebSocket streams open.
+Connected means `host/describe` success plus both WebSocket streams open.
 Backoff on loss: 500 ms base, factor 2, cap 10 s.
 Reconnect refetches session list and open histories, then replays buffered frames.
 

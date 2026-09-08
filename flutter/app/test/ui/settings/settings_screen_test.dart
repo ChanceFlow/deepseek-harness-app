@@ -90,7 +90,7 @@ class _FakeRpc implements DshRpcClient {
     String method,
     JsonMap payload,
   ) async {
-    if (endpoint == 'host.describe') {
+    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
       return RpcResult(
         ok: true,
         value: <String, Object?>{

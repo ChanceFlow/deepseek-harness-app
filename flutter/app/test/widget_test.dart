@@ -27,7 +27,7 @@ class _FakeRpc implements DshRpcClient {
     String method,
     JsonMap payload,
   ) async {
-    if (endpoint == 'session.list') {
+    if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(ok: true, value: <String, Object?>{'items': _sessions});
     }
     return RpcResult(ok: true, value: <String, Object?>{});

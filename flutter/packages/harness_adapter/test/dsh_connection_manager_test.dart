@@ -85,7 +85,7 @@ void main() {
       expect(state.hostDescription?.version, '0.0.0-test');
       expect(state.hostDescription?.cwd, '/tmp/dsh');
       expect(rpc.callCount, 1);
-      expect(socket.paths, <String>['/api/events.mux', '/api/events.host']);
+      expect(socket.paths, <String>['/api/remote.mux', '/api/events.host']);
       manager.stop();
     });
   });

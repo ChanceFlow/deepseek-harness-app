@@ -147,10 +147,21 @@ class HarnessFakeRpc implements DshRpcClient {
       <String, List<JsonMap>>{};
   final List<(String, RpcResult)> _receivedResponses = <(String, RpcResult)>[];
 
-  int callCountFor(String endpoint) => _calls[endpoint] ?? 0;
+  int callCountFor(String endpoint) =>
+      _calls[endpoint] ??
+      _calls[endpoint.replaceAll('/', '.')] ??
+      _calls[endpoint.replaceAll('.', '/')] ??
+      0;
 
-  List<JsonMap> payloads(String endpoint) =>
-      List<JsonMap>.of(_payloadsByEndpoint[endpoint] ?? <JsonMap>[]);
+  List<JsonMap> payloads(String endpoint) {
+    final direct = _payloadsByEndpoint[endpoint];
+    if (direct != null && direct.isNotEmpty) return List<JsonMap>.of(direct);
+    final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
+    if (slash != null && slash.isNotEmpty) return List<JsonMap>.of(slash);
+    final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
+    if (dot != null && dot.isNotEmpty) return List<JsonMap>.of(dot);
+    return const <JsonMap>[];
+  }
 
   List<(String, RpcResult)> receivedResponses() =>
       List<(String, RpcResult)>.of(_receivedResponses);
@@ -158,6 +169,8 @@ class HarnessFakeRpc implements DshRpcClient {
   /// One-shot scripted business failure for the next call to [endpoint].
   void failNextCall(String endpoint, String code) {
     _failures[endpoint] = code;
+    _failures[endpoint.replaceAll('.', '/')] = code;
+    _failures[endpoint.replaceAll('/', '.')] = code;
   }
 
   final Map<String, String> _failures = <String, String>{};
@@ -271,13 +284,19 @@ class HarnessFakeRpc implements DshRpcClient {
     _calls[endpoint] = callCountFor(endpoint) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
     callJournal.add('$endpoint:start');
-    final witnesses = _callWitnesses.remove(endpoint);
+    final witnesses =
+        _callWitnesses.remove(endpoint) ??
+        _callWitnesses.remove(endpoint.replaceAll('.', '/')) ??
+        _callWitnesses.remove(endpoint.replaceAll('/', '.'));
     if (witnesses != null) {
       for (final waiter in witnesses) {
         if (!waiter.isCompleted) waiter.complete();
       }
     }
-    final gates = _responseGates[endpoint];
+    final gates =
+        _responseGates[endpoint] ??
+        _responseGates[endpoint.replaceAll('.', '/')] ??
+        _responseGates[endpoint.replaceAll('/', '.')];
     if (gates != null && gates.isNotEmpty) {
       await gates.removeAt(0);
     }
@@ -297,10 +316,17 @@ class HarnessFakeRpc implements DshRpcClient {
             const SocketException('Software caused connection abort'),
       );
     }
-    if (_failures.remove(endpoint) case final code?) {
+    final failureCode =
+        _failures.remove(endpoint) ??
+        _failures.remove(endpoint.replaceAll('.', '/')) ??
+        _failures.remove(endpoint.replaceAll('/', '.'));
+    if (failureCode != null) {
       return RpcResult(
         ok: false,
-        error: RpcError(code: code, message: 'scripted failure: $code'),
+        error: RpcError(
+          code: failureCode,
+          message: 'scripted failure: $failureCode',
+        ),
       );
     }
     if (endpoint == 'commands/execute') {
@@ -311,34 +337,44 @@ class HarnessFakeRpc implements DshRpcClient {
   }
 
   JsonMap _valueFor(String endpoint, JsonMap payload) {
+    final args = asJsonObject(payload['args']) ?? payload;
     switch (endpoint) {
       case 'host.describe':
+      case 'host/describe':
         return <String, Object?>{
           'version': 'fake-host',
           'cwd': '/tmp/fake-host',
           'attachedSessions': 0,
         };
       case 'session.list':
+      case 'session/list':
         return <String, Object?>{'items': sessionsValue};
       case 'subagent.list':
+      case 'subagent/list':
         return subagentListValue;
       case 'subagent.history':
+      case 'subagent/history':
         return subagentHistoryValue;
       case 'subagent.prompt':
+      case 'subagent/prompt':
         return subagentPromptValue;
       case 'workspace.list':
+      case 'workspace/list':
         return <String, Object?>{
           'items': _initialWorkspaces,
           'archivedSessionIds': <Object?>[],
         };
       case 'workspace.insertBefore':
+      case 'workspace/insertBefore':
         return <String, Object?>{
           'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
         };
       case 'session.history':
+      case 'session/history':
         // History entries ride the `historyEntrySchema` envelope: the log
         // event nests under 'event' (sessions.schema.ts).
-        final sessionId = payload['sessionId'] as String?;
+        final sessionId =
+            (args['sessionId'] ?? payload['sessionId']) as String?;
         final scripted = historyEvents[sessionId];
         final scriptedProjections = historyProjections[sessionId];
         return <String, Object?>{
@@ -356,6 +392,7 @@ class HarnessFakeRpc implements DshRpcClient {
             },
         };
       case 'session.attachment':
+      case 'session/attachment':
         return <String, Object?>{
           'attachment': <String, Object?>{
             'attachmentId': 'sha256:abc',
@@ -368,6 +405,7 @@ class HarnessFakeRpc implements DshRpcClient {
           'data': 'aGk=',
         };
       case 'workspace.insertSessionBefore':
+      case 'workspace/insertSessionBefore':
         return <String, Object?>{
           'workspace': _workspaceJson('ws-a', '/a', 'A', <String>[
             's2',
@@ -376,6 +414,7 @@ class HarnessFakeRpc implements DshRpcClient {
           ]),
         };
       case 'skill.list':
+      case 'skill/list':
         return <String, Object?>{
           'skills': <Object?>[
             <String, Object?>{
@@ -392,6 +431,7 @@ class HarnessFakeRpc implements DshRpcClient {
           ],
         };
       case 'host.listDirectory':
+      case 'host/listDirectory':
         return <String, Object?>{
           'path': '/tmp/chosen',
           'home': '/home/user',
@@ -404,8 +444,10 @@ class HarnessFakeRpc implements DshRpcClient {
           'truncated': false,
         };
       case 'host.createDirectory':
+      case 'host/createDirectory':
         return <String, Object?>{'path': '/tmp/chosen/new-folder'};
       case 'settings.describe':
+      case 'settings/describe':
         return <String, Object?>{
           'writable': true,
           'hasDocument': false,
@@ -441,6 +483,7 @@ class HarnessFakeRpc implements DshRpcClient {
           ],
         };
       case 'credentials.describe':
+      case 'credentials/describe':
         return <String, Object?>{
           'credentials': <String, Object?>{
             'DEEPSEEK_API_KEY': <String, Object?>{
@@ -455,8 +498,11 @@ class HarnessFakeRpc implements DshRpcClient {
           },
         };
       case 'settings.update':
+      case 'settings/update':
       case 'settings.replace':
+      case 'settings/replace':
       case 'settings.mutate':
+      case 'settings/mutate':
         return <String, Object?>{
           'ns': 'llm-deepseek',
           'value': <String, Object?>{},
@@ -466,10 +512,12 @@ class HarnessFakeRpc implements DshRpcClient {
           'revision': 3,
         };
       case 'goal.edit':
+      case 'goal/edit':
         return <String, Object?>{
           'ref': <String, Object?>{'id': 'goal-1', 'revision': 2},
         };
       case 'agentPreset.list':
+      case 'agentPreset/list':
         // Fixture transcribed from
         // reference/deepseek-harness/packages/host/apiproxy/src/api/
         // agent-presets.schema.ts agentPresetListValueSchema.
@@ -498,6 +546,7 @@ class HarnessFakeRpc implements DshRpcClient {
           'hasDocument': false,
         };
       case 'agentPreset.select':
+      case 'agentPreset/select':
         return <String, Object?>{'agentPreset': 'minimal'};
       default:
         return <String, Object?>{};
@@ -552,7 +601,7 @@ class ScriptedHarnessSocket implements DshEventSocket {
   }
 }
 
-const String _muxPath = '/api/events.mux';
+const String _muxPath = '/api/remote.mux';
 
 /// A socket seam that can end the current generation: closing both
 /// downlink streams drives [DshConnectionManager] into its reconnect loop,
@@ -667,7 +716,7 @@ void main() {
       expect(workspaces.map((workspace) => workspace.workspaceId), <String>[
         'ws-a',
       ]);
-      expect(rpc.callCountFor('workspace.list'), 1);
+      expect(rpc.callCountFor('workspace/list'), 1);
     },
   );
 
@@ -982,7 +1031,7 @@ void main() {
         'blank': false,
       },
     ]);
-    rpc.failNextCall('session.history', 'bad-response');
+    rpc.failNextCall('session/history', 'bad-response');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -1018,8 +1067,9 @@ void main() {
       ),
     );
 
-    final payload = rpc.payloads('session.updateQueue').single;
-    final action = asJsonObject(payload['action']);
+    final payload = rpc.payloads('session/updateQueue').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    final action = asJsonObject(payloadArgs['action']);
     expect(action, isNotNull, reason: 'missing action');
     final content = asJsonObject(asJsonArray(action!['content'])?.single);
     expect(content, isNotNull, reason: 'missing content block');
@@ -1037,7 +1087,7 @@ void main() {
 
       // Web parity: steer-unavailable / queue-item-not-found are benign races
       // (the queue projection refreshes the dock) — no exception escapes.
-      rpc.failNextCall('session.updateQueue', 'steer-unavailable');
+      rpc.failNextCall('session/updateQueue', 'steer-unavailable');
       await repository.updateQueue(
         const QueueUpdateRequest(
           sessionId: 'session-1',
@@ -1045,7 +1095,7 @@ void main() {
           kind: QueueUpdateKind.steer,
         ),
       );
-      rpc.failNextCall('session.updateQueue', 'queue-item-not-found');
+      rpc.failNextCall('session/updateQueue', 'queue-item-not-found');
       await repository.updateQueue(
         const QueueUpdateRequest(
           sessionId: 'session-1',
@@ -1054,7 +1104,7 @@ void main() {
         ),
       );
 
-      rpc.failNextCall('session.updateQueue', 'agent-busy');
+      rpc.failNextCall('session/updateQueue', 'agent-busy');
       await expectLater(
         repository.updateQueue(
           const QueueUpdateRequest(
@@ -1124,10 +1174,11 @@ void main() {
 
     expect(edited.id, 'goal-1');
     expect(edited.revision, 2);
-    final payload = rpc.payloads('goal.edit').single;
-    expect(payload['sessionId'], 'session-1');
-    expect(payload['objective'], 'ship it v2');
-    final ref = asJsonObject(payload['ref']);
+    final payload = rpc.payloads('goal/edit').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['sessionId'], 'session-1');
+    expect(payloadArgs['objective'], 'ship it v2');
+    final ref = asJsonObject(payloadArgs['ref']);
     expect(ref, isNotNull, reason: 'missing goal ref');
     expect(ref!['id'], 'goal-1');
     expect(ref['revision'], 1);
@@ -1367,7 +1418,9 @@ void main() {
     expect(listing.home, '/home/user');
     expect(listing.entries.single.name, 'src');
     expect(listing.entries.single.hidden, isFalse);
-    expect(rpc.payloads('host.listDirectory').single['path'], '/tmp/chosen');
+    final payload = rpc.payloads('host/listDirectory').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['path'], '/tmp/chosen');
   });
 
   test('directory creation sends host payload', () async {
@@ -1381,9 +1434,10 @@ void main() {
     );
 
     expect(created, '/tmp/chosen/new-folder');
-    final payload = rpc.payloads('host.createDirectory').single;
-    expect(payload['path'], '/tmp/chosen');
-    expect(payload['name'], 'new-folder');
+    final payload = rpc.payloads('host/createDirectory').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['path'], '/tmp/chosen');
+    expect(payloadArgs['name'], 'new-folder');
   });
 
   test('settings describe maps namespace wire shape', () async {
@@ -1408,7 +1462,10 @@ void main() {
     expect(shell.applies, SettingsApplies.restart);
     expect(shell.hasUserLayer, isFalse);
     expect(snapshot.credentialRefs, <String>['DEEPSEEK_API_KEY']);
-    expect(rpc.payloads('settings.describe').single.length, 0);
+    final settingsPayload = rpc.payloads('settings/describe').single;
+    final settingsArgs =
+        asJsonObject(settingsPayload['args']) ?? settingsPayload;
+    expect(settingsArgs.length, 0);
   });
 
   test('credentials describe sends refs and maps views', () async {
@@ -1437,9 +1494,9 @@ void main() {
     expect(missing.configured, isFalse);
     expect(missing.source, isNull);
     expect(missing.writable, isFalse);
-    final refs = asJsonArray(
-      rpc.payloads('credentials.describe').single['refs'],
-    );
+    final credPayload = rpc.payloads('credentials/describe').single;
+    final credArgs = asJsonObject(credPayload['args']) ?? credPayload;
+    final refs = asJsonArray(credArgs['refs']);
     expect(refs?.cast<String>(), <String>[
       'MINIMAX_CN_API_KEY',
       'DEEPSEEK_API_KEY',
@@ -1452,7 +1509,7 @@ void main() {
     await pumpEventQueue();
 
     expect(await repository.describeCredentials(<String>[]), isEmpty);
-    expect(rpc.payloads('credentials.describe'), isEmpty);
+    expect(rpc.payloads('credentials/describe'), isEmpty);
   });
 
   test('history projections seed plan state', () async {
@@ -1818,7 +1875,9 @@ void main() {
 
     final catalog = await repository.listSkills('session-1');
 
-    expect(rpc.payloads('skill.list').single['sessionId'], 'session-1');
+    final skillPayload = rpc.payloads('skill/list').single;
+    final skillArgs = asJsonObject(skillPayload['args']) ?? skillPayload;
+    expect(skillArgs['sessionId'], 'session-1');
     expect(catalog, hasLength(2));
     final first = catalog.first;
     expect(first.name, 'generate-image');
@@ -1841,9 +1900,10 @@ void main() {
     final orderedIds = await repository.moveWorkspace('ws-a', 'ws-c');
 
     expect(orderedIds, <String>['ws-b', 'ws-a', 'ws-c']);
-    final payload = rpc.payloads('workspace.insertBefore').single;
-    expect(payload['workspaceId'], 'ws-a');
-    expect(payload['beforeWorkspaceId'], 'ws-c');
+    final payload = rpc.payloads('workspace/insertBefore').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['workspaceId'], 'ws-a');
+    expect(payloadArgs['beforeWorkspaceId'], 'ws-c');
     expect(
       (await repository.observeWorkspaces().first)
           .map((workspace) => workspace.workspaceId)
@@ -1859,9 +1919,10 @@ void main() {
 
     await repository.moveWorkspace('ws-a', null);
 
-    final payload = rpc.payloads('workspace.insertBefore').single;
-    expect(payload['workspaceId'], 'ws-a');
-    expect(payload.containsKey('beforeWorkspaceId'), isFalse);
+    final payload = rpc.payloads('workspace/insertBefore').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['workspaceId'], 'ws-a');
+    expect(payloadArgs.containsKey('beforeWorkspaceId'), isFalse);
   });
 
   test('credential set sends ref and value', () async {
@@ -1871,9 +1932,10 @@ void main() {
 
     await repository.setCredential('DEEPSEEK_API_KEY', 'sk-typed');
 
-    final payload = rpc.payloads('credentials.set').single;
-    expect(payload['ref'], 'DEEPSEEK_API_KEY');
-    expect(payload['value'], 'sk-typed');
+    final payload = rpc.payloads('credentials/set').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['ref'], 'DEEPSEEK_API_KEY');
+    expect(payloadArgs['value'], 'sk-typed');
   });
 
   test('credential unset sends ref only', () async {
@@ -1883,9 +1945,10 @@ void main() {
 
     await repository.unsetCredential('DEEPSEEK_API_KEY');
 
-    final payload = rpc.payloads('credentials.unset').single;
-    expect(payload['ref'], 'DEEPSEEK_API_KEY');
-    expect(payload.length, 1);
+    final payload = rpc.payloads('credentials/unset').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['ref'], 'DEEPSEEK_API_KEY');
+    expect(payloadArgs.length, 1);
   });
 
   test('setting update sends patch with cas revision and maps view', () async {
@@ -1900,10 +1963,11 @@ void main() {
       expectedRevision: 3,
     );
 
-    final payload = rpc.payloads('settings.update').single;
-    expect(payload['ns'], 'llm-deepseek');
-    expect(payload['expectedRevision'], 3);
-    final patch = asJsonObject(payload['patch']);
+    final payload = rpc.payloads('settings/update').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['ns'], 'llm-deepseek');
+    expect(payloadArgs['expectedRevision'], 3);
+    final patch = asJsonObject(payloadArgs['patch']);
     expect(patch, isNotNull, reason: 'missing patch');
     expect(asJsonObject(patch!['retry'])?['attempts'], 5);
     // The response arm reuses the settings.describe namespace fixture.
@@ -1923,10 +1987,11 @@ void main() {
       expectedRevision: 2,
     );
 
-    final payload = rpc.payloads('settings.replace').single;
-    expect(payload['ns'], 'shell');
-    expect(payload['expectedRevision'], 2);
-    final section = asJsonObject(payload['section']);
+    final payload = rpc.payloads('settings/replace').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['ns'], 'shell');
+    expect(payloadArgs['expectedRevision'], 2);
+    final section = asJsonObject(payloadArgs['section']);
     expect(section, isNotNull, reason: 'missing section');
     expect(asJsonObject(section!['bash'])?['enabled'], isFalse);
   });
@@ -1945,10 +2010,11 @@ void main() {
       SettingPathOp(op: 'unset', path: <String>['retry']),
     ]);
 
-    final payload = rpc.payloads('settings.mutate').single;
-    expect(payload['ns'], 'llm-deepseek');
-    expect(payload.containsKey('expectedRevision'), isFalse);
-    final ops = asJsonArray(payload['ops']);
+    final payload = rpc.payloads('settings/mutate').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['ns'], 'llm-deepseek');
+    expect(payloadArgs.containsKey('expectedRevision'), isFalse);
+    final ops = asJsonArray(payloadArgs['ops']);
     expect(ops, isNotNull, reason: 'missing ops');
     expect(ops!.length, 2);
     final setOp = asJsonObject(ops[0])!;
@@ -1972,10 +2038,11 @@ void main() {
 
       final updated = await repository.moveSession('ws-a', 's1', 's3');
 
-      final payload = rpc.payloads('workspace.insertSessionBefore').single;
-      expect(payload['workspaceId'], 'ws-a');
-      expect(payload['sessionId'], 's1');
-      expect(payload['beforeSessionId'], 's3');
+      final payload = rpc.payloads('workspace/insertSessionBefore').single;
+      final payloadArgs = asJsonObject(payload['args']) ?? payload;
+      expect(payloadArgs['workspaceId'], 'ws-a');
+      expect(payloadArgs['sessionId'], 's1');
+      expect(payloadArgs['beforeSessionId'], 's3');
       expect(updated.workspaceId, 'ws-a');
       expect(
         (await repository.observeWorkspaces().first)
@@ -2006,8 +2073,9 @@ void main() {
       ),
     );
 
-    final payload = rpc.payloads('session.prompt').single;
-    final content = asJsonArray(payload['content']) ?? const <Object?>[];
+    final payload = rpc.payloads('session/prompt').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    final content = asJsonArray(payloadArgs['content']) ?? const <Object?>[];
     expect(content, hasLength(2));
     final textPart = asJsonObject(content[0])!;
     expect(textPart['type'], 'text');
@@ -2029,9 +2097,10 @@ void main() {
       'sha256:abc',
     );
 
-    final payload = rpc.payloads('session.attachment').single;
-    expect(payload['sessionId'], 'session-1');
-    expect(payload['attachmentId'], 'sha256:abc');
+    final payload = rpc.payloads('session/attachment').single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    expect(payloadArgs['sessionId'], 'session-1');
+    expect(payloadArgs['attachmentId'], 'sha256:abc');
     expect(downloaded.ref.attachmentId, 'sha256:abc');
     expect(downloaded.ref.mediaType, 'image/png');
     expect(downloaded.ref.bytes, 2);
@@ -2165,14 +2234,14 @@ void main() {
       );
       final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
-      final before = rpc.callCountFor('session.list');
+      final before = rpc.callCountFor('session/list');
 
       final sessions = <List<SessionSummary>>[];
       final sub = repository.observeSessions().listen(sessions.add);
       addTearDown(() => sub.cancel());
 
       // The spawn frame lands; by the time the adapter's repull reads
-      // `session.list`, the host's durable list answers the new child.
+      // `session/list`, the host's durable list answers the new child.
       rows.add(<String, Object?>{
         'sessionId': 'session-child',
         'updatedAt': 5,
@@ -2184,7 +2253,7 @@ void main() {
       socket.releaseHostFrames();
       await pumpEventQueue();
 
-      expect(rpc.callCountFor('session.list'), greaterThan(before));
+      expect(rpc.callCountFor('session/list'), greaterThan(before));
       final last = sessions.last;
       final child = last.firstWhere((session) => session.id == 'session-child');
       expect(child.parentSessionId, 'session-root');
@@ -2232,9 +2301,10 @@ void main() {
 
     final catalog = await repository.loadSubagents('session-root');
 
-    expect(rpc.payloads('subagent.list').first, <String, Object?>{
-      'parentSessionId': 'session-root',
-    });
+    final subagentPayload = rpc.payloads('subagent/list').first;
+    final subagentArgs =
+        asJsonObject(subagentPayload['args']) ?? subagentPayload;
+    expect(subagentArgs, <String, Object?>{'parentSessionId': 'session-root'});
     expect(catalog.parentSessionId, 'session-root');
     expect(catalog.parentAvailable, isTrue);
     expect(catalog.entries, const <SubagentEntry>[
@@ -2369,7 +2439,10 @@ void main() {
         SubagentMode.oneShot,
       );
 
-      expect(rpc.payloads('subagent.history').single, <String, Object?>{
+      final subHistoryPayload = rpc.payloads('subagent/history').single;
+      final subHistoryArgs =
+          asJsonObject(subHistoryPayload['args']) ?? subHistoryPayload;
+      expect(subHistoryArgs, <String, Object?>{
         'parentSessionId': 'session-root',
         'childSessionId': 'child-2',
         'mode': 'one-shot',
@@ -2381,7 +2454,10 @@ void main() {
         'child-1',
         SubagentMode.continuable,
       );
-      expect(rpc.payloads('subagent.history').last['mode'], 'continuable');
+      final lastSubHistory = rpc.payloads('subagent/history').last;
+      final lastSubHistoryArgs =
+          asJsonObject(lastSubHistory['args']) ?? lastSubHistory;
+      expect(lastSubHistoryArgs['mode'], 'continuable');
     },
   );
 
@@ -2391,7 +2467,7 @@ void main() {
     // exception reaches the caller, which surfaces it on the error
     // banner.
     final rpc = HarnessFakeRpc()
-      ..failNextCall('subagent.history', 'subagent-not-found');
+      ..failNextCall('subagent/history', 'subagent-not-found');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -2428,14 +2504,18 @@ void main() {
         'keep going',
       );
 
-      expect(rpc.payloads('subagent.interrupt').single, <String, Object?>{
+      final interruptPayload = rpc.payloads('subagent/interrupt').single;
+      final interruptArgs =
+          asJsonObject(interruptPayload['args']) ?? interruptPayload;
+      expect(interruptArgs, <String, Object?>{
         'parentSessionId': 'session-root',
         'childSessionId': 'child-1',
         'mode': 'continuable',
       });
-      final prompt = rpc.payloads('subagent.prompt').single;
-      expect(prompt['mode'], 'continuable');
-      expect(prompt['childSessionId'], 'child-1');
+      final prompt = rpc.payloads('subagent/prompt').single;
+      final promptArgs = asJsonObject(prompt['args']) ?? prompt;
+      expect(promptArgs['mode'], 'continuable');
+      expect(promptArgs['childSessionId'], 'child-1');
       expect(messageId, 'subagent-msg-1');
     },
   );
@@ -2936,7 +3016,9 @@ void main() {
 
     final roster = await repository.listAgentPresets();
 
-    expect(rpc.payloads('agentPreset.list').single, isEmpty);
+    final presetPayload = rpc.payloads('agentPreset/list').single;
+    final presetArgs = asJsonObject(presetPayload['args']) ?? presetPayload;
+    expect(presetArgs, isEmpty);
     expect(roster.authorable, isTrue);
     expect(roster.hasDocument, isFalse);
     expect(roster.entries, hasLength(3));
@@ -2962,7 +3044,9 @@ void main() {
     final echoed = await repository.selectAgentPreset('session-1', 'minimal');
 
     expect(echoed, 'minimal');
-    expect(rpc.payloads('agentPreset.select').single, <String, Object?>{
+    final selectPayload = rpc.payloads('agentPreset/select').single;
+    final selectArgs = asJsonObject(selectPayload['args']) ?? selectPayload;
+    expect(selectArgs, <String, Object?>{
       'sessionId': 'session-1',
       'agentPreset': 'minimal',
     });
@@ -2970,7 +3054,7 @@ void main() {
 
   test('agentPreset.select surfaces the host refusal', () async {
     final rpc = HarnessFakeRpc();
-    rpc.failNextCall('agentPreset.select', 'agent-preset-locked');
+    rpc.failNextCall('agentPreset/select', 'agent-preset-locked');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -3214,14 +3298,14 @@ void main() {
       ];
       await repository.openSession('b');
       await pumpEventQueue();
-      expect(rpc.callCountFor('session.list'), 1);
-      expect(rpc.callCountFor('session.history'), 2);
+      expect(rpc.callCountFor('session/list'), 1);
+      expect(rpc.callCountFor('session/history'), 2);
 
       rpc.historyEvents['a'] = <Object?>[
         resyncAssistantTextEvent(7, 'after resync'),
       ];
-      rpc.gateResponsesUntilCalled('session.list', 'session.history');
-      rpc.gateResponsesUntilCalled('session.history', 'session.list');
+      rpc.gateResponsesUntilCalled('session/list', 'session/history');
+      rpc.gateResponsesUntilCalled('session/history', 'session/list');
       final mark = rpc.callJournal.length;
 
       socket.terminate();
@@ -3234,15 +3318,15 @@ void main() {
       expect(rpc.gateTimeouts, isEmpty);
       final journal = rpc.callJournal.sublist(mark);
       expect(
-        journal.indexOf('session.list:start'),
-        lessThan(journal.indexOf('session.history:start')),
+        journal.indexOf('session/list:start'),
+        lessThan(journal.indexOf('session/history:start')),
       );
       expect(
-        journal.indexOf('session.history:start'),
-        lessThan(journal.indexOf('session.list:return')),
+        journal.indexOf('session/history:start'),
+        lessThan(journal.indexOf('session/list:return')),
       );
-      expect(rpc.callCountFor('session.list'), 2);
-      expect(rpc.callCountFor('session.history'), 4);
+      expect(rpc.callCountFor('session/list'), 2);
+      expect(rpc.callCountFor('session/history'), 4);
 
       final timeline = await repository.observeTimeline('a').first;
       final message = timeline.whereType<TimelineMessage>().single;
@@ -3267,7 +3351,7 @@ void main() {
         resyncAssistantTextEvent(7, 'baseline v1'),
       ];
       final holdList = Completer<void>();
-      rpc.gateResponses('session.list', holdList.future);
+      rpc.gateResponses('session/list', holdList.future);
       socket.terminate();
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -3275,8 +3359,8 @@ void main() {
 
       // Generation 2's window rebuild settled while its list pull is still
       // in flight.
-      expect(rpc.callCountFor('session.list'), 2);
-      expect(rpc.callCountFor('session.history'), 2);
+      expect(rpc.callCountFor('session/list'), 2);
+      expect(rpc.callCountFor('session/history'), 2);
       final first = await repository.observeTimeline('a').first;
       expect(
         first.whereType<TimelineMessage>().single.value.text,
@@ -3293,14 +3377,14 @@ void main() {
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await pumpEventQueue();
-      expect(rpc.callCountFor('session.list'), 2);
+      expect(rpc.callCountFor('session/list'), 2);
 
       holdList.complete();
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 80));
       await pumpEventQueue();
-      expect(rpc.callCountFor('session.list'), 3);
-      expect(rpc.callCountFor('session.history'), 3);
+      expect(rpc.callCountFor('session/list'), 3);
+      expect(rpc.callCountFor('session/history'), 3);
       final second = await repository.observeTimeline('a').first;
       expect(
         second.whereType<TimelineMessage>().single.value.text,
@@ -3405,7 +3489,7 @@ void main() {
     // flows while the previous window is still ready — the race the old
     // connected-time truncation lost to.
     final describeHeld = Completer<void>();
-    rpc.gateResponses('host.describe', describeHeld.future);
+    rpc.gateResponses('host/describe', describeHeld.future);
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -3468,7 +3552,7 @@ void main() {
     // reload is held — the burst now arrives against a not-ready window
     // and parks for the after-reset replay.
     final historyHeld = Completer<void>();
-    rpc.gateResponses('session.history', historyHeld.future);
+    rpc.gateResponses('session/history', historyHeld.future);
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -3519,7 +3603,7 @@ void main() {
     // baseline) arrives before the connected publish drives the prep; the
     // old connected-time truncation wiped exactly these fresh buffers.
     final describeHeld = Completer<void>();
-    rpc.gateResponses('host.describe', describeHeld.future);
+    rpc.gateResponses('host/describe', describeHeld.future);
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 30));

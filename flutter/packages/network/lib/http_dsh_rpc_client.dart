@@ -42,10 +42,13 @@ final class HttpDshRpcClient implements DshRpcClient {
     JsonMap payload,
   ) async {
     final rpcId = _uuidV4();
+    final wrappedPayload = payload.containsKey('args') && payload.length == 1
+        ? payload
+        : <String, Object?>{'args': payload};
     final request = ClientRequest(
       rpcId: rpcId,
       method: method,
-      payload: payload,
+      payload: wrappedPayload,
     );
     return (await _execute('api/$endpoint', request.toJson(), rpcId)).result;
   }
