@@ -1082,7 +1082,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     final result = await _call(
       DshRpcEndpoints.sessionModelCatalog,
       DshRpcEndpoints.sessionModelCatalog,
-      {'sessionId': sessionId},
+      <String, Object?>{},
     ).valueOrThrow();
     return _toDomainSessionModels(SessionModelsValueWire.fromJson(result));
   }
@@ -1154,6 +1154,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     _subs.add(
       _connectionManager.muxFrames.listen((frame) {
         final type = wireString(frame.payload, 'type');
+        if (frame.rpcId == 'workspace-follow' ||
+            type == 'baseline' ||
+            type == 'upsert' ||
+            type == 'remove' ||
+            type == 'order' ||
+            type == 'archived') {
+          _handleWorkspaceFollowFrame(frame);
+          return;
+        }
         if (type == 'session/projection') {
           _handleProjection(frame);
           return;
@@ -1553,6 +1562,52 @@ class HarnessRepositoryImpl implements ChatRepository {
         .toList();
   }
 
+  void _handleWorkspaceFollowFrame(ServerRequest frame) {
+    final type = wireString(frame.payload, 'type');
+    switch (type) {
+      case 'baseline':
+        final value = asJsonObject(frame.payload['value']) ?? frame.payload;
+        final listing = WorkspaceListValueWire.fromJson(value);
+        _applyWorkspaceListing(listing);
+      case 'upsert':
+        _applyWorkspaceChanged(frame);
+      case 'remove':
+        _applyWorkspaceRemoved(frame);
+      case 'order':
+        _applyWorkspaceOrderFrame(frame);
+      case 'archived':
+        final archived = _stringSet(frame.payload['archivedSessionIds']);
+        _archivedSessionIds.value = archived;
+    }
+  }
+
+  void _inferWorkspacesFromSessionsIfEmpty(List<SessionWire> listing) {
+    if (_workspaces.value.isNotEmpty) return;
+    final map = <String, List<String>>{};
+    for (final s in listing) {
+      final cwd = s.cwd;
+      if (cwd != null && cwd.isNotEmpty) {
+        map.putIfAbsent(cwd, () => <String>[]).add(s.sessionId);
+      }
+    }
+    if (map.isEmpty) return;
+    final inferred = map.entries.map((entry) {
+      final path = entry.key;
+      final segments = path
+          .split(RegExp(r'[/\\]'))
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final title = segments.isNotEmpty ? segments.last : path;
+      return WorkspaceSummary(
+        workspaceId: 'ws-inferred-${path.hashCode}',
+        title: title,
+        path: path,
+        sessionIds: entry.value,
+      );
+    }).toList();
+    _workspaces.value = inferred;
+  }
+
   /// Full-snapshot increment carried by `host/workspace-changed`: upsert one
   /// workspace without an extra `workspace.list` round-trip.
   void _applyWorkspaceChanged(ServerRequest frame) {
@@ -1665,6 +1720,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, Object?>{},
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
+    _inferWorkspacesFromSessionsIfEmpty(listing);
     for (final session in listing) {
       if (session.asOfSeq > 0) {
         _sessionCursors[session.sessionId] = session.asOfSeq;
