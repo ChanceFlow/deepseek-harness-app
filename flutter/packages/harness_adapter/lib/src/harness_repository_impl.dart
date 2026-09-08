@@ -798,6 +798,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     String childSessionId,
     SubagentMode mode,
   ) async {
+    final throughSeq = _sessionCursors[childSessionId];
     final value = await _call(
       DshRpcEndpoints.subagentsHistory,
       DshRpcEndpoints.subagentsHistory,
@@ -805,6 +806,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'parentSessionId': parentSessionId,
         'childSessionId': childSessionId,
         'mode': _subagentModeToWire(mode),
+        if (throughSeq != null) 'throughSeq': throughSeq,
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
@@ -1836,11 +1838,13 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
+    final throughSeq = beforeSeq ?? _sessionCursors[sessionId];
     final value = await _call(
       DshRpcEndpoints.sessionHistory,
       DshRpcEndpoints.sessionHistory,
       {
         'sessionId': sessionId,
+        if (throughSeq != null) 'throughSeq': throughSeq,
         if (beforeSeq != null) 'beforeSeq': beforeSeq,
         'maxMessages': _historyPageMessages,
       },
