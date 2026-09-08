@@ -136,10 +136,20 @@ final class RpcResult {
   static RpcResult fromJson(Object? json) {
     final map = _asMap(json, 'RpcResult');
     final error = map['error'];
-    final value = map['value'];
+    final raw = map['value'];
+    final JsonMap? valueMap;
+    if (raw is Map<String, Object?>) {
+      valueMap = raw;
+    } else if (raw is Map) {
+      valueMap = raw.cast<String, Object?>();
+    } else if (raw != null) {
+      valueMap = <String, Object?>{'value': raw, 'path': raw.toString()};
+    } else {
+      valueMap = null;
+    }
     return RpcResult(
       ok: map['ok'] as bool,
-      value: value == null ? null : _asMap(value, 'RpcResult.value'),
+      value: valueMap,
       error: error == null ? null : RpcError.fromJson(error),
     );
   }

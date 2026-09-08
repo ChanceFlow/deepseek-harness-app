@@ -18,10 +18,12 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
 - **Endpoint naming & decoupling**:
   - `DshRpcEndpoints` in `rpc_map.dart` acts as the single central registry for all Typert Remote endpoints (`session/*`, `skills/list`, `subagents/*`, `goals/*`, `agentPresets/*`, `directoryPicker/*`, `workspace/*`, `settings/*`, `credentials/*`, `commands/execute`).
   - `DshRemoteInvoker` decouples repository business logic from wire transport details, implementing transparent version fallback via `kDshEndpointFallbacks` when a 404 is encountered against an older API Proxy backend.
-- **Payload packaging**:
-  - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` unless already wrapped.
+- **Payload packaging & descriptor matching**:
+  - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation, while unwrapping on fallback to legacy flat endpoints.
+  - `AgentPresetListValueWire` treats `hasDocument` as optional (`wireBool` default false) matching DSH 0.1.2 `AgentPresetRoster`.
+  - `RpcResult.fromJson` accepts non-map primitives (e.g. string path from `directoryPicker/createDirectory`) without throwing `FormatException`.
   - `executeCommand` strips its ad-hoc manual `'args'` wrapper.
-  - `dsh_connection_manager.dart` uses `DshRemoteInvoker` for `host/describe`.
+  - `dsh_connection_manager.dart` uses `DshRemoteInvoker` for `host/describe`, tolerating its removal in 0.1.2.
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
 - **Workspace listing 404 tolerance**: DSH 0.1.2 provides workspace state via the `workspace/follow` stream and mutation returns rather than a unary endpoint. `_loadWorkspaceListing` catches 404 responses gracefully so startup reconciliation and `refreshWorkspaces` complete quietly without raising transport errors, while mutations (`createWorkspace`, `renameWorkspace`, `deleteWorkspace`) apply their immediate result to local state.
 - **WebSocket connection point**:

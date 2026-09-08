@@ -243,7 +243,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.directoryPickerCreate,
       {'path': parentPath, 'name': name},
     ).valueOrThrow();
-    final path = wireString(value, 'path');
+    final path = wireString(value, 'path') ?? (value['value'] as String?);
     if (path == null) {
       throw const FormatException(
         'directoryPicker.createDirectory missing path',
