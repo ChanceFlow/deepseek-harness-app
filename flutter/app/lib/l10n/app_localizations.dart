@@ -2922,6 +2922,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Online speech recognition failed. Check your credentials and try again.'**
   String get voiceInputCloudFailed;
+
+  /// No description provided for @errorLogsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Error Logs'**
+  String get errorLogsTitle;
+
+  /// No description provided for @errorLogsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'View and export application error logs'**
+  String get errorLogsDescription;
+
+  /// No description provided for @errorLogsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No Error Logs'**
+  String get errorLogsEmptyTitle;
+
+  /// No description provided for @errorLogsEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Application is running smoothly with no errors captured.'**
+  String get errorLogsEmptySubtitle;
+
+  /// No description provided for @errorLogsFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get errorLogsFilterAll;
+
+  /// No description provided for @errorLogsFilterFatal.
+  ///
+  /// In en, this message translates to:
+  /// **'Fatal'**
+  String get errorLogsFilterFatal;
+
+  /// No description provided for @errorLogsFilterError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get errorLogsFilterError;
+
+  /// No description provided for @errorLogsFilterWarn.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get errorLogsFilterWarn;
+
+  /// No description provided for @errorLogsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search errors or stack trace…'**
+  String get errorLogsSearchHint;
+
+  /// No description provided for @errorLogsCopyAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy All'**
+  String get errorLogsCopyAll;
+
+  /// No description provided for @errorLogsCopyAllSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'All error logs copied to clipboard'**
+  String get errorLogsCopyAllSuccess;
+
+  /// No description provided for @errorLogsCopyEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get errorLogsCopyEntry;
+
+  /// No description provided for @errorLogsCopyEntrySuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Error details copied to clipboard'**
+  String get errorLogsCopyEntrySuccess;
+
+  /// No description provided for @errorLogsClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get errorLogsClear;
+
+  /// No description provided for @errorLogsClearConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Error Logs'**
+  String get errorLogsClearConfirmTitle;
+
+  /// No description provided for @errorLogsClearConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to clear all recorded error logs? This cannot be undone.'**
+  String get errorLogsClearConfirmMessage;
+
+  /// No description provided for @errorLogsClearSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Error logs cleared'**
+  String get errorLogsClearSuccess;
+
+  /// No description provided for @errorLogsStackTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Stack Trace'**
+  String get errorLogsStackTrace;
+
+  /// No description provided for @errorLogsBreadcrumbs.
+  ///
+  /// In en, this message translates to:
+  /// **'Related Logs'**
+  String get errorLogsBreadcrumbs;
+
+  /// No description provided for @errorLogsContext.
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get errorLogsContext;
+
+  /// No description provided for @errorLogsSystemInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'System & Build Info'**
+  String get errorLogsSystemInfo;
+
+  /// No description provided for @errorLogsCopySystemInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy System Info'**
+  String get errorLogsCopySystemInfo;
+
+  /// No description provided for @errorLogsSystemInfoCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'System info copied to clipboard'**
+  String get errorLogsSystemInfoCopied;
+
+  /// Error count badge label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} errors'**
+  String errorLogsCountBadge(int count);
+
+  /// No description provided for @errorLogsNoSearchResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No errors match your filter.'**
+  String get errorLogsNoSearchResults;
 }
 
 class _AppLocalizationsDelegate

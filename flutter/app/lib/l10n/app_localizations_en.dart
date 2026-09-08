@@ -1684,4 +1684,83 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get voiceInputCloudFailed =>
       'Online speech recognition failed. Check your credentials and try again.';
+
+  @override
+  String get errorLogsTitle => 'Error Logs';
+
+  @override
+  String get errorLogsDescription => 'View and export application error logs';
+
+  @override
+  String get errorLogsEmptyTitle => 'No Error Logs';
+
+  @override
+  String get errorLogsEmptySubtitle =>
+      'Application is running smoothly with no errors captured.';
+
+  @override
+  String get errorLogsFilterAll => 'All';
+
+  @override
+  String get errorLogsFilterFatal => 'Fatal';
+
+  @override
+  String get errorLogsFilterError => 'Error';
+
+  @override
+  String get errorLogsFilterWarn => 'Warning';
+
+  @override
+  String get errorLogsSearchHint => 'Search errors or stack trace…';
+
+  @override
+  String get errorLogsCopyAll => 'Copy All';
+
+  @override
+  String get errorLogsCopyAllSuccess => 'All error logs copied to clipboard';
+
+  @override
+  String get errorLogsCopyEntry => 'Copy';
+
+  @override
+  String get errorLogsCopyEntrySuccess => 'Error details copied to clipboard';
+
+  @override
+  String get errorLogsClear => 'Clear';
+
+  @override
+  String get errorLogsClearConfirmTitle => 'Clear Error Logs';
+
+  @override
+  String get errorLogsClearConfirmMessage =>
+      'Are you sure you want to clear all recorded error logs? This cannot be undone.';
+
+  @override
+  String get errorLogsClearSuccess => 'Error logs cleared';
+
+  @override
+  String get errorLogsStackTrace => 'Stack Trace';
+
+  @override
+  String get errorLogsBreadcrumbs => 'Related Logs';
+
+  @override
+  String get errorLogsContext => 'Context';
+
+  @override
+  String get errorLogsSystemInfo => 'System & Build Info';
+
+  @override
+  String get errorLogsCopySystemInfo => 'Copy System Info';
+
+  @override
+  String get errorLogsSystemInfoCopied => 'System info copied to clipboard';
+
+  @override
+  String errorLogsCountBadge(int count) {
+    return '$count errors';
+  }
+
+  @override
+  String get errorLogsNoSearchResults => 'No errors match your filter.';
 }

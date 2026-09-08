@@ -1624,4 +1624,81 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get voiceInputCloudFailed => '在线语音识别失败，请检查密钥配置后重试。';
+
+  @override
+  String get errorLogsTitle => '错误日志';
+
+  @override
+  String get errorLogsDescription => '查看并导出应用运行错误记录';
+
+  @override
+  String get errorLogsEmptyTitle => '暂无错误日志';
+
+  @override
+  String get errorLogsEmptySubtitle => '应用运行良好，未捕获到任何错误。';
+
+  @override
+  String get errorLogsFilterAll => '全部';
+
+  @override
+  String get errorLogsFilterFatal => '崩溃';
+
+  @override
+  String get errorLogsFilterError => '错误';
+
+  @override
+  String get errorLogsFilterWarn => '警告';
+
+  @override
+  String get errorLogsSearchHint => '搜索错误信息或堆栈…';
+
+  @override
+  String get errorLogsCopyAll => '复制全部';
+
+  @override
+  String get errorLogsCopyAllSuccess => '已复制全部错误日志到剪贴板';
+
+  @override
+  String get errorLogsCopyEntry => '复制';
+
+  @override
+  String get errorLogsCopyEntrySuccess => '已复制该错误详情到剪贴板';
+
+  @override
+  String get errorLogsClear => '清空';
+
+  @override
+  String get errorLogsClearConfirmTitle => '清空错误日志';
+
+  @override
+  String get errorLogsClearConfirmMessage => '确定要清空所有已记录的错误日志吗？此操作无法撤销。';
+
+  @override
+  String get errorLogsClearSuccess => '错误日志已清空';
+
+  @override
+  String get errorLogsStackTrace => '堆栈信息';
+
+  @override
+  String get errorLogsBreadcrumbs => '关联运行日志';
+
+  @override
+  String get errorLogsContext => '上下文信息';
+
+  @override
+  String get errorLogsSystemInfo => '系统与构建信息';
+
+  @override
+  String get errorLogsCopySystemInfo => '复制系统信息';
+
+  @override
+  String get errorLogsSystemInfoCopied => '已复制系统信息到剪贴板';
+
+  @override
+  String errorLogsCountBadge(int count) {
+    return '$count 条错误';
+  }
+
+  @override
+  String get errorLogsNoSearchResults => '未找到匹配的错误日志。';
 }

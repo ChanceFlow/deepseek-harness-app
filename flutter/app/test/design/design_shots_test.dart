@@ -236,6 +236,15 @@ final List<DesignShot> shots = <DesignShot>[
     host: (theme, locale) => _settingsAsrHost(theme, locale, true),
     dark: false,
   ),
+  DesignShot(
+    name: 'settings-error-logs',
+    host: (theme, locale) => _settingsErrorLogsHost(theme, locale, false),
+  ),
+  DesignShot(
+    name: 'settings-error-logs-zh',
+    locale: const Locale('zh'),
+    host: (theme, locale) => _settingsErrorLogsHost(theme, locale, true),
+  ),
   // The online voice-input mode: the new card with the Volcengine
   // credential form (dark) and the Tencent one (light), each scrolled to
   // bring the card's fields into frame.
@@ -758,6 +767,75 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
     locale: locale,
     theme: _withRealFonts(theme),
     home: AsrModelsScreen(uiState: state, onAction: (_) {}),
+  );
+}
+
+Widget _settingsErrorLogsHost(ThemeData theme, Locale? locale, bool zh) {
+  final List<ErrorLogEntry> entries = <ErrorLogEntry>[
+    ErrorLogEntry(
+      id: 'err_1',
+      timestamp: DateTime(2026, 8, 20, 14, 32, 5, 120),
+      level: ErrorLogLevel.fatal,
+      type: 'FlutterError:RenderFlex',
+      message: zh
+          ? 'RenderFlex 在右侧溢出了 24 个像素。'
+          : 'A RenderFlex overflowed by 24 pixels on the right.',
+      stackTrace:
+          '#0 RenderFlex.performLayout (package:flutter/src/rendering/flex.dart:1000)\n'
+          '#1 RenderObject.layout (package:flutter/src/rendering/object.dart:2000)\n'
+          '#2 MultiChildLayoutView.performLayout (package:flutter/src/rendering/custom_layout.dart:120)',
+      context: const <String, Object?>{
+        'screen': 'ChatScreen',
+        'backend': 'http://127.0.0.1:3080',
+      },
+      breadcrumbs: const <String>[
+        '14:31:55.010 [INFO] App launch: ready',
+        '14:32:00.540 [INFO] Switching active session: sess_001',
+        '14:32:04.990 [WARN] Render tree layout pass requested',
+      ],
+    ),
+    ErrorLogEntry(
+      id: 'err_2',
+      timestamp: DateTime(2026, 8, 20, 13, 15, 20, 450),
+      level: ErrorLogLevel.error,
+      type: 'SocketException',
+      message: zh
+          ? '系统错误：连接被拒绝 (errno = 111, address = 127.0.0.1, port = 3080)'
+          : 'OS Error: Connection refused, errno = 111, address = 127.0.0.1, port = 3080',
+      stackTrace:
+          '#0 _NativeSocket.startConnect (dart:io-patch/socket_patch.dart:735)\n'
+          '#1 _RawSocket.startConnect (dart:io-patch/socket_patch.dart:200)',
+      context: const <String, Object?>{
+        'endpoint': 'http://127.0.0.1:3080/v1/sessions',
+      },
+      breadcrumbs: const <String>[
+        '13:15:19.100 [INFO] Connecting to backend: http://127.0.0.1:3080',
+      ],
+    ),
+    ErrorLogEntry(
+      id: 'err_3',
+      timestamp: DateTime(2026, 8, 20, 12, 00, 10, 80),
+      level: ErrorLogLevel.warning,
+      type: 'ModelWarning',
+      message: zh
+          ? '离线语音识别模型加载耗时超过 1250ms。'
+          : 'Active speech recognition model took 1250ms to warm up.',
+    ),
+  ];
+
+  final ErrorLogsUiState state = ErrorLogsUiState(
+    entries: entries,
+    expandedIds: const <String>{'err_1'},
+    activeBackendUrl: 'http://127.0.0.1:3080',
+  );
+
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: _withRealFonts(theme),
+    home: ErrorLogsScreen(uiState: state, onAction: (_) {}),
   );
 }
 
