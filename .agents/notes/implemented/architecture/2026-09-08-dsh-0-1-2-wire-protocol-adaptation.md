@@ -15,11 +15,13 @@ Prior to this change, only `commands/execute` adhered to the Typert Remote conve
 
 The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
 
-- **Endpoint naming**: all 41 RPC constants in `harness_repository_impl.dart` and `_hostDescribe` in `dsh_connection_manager.dart` are upgraded from `domain.method` to `domain/method` (e.g. `session/list`, `session/prompt`, `workspace/list`, `host/describe`, `subagent/list`).
+- **Endpoint naming & decoupling**:
+  - `DshRpcEndpoints` in `rpc_map.dart` acts as the single central registry for all Typert Remote endpoints (`session/*`, `skills/list`, `subagents/*`, `goals/*`, `agentPresets/*`, `directoryPicker/*`, `workspace/*`, `settings/*`, `credentials/*`, `commands/execute`).
+  - `DshRemoteInvoker` decouples repository business logic from wire transport details, implementing transparent version fallback via `kDshEndpointFallbacks` when a 404 is encountered against an older API Proxy backend.
 - **Payload packaging**:
-  - `HarnessRepositoryImpl._call` automatically wraps the payload map inside `<String, Object?>{'args': payload}` unless already wrapped. Call sites pass clean parameter maps without boilerplate.
-  - `executeCommand` strips its ad-hoc manual `'args'` wrapper and relies on the unified `_call` wrapping.
-  - `dsh_connection_manager.dart` passes `{'args': {}}` for `host/describe`.
+  - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` unless already wrapped.
+  - `executeCommand` strips its ad-hoc manual `'args'` wrapper.
+  - `dsh_connection_manager.dart` uses `DshRemoteInvoker` for `host/describe`.
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
 - **Workspace listing 404 tolerance**: DSH 0.1.2 provides workspace state via the `workspace/follow` stream and mutation returns rather than a unary endpoint. `_loadWorkspaceListing` catches 404 responses gracefully so startup reconciliation and `refreshWorkspaces` complete quietly without raising transport errors, while mutations (`createWorkspace`, `renameWorkspace`, `deleteWorkspace`) apply their immediate result to local state.
 - **WebSocket connection point**:
