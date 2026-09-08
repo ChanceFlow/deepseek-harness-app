@@ -33,6 +33,7 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
 import 'dsh_connection_manager.dart';
+import 'dsh_remote_invoker.dart';
 import 'session_stats_fold.dart';
 import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
@@ -45,50 +46,8 @@ import 'wire_json.dart';
 /// frame cadence (the reference web client's animation-frame flush).
 const Duration kStreamPublishWindow = Duration(milliseconds: 16);
 
-const String _sessionList = 'session/list';
-const String _sessionCreate = 'session/create';
-const String _sessionHistory = 'session/history';
-const String _sessionPrompt = 'session/prompt';
-const String _sessionAttachment = 'session/attachment';
-const String _sessionCancel = 'session/cancel';
-const String _sessionModels = 'session/models';
-const String _sessionSelectModel = 'session/selectModel';
-const String _sessionSearch = 'session/search';
-const String _sessionRename = 'session/rename';
-const String _sessionFork = 'session/fork';
-const String _sessionUpdateQueue = 'session/updateQueue';
-const String _workspaceList = 'workspace/list';
-const String _workspaceCreate = 'workspace/create';
-const String _workspaceRename = 'workspace/rename';
-const String _workspaceDelete = 'workspace/delete';
-const String _workspaceInsertBefore = 'workspace/insertBefore';
-const String _workspaceInsertSessionBefore = 'workspace/insertSessionBefore';
-const String _workspaceArchiveSession = 'workspace/archiveSession';
-const String _hostListDirectory = 'host/listDirectory';
-const String _hostCreateDirectory = 'host/createDirectory';
-const String _settingsDescribe = 'settings/describe';
-const String _settingsUpdate = 'settings/update';
-const String _settingsReplace = 'settings/replace';
-const String _settingsMutate = 'settings/mutate';
-const String _credentialsDescribe = 'credentials/describe';
-const String _credentialsSet = 'credentials/set';
-const String _credentialsUnset = 'credentials/unset';
 const int _credentialsMaxRefs = 64;
-const String _skillList = 'skill/list';
 const int _historyPageMessages = 50;
-const String _subagentList = 'subagent/list';
-const String _subagentInterrupt = 'subagent/interrupt';
-const String _subagentHistory = 'subagent/history';
-const String _subagentPrompt = 'subagent/prompt';
-const String _goalCreate = 'goal/create';
-const String _goalEdit = 'goal/edit';
-const String _goalPause = 'goal/pause';
-const String _goalResume = 'goal/resume';
-const String _goalComplete = 'goal/complete';
-const String _goalClear = 'goal/clear';
-const String _commandsExecute = 'commands/execute';
-const String _agentPresetList = 'agentPreset/list';
-const String _agentPresetSelect = 'agentPreset/select';
 
 final class _HistoryPage {
   _HistoryPage({required this.events, required this.hasMore});
@@ -99,6 +58,7 @@ final class _HistoryPage {
 
 class HarnessRepositoryImpl implements ChatRepository {
   HarnessRepositoryImpl(this._rpcClient, this._connectionManager) {
+    _invoker = DshRemoteInvoker(_rpcClient);
     _connectionManager.start();
     _collectConnection();
     _collectMuxFrames();
@@ -107,6 +67,7 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   final DshRpcClient _rpcClient;
   final DshConnectionManager _connectionManager;
+  late final DshRemoteInvoker _invoker;
 
   final StateStream<int> _connectionGeneration = StateStream<int>(0);
   final StateStream<List<SessionSummary>> _sessions =
@@ -223,8 +184,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       if (request.agentPreset != null) 'agentPreset': request.agentPreset,
     };
     final value = await _call(
-      _sessionCreate,
-      _sessionCreate,
+      DshRpcEndpoints.sessionCreate,
+      DshRpcEndpoints.sessionCreate,
       payload,
     ).valueOrThrow();
     final created = wireString(value, 'sessionId');
@@ -238,8 +199,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<AgentPresetRoster> listAgentPresets() async {
     final value = await _call(
-      _agentPresetList,
-      _agentPresetList,
+      DshRpcEndpoints.agentPresetsList,
+      DshRpcEndpoints.agentPresetsList,
       <String, Object?>{},
     ).valueOrThrow();
     final decoded = AgentPresetListValueWire.fromJson(value);
@@ -252,13 +213,14 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<String> selectAgentPreset(String sessionId, String agentPreset) async {
-    final value = await _call(_agentPresetSelect, _agentPresetSelect, {
-      'sessionId': sessionId,
-      'agentPreset': agentPreset,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.agentPresetsSelect,
+      DshRpcEndpoints.agentPresetsSelect,
+      {'sessionId': sessionId, 'agentPreset': agentPreset},
+    ).valueOrThrow();
     final echoed = wireString(value, 'agentPreset');
     if (echoed == null) {
-      throw const FormatException('agentPreset.select missing agentPreset');
+      throw const FormatException('agentPresets.select missing agentPreset');
     }
     return echoed;
   }
@@ -267,8 +229,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   Future<DirectoryListing> listDirectory(String? path) async {
     final payload = <String, Object?>{if (path != null) 'path': path};
     final value = await _call(
-      _hostListDirectory,
-      _hostListDirectory,
+      DshRpcEndpoints.directoryPickerList,
+      DshRpcEndpoints.directoryPickerList,
       payload,
     ).valueOrThrow();
     return _toDomainDirectoryListing(DirectoryListingValueWire.fromJson(value));
@@ -276,13 +238,16 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<String> createDirectory(String parentPath, String name) async {
-    final value = await _call(_hostCreateDirectory, _hostCreateDirectory, {
-      'path': parentPath,
-      'name': name,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.directoryPickerCreate,
+      DshRpcEndpoints.directoryPickerCreate,
+      {'path': parentPath, 'name': name},
+    ).valueOrThrow();
     final path = wireString(value, 'path');
     if (path == null) {
-      throw const FormatException('host.createDirectory missing path');
+      throw const FormatException(
+        'directoryPicker.createDirectory missing path',
+      );
     }
     return path;
   }
@@ -290,8 +255,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<SettingsSnapshot> describeSettings() async {
     final value = await _call(
-      _settingsDescribe,
-      _settingsDescribe,
+      DshRpcEndpoints.settingsDescribe,
+      DshRpcEndpoints.settingsDescribe,
       <String, Object?>{},
     ).valueOrThrow();
     final described = SettingsDescribeValueWire.fromJson(value);
@@ -310,9 +275,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<List<CredentialStatus>> describeCredentials(List<String> refs) async {
     if (refs.isEmpty) return const <CredentialStatus>[];
-    final value = await _call(_credentialsDescribe, _credentialsDescribe, {
-      'refs': refs.take(_credentialsMaxRefs).toList(),
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.credentialsDescribe,
+      DshRpcEndpoints.credentialsDescribe,
+      {'refs': refs.take(_credentialsMaxRefs).toList()},
+    ).valueOrThrow();
     return decodeCredentialsDescribeValue(value);
   }
 
@@ -321,17 +288,20 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (value.isEmpty) {
       throw ArgumentError('credential value must be non-empty');
     }
-    await _call(_credentialsSet, _credentialsSet, {
-      'ref': ref,
-      'value': value,
-    }).valueOrThrow();
+    await _call(
+      DshRpcEndpoints.credentialsSet,
+      DshRpcEndpoints.credentialsSet,
+      {'ref': ref, 'value': value},
+    ).valueOrThrow();
   }
 
   @override
   Future<void> unsetCredential(String ref) async {
-    await _call(_credentialsUnset, _credentialsUnset, {
-      'ref': ref,
-    }).valueOrThrow();
+    await _call(
+      DshRpcEndpoints.credentialsUnset,
+      DshRpcEndpoints.credentialsUnset,
+      {'ref': ref},
+    ).valueOrThrow();
   }
 
   @override
@@ -341,11 +311,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     String jsonValue, {
     int? expectedRevision,
   }) async {
-    final value = await _call(_settingsUpdate, _settingsUpdate, {
-      'ns': ns,
-      'patch': {key: _parseJsonValue(jsonValue)},
-      if (expectedRevision != null) 'expectedRevision': expectedRevision,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.settingsUpdate,
+      DshRpcEndpoints.settingsUpdate,
+      {
+        'ns': ns,
+        'patch': {key: _parseJsonValue(jsonValue)},
+        if (expectedRevision != null) 'expectedRevision': expectedRevision,
+      },
+    ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
   }
 
@@ -359,11 +333,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (decoded is! Map) {
       throw ArgumentError('settings.replace section must be a JSON object');
     }
-    final value = await _call(_settingsReplace, _settingsReplace, {
-      'ns': ns,
-      'section': decoded,
-      if (expectedRevision != null) 'expectedRevision': expectedRevision,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.settingsReplace,
+      DshRpcEndpoints.settingsReplace,
+      {
+        'ns': ns,
+        'section': decoded,
+        if (expectedRevision != null) 'expectedRevision': expectedRevision,
+      },
+    ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
   }
 
@@ -373,19 +351,24 @@ class HarnessRepositoryImpl implements ChatRepository {
     List<SettingPathOp> ops, {
     int? expectedRevision,
   }) async {
-    final value = await _call(_settingsMutate, _settingsMutate, {
-      'ns': ns,
-      'ops': ops
-          .map(
-            (op) => <String, Object?>{
-              'op': op.op,
-              'path': op.path,
-              if (op.jsonValue != null) 'value': _parseJsonValue(op.jsonValue!),
-            },
-          )
-          .toList(),
-      if (expectedRevision != null) 'expectedRevision': expectedRevision,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.settingsMutate,
+      DshRpcEndpoints.settingsMutate,
+      {
+        'ns': ns,
+        'ops': ops
+            .map(
+              (op) => <String, Object?>{
+                'op': op.op,
+                'path': op.path,
+                if (op.jsonValue != null)
+                  'value': _parseJsonValue(op.jsonValue!),
+              },
+            )
+            .toList(),
+        if (expectedRevision != null) 'expectedRevision': expectedRevision,
+      },
+    ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
   }
 
@@ -458,11 +441,15 @@ class HarnessRepositoryImpl implements ChatRepository {
           if (image.name != null) 'name': image.name,
         },
     ];
-    final value = await _call(_sessionPrompt, _sessionPrompt, {
-      'sessionId': request.sessionId,
-      'mode': request.mode == PromptMode.queue ? 'queue' : 'steer',
-      'content': content,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.sessionPrompt,
+      DshRpcEndpoints.sessionPrompt,
+      {
+        'sessionId': request.sessionId,
+        'mode': request.mode == PromptMode.queue ? 'queue' : 'steer',
+        'content': content,
+      },
+    ).valueOrThrow();
     if (wireBool(value, 'accepted') || !value.containsKey('accepted')) {
       // Web parity: a successful first prompt proves the user message is in
       // the host log, so the provisional blank session is retired without
@@ -520,8 +507,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     // the base64-encoded composer images in submission order (the host
     // admission enforces the command's image-acceptance flag).
     final result = await _call(
-      _commandsExecute,
-      _commandsExecute,
+      DshRpcEndpoints.commandsExecute,
+      DshRpcEndpoints.commandsExecute,
       <String, Object?>{
         'agentId': sessionId,
         'line': line,
@@ -563,7 +550,7 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> cancelTurn(String sessionId) async {
-    await _call(_sessionCancel, _sessionCancel, {
+    await _call(DshRpcEndpoints.sessionCancel, DshRpcEndpoints.sessionCancel, {
       'sessionId': sessionId,
     }).valueOrThrow();
   }
@@ -573,10 +560,11 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     String attachmentId,
   ) async {
-    final value = await _call(_sessionAttachment, _sessionAttachment, {
-      'sessionId': sessionId,
-      'attachmentId': attachmentId,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.sessionAttachment,
+      DshRpcEndpoints.sessionAttachment,
+      {'sessionId': sessionId, 'attachmentId': attachmentId},
+    ).valueOrThrow();
     final downloaded = SessionAttachmentValueWire.fromJson(value);
     return AttachmentData(
       ref: AttachmentRef(
@@ -596,9 +584,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<List<SkillEntry>> listSkills(String sessionId) async {
-    final value = await _call(_skillList, _skillList, {
-      'sessionId': sessionId,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.skillsList,
+      DshRpcEndpoints.skillsList,
+      {'sessionId': sessionId},
+    ).valueOrThrow();
     return decodeSkillListValue(value)
         .map(
           (wire) => SkillEntry(
@@ -664,10 +654,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<String> renameSession(String sessionId, String title) async {
-    final result = await _call(_sessionRename, _sessionRename, {
-      'sessionId': sessionId,
-      'title': title,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.sessionRename,
+      DshRpcEndpoints.sessionRename,
+      {'sessionId': sessionId, 'title': title},
+    ).valueOrThrow();
     final renamed = wireString(result, 'title');
     if (renamed == null) {
       throw const FormatException('session/rename missing title');
@@ -678,10 +669,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SessionSummary> forkSession(String sessionId, {int? atSeq}) async {
-    final result = await _call(_sessionFork, _sessionFork, {
-      'sessionId': sessionId,
-      if (atSeq != null) 'atSeq': atSeq,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.sessionFork,
+      DshRpcEndpoints.sessionFork,
+      {'sessionId': sessionId, if (atSeq != null) 'atSeq': atSeq},
+    ).valueOrThrow();
     final forked = wireString(result, 'sessionId');
     if (forked == null) {
       throw const FormatException('session/fork missing sessionId');
@@ -707,11 +699,15 @@ class HarnessRepositoryImpl implements ChatRepository {
         };
     }
     try {
-      await _call(_sessionUpdateQueue, _sessionUpdateQueue, {
-        'sessionId': request.sessionId,
-        'itemId': request.itemId,
-        'action': action,
-      }).valueOrThrow();
+      await _call(
+        DshRpcEndpoints.sessionUpdateQueue,
+        DshRpcEndpoints.sessionUpdateQueue,
+        {
+          'sessionId': request.sessionId,
+          'itemId': request.itemId,
+          'action': action,
+        },
+      ).valueOrThrow();
     } on DshBusinessException catch (error) {
       // Web parity (input hub): a turn closing mid-steer or a row already
       // settled is a benign race — the queue projection refreshes the dock,
@@ -726,9 +722,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SubagentCatalog> loadSubagents(String parentSessionId) async {
-    final value = await _call(_subagentList, _subagentList, {
-      'parentSessionId': parentSessionId,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.subagentsList,
+      DshRpcEndpoints.subagentsList,
+      {'parentSessionId': parentSessionId},
+    ).valueOrThrow();
     final wire = SubagentListValueWire.fromJson(value);
     return SubagentCatalog(
       parentSessionId: parentSessionId,
@@ -782,11 +780,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     String parentSessionId,
     String childSessionId,
   ) async {
-    await _call(_subagentInterrupt, _subagentInterrupt, {
-      'parentSessionId': parentSessionId,
-      'childSessionId': childSessionId,
-      'mode': _subagentModeToWire(SubagentMode.continuable),
-    }).valueOrThrow();
+    await _call(
+      DshRpcEndpoints.subagentsInterrupt,
+      DshRpcEndpoints.subagentsInterrupt,
+      {
+        'parentSessionId': parentSessionId,
+        'childSessionId': childSessionId,
+        'mode': _subagentModeToWire(SubagentMode.continuable),
+      },
+    ).valueOrThrow();
   }
 
   @override
@@ -795,11 +797,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     String childSessionId,
     SubagentMode mode,
   ) async {
-    final value = await _call(_subagentHistory, _subagentHistory, {
-      'parentSessionId': parentSessionId,
-      'childSessionId': childSessionId,
-      'mode': _subagentModeToWire(mode),
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.subagentsHistory,
+      DshRpcEndpoints.subagentsHistory,
+      {
+        'parentSessionId': parentSessionId,
+        'childSessionId': childSessionId,
+        'mode': _subagentModeToWire(mode),
+      },
+    ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
     final reducer = TimelineReducer(childSessionId);
     reducer.reset(history.events);
@@ -812,14 +818,18 @@ class HarnessRepositoryImpl implements ChatRepository {
     String childSessionId,
     String text,
   ) async {
-    final value = await _call(_subagentPrompt, _subagentPrompt, {
-      'parentSessionId': parentSessionId,
-      'childSessionId': childSessionId,
-      'mode': _subagentModeToWire(SubagentMode.continuable),
-      'content': <Object?>[
-        <String, Object?>{'type': 'text', 'text': text},
-      ],
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.subagentsPrompt,
+      DshRpcEndpoints.subagentsPrompt,
+      {
+        'parentSessionId': parentSessionId,
+        'childSessionId': childSessionId,
+        'mode': _subagentModeToWire(SubagentMode.continuable),
+        'content': <Object?>[
+          <String, Object?>{'type': 'text', 'text': text},
+        ],
+      },
+    ).valueOrThrow();
     final messageId = wireString(value, 'messageId');
     if (messageId == null) {
       throw const FormatException('subagent.prompt missing messageId');
@@ -861,36 +871,45 @@ class HarnessRepositoryImpl implements ChatRepository {
     String objective, {
     int? maxGoalRounds,
   }) async {
-    final value = await _call(_goalCreate, _goalCreate, {
-      'sessionId': sessionId,
-      'objective': objective,
-      if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.goalsCreate,
+      DshRpcEndpoints.goalsCreate,
+      {
+        'sessionId': sessionId,
+        'agentId': sessionId,
+        'objective': objective,
+        if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
+        'request': <String, Object?>{
+          'objective': objective,
+          if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
+        },
+      },
+    ).valueOrThrow();
     final ref = decodeGoalRefValue(value);
     return GoalRef(id: ref.id, revision: ref.revision);
   }
 
   @override
   Future<GoalRef> editGoal(String sessionId, GoalRef ref, String objective) =>
-      _goalMutation(_goalEdit, sessionId, ref, objective);
+      _goalMutation(DshRpcEndpoints.goalsEdit, sessionId, ref, objective);
 
   @override
   Future<GoalRef> pauseGoal(String sessionId, GoalRef ref) =>
-      _goalMutation(_goalPause, sessionId, ref);
+      _goalMutation(DshRpcEndpoints.goalsPause, sessionId, ref);
 
   @override
   Future<GoalRef> resumeGoal(String sessionId, GoalRef ref) =>
-      _goalMutation(_goalResume, sessionId, ref);
+      _goalMutation(DshRpcEndpoints.goalsResume, sessionId, ref);
 
   @override
   Future<GoalRef> completeGoal(String sessionId, GoalRef ref) =>
-      _goalMutation(_goalComplete, sessionId, ref);
+      _goalMutation(DshRpcEndpoints.goalsComplete, sessionId, ref);
 
   @override
   Future<void> clearGoal(String sessionId, GoalRef ref) async {
     await _call(
-      _goalClear,
-      _goalClear,
+      DshRpcEndpoints.goalsClear,
+      DshRpcEndpoints.goalsClear,
       _goalPayload(sessionId, ref),
     ).valueOrThrow();
     _goalProjections[sessionId]?.value = null;
@@ -913,8 +932,10 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   JsonMap _goalPayload(String sessionId, GoalRef ref, [String? objective]) => {
     'sessionId': sessionId,
+    'agentId': sessionId,
     'ref': <String, Object?>{'id': ref.id, 'revision': ref.revision},
     if (objective != null) 'objective': objective,
+    if (objective != null) 'request': <String, Object?>{'objective': objective},
   };
 
   @override
@@ -929,25 +950,12 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<WorkspaceListValueWire?> _loadWorkspaceListing() async {
-    try {
-      final result = await _call(
-        _workspaceList,
-        _workspaceList,
-        <String, Object?>{},
-      );
-      if (!result.ok) {
-        return null;
-      }
-      final value = result.value;
-      if (value == null) return null;
-      return WorkspaceListValueWire.fromJson(value);
-    } on DshTransportException catch (e) {
-      if (e.message.contains('404')) {
-        // DSH 0.1.2 does not mount a unary workspace/list endpoint.
-        return null;
-      }
-      rethrow;
-    }
+    final value = await _invoker.invokeOrNullOnNotFound(
+      DshRpcEndpoints.workspaceList,
+      <String, Object?>{},
+    );
+    if (value == null) return null;
+    return WorkspaceListValueWire.fromJson(value);
   }
 
   void _applyWorkspaceListing(WorkspaceListValueWire listing) {
@@ -957,9 +965,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<WorkspaceSummary> createWorkspace(String path) async {
-    final result = await _call(_workspaceCreate, _workspaceCreate, {
-      'path': path,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.workspaceCreate,
+      DshRpcEndpoints.workspaceCreate,
+      {'path': path},
+    ).valueOrThrow();
     final created = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     final current = _workspaces.value;
     final index = current.indexWhere(
@@ -982,10 +992,11 @@ class HarnessRepositoryImpl implements ChatRepository {
     String workspaceId,
     String title,
   ) async {
-    final result = await _call(_workspaceRename, _workspaceRename, {
-      'workspaceId': workspaceId,
-      'title': title,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.workspaceRename,
+      DshRpcEndpoints.workspaceRename,
+      {'workspaceId': workspaceId, 'title': title},
+    ).valueOrThrow();
     final renamed = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     final current = _workspaces.value;
     final index = current.indexWhere(
@@ -1004,8 +1015,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Future<void> archiveSession(String sessionId) async {
     final result = await _call(
-      _workspaceArchiveSession,
-      _workspaceArchiveSession,
+      DshRpcEndpoints.workspaceArchiveSession,
+      DshRpcEndpoints.workspaceArchiveSession,
       {'sessionId': sessionId},
     ).valueOrThrow();
     _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
@@ -1013,9 +1024,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> deleteWorkspace(String workspaceId) async {
-    await _call(_workspaceDelete, _workspaceDelete, {
-      'workspaceId': workspaceId,
-    }).valueOrThrow();
+    await _call(
+      DshRpcEndpoints.workspaceDelete,
+      DshRpcEndpoints.workspaceDelete,
+      {'workspaceId': workspaceId},
+    ).valueOrThrow();
     _workspaces.value = _workspaces.value
         .where((item) => item.workspaceId != workspaceId)
         .toList();
@@ -1030,10 +1043,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     String workspaceId,
     String? beforeWorkspaceId,
   ) async {
-    final value = await _call(_workspaceInsertBefore, _workspaceInsertBefore, {
-      'workspaceId': workspaceId,
-      if (beforeWorkspaceId != null) 'beforeWorkspaceId': beforeWorkspaceId,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.workspaceInsertBefore,
+      DshRpcEndpoints.workspaceInsertBefore,
+      {
+        'workspaceId': workspaceId,
+        if (beforeWorkspaceId != null) 'beforeWorkspaceId': beforeWorkspaceId,
+      },
+    ).valueOrThrow();
     final orderedIds = _stringList(value['workspaceIds']);
     _applyWorkspaceOrder(orderedIds);
     return orderedIds;
@@ -1046,8 +1063,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     String? beforeSessionId,
   ) async {
     final value = await _call(
-      _workspaceInsertSessionBefore,
-      _workspaceInsertSessionBefore,
+      DshRpcEndpoints.workspaceInsertSessionBefore,
+      DshRpcEndpoints.workspaceInsertSessionBefore,
       {
         'workspaceId': workspaceId,
         'sessionId': sessionId,
@@ -1063,9 +1080,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SessionModels> loadModels(String sessionId) async {
-    final result = await _call(_sessionModels, _sessionModels, {
-      'sessionId': sessionId,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.sessionModelCatalog,
+      DshRpcEndpoints.sessionModelCatalog,
+      {'sessionId': sessionId},
+    ).valueOrThrow();
     return _toDomainSessionModels(SessionModelsValueWire.fromJson(result));
   }
 
@@ -1074,13 +1093,17 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     ModelSelection selection,
   ) async {
-    final result = await _call(_sessionSelectModel, _sessionSelectModel, {
-      'sessionId': sessionId,
-      'provider': selection.provider,
-      'model': selection.model,
-      if (selection.reasoningEffort != null)
-        'reasoningEffort': selection.reasoningEffort,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.sessionSelectModel,
+      DshRpcEndpoints.sessionSelectModel,
+      {
+        'sessionId': sessionId,
+        'provider': selection.provider,
+        'model': selection.model,
+        if (selection.reasoningEffort != null)
+          'reasoningEffort': selection.reasoningEffort,
+      },
+    ).valueOrThrow();
     final selectedObj = asJsonObject(result['selected']);
     if (selectedObj == null) {
       throw const FormatException('session/selectModel missing selected');
@@ -1095,9 +1118,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<List<SessionSearchResult>> searchSessions(String query) async {
-    final result = await _call(_sessionSearch, _sessionSearch, {
-      'query': query,
-    }).valueOrThrow();
+    final result = await _call(
+      DshRpcEndpoints.sessionSearch,
+      DshRpcEndpoints.sessionSearch,
+      {'query': query},
+    ).valueOrThrow();
     return (asJsonArray(result['items']) ?? const <Object?>[])
         .map(asJsonObject)
         .whereType<JsonMap>()
@@ -1631,16 +1656,13 @@ class HarnessRepositoryImpl implements ChatRepository {
   // -----------------------------------------------------------------------
 
   Future<RpcResult> _call(String endpoint, String method, JsonMap payload) {
-    final wrapped = payload.containsKey('args') && payload.length == 1
-        ? payload
-        : <String, Object?>{'args': payload};
-    return _rpcClient.call(endpoint, method, wrapped);
+    return _invoker.call(endpoint, payload);
   }
 
   Future<List<SessionSummary>> _loadSessions() async {
     final value = await _call(
-      _sessionList,
-      _sessionList,
+      DshRpcEndpoints.sessionList,
+      DshRpcEndpoints.sessionList,
       <String, Object?>{},
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
@@ -1756,11 +1778,15 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
-    final value = await _call(_sessionHistory, _sessionHistory, {
-      'sessionId': sessionId,
-      if (beforeSeq != null) 'beforeSeq': beforeSeq,
-      'maxMessages': _historyPageMessages,
-    }).valueOrThrow();
+    final value = await _call(
+      DshRpcEndpoints.sessionHistory,
+      DshRpcEndpoints.sessionHistory,
+      {
+        'sessionId': sessionId,
+        if (beforeSeq != null) 'beforeSeq': beforeSeq,
+        'maxMessages': _historyPageMessages,
+      },
+    ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
     final goalValue = history.projectionValues?['goal'];
     if (goalValue != null) {

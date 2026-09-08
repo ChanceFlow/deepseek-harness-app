@@ -147,11 +147,28 @@ class HarnessFakeRpc implements DshRpcClient {
       <String, List<JsonMap>>{};
   final List<(String, RpcResult)> _receivedResponses = <(String, RpcResult)>[];
 
-  int callCountFor(String endpoint) =>
-      _calls[endpoint] ??
-      _calls[endpoint.replaceAll('/', '.')] ??
-      _calls[endpoint.replaceAll('.', '/')] ??
-      0;
+  int callCountFor(String endpoint) {
+    final count = _calls[endpoint];
+    if (count != null && count > 0) return count;
+    final slash = _calls[endpoint.replaceAll('.', '/')];
+    if (slash != null && slash > 0) return slash;
+    final dot = _calls[endpoint.replaceAll('/', '.')];
+    if (dot != null && dot > 0) return dot;
+    final fallbacks = kDshEndpointFallbacks[endpoint];
+    if (fallbacks != null) {
+      for (final fb in fallbacks) {
+        final c = _calls[fb];
+        if (c != null && c > 0) return c;
+      }
+    }
+    for (final entry in kDshEndpointFallbacks.entries) {
+      if (entry.value.contains(endpoint)) {
+        final c = _calls[entry.key];
+        if (c != null && c > 0) return c;
+      }
+    }
+    return 0;
+  }
 
   List<JsonMap> payloads(String endpoint) {
     final direct = _payloadsByEndpoint[endpoint];
@@ -160,6 +177,19 @@ class HarnessFakeRpc implements DshRpcClient {
     if (slash != null && slash.isNotEmpty) return List<JsonMap>.of(slash);
     final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
     if (dot != null && dot.isNotEmpty) return List<JsonMap>.of(dot);
+    final fallbacks = kDshEndpointFallbacks[endpoint];
+    if (fallbacks != null) {
+      for (final fb in fallbacks) {
+        final list = _payloadsByEndpoint[fb];
+        if (list != null && list.isNotEmpty) return List<JsonMap>.of(list);
+      }
+    }
+    for (final entry in kDshEndpointFallbacks.entries) {
+      if (entry.value.contains(endpoint)) {
+        final list = _payloadsByEndpoint[entry.key];
+        if (list != null && list.isNotEmpty) return List<JsonMap>.of(list);
+      }
+    }
     return const <JsonMap>[];
   }
 
@@ -171,6 +201,11 @@ class HarnessFakeRpc implements DshRpcClient {
     _failures[endpoint] = code;
     _failures[endpoint.replaceAll('.', '/')] = code;
     _failures[endpoint.replaceAll('/', '.')] = code;
+    for (final entry in kDshEndpointFallbacks.entries) {
+      if (entry.value.contains(endpoint)) {
+        _failures[entry.key] = code;
+      }
+    }
   }
 
   final Map<String, String> _failures = <String, String>{};
@@ -281,7 +316,7 @@ class HarnessFakeRpc implements DshRpcClient {
     String method,
     JsonMap payload,
   ) async {
-    _calls[endpoint] = callCountFor(endpoint) + 1;
+    _calls[endpoint] = (_calls[endpoint] ?? 0) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
     callJournal.add('$endpoint:start');
     final witnesses =
@@ -352,15 +387,21 @@ class HarnessFakeRpc implements DshRpcClient {
       case 'session.list':
       case 'session/list':
         return <String, Object?>{'items': sessionsValue};
+      case 'subagents/list':
       case 'subagent.list':
       case 'subagent/list':
         return subagentListValue;
       case 'subagent.history':
       case 'subagent/history':
         return subagentHistoryValue;
+      case 'subagents/prompt':
       case 'subagent.prompt':
       case 'subagent/prompt':
         return subagentPromptValue;
+      case 'subagents/interruptByParent':
+      case 'subagent/interrupt':
+      case 'subagent.interrupt':
+        return <String, Object?>{'receipt': true};
       case 'workspace.list':
       case 'workspace/list':
         return <String, Object?>{
@@ -416,6 +457,7 @@ class HarnessFakeRpc implements DshRpcClient {
             's1',
           ]),
         };
+      case 'skills/list':
       case 'skill.list':
       case 'skill/list':
         return <String, Object?>{
@@ -433,6 +475,7 @@ class HarnessFakeRpc implements DshRpcClient {
             },
           ],
         };
+      case 'directoryPicker/list':
       case 'host.listDirectory':
       case 'host/listDirectory':
         return <String, Object?>{
@@ -446,6 +489,7 @@ class HarnessFakeRpc implements DshRpcClient {
           ],
           'truncated': false,
         };
+      case 'directoryPicker/createDirectory':
       case 'host.createDirectory':
       case 'host/createDirectory':
         return <String, Object?>{'path': '/tmp/chosen/new-folder'};
@@ -514,11 +558,13 @@ class HarnessFakeRpc implements DshRpcClient {
           'secrets': <Object?>[],
           'revision': 3,
         };
+      case 'goals/edit':
       case 'goal.edit':
       case 'goal/edit':
         return <String, Object?>{
           'ref': <String, Object?>{'id': 'goal-1', 'revision': 2},
         };
+      case 'agentPresets/list':
       case 'agentPreset.list':
       case 'agentPreset/list':
         // Fixture transcribed from
@@ -548,9 +594,20 @@ class HarnessFakeRpc implements DshRpcClient {
           'authorable': true,
           'hasDocument': false,
         };
+      case 'agentPresets/select':
       case 'agentPreset.select':
       case 'agentPreset/select':
         return <String, Object?>{'agentPreset': 'minimal'};
+      case 'session/modelCatalog':
+      case 'session.models':
+      case 'session/models':
+        return <String, Object?>{
+          'defaultSelection': <String, Object?>{
+            'provider': 'deepseek',
+            'model': 'glm-x',
+          },
+          'entries': <Object?>[],
+        };
       default:
         return <String, Object?>{};
     }
@@ -720,6 +777,23 @@ void main() {
         'ws-a',
       ]);
       expect(rpc.callCountFor('workspace/list'), 1);
+    },
+  );
+
+  test(
+    'primary endpoint 404 transparently falls back to legacy alias',
+    () async {
+      final rpc = HarnessFakeRpc();
+      // Simulate skills/list returning 404 (e.g. against an older DSH 0.1.1 API Proxy backend).
+      rpc.failNextCall(DshRpcEndpoints.skillsList, '404');
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final skills = await repository.listSkills('session-1');
+      expect(skills, hasLength(2));
+      expect(skills.first.name, 'generate-image');
+      expect(rpc.callCountFor(DshRpcEndpoints.skillsList), 1);
+      expect(rpc.callCountFor('skill/list'), 1);
     },
   );
 

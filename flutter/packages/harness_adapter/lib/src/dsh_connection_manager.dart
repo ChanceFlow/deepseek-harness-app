@@ -6,17 +6,17 @@ library;
 import 'dart:async';
 
 import 'package:domain/model/connection_state.dart';
-import 'package:network/dsh_exceptions.dart';
 import 'package:network/dsh_rpc_client.dart';
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/rpc_envelope.dart';
 
+import 'dsh_remote_invoker.dart';
+import 'rpc_map.dart';
 import 'state_stream.dart';
 import 'wire_json.dart';
 
 const String _remoteMuxPath = '/api/remote.mux';
 const String _eventsHostPath = '/api/events.host';
-const String _hostDescribe = 'host/describe';
 const Duration _streamOpenTimeout = Duration(milliseconds: 3000);
 
 /// Retry-time policy seam. The product uses randomized exponential backoff;
@@ -158,24 +158,11 @@ class DshConnectionManager {
     _pump(_eventsHostPath, hostOpened, failure, _hostFrames, generationSubs);
 
     try {
-      final result = await _rpcClient.call(
-        _hostDescribe,
-        _hostDescribe,
-        <String, Object?>{'args': <String, Object?>{}},
+      final invoker = DshRemoteInvoker(_rpcClient);
+      final value = await invoker.invoke(
+        DshRpcEndpoints.hostDescribe,
+        <String, Object?>{},
       );
-      if (!result.ok) {
-        throw DshBusinessException(
-          code: result.error?.code ?? 'internal',
-          message: result.error?.message ?? 'host/describe failed',
-        );
-      }
-      final value = result.value;
-      if (value == null) {
-        throw DshBusinessException(
-          code: 'bad-response',
-          message: 'host/describe missing value',
-        );
-      }
       final description = HostDescription(
         version: wireString(value, 'version') ?? '',
         cwd: wireString(value, 'cwd') ?? '',

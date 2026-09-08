@@ -206,18 +206,33 @@ final class ModelCatalogFailureWire {
 
 final class SessionModelsValueWire {
   SessionModelsValueWire.fromJson(JsonMap json)
-    : current = ModelSelectionWire.fromJson(_reqObject(json, 'current')),
+    : current = ModelSelectionWire.fromJson(
+        asJsonObject(json['current']) ??
+            asJsonObject(json['defaultSelection']) ??
+            const <String, Object?>{'provider': '', 'model': ''},
+      ),
       routable = wireBool(json, 'routable'),
-      groups = (asJsonArray(json['groups']) ?? const <Object?>[])
-          .map(asJsonObject)
-          .whereType<JsonMap>()
-          .map(ModelProviderGroupWire.fromJson)
-          .toList(),
-      failures = (asJsonArray(json['failures']) ?? const <Object?>[])
-          .map(asJsonObject)
-          .whereType<JsonMap>()
-          .map(ModelCatalogFailureWire.fromJson)
-          .toList();
+      groups =
+          (asJsonArray(json['groups'] ?? json['entries']) ?? const <Object?>[])
+              .map(asJsonObject)
+              .whereType<JsonMap>()
+              .map((entry) => asJsonObject(entry['group']) ?? entry)
+              .where((m) => m.containsKey('id') && m.containsKey('models'))
+              .map(ModelProviderGroupWire.fromJson)
+              .toList(),
+      failures =
+          (asJsonArray(json['failures'] ?? json['entries']) ??
+                  const <Object?>[])
+              .map(asJsonObject)
+              .whereType<JsonMap>()
+              .where(
+                (m) =>
+                    wireString(m, 'kind') == 'failure' ||
+                    m.containsKey('error'),
+              )
+              .map((m) => asJsonObject(m['failure']) ?? m)
+              .map(ModelCatalogFailureWire.fromJson)
+              .toList();
 
   final ModelSelectionWire current;
   final bool routable;
