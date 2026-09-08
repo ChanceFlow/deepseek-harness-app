@@ -67,12 +67,21 @@ void main() {
         final skills = await repository.listSkills(firstSession.id);
         expect(skills.every((skill) => skill.name.trim().isNotEmpty), isTrue);
       }
+      final nonBlank = sessions.where((s) => !s.blank).firstOrNull;
+      if (nonBlank != null) {
+        await repository.openSession(nonBlank.id);
+        final window = await repository
+            .observeTimelineWindow(nonBlank.id)
+            .first;
+        expect(
+          window.items,
+          isNotEmpty,
+          reason: 'Chat timeline items must load for non-blank session',
+        );
+      }
       final presets = await repository.listAgentPresets();
       expect(presets.entries.isNotEmpty, isTrue);
-      expect(
-        workspaces.isEmpty ? true : workspaces.first.path.trim().isNotEmpty,
-        isTrue,
-      );
+      expect(workspaces.isNotEmpty, isTrue);
     } finally {
       manager.stop();
     }

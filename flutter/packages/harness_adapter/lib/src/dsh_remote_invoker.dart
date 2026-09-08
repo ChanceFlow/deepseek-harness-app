@@ -154,17 +154,20 @@ final class DshRemoteInvoker {
           final fallbackArgs = _unwrapArgsForFallback(endpoint, rawArgs);
           for (final fallback in fallbacks) {
             try {
-              final JsonMap payloadToSend;
               if (fallback == DshRpcEndpoints.sessionPage) {
                 if (endpoint == DshRpcEndpoints.sessionHistory) {
-                  payloadToSend = <String, Object?>{
+                  final initialThrough =
+                      fallbackArgs['throughSeq'] ??
+                      fallbackArgs['beforeSeq'] ??
+                      999999999;
+                  final payload = <String, Object?>{
                     'args': <String, Object?>{
                       'request': <String, Object?>{
                         'address': <String, Object?>{
                           'kind': 'session',
                           'sessionId': fallbackArgs['sessionId'],
                         },
-                        'throughSeq': fallbackArgs['beforeSeq'] ?? 0,
+                        'throughSeq': initialThrough,
                         if (fallbackArgs['beforeSeq'] != null)
                           'beforeSeq': fallbackArgs['beforeSeq'],
                         if (fallbackArgs['maxMessages'] != null)
@@ -172,8 +175,41 @@ final class DshRemoteInvoker {
                       },
                     },
                   };
+                  var res = await _rpcClient.call(fallback, fallback, payload);
+                  if (!res.ok) {
+                    final msg = res.error?.message ?? '';
+                    final match = RegExp(r'past cursor (\d+)').firstMatch(msg);
+                    if (match != null) {
+                      final cursor = int.tryParse(match.group(1)!);
+                      if (cursor != null) {
+                        final retryPayload = <String, Object?>{
+                          'args': <String, Object?>{
+                            'request': <String, Object?>{
+                              'address': <String, Object?>{
+                                'kind': 'session',
+                                'sessionId': fallbackArgs['sessionId'],
+                              },
+                              'throughSeq': cursor,
+                              if (fallbackArgs['beforeSeq'] != null)
+                                'beforeSeq': fallbackArgs['beforeSeq'],
+                              if (fallbackArgs['maxMessages'] != null)
+                                'maxMessages': fallbackArgs['maxMessages'],
+                            },
+                          },
+                        };
+                        res = await _rpcClient.call(
+                          fallback,
+                          fallback,
+                          retryPayload,
+                        );
+                      }
+                    }
+                  }
+                  return res;
                 } else if (endpoint == DshRpcEndpoints.subagentsHistory) {
-                  payloadToSend = <String, Object?>{
+                  final initialThrough =
+                      fallbackArgs['throughSeq'] ?? 999999999;
+                  final payload = <String, Object?>{
                     'args': <String, Object?>{
                       'request': <String, Object?>{
                         'address': <String, Object?>{
@@ -182,18 +218,57 @@ final class DshRemoteInvoker {
                           'childSessionId': fallbackArgs['childSessionId'],
                           'mode': fallbackArgs['mode'] ?? 'continuable',
                         },
-                        'throughSeq': 0,
+                        'throughSeq': initialThrough,
                         'maxMessages': 50,
                       },
                     },
                   };
+                  var res = await _rpcClient.call(fallback, fallback, payload);
+                  if (!res.ok) {
+                    final msg = res.error?.message ?? '';
+                    final match = RegExp(r'past cursor (\d+)').firstMatch(msg);
+                    if (match != null) {
+                      final cursor = int.tryParse(match.group(1)!);
+                      if (cursor != null) {
+                        final retryPayload = <String, Object?>{
+                          'args': <String, Object?>{
+                            'request': <String, Object?>{
+                              'address': <String, Object?>{
+                                'kind': 'subagent',
+                                'parentSessionId':
+                                    fallbackArgs['parentSessionId'],
+                                'childSessionId':
+                                    fallbackArgs['childSessionId'],
+                                'mode': fallbackArgs['mode'] ?? 'continuable',
+                              },
+                              'throughSeq': cursor,
+                              'maxMessages': 50,
+                            },
+                          },
+                        };
+                        res = await _rpcClient.call(
+                          fallback,
+                          fallback,
+                          retryPayload,
+                        );
+                      }
+                    }
+                  }
+                  return res;
                 } else {
-                  payloadToSend = <String, Object?>{'args': fallbackArgs};
+                  return await _rpcClient.call(
+                    fallback,
+                    fallback,
+                    <String, Object?>{'args': fallbackArgs},
+                  );
                 }
               } else {
-                payloadToSend = <String, Object?>{'args': fallbackArgs};
+                return await _rpcClient.call(
+                  fallback,
+                  fallback,
+                  <String, Object?>{'args': fallbackArgs},
+                );
               }
-              return await _rpcClient.call(fallback, fallback, payloadToSend);
             } on DshTransportException catch (fe) {
               if (fe.message.contains('404')) continue;
               rethrow;
