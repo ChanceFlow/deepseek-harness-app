@@ -11,3 +11,10 @@ abstract class DshEventSocket {
   /// handshake signal.
   Stream<ServerRequest> connect(String path, {void Function()? onOpen});
 }
+
+/// Optional extension for sockets that can send upstream control frames
+/// (e.g. stream multiplexing over `/api/remote.mux`).
+abstract class DshWritableEventSocket implements DshEventSocket {
+  /// Sends one text message over the connected socket for [path].
+  void send(String path, String message);
+}

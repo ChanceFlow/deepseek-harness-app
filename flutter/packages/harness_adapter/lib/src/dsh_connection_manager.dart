@@ -4,6 +4,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:domain/model/connection_state.dart';
 import 'package:network/dsh_rpc_client.dart';
@@ -226,6 +227,18 @@ class DshConnectionManager {
     final stream = _eventSocket.connect(
       path,
       onOpen: () {
+        final socket = _eventSocket;
+        if (path == _remoteMuxPath && socket is DshWritableEventSocket) {
+          socket.send(
+            path,
+            jsonEncode(<String, Object?>{
+              'type': 'open',
+              'streamId': 'workspace-follow',
+              'endpoint': 'workspace/follow',
+              'payload': <String, Object?>{'args': <String, Object?>{}},
+            }),
+          );
+        }
         if (!opened.isCompleted) opened.complete();
       },
     );

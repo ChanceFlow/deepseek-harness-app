@@ -20,6 +20,7 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
   - `DshRemoteInvoker` decouples repository business logic from wire transport details, implementing transparent version fallback via `kDshEndpointFallbacks` when a 404 is encountered against an older API Proxy backend.
 - **Payload packaging & descriptor matching**:
   - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation, while unwrapping on fallback to legacy flat endpoints.
+  - `session/modelCatalog` takes no parameters in DSH 0.1.2; stripped legacy `sessionId` argument to avoid gateway descriptor rejection.
   - `session/page` replaces `session.history` in DSH 0.1.2; `DshRemoteInvoker` translates backwards-history requests to `session/page` with session/subagent address and `throughSeq` cursor.
   - `decodeGoalRefValue` parses top-level `{ id, revision }` from DSH 0.1.2 mutations (`edit`, `pause`, `resume`, `complete`, `clear`).
   - `AgentPresetListValueWire` treats `hasDocument` as optional (`wireBool` default false) matching DSH 0.1.2 `AgentPresetRoster`.
@@ -27,7 +28,10 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
   - `executeCommand` strips its ad-hoc manual `'args'` wrapper.
   - `dsh_connection_manager.dart` treats `/api/events.host` as optional and uses `DshRemoteInvoker.invokeOrNullOnNotFound` for `host/describe`, achieving readiness on DSH 0.1.2.
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
-- **Workspace listing 404 tolerance**: DSH 0.1.2 provides workspace state via the `workspace/follow` stream and mutation returns rather than a unary endpoint. `_loadWorkspaceListing` catches 404 responses gracefully so startup reconciliation and `refreshWorkspaces` complete quietly without raising transport errors, while mutations (`createWorkspace`, `renameWorkspace`, `deleteWorkspace`) apply their immediate result to local state.
+- **Workspace streaming and auto-grouping**:
+  - DSH 0.1.2 provides workspace state via the `workspace/follow` stream over `/api/remote.mux`. `DshConnectionManager` subscribes via `workspace-follow` stream id upon WebSocket connect; `HarnessRepositoryImpl` decodes the `baseline` and increment frames (`upsert`, `remove`, `order`, `archived`) to populate `_workspaces` and `_archivedSessionIds`.
+  - If workspaces are initially empty, `_inferWorkspacesFromSessionsIfEmpty` groups sessions by their `cwd` as an immediate local baseline, eliminating the blank/ungrouped session display.
+  - Unary `workspace/list` 404 is tolerated gracefully for legacy backends.
 - **WebSocket connection point**:
   - `dsh_connection_manager.dart` replaces `_eventsMuxPath = '/api/events.mux'` with `_remoteMuxPath = '/api/remote.mux'`.
   - All test fixtures and sockets across `network` and `harness_adapter` connect to `/api/remote.mux`.

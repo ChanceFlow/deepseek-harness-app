@@ -110,11 +110,25 @@ final class ServerRequest {
 
   static ServerRequest fromJson(Object? json) {
     final map = _asMap(json, 'ServerRequest');
+    final type = map['type'] as String? ?? 'server-request';
+    final rpcId = (map['rpcId'] ?? map['streamId'] ?? '') as String;
+    final method = (map['method'] ?? map['endpoint'] ?? type) as String;
+    final payloadRaw = map['payload'] ?? map['value'];
+    final JsonMap payloadMap;
+    if (payloadRaw is Map<String, Object?>) {
+      payloadMap = payloadRaw;
+    } else if (payloadRaw is Map) {
+      payloadMap = payloadRaw.cast<String, Object?>();
+    } else if (payloadRaw != null) {
+      payloadMap = <String, Object?>{'value': payloadRaw};
+    } else {
+      payloadMap = const <String, Object?>{};
+    }
     return ServerRequest(
-      type: map['type'] as String? ?? 'server-request',
-      rpcId: map['rpcId'] as String,
-      method: map['method'] as String,
-      payload: _asMap(map['payload'], 'ServerRequest.payload'),
+      type: type,
+      rpcId: rpcId,
+      method: method,
+      payload: payloadMap,
     );
   }
 

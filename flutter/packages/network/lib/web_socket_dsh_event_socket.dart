@@ -9,7 +9,7 @@ import 'dsh_event_socket.dart';
 import 'dsh_exceptions.dart';
 import 'rpc_envelope.dart';
 
-final class WebSocketDshEventSocket implements DshEventSocket {
+final class WebSocketDshEventSocket implements DshWritableEventSocket {
   WebSocketDshEventSocket(
     this._baseUrl, {
     this.compression = CompressionOptions.compressionDefault,
@@ -20,6 +20,12 @@ final class WebSocketDshEventSocket implements DshEventSocket {
   /// permessage-deflate offer sent in the handshake; the server decides
   /// whether it negotiates.
   final CompressionOptions compression;
+  final Map<String, WebSocket> _sockets = <String, WebSocket>{};
+
+  @override
+  void send(String path, String message) {
+    _sockets[path]?.add(message);
+  }
 
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
@@ -44,6 +50,7 @@ final class WebSocketDshEventSocket implements DshEventSocket {
             await webSocket!.close();
             return;
           }
+          _sockets[path] = webSocket!;
           onOpen?.call();
           webSocketSub = webSocket!.listen(
             (frame) {
@@ -86,6 +93,7 @@ final class WebSocketDshEventSocket implements DshEventSocket {
       },
       onCancel: () async {
         cancelled = true;
+        _sockets.remove(path);
         await webSocketSub?.cancel();
         await _closeQuietly(webSocket);
       },
