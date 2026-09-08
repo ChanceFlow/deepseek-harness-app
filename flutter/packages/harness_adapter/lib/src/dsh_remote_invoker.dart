@@ -71,8 +71,17 @@ final class DshRemoteInvoker {
       return await _rpcClient.call(endpoint, endpoint, primaryWrapped);
     } on DshTransportException catch (e) {
       if (e.message.contains('404')) {
-        final fallbacks = kDshEndpointFallbacks[endpoint];
-        if (fallbacks != null) {
+        final explicitFallbacks = kDshEndpointFallbacks[endpoint];
+        final dotFallback = endpoint.contains('/')
+            ? endpoint.replaceAll('/', '.')
+            : null;
+        final fallbacks = <String>[
+          ...?explicitFallbacks,
+          if (dotFallback != null &&
+              !(explicitFallbacks?.contains(dotFallback) ?? false))
+            dotFallback,
+        ];
+        if (fallbacks.isNotEmpty) {
           final fallbackArgs = _unwrapArgsForFallback(rawArgs);
           final fallbackWrapped = <String, Object?>{'args': fallbackArgs};
           for (final fallback in fallbacks) {
