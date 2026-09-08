@@ -53,10 +53,10 @@ import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import 'todo_panel.dart';
+import 'tool_group_summary.dart';
 import 'tool_row_model.dart';
 import 'turn_status_row.dart';
 import '../theme/theme.dart';
-import '../shared/state_dot.dart';
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
@@ -1779,7 +1779,11 @@ class MessageRow extends StatelessWidget {
       children: [
         if (message.reasoning case final String reasoning
             when reasoning.isNotEmpty)
-          ReasoningRow(text: reasoning, running: message.streaming),
+          ReasoningRow(
+            text: reasoning,
+            running: message.streaming,
+            elapsedDuration: message.reasoningDuration,
+          ),
         if (message.text.isNotEmpty) MarkdownText(text: message.text),
         for (final ref in message.images)
           AttachmentImageRow(
@@ -2261,55 +2265,14 @@ class _ToolGroupRowState extends State<ToolGroupRow>
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final calls = widget.group.calls;
-    final isZh = l10n.localeName.startsWith('zh');
 
-    var failed = 0;
-    var running = 0;
-    final countByName = <String, int>{};
-    for (final call in calls) {
-      countByName[call.name] = (countByName[call.name] ?? 0) + 1;
-      if (call.status == ToolRunStatus.failed) failed++;
-      if (call.status == ToolRunStatus.running) running++;
-    }
-
-    final names = countByName.keys.toList()..sort();
-    final toolSummary = names.map((n) => '$n ${countByName[n]}').join(' · ');
-
-    final String title;
-    final String subtitle;
-
-    final runningCall = calls
-        .where((c) => c.status == ToolRunStatus.running)
-        .firstOrNull;
-    if (runningCall != null) {
-      final runningModel = deriveToolRowModel(runningCall, l10n);
-      final activeAction = switch (runningCall.name) {
-        'read' => isZh ? '正在读取' : 'Reading',
-        'write' => isZh ? '正在写入' : 'Writing',
-        'edit' => isZh ? '正在编辑' : 'Editing',
-        'bash' => isZh ? '正在运行 bash' : 'Running bash',
-        _ =>
-          isZh ? '正在执行 ${runningModel.title}' : 'Running ${runningModel.title}',
-      };
-      final target = runningModel.summary.isNotEmpty
-          ? runningModel.summary
-          : runningModel.title;
-      title = calls.length > 1
-          ? (isZh
-                ? '执行中 (${calls.length} 步)'
-                : 'Working (${calls.length} steps)')
-          : (isZh ? '执行中' : 'Working');
-      subtitle = '$activeAction: $target';
-    } else {
-      title = isZh ? '已执行 ${calls.length} 个操作' : '${calls.length} operations';
-      subtitle = toolSummary.isNotEmpty ? toolSummary : (isZh ? '完成' : 'Done');
-    }
-
-    final state = failed > 0
-        ? StateDotState.error
-        : running > 0
-        ? StateDotState.ongoing
-        : StateDotState.done;
+    final summary = deriveToolGroupSummary(calls, l10n);
+    final title = summary.title;
+    final subtitle = summary.subtitle;
+    final running = summary.runningCalls;
+    final failed = summary.failedCalls;
+    final showSubtitle =
+        running > 0 || (title.contains('operation') || title.contains('操作'));
 
     final settledCount = calls.length - running - failed;
     final leadingWidget = Row(
@@ -2320,32 +2283,20 @@ class _ToolGroupRowState extends State<ToolGroupRow>
         if (settledCount > 0 && running > 0)
           Icon(Icons.check, size: 14, color: scheme.success),
         if (running == 0)
-          switch (state) {
-            StateDotState.error => Icon(
-              Icons.close,
-              size: 14,
-              color: scheme.error,
-            ),
-            StateDotState.done => Icon(
-              Icons.check,
-              size: 14,
-              color: scheme.success,
-            ),
-            StateDotState.warning => Icon(
-              Icons.warning_amber_rounded,
-              size: 14,
-              color: scheme.warning,
-            ),
-            _ => Icon(Icons.check, size: 14, color: scheme.success),
-          },
+          if (failed > 0)
+            Icon(Icons.close, size: 14, color: scheme.error)
+          else if (summary.filesExplored > 0 || summary.searches > 0)
+            Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant)
+          else
+            Icon(Icons.check, size: 14, color: scheme.success),
       ],
     );
 
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -2361,7 +2312,7 @@ class _ToolGroupRowState extends State<ToolGroupRow>
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 8,
+                  vertical: 7,
                 ),
                 child: Row(
                   children: [
@@ -2374,17 +2325,23 @@ class _ToolGroupRowState extends State<ToolGroupRow>
                         color: scheme.onSurface,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                    if (showSubtitle &&
+                        subtitle.isNotEmpty &&
+                        subtitle != title) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
+                    ] else ...[
+                      const Spacer(),
+                    ],
                     if (failed > 0) ...[
                       const SizedBox(width: 4),
                       Text(
@@ -2407,21 +2364,35 @@ class _ToolGroupRowState extends State<ToolGroupRow>
             ),
           ),
           if (_expanded) ...[
-            Container(height: 1, color: scheme.outlineVariant),
+            Container(
+              height: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.4),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
-              child: Column(
-                children: [
-                  for (final call in calls)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: ToolCallRow(
-                        key: ValueKey(timelineKey(call)),
-                        call: call,
-                        expansion: widget.expansion,
-                      ),
+              padding: const EdgeInsets.fromLTRB(10, 6, 8, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: scheme.outlineVariant.withValues(alpha: 0.4),
+                      width: 1.2,
                     ),
-                ],
+                  ),
+                ),
+                padding: const EdgeInsets.only(left: 8),
+                child: Column(
+                  children: [
+                    for (final call in calls)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: ToolCallRow(
+                          key: ValueKey(timelineKey(call)),
+                          call: call,
+                          expansion: widget.expansion,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],

@@ -356,6 +356,17 @@
     "description": "Tool row title for the todo_write tool."
   },
   "toolTodoPlanCompleted": "{done}/{total} completed",
+  "thoughtDuration": "Thought {duration}",
+  "thinkingDuration": "Thinking · {duration}",
+  "exploredFilesAndSearches": "{files, plural, =1{Explored 1 file} other{Explored {files} files}}, {searches, plural, =1{1 search} other{{searches} searches}}",
+  "exploredFiles": "{count, plural, =1{Explored 1 file} other{Explored {count} files}}",
+  "exploringFiles": "{count, plural, =1{Exploring 1 file} other{Exploring {count} files}}",
+  "searchedCount": "{count, plural, =1{1 search} other{{count} searches}}",
+  "modifiedFiles": "{count, plural, =1{Modified 1 file} other{Modified {count} files}}",
+  "ranCommands": "{count, plural, =1{Ran 1 command} other{Ran {count} commands}}",
+  "runningCommands": "{count, plural, =1{Running 1 command} other{Running {count} commands}}",
+  "toolGroupOperations": "{count, plural, =1{1 operation} other{{count} operations}}",
+  "toolWorkingSteps": "Working ({count, plural, =1{1 step} other{{count} steps}})",
   "statsTurnsSteps": "{turns} turns · {steps} steps",
   "statsLlmDuration": "LLM {duration}",
   "statsToolDuration": "Tool call {duration}",
@@ -842,6 +853,99 @@
         "type": "int"
       },
       "total": {
+        "type": "int"
+      }
+    }
+  },
+  "@thoughtDuration": {
+    "description": "Collapsed thought block header with completed duration.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "10s"
+      }
+    }
+  },
+  "@thinkingDuration": {
+    "description": "Active in-flight thought header with ticking duration.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "3s"
+      }
+    }
+  },
+  "@exploredFilesAndSearches": {
+    "description": "Collapsed action summary when both files were explored and searches were conducted.",
+    "placeholders": {
+      "files": {
+        "type": "int"
+      },
+      "searches": {
+        "type": "int"
+      }
+    }
+  },
+  "@exploredFiles": {
+    "description": "Collapsed action summary for explored files.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@exploringFiles": {
+    "description": "In-flight action summary for exploring files.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@searchedCount": {
+    "description": "Action summary for search operations.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@modifiedFiles": {
+    "description": "Action summary for file edits/writes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@ranCommands": {
+    "description": "Action summary for executed terminal commands.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@runningCommands": {
+    "description": "In-flight action summary for executing terminal commands.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@toolGroupOperations": {
+    "description": "Fallback action summary count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@toolWorkingSteps": {
+    "description": "In-flight multi-step action header.",
+    "placeholders": {
+      "count": {
         "type": "int"
       }
     }

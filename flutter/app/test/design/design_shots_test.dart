@@ -89,6 +89,29 @@ final class DesignShot {
 }
 
 final List<DesignShot> shots = <DesignShot>[
+  DesignShot(name: 'timeline-folding', state: timelineFoldingStateEn()),
+  DesignShot(
+    name: 'timeline-folding-expanded',
+    state: timelineFoldingStateEn(),
+    act: (tester) async {
+      await tester.tap(find.text('Explored 3 files, 2 searches'));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'timeline-folding-zh',
+    state: timelineFoldingStateZh(),
+    locale: const Locale('zh'),
+  ),
+  DesignShot(
+    name: 'timeline-folding-expanded-zh',
+    state: timelineFoldingStateZh(),
+    locale: const Locale('zh'),
+    act: (tester) async {
+      await tester.tap(find.text('浏览了 3 个文件，2 次搜索'));
+      await settle(tester);
+    },
+  ),
   DesignShot(name: 'transcript', state: busyState()),
   DesignShot(name: 'prose', state: proseState()),
   DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),

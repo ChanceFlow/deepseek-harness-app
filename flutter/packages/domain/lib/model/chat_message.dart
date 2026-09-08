@@ -15,6 +15,7 @@ final class ChatMessage {
     required this.role,
     required this.text,
     this.reasoning,
+    this.reasoningDuration,
     this.streaming = false,
     this.createdAtEpochMs = 0,
     this.images = const <AttachmentRef>[],
@@ -26,6 +27,7 @@ final class ChatMessage {
   final MessageRole role;
   final String text;
   final String? reasoning;
+  final Duration? reasoningDuration;
   final bool streaming;
   final int createdAtEpochMs;
 
@@ -46,6 +48,7 @@ final class ChatMessage {
       other.role == role &&
       other.text == text &&
       other.reasoning == reasoning &&
+      other.reasoningDuration == reasoningDuration &&
       other.streaming == streaming &&
       other.createdAtEpochMs == createdAtEpochMs &&
       other.seq == seq &&
@@ -58,6 +61,7 @@ final class ChatMessage {
     role,
     text,
     reasoning,
+    reasoningDuration,
     streaming,
     createdAtEpochMs,
     Object.hashAll(images),

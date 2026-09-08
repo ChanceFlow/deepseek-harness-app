@@ -863,3 +863,225 @@ ChatUiState multiBackendDrawerState() => const ChatUiState(
   selectedSessionId: 's1',
   timeline: _conversation,
 );
+
+ChatUiState timelineFoldingStateZh() {
+  final items = <TimelineItem>[
+    const TimelineMessage(
+      ChatMessage(
+        id: 'u1',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: '看看这个项目',
+        createdAtEpochMs: kNow,
+        seq: 1,
+      ),
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a1',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        reasoning: '先分析仓库结构和核心架构设计文档，梳理客户端与服务端之间的通讯契约和主要模块划分。',
+        reasoningDuration: Duration(seconds: 10),
+        text: '先从仓库结构和核心文档入手，摸清这个项目是做什么的、模块怎么拆。',
+        createdAtEpochMs: kNow + 1000,
+        seq: 2,
+      ),
+    ),
+    const TimelineToolCall(
+      id: 'tf1_1',
+      name: 'read',
+      arguments: '{"file_path":"AGENTS.md"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_2',
+      name: 'read',
+      arguments: '{"file_path":"README.md"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_3',
+      name: 'read',
+      arguments: '{"file_path":"pubspec.yaml"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_4',
+      name: 'grep',
+      arguments: '{"pattern":"TimelineItem"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_5',
+      name: 'glob',
+      arguments: '{"pattern":"lib/**/*.dart"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a2',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: '正在读各模块入口文档和目录，把产品、客户端、生成链路和基础设施串起来。',
+        createdAtEpochMs: kNow + 2000,
+        seq: 3,
+      ),
+    ),
+    for (var i = 1; i <= 6; i++)
+      TimelineToolCall(
+        id: 'tf2_$i',
+        name: 'read',
+        arguments: '{"file_path":"module_$i.dart"}',
+        status: ToolRunStatus.completed,
+      ),
+    const TimelineToolCall(
+      id: 'tf2_search',
+      name: 'grep',
+      arguments: '{"pattern":"pipeline"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a3',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: '继续补齐生成链路、后端和客户端的关键细节，再给你一份整体图。',
+        createdAtEpochMs: kNow + 3000,
+        seq: 4,
+      ),
+    ),
+    for (var i = 1; i <= 17; i++)
+      TimelineToolCall(
+        id: 'tf3_$i',
+        name: 'read',
+        arguments: '{"file_path":"src/layer_$i.dart"}',
+        status: ToolRunStatus.completed,
+      ),
+    for (var i = 1; i <= 3; i++)
+      TimelineToolCall(
+        id: 'tf3_search_$i',
+        name: 'grep',
+        arguments: '{"pattern":"query_$i"}',
+        status: ToolRunStatus.completed,
+      ),
+  ];
+
+  return ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: items,
+  );
+}
+
+ChatUiState timelineFoldingStateEn() {
+  final items = <TimelineItem>[
+    const TimelineMessage(
+      ChatMessage(
+        id: 'u1',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: 'Analyze this project structure',
+        createdAtEpochMs: kNow,
+        seq: 1,
+      ),
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a1',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        reasoning: 'Inspect repository layout and core architectural documentation to understand module boundaries.',
+        reasoningDuration: Duration(seconds: 10),
+        text: 'Starting with the repository structure and core documentation to map out modules and boundaries.',
+        createdAtEpochMs: kNow + 1000,
+        seq: 2,
+      ),
+    ),
+    const TimelineToolCall(
+      id: 'tf1_1',
+      name: 'read',
+      arguments: '{"file_path":"AGENTS.md"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_2',
+      name: 'read',
+      arguments: '{"file_path":"README.md"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_3',
+      name: 'read',
+      arguments: '{"file_path":"pubspec.yaml"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_4',
+      name: 'grep',
+      arguments: '{"pattern":"TimelineItem"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineToolCall(
+      id: 'tf1_5',
+      name: 'glob',
+      arguments: '{"pattern":"lib/**/*.dart"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a2',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: 'Reading entry docs and directories to connect product features, client runtime, and wire protocol.',
+        createdAtEpochMs: kNow + 2000,
+        seq: 3,
+      ),
+    ),
+    for (var i = 1; i <= 6; i++)
+      TimelineToolCall(
+        id: 'tf2_$i',
+        name: 'read',
+        arguments: '{"file_path":"module_$i.dart"}',
+        status: ToolRunStatus.completed,
+      ),
+    const TimelineToolCall(
+      id: 'tf2_search',
+      name: 'grep',
+      arguments: '{"pattern":"pipeline"}',
+      status: ToolRunStatus.completed,
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'a3',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: 'Fleshing out generation pipeline and backend details to synthesize an end-to-end architecture overview.',
+        createdAtEpochMs: kNow + 3000,
+        seq: 4,
+      ),
+    ),
+    for (var i = 1; i <= 17; i++)
+      TimelineToolCall(
+        id: 'tf3_$i',
+        name: 'read',
+        arguments: '{"file_path":"src/layer_$i.dart"}',
+        status: ToolRunStatus.completed,
+      ),
+    for (var i = 1; i <= 3; i++)
+      TimelineToolCall(
+        id: 'tf3_search_$i',
+        name: 'grep',
+        arguments: '{"pattern":"query_$i"}',
+        status: ToolRunStatus.completed,
+      ),
+  ];
+
+  return ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: items,
+  );
+}
+
+ChatUiState timelineFoldingState() => timelineFoldingStateEn();

@@ -365,6 +365,61 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String thoughtDuration(String duration) {
+    return '已思考 $duration';
+  }
+
+  @override
+  String thinkingDuration(String duration) {
+    return '思考中 · $duration';
+  }
+
+  @override
+  String exploredFilesAndSearches(int files, int searches) {
+    return '浏览了 $files 个文件，$searches 次搜索';
+  }
+
+  @override
+  String exploredFiles(int count) {
+    return '浏览了 $count 个文件';
+  }
+
+  @override
+  String exploringFiles(int count) {
+    return '正在浏览 $count 个文件';
+  }
+
+  @override
+  String searchedCount(int count) {
+    return '$count 次搜索';
+  }
+
+  @override
+  String modifiedFiles(int count) {
+    return '修改了 $count 个文件';
+  }
+
+  @override
+  String ranCommands(int count) {
+    return '运行了 $count 条命令';
+  }
+
+  @override
+  String runningCommands(int count) {
+    return '正在运行 $count 条命令';
+  }
+
+  @override
+  String toolGroupOperations(int count) {
+    return '$count 个操作';
+  }
+
+  @override
+  String toolWorkingSteps(int count) {
+    return '执行中 ($count 步)';
+  }
+
+  @override
   String statsTurnsSteps(int steps, int turns) {
     return '$turns 轮 · $steps 步';
   }

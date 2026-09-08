@@ -710,6 +710,72 @@ abstract class AppLocalizations {
   /// **'{done}/{total} completed'**
   String toolTodoPlanCompleted(int done, int total);
 
+  /// Collapsed thought block header with completed duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Thought {duration}'**
+  String thoughtDuration(String duration);
+
+  /// Active in-flight thought header with ticking duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking · {duration}'**
+  String thinkingDuration(String duration);
+
+  /// Collapsed action summary when both files were explored and searches were conducted.
+  ///
+  /// In en, this message translates to:
+  /// **'{files, plural, =1{Explored 1 file} other{Explored {files} files}}, {searches, plural, =1{1 search} other{{searches} searches}}'**
+  String exploredFilesAndSearches(int files, int searches);
+
+  /// Collapsed action summary for explored files.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Explored 1 file} other{Explored {count} files}}'**
+  String exploredFiles(int count);
+
+  /// In-flight action summary for exploring files.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Exploring 1 file} other{Exploring {count} files}}'**
+  String exploringFiles(int count);
+
+  /// Action summary for search operations.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 search} other{{count} searches}}'**
+  String searchedCount(int count);
+
+  /// Action summary for file edits/writes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Modified 1 file} other{Modified {count} files}}'**
+  String modifiedFiles(int count);
+
+  /// Action summary for executed terminal commands.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Ran 1 command} other{Ran {count} commands}}'**
+  String ranCommands(int count);
+
+  /// In-flight action summary for executing terminal commands.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Running 1 command} other{Running {count} commands}}'**
+  String runningCommands(int count);
+
+  /// Fallback action summary count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation} other{{count} operations}}'**
+  String toolGroupOperations(int count);
+
+  /// In-flight multi-step action header.
+  ///
+  /// In en, this message translates to:
+  /// **'Working ({count, plural, =1{1 step} other{{count} steps}})'**
+  String toolWorkingSteps(int count);
+
   /// Localized screen copy.
   ///
   /// In en, this message translates to:

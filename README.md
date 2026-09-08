@@ -75,12 +75,16 @@ box, a tunneled remote dsh.
 
 ## Feature surface
 
-- **Chat** — session list (search, create-in-workspace, rename,
-  archive, fork, running indicator), flat timeline and ledger-style
-  outline with collapsible turn groups, markdown rendering (fenced
-  code, headings, lists, tables, clickable links), queue rows,
-  approvals, questions, plan-review cards, background jobs, image
-  attachments, skill candidates.
+- **Chat & Agent execution timeline** — Cursor Composer and Windsurf
+  Cascade-style activity timeline: collapsible thought blocks with duration
+  ("Thought 10s"), smart semantic tool-call aggregation ("Explored 3 files,
+  2 searches"), live in-flight activity dots and sweeps, tree-line step
+  disclosure with arguments and results, session list (search,
+  create-in-workspace, rename, archive, fork, running indicator), ledger-style
+  outline with collapsible turn groups, markdown rendering (fenced code,
+  headings, lists, tables, clickable links), queue rows, approvals,
+  questions, plan-review cards, background jobs, image attachments, skill
+  candidates.
 - **Voice input & on-device ASR** — 100% client-side speech recognition
   (streaming Zipformer, offline SenseVoice and Fun-ASR-Nano) with live
   waveform dock, timer, and direct transcription stream into the

@@ -14,7 +14,7 @@
 管理工作区、模型、目标和子代理——支持英文和简体中文。
 
 <p align="center">
-  <img src="docs/screenshots/chat.png" width="210" alt="聊天时间线">
+  <img src="docs/screenshots/chat_zh.png" width="210" alt="聊天时间线">
   <img src="docs/screenshots/voice_zh.png" width="210" alt="端侧语音输入">
   <img src="docs/screenshots/sessions.png" width="210" alt="会话抽屉">
   <img src="docs/screenshots/markdown.png" width="210" alt="Markdown 渲染">
@@ -67,7 +67,10 @@ URL 为种子，所以在你添加第二台主机（笔记本、构建机、隧�
 
 ## 功能一览
 
-- **聊天** — 会话列表（搜索、在工作区内创建、重命名、归档、分叉、运行中指示）、
+- **聊天与 Agent 执行时间轴** — 对齐 Cursor Composer 与 Windsurf Cascade
+  风格的活动时间轴：带耗时的大模型思考块折叠（“已思考 10秒”）、语义化工具调用聚合
+  （“浏览了 3 个文件，2 次搜索”）、实时执行脉冲点与扫光动效、树形步骤展开及入参与
+  结果下钻、会话列表（搜索、在工作区内创建、重命名、归档、分叉、运行中指示）、
   扁平时间线与账本式大纲（可折叠回合分组、压缩标记）、Markdown 渲染（围栏代码、
   标题、列表、表格、可点击链接）、队列行、审批、提问、计划审阅卡片、后台任务、
   图片附件、技能候选。
