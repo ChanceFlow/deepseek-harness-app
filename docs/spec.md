@@ -41,8 +41,10 @@ Content-Type: application/json
 {
   "type": "client-request",
   "rpcId": "uuid",
-  "method": "session.prompt",
-  "payload": {}
+  "method": "session/prompt",
+  "payload": {
+    "args": {}
+  }
 }
 ```
 
@@ -67,7 +69,7 @@ whose `code` is machine-readable and whose `details` is code-specific.
 Two downlink-only WebSocket streams are required:
 
 ```text
-/api/events.mux
+/api/remote.mux
 /api/events.host
 ```
 
@@ -113,8 +115,8 @@ landed.
 
 A connection generation is healthy only when all three readiness facts hold:
 
-1. `host.describe` RPC succeeded.
-2. `/api/events.mux` WebSocket fired `onOpen`.
+1. `host/describe` RPC succeeded.
+2. `/api/remote.mux` WebSocket fired `onOpen`.
 3. `/api/events.host` WebSocket fired `onOpen`.
 
 After readiness, the client publishes `ConnectionPhase.CONNECTED`.
@@ -127,9 +129,9 @@ On any stream loss or handshake failure:
 
 After a new generation connects, the repository:
 
-1. Refetches `session.list`.
+1. Refetches `session/list`.
 2. Marks all open session stores stale.
-3. Refetches `session.history` for each open session.
+3. Refetches `session/history` for each open session.
 4. Replays buffered mux frames that arrived while history was loading.
 
 The mux-open burst flows before the `CONNECTED` publish, so no live mirror is

@@ -45,50 +45,50 @@ import 'wire_json.dart';
 /// frame cadence (the reference web client's animation-frame flush).
 const Duration kStreamPublishWindow = Duration(milliseconds: 16);
 
-const String _sessionList = 'session.list';
-const String _sessionCreate = 'session.create';
-const String _sessionHistory = 'session.history';
-const String _sessionPrompt = 'session.prompt';
-const String _sessionAttachment = 'session.attachment';
-const String _sessionCancel = 'session.cancel';
-const String _sessionModels = 'session.models';
-const String _sessionSelectModel = 'session.selectModel';
-const String _sessionSearch = 'session.search';
-const String _sessionRename = 'session.rename';
-const String _sessionFork = 'session.fork';
-const String _sessionUpdateQueue = 'session.updateQueue';
-const String _workspaceList = 'workspace.list';
-const String _workspaceCreate = 'workspace.create';
-const String _workspaceRename = 'workspace.rename';
-const String _workspaceDelete = 'workspace.delete';
-const String _workspaceInsertBefore = 'workspace.insertBefore';
-const String _workspaceInsertSessionBefore = 'workspace.insertSessionBefore';
-const String _workspaceArchiveSession = 'workspace.archiveSession';
-const String _hostListDirectory = 'host.listDirectory';
-const String _hostCreateDirectory = 'host.createDirectory';
-const String _settingsDescribe = 'settings.describe';
-const String _settingsUpdate = 'settings.update';
-const String _settingsReplace = 'settings.replace';
-const String _settingsMutate = 'settings.mutate';
-const String _credentialsDescribe = 'credentials.describe';
-const String _credentialsSet = 'credentials.set';
-const String _credentialsUnset = 'credentials.unset';
+const String _sessionList = 'session/list';
+const String _sessionCreate = 'session/create';
+const String _sessionHistory = 'session/history';
+const String _sessionPrompt = 'session/prompt';
+const String _sessionAttachment = 'session/attachment';
+const String _sessionCancel = 'session/cancel';
+const String _sessionModels = 'session/models';
+const String _sessionSelectModel = 'session/selectModel';
+const String _sessionSearch = 'session/search';
+const String _sessionRename = 'session/rename';
+const String _sessionFork = 'session/fork';
+const String _sessionUpdateQueue = 'session/updateQueue';
+const String _workspaceList = 'workspace/list';
+const String _workspaceCreate = 'workspace/create';
+const String _workspaceRename = 'workspace/rename';
+const String _workspaceDelete = 'workspace/delete';
+const String _workspaceInsertBefore = 'workspace/insertBefore';
+const String _workspaceInsertSessionBefore = 'workspace/insertSessionBefore';
+const String _workspaceArchiveSession = 'workspace/archiveSession';
+const String _hostListDirectory = 'host/listDirectory';
+const String _hostCreateDirectory = 'host/createDirectory';
+const String _settingsDescribe = 'settings/describe';
+const String _settingsUpdate = 'settings/update';
+const String _settingsReplace = 'settings/replace';
+const String _settingsMutate = 'settings/mutate';
+const String _credentialsDescribe = 'credentials/describe';
+const String _credentialsSet = 'credentials/set';
+const String _credentialsUnset = 'credentials/unset';
 const int _credentialsMaxRefs = 64;
-const String _skillList = 'skill.list';
+const String _skillList = 'skill/list';
 const int _historyPageMessages = 50;
-const String _subagentList = 'subagent.list';
-const String _subagentInterrupt = 'subagent.interrupt';
-const String _subagentHistory = 'subagent.history';
-const String _subagentPrompt = 'subagent.prompt';
-const String _goalCreate = 'goal.create';
-const String _goalEdit = 'goal.edit';
-const String _goalPause = 'goal.pause';
-const String _goalResume = 'goal.resume';
-const String _goalComplete = 'goal.complete';
-const String _goalClear = 'goal.clear';
+const String _subagentList = 'subagent/list';
+const String _subagentInterrupt = 'subagent/interrupt';
+const String _subagentHistory = 'subagent/history';
+const String _subagentPrompt = 'subagent/prompt';
+const String _goalCreate = 'goal/create';
+const String _goalEdit = 'goal/edit';
+const String _goalPause = 'goal/pause';
+const String _goalResume = 'goal/resume';
+const String _goalComplete = 'goal/complete';
+const String _goalClear = 'goal/clear';
 const String _commandsExecute = 'commands/execute';
-const String _agentPresetList = 'agentPreset.list';
-const String _agentPresetSelect = 'agentPreset.select';
+const String _agentPresetList = 'agentPreset/list';
+const String _agentPresetSelect = 'agentPreset/select';
 
 final class _HistoryPage {
   _HistoryPage({required this.events, required this.hasMore});
@@ -229,7 +229,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     ).valueOrThrow();
     final created = wireString(value, 'sessionId');
     if (created == null) {
-      throw const FormatException('session.create missing sessionId');
+      throw const FormatException('session/create missing sessionId');
     }
     _sessions.value = await _loadSessions();
     return SessionSummary(id: created, blank: true);
@@ -519,8 +519,10 @@ class HarnessRepositoryImpl implements ChatRepository {
     // session id — sessions are agent-backed), the complete line, and
     // the base64-encoded composer images in submission order (the host
     // admission enforces the command's image-acceptance flag).
-    final result = await _call(_commandsExecute, _commandsExecute, {
-      'args': <String, Object?>{
+    final result = await _call(
+      _commandsExecute,
+      _commandsExecute,
+      <String, Object?>{
         'agentId': sessionId,
         'line': line,
         'images': <Object?>[
@@ -532,7 +534,7 @@ class HarnessRepositoryImpl implements ChatRepository {
             },
         ],
       },
-    });
+    );
     if (!result.ok) {
       final failure = result.error;
       throw DshBusinessException(
@@ -668,7 +670,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     }).valueOrThrow();
     final renamed = wireString(result, 'title');
     if (renamed == null) {
-      throw const FormatException('session.rename missing title');
+      throw const FormatException('session/rename missing title');
     }
     _sessions.value = await _loadSessions();
     return renamed;
@@ -682,7 +684,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     }).valueOrThrow();
     final forked = wireString(result, 'sessionId');
     if (forked == null) {
-      throw const FormatException('session.fork missing sessionId');
+      throw const FormatException('session/fork missing sessionId');
     }
     _sessions.value = await _loadSessions();
     return SessionSummary(id: forked, blank: false);
@@ -1037,7 +1039,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     }).valueOrThrow();
     final selectedObj = asJsonObject(result['selected']);
     if (selectedObj == null) {
-      throw const FormatException('session.selectModel missing selected');
+      throw const FormatException('session/selectModel missing selected');
     }
     final selected = ModelSelectionWire.fromJson(selectedObj);
     return ModelSelection(
@@ -1585,7 +1587,10 @@ class HarnessRepositoryImpl implements ChatRepository {
   // -----------------------------------------------------------------------
 
   Future<RpcResult> _call(String endpoint, String method, JsonMap payload) {
-    return _rpcClient.call(endpoint, method, payload);
+    final wrapped = payload.containsKey('args') && payload.length == 1
+        ? payload
+        : <String, Object?>{'args': payload};
+    return _rpcClient.call(endpoint, method, wrapped);
   }
 
   Future<List<SessionSummary>> _loadSessions() async {

@@ -45,7 +45,7 @@ class _FakeRpc implements DshRpcClient {
     String method,
     Map<String, Object?> payload,
   ) async {
-    if (endpoint == 'host.describe') {
+    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
       return RpcResult(
         ok: true,
         value: <String, Object?>{
@@ -58,7 +58,7 @@ class _FakeRpc implements DshRpcClient {
         },
       );
     }
-    if (endpoint == 'session.list') {
+    if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(
         ok: true,
         value: <String, Object?>{'sessions': <Object?>[]},

@@ -49,7 +49,7 @@ void main() {
     final opened = Completer<void>();
     final frames = <ServerRequest>[];
     final subscription = socket
-        .connect('/api/events.mux', onOpen: opened.complete)
+        .connect('/api/remote.mux', onOpen: opened.complete)
         .listen(frames.add);
     addTearDown(() => subscription.cancel());
 
@@ -90,7 +90,7 @@ void main() {
     );
     final opened = Completer<void>();
     final subscription = socket
-        .connect('/api/events.mux', onOpen: opened.complete)
+        .connect('/api/remote.mux', onOpen: opened.complete)
         .listen((_) {});
     addTearDown(() => subscription.cancel());
     await opened.future;
@@ -126,7 +126,7 @@ void main() {
     final socket = WebSocketDshEventSocket(
       Uri.parse('http://127.0.0.1:${server.port}'),
     );
-    final frames = await socket.connect('/api/events.mux').toList();
+    final frames = await socket.connect('/api/remote.mux').toList();
     expect(frames, hasLength(1));
     expect(frames.single.payload['body'], contains('chunk=xxx'));
     expect(
@@ -141,7 +141,7 @@ void main() {
     final socket = WebSocketDshEventSocket(
       Uri.parse('http://127.0.0.1:${server.port}'),
     );
-    final stream = socket.connect('/api/events.mux');
+    final stream = socket.connect('/api/remote.mux');
     final expectation = expectLater(
       stream,
       emitsError(isA<DshTransportException>()),
@@ -158,7 +158,7 @@ void main() {
     final socket = WebSocketDshEventSocket(
       Uri.parse('http://127.0.0.1:${server.port}'),
     );
-    final stream = socket.connect('/api/events.mux');
+    final stream = socket.connect('/api/remote.mux');
     final expectation = expectLater(
       stream,
       emitsError(isA<DshTransportException>()),
@@ -175,7 +175,7 @@ void main() {
     final socket = WebSocketDshEventSocket(
       Uri.parse('http://127.0.0.1:${server.port}'),
     );
-    final stream = socket.connect('/api/events.mux');
+    final stream = socket.connect('/api/remote.mux');
     final done = Completer<void>();
     stream.listen((_) {}, onDone: done.complete);
     final serverSocket = await upsert;
@@ -192,7 +192,7 @@ void main() {
     expect(socket.compression, same(CompressionOptions.compressionDefault));
     final opened = Completer<void>();
     final subscription = socket
-        .connect('/api/events.mux', onOpen: opened.complete)
+        .connect('/api/remote.mux', onOpen: opened.complete)
         .listen((_) {});
     await opened.future;
     await upsert;
@@ -207,7 +207,7 @@ void main() {
     await dead.close(force: true);
     final socket = WebSocketDshEventSocket(Uri.parse('http://127.0.0.1:$port'));
     await expectLater(
-      socket.connect('/api/events.mux'),
+      socket.connect('/api/remote.mux'),
       emitsError(isA<DshTransportException>()),
     );
   });

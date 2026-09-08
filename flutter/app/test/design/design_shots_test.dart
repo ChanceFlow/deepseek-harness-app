@@ -309,7 +309,7 @@ class _FakeRpc implements DshRpcClient {
     String method,
     JsonMap payload,
   ) async {
-    if (endpoint == 'host.describe') {
+    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
       // A valid description so the settings shots' connection
       // handshakes reach CONNECTED (green dots, versioned rows).
       return RpcResult(
