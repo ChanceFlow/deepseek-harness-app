@@ -68,7 +68,13 @@ final class SessionWire {
       parentSessionId = wireString(json, 'parentSessionId'),
       origin = wireString(json, 'origin'),
       cwd = wireString(json, 'cwd'),
-      agentPreset = wireString(json, 'agentPreset'),
+      agentPreset =
+          wireString(json, 'agentPreset') ??
+          wireString(
+            asJsonObject(asJsonObject(json['projections'])?['values']) ??
+                const <String, Object?>{},
+            'agentPreset',
+          ),
       projections = asJsonObject(json['projections']);
 
   final String sessionId;
@@ -341,8 +347,7 @@ final class SessionHistoryValueWire {
   SessionHistoryValueWire.fromJson(JsonMap json)
     : events =
           (asJsonArray(json['events'] ?? json['records']) ?? const <Object?>[])
-              .map(_reqEvent)
-              .whereType<JsonMap>()
+              .expand(_expandRecord)
               .toList(),
       hasMore = wireBool(json, 'hasMore'),
       projections = asJsonObject(json['projections']);
@@ -357,13 +362,80 @@ final class SessionHistoryValueWire {
   JsonMap? get projectionValues =>
       projections == null ? null : asJsonObject(projections!['values']);
 
-  static JsonMap? _reqEvent(Object? json) {
-    if (json is! Map) return null;
-    final map = json.cast<String, Object?>();
+  static Iterable<JsonMap> _expandRecord(Object? record) {
+    if (record is! Map) return const <JsonMap>[];
+    final map = record.cast<String, Object?>();
+    final type = map['type'] as String?;
+    if (type == 'chunks') {
+      final event = asJsonObject(map['event']);
+      if (event != null) {
+        final eventType = wireString(event, 'type');
+        final seq0 = wireLong(event, 'seq');
+        final time0 = wireLong(event, 'time');
+        final data = asJsonObject(event['data']);
+        if (data != null) {
+          final turn = wireLong(data, 'turn');
+          final step = wireLong(data, 'step');
+          final index = wireLong(data, 'index');
+          if (eventType == 'chunkrow/text-chunks' ||
+              eventType == 'chunkrow/reasoning-chunks') {
+            final texts = (asJsonArray(data['texts']) ?? const <Object?>[])
+                .whereType<String>()
+                .toList();
+            final isReasoning = eventType == 'chunkrow/reasoning-chunks';
+            final deltaType = isReasoning ? 'reasoning-delta' : 'text-delta';
+            return <JsonMap>[
+              for (var k = 0; k < texts.length; k++)
+                <String, Object?>{
+                  'type': 'assistant/chunk',
+                  'seq': seq0 + k,
+                  'time': time0,
+                  'data': <String, Object?>{
+                    'turn': turn,
+                    'step': step,
+                    'chunk': <String, Object?>{
+                      'type': deltaType,
+                      'index': index,
+                      'text': texts[k],
+                    },
+                  },
+                },
+            ];
+          } else if (eventType == 'chunkrow/tool-call-chunks') {
+            final args = (asJsonArray(data['args']) ?? const <Object?>[])
+                .whereType<String>()
+                .toList();
+            final id = wireString(data, 'id') ?? '';
+            final name = wireString(data, 'name');
+            return <JsonMap>[
+              for (var k = 0; k < args.length; k++)
+                <String, Object?>{
+                  'type': 'assistant/chunk',
+                  'seq': seq0 + k,
+                  'time': time0,
+                  'data': <String, Object?>{
+                    'turn': turn,
+                    'step': step,
+                    'chunk': <String, Object?>{
+                      'type': 'tool-call-delta',
+                      'index': index,
+                      'id': id,
+                      if (name != null) 'name': name,
+                      'argumentsDelta': args[k],
+                    },
+                  },
+                },
+            ];
+          }
+        }
+      }
+    }
     final event = asJsonObject(map['event']);
-    if (event != null) return event;
-    if (map.containsKey('seq') && map.containsKey('type')) return map;
-    return null;
+    if (event != null) return <JsonMap>[event];
+    if (map.containsKey('seq') && map.containsKey('type')) {
+      return <JsonMap>[map];
+    }
+    return const <JsonMap>[];
   }
 }
 
@@ -543,6 +615,9 @@ ImageLimits decodeImageLimitsWire(JsonMap json) {
     maxImagesPerMessage: _reqLong(json, 'maxImagesPerMessage'),
     maxMessageImageBytes: _reqLong(json, 'maxMessageImageBytes'),
     maxImagePixels: _reqLong(json, 'maxImagePixels'),
+    maxImageDimension:
+        wireLongOrNull(json, 'maxImageDimension') ??
+        ImageLimits.defaultMaxImageDimension,
     mediaTypes: mediaTypes.isEmpty ? ImageLimits.defaultMediaTypes : mediaTypes,
   );
 }

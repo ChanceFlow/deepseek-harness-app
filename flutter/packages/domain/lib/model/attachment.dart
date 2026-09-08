@@ -101,12 +101,14 @@ final class ImageLimits {
     this.maxImagesPerMessage = defaultMaxImagesPerMessage,
     this.maxMessageImageBytes = defaultMaxImageBytes,
     this.maxImagePixels = defaultMaxImagePixels,
+    this.maxImageDimension = defaultMaxImageDimension,
     this.mediaTypes = defaultMediaTypes,
   });
 
   static const int defaultMaxImageBytes = 5 * 1024 * 1024;
   static const int defaultMaxImagesPerMessage = 20;
   static const int defaultMaxImagePixels = 30000000;
+  static const int defaultMaxImageDimension = 8192;
   static const List<String> defaultMediaTypes = [
     'image/png',
     'image/jpeg',
@@ -118,6 +120,7 @@ final class ImageLimits {
   final int maxImagesPerMessage;
   final int maxMessageImageBytes;
   final int maxImagePixels;
+  final int maxImageDimension;
   final List<String> mediaTypes;
 
   @override
@@ -127,6 +130,7 @@ final class ImageLimits {
       other.maxImagesPerMessage == maxImagesPerMessage &&
       other.maxMessageImageBytes == maxMessageImageBytes &&
       other.maxImagePixels == maxImagePixels &&
+      other.maxImageDimension == maxImageDimension &&
       _listEquals(other.mediaTypes, mediaTypes);
 
   @override
@@ -135,6 +139,7 @@ final class ImageLimits {
     maxImagesPerMessage,
     maxMessageImageBytes,
     maxImagePixels,
+    maxImageDimension,
     Object.hashAll(mediaTypes),
   );
 }

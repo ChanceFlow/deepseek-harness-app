@@ -105,9 +105,6 @@ final class SettingPathOp {
     if (op != 'set' && op != 'unset') {
       throw ArgumentError('op must be set or unset');
     }
-    if (path.isEmpty) {
-      throw ArgumentError('path must be non-empty');
-    }
     if (op == 'set' && jsonValue == null) {
       throw ArgumentError('set op requires a value');
     }

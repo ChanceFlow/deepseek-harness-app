@@ -62,7 +62,11 @@ final class DshRemoteInvoker {
       return <String, Object?>{
         'agentId': payload['agentId'] ?? payload['sessionId'],
         'ref': payload['ref'],
-        'request': <String, Object?>{'objective': req['objective']},
+        'request': <String, Object?>{
+          if (req['objective'] != null) 'objective': req['objective'],
+          if (req['maxGoalRounds'] != null)
+            'maxGoalRounds': req['maxGoalRounds'],
+        },
       };
     }
     if (endpoint == DshRpcEndpoints.goalsPause ||
