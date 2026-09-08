@@ -922,16 +922,32 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> refreshWorkspaces() async {
-    _applyWorkspaceListing(await _loadWorkspaceListing());
+    final listing = await _loadWorkspaceListing();
+    if (listing != null) {
+      _applyWorkspaceListing(listing);
+    }
   }
 
-  Future<WorkspaceListValueWire> _loadWorkspaceListing() async {
-    final result = await _call(
-      _workspaceList,
-      _workspaceList,
-      <String, Object?>{},
-    ).valueOrThrow();
-    return WorkspaceListValueWire.fromJson(result);
+  Future<WorkspaceListValueWire?> _loadWorkspaceListing() async {
+    try {
+      final result = await _call(
+        _workspaceList,
+        _workspaceList,
+        <String, Object?>{},
+      );
+      if (!result.ok) {
+        return null;
+      }
+      final value = result.value;
+      if (value == null) return null;
+      return WorkspaceListValueWire.fromJson(value);
+    } on DshTransportException catch (e) {
+      if (e.message.contains('404')) {
+        // DSH 0.1.2 does not mount a unary workspace/list endpoint.
+        return null;
+      }
+      rethrow;
+    }
   }
 
   void _applyWorkspaceListing(WorkspaceListValueWire listing) {
@@ -945,7 +961,19 @@ class HarnessRepositoryImpl implements ChatRepository {
       'path': path,
     }).valueOrThrow();
     final created = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
-    _applyWorkspaceListing(await _loadWorkspaceListing());
+    final current = _workspaces.value;
+    final index = current.indexWhere(
+      (item) => item.workspaceId == created.workspaceId,
+    );
+    if (index < 0) {
+      _workspaces.value = List.of(current)..add(created);
+    } else {
+      _workspaces.value = List.of(current)..[index] = created;
+    }
+    final listing = await _loadWorkspaceListing();
+    if (listing != null) {
+      _applyWorkspaceListing(listing);
+    }
     return created;
   }
 
@@ -959,7 +987,17 @@ class HarnessRepositoryImpl implements ChatRepository {
       'title': title,
     }).valueOrThrow();
     final renamed = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
-    _applyWorkspaceListing(await _loadWorkspaceListing());
+    final current = _workspaces.value;
+    final index = current.indexWhere(
+      (item) => item.workspaceId == renamed.workspaceId,
+    );
+    if (index >= 0) {
+      _workspaces.value = List.of(current)..[index] = renamed;
+    }
+    final listing = await _loadWorkspaceListing();
+    if (listing != null) {
+      _applyWorkspaceListing(listing);
+    }
     return renamed;
   }
 
@@ -978,7 +1016,13 @@ class HarnessRepositoryImpl implements ChatRepository {
     await _call(_workspaceDelete, _workspaceDelete, {
       'workspaceId': workspaceId,
     }).valueOrThrow();
-    _applyWorkspaceListing(await _loadWorkspaceListing());
+    _workspaces.value = _workspaces.value
+        .where((item) => item.workspaceId != workspaceId)
+        .toList();
+    final listing = await _loadWorkspaceListing();
+    if (listing != null) {
+      _applyWorkspaceListing(listing);
+    }
   }
 
   @override

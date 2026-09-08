@@ -21,6 +21,7 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
   - `executeCommand` strips its ad-hoc manual `'args'` wrapper and relies on the unified `_call` wrapping.
   - `dsh_connection_manager.dart` passes `{'args': {}}` for `host/describe`.
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
+- **Workspace listing 404 tolerance**: DSH 0.1.2 provides workspace state via the `workspace/follow` stream and mutation returns rather than a unary endpoint. `_loadWorkspaceListing` catches 404 responses gracefully so startup reconciliation and `refreshWorkspaces` complete quietly without raising transport errors, while mutations (`createWorkspace`, `renameWorkspace`, `deleteWorkspace`) apply their immediate result to local state.
 - **WebSocket connection point**:
   - `dsh_connection_manager.dart` replaces `_eventsMuxPath = '/api/events.mux'` with `_remoteMuxPath = '/api/remote.mux'`.
   - All test fixtures and sockets across `network` and `harness_adapter` connect to `/api/remote.mux`.

@@ -321,6 +321,9 @@ class HarnessFakeRpc implements DshRpcClient {
         _failures.remove(endpoint.replaceAll('.', '/')) ??
         _failures.remove(endpoint.replaceAll('/', '.'));
     if (failureCode != null) {
+      if (failureCode == '404') {
+        throw DshTransportException('HTTP 404 for api/$endpoint: not found');
+      }
       return RpcResult(
         ok: false,
         error: RpcError(
@@ -717,6 +720,19 @@ void main() {
         'ws-a',
       ]);
       expect(rpc.callCountFor('workspace/list'), 1);
+    },
+  );
+
+  test(
+    'workspace/list 404 is tolerated gracefully without surfacing an error',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.failNextCall('workspace/list', '404');
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await expectLater(repository.refreshWorkspaces(), completes);
+      expect(await repository.observeWorkspaces().first, isEmpty);
     },
   );
 
