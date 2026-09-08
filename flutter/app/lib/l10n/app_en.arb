@@ -1388,5 +1388,38 @@
   "voiceInputCloudSetupBody": "Add your online speech service credentials in Settings to enable online voice input.",
   "voiceInputCloudNotConfigured": "Online voice input needs credentials. Add them in Settings → Speech recognition.",
   "voiceInputCloudConnectFailed": "Could not reach the online speech service. Check your network and credentials, then try again.",
-  "voiceInputCloudFailed": "Online speech recognition failed. Check your credentials and try again."
+  "voiceInputCloudFailed": "Online speech recognition failed. Check your credentials and try again.",
+  "errorLogsTitle": "Error Logs",
+  "errorLogsDescription": "View and export application error logs",
+  "errorLogsEmptyTitle": "No Error Logs",
+  "errorLogsEmptySubtitle": "Application is running smoothly with no errors captured.",
+  "errorLogsFilterAll": "All",
+  "errorLogsFilterFatal": "Fatal",
+  "errorLogsFilterError": "Error",
+  "errorLogsFilterWarn": "Warning",
+  "errorLogsSearchHint": "Search errors or stack trace…",
+  "errorLogsCopyAll": "Copy All",
+  "errorLogsCopyAllSuccess": "All error logs copied to clipboard",
+  "errorLogsCopyEntry": "Copy",
+  "errorLogsCopyEntrySuccess": "Error details copied to clipboard",
+  "errorLogsClear": "Clear",
+  "errorLogsClearConfirmTitle": "Clear Error Logs",
+  "errorLogsClearConfirmMessage": "Are you sure you want to clear all recorded error logs? This cannot be undone.",
+  "errorLogsClearSuccess": "Error logs cleared",
+  "errorLogsStackTrace": "Stack Trace",
+  "errorLogsBreadcrumbs": "Related Logs",
+  "errorLogsContext": "Context",
+  "errorLogsSystemInfo": "System & Build Info",
+  "errorLogsCopySystemInfo": "Copy System Info",
+  "errorLogsSystemInfoCopied": "System info copied to clipboard",
+  "errorLogsCountBadge": "{count} errors",
+  "@errorLogsCountBadge": {
+    "description": "Error count badge label.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errorLogsNoSearchResults": "No errors match your filter."
 }

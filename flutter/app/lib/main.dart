@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'config.dart';
 import 'di/providers.dart' show systemNotifierProvider;
+import 'logging/error_log_collector.dart';
 import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
 import 'ui/settings/locale_preference.dart';
@@ -21,6 +22,7 @@ DebugToolBootstrap? debugBootstrap;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _initErrorLogging();
   // One system notifier, initialized here (permission request + launch-time
   // locale + cold-start tap capture) and handed to the DI layer through an
   // override so the provider consumers share the exact initialized instance.
@@ -33,6 +35,32 @@ Future<void> main() async {
       child: const DshApp(),
     ),
   );
+}
+
+/// Initialize in-app error log collection hooks and restore saved errors.
+void _initErrorLogging() {
+  ErrorLogCollector.instance.installHooks();
+  ErrorLogCollector.instance.addBreadcrumb('App launch: initializing');
+
+  if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+    try {
+      final documents = getApplicationDocumentsDirectory();
+      unawaited(
+        documents
+            .then((dir) async {
+              await ErrorLogCollector.instance.initialize(storageDir: dir);
+              ErrorLogCollector.instance.addBreadcrumb(
+                'App launch: storage ready (v$kDshAppVersion+$kDshBuildNumber)',
+              );
+            })
+            .catchError((Object _) {
+              // Documents directory resolution failure is swallowed.
+            }),
+      );
+    } catch (_) {
+      // Swallowed: error logging setup must never crash app startup.
+    }
+  }
 }
 
 /// Wire debug telemetry on debug builds and prerelease release builds only:

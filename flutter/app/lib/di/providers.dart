@@ -65,6 +65,9 @@ import '../ui/chat/voice_input/voice_input_controller.dart';
 import '../ui/chat/voice_input/voice_input_ui_state.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
+import '../logging/error_log_collector.dart';
+import '../ui/settings/error_logs/error_logs_controller.dart';
+import '../ui/settings/error_logs/error_logs_ui_state.dart';
 
 import 'package:asr/asr.dart';
 
@@ -73,6 +76,11 @@ export '../ui/settings/asr/asr_models_screen.dart';
 export '../ui/chat/voice_input/voice_input_controller.dart';
 export '../ui/chat/voice_input/voice_input_ui_state.dart';
 export '../ui/chat/voice_input/voice_record_bubble.dart';
+export '../ui/settings/error_logs/error_logs_controller.dart';
+export '../ui/settings/error_logs/error_logs_screen.dart';
+export '../ui/settings/error_logs/error_logs_ui_state.dart';
+export '../logging/error_log_collector.dart';
+export '../logging/error_log_entry.dart';
 
 /// Backend registry (device-local store + UDF stream).
 final backendStoreProvider = FutureProvider<BackendStore>((ref) async {
@@ -642,3 +650,35 @@ final voiceInputUiStateProvider = StreamProvider.autoDispose<VoiceInputUiState>(
     return controller.uiState;
   },
 );
+
+/// Central Error Log Collector singleton provider.
+final errorLogCollectorProvider = Provider<ErrorLogCollector>((ref) {
+  return ErrorLogCollector.instance;
+});
+
+/// Error logs controller provider (autoDispose).
+final errorLogsControllerProvider = Provider.autoDispose<ErrorLogsController>((
+  ref,
+) {
+  final collector = ref.watch(errorLogCollectorProvider);
+  final registry = ref.watch(backendRegistryStateProvider).value;
+  final activeBackend = registry?.backends
+      .where((BackendConfig b) => b.id == registry.activeId)
+      .firstOrNull;
+  final activeBackendUrl = activeBackend?.baseUri.toString();
+
+  final controller = ErrorLogsController(
+    collector: collector,
+    activeBackendUrl: activeBackendUrl,
+  );
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Error logs UI state stream.
+final errorLogsUiStateProvider = StreamProvider.autoDispose<ErrorLogsUiState>((
+  ref,
+) {
+  final controller = ref.watch(errorLogsControllerProvider);
+  return controller.uiState;
+});

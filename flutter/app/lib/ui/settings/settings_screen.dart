@@ -495,6 +495,11 @@ class _AppPreferencesSection extends StatelessWidget {
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: _AsrModelsEntryRow(),
             ),
+            _CardDivider(),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: _ErrorLogsEntryRow(),
+            ),
           ],
         ),
       ],
@@ -928,6 +933,82 @@ class _AsrModelsEntryRow extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                   color: asrState.installedCount > 0
                       ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Error logs entry row navigating to error log viewing and copying.
+class _ErrorLogsEntryRow extends ConsumerWidget {
+  const _ErrorLogsEntryRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final ErrorLogsUiState errorState =
+        ref.watch(errorLogsUiStateProvider).value ?? const ErrorLogsUiState();
+    final int count = errorState.totalCount;
+    final bool hasFatal = errorState.fatalCount > 0;
+    final bool hasErrors = errorState.errorCount > 0;
+
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (BuildContext _) => const ErrorLogsRoute(),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    l10n.errorLogsTitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.errorLogsDescription,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: hasFatal || hasErrors
+                    ? scheme.errorContainer
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                l10n.errorLogsCountBadge(count),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: hasFatal || hasErrors
+                      ? scheme.error
                       : scheme.onSurfaceVariant,
                 ),
               ),
