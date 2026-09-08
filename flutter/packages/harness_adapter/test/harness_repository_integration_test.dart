@@ -230,13 +230,6 @@ class HarnessFakeRpc implements DshRpcClient {
   /// One-shot scripted business failure for the next call to [endpoint].
   void failNextCall(String endpoint, String code) {
     _failures[endpoint] = code;
-    _failures[endpoint.replaceAll('.', '/')] = code;
-    _failures[endpoint.replaceAll('/', '.')] = code;
-    for (final entry in kDshEndpointFallbacks.entries) {
-      if (entry.value.contains(endpoint)) {
-        _failures[entry.key] = code;
-      }
-    }
   }
 
   final Map<String, String> _failures = <String, String>{};
@@ -382,10 +375,19 @@ class HarnessFakeRpc implements DshRpcClient {
             const SocketException('Software caused connection abort'),
       );
     }
-    final failureCode =
-        _failures.remove(endpoint) ??
-        _failures.remove(endpoint.replaceAll('.', '/')) ??
-        _failures.remove(endpoint.replaceAll('/', '.'));
+    var failureCode = _failures.remove(endpoint);
+    if (failureCode == null) {
+      final fallbacks = kDshEndpointFallbacks[endpoint];
+      if (fallbacks != null) {
+        for (final fb in fallbacks) {
+          final c = _failures.remove(fb);
+          if (c != null) {
+            failureCode = c;
+            break;
+          }
+        }
+      }
+    }
     if (failureCode != null) {
       if (failureCode == '404') {
         throw DshTransportException('HTTP 404 for api/$endpoint: not found');
@@ -828,6 +830,21 @@ void main() {
       expect(skills.first.name, 'generate-image');
       expect(rpc.callCountFor(DshRpcEndpoints.skillsList), 1);
       expect(rpc.callCountFor('skill/list'), 1);
+    },
+  );
+
+  test(
+    'settings/describe 404 transparently falls back to settings.describe',
+    () async {
+      final rpc = HarnessFakeRpc();
+      rpc.failNextCall(DshRpcEndpoints.settingsDescribe, '404');
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final snapshot = await repository.describeSettings();
+      expect(snapshot.writable, isTrue);
+      expect(rpc.callCountFor(DshRpcEndpoints.settingsDescribe), 1);
+      expect(rpc.callCountFor('settings.describe'), 1);
     },
   );
 
