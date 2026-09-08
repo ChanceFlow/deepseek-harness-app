@@ -116,6 +116,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     null,
   );
   final Map<String, _SessionState> _sessionStates = <String, _SessionState>{};
+  final Map<String, int> _sessionCursors = <String, int>{};
 
   /// Session id -> answerable live frames that arrived before the session's
   /// state was instantiated (web SessionManager `pendingBuffers` parity).
@@ -216,7 +217,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     final value = await _call(
       DshRpcEndpoints.agentPresetsSelect,
       DshRpcEndpoints.agentPresetsSelect,
-      {'sessionId': sessionId, 'agentPreset': agentPreset},
+      {'agentId': sessionId, 'agentPreset': agentPreset},
     ).valueOrThrow();
     final echoed = wireString(value, 'agentPreset');
     if (echoed == null) {
@@ -818,22 +819,25 @@ class HarnessRepositoryImpl implements ChatRepository {
     String childSessionId,
     String text,
   ) async {
-    final value = await _call(
-      DshRpcEndpoints.subagentsPrompt,
-      DshRpcEndpoints.subagentsPrompt,
-      {
-        'parentSessionId': parentSessionId,
-        'childSessionId': childSessionId,
-        'mode': _subagentModeToWire(SubagentMode.continuable),
-        'content': <Object?>[
-          <String, Object?>{'type': 'text', 'text': text},
-        ],
-      },
-    ).valueOrThrow();
-    final messageId = wireString(value, 'messageId');
-    if (messageId == null) {
-      throw const FormatException('subagent.prompt missing messageId');
+    final promptPayload = <String, Object?>{
+      'parentSessionId': parentSessionId,
+      'childSessionId': childSessionId,
+      'requestId': 'req-${DateTime.now().microsecondsSinceEpoch}',
+      'mode': _subagentModeToWire(SubagentMode.continuable),
+      'content': <Object?>[
+        <String, Object?>{'type': 'text', 'text': text},
+      ],
+    };
+    JsonMap value;
+    try {
+      value = await _invoker.invoke(
+        DshRpcEndpoints.subagentsPrompt,
+        promptPayload,
+      );
+    } catch (_) {
+      value = await _invoker.invoke('subagent.prompt', promptPayload);
     }
+    final messageId = wireString(value, 'messageId') ?? 'accepted';
     return messageId;
   }
 
@@ -875,10 +879,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.goalsCreate,
       DshRpcEndpoints.goalsCreate,
       {
-        'sessionId': sessionId,
         'agentId': sessionId,
-        'objective': objective,
-        if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
         'request': <String, Object?>{
           'objective': objective,
           if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
@@ -931,10 +932,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   JsonMap _goalPayload(String sessionId, GoalRef ref, [String? objective]) => {
-    'sessionId': sessionId,
     'agentId': sessionId,
     'ref': <String, Object?>{'id': ref.id, 'revision': ref.revision},
-    if (objective != null) 'objective': objective,
     if (objective != null) 'request': <String, Object?>{'objective': objective},
   };
 
@@ -1667,6 +1666,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
     for (final session in listing) {
+      if (session.asOfSeq > 0) {
+        _sessionCursors[session.sessionId] = session.asOfSeq;
+      }
       final parsed = _imageLimitsFromProjections(session);
       if (parsed != null && _imageLimits.value != parsed) {
         _imageLimits.value = parsed;
@@ -1788,6 +1790,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
+    if (history.asOfSeq > 0) {
+      _sessionCursors[sessionId] = history.asOfSeq;
+    }
     final goalValue = history.projectionValues?['goal'];
     if (goalValue != null) {
       _goalProjectionStateFor(sessionId).value = _parseGoalProjection(

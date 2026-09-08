@@ -16,6 +16,7 @@ final class DshRemoteInvoker {
   final DshRpcClient _rpcClient;
 
   static const Set<String> _requestWrappedEndpoints = <String>{
+    DshRpcEndpoints.sessionCreate,
     DshRpcEndpoints.sessionPrompt,
     DshRpcEndpoints.sessionAttachment,
     DshRpcEndpoints.sessionCancel,
@@ -39,6 +40,58 @@ final class DshRemoteInvoker {
       if (payload.containsKey('_request')) return payload;
       return <String, Object?>{'_request': payload};
     }
+    if (endpoint == DshRpcEndpoints.agentPresetsSelect) {
+      return <String, Object?>{
+        'agentId': payload['agentId'] ?? payload['sessionId'],
+        'agentPreset': payload['agentPreset'],
+      };
+    }
+    if (endpoint == DshRpcEndpoints.goalsCreate) {
+      final req = asJsonObject(payload['request']) ?? payload;
+      return <String, Object?>{
+        'agentId': payload['agentId'] ?? payload['sessionId'],
+        'request': <String, Object?>{
+          'objective': req['objective'],
+          if (req['maxGoalRounds'] != null)
+            'maxGoalRounds': req['maxGoalRounds'],
+        },
+      };
+    }
+    if (endpoint == DshRpcEndpoints.goalsEdit) {
+      final req = asJsonObject(payload['request']) ?? payload;
+      return <String, Object?>{
+        'agentId': payload['agentId'] ?? payload['sessionId'],
+        'ref': payload['ref'],
+        'request': <String, Object?>{'objective': req['objective']},
+      };
+    }
+    if (endpoint == DshRpcEndpoints.goalsPause ||
+        endpoint == DshRpcEndpoints.goalsResume ||
+        endpoint == DshRpcEndpoints.goalsComplete ||
+        endpoint == DshRpcEndpoints.goalsClear) {
+      return <String, Object?>{
+        'agentId': payload['agentId'] ?? payload['sessionId'],
+        'ref': payload['ref'],
+      };
+    }
+    if (endpoint == DshRpcEndpoints.sessionPage) {
+      if (payload.containsKey('request')) return payload;
+      if (payload.containsKey('address')) {
+        return <String, Object?>{'request': payload};
+      }
+      return <String, Object?>{
+        'request': <String, Object?>{
+          'address': <String, Object?>{
+            'kind': 'session',
+            'sessionId': payload['sessionId'],
+          },
+          'throughSeq': payload['throughSeq'] ?? payload['beforeSeq'] ?? 0,
+          if (payload['beforeSeq'] != null) 'beforeSeq': payload['beforeSeq'],
+          if (payload['maxMessages'] != null)
+            'maxMessages': payload['maxMessages'],
+        },
+      };
+    }
     if (_requestWrappedEndpoints.contains(endpoint)) {
       if (payload.containsKey('request')) return payload;
       return <String, Object?>{'request': payload};
@@ -46,7 +99,23 @@ final class DshRemoteInvoker {
     return payload;
   }
 
-  static JsonMap _unwrapArgsForFallback(JsonMap payload) {
+  static JsonMap _unwrapArgsForFallback(String endpoint, JsonMap payload) {
+    if (endpoint.startsWith('goals/') || endpoint.startsWith('goal.')) {
+      final req = asJsonObject(payload['request']) ?? payload;
+      return <String, Object?>{
+        'sessionId': payload['agentId'] ?? payload['sessionId'],
+        if (payload['ref'] != null) 'ref': payload['ref'],
+        if (req['objective'] != null) 'objective': req['objective'],
+        if (req['maxGoalRounds'] != null) 'maxGoalRounds': req['maxGoalRounds'],
+      };
+    }
+    if (endpoint == DshRpcEndpoints.agentPresetsSelect ||
+        endpoint == 'agentPreset.select') {
+      return <String, Object?>{
+        'sessionId': payload['agentId'] ?? payload['sessionId'],
+        'agentPreset': payload['agentPreset'],
+      };
+    }
     if (payload.containsKey('request') && payload.length == 1) {
       final inner = asJsonObject(payload['request']);
       if (inner != null) return inner;
@@ -82,11 +151,49 @@ final class DshRemoteInvoker {
             dotFallback,
         ];
         if (fallbacks.isNotEmpty) {
-          final fallbackArgs = _unwrapArgsForFallback(rawArgs);
-          final fallbackWrapped = <String, Object?>{'args': fallbackArgs};
+          final fallbackArgs = _unwrapArgsForFallback(endpoint, rawArgs);
           for (final fallback in fallbacks) {
             try {
-              return await _rpcClient.call(fallback, fallback, fallbackWrapped);
+              final JsonMap payloadToSend;
+              if (fallback == DshRpcEndpoints.sessionPage) {
+                if (endpoint == DshRpcEndpoints.sessionHistory) {
+                  payloadToSend = <String, Object?>{
+                    'args': <String, Object?>{
+                      'request': <String, Object?>{
+                        'address': <String, Object?>{
+                          'kind': 'session',
+                          'sessionId': fallbackArgs['sessionId'],
+                        },
+                        'throughSeq': fallbackArgs['beforeSeq'] ?? 0,
+                        if (fallbackArgs['beforeSeq'] != null)
+                          'beforeSeq': fallbackArgs['beforeSeq'],
+                        if (fallbackArgs['maxMessages'] != null)
+                          'maxMessages': fallbackArgs['maxMessages'],
+                      },
+                    },
+                  };
+                } else if (endpoint == DshRpcEndpoints.subagentsHistory) {
+                  payloadToSend = <String, Object?>{
+                    'args': <String, Object?>{
+                      'request': <String, Object?>{
+                        'address': <String, Object?>{
+                          'kind': 'subagent',
+                          'parentSessionId': fallbackArgs['parentSessionId'],
+                          'childSessionId': fallbackArgs['childSessionId'],
+                          'mode': fallbackArgs['mode'] ?? 'continuable',
+                        },
+                        'throughSeq': 0,
+                        'maxMessages': 50,
+                      },
+                    },
+                  };
+                } else {
+                  payloadToSend = <String, Object?>{'args': fallbackArgs};
+                }
+              } else {
+                payloadToSend = <String, Object?>{'args': fallbackArgs};
+              }
+              return await _rpcClient.call(fallback, fallback, payloadToSend);
             } on DshTransportException catch (fe) {
               if (fe.message.contains('404')) continue;
               rethrow;
@@ -127,7 +234,13 @@ final class DshRemoteInvoker {
   ) async {
     try {
       final result = await call(endpoint, payload);
-      if (!result.ok) return null;
+      if (!result.ok) {
+        final failure = result.error;
+        throw DshBusinessException(
+          code: failure?.code ?? 'internal',
+          message: failure?.message ?? '$endpoint failed',
+        );
+      }
       return result.value;
     } on DshTransportException catch (e) {
       if (e.message.contains('404')) return null;

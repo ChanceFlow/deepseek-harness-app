@@ -64,7 +64,11 @@ void main() {
       if (firstSession != null) {
         await repository.openSession(firstSession.id);
         await repository.observeTimelineWindow(firstSession.id).first;
+        final skills = await repository.listSkills(firstSession.id);
+        expect(skills.every((skill) => skill.name.trim().isNotEmpty), isTrue);
       }
+      final presets = await repository.listAgentPresets();
+      expect(presets.entries.isNotEmpty, isTrue);
       expect(
         workspaces.isEmpty ? true : workspaces.first.path.trim().isNotEmpty,
         isTrue,
