@@ -143,32 +143,23 @@ final activeBackendIdProvider = StreamProvider<String>((ref) async* {
 
 /// One backend's config by id; null once the backend is removed (the
 /// dependent connection disposes with it through autoDispose).
-final backendByIdProvider = StreamProvider.family
-    .autoDispose<BackendConfig?, String>((ref, backendId) async* {
-      final controller = await ref.watch(backendRegistryProvider.future);
-      BackendConfig? current = controller.state.backends
-          .where((backend) => backend.id == backendId)
-          .firstOrNull;
-      yield current;
-      await for (final next in controller.uiState) {
-        final updated = next.backends
-            .where((backend) => backend.id == backendId)
-            .firstOrNull;
-        if (updated != current) {
-          current = updated;
-          yield updated;
-        }
-      }
-    });
+final backendByIdProvider = Provider.family.autoDispose<BackendConfig?, String>(
+  (ref, backendId) {
+    final state = ref.watch(backendRegistryStateProvider).value;
+    return state?.backends
+        .where((backend) => backend.id == backendId)
+        .firstOrNull;
+  },
+);
 
 /// Raw transport seams, overridable in tests (one per backend URL).
 ///
 /// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
 /// `http_engine.dart`); non-Android hosts and engine-construction failure
 /// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
-/// The engine lives and dies with the backend configuration: autoDispose
-/// tears it down when the last watcher drops (backend removed, disabled,
-/// or its URL edited).
+/// The engine lives for the application lifetime; client wrappers are closed
+/// on autoDispose with disposal errors swallowed so they never escape into
+/// Riverpod's unhandled zone.
 final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
   _buildRpcClient,
   name: 'dshRpcClient',
@@ -177,15 +168,21 @@ final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
 /// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
 /// `http_engine.dart`); non-Android hosts and engine-construction failure
 /// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
-/// The engine lives and dies with the backend configuration: autoDispose
-/// tears it down when the last watcher drops (backend removed, disabled,
-/// or its URL edited).
+/// The engine lives for the application lifetime; client wrappers are closed
+/// on autoDispose with disposal errors swallowed so they never escape into
+/// Riverpod's unhandled zone.
 DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
   final engine = dshHttp3Engine();
   if (engine == null) {
     return HttpDshRpcClient(uri);
   }
-  ref.onDispose(engine.close);
+  ref.onDispose(() {
+    try {
+      engine.close();
+    } catch (_) {
+      // Swallowed: client teardown must never crash the app.
+    }
+  });
   return HttpDshRpcClient(uri, httpClient: engine);
 }
 
@@ -243,7 +240,7 @@ final backendConnectionStateProvider = StreamProvider.family
 /// The domain-facing repository per backend.
 final chatRepositoryProvider = Provider.family
     .autoDispose<ChatRepository, String>((ref, backendId) {
-      final backend = ref.watch(backendByIdProvider(backendId)).value;
+      final backend = ref.watch(backendByIdProvider(backendId));
       // The seed fallback covers only the pre-load window; a removed backend
       // takes its dependents down with it before this can matter.
       final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);

@@ -7,10 +7,56 @@
 library;
 
 import 'package:app/di/http_engine.dart';
+import 'package:app/di/providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+
+final class _ThrowingOnCloseHttpClient extends http.BaseClient {
+  bool closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    throw UnimplementedError();
+  }
+
+  @override
+  void close() {
+    closed = true;
+    throw Exception(
+      'java.lang.IllegalStateException: Cannot shutdown with running requests.',
+    );
+  }
+}
 
 void main() {
+  tearDown(() {
+    customHttpEngineBuilder = null;
+    resetCronetEngineForTesting();
+  });
+
   test('non-Android host returns null (default engine fallback)', () {
     expect(dshHttp3Engine(), isNull);
+  });
+
+  test('customHttpEngineBuilder allows overriding engine in tests', () {
+    final client = _ThrowingOnCloseHttpClient();
+    customHttpEngineBuilder = () => client;
+    expect(dshHttp3Engine(), same(client));
+  });
+
+  test('dshRpcClientProvider swallows engine close errors on dispose', () {
+    final client = _ThrowingOnCloseHttpClient();
+    customHttpEngineBuilder = () => client;
+
+    final container = ProviderContainer();
+    final clientInstance = container.read(
+      dshRpcClientProvider(Uri.parse('http://127.0.0.1:3080')),
+    );
+    expect(clientInstance, isNotNull);
+
+    // Disposing the container must not throw even though client.close() throws.
+    expect(() => container.dispose(), returnsNormally);
+    expect(client.closed, isTrue);
   });
 }
