@@ -74,8 +74,6 @@ jobs:
   build:
     runs-on: flutter-android
     timeout-minutes: 90
-    container:
-      image: flutter-3.47-android:latest
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -101,8 +99,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            /root/.gradle/caches
-            /root/.pub-cache
+            ~/.gradle/caches
+            ~/.pub-cache
           key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
           restore-keys: gradle-v1-
 
@@ -167,8 +165,9 @@ jobs:
           EGRESS: ${{ vars.EGRESS_PROXY }}
         run: |
           set -eu
-          GP=/root/.gradle/gradle.properties
-          mkdir -p /root/.gradle
+          GRADLE_DIR="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          mkdir -p "$GRADLE_DIR"
+          GP="$GRADLE_DIR/gradle.properties"
           if [[ -z "$EGRESS" ]]; then
             sed -i -E '/^systemProp\.(http|https)\.proxy(Host|Port)=/d' "$GP" 2>/dev/null || true
             echo "EGRESS_PROXY unset: Gradle proxy lines removed"
