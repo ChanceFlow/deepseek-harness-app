@@ -483,6 +483,17 @@ class HarnessFakeRpc implements DshRpcClient {
       }
     }
     if (failureCode != null) {
+      _failures.remove(endpoint);
+      _failures.remove(endpoint.replaceAll('.', '/'));
+      _failures.remove(endpoint.replaceAll('/', '.'));
+      final canonical = _testLegacyToCanonicalMap[endpoint];
+      if (canonical != null) _failures.remove(canonical);
+      for (final entry in _testLegacyToCanonicalMap.entries) {
+        if (entry.value == endpoint || entry.key == endpoint) {
+          _failures.remove(entry.key);
+          _failures.remove(entry.value);
+        }
+      }
       if (failureCode == '404') {
         throw DshTransportException('HTTP 404 for api/$endpoint: not found');
       }
@@ -957,6 +968,90 @@ void main() {
       final payloads = rpc.payloads(DshRpcEndpoints.sessionModelCatalog);
       expect(payloads, isNotEmpty);
       expect(payloads.first['args'], isEmpty);
+    },
+  );
+
+  test(
+    'session/page with past-cursor error triggers auto-discovery and retries',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-1',
+          'updatedAt': 3,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      rpc.historyEvents['session-1'] = <JsonMap>[
+        <String, Object?>{
+          'type': 'user/message',
+          'seq': 42,
+          'time': 42,
+          'data': <String, Object?>{
+            'id': 'msg-1',
+            'role': 'user',
+            'source': <String, Object?>{'kind': 'user'},
+            'content': <Object?>[
+              <String, Object?>{'type': 'text', 'text': 'restored text'},
+            ],
+          },
+        },
+      ];
+      // Simulate DSH 0.1.2 server throwing when throughSeq (999999999) exceeds cursor 42
+      rpc.failNextCall(
+        DshRpcEndpoints.sessionPage,
+        'gateway/bad-request: session page through seq 999999999 is past cursor 42',
+      );
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await repository.openSession('session-1');
+      await pumpEventQueue();
+
+      final window = await repository
+          .observeTimelineWindow('session-1')
+          .firstWhere((w) => !w.isLoading && w.items.isNotEmpty);
+      expect(window.items, hasLength(1));
+      final msg = window.items.first as TimelineMessage;
+      expect(msg.value.text, 'restored text');
+      // Verify retry occurred with discovered cursor 42
+      final pageCalls = rpc.payloads(DshRpcEndpoints.sessionPage);
+      expect(pageCalls, hasLength(2));
+      final retryReq = asJsonObject(pageCalls.last['args'])?['request'] as Map?;
+      expect(retryReq?['throughSeq'], 42);
+    },
+  );
+
+  test(
+    'session/page with empty session past-cursor -1 recovers empty page',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-empty',
+          'updatedAt': 1,
+          'running': false,
+          'blank': true,
+        },
+      ]);
+      rpc.historyEvents['session-empty'] = <JsonMap>[];
+      rpc.failNextCall(
+        DshRpcEndpoints.sessionPage,
+        'gateway/bad-request: session page through seq 999999999 is past cursor -1',
+      );
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      await repository.openSession('session-empty');
+      await pumpEventQueue();
+
+      final window = await repository
+          .observeTimelineWindow('session-empty')
+          .first;
+      expect(window.items, isEmpty);
+      final pageCalls = rpc.payloads(DshRpcEndpoints.sessionPage);
+      expect(pageCalls, hasLength(2));
+      final retryReq = asJsonObject(pageCalls.last['args'])?['request'] as Map?;
+      expect(retryReq?['throughSeq'], -1);
     },
   );
 

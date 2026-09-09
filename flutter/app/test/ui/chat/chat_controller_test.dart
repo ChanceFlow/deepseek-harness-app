@@ -581,6 +581,8 @@ void main() {
     expect(repository.openedSessionIds, <String>[
       FakeChatRepository.initialSession.id,
     ]);
+    await settlePublish();
+    expect(controller.state.timeline, isNotEmpty);
   });
 
   test('a stored session absent from a loaded list does not restore', () async {
@@ -1766,97 +1768,95 @@ void main() {
     // A leaked Timer fails this testWidgets at teardown.
   });
 
-  testWidgets(
-    'approval, question and plan reach the rendered uiState within one '
-    'publish window',
-    (tester) async {
-      tester.view.physicalSize = const Size(800, 1280);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('approval, question and plan reach the rendered uiState within one '
+      'publish window', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      final repository = FakeChatRepository(
-        initialSessions: const <SessionSummary>[
-          SessionSummary(id: 'session-1', title: 'Test session'),
+    final repository = FakeChatRepository(
+      initialSessions: const <SessionSummary>[
+        SessionSummary(id: 'session-1', title: 'Test session'),
+      ],
+    );
+    final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
+    repository.windowSource = (_) => windows.stream;
+    final plan = AppStateStream<PlanState?>(null);
+    repository.planSource = (_) => plan.stream;
+    final controller = ChatController(repository);
+    addTearDown(controller.dispose);
+
+    ChatUiState rendered = const ChatUiState();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+              .overrideWithValue(_WindowTestRpc()),
+          dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+              .overrideWithValue(_WindowTestSocket()),
         ],
-      );
-      final windows = AppStateStream<TimelineWindow>(const TimelineWindow());
-      repository.windowSource = (_) => windows.stream;
-      final plan = AppStateStream<PlanState?>(null);
-      repository.planSource = (_) => plan.stream;
-      final controller = ChatController(repository);
-      addTearDown(controller.dispose);
-
-      ChatUiState rendered = const ChatUiState();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            dshRpcClientProvider(Uri.parse(kDshBaseUrl))
-                .overrideWithValue(_WindowTestRpc()),
-            dshEventSocketProvider(Uri.parse(kDshBaseUrl))
-                .overrideWithValue(_WindowTestSocket()),
-          ],
-          child: l10nApp(
-            home: StreamBuilder<ChatUiState>(
-              stream: controller.uiState,
-              builder: (context, snapshot) {
-                rendered = snapshot.data ?? rendered;
-                return ChatScreen(
-                  uiState: rendered,
-                  onAction: controller.onAction,
-                  localState: FakeChatLocalState(),
-                );
-              },
-            ),
+        child: l10nApp(
+          home: StreamBuilder<ChatUiState>(
+            stream: controller.uiState,
+            builder: (context, snapshot) {
+              rendered = snapshot.data ?? rendered;
+              return ChatScreen(
+                uiState: rendered,
+                onAction: controller.onAction,
+                localState: FakeChatLocalState(),
+              );
+            },
           ),
         ),
-      );
-      await tester.pump(const Duration(milliseconds: 40));
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 40));
 
-      controller.onAction(const SelectSession('session-1'));
-      await tester.pump(const Duration(milliseconds: 40));
+    controller.onAction(const SelectSession('session-1'));
+    await tester.pump(const Duration(milliseconds: 40));
 
-      windows.value = const TimelineWindow(
-        items: [
-          TimelineApprovalRequest(
-            requestId: 'rpc-1',
-            sessionId: 'session-1',
-            approvalId: 'a-1',
-            toolName: 'bash',
-            reason: 'Would run a command',
-          ),
-          TimelineQuestionRequest(
-            requestId: 'rpc-2',
-            questions: [
-              QuestionItem(
-                id: 'q1',
-                question: 'Continue?',
-                options: ['yes', 'no'],
-              ),
-            ],
-          ),
-        ],
-      );
-      plan.value = const PlanState(active: true, pending: false);
+    windows.value = const TimelineWindow(
+      items: [
+        TimelineApprovalRequest(
+          requestId: 'rpc-1',
+          sessionId: 'session-1',
+          approvalId: 'a-1',
+          toolName: 'bash',
+          reason: 'Would run a command',
+        ),
+        TimelineQuestionRequest(
+          requestId: 'rpc-2',
+          questions: [
+            QuestionItem(
+              id: 'q1',
+              question: 'Continue?',
+              options: ['yes', 'no'],
+            ),
+          ],
+        ),
+      ],
+    );
+    plan.value = const PlanState(active: true, pending: false);
 
-      // The stream events land; the uiState may still carry the previous
-      // fold until the window closes…
-      await tester.pump();
-      // …and it must carry them, no more than one window behind.
-      await tester.pump(kUiPublishWindow);
-      await tester.pump();
-      expect(
-        rendered.timeline.whereType<TimelineApprovalRequest>(),
-        hasLength(1),
-      );
-      expect(
-        rendered.timeline.whereType<TimelineQuestionRequest>(),
-        hasLength(1),
-      );
-      expect(rendered.plan, const PlanState(active: true, pending: false));
-      expect(find.text('Waiting for approval'), findsOneWidget);
-    },
-  );
+    // The stream events land; the uiState may still carry the previous
+    // fold until the window closes…
+    await tester.pump();
+    // …and it must carry them, no more than one window behind.
+    await tester.pump(kUiPublishWindow);
+    await tester.pump();
+    expect(
+      rendered.timeline.whereType<TimelineApprovalRequest>(),
+      hasLength(1),
+    );
+    expect(
+      rendered.timeline.whereType<TimelineQuestionRequest>(),
+      hasLength(1),
+    );
+    expect(rendered.plan, const PlanState(active: true, pending: false));
+    // Precedence: Question takeover (priority 1) preempts Approval (priority 0)
+    expect(find.text('Continue?'), findsOneWidget);
+  });
 }
 
 /// Silent RPC answerer for the provider seams the ChatScreen tree resolves
