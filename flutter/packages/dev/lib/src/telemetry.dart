@@ -52,7 +52,8 @@ class TelemetrySettings {
 
 /// One telemetry facade bound to the global OTel providers.
 class DebugTelemetry {
-  DebugTelemetry._(this._settings, this._logger, this._meter);
+  DebugTelemetry._(this._settings, this._logger, this._meter)
+    : _buffer = LogBuffer(capacity: _settings.bufferCapacity);
 
   final TelemetrySettings _settings;
   final OTelLogger _logger;
@@ -61,7 +62,7 @@ class DebugTelemetry {
   final Map<String, APICounter<int>> _counters = {};
   final Map<String, APIHistogram<double>> _histograms = {};
   final Map<String, APIGauge<double>> _gauges = {};
-  final LogBuffer _buffer = LogBuffer(capacity: 300);
+  final LogBuffer _buffer;
 
   final List<int> _eventWindow = [];
 
@@ -85,7 +86,7 @@ class DebugTelemetry {
     }
     await OTel.initialize(
       endpoint: settings.endpoint,
-      secure: !settings.endpoint.startsWith('https://'),
+      secure: settings.endpoint.startsWith('https://'),
       serviceName: settings.serviceName,
       serviceVersion: settings.serviceVersion,
       resourceAttributes: OTel.attributesFromMap({

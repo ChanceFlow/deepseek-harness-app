@@ -2918,7 +2918,8 @@ class _GoalBarStripState extends State<GoalBarStrip> {
                   color: scheme.onSurfaceVariant,
                 ),
               ),
-            if (snapshot.phase == GoalPhase.paused)
+            if (snapshot.phase == GoalPhase.paused ||
+                snapshot.phase == GoalPhase.blocked)
               IconButton(
                 visualDensity: VisualDensity.compact,
                 iconSize: 14,

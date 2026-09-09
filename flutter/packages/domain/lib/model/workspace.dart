@@ -44,6 +44,15 @@ final class SessionSearchResult {
 
   final String sessionId;
   final String snippet;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SessionSearchResult &&
+      other.sessionId == sessionId &&
+      other.snippet == snippet;
+
+  @override
+  int get hashCode => Object.hash(sessionId, snippet);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
