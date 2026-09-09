@@ -21,12 +21,13 @@ final class SettingsNamespace {
 
   @override
   bool operator ==(Object other) =>
-      other is SettingsNamespace &&
-      other.ns == ns &&
-      other.applies == applies &&
-      other.revision == revision &&
-      other.hasUserLayer == hasUserLayer &&
-      other.secretCount == secretCount;
+      identical(this, other) ||
+      (other is SettingsNamespace &&
+          other.ns == ns &&
+          other.applies == applies &&
+          other.revision == revision &&
+          other.hasUserLayer == hasUserLayer &&
+          other.secretCount == secretCount);
 
   @override
   int get hashCode =>
@@ -55,11 +56,12 @@ final class SettingsSnapshot {
 
   @override
   bool operator ==(Object other) =>
-      other is SettingsSnapshot &&
-      other.writable == writable &&
-      other.hasDocument == hasDocument &&
-      _listEquals(other.namespaces, namespaces) &&
-      _listEquals(other.credentialRefs, credentialRefs);
+      identical(this, other) ||
+      (other is SettingsSnapshot &&
+          other.writable == writable &&
+          other.hasDocument == hasDocument &&
+          _listEquals(other.namespaces, namespaces) &&
+          _listEquals(other.credentialRefs, credentialRefs));
 
   @override
   int get hashCode => Object.hash(
@@ -87,11 +89,12 @@ final class CredentialStatus {
 
   @override
   bool operator ==(Object other) =>
-      other is CredentialStatus &&
-      other.ref == ref &&
-      other.configured == configured &&
-      other.source == source &&
-      other.writable == writable;
+      identical(this, other) ||
+      (other is CredentialStatus &&
+          other.ref == ref &&
+          other.configured == configured &&
+          other.source == source &&
+          other.writable == writable);
 
   @override
   int get hashCode => Object.hash(ref, configured, source, writable);
@@ -116,16 +119,18 @@ final class SettingPathOp {
 
   @override
   bool operator ==(Object other) =>
-      other is SettingPathOp &&
-      other.op == op &&
-      _listEquals(other.path, path) &&
-      other.jsonValue == jsonValue;
+      identical(this, other) ||
+      (other is SettingPathOp &&
+          other.op == op &&
+          _listEquals(other.path, path) &&
+          other.jsonValue == jsonValue);
 
   @override
   int get hashCode => Object.hash(op, Object.hashAll(path), jsonValue);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

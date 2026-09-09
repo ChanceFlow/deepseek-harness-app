@@ -204,6 +204,31 @@ final backendConnectionProvider = Provider.family
         ref.watch(dshRpcClientProvider(key.$2)),
         ref.watch(dshEventSocketProvider(key.$2)),
         exponentialDshBackoffDelay,
+        onDiagnostic: (diagnostic) {
+          final levelStr = diagnostic.level.name.toUpperCase();
+          ErrorLogCollector.instance.addBreadcrumb(
+            '[Connection $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
+            level: diagnostic.level.name,
+          );
+          if (diagnostic.level == AdapterDiagnosticLevel.error ||
+              diagnostic.error != null) {
+            ErrorLogCollector.instance.captureError(
+              diagnostic.error ?? diagnostic.message,
+              stackTrace: diagnostic.stackTrace,
+              context: <String, Object?>{
+                'backendId': key.$1,
+                'diagnostic_context': diagnostic.context,
+                ...diagnostic.metadata,
+              },
+            );
+          }
+          DebugTelemetry.instance?.log(
+            '${diagnostic.context ?? "connection"}: ${diagnostic.message}',
+            level: diagnostic.level == AdapterDiagnosticLevel.error
+                ? 'error'
+                : 'warn',
+          );
+        },
       );
       manager.start();
       ref.onDispose(manager.stop);
@@ -258,7 +283,8 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, Strin
         '[Adapter $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
         level: diagnostic.level.name,
       );
-      if (diagnostic.level == AdapterDiagnosticLevel.error) {
+      if (diagnostic.level == AdapterDiagnosticLevel.error ||
+          diagnostic.error != null) {
         ErrorLogCollector.instance.captureError(
           diagnostic.error ?? diagnostic.message,
           stackTrace: diagnostic.stackTrace,

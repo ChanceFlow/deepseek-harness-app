@@ -31,6 +31,7 @@ class CapturedCrash {
   factory CapturedCrash.fromFlutterError(
     FlutterErrorDetails details, {
     required DateTime occurredAt,
+    int maxStackFrames = 100,
   }) {
     final stack =
         details.stack
@@ -38,7 +39,7 @@ class CapturedCrash {
             .split('\n')
             .map((l) => l.trim())
             .where((l) => l.isNotEmpty)
-            .take(20)
+            .take(maxStackFrames)
             .toList() ??
         const [];
     final context = details.context?.toString().trim().split('\n').first;
@@ -57,6 +58,7 @@ class CapturedCrash {
     Object error,
     StackTrace? stack, {
     required DateTime occurredAt,
+    int maxStackFrames = 100,
   }) {
     final stackLines =
         stack
@@ -64,7 +66,7 @@ class CapturedCrash {
             .split('\n')
             .map((l) => l.trim())
             .where((l) => l.isNotEmpty)
-            .take(20)
+            .take(maxStackFrames)
             .toList() ??
         const [];
     return CapturedCrash(
@@ -156,6 +158,11 @@ class CrashRecord {
     'source.commit': build.sourceCommit,
     'crash.kind': crash.kind,
     'crash.type': crash.type,
+    'crash.message': crash.message,
+    'crash.stack': crash.stackFrames.join('\n'),
+    'crash.stackFrames': crash.stackFrames,
     'crash.occurredAt': crash.occurredAt.toUtc().toIso8601String(),
+    'crash.log_count': logs.length,
+    if (logs.isNotEmpty) 'crash.logs': logs,
   };
 }

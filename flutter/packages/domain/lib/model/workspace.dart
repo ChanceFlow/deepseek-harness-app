@@ -20,13 +20,14 @@ final class WorkspaceSummary {
 
   @override
   bool operator ==(Object other) =>
-      other is WorkspaceSummary &&
-      other.workspaceId == workspaceId &&
-      other.path == path &&
-      other.title == title &&
-      _listEquals(other.sessionIds, sessionIds) &&
-      other.createdAt == createdAt &&
-      other.updatedAt == updatedAt;
+      identical(this, other) ||
+      (other is WorkspaceSummary &&
+          other.workspaceId == workspaceId &&
+          other.path == path &&
+          other.title == title &&
+          _listEquals(other.sessionIds, sessionIds) &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt);
 
   @override
   int get hashCode => Object.hash(
@@ -47,15 +48,17 @@ final class SessionSearchResult {
 
   @override
   bool operator ==(Object other) =>
-      other is SessionSearchResult &&
-      other.sessionId == sessionId &&
-      other.snippet == snippet;
+      identical(this, other) ||
+      (other is SessionSearchResult &&
+          other.sessionId == sessionId &&
+          other.snippet == snippet);
 
   @override
   int get hashCode => Object.hash(sessionId, snippet);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

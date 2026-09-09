@@ -310,4 +310,23 @@ final class QuestionEvidence {
 
   final String sessionId;
   final List<QuestionAnswer> answers;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is QuestionEvidence &&
+          other.sessionId == sessionId &&
+          _listEquals(other.answers, answers));
+
+  @override
+  int get hashCode => Object.hash(sessionId, Object.hashAll(answers));
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }

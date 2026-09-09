@@ -23,12 +23,13 @@ final class PendingImage {
 
   @override
   bool operator ==(Object other) =>
-      other is PendingImage &&
-      other.id == id &&
-      other.mediaType == mediaType &&
-      other.base64Data == base64Data &&
-      other.name == name &&
-      other.byteSize == byteSize;
+      identical(this, other) ||
+      (other is PendingImage &&
+          other.id == id &&
+          other.mediaType == mediaType &&
+          other.base64Data == base64Data &&
+          other.name == name &&
+          other.byteSize == byteSize);
 
   @override
   int get hashCode => Object.hash(id, mediaType, base64Data, name, byteSize);
@@ -54,13 +55,14 @@ final class AttachmentRef {
 
   @override
   bool operator ==(Object other) =>
-      other is AttachmentRef &&
-      other.attachmentId == attachmentId &&
-      other.mediaType == mediaType &&
-      other.bytes == bytes &&
-      other.width == width &&
-      other.height == height &&
-      other.name == name;
+      identical(this, other) ||
+      (other is AttachmentRef &&
+          other.attachmentId == attachmentId &&
+          other.mediaType == mediaType &&
+          other.bytes == bytes &&
+          other.width == width &&
+          other.height == height &&
+          other.name == name);
 
   @override
   int get hashCode =>
@@ -76,14 +78,16 @@ final class AttachmentData {
 
   @override
   bool operator ==(Object other) =>
-      other is AttachmentData &&
-      other.ref == ref &&
-      _bytesEqual(other.data, data);
+      identical(this, other) ||
+      (other is AttachmentData &&
+          other.ref == ref &&
+          _bytesEqual(other.data, data));
 
   @override
   int get hashCode => Object.hash(ref, data.length);
 
   static bool _bytesEqual(Uint8List a, Uint8List b) {
+    if (identical(a, b)) return true;
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -125,13 +129,14 @@ final class ImageLimits {
 
   @override
   bool operator ==(Object other) =>
-      other is ImageLimits &&
-      other.maxImageBytes == maxImageBytes &&
-      other.maxImagesPerMessage == maxImagesPerMessage &&
-      other.maxMessageImageBytes == maxMessageImageBytes &&
-      other.maxImagePixels == maxImagePixels &&
-      other.maxImageDimension == maxImageDimension &&
-      _listEquals(other.mediaTypes, mediaTypes);
+      identical(this, other) ||
+      (other is ImageLimits &&
+          other.maxImageBytes == maxImageBytes &&
+          other.maxImagesPerMessage == maxImagesPerMessage &&
+          other.maxMessageImageBytes == maxMessageImageBytes &&
+          other.maxImagePixels == maxImagePixels &&
+          other.maxImageDimension == maxImageDimension &&
+          _listEquals(other.mediaTypes, mediaTypes));
 
   @override
   int get hashCode => Object.hash(
@@ -145,6 +150,7 @@ final class ImageLimits {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

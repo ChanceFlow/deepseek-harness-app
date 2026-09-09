@@ -36,14 +36,15 @@ final class SubagentEntry {
 
   @override
   bool operator ==(Object other) =>
-      other is SubagentEntry &&
-      other.id == id &&
-      other.kind == kind &&
-      other.mode == mode &&
-      other.activity == activity &&
-      other.hasChildren == hasChildren &&
-      other.label == label &&
-      other.reason == reason;
+      identical(this, other) ||
+      (other is SubagentEntry &&
+          other.id == id &&
+          other.kind == kind &&
+          other.mode == mode &&
+          other.activity == activity &&
+          other.hasChildren == hasChildren &&
+          other.label == label &&
+          other.reason == reason);
 
   @override
   int get hashCode =>
@@ -63,10 +64,11 @@ final class SubagentCatalog {
 
   @override
   bool operator ==(Object other) =>
-      other is SubagentCatalog &&
-      other.parentSessionId == parentSessionId &&
-      _listEquals(other.entries, entries) &&
-      other.parentAvailable == parentAvailable;
+      identical(this, other) ||
+      (other is SubagentCatalog &&
+          other.parentSessionId == parentSessionId &&
+          _listEquals(other.entries, entries) &&
+          other.parentAvailable == parentAvailable);
 
   @override
   int get hashCode =>
@@ -74,6 +76,7 @@ final class SubagentCatalog {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

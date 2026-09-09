@@ -22,13 +22,14 @@ final class HostDescription {
 
   @override
   bool operator ==(Object other) =>
-      other is HostDescription &&
-      other.version == version &&
-      other.cwd == cwd &&
-      other.provider == provider &&
-      other.model == model &&
-      other.attachedSessions == attachedSessions &&
-      other.canOpenPath == canOpenPath;
+      identical(this, other) ||
+      (other is HostDescription &&
+          other.version == version &&
+          other.cwd == cwd &&
+          other.provider == provider &&
+          other.model == model &&
+          other.attachedSessions == attachedSessions &&
+          other.canOpenPath == canOpenPath);
 
   @override
   int get hashCode =>
@@ -50,10 +51,11 @@ final class ConnectionState {
 
   @override
   bool operator ==(Object other) =>
-      other is ConnectionState &&
-      other.phase == phase &&
-      other.hostDescription == hostDescription &&
-      other.generation == generation;
+      identical(this, other) ||
+      (other is ConnectionState &&
+          other.phase == phase &&
+          other.hostDescription == hostDescription &&
+          other.generation == generation);
 
   @override
   int get hashCode => Object.hash(phase, hostDescription, generation);

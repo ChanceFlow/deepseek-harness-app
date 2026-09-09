@@ -74,18 +74,19 @@ final class SessionSummary {
 
   @override
   bool operator ==(Object other) =>
-      other is SessionSummary &&
-      other.id == id &&
-      other.title == title &&
-      other.running == running &&
-      other.blank == blank &&
-      other.updatedAtEpochMs == updatedAtEpochMs &&
-      other.cwd == cwd &&
-      other.agentPreset == agentPreset &&
-      other.origin == origin &&
-      other.parentSessionId == parentSessionId &&
-      other.pendingInteraction == pendingInteraction &&
-      other.completed == completed;
+      identical(this, other) ||
+      (other is SessionSummary &&
+          other.id == id &&
+          other.title == title &&
+          other.running == running &&
+          other.blank == blank &&
+          other.updatedAtEpochMs == updatedAtEpochMs &&
+          other.cwd == cwd &&
+          other.agentPreset == agentPreset &&
+          other.origin == origin &&
+          other.parentSessionId == parentSessionId &&
+          other.pendingInteraction == pendingInteraction &&
+          other.completed == completed);
 
   @override
   int get hashCode => Object.hash(
@@ -118,11 +119,12 @@ final class CreateSessionRequest {
 
   @override
   bool operator ==(Object other) =>
-      other is CreateSessionRequest &&
-      other.sessionId == sessionId &&
-      other.workspaceId == workspaceId &&
-      other.cwd == cwd &&
-      other.agentPreset == agentPreset;
+      identical(this, other) ||
+      (other is CreateSessionRequest &&
+          other.sessionId == sessionId &&
+          other.workspaceId == workspaceId &&
+          other.cwd == cwd &&
+          other.agentPreset == agentPreset);
 
   @override
   int get hashCode => Object.hash(sessionId, workspaceId, cwd, agentPreset);
@@ -147,11 +149,12 @@ final class QueueUpdateRequest {
 
   @override
   bool operator ==(Object other) =>
-      other is QueueUpdateRequest &&
-      other.sessionId == sessionId &&
-      other.itemId == itemId &&
-      other.kind == kind &&
-      other.text == text;
+      identical(this, other) ||
+      (other is QueueUpdateRequest &&
+          other.sessionId == sessionId &&
+          other.itemId == itemId &&
+          other.kind == kind &&
+          other.text == text);
 
   @override
   int get hashCode => Object.hash(sessionId, itemId, kind, text);

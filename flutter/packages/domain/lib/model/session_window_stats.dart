@@ -39,18 +39,19 @@ final class SessionWindowStats {
 
   @override
   bool operator ==(Object other) =>
-      other is SessionWindowStats &&
-      other.turns == turns &&
-      other.steps == steps &&
-      other.llmMs == llmMs &&
-      other.toolMs == toolMs &&
-      other.ttftMs == ttftMs &&
-      other.ttftSteps == ttftSteps &&
-      other.decodeMs == decodeMs &&
-      other.decodeTokens == decodeTokens &&
-      other.billedInputTokens == billedInputTokens &&
-      other.outputTokens == outputTokens &&
-      other.cacheReadTokens == cacheReadTokens;
+      identical(this, other) ||
+      (other is SessionWindowStats &&
+          other.turns == turns &&
+          other.steps == steps &&
+          other.llmMs == llmMs &&
+          other.toolMs == toolMs &&
+          other.ttftMs == ttftMs &&
+          other.ttftSteps == ttftSteps &&
+          other.decodeMs == decodeMs &&
+          other.decodeTokens == decodeTokens &&
+          other.billedInputTokens == billedInputTokens &&
+          other.outputTokens == outputTokens &&
+          other.cacheReadTokens == cacheReadTokens);
 
   @override
   int get hashCode => Object.hash(

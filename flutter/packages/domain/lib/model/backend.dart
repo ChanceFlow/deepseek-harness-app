@@ -39,11 +39,12 @@ final class BackendConfig {
 
   @override
   bool operator ==(Object other) =>
-      other is BackendConfig &&
-      other.id == id &&
-      other.label == label &&
-      other.baseUri == baseUri &&
-      other.enabled == enabled;
+      identical(this, other) ||
+      (other is BackendConfig &&
+          other.id == id &&
+          other.label == label &&
+          other.baseUri == baseUri &&
+          other.enabled == enabled);
 
   @override
   int get hashCode => Object.hash(id, label, baseUri, enabled);

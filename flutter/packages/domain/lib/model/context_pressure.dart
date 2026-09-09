@@ -44,10 +44,11 @@ final class ContextPressure {
 
   @override
   bool operator ==(Object other) =>
-      other is ContextPressure &&
-      other.pressureTokens == pressureTokens &&
-      other.projectedTokens == projectedTokens &&
-      other.contextWindow == contextWindow;
+      identical(this, other) ||
+      (other is ContextPressure &&
+          other.pressureTokens == pressureTokens &&
+          other.projectedTokens == projectedTokens &&
+          other.contextWindow == contextWindow);
 
   @override
   int get hashCode =>
@@ -72,10 +73,11 @@ final class ContextBreakdown {
 
   @override
   bool operator ==(Object other) =>
-      other is ContextBreakdown &&
-      other.systemTokens == systemTokens &&
-      other.toolsTokens == toolsTokens &&
-      other.messageTokens == messageTokens;
+      identical(this, other) ||
+      (other is ContextBreakdown &&
+          other.systemTokens == systemTokens &&
+          other.toolsTokens == toolsTokens &&
+          other.messageTokens == messageTokens);
 
   @override
   int get hashCode => Object.hash(systemTokens, toolsTokens, messageTokens);

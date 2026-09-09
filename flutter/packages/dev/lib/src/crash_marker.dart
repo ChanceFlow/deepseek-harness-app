@@ -10,6 +10,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+
 import 'crash_record.dart';
 
 class CrashMarker {
@@ -25,7 +27,10 @@ class CrashMarker {
     try {
       file.parent.createSync(recursive: true);
       file.writeAsStringSync(jsonEncode(record.toJson()), flush: true);
-    } catch (_) {
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('CrashMarker: writeSync failed to write marker: $e\n$st');
+      }
       // Never let marker write failure escape into the crash handler.
     }
   }
@@ -43,7 +48,12 @@ class CrashMarker {
       final record = CrashRecord.fromJson(decoded as Map<String, Object?>);
       clear();
       return record;
-    } catch (_) {
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint(
+          'CrashMarker: takeIfPresent failed to parse marker: $e\n$st',
+        );
+      }
       clear();
       return null;
     }
@@ -52,7 +62,10 @@ class CrashMarker {
   void clear() {
     try {
       if (exists) file.deleteSync();
-    } catch (_) {
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('CrashMarker: clear failed: $e\n$st');
+      }
       // best effort
     }
   }
