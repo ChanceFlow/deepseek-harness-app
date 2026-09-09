@@ -18,15 +18,17 @@ the WS leg stays pure dart:io, untouched.
 Android RPC rides embedded Cronet via `cronet_http`; everything else keeps
 today's path.
 
-- `app/lib/di/http_engine.dart` owns the choice: `dshHttp3Engine()` builds
-  `CronetEngine.build(userAgent: 'dsh-android/$kDshAppVersion http3')` +
-  `CronetClient.fromCronetEngine(engine, closeEngine: true)` on Android,
-  returns null elsewhere and on any construction failure. The factory is
+- `app/lib/di/http_engine.dart` owns the choice: a process-lived shared
+  `CronetEngine` (`_sharedCronetEngine`, lazily built with
+  `userAgent: 'dsh-android/$kDshAppVersion http3'`) backs clients via
+  `CronetClient.fromCronetEngine(engine, closeEngine: false)` on Android,
+  returning null elsewhere and on any construction failure. The factory is
   deliberately in `app/lib/di/`, not `packages/network`: `cronet_http` is
   an Android Flutter plugin, and the import gate keeps network
   flutter-free. `dshRpcClientProvider` injects it; `ref.onDispose` closes
-  the engine when the backend configuration goes away, so engine lifetime
-  equals backend lifetime.
+  the client wrapper (`_isClosed = true`) guarded with try/catch. The
+  native CronetEngine persists across client lifecycles, avoiding
+  Chromium's `IllegalStateException: Cannot shutdown with running requests`.
 - **Default on, no build flag.** The app has no remote config, so a
   `--dart-define` kill switch only re-labels "rebuild to roll back" — the
   rollback for default-on is a dependency bump or revert. Fallback is
@@ -97,6 +99,7 @@ today's path.
   release) must pass `--dart-define=cronetHttpNoPlay=true`. The embedded
   chain ships unique namespaces (`cronet_embedded`/`cronet_shared`/…)
   and builds clean; verified by the debug build smoke.
-- Engine disposal rides the provider's autoDispose: an in-flight RPC at
-  dispose time fails with a transport exception, the same settlement
-  shape as the WS teardown.
+- Engine disposal closes only the client wrapper (`closeEngine: false`):
+  Cronet rejects shutting down while requests run (`IllegalStateException:
+  Cannot shutdown with running requests`). Sharing the engine across
+  clients lets active requests finish or abort cleanly without crashing.
