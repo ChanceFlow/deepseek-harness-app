@@ -82,78 +82,9 @@ abstract final class DshRpcEndpoints {
 
 /// Fallback mapping from canonical DSH 0.1.2 endpoints to legacy 0.1.1 endpoints.
 ///
-/// Used by remote invokers when a primary 0.1.2 endpoint answers HTTP 404
-/// against an older API Proxy backend.
-const Map<String, List<String>> kDshEndpointFallbacks = <String, List<String>>{
-  DshRpcEndpoints.skillsList: <String>['skill/list', 'skill.list'],
-  DshRpcEndpoints.subagentsList: <String>['subagent/list', 'subagent.list'],
-  DshRpcEndpoints.subagentsPrompt: <String>[
-    'subagent/prompt',
-    'subagent.prompt',
-  ],
-  DshRpcEndpoints.subagentsInterrupt: <String>[
-    'subagent/interrupt',
-    'subagent.interrupt',
-  ],
-  DshRpcEndpoints.goalsCreate: <String>['goal/create', 'goal.create'],
-  DshRpcEndpoints.goalsEdit: <String>['goal/edit', 'goal.edit'],
-  DshRpcEndpoints.goalsPause: <String>['goal/pause', 'goal.pause'],
-  DshRpcEndpoints.goalsResume: <String>['goal/resume', 'goal.resume'],
-  DshRpcEndpoints.goalsComplete: <String>['goal/complete', 'goal.complete'],
-  DshRpcEndpoints.goalsClear: <String>['goal/clear', 'goal.clear'],
-  DshRpcEndpoints.agentPresetsList: <String>[
-    'agentPreset/list',
-    'agentPreset.list',
-  ],
-  DshRpcEndpoints.agentPresetsSelect: <String>[
-    'agentPreset/select',
-    'agentPreset.select',
-  ],
-  DshRpcEndpoints.directoryPickerList: <String>[
-    'host/listDirectory',
-    'host.listDirectory',
-  ],
-  DshRpcEndpoints.directoryPickerCreate: <String>[
-    'host/createDirectory',
-    'host.createDirectory',
-  ],
-  DshRpcEndpoints.sessionList: <String>['session.list'],
-  DshRpcEndpoints.sessionCreate: <String>['session.create'],
-  DshRpcEndpoints.sessionPrompt: <String>['session.prompt'],
-  DshRpcEndpoints.sessionAttachment: <String>['session.attachment'],
-  DshRpcEndpoints.sessionCancel: <String>['session.cancel'],
-  DshRpcEndpoints.sessionSearch: <String>['session.search'],
-  DshRpcEndpoints.sessionRename: <String>['session.rename'],
-  DshRpcEndpoints.sessionFork: <String>['session.fork'],
-  DshRpcEndpoints.sessionUpdateQueue: <String>['session.updateQueue'],
-  DshRpcEndpoints.sessionSelectModel: <String>['session.selectModel'],
-  DshRpcEndpoints.sessionHistory: <String>[
-    'session.history',
-    DshRpcEndpoints.sessionPage,
-  ],
-  DshRpcEndpoints.subagentsHistory: <String>[
-    'subagents/history',
-    'subagent.history',
-    DshRpcEndpoints.sessionPage,
-  ],
-  DshRpcEndpoints.hostDescribe: <String>['host.describe'],
-  DshRpcEndpoints.settingsDescribe: <String>['settings.describe'],
-  DshRpcEndpoints.settingsUpdate: <String>['settings.update'],
-  DshRpcEndpoints.settingsReplace: <String>['settings.replace'],
-  DshRpcEndpoints.settingsMutate: <String>['settings.mutate'],
-  DshRpcEndpoints.credentialsDescribe: <String>['credentials.describe'],
-  DshRpcEndpoints.credentialsSet: <String>['credentials.set'],
-  DshRpcEndpoints.credentialsUnset: <String>['credentials.unset'],
-  DshRpcEndpoints.workspaceList: <String>['workspace.list'],
-  DshRpcEndpoints.workspaceCreate: <String>['workspace.create'],
-  DshRpcEndpoints.workspaceRename: <String>['workspace.rename'],
-  DshRpcEndpoints.workspaceDelete: <String>['workspace.delete'],
-  DshRpcEndpoints.workspaceInsertBefore: <String>['workspace.insertBefore'],
-  DshRpcEndpoints.workspaceInsertSessionBefore: <String>[
-    'workspace.insertSessionBefore',
-  ],
-  DshRpcEndpoints.workspaceArchiveSession: <String>['workspace.archiveSession'],
-};
+/// Kept empty since all communication is strictly locked to DSH 0.1.2.
+const Map<String, List<String>> kDshEndpointFallbacks =
+    <String, List<String>>{};
 
 /// Returns [value] as a [JsonMap], or null when it is not an object.
 JsonMap? asJsonObject(Object? value) {

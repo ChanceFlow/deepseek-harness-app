@@ -219,7 +219,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.agentPresetsSelect,
       {'agentId': sessionId, 'agentPreset': agentPreset},
     ).valueOrThrow();
-    final echoed = wireString(value, 'agentPreset');
+    final echoed =
+        wireString(value, 'value') ??
+        wireString(value, 'agentPreset') ??
+        (value is String ? value as String : null);
     if (echoed == null) {
       throw const FormatException('agentPresets.select missing agentPreset');
     }
@@ -446,6 +449,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionPrompt,
       DshRpcEndpoints.sessionPrompt,
       {
+        'requestId': 'req-${DateTime.now().microsecondsSinceEpoch}',
         'sessionId': request.sessionId,
         'mode': request.mode == PromptMode.queue ? 'queue' : 'steer',
         'content': content,
@@ -798,15 +802,21 @@ class HarnessRepositoryImpl implements ChatRepository {
     String childSessionId,
     SubagentMode mode,
   ) async {
-    final throughSeq = _sessionCursors[childSessionId];
+    final throughSeq = _sessionCursors[childSessionId] ?? 999999999;
     final value = await _call(
-      DshRpcEndpoints.subagentsHistory,
-      DshRpcEndpoints.subagentsHistory,
+      DshRpcEndpoints.sessionPage,
+      DshRpcEndpoints.sessionPage,
       {
-        'parentSessionId': parentSessionId,
-        'childSessionId': childSessionId,
-        'mode': _subagentModeToWire(mode),
-        if (throughSeq != null) 'throughSeq': throughSeq,
+        'request': <String, Object?>{
+          'address': <String, Object?>{
+            'kind': 'subagent',
+            'parentSessionId': parentSessionId,
+            'childSessionId': childSessionId,
+            'mode': _subagentModeToWire(mode),
+          },
+          'throughSeq': throughSeq,
+          'maxMessages': _historyPageMessages,
+        },
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
@@ -1838,15 +1848,20 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
-    final throughSeq = beforeSeq ?? _sessionCursors[sessionId];
+    final throughSeq = beforeSeq ?? _sessionCursors[sessionId] ?? 999999999;
     final value = await _call(
-      DshRpcEndpoints.sessionHistory,
-      DshRpcEndpoints.sessionHistory,
+      DshRpcEndpoints.sessionPage,
+      DshRpcEndpoints.sessionPage,
       {
-        'sessionId': sessionId,
-        if (throughSeq != null) 'throughSeq': throughSeq,
-        if (beforeSeq != null) 'beforeSeq': beforeSeq,
-        'maxMessages': _historyPageMessages,
+        'request': <String, Object?>{
+          'address': <String, Object?>{
+            'kind': 'session',
+            'sessionId': sessionId,
+          },
+          'throughSeq': throughSeq,
+          if (beforeSeq != null) 'beforeSeq': beforeSeq,
+          'maxMessages': _historyPageMessages,
+        },
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);

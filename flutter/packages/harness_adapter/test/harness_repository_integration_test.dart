@@ -147,6 +147,59 @@ class HarnessFakeRpc implements DshRpcClient {
       <String, List<JsonMap>>{};
   final List<(String, RpcResult)> _receivedResponses = <(String, RpcResult)>[];
 
+  static const Map<String, String> _testLegacyToCanonicalMap = <String, String>{
+    'skill/list': DshRpcEndpoints.skillsList,
+    'skill.list': DshRpcEndpoints.skillsList,
+    'skills.list': DshRpcEndpoints.skillsList,
+    'subagent/list': DshRpcEndpoints.subagentsList,
+    'subagent.list': DshRpcEndpoints.subagentsList,
+    'subagents.list': DshRpcEndpoints.subagentsList,
+    'subagent/prompt': DshRpcEndpoints.subagentsPrompt,
+    'subagent.prompt': DshRpcEndpoints.subagentsPrompt,
+    'subagents.prompt': DshRpcEndpoints.subagentsPrompt,
+    'subagent/interrupt': DshRpcEndpoints.subagentsInterrupt,
+    'subagent.interrupt': DshRpcEndpoints.subagentsInterrupt,
+    'subagents.interrupt': DshRpcEndpoints.subagentsInterrupt,
+    'subagents.interruptByParent': DshRpcEndpoints.subagentsInterrupt,
+    'subagent/history': DshRpcEndpoints.sessionPage,
+    'subagent.history': DshRpcEndpoints.sessionPage,
+    'subagents/history': DshRpcEndpoints.sessionPage,
+    'subagents.history': DshRpcEndpoints.sessionPage,
+    'goal/create': DshRpcEndpoints.goalsCreate,
+    'goal.create': DshRpcEndpoints.goalsCreate,
+    'goals.create': DshRpcEndpoints.goalsCreate,
+    'goal/edit': DshRpcEndpoints.goalsEdit,
+    'goal.edit': DshRpcEndpoints.goalsEdit,
+    'goals.edit': DshRpcEndpoints.goalsEdit,
+    'goal/pause': DshRpcEndpoints.goalsPause,
+    'goal.pause': DshRpcEndpoints.goalsPause,
+    'goals.pause': DshRpcEndpoints.goalsPause,
+    'goal/resume': DshRpcEndpoints.goalsResume,
+    'goal.resume': DshRpcEndpoints.goalsResume,
+    'goals.resume': DshRpcEndpoints.goalsResume,
+    'goal/complete': DshRpcEndpoints.goalsComplete,
+    'goal.complete': DshRpcEndpoints.goalsComplete,
+    'goals.complete': DshRpcEndpoints.goalsComplete,
+    'goal/clear': DshRpcEndpoints.goalsClear,
+    'goal.clear': DshRpcEndpoints.goalsClear,
+    'goals.clear': DshRpcEndpoints.goalsClear,
+    'agentPreset/list': DshRpcEndpoints.agentPresetsList,
+    'agentPreset.list': DshRpcEndpoints.agentPresetsList,
+    'agentPresets.list': DshRpcEndpoints.agentPresetsList,
+    'agentPreset/select': DshRpcEndpoints.agentPresetsSelect,
+    'agentPreset.select': DshRpcEndpoints.agentPresetsSelect,
+    'agentPresets.select': DshRpcEndpoints.agentPresetsSelect,
+    'host/listDirectory': DshRpcEndpoints.directoryPickerList,
+    'host.listDirectory': DshRpcEndpoints.directoryPickerList,
+    'directoryPicker.list': DshRpcEndpoints.directoryPickerList,
+    'host/createDirectory': DshRpcEndpoints.directoryPickerCreate,
+    'host.createDirectory': DshRpcEndpoints.directoryPickerCreate,
+    'directoryPicker.createDirectory': DshRpcEndpoints.directoryPickerCreate,
+    'session/history': DshRpcEndpoints.sessionPage,
+    'session.history': DshRpcEndpoints.sessionPage,
+    'session.page': DshRpcEndpoints.sessionPage,
+  };
+
   int callCountFor(String endpoint) {
     final count = _calls[endpoint];
     if (count != null && count > 0) return count;
@@ -154,15 +207,13 @@ class HarnessFakeRpc implements DshRpcClient {
     if (slash != null && slash > 0) return slash;
     final dot = _calls[endpoint.replaceAll('/', '.')];
     if (dot != null && dot > 0) return dot;
-    final fallbacks = kDshEndpointFallbacks[endpoint];
-    if (fallbacks != null) {
-      for (final fb in fallbacks) {
-        final c = _calls[fb];
-        if (c != null && c > 0) return c;
-      }
+    final canonical = _testLegacyToCanonicalMap[endpoint];
+    if (canonical != null) {
+      final c = _calls[canonical];
+      if (c != null && c > 0) return c;
     }
-    for (final entry in kDshEndpointFallbacks.entries) {
-      if (entry.value.contains(endpoint)) {
+    for (final entry in _testLegacyToCanonicalMap.entries) {
+      if (entry.value == endpoint) {
         final c = _calls[entry.key];
         if (c != null && c > 0) return c;
       }
@@ -176,27 +227,21 @@ class HarnessFakeRpc implements DshRpcClient {
     if (direct != null && direct.isNotEmpty) {
       raw = direct;
     } else {
-      final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
-      if (slash != null && slash.isNotEmpty) {
-        raw = slash;
+      final canonical = _testLegacyToCanonicalMap[endpoint];
+      if (canonical != null &&
+          _payloadsByEndpoint[canonical]?.isNotEmpty == true) {
+        raw = _payloadsByEndpoint[canonical];
       } else {
-        final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
-        if (dot != null && dot.isNotEmpty) {
-          raw = dot;
+        final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
+        if (slash != null && slash.isNotEmpty) {
+          raw = slash;
         } else {
-          final fallbacks = kDshEndpointFallbacks[endpoint];
-          if (fallbacks != null) {
-            for (final fb in fallbacks) {
-              final list = _payloadsByEndpoint[fb];
-              if (list != null && list.isNotEmpty) {
-                raw = list;
-                break;
-              }
-            }
-          }
-          if (raw == null) {
-            for (final entry in kDshEndpointFallbacks.entries) {
-              if (entry.value.contains(endpoint)) {
+          final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
+          if (dot != null && dot.isNotEmpty) {
+            raw = dot;
+          } else {
+            for (final entry in _testLegacyToCanonicalMap.entries) {
+              if (entry.value == endpoint) {
                 final list = _payloadsByEndpoint[entry.key];
                 if (list != null && list.isNotEmpty) {
                   raw = list;
@@ -232,6 +277,17 @@ class HarnessFakeRpc implements DshRpcClient {
   /// One-shot scripted business failure for the next call to [endpoint].
   void failNextCall(String endpoint, String code) {
     _failures[endpoint] = code;
+    _failures[endpoint.replaceAll('.', '/')] = code;
+    _failures[endpoint.replaceAll('/', '.')] = code;
+    final canonical = _testLegacyToCanonicalMap[endpoint];
+    if (canonical != null) {
+      _failures[canonical] = code;
+    }
+    for (final entry in _testLegacyToCanonicalMap.entries) {
+      if (entry.value == endpoint) {
+        _failures[entry.key] = code;
+      }
+    }
   }
 
   final Map<String, String> _failures = <String, String>{};
@@ -345,10 +401,26 @@ class HarnessFakeRpc implements DshRpcClient {
     _calls[endpoint] = (_calls[endpoint] ?? 0) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
     callJournal.add('$endpoint:start');
+    for (final entry in _testLegacyToCanonicalMap.entries) {
+      if (entry.value == endpoint) {
+        callJournal.add('${entry.key}:start');
+      }
+    }
+    final canonical = _testLegacyToCanonicalMap[endpoint];
     final witnesses =
         _callWitnesses.remove(endpoint) ??
         _callWitnesses.remove(endpoint.replaceAll('.', '/')) ??
-        _callWitnesses.remove(endpoint.replaceAll('/', '.'));
+        _callWitnesses.remove(endpoint.replaceAll('/', '.')) ??
+        (canonical != null ? _callWitnesses.remove(canonical) : null) ??
+        (() {
+          for (final entry in _testLegacyToCanonicalMap.entries) {
+            if (entry.value == endpoint) {
+              final w = _callWitnesses.remove(entry.key);
+              if (w != null) return w;
+            }
+          }
+          return null;
+        })();
     if (witnesses != null) {
       for (final waiter in witnesses) {
         if (!waiter.isCompleted) waiter.complete();
@@ -357,7 +429,17 @@ class HarnessFakeRpc implements DshRpcClient {
     final gates =
         _responseGates[endpoint] ??
         _responseGates[endpoint.replaceAll('.', '/')] ??
-        _responseGates[endpoint.replaceAll('/', '.')];
+        _responseGates[endpoint.replaceAll('/', '.')] ??
+        (canonical != null ? _responseGates[canonical] : null) ??
+        (() {
+          for (final entry in _testLegacyToCanonicalMap.entries) {
+            if (entry.value == endpoint) {
+              final g = _responseGates[entry.key];
+              if (g != null) return g;
+            }
+          }
+          return null;
+        })();
     if (gates != null && gates.isNotEmpty) {
       await gates.removeAt(0);
     }
@@ -365,6 +447,11 @@ class HarnessFakeRpc implements DshRpcClient {
       return await _answer(endpoint, payload);
     } finally {
       callJournal.add('$endpoint:return');
+      for (final entry in _testLegacyToCanonicalMap.entries) {
+        if (entry.value == endpoint) {
+          callJournal.add('${entry.key}:return');
+        }
+      }
     }
   }
 
@@ -379,10 +466,15 @@ class HarnessFakeRpc implements DshRpcClient {
     }
     var failureCode = _failures.remove(endpoint);
     if (failureCode == null) {
-      final fallbacks = kDshEndpointFallbacks[endpoint];
-      if (fallbacks != null) {
-        for (final fb in fallbacks) {
-          final c = _failures.remove(fb);
+      final canonical = _testLegacyToCanonicalMap[endpoint];
+      if (canonical != null) {
+        failureCode = _failures.remove(canonical);
+      }
+    }
+    if (failureCode == null) {
+      for (final entry in _testLegacyToCanonicalMap.entries) {
+        if (entry.value == endpoint) {
+          final c = _failures.remove(entry.key);
           if (c != null) {
             failureCode = c;
             break;
@@ -826,37 +918,31 @@ void main() {
     },
   );
 
-  test(
-    'primary endpoint 404 transparently falls back to legacy alias',
-    () async {
-      final rpc = HarnessFakeRpc();
-      // Simulate skills/list returning 404 (e.g. against an older DSH 0.1.1 API Proxy backend).
-      rpc.failNextCall(DshRpcEndpoints.skillsList, '404');
-      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
-      await pumpEventQueue();
+  test('primary endpoint 404 fails loud without legacy fallbacks', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.failNextCall(DshRpcEndpoints.skillsList, '404');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
 
-      final skills = await repository.listSkills('session-1');
-      expect(skills, hasLength(2));
-      expect(skills.first.name, 'generate-image');
-      expect(rpc.callCountFor(DshRpcEndpoints.skillsList), 1);
-      expect(rpc.callCountFor('skill/list'), 1);
-    },
-  );
+    expect(
+      () => repository.listSkills('session-1'),
+      throwsA(isA<DshTransportException>()),
+    );
+    expect(rpc.callCountFor(DshRpcEndpoints.skillsList), 1);
+  });
 
-  test(
-    'settings/describe 404 transparently falls back to settings.describe',
-    () async {
-      final rpc = HarnessFakeRpc();
-      rpc.failNextCall(DshRpcEndpoints.settingsDescribe, '404');
-      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
-      await pumpEventQueue();
+  test('settings/describe 404 fails loud without legacy fallbacks', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.failNextCall(DshRpcEndpoints.settingsDescribe, '404');
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
 
-      final snapshot = await repository.describeSettings();
-      expect(snapshot.writable, isTrue);
-      expect(rpc.callCountFor(DshRpcEndpoints.settingsDescribe), 1);
-      expect(rpc.callCountFor('settings.describe'), 1);
-    },
-  );
+    expect(
+      () => repository.describeSettings(),
+      throwsA(isA<DshTransportException>()),
+    );
+    expect(rpc.callCountFor(DshRpcEndpoints.settingsDescribe), 1);
+  });
 
   test(
     'loadModels strips arguments for canonical session/modelCatalog',
@@ -2609,7 +2695,8 @@ void main() {
       final subHistoryPayload = rpc.payloads('subagent/history').single;
       final subHistoryArgs =
           asJsonObject(subHistoryPayload['args']) ?? subHistoryPayload;
-      expect(subHistoryArgs, <String, Object?>{
+      expect(subHistoryArgs['address'], <String, Object?>{
+        'kind': 'subagent',
         'parentSessionId': 'session-root',
         'childSessionId': 'child-2',
         'mode': 'one-shot',
@@ -2624,7 +2711,10 @@ void main() {
       final lastSubHistory = rpc.payloads('subagent/history').last;
       final lastSubHistoryArgs =
           asJsonObject(lastSubHistory['args']) ?? lastSubHistory;
-      expect(lastSubHistoryArgs['mode'], 'continuable');
+      expect(
+        asJsonObject(lastSubHistoryArgs['address'])?['mode'],
+        'continuable',
+      );
     },
   );
 
