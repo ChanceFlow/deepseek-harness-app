@@ -36,6 +36,9 @@ final class DshRemoteInvoker {
   };
 
   static JsonMap _prepareArgs(String endpoint, JsonMap payload) {
+    if (endpoint == DshRpcEndpoints.sessionModelCatalog) {
+      return const <String, Object?>{};
+    }
     if (endpoint == DshRpcEndpoints.sessionList) {
       if (payload.containsKey('_request')) return payload;
       return <String, Object?>{'_request': payload};

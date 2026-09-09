@@ -647,8 +647,6 @@ class HarnessFakeRpc implements DshRpcClient {
       case 'agentPreset/select':
         return <String, Object?>{'agentPreset': 'minimal'};
       case 'session/modelCatalog':
-      case 'session.models':
-      case 'session/models':
         return <String, Object?>{
           'defaultSelection': <String, Object?>{
             'provider': 'deepseek',
@@ -857,6 +855,22 @@ void main() {
       expect(snapshot.writable, isTrue);
       expect(rpc.callCountFor(DshRpcEndpoints.settingsDescribe), 1);
       expect(rpc.callCountFor('settings.describe'), 1);
+    },
+  );
+
+  test(
+    'loadModels strips arguments for canonical session/modelCatalog',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final models = await repository.loadModels('session-1');
+      expect(models.current.model, 'glm-x');
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 1);
+      final payloads = rpc.payloads(DshRpcEndpoints.sessionModelCatalog);
+      expect(payloads, isNotEmpty);
+      expect(payloads.first['args'], isEmpty);
     },
   );
 

@@ -117,10 +117,6 @@ const Map<String, List<String>> kDshEndpointFallbacks = <String, List<String>>{
     'host/createDirectory',
     'host.createDirectory',
   ],
-  DshRpcEndpoints.sessionModelCatalog: <String>[
-    'session/models',
-    'session.models',
-  ],
   DshRpcEndpoints.sessionList: <String>['session.list'],
   DshRpcEndpoints.sessionCreate: <String>['session.create'],
   DshRpcEndpoints.sessionPrompt: <String>['session.prompt'],
