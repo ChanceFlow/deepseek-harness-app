@@ -13,9 +13,8 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
   menus, dialogs, and controls ride `ListTile`, `ExpansionTile`,
   `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
   `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
-  `CustomPainter` carries its reason in a decision note; the standing
-  exceptions are the markdown renderer, the outline timeline's turn folding,
-  and the brand fish logo.
+  `CustomPainter` carries its reason in a decision note; standing
+  exceptions are markdown, turn folding, and the brand fish logo.
 - **Colors come from `ColorScheme` roles.**
   `Theme.of(context).colorScheme` is the source:
 
@@ -51,8 +50,11 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 - **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
   `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
   reason, not a number typed at a call site.
-- **Motion and elevation are framework defaults.** A bespoke curve is a
-  per-change decision with a reason.
+- **Motion follows `DshMotion` tokens in `theme.dart`.** Durations
+  (`durationMicro/Short/Medium/Long`) and curves (`curveEmphasized/Enter/Exit/Standard`).
+  Controls provide tactile feedback (`DshTappable`); pages ride
+  `PageTransitionsTheme`. Hard-coded motion at call sites is rejected; reduced
+  motion is honored (5).
 
 ## Structure and state
 

@@ -24,6 +24,7 @@ import '../../notifications/system_notifier.dart' show NotificationTarget;
 import '../chat/chat_screen.dart';
 import '../chat/chat_ui_state.dart' show SelectSession;
 import '../settings/settings_screen.dart';
+import '../theme/theme.dart';
 import '../workspace/workspace_screen.dart';
 import 'app_destination.dart';
 
@@ -82,26 +83,40 @@ class _AppRootState extends ConsumerState<AppRoot> {
     );
 
     return Scaffold(
-      // IndexedStack keeps every destination's state alive across tab
-      // switches — the composer draft, scroll positions, and expansion
-      // states survive leaving and returning to a tab (a switch here
-      // would unmount the route and drop them).
+      // AnimatedIndexedStack keeps every destination's state alive across tab
+      // switches with smooth cross-fading, preventing jarring layout hard-cuts.
       body: Stack(
         children: [
-          IndexedStack(
+          AnimatedIndexedStack(
             index: destination.index,
             children: const [ChatRoute(), WorkspaceRoute(), SettingsRoute()],
           ),
-          // The toast rides a top overlay above every destination.
-          if (_toastEvent case final event?)
-            Align(
-              alignment: Alignment.topCenter,
-              child: NotificationToast(
-                event: event,
-                onTap: _navigateToEvent,
-                onDismiss: _dismissToast,
-              ),
-            ),
+          // The toast rides a top overlay with smooth slide-and-fade entry/exit.
+          AnimatedSwitcher(
+            duration: DshMotion.durationMedium,
+            switchInCurve: DshMotion.curveEnter,
+            switchOutCurve: DshMotion.curveExit,
+            transitionBuilder: (child, animation) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, -1.0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: FadeTransition(opacity: animation, child: child),
+              );
+            },
+            child: _toastEvent != null
+                ? Align(
+                    key: ValueKey(_toastEvent),
+                    alignment: Alignment.topCenter,
+                    child: NotificationToast(
+                      event: _toastEvent!,
+                      onTap: _navigateToEvent,
+                      onDismiss: _dismissToast,
+                    ),
+                  )
+                : const SizedBox.shrink(key: ValueKey('no-toast')),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -170,5 +185,73 @@ class _AppRootState extends ConsumerState<AppRoot> {
         .read(chatControllerProvider(target.backendId))
         .onAction(SelectSession(target.sessionId));
     ref.read(appDestinationProvider.notifier).select(AppDestination.chat);
+  }
+}
+
+/// An [IndexedStack] that smoothly fades in on destination changes while
+/// keeping all destinations mounted and their states intact.
+class AnimatedIndexedStack extends StatefulWidget {
+  const AnimatedIndexedStack({
+    required this.index,
+    required this.children,
+    this.duration = DshMotion.durationShort,
+    this.curve = DshMotion.curveEnter,
+    super.key,
+  });
+
+  final int index;
+  final List<Widget> children;
+  final Duration duration;
+  final Curve curve;
+
+  @override
+  State<AnimatedIndexedStack> createState() => _AnimatedIndexedStackState();
+}
+
+class _AnimatedIndexedStackState extends State<AnimatedIndexedStack>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  )..value = 1.0;
+
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: widget.curve,
+  );
+
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.index;
+  }
+
+  @override
+  void didUpdateWidget(AnimatedIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != _currentIndex) {
+      _currentIndex = widget.index;
+      if (DshMotion.isReducedMotion(context)) {
+        _controller.value = 1.0;
+      } else {
+        _controller.forward(from: 0.0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: IndexedStack(index: _currentIndex, children: widget.children),
+    );
   }
 }

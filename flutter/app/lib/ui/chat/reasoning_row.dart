@@ -12,6 +12,7 @@ import 'dart:async';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/theme.dart';
 import 'sweep_highlight.dart';
 
 class ReasoningRow extends StatefulWidget {
@@ -120,7 +121,7 @@ class _ReasoningRowState extends State<ReasoningRow>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced = DshMotion.isReducedMotion(context);
     final l10n = AppLocalizations.of(context)!;
     return Semantics(
       label: widget.running ? l10n.semanticsRunning : null,

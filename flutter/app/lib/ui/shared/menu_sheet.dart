@@ -28,6 +28,11 @@ Future<T?> showMenuSheet<T>(
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: DshMotion.durationMedium,
+      curve: DshMotion.curveEmphasized,
+      reverseCurve: DshMotion.curveExit,
+    ),
     backgroundColor: Colors.transparent,
     builder: (sheetContext) {
       final scheme = Theme.of(sheetContext).colorScheme;

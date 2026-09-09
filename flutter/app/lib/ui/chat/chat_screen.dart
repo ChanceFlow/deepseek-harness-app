@@ -48,6 +48,7 @@ import 'context_ring.dart';
 import 'stats_line.dart';
 import '../shared/dock_anchor.dart';
 import '../shared/menu_sheet.dart';
+import '../shared/tappable_feedback.dart';
 import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
@@ -389,8 +390,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           // ease-in-out is a recorded per-change decision —
                           // the default linear reads as a snap at both
                           // ends of a row this wide.
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeInOut,
+                          duration: DshMotion.durationShort,
+                          curve: DshMotion.curveStandard,
                           width: _rail ? kRailWidth : kSidebarWidth,
                           child: SessionPanel(
                             onRailChanged: (rail) =>
@@ -900,8 +901,8 @@ class _ChatPanelState extends State<ChatPanel> {
     try {
       await _timelineScroll.animateTo(
         target,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
+        duration: DshMotion.durationMedium,
+        curve: DshMotion.curveEnter,
       );
     } finally {
       if (mounted) {
@@ -1046,7 +1047,7 @@ class _ChatPanelState extends State<ChatPanel> {
         await _timelineScroll.animateTo(
           target,
           duration: _followDuration(live.pixels, target),
-          curve: Curves.easeOutCubic,
+          curve: DshMotion.curveEnter,
         );
       }
     } finally {
@@ -1351,18 +1352,20 @@ class _ChatPanelState extends State<ChatPanel> {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: AppLocalizations.of(context)!.jumpToBottomTooltip,
-      child: FloatingActionButton.small(
-        heroTag: null,
-        shape: const CircleBorder(),
-        backgroundColor: scheme.surfaceContainerLow,
-        foregroundColor: scheme.onSurfaceVariant,
-        elevation: 2,
-        highlightElevation: 3,
-        hoverElevation: 3,
-        focusElevation: 3,
-        disabledElevation: 0,
-        onPressed: _jumpToBottom,
-        child: const Icon(Icons.arrow_downward, size: 22),
+      child: DshTappable(
+        child: FloatingActionButton.small(
+          heroTag: null,
+          shape: const CircleBorder(),
+          backgroundColor: scheme.surfaceContainerLow,
+          foregroundColor: scheme.onSurfaceVariant,
+          elevation: 2,
+          highlightElevation: 3,
+          hoverElevation: 3,
+          focusElevation: 3,
+          disabledElevation: 0,
+          onPressed: _jumpToBottom,
+          child: const Icon(Icons.arrow_downward, size: 22),
+        ),
       ),
     );
   }
@@ -1442,9 +1445,9 @@ class _ChatPanelState extends State<ChatPanel> {
                     right: 8,
                     bottom: 8,
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
+                      duration: DshMotion.durationShort,
+                      switchInCurve: DshMotion.curveEnter,
+                      switchOutCurve: DshMotion.curveExit,
                       transitionBuilder: (child, animation) => FadeTransition(
                         opacity: animation,
                         child: ScaleTransition(scale: animation, child: child),
@@ -1971,7 +1974,7 @@ class _PendingSteeringRowState extends State<PendingSteeringRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced = DshMotion.isReducedMotion(context);
     return Align(
       alignment: Alignment.centerRight,
       child: LayoutBuilder(
@@ -2316,8 +2319,7 @@ class _ToolGroupRowState extends State<ToolGroupRow>
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: SweepHighlight(
-              controller:
-                  running > 0 && !MediaQuery.disableAnimationsOf(context)
+              controller: running > 0 && !DshMotion.isReducedMotion(context)
                   ? _sweep
                   : null,
               child: Padding(
@@ -2530,7 +2532,7 @@ class _ToolCallRowState extends State<ToolCallRow>
           },
           title: ClipRect(
             child: SweepHighlight(
-              controller: running && !MediaQuery.disableAnimationsOf(context)
+              controller: running && !DshMotion.isReducedMotion(context)
                   ? _sweep
                   : null,
               child: Padding(
@@ -5718,7 +5720,7 @@ class _CommandRowState extends State<CommandRow>
     };
     return ClipRect(
       child: SweepHighlight(
-        controller: running && !MediaQuery.disableAnimationsOf(context)
+        controller: running && !DshMotion.isReducedMotion(context)
             ? _sweep
             : null,
         child: SizedBox(

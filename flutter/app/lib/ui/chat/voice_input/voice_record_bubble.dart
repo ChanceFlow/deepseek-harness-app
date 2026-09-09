@@ -74,8 +74,7 @@ String formatVoiceDuration(Duration duration) {
 /// setting and a muted [TickerMode] both stop it, leaving a stepped, still
 /// legible meter and an bubble that appears instead of popping.
 bool voiceMotionAllowed(BuildContext context) =>
-    !MediaQuery.disableAnimationsOf(context) &&
-    TickerMode.valuesOf(context).enabled;
+    !DshMotion.isReducedMotion(context) && TickerMode.valuesOf(context).enabled;
 
 /// Microphone seat for the Composer tools row, and the owner of the recording
 /// bubble its session puts on screen.
