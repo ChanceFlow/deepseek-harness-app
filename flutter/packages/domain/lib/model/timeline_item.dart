@@ -27,7 +27,8 @@ final class TimelineMessage extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineMessage && other.value == value;
+      identical(this, other) ||
+      (other is TimelineMessage && other.value == value);
 
   @override
   int get hashCode => Object.hash('message', value);
@@ -42,7 +43,8 @@ final class TimelineTurnBoundary extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineTurnBoundary && other.turn == turn;
+      identical(this, other) ||
+      (other is TimelineTurnBoundary && other.turn == turn);
 
   @override
   int get hashCode => Object.hash('turn', turn);
@@ -74,11 +76,12 @@ final class TimelineCompaction extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineCompaction &&
-      other.id == id &&
-      other.shadowedCount == shadowedCount &&
-      other.shadowedTokens == shadowedTokens &&
-      other.summary == summary;
+      identical(this, other) ||
+      (other is TimelineCompaction &&
+          other.id == id &&
+          other.shadowedCount == shadowedCount &&
+          other.shadowedTokens == shadowedTokens &&
+          other.summary == summary);
 
   @override
   int get hashCode =>
@@ -108,12 +111,13 @@ final class TimelineCommand extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineCommand &&
-      other.commandId == commandId &&
-      other.name == name &&
-      other.args == args &&
-      other.status == status &&
-      other.text == text;
+      identical(this, other) ||
+      (other is TimelineCommand &&
+          other.commandId == commandId &&
+          other.name == name &&
+          other.args == args &&
+          other.status == status &&
+          other.text == text);
 
   @override
   int get hashCode =>
@@ -151,12 +155,13 @@ final class TimelineContextInjection extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineContextInjection &&
-      other.id == id &&
-      other.text == text &&
-      other.producerLabel == producerLabel &&
-      other.isRecall == isRecall &&
-      other.summary == summary;
+      identical(this, other) ||
+      (other is TimelineContextInjection &&
+          other.id == id &&
+          other.text == text &&
+          other.producerLabel == producerLabel &&
+          other.isRecall == isRecall &&
+          other.summary == summary);
 
   @override
   int get hashCode => Object.hash(
@@ -188,13 +193,14 @@ final class TimelineToolCall extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineToolCall &&
-      other.id == id &&
-      other.name == name &&
-      other.arguments == arguments &&
-      other.result == result &&
-      other.isError == isError &&
-      other.status == status;
+      identical(this, other) ||
+      (other is TimelineToolCall &&
+          other.id == id &&
+          other.name == name &&
+          other.arguments == arguments &&
+          other.result == result &&
+          other.isError == isError &&
+          other.status == status);
 
   @override
   int get hashCode =>
@@ -220,13 +226,14 @@ final class TimelineApprovalRequest extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineApprovalRequest &&
-      other.requestId == requestId &&
-      other.sessionId == sessionId &&
-      other.approvalId == approvalId &&
-      other.toolName == toolName &&
-      other.callId == callId &&
-      other.reason == reason;
+      identical(this, other) ||
+      (other is TimelineApprovalRequest &&
+          other.requestId == requestId &&
+          other.sessionId == sessionId &&
+          other.approvalId == approvalId &&
+          other.toolName == toolName &&
+          other.callId == callId &&
+          other.reason == reason);
 
   @override
   int get hashCode => Object.hash(
@@ -251,9 +258,10 @@ final class TimelineQuestionRequest extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineQuestionRequest &&
-      other.requestId == requestId &&
-      _listEquals(other.questions, questions);
+      identical(this, other) ||
+      (other is TimelineQuestionRequest &&
+          other.requestId == requestId &&
+          _listEquals(other.questions, questions));
 
   @override
   int get hashCode =>
@@ -267,7 +275,8 @@ final class TimelineQueue extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineQueue && _listEquals(other.items, items);
+      identical(this, other) ||
+      (other is TimelineQueue && _listEquals(other.items, items));
 
   @override
   int get hashCode => Object.hash('queue', Object.hashAll(items));
@@ -280,7 +289,8 @@ final class TimelineJobs extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineJobs && _listEquals(other.jobs, jobs);
+      identical(this, other) ||
+      (other is TimelineJobs && _listEquals(other.jobs, jobs));
 
   @override
   int get hashCode => Object.hash('jobs', Object.hashAll(jobs));
@@ -295,10 +305,11 @@ final class TimelineError extends TimelineItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TimelineError &&
-      other.id == id &&
-      other.message == message &&
-      other.code == code;
+      identical(this, other) ||
+      (other is TimelineError &&
+          other.id == id &&
+          other.message == message &&
+          other.code == code);
 
   @override
   int get hashCode => Object.hash('error', id, message, code);
@@ -329,15 +340,16 @@ final class QuestionItem {
 
   @override
   bool operator ==(Object other) =>
-      other is QuestionItem &&
-      other.id == id &&
-      other.question == question &&
-      _listEquals(other.options, options) &&
-      other.multiSelect == multiSelect &&
-      other.detail == detail &&
-      other.header == header &&
-      _mapEquals(other.optionDescriptions, optionDescriptions) &&
-      other.intent == intent;
+      identical(this, other) ||
+      (other is QuestionItem &&
+          other.id == id &&
+          other.question == question &&
+          _listEquals(other.options, options) &&
+          other.multiSelect == multiSelect &&
+          other.detail == detail &&
+          other.header == header &&
+          _mapEquals(other.optionDescriptions, optionDescriptions) &&
+          other.intent == intent);
 
   @override
   int get hashCode => Object.hash(
@@ -364,7 +376,10 @@ final class QuestionIntent {
 
   @override
   bool operator ==(Object other) =>
-      other is QuestionIntent && other.kind == kind && other.approve == approve;
+      identical(this, other) ||
+      (other is QuestionIntent &&
+          other.kind == kind &&
+          other.approve == approve);
 
   @override
   int get hashCode => Object.hash(kind, approve);
@@ -385,11 +400,12 @@ final class ApprovalAnswer {
 
   @override
   bool operator ==(Object other) =>
-      other is ApprovalAnswer &&
-      other.requestId == requestId &&
-      other.sessionId == sessionId &&
-      other.approvalId == approvalId &&
-      other.allowed == allowed;
+      identical(this, other) ||
+      (other is ApprovalAnswer &&
+          other.requestId == requestId &&
+          other.sessionId == sessionId &&
+          other.approvalId == approvalId &&
+          other.allowed == allowed);
 
   @override
   int get hashCode => Object.hash(requestId, sessionId, approvalId, allowed);
@@ -408,10 +424,11 @@ final class QuestionAnswer {
 
   @override
   bool operator ==(Object other) =>
-      other is QuestionAnswer &&
-      other.questionId == questionId &&
-      _listEquals(other.selectedOptions, selectedOptions) &&
-      other.customText == customText;
+      identical(this, other) ||
+      (other is QuestionAnswer &&
+          other.questionId == questionId &&
+          _listEquals(other.selectedOptions, selectedOptions) &&
+          other.customText == customText);
 
   @override
   int get hashCode =>
@@ -431,16 +448,18 @@ final class SessionQueueItem {
 
   @override
   bool operator ==(Object other) =>
-      other is SessionQueueItem &&
-      other.itemId == itemId &&
-      other.placement == placement &&
-      other.text == text;
+      identical(this, other) ||
+      (other is SessionQueueItem &&
+          other.itemId == itemId &&
+          other.placement == placement &&
+          other.text == text);
 
   @override
   int get hashCode => Object.hash(itemId, placement, text);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;
@@ -449,9 +468,10 @@ bool _listEquals<T>(List<T> a, List<T> b) {
 }
 
 bool _mapEquals<K, V>(Map<K, V> a, Map<K, V> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (final entry in a.entries) {
-    if (b[entry.key] != entry.value) return false;
+    if (!b.containsKey(entry.key) || b[entry.key] != entry.value) return false;
   }
   return true;
 }

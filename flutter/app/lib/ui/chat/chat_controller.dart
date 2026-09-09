@@ -484,8 +484,12 @@ class ChatController {
       try {
         final roster = await _repository.listAgentPresets();
         _agentPresets = roster;
-      } catch (_) {
+      } catch (e) {
         _agentPresets = null;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to load agent presets: $e',
+          level: 'warn',
+        );
       }
       _publish();
     }());
@@ -520,7 +524,11 @@ class ChatController {
           _skills = catalog;
           _publish();
         }
-      } catch (_) {
+      } catch (e) {
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to load skills for $sessionId: $e',
+          level: 'warn',
+        );
         if (_selectedSessionId == sessionId) {
           _skills = const <SkillEntry>[];
           _publish();
@@ -924,9 +932,11 @@ class ChatController {
             _restoreSessionId = stored;
             _maybeRestoreSelectedSession();
           })
-          .catchError((_) {
-            // Persistence is a convenience; selection itself never depends
-            // on the seam resolving.
+          .catchError((Object e) {
+            ErrorLogCollector.instance.addBreadcrumb(
+              'Session selection restore failed: $e',
+              level: 'warn',
+            );
           }),
     );
   }
@@ -966,9 +976,11 @@ class ChatController {
     unawaited(() async {
       try {
         await store.writeSelectedSession(sessionId);
-      } catch (_) {
-        // Local persistence is a convenience; selection itself never
-        // depends on the write landing.
+      } catch (e) {
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to persist selected session: $e',
+          level: 'warn',
+        );
       }
     }());
   }
@@ -994,9 +1006,11 @@ class ChatController {
             _publish();
             _maybeApplyModelPreferences();
           })
-          .catchError((_) {
-            // Preference memory is a convenience; the seat never depends on
-            // the seam resolving.
+          .catchError((Object e) {
+            ErrorLogCollector.instance.addBreadcrumb(
+              'Model preferences restore failed: $e',
+              level: 'warn',
+            );
           }),
     );
   }
@@ -1012,9 +1026,11 @@ class ChatController {
     unawaited(() async {
       try {
         await store.write(next);
-      } catch (_) {
-        // A failed preference write only costs the memory: the seat still
-        // works off the host's own selection on the next cold start.
+      } catch (e) {
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to persist model selection: $e',
+          level: 'warn',
+        );
       }
     }());
   }

@@ -27,10 +27,11 @@ final class PermissionPresetOption {
 
   @override
   bool operator ==(Object other) =>
-      other is PermissionPresetOption &&
-      other.value == value &&
-      other.name == name &&
-      other.description == description;
+      identical(this, other) ||
+      (other is PermissionPresetOption &&
+          other.value == value &&
+          other.name == name &&
+          other.description == description);
 
   @override
   int get hashCode => Object.hash(value, name, description);
@@ -53,15 +54,17 @@ final class PermissionSelect {
 
   @override
   bool operator ==(Object other) =>
-      other is PermissionSelect &&
-      other.currentValue == currentValue &&
-      _listEquals(other.options, options);
+      identical(this, other) ||
+      (other is PermissionSelect &&
+          other.currentValue == currentValue &&
+          _listEquals(other.options, options));
 
   @override
   int get hashCode => Object.hash(Object.hashAll(options), currentValue);
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

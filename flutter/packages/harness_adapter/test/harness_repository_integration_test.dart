@@ -349,6 +349,9 @@ class HarnessFakeRpc implements DshRpcClient {
   /// Scripted projections block for `session.history` keyed by sessionId.
   final Map<String, JsonMap> historyProjections = <String, JsonMap>{};
 
+  /// Scripted `hasMore` for `session.history` keyed by sessionId.
+  final Map<String, bool> historyHasMore = <String, bool>{};
+
   /// One-shot response holds: the next response for the key waits on the
   /// value before answering (each hold releases at most once).
   final Map<String, List<Future<void>>> _responseGates =
@@ -577,7 +580,7 @@ class HarnessFakeRpc implements DshRpcClient {
         return <String, Object?>{
           'events': records,
           'records': records,
-          'hasMore': false,
+          'hasMore': historyHasMore[sessionId] ?? false,
           if (scriptedProjections != null)
             'projections': scriptedProjections
           else
@@ -885,6 +888,28 @@ Future<HarnessRepositoryImpl> resyncFixture(
   await Future<void>.delayed(const Duration(milliseconds: 20));
   await pumpEventQueue();
   return repository;
+}
+
+class _DiagnosticTestConnectionManager extends DshConnectionManager {
+  _DiagnosticTestConnectionManager(DshRpcClient rpc, DshEventSocket socket)
+    : super(rpc, socket, (_) => 10000);
+
+  final StreamController<ServerRequest> testMuxFrames =
+      StreamController<ServerRequest>.broadcast();
+  final StreamController<ServerRequest> testHostFrames =
+      StreamController<ServerRequest>.broadcast();
+
+  @override
+  Stream<ServerRequest> get muxFrames => testMuxFrames.stream;
+
+  @override
+  Stream<ServerRequest> get hostFrames => testHostFrames.stream;
+
+  void dispose() {
+    stop();
+    unawaited(testMuxFrames.close());
+    unawaited(testHostFrames.close());
+  }
 }
 
 void main() {
@@ -1209,6 +1234,279 @@ void main() {
       );
     },
   );
+
+  test('_collectMuxFrames stream error emits diagnostic', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      manager,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    addTearDown(manager.dispose);
+    await pumpEventQueue();
+
+    final testError = Exception('simulated mux stream failure');
+    manager.testMuxFrames.addError(testError);
+    await pumpEventQueue();
+
+    expect(diagnostics, isNotEmpty);
+    final diag = diagnostics.firstWhere((d) => d.context == 'mux.stream');
+    expect(diag.level, AdapterDiagnosticLevel.error);
+    expect(diag.message, 'mux stream error: $testError');
+    expect(diag.error, equals(testError));
+    expect(diag.stackTrace, isNotNull);
+  });
+
+  test('_collectHostFrames stream error emits diagnostic', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      manager,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    addTearDown(manager.dispose);
+    await pumpEventQueue();
+
+    final testError = Exception('simulated host stream failure');
+    manager.testHostFrames.addError(testError);
+    await pumpEventQueue();
+
+    expect(diagnostics, isNotEmpty);
+    final diag = diagnostics.firstWhere((d) => d.context == 'host.stream');
+    expect(diag.level, AdapterDiagnosticLevel.error);
+    expect(diag.message, 'host stream error: $testError');
+    expect(diag.error, equals(testError));
+    expect(diag.stackTrace, isNotNull);
+  });
+
+  test('handleFrame error emits diagnostic', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('session-test-frame'),
+    ]);
+    final socket = ScriptedHarnessSocket();
+    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      manager,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    addTearDown(manager.dispose);
+    await pumpEventQueue();
+
+    await repository.openSession('session-test-frame');
+    await pumpEventQueue();
+
+    manager.testMuxFrames.add(
+      ServerRequest(
+        rpcId: 'rpc-bad-frame',
+        method: 'session/queue',
+        payload: <String, Object?>{
+          'type': 'session/queue',
+          'sessionId': 'session-test-frame',
+        },
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(diagnostics, isNotEmpty);
+    final diag = diagnostics.firstWhere((d) => d.context == 'session.frame');
+    expect(diag.level, AdapterDiagnosticLevel.error);
+    expect(
+      diag.message,
+      contains('handleFrame failed for session-test-frame:'),
+    );
+    expect(diag.error, isA<FormatException>());
+    expect(diag.stackTrace, isNotNull);
+  });
+
+  test('refreshSessions failure emits diagnostic', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('session-refresh-test'),
+    ]);
+    final socket = ScriptedHarnessSocket();
+    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      manager,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    addTearDown(manager.dispose);
+    await pumpEventQueue();
+
+    // 1. host/session-added triggers refreshSessions
+    rpc.failNextCall(DshRpcEndpoints.sessionList, 'session-added-fail');
+    manager.testHostFrames.add(
+      ServerRequest(
+        rpcId: 'rpc-added',
+        method: 'host/session-added',
+        payload: <String, Object?>{
+          'type': 'host/session-added',
+          'sessionId': 'session-2',
+        },
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.any(
+        (d) =>
+            d.context == 'session.refresh' &&
+            d.level == AdapterDiagnosticLevel.warning &&
+            d.message.contains(
+              'refreshSessions failed for host/session-added:',
+            ),
+      ),
+      isTrue,
+    );
+
+    // 2. turn/end triggers refreshSessions
+    rpc.failNextCall(DshRpcEndpoints.sessionList, 'turn-end-fail');
+    manager.testMuxFrames.add(
+      ServerRequest(
+        rpcId: 'session-follow-session-refresh-test',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{'type': 'turn/end'},
+        },
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.any(
+        (d) =>
+            d.context == 'session.refresh' &&
+            d.level == AdapterDiagnosticLevel.warning &&
+            d.message.contains('refreshSessions failed after turn end:'),
+      ),
+      isTrue,
+    );
+
+    // 3. workspace upsert triggers refreshSessions
+    rpc.failNextCall(DshRpcEndpoints.sessionList, 'workspace-fail');
+    manager.testMuxFrames.add(
+      ServerRequest(
+        rpcId: 'workspace-follow',
+        method: 'workspace/follow',
+        payload: <String, Object?>{
+          'type': 'upsert',
+          'workspace': _workspaceJson('ws-test', '/path', 'Test Workspace'),
+        },
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.any(
+        (d) =>
+            d.context == 'workspace.refresh' &&
+            d.level == AdapterDiagnosticLevel.warning &&
+            d.message.contains('refreshSessions failed on workspace upsert:'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('resync failures emit diagnostic for list and ensureLoaded', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('session-resync-diag'),
+    ]);
+    final socket = ReconnectableHarnessSocket();
+    final manager = DshConnectionManager(rpc, socket, (_) => 0);
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      manager,
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await pumpEventQueue();
+
+    await repository.openSession('session-resync-diag');
+    await pumpEventQueue();
+
+    // Cause list refresh and history page to fail on reconnect resync
+    rpc.failNextCall(DshRpcEndpoints.sessionList, 'resync-list-fail');
+    rpc.failNextCall(DshRpcEndpoints.sessionPage, 'resync-page-fail');
+
+    socket.terminate();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await pumpEventQueue();
+
+    expect(
+      diagnostics.any(
+        (d) =>
+            d.context == 'resync.list' &&
+            d.level == AdapterDiagnosticLevel.warning &&
+            d.message.contains('resync list refresh failed:'),
+      ),
+      isTrue,
+    );
+    expect(
+      diagnostics.any(
+        (d) =>
+            d.context == 'resync.session' &&
+            d.level == AdapterDiagnosticLevel.warning &&
+            d.message.contains(
+              'resync ensureLoaded failed for session-resync-diag:',
+            ),
+      ),
+      isTrue,
+    );
+  });
+
+  test('loadOlderHistory error emits diagnostic', () async {
+    final diagnostics = <AdapterDiagnostic>[];
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('session-older-test'),
+    ]);
+    rpc.historyEvents['session-older-test'] = <Object?>[
+      resyncAssistantTextEvent(10, 'first batch message'),
+    ];
+    rpc.historyHasMore['session-older-test'] = true;
+
+    final socket = ScriptedHarnessSocket();
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      DshConnectionManager(rpc, socket, (_) => 10000),
+      onDiagnostic: diagnostics.add,
+    );
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+
+    await repository.openSession('session-older-test');
+    await pumpEventQueue();
+
+    rpc.failNextCall(DshRpcEndpoints.sessionPage, 'history-page-error');
+    final success = await repository.loadOlderHistory('session-older-test');
+
+    expect(success, isFalse);
+    expect(diagnostics, isNotEmpty);
+    final diag = diagnostics.firstWhere((d) => d.context == 'session.history');
+    expect(diag.level, AdapterDiagnosticLevel.error);
+    expect(
+      diag.message,
+      contains('loadOlderHistory failed for session-older-test:'),
+    );
+    expect(diag.error, isA<DshBusinessException>());
+    expect(diag.stackTrace, isNotNull);
+  });
 
   test(
     'workspace/list 404 is tolerated gracefully without surfacing an error',

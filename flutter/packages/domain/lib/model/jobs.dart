@@ -24,14 +24,15 @@ final class JobView {
 
   @override
   bool operator ==(Object other) =>
-      other is JobView &&
-      other.id == id &&
-      other.kind == kind &&
-      other.label == label &&
-      other.status == status &&
-      other.detail == detail &&
-      other.startedAt == startedAt &&
-      other.finishedAt == finishedAt;
+      identical(this, other) ||
+      (other is JobView &&
+          other.id == id &&
+          other.kind == kind &&
+          other.label == label &&
+          other.status == status &&
+          other.detail == detail &&
+          other.startedAt == startedAt &&
+          other.finishedAt == finishedAt);
 
   @override
   int get hashCode =>

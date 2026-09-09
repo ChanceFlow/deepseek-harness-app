@@ -115,4 +115,121 @@ void main() {
     bootstrap.dispose();
     expect(bootstrap.frameTracker, isNull);
   });
+
+  test('PlatformDispatcher.onError appends crash and stack to log buffer and writes marker', () {
+    final dir = tempDir();
+    final marker = CrashMarker(File('${dir.path}/${CrashMarker.markerName}'));
+    final bootstrap = makeBootstrap(dir);
+    bootstrap.start(trackFrames: false);
+
+    telemetry.buffer.clear();
+    final error = StateError('async kapow');
+    final stack = StackTrace.fromString('#0 _runAsync\n#1 _eventLoop\n');
+
+    PlatformDispatcher.instance.onError!(error, stack);
+
+    final snapshot = telemetry.buffer.snapshot();
+    expect(
+      snapshot.any((l) => l.contains('CRASH') && l.contains('async kapow')),
+      isTrue,
+    );
+    expect(
+      snapshot.any((l) => l.contains('STACK') && l.contains('#0 _runAsync')),
+      isTrue,
+    );
+    expect(
+      snapshot.any((l) => l.contains('STACK') && l.contains('#1 _eventLoop')),
+      isTrue,
+    );
+
+    expect(marker.exists, isTrue);
+    final record = marker.takeIfPresent();
+    expect(record, isNotNull);
+    expect(record!.crash.message, contains('async kapow'));
+    expect(
+      record.logs.any((l) => l.contains('CRASH') && l.contains('async kapow')),
+      isTrue,
+    );
+    expect(
+      record.logs.any((l) => l.contains('STACK') && l.contains('#0 _runAsync')),
+      isTrue,
+    );
+
+    bootstrap.dispose();
+  });
+
+  test('FlutterError.onError appends crash and stack to log buffer and writes marker', () {
+    final dir = tempDir();
+    final marker = CrashMarker(File('${dir.path}/${CrashMarker.markerName}'));
+    final bootstrap = makeBootstrap(dir);
+    bootstrap.start(trackFrames: false);
+
+    telemetry.buffer.clear();
+    final details = FlutterErrorDetails(
+      exception: StateError('sync kapow'),
+      stack: StackTrace.fromString(
+        '#0 buildWidget (package:app/main.dart:10:5)\n#1 layout (package:flutter/src/rendering/box.dart:20:1)\n',
+      ),
+    );
+
+    FlutterError.onError!(details);
+
+    final snapshot = telemetry.buffer.snapshot();
+    expect(
+      snapshot.any((l) => l.contains('CRASH') && l.contains('sync kapow')),
+      isTrue,
+    );
+    expect(
+      snapshot.any((l) => l.contains('STACK') && l.contains('#0 buildWidget')),
+      isTrue,
+    );
+    expect(
+      snapshot.any((l) => l.contains('STACK') && l.contains('#1 layout')),
+      isTrue,
+    );
+
+    expect(marker.exists, isTrue);
+    final record = marker.takeIfPresent();
+    expect(record, isNotNull);
+    expect(record!.crash.message, contains('sync kapow'));
+    expect(
+      record.logs.any((l) => l.contains('CRASH') && l.contains('sync kapow')),
+      isTrue,
+    );
+    expect(
+      record.logs.any(
+        (l) => l.contains('STACK') && l.contains('#0 buildWidget'),
+      ),
+      isTrue,
+    );
+
+    bootstrap.dispose();
+  });
+
+  test('initDebugTelemetry initializes gracefully even if remote telemetry throws or fails', () async {
+    final dir = tempDir();
+    final bootstrap = await initDebugTelemetry(
+      settings: const TelemetrySettings(
+        endpoint: 'http://localhost:4318',
+        serviceName: 'dsh-android',
+      ),
+      markerDirectory: dir,
+    );
+    expect(bootstrap, isNotNull);
+    expect(bootstrap!.isInstalled, isTrue);
+    expect(bootstrap.marker.file.path, '${dir.path}/${CrashMarker.markerName}');
+    bootstrap.dispose();
+  });
+
+  test('initDebugTelemetry returns null when disabled', () async {
+    final dir = tempDir();
+    final bootstrap = await initDebugTelemetry(
+      settings: const TelemetrySettings(
+        endpoint: 'http://localhost:4318',
+        enabled: false,
+      ),
+      markerDirectory: dir,
+    );
+    expect(bootstrap, isNull);
+  });
 }

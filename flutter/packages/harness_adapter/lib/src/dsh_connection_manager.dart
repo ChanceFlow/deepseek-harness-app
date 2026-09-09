@@ -11,6 +11,7 @@ import 'package:network/dsh_rpc_client.dart';
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/rpc_envelope.dart';
 
+import 'adapter_diagnostics.dart';
 import 'dsh_remote_invoker.dart';
 import 'rpc_map.dart';
 import 'state_stream.dart';
@@ -62,11 +63,17 @@ int _exponentialCap(int times, int baseMillis, int maxMillis) {
 }
 
 class DshConnectionManager {
-  DshConnectionManager(this._rpcClient, this._eventSocket, this._backoffDelay);
+  DshConnectionManager(
+    this._rpcClient,
+    this._eventSocket,
+    this._backoffDelay, {
+    this.onDiagnostic,
+  });
 
   final DshRpcClient _rpcClient;
   final DshEventSocket _eventSocket;
   final DshBackoffDelay _backoffDelay;
+  final AdapterDiagnosticListener? onDiagnostic;
 
   final StateStream<ConnectionState> _state = StateStream<ConnectionState>(
     const ConnectionState(),
@@ -97,8 +104,16 @@ class DshConnectionManager {
     if (socket is DshWritableEventSocket) {
       try {
         socket.send(_remoteMuxPath, message);
-      } catch (_) {
-        // Socket may not be connected or ready yet.
+      } catch (e, st) {
+        onDiagnostic?.call(
+          AdapterDiagnostic(
+            level: AdapterDiagnosticLevel.warning,
+            context: 'connection_manager:sendMuxMessage',
+            message: 'Failed to send mux message: $e',
+            error: e,
+            stackTrace: st,
+          ),
+        );
       }
     }
   }
@@ -151,9 +166,16 @@ class DshConnectionManager {
       // A generation that reached CONNECTED was healthy until stream loss;
       // its loss starts a fresh backoff sequence.
       if (connected) attempt = 0;
-      await Future<void>.delayed(
-        Duration(milliseconds: _backoffDelay(attempt)),
+      final delay = _backoffDelay(attempt);
+      onDiagnostic?.call(
+        AdapterDiagnostic(
+          level: AdapterDiagnosticLevel.warning,
+          context: 'connection_manager',
+          message:
+              'Generation lost, reconnecting (attempt: $attempt, delay: ${delay}ms)',
+        ),
       );
+      await Future<void>.delayed(Duration(milliseconds: delay));
       attempt += 1;
     }
   }
@@ -213,7 +235,16 @@ class DshConnectionManager {
       connected = true;
 
       if (!failure.isCompleted) await failure.future;
-    } catch (_) {
+    } catch (e, st) {
+      onDiagnostic?.call(
+        AdapterDiagnostic(
+          level: AdapterDiagnosticLevel.warning,
+          context: 'connection_manager',
+          message: 'Generation handshake failed: $e',
+          error: e,
+          stackTrace: st,
+        ),
+      );
       if (_stopped) return connected;
       // Generation failed before readiness; the retry loop owns it.
     } finally {
@@ -269,7 +300,18 @@ class DshConnectionManager {
       );
       sub = stream.listen(
         sink.add,
-        onError: (Object error) {
+        onError: (Object error, [StackTrace? st]) {
+          onDiagnostic?.call(
+            AdapterDiagnostic(
+              level: isOptional
+                  ? AdapterDiagnosticLevel.debug
+                  : AdapterDiagnosticLevel.warning,
+              context: 'connection_manager:stream:$currentPath',
+              message: 'Downlink stream error on $currentPath: $error',
+              error: error,
+              stackTrace: st,
+            ),
+          );
           if (currentPath == _remoteMuxPath &&
               !opened.isCompleted &&
               error.toString().contains('404')) {
@@ -284,6 +326,13 @@ class DshConnectionManager {
           if (!failure.isCompleted) failure.complete(error);
         },
         onDone: () {
+          onDiagnostic?.call(
+            AdapterDiagnostic(
+              level: AdapterDiagnosticLevel.debug,
+              context: 'connection_manager:stream:$currentPath',
+              message: 'Downlink stream closed on $currentPath',
+            ),
+          );
           if (isOptional) {
             if (!opened.isCompleted) opened.complete();
             return;

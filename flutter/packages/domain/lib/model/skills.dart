@@ -19,11 +19,12 @@ final class SkillEntry {
 
   @override
   bool operator ==(Object other) =>
-      other is SkillEntry &&
-      other.name == name &&
-      other.description == description &&
-      other.whenToUse == whenToUse &&
-      other.modelInvocable == modelInvocable;
+      identical(this, other) ||
+      (other is SkillEntry &&
+          other.name == name &&
+          other.description == description &&
+          other.whenToUse == whenToUse &&
+          other.modelInvocable == modelInvocable);
 
   @override
   int get hashCode => Object.hash(name, description, whenToUse, modelInvocable);

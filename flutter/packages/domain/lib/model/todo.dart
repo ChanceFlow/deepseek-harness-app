@@ -23,7 +23,8 @@ final class TodoItem {
 
   @override
   bool operator ==(Object other) =>
-      other is TodoItem && other.content == content && other.status == status;
+      identical(this, other) ||
+      (other is TodoItem && other.content == content && other.status == status);
 
   @override
   int get hashCode => Object.hash(content, status);

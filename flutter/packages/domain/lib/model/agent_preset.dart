@@ -46,13 +46,14 @@ final class AgentPresetEntry {
 
   @override
   bool operator ==(Object other) =>
-      other is AgentPresetEntry &&
-      other.id == id &&
-      other.trust == trust &&
-      other.isDefault == isDefault &&
-      other.name == name &&
-      other.description == description &&
-      other.broken == broken;
+      identical(this, other) ||
+      (other is AgentPresetEntry &&
+          other.id == id &&
+          other.trust == trust &&
+          other.isDefault == isDefault &&
+          other.name == name &&
+          other.description == description &&
+          other.broken == broken);
 
   @override
   int get hashCode =>
@@ -90,10 +91,11 @@ final class AgentPresetRoster {
 
   @override
   bool operator ==(Object other) =>
-      other is AgentPresetRoster &&
-      _listEquals(other.entries, entries) &&
-      other.authorable == authorable &&
-      other.hasDocument == hasDocument;
+      identical(this, other) ||
+      (other is AgentPresetRoster &&
+          _listEquals(other.entries, entries) &&
+          other.authorable == authorable &&
+          other.hasDocument == hasDocument);
 
   @override
   int get hashCode =>
@@ -101,6 +103,7 @@ final class AgentPresetRoster {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

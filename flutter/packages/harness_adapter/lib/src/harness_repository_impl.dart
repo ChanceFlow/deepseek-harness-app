@@ -490,7 +490,22 @@ class HarnessRepositoryImpl implements ChatRepository {
   Future<bool> loadOlderHistory(String sessionId) async {
     final state = _sessionStates[sessionId];
     if (state == null) return false;
-    return state.loadOlder((beforeSeq) => _loadHistory(sessionId, beforeSeq));
+    try {
+      return await state.loadOlder(
+        (beforeSeq) => _loadHistory(sessionId, beforeSeq),
+      );
+    } catch (e, st) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'loadOlderHistory failed for $sessionId: $e',
+          level: AdapterDiagnosticLevel.error,
+          error: e,
+          stackTrace: st,
+          context: 'session.history',
+        ),
+      );
+      return false;
+    }
   }
 
   @override
@@ -1234,99 +1249,134 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   void _collectMuxFrames() {
     _subs.add(
-      _connectionManager.muxFrames.listen((frame) {
-        final type = wireString(frame.payload, 'type');
-        if (frame.rpcId == 'session-control' ||
-            (type == 'baseline' &&
-                (frame.payload.containsKey('projections') ||
-                    frame.payload.containsKey('queues') ||
-                    asJsonObject(frame.payload['value'])
-                            ?.containsKey('projections') ==
-                        true))) {
-          if (type == 'baseline') {
-            _handleControlBaseline(frame);
+      _connectionManager.muxFrames.listen(
+        (frame) {
+          final type = wireString(frame.payload, 'type');
+          if (frame.rpcId == 'session-control' ||
+              (type == 'baseline' &&
+                  (frame.payload.containsKey('projections') ||
+                      frame.payload.containsKey('queues') ||
+                      asJsonObject(frame.payload['value'])
+                              ?.containsKey('projections') ==
+                          true))) {
+            if (type == 'baseline') {
+              _handleControlBaseline(frame);
+              return;
+            }
+            if (type == 'projection' || type == 'session/projection') {
+              _handleProjection(frame);
+              return;
+            }
+          }
+          if (frame.rpcId == 'workspace-follow' ||
+              type == 'baseline' ||
+              type == 'upsert' ||
+              type == 'remove' ||
+              type == 'order' ||
+              type == 'archived') {
+            _handleWorkspaceFollowFrame(frame);
             return;
           }
-          if (type == 'projection' || type == 'session/projection') {
+          if (type == 'session/projection' || type == 'projection') {
             _handleProjection(frame);
             return;
           }
-        }
-        if (frame.rpcId == 'workspace-follow' ||
-            type == 'baseline' ||
-            type == 'upsert' ||
-            type == 'remove' ||
-            type == 'order' ||
-            type == 'archived') {
-          _handleWorkspaceFollowFrame(frame);
-          return;
-        }
-        if (type == 'session/projection' || type == 'projection') {
-          _handleProjection(frame);
-          return;
-        }
-        if (frame.rpcId.startsWith('session-follow-')) {
-          final streamSessionId = frame.rpcId.substring(
-            'session-follow-'.length,
-          );
-          if (type == 'snapshot') {
-            final cursor = wireLong(frame.payload, 'cursor');
-            if (cursor >= 0) _sessionCursors[streamSessionId] = cursor;
-            final projections = asJsonObject(frame.payload['projections']);
-            if (projections != null) {
-              final values = asJsonObject(projections['values']);
-              if (values != null) {
-                _applySessionProjectionValues(
-                  streamSessionId,
-                  values,
-                  wireLong(projections, 'asOfSeq'),
-                );
+          if (frame.rpcId.startsWith('session-follow-')) {
+            final streamSessionId = frame.rpcId.substring(
+              'session-follow-'.length,
+            );
+            if (type == 'snapshot') {
+              final cursor = wireLong(frame.payload, 'cursor');
+              if (cursor >= 0) _sessionCursors[streamSessionId] = cursor;
+              final projections = asJsonObject(frame.payload['projections']);
+              if (projections != null) {
+                final values = asJsonObject(projections['values']);
+                if (values != null) {
+                  _applySessionProjectionValues(
+                    streamSessionId,
+                    values,
+                    wireLong(projections, 'asOfSeq'),
+                  );
+                }
+              }
+              return;
+            }
+            if (type == 'event' || type == 'session/event') {
+              final event = asJsonObject(frame.payload['event']);
+              if (event != null) {
+                final eventType = wireString(event, 'type');
+                if (eventType == 'turn/start') {
+                  _updateSessionRunning(streamSessionId, true);
+                } else if (eventType == 'turn/end') {
+                  _updateSessionRunning(streamSessionId, false);
+                  unawaited(
+                    refreshSessions().catchError((Object e, StackTrace st) {
+                      _onDiagnostic?.call(
+                        AdapterDiagnostic(
+                          message: 'refreshSessions failed after turn end: $e',
+                          level: AdapterDiagnosticLevel.warning,
+                          error: e,
+                          stackTrace: st,
+                          context: 'session.refresh',
+                        ),
+                      );
+                    }),
+                  );
+                }
               }
             }
+          }
+          final sessionId = _frameSessionId(frame);
+          if (type == 'session/subscribed' && sessionId != null) {
+            // New mux-generation baseline, in-band: this frame precedes the
+            // generation's replayed requested/queue frames on the same stream
+            // (reference api-proxy.ts mux burst), so the previous generation's
+            // mirrors drop here — never on the connected publish, which the
+            // burst outruns (web SessionManager `session/subscribed` parity).
+            _dropGenerationMirrors(sessionId);
+          }
+          // Registry-global pending-interaction fold: tracked for every
+          // session, instantiated or not, before the per-session fan-out
+          // (web SessionManager parity — the sidebar's amber dot and
+          // approval/plan-review alerts must fire for sessions never opened
+          // here). Stable keys make replays
+          // idempotent.
+          _foldPendingFrame(frame);
+          if (sessionId == null) return;
+          final state = _sessionStates[sessionId];
+          if (state == null) {
+            // Web SessionManager parity: answerable live frames (approval/
+            // question requested, queue) that reach an uninstantiated session
+            // are buffered, not dropped — a later open replays them, so the
+            // question/approval card still renders even though the transcript
+            // backfill only carries the running tool call.
+            _bufferPendingFrame(sessionId, frame);
             return;
           }
-          if (type == 'event' || type == 'session/event') {
-            final event = asJsonObject(frame.payload['event']);
-            if (event != null) {
-              final eventType = wireString(event, 'type');
-              if (eventType == 'turn/start') {
-                _updateSessionRunning(streamSessionId, true);
-              } else if (eventType == 'turn/end') {
-                _updateSessionRunning(streamSessionId, false);
-                unawaited(refreshSessions().catchError((_) {}));
-              }
-            }
-          }
-        }
-        final sessionId = _frameSessionId(frame);
-        if (type == 'session/subscribed' && sessionId != null) {
-          // New mux-generation baseline, in-band: this frame precedes the
-          // generation's replayed requested/queue frames on the same stream
-          // (reference api-proxy.ts mux burst), so the previous generation's
-          // mirrors drop here — never on the connected publish, which the
-          // burst outruns (web SessionManager `session/subscribed` parity).
-          _dropGenerationMirrors(sessionId);
-        }
-        // Registry-global pending-interaction fold: tracked for every
-        // session, instantiated or not, before the per-session fan-out
-        // (web SessionManager parity — the sidebar's amber dot and
-        // approval/plan-review alerts must fire for sessions never opened
-        // here). Stable keys make replays
-        // idempotent.
-        _foldPendingFrame(frame);
-        if (sessionId == null) return;
-        final state = _sessionStates[sessionId];
-        if (state == null) {
-          // Web SessionManager parity: answerable live frames (approval/
-          // question requested, queue) that reach an uninstantiated session
-          // are buffered, not dropped — a later open replays them, so the
-          // question/approval card still renders even though the transcript
-          // backfill only carries the running tool call.
-          _bufferPendingFrame(sessionId, frame);
-          return;
-        }
-        unawaited(state.handleFrame(frame));
-      }),
+          unawaited(
+            state.handleFrame(frame).catchError((Object e, StackTrace st) {
+              _onDiagnostic?.call(
+                AdapterDiagnostic(
+                  message: 'handleFrame failed for $sessionId: $e',
+                  level: AdapterDiagnosticLevel.error,
+                  error: e,
+                  stackTrace: st,
+                  context: 'session.frame',
+                ),
+              );
+            }),
+          );
+        },
+        onError: (Object error, StackTrace stack) => _onDiagnostic?.call(
+          AdapterDiagnostic(
+            message: 'mux stream error: $error',
+            level: AdapterDiagnosticLevel.error,
+            error: error,
+            stackTrace: stack,
+            context: 'mux.stream',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1768,58 +1818,81 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   void _collectHostFrames() {
     _subs.add(
-      _connectionManager.hostFrames.listen((frame) {
-        final type = wireString(frame.payload, 'type');
-        if (type == null) return;
-        final sessionId = wireString(frame.payload, 'sessionId');
-        switch (type) {
-          case 'host/session-status':
-            if (sessionId == null) return;
-            final running =
-                frame.payload['running'] == 'true' ||
-                frame.payload['running'] == true;
-            // Finished-but-unviewed fold (web SessionManager
-            // `syncCompletedNotifications`): the true→false edge while the
-            // session is not the one being viewed arms the green dot;
-            // running again clears it. The first observation of a session
-            // seeds prev-running without arming anything.
-            final wasRunning = _prevRunningBySession[sessionId];
-            _prevRunningBySession[sessionId] = running;
-            if (running) {
-              // Running again clears the completion reminder; a first
-              // sight of a running session arms nothing.
-              if (_isCompleted(sessionId)) {
-                _setSessionCompleted(sessionId, false);
+      _connectionManager.hostFrames.listen(
+        (frame) {
+          final type = wireString(frame.payload, 'type');
+          if (type == null) return;
+          final sessionId = wireString(frame.payload, 'sessionId');
+          switch (type) {
+            case 'host/session-status':
+              if (sessionId == null) return;
+              final running =
+                  frame.payload['running'] == 'true' ||
+                  frame.payload['running'] == true;
+              // Finished-but-unviewed fold (web SessionManager
+              // `syncCompletedNotifications`): the true→false edge while the
+              // session is not the one being viewed arms the green dot;
+              // running again clears it. The first observation of a session
+              // seeds prev-running without arming anything.
+              final wasRunning = _prevRunningBySession[sessionId];
+              _prevRunningBySession[sessionId] = running;
+              if (running) {
+                // Running again clears the completion reminder; a first
+                // sight of a running session arms nothing.
+                if (_isCompleted(sessionId)) {
+                  _setSessionCompleted(sessionId, false);
+                }
+              } else if (wasRunning == true) {
+                _setSessionCompleted(sessionId, sessionId != _openSessionId);
               }
-            } else if (wasRunning == true) {
-              _setSessionCompleted(sessionId, sessionId != _openSessionId);
-            }
-            _sessions.value = _sessions.value.map((item) {
-              if (item.id != sessionId) return item;
-              // Web parity: a blank session never runs; the first running:true
-              // is the cross-client flip that clears the placeholder locally.
-              return _copySession(
-                item,
-                running: running,
-                blank: item.blank && !running,
+              _sessions.value = _sessions.value.map((item) {
+                if (item.id != sessionId) return item;
+                // Web parity: a blank session never runs; the first running:true
+                // is the cross-client flip that clears the placeholder locally.
+                return _copySession(
+                  item,
+                  running: running,
+                  blank: item.blank && !running,
+                );
+              }).toList();
+            case 'host/session-added':
+            case 'host/session-removed':
+              unawaited(
+                refreshSessions().catchError((Object e, StackTrace st) {
+                  _onDiagnostic?.call(
+                    AdapterDiagnostic(
+                      message: 'refreshSessions failed for $type: $e',
+                      level: AdapterDiagnosticLevel.warning,
+                      error: e,
+                      stackTrace: st,
+                      context: 'session.refresh',
+                    ),
+                  );
+                }),
               );
-            }).toList();
-          case 'host/session-added':
-          case 'host/session-removed':
-            unawaited(refreshSessions().catchError((_) {}));
-          case 'host/workspace-changed':
-            _applyWorkspaceChanged(frame);
-          case 'host/workspace-removed':
-            _applyWorkspaceRemoved(frame);
-          case 'host/workspace-order-changed':
-            _applyWorkspaceOrderFrame(frame);
-          case 'host/archived-sessions-changed':
-            final archived = _stringSet(frame.payload['archivedSessionIds']);
-            _archivedSessionIds.value = archived;
-          case 'host/remote-event':
-            _applyRemoteEvent(frame);
-        }
-      }),
+            case 'host/workspace-changed':
+              _applyWorkspaceChanged(frame);
+            case 'host/workspace-removed':
+              _applyWorkspaceRemoved(frame);
+            case 'host/workspace-order-changed':
+              _applyWorkspaceOrderFrame(frame);
+            case 'host/archived-sessions-changed':
+              final archived = _stringSet(frame.payload['archivedSessionIds']);
+              _archivedSessionIds.value = archived;
+            case 'host/remote-event':
+              _applyRemoteEvent(frame);
+          }
+        },
+        onError: (Object error, StackTrace stack) => _onDiagnostic?.call(
+          AdapterDiagnostic(
+            message: 'host stream error: $error',
+            level: AdapterDiagnosticLevel.error,
+            error: error,
+            stackTrace: stack,
+            context: 'host.stream',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1853,10 +1926,34 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyWorkspaceListing(listing);
       case 'upsert':
         _applyWorkspaceChanged(frame);
-        unawaited(refreshSessions().catchError((_) {}));
+        unawaited(
+          refreshSessions().catchError((Object e, StackTrace st) {
+            _onDiagnostic?.call(
+              AdapterDiagnostic(
+                message: 'refreshSessions failed on workspace $type: $e',
+                level: AdapterDiagnosticLevel.warning,
+                error: e,
+                stackTrace: st,
+                context: 'workspace.refresh',
+              ),
+            );
+          }),
+        );
       case 'remove':
         _applyWorkspaceRemoved(frame);
-        unawaited(refreshSessions().catchError((_) {}));
+        unawaited(
+          refreshSessions().catchError((Object e, StackTrace st) {
+            _onDiagnostic?.call(
+              AdapterDiagnostic(
+                message: 'refreshSessions failed on workspace $type: $e',
+                level: AdapterDiagnosticLevel.warning,
+                error: e,
+                stackTrace: st,
+                context: 'workspace.refresh',
+              ),
+            );
+          }),
+        );
       case 'order':
         _applyWorkspaceOrderFrame(frame);
       case 'archived':
@@ -1971,8 +2068,16 @@ class HarnessRepositoryImpl implements ChatRepository {
           try {
             await refreshSessions();
             await refreshWorkspaces();
-          } catch (_) {
-            // List failure does not block timeline recovery.
+          } catch (e, st) {
+            _onDiagnostic?.call(
+              AdapterDiagnostic(
+                message: 'resync list refresh failed: $e',
+                level: AdapterDiagnosticLevel.warning,
+                error: e,
+                stackTrace: st,
+                context: 'resync.list',
+              ),
+            );
           }
         }(),
         for (final state in states)
@@ -1981,8 +2086,17 @@ class HarnessRepositoryImpl implements ChatRepository {
               await state.ensureLoaded(
                 (beforeSeq) => _loadHistory(state.sessionId, beforeSeq),
               );
-            } catch (_) {
-              // Pending state retries on the next generation.
+            } catch (e, st) {
+              _onDiagnostic?.call(
+                AdapterDiagnostic(
+                  message:
+                      'resync ensureLoaded failed for ${state.sessionId}: $e',
+                  level: AdapterDiagnosticLevel.warning,
+                  error: e,
+                  stackTrace: st,
+                  context: 'resync.session',
+                ),
+              );
             }
           }(),
       ]);

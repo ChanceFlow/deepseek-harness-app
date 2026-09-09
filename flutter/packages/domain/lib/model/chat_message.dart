@@ -42,17 +42,18 @@ final class ChatMessage {
 
   @override
   bool operator ==(Object other) =>
-      other is ChatMessage &&
-      other.id == id &&
-      other.sessionId == sessionId &&
-      other.role == role &&
-      other.text == text &&
-      other.reasoning == reasoning &&
-      other.reasoningDuration == reasoningDuration &&
-      other.streaming == streaming &&
-      other.createdAtEpochMs == createdAtEpochMs &&
-      other.seq == seq &&
-      _listEquals(other.images, images);
+      identical(this, other) ||
+      (other is ChatMessage &&
+          other.id == id &&
+          other.sessionId == sessionId &&
+          other.role == role &&
+          other.text == text &&
+          other.reasoning == reasoning &&
+          other.reasoningDuration == reasoningDuration &&
+          other.streaming == streaming &&
+          other.createdAtEpochMs == createdAtEpochMs &&
+          other.seq == seq &&
+          _listEquals(other.images, images));
 
   @override
   int get hashCode => Object.hash(
@@ -70,6 +71,7 @@ final class ChatMessage {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

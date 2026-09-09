@@ -91,9 +91,21 @@ class DebugToolBootstrap {
   void _installHooks() {
     _previousOnError = FlutterError.onError;
     FlutterError.onError = (details) {
-      telemetry.buffer.append(
-        formatLogLine('CRASH', details.exceptionAsString()),
-      );
+      for (final line in details.exceptionAsString().split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          telemetry.buffer.append(formatLogLine('CRASH', trimmed));
+        }
+      }
+      final stack = details.stack;
+      if (stack != null) {
+        for (final frame in stack.toString().split('\n')) {
+          final trimmed = frame.trim();
+          if (trimmed.isNotEmpty) {
+            telemetry.buffer.append(formatLogLine('STACK', trimmed));
+          }
+        }
+      }
       final record = CrashRecord(
         crash: CapturedCrash.fromFlutterError(
           details,
@@ -112,6 +124,18 @@ class DebugToolBootstrap {
 
     _previousPlatformError = PlatformDispatcher.instance.onError;
     PlatformDispatcher.instance.onError = (error, stack) {
+      for (final line in error.toString().split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          telemetry.buffer.append(formatLogLine('CRASH', trimmed));
+        }
+      }
+      for (final frame in stack.toString().split('\n')) {
+        final trimmed = frame.trim();
+        if (trimmed.isNotEmpty) {
+          telemetry.buffer.append(formatLogLine('STACK', trimmed));
+        }
+      }
       final record = CrashRecord(
         crash: CapturedCrash.fromAsyncError(
           error,
@@ -162,9 +186,23 @@ Future<DebugToolBootstrap?> initDebugTelemetry({
   // ([kDebugTelemetryEnabled] false — stable releases); debug builds and
   // prerelease release builds report.
   if (kReleaseMode && !kDebugTelemetryEnabled) return null;
+  if (!settings.enabled) return null;
+
+  DebugTelemetry? telemetry;
   try {
-    final telemetry = await DebugTelemetry.initialize(settings);
-    if (telemetry == null) return null;
+    telemetry = await DebugTelemetry.initialize(settings);
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint('initDebugTelemetry: telemetry initialize threw: $e\n$st');
+    }
+  }
+
+  // Graceful fallback: even if remote OTLP initialization failed (unreachable
+  // endpoint, bad network, etc.), still initialize local-only telemetry
+  // so DebugToolBootstrap, CrashMarker, LogBuffer, and crash hooks STILL run!
+  telemetry ??= DebugTelemetry.localFallback(settings);
+
+  try {
     return DebugToolBootstrap(
       telemetry: telemetry,
       marker: CrashMarker(
@@ -174,7 +212,10 @@ Future<DebugToolBootstrap?> initDebugTelemetry({
       deviceProvider: deviceProvider,
       sessionIdProvider: sessionIdProvider,
     )..start();
-  } catch (_) {
+  } catch (e, st) {
+    if (kDebugMode) {
+      debugPrint('initDebugTelemetry: failed to start bootstrap: $e\n$st');
+    }
     // Debug tooling never breaks app startup.
     return null;
   }

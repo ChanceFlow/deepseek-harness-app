@@ -15,10 +15,11 @@ final class DirectoryEntry {
 
   @override
   bool operator ==(Object other) =>
-      other is DirectoryEntry &&
-      other.name == name &&
-      other.path == path &&
-      other.hidden == hidden;
+      identical(this, other) ||
+      (other is DirectoryEntry &&
+          other.name == name &&
+          other.path == path &&
+          other.hidden == hidden);
 
   @override
   int get hashCode => Object.hash(name, path, hidden);
@@ -41,12 +42,13 @@ final class DirectoryListing {
 
   @override
   bool operator ==(Object other) =>
-      other is DirectoryListing &&
-      other.path == path &&
-      other.home == home &&
-      _listEquals(other.crumbs, crumbs) &&
-      _listEquals(other.entries, entries) &&
-      other.truncated == truncated;
+      identical(this, other) ||
+      (other is DirectoryListing &&
+          other.path == path &&
+          other.home == home &&
+          _listEquals(other.crumbs, crumbs) &&
+          _listEquals(other.entries, entries) &&
+          other.truncated == truncated);
 
   @override
   int get hashCode => Object.hash(
@@ -59,6 +61,7 @@ final class DirectoryListing {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;

@@ -12,7 +12,10 @@ final class PlanState {
 
   @override
   bool operator ==(Object other) =>
-      other is PlanState && other.active == active && other.pending == pending;
+      identical(this, other) ||
+      (other is PlanState &&
+          other.active == active &&
+          other.pending == pending);
 
   @override
   int get hashCode => Object.hash(active, pending);

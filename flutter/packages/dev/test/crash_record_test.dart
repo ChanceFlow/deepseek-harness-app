@@ -61,15 +61,34 @@ void main() {
     expect(crash.occurredAt, DateTime.utc(2026, 8, 21));
   });
 
-  test('fromAsyncError classifies uncaught async errors', () {
+  test('fromFlutterError retains deep stack frames (not truncated to 20)', () {
+    final frames = List.generate(50, (i) => '#$i frame$i()').join('\n');
+    final details = FlutterErrorDetails(
+      exception: StateError('deep stack'),
+      stack: StackTrace.fromString(frames),
+    );
+    final crash = CapturedCrash.fromFlutterError(
+      details,
+      occurredAt: DateTime.utc(2026, 8, 21),
+    );
+    expect(crash.stackFrames.length, 50);
+    expect(crash.stackFrames.first, '#0 frame0()');
+    expect(crash.stackFrames.last, '#49 frame49()');
+  });
+
+  test('fromAsyncError retains deep stack frames (not truncated to 20)', () {
+    final frames = List.generate(60, (i) => '#$i asyncFrame$i()').join('\n');
     final crash = CapturedCrash.fromAsyncError(
       ArgumentError('bad arg'),
-      StackTrace.fromString('#0 _run\n'),
+      StackTrace.fromString(frames),
       occurredAt: DateTime.utc(2026, 8, 21),
     );
     expect(crash.kind, 'uncaught-async');
     expect(crash.type, 'ArgumentError');
     expect(crash.message, 'Invalid argument(s): bad arg');
+    expect(crash.stackFrames.length, 60);
+    expect(crash.stackFrames.first, '#0 asyncFrame0()');
+    expect(crash.stackFrames.last, '#59 asyncFrame59()');
   });
 
   test('toTelemetryAttributes carries provenance and crash facts', () {
@@ -78,6 +97,7 @@ void main() {
         kind: 'FlutterError',
         type: 'StateError',
         message: 'boom',
+        stackFrames: const ['#0 frame1', '#1 frame2'],
         occurredAt: DateTime.utc(2026, 8, 21),
       ),
       build: build,
@@ -91,6 +111,11 @@ void main() {
     expect(attrs['source.commit'], 'abc1234');
     expect(attrs['crash.kind'], 'FlutterError');
     expect(attrs['crash.type'], 'StateError');
+    expect(attrs['crash.message'], 'boom');
+    expect(attrs['crash.stack'], '#0 frame1\n#1 frame2');
+    expect(attrs['crash.stackFrames'], ['#0 frame1', '#1 frame2']);
+    expect(attrs['crash.log_count'], 1);
+    expect(attrs['crash.logs'], ['09:00:00.000 INFO hello']);
     expect(attrs['device'], 'Pixel 9');
   });
 }

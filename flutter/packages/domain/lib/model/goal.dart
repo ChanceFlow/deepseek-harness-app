@@ -9,7 +9,8 @@ final class GoalRef {
 
   @override
   bool operator ==(Object other) =>
-      other is GoalRef && other.id == id && other.revision == revision;
+      identical(this, other) ||
+      (other is GoalRef && other.id == id && other.revision == revision);
 
   @override
   int get hashCode => Object.hash(id, revision);
@@ -36,13 +37,14 @@ final class GoalSnapshot {
 
   @override
   bool operator ==(Object other) =>
-      other is GoalSnapshot &&
-      other.id == id &&
-      other.revision == revision &&
-      other.objective == objective &&
-      other.phase == phase &&
-      other.blockedReason == blockedReason &&
-      other.maxGoalRounds == maxGoalRounds;
+      identical(this, other) ||
+      (other is GoalSnapshot &&
+          other.id == id &&
+          other.revision == revision &&
+          other.objective == objective &&
+          other.phase == phase &&
+          other.blockedReason == blockedReason &&
+          other.maxGoalRounds == maxGoalRounds);
 
   @override
   int get hashCode =>
@@ -64,11 +66,12 @@ final class GoalProjection {
 
   @override
   bool operator ==(Object other) =>
-      other is GoalProjection &&
-      other.goal == goal &&
-      other.roundsStarted == roundsStarted &&
-      other.createdAt == createdAt &&
-      other.updatedAt == updatedAt;
+      identical(this, other) ||
+      (other is GoalProjection &&
+          other.goal == goal &&
+          other.roundsStarted == roundsStarted &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt);
 
   @override
   int get hashCode => Object.hash(goal, roundsStarted, createdAt, updatedAt);

@@ -14,10 +14,11 @@ final class ModelSelection {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelSelection &&
-      other.provider == provider &&
-      other.model == model &&
-      other.reasoningEffort == reasoningEffort;
+      identical(this, other) ||
+      (other is ModelSelection &&
+          other.provider == provider &&
+          other.model == model &&
+          other.reasoningEffort == reasoningEffort);
 
   @override
   int get hashCode => Object.hash(provider, model, reasoningEffort);
@@ -36,10 +37,11 @@ final class ModelReasoningEffort {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelReasoningEffort &&
-      other.id == id &&
-      other.name == name &&
-      other.description == description;
+      identical(this, other) ||
+      (other is ModelReasoningEffort &&
+          other.id == id &&
+          other.name == name &&
+          other.description == description);
 
   @override
   int get hashCode => Object.hash(id, name, description);
@@ -56,9 +58,10 @@ final class ModelReasoning {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelReasoning &&
-      _listEquals(other.efforts, efforts) &&
-      other.defaultEffort == defaultEffort;
+      identical(this, other) ||
+      (other is ModelReasoning &&
+          _listEquals(other.efforts, efforts) &&
+          other.defaultEffort == defaultEffort);
 
   @override
   int get hashCode => Object.hash(Object.hashAll(efforts), defaultEffort);
@@ -79,11 +82,12 @@ final class ModelCatalogModel {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelCatalogModel &&
-      other.id == id &&
-      other.name == name &&
-      other.description == description &&
-      other.reasoning == reasoning;
+      identical(this, other) ||
+      (other is ModelCatalogModel &&
+          other.id == id &&
+          other.name == name &&
+          other.description == description &&
+          other.reasoning == reasoning);
 
   @override
   int get hashCode => Object.hash(id, name, description, reasoning);
@@ -102,10 +106,11 @@ final class ModelProviderGroup {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelProviderGroup &&
-      other.id == id &&
-      other.name == name &&
-      _listEquals(other.models, models);
+      identical(this, other) ||
+      (other is ModelProviderGroup &&
+          other.id == id &&
+          other.name == name &&
+          _listEquals(other.models, models));
 
   @override
   int get hashCode => Object.hash(id, name, Object.hashAll(models));
@@ -124,10 +129,11 @@ final class ModelCatalogFailure {
 
   @override
   bool operator ==(Object other) =>
-      other is ModelCatalogFailure &&
-      other.id == id &&
-      other.name == name &&
-      other.message == message;
+      identical(this, other) ||
+      (other is ModelCatalogFailure &&
+          other.id == id &&
+          other.name == name &&
+          other.message == message);
 
   @override
   int get hashCode => Object.hash(id, name, message);
@@ -148,11 +154,12 @@ final class SessionModels {
 
   @override
   bool operator ==(Object other) =>
-      other is SessionModels &&
-      other.current == current &&
-      other.routable == routable &&
-      _listEquals(other.groups, groups) &&
-      _listEquals(other.failures, failures);
+      identical(this, other) ||
+      (other is SessionModels &&
+          other.current == current &&
+          other.routable == routable &&
+          _listEquals(other.groups, groups) &&
+          _listEquals(other.failures, failures));
 
   @override
   int get hashCode => Object.hash(
@@ -164,6 +171,7 @@ final class SessionModels {
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;
