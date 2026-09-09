@@ -78,6 +78,9 @@ abstract final class DshRpcEndpoints {
   static const String credentialsDescribe = 'credentials/describe';
   static const String credentialsSet = 'credentials/set';
   static const String credentialsUnset = 'credentials/unset';
+
+  // Remote Events (DSH 0.1.2)
+  static const String eventsResult = r'$events/result';
 }
 
 /// Fallback mapping from canonical DSH 0.1.2 endpoints to legacy 0.1.1 endpoints.

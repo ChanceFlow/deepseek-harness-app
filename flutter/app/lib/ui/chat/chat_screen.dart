@@ -1073,6 +1073,19 @@ class _ChatPanelState extends State<ChatPanel> {
     return null;
   }
 
+  /// First unanswered question / plan review request; it takes over the composer seat.
+  TimelineQuestionRequest? get _pendingQuestion {
+    for (final item in widget.uiState.timeline) {
+      if (item is TimelineQuestionRequest) return item;
+    }
+    return null;
+  }
+
+  /// Whether an interactive decision (plan review, question, or approval)
+  /// is pending and taking over the composer seat.
+  bool get _hasPendingDecision =>
+      _pendingQuestion != null || _pendingApproval != null;
+
   /// Extract the command from the tool call paired with the pending approval.
   String? _commandForApproval(TimelineApprovalRequest approval) {
     final callId = approval.callId;
@@ -1099,14 +1112,15 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   /// Timeline without the queue rows (queued ones ride the composer dock,
-  /// steering ones the transcript tail below) and the approval that took
-  /// over the composer seat.
+  /// steering ones the transcript tail below) and the interactive requests
+  /// (approval / question / plan-review) that took over the composer seat.
   List<TimelineItem> get _timelineItems => widget.uiState.timeline
       .where(
         (item) =>
             item is! TimelineQueue &&
             item is! TimelineJobs &&
-            item != _pendingApproval,
+            item != _pendingApproval &&
+            item != _pendingQuestion,
       )
       .toList();
 
@@ -1175,7 +1189,7 @@ class _ChatPanelState extends State<ChatPanel> {
         uiState.timeline.any(
           (item) => item is TimelineMessage && item.value.streaming,
         );
-    if (!busy || _pendingApproval != null) return false;
+    if (!busy || _hasPendingDecision) return false;
     return !uiState.timeline.any(
       (item) =>
           item is TimelineMessage &&
@@ -1445,19 +1459,18 @@ class _ChatPanelState extends State<ChatPanel> {
             // The session's counters are the transcript's footer, not dock
             // chrome: they caption the conversation above the input surface
             // rather than wedge between two of its strips.
-            if (_pendingApproval == null)
-              StatsLine(stats: uiState.sessionStats),
+            if (!_hasPendingDecision) StatsLine(stats: uiState.sessionStats),
             // Web input-dock order 0: the plan strip before the goal and
-            // queue entries. While an approval is pending the ApprovalPanel
-            // takes the composer seat, so the todo/goal chrome stands down —
-            // the decision moment keeps the transcript room instead of
-            // stacking chrome above it. Every strip shares one raised
-            // surface; the parts divide with hairlines, never with borders
-            // of their own.
+            // queue entries. While a decision (plan review, question, approval)
+            // is pending, the decision panel takes the composer seat, so the
+            // todo/goal chrome stands down — the decision moment keeps the
+            // transcript room instead of stacking chrome above it. Every strip
+            // shares one raised surface; the parts divide with hairlines, never
+            // with borders of their own.
             _InputDock(
               key: _dockKey,
               children: [
-                if (_pendingApproval == null) ...[
+                if (!_hasPendingDecision) ...[
                   TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
                   GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
                 ],
@@ -1478,7 +1491,13 @@ class _ChatPanelState extends State<ChatPanel> {
                     running: isSessionRunning,
                     onAction: widget.onAction,
                   ),
-                if (_pendingApproval case final approval?)
+                if (_pendingQuestion case final question?)
+                  QuestionRow(
+                    key: ValueKey('question-takeover:${question.requestId}'),
+                    request: question,
+                    onAction: widget.onAction,
+                  )
+                else if (_pendingApproval case final approval?)
                   ApprovalPanel(
                     request: approval,
                     command: _commandForApproval(approval),
@@ -1693,17 +1712,8 @@ class TimelineRow extends StatelessWidget {
         call: item as TimelineToolCall,
         expansion: expansion,
       ),
-      TimelineApprovalRequest() => ApprovalRow(
-        requestId: (item as TimelineApprovalRequest).requestId,
-        approvalId: (item as TimelineApprovalRequest).approvalId,
-        toolName: (item as TimelineApprovalRequest).toolName,
-        reason: (item as TimelineApprovalRequest).reason,
-        onAction: onAction,
-      ),
-      TimelineQuestionRequest() => QuestionRow(
-        request: item as TimelineQuestionRequest,
-        onAction: onAction,
-      ),
+      TimelineApprovalRequest() => const SizedBox.shrink(),
+      TimelineQuestionRequest() => const SizedBox.shrink(),
       TimelineQueue() => const SizedBox.shrink(),
       TimelineJobs() => const SizedBox.shrink(),
       TimelineError(:final message, :final code) => SizedBox(
@@ -3611,46 +3621,51 @@ class _QuestionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _QuestionCardHeader(question: question, onDismiss: onDismiss),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (question.detail case final String detail)
-                  MarkdownText(text: detail),
-                if (hasOptions) ...[
-                  const SizedBox(height: 8),
-                  if (question.multiSelect)
-                    for (final option in question.options)
-                      _QuestionOptionTile(
-                        question: question,
-                        option: option,
-                        selected: draft.selected.contains(option),
-                        onChanged: () => onChoose(question.id, option),
-                      )
-                  else
-                    RadioGroup<String>(
-                      groupValue: draft.selected.isEmpty
-                          ? null
-                          : draft.selected.first,
-                      onChanged: (value) {
-                        if (value != null) onChoose(question.id, value);
-                      },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (final option in question.options)
-                            _QuestionOptionTile(
-                              question: question,
-                              option: option,
-                              selected: draft.selected.contains(option),
-                              onChanged: () => onChoose(question.id, option),
-                            ),
-                        ],
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (question.detail case final String detail)
+                    MarkdownText(text: detail),
+                  if (hasOptions) ...[
+                    const SizedBox(height: 8),
+                    if (question.multiSelect)
+                      for (final option in question.options)
+                        _QuestionOptionTile(
+                          question: question,
+                          option: option,
+                          selected: draft.selected.contains(option),
+                          onChanged: () => onChoose(question.id, option),
+                        )
+                    else
+                      RadioGroup<String>(
+                        groupValue: draft.selected.isEmpty
+                            ? null
+                            : draft.selected.first,
+                        onChanged: (value) {
+                          if (value != null) onChoose(question.id, value);
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final option in question.options)
+                              _QuestionOptionTile(
+                                question: question,
+                                option: option,
+                                selected: draft.selected.contains(option),
+                                onChanged: () => onChoose(question.id, option),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           Padding(
@@ -4212,7 +4227,7 @@ class _PlanReviewCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.errorContainer),
+        border: Border.all(color: scheme.outlineVariant),
         borderRadius: BorderRadius.circular(20),
         boxShadow: kM3ShadowElevation1,
       ),
@@ -4221,7 +4236,7 @@ class _PlanReviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            color: scheme.errorContainer,
+            color: scheme.warning.withValues(alpha: 0.12),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
@@ -4229,7 +4244,7 @@ class _PlanReviewCard extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: scheme.error,
+                    color: scheme.warning,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -4237,17 +4252,23 @@ class _PlanReviewCard extends StatelessWidget {
                 Text(
                   l10n.planReview,
                   style: TextStyle(
-                    color: scheme.error,
+                    color: scheme.warning,
                     fontSize: 13,
                     height: 18 / 13,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: MarkdownText(text: review.plan),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: MarkdownText(text: review.plan),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

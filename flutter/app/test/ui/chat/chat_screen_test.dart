@@ -30,6 +30,7 @@ import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
+import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/turn_status_row.dart';
 import 'package:app/ui/theme/theme.dart';
@@ -1774,6 +1775,9 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, 'Refuse'), findsOneWidget);
       expect(find.widgetWithText(TextButton, 'Chat about it'), findsOneWidget);
+      // ComposerBar and StatsLine are suppressed by the plan review takeover
+      expect(find.byType(ComposerBar), findsNothing);
+      expect(find.byType(StatsLine), findsNothing);
 
       // Approve answers with the asker's approve label.
       await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
@@ -1822,6 +1826,48 @@ void main() {
       );
     },
   );
+
+  testWidgets('plan review takes precedence over approval in composer dock', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineApprovalRequest(
+            requestId: 'rpc-approval',
+            sessionId: 's1',
+            approvalId: 'app-1',
+            toolName: 'bash',
+            reason: 'run script',
+          ),
+          TimelineQuestionRequest(
+            requestId: 'rpc-plan',
+            questions: [
+              QuestionItem(
+                id: 'plan-1',
+                question: 'Approve plan?',
+                detail: '# Plan\nDeploy',
+                options: ['Approve', 'Keep planning'],
+                intent: QuestionIntent(kind: 'plan-review', approve: 'Approve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    // Precedence 2 (Plan review) wins over Precedence 0 (Approval):
+    expect(find.text('Plan review'), findsOneWidget);
+    expect(find.byType(ApprovalPanel), findsNothing);
+    expect(find.byType(ComposerBar), findsNothing);
+  });
 
   testWidgets('a non-binary question batch stays in the generic flow', (
     tester,

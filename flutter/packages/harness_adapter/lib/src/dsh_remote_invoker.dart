@@ -117,7 +117,24 @@ final class DshRemoteInvoker {
     final primaryArgs = _prepareArgs(endpoint, rawArgs);
     final primaryWrapped = <String, Object?>{'args': primaryArgs};
 
-    return _rpcClient.call(endpoint, endpoint, primaryWrapped);
+    var result = await _rpcClient.call(endpoint, endpoint, primaryWrapped);
+    if (!result.ok && endpoint == DshRpcEndpoints.sessionPage) {
+      final msg = result.error?.message ?? '';
+      final match = RegExp(r'past cursor (-?\d+)').firstMatch(msg);
+      if (match != null) {
+        final cursor = int.tryParse(match.group(1)!);
+        if (cursor != null) {
+          final req = asJsonObject(primaryArgs['request']) ?? primaryArgs;
+          final retryReq = Map<String, Object?>.from(req);
+          retryReq['throughSeq'] = cursor;
+          final retryPayload = <String, Object?>{
+            'args': <String, Object?>{'request': retryReq},
+          };
+          result = await _rpcClient.call(endpoint, endpoint, retryPayload);
+        }
+      }
+    }
+    return result;
   }
 
   /// Calls [endpoint] and returns its non-null [RpcResult.value], throwing a

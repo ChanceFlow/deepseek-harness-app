@@ -122,6 +122,7 @@ class ChatController {
   SessionSelectionPersistence? _selectionStore;
   String? _restoreSessionId;
   bool _restoreGivenUp = false;
+  bool _sessionsRefreshed = false;
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
   GoalProjection? _goal;
@@ -527,6 +528,8 @@ class ChatController {
     unawaited(() async {
       await _runCatchingForUi(_repository.refreshSessions);
       await _runCatchingForUi(_repository.refreshWorkspaces);
+      _sessionsRefreshed = true;
+      _maybeRestoreSelectedSession();
     }());
   }
 
@@ -899,9 +902,9 @@ class ChatController {
     final target = _restoreSessionId!;
     final present = _sessions.any((session) => session.id == target);
     if (!present) {
-      // An empty list can still be the pre-load state; only a non-empty
-      // one proves the stored session gone.
-      if (_sessions.isNotEmpty) {
+      // An empty list can still be the pre-load state; only a settled,
+      // non-empty one proves the stored session gone.
+      if (_sessionsRefreshed && _sessions.isNotEmpty) {
         _restoreSessionId = null;
         _restoreGivenUp = true;
       }

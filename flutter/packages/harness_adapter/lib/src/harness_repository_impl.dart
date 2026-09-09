@@ -820,6 +820,12 @@ class HarnessRepositoryImpl implements ChatRepository {
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
+    if (history.events.isNotEmpty) {
+      final lastSeq = wireLong(history.events.last, 'seq');
+      _sessionCursors[childSessionId] = lastSeq;
+    } else {
+      _sessionCursors[childSessionId] = -1;
+    }
     final reducer = TimelineReducer(childSessionId);
     reducer.reset(history.events);
     return reducer.snapshot();
@@ -1734,7 +1740,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     final listing = decodeSessionListValue(value);
     _inferWorkspacesFromSessionsIfEmpty(listing);
     for (final session in listing) {
-      if (session.asOfSeq > 0) {
+      if (session.asOfSeq >= 0) {
         _sessionCursors[session.sessionId] = session.asOfSeq;
       }
       final parsed = _imageLimitsFromProjections(session);
@@ -1865,8 +1871,13 @@ class HarnessRepositoryImpl implements ChatRepository {
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
-    if (history.asOfSeq > 0) {
+    if (history.asOfSeq >= 0) {
       _sessionCursors[sessionId] = history.asOfSeq;
+    } else if (history.events.isNotEmpty) {
+      final lastSeq = wireLong(history.events.last, 'seq');
+      _sessionCursors[sessionId] = lastSeq;
+    } else {
+      _sessionCursors[sessionId] = -1;
     }
     final goalValue = history.projectionValues?['goal'];
     if (goalValue != null) {
