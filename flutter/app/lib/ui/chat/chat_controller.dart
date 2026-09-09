@@ -30,6 +30,7 @@ import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
 import 'package:dev/dev.dart' show DebugTelemetry;
 
+import '../../logging/error_log_collector.dart';
 import '../state_stream.dart';
 import 'command_roster.dart';
 import 'chat_local_state.dart';
@@ -420,8 +421,17 @@ class ChatController {
     // session's values never flash under the entering one's header.
     // The model directory also unbinds — the remembered-selection apply
     // must never read the leaving session's seat as the entering one's.
-    _permissions = null;
+    _timelineWindow = const TimelineWindow();
+    _plan = null;
+    _todos = null;
+    _contextPressure = null;
+    _contextBreakdown = null;
+    _sessionStats = const SessionWindowStats();
+    _goal = null;
+    _models = null;
     _modelsSessionId = null;
+    _skills = const <SkillEntry>[];
+    _permissions = null;
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
       window,
     ) {
@@ -1080,6 +1090,7 @@ class ChatController {
       _timelineWindow = const TimelineWindow();
       _bindSelected(resolved);
       _loadModels(resolved);
+      _loadSkills(resolved);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
       _telemetry?.count('chat.session.create');
@@ -1311,6 +1322,7 @@ class ChatController {
       _timelineWindow = const TimelineWindow();
       _bindSelected(forked.id);
       _loadModels(forked.id);
+      _loadSkills(forked.id);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(forked.id));
       _telemetry?.count('chat.session.fork');
@@ -1347,9 +1359,14 @@ class ChatController {
       _commandFailed = false;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'ChatController'},
+      );
       _telemetry?.count('chat.error');
       _telemetry?.event(
         'chat.error',

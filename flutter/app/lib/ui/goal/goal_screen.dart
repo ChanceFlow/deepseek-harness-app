@@ -204,6 +204,15 @@ class _GoalScreenState extends State<GoalScreen> {
           ),
           style: theme.textTheme.bodySmall,
         ),
+        if (snapshot.phase == GoalPhase.blocked &&
+            snapshot.blockedReason != null)
+          Text(
+            snapshot.blockedReason!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.error,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         Wrap(
           children: [
             switch (snapshot.phase) {

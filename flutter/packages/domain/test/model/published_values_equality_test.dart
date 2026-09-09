@@ -8,6 +8,8 @@ library;
 
 import 'package:test/test.dart';
 
+import 'package:domain/model/backend.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/session_window_stats.dart';
 
@@ -160,6 +162,90 @@ void main() {
       const b = SessionWindowStats(billedInputTokens: 100, cacheReadTokens: 50);
       expect(a, b);
       expect(a.cacheHitPercent, b.cacheHitPercent);
+    });
+  });
+
+  group('BackendRegistryState', () {
+    test('equal when all properties match', () {
+      final a = BackendRegistryState(
+        backends: [
+          BackendConfig(
+            id: 'b1',
+            label: 'Local',
+            baseUri: Uri.parse('http://127.0.0.1:3080'),
+          ),
+        ],
+        activeId: 'b1',
+        errorMessage: null,
+      );
+      final b = BackendRegistryState(
+        backends: [
+          BackendConfig(
+            id: 'b1',
+            label: 'Local',
+            baseUri: Uri.parse('http://127.0.0.1:3080'),
+          ),
+        ],
+        activeId: 'b1',
+        errorMessage: null,
+      );
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('unequal when activeId moves', () {
+      final a = BackendRegistryState(
+        backends: [
+          BackendConfig(
+            id: 'b1',
+            label: 'Local',
+            baseUri: Uri.parse('http://127.0.0.1:3080'),
+          ),
+        ],
+        activeId: 'b1',
+      );
+      final b = BackendRegistryState(
+        backends: [
+          BackendConfig(
+            id: 'b1',
+            label: 'Local',
+            baseUri: Uri.parse('http://127.0.0.1:3080'),
+          ),
+        ],
+        activeId: 'b2',
+      );
+      expect(a, isNot(b));
+    });
+  });
+
+  group('CommandExecution', () {
+    test('equal when all fields match', () {
+      const a = CommandExecution(
+        commandId: 'cmd-1',
+        kind: CommandOutcomeKind.success,
+        text: 'done',
+      );
+      const b = CommandExecution(
+        commandId: 'cmd-1',
+        kind: CommandOutcomeKind.success,
+        text: 'done',
+      );
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('unequal when outcome moves', () {
+      const a = CommandExecution(
+        commandId: 'cmd-1',
+        kind: CommandOutcomeKind.success,
+        text: 'done',
+      );
+      const b = CommandExecution(
+        commandId: 'cmd-1',
+        kind: CommandOutcomeKind.error,
+        text: 'done',
+      );
+      expect(a, isNot(b));
     });
   });
 }

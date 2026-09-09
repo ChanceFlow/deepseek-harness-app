@@ -1,6 +1,8 @@
 /// Transport exceptions mapped from wire failures.
 library;
 
+import 'rpc_envelope.dart' show JsonMap;
+
 /// Transport-level failure: HTTP error, invalid envelope, socket loss.
 class DshTransportException implements Exception {
   DshTransportException(this.message, [this.cause]);
@@ -16,11 +18,18 @@ class DshTransportException implements Exception {
 
 /// Business-level failure carried by an `ok == false` RPC result.
 class DshBusinessException implements Exception {
-  DshBusinessException({required this.code, required this.message});
+  DshBusinessException({
+    required this.code,
+    required this.message,
+    this.details,
+  });
 
   final String code;
   final String message;
+  final JsonMap? details;
 
   @override
-  String toString() => 'DshBusinessException: $code: $message';
+  String toString() => details == null
+      ? 'DshBusinessException: $code: $message'
+      : 'DshBusinessException: $code: $message (details: $details)';
 }

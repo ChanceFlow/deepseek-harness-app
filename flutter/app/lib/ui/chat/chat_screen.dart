@@ -3911,7 +3911,7 @@ class _QuestionNumberChip extends StatelessWidget {
 /// copy is a borderless text input; a typed draft lifts it to the selected
 /// look, and the leading indicator mirrors the option row (checkbox for
 /// multi-select, edit chip for single-select).
-class _CustomAnswerRow extends StatelessWidget {
+class _CustomAnswerRow extends StatefulWidget {
   const _CustomAnswerRow({
     required this.question,
     required this.draft,
@@ -3923,11 +3923,42 @@ class _CustomAnswerRow extends StatelessWidget {
   final void Function(QuestionDraft) onDraftChange;
 
   @override
+  State<_CustomAnswerRow> createState() => _CustomAnswerRowState();
+}
+
+class _CustomAnswerRowState extends State<_CustomAnswerRow> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.draft.customText)
+      ..selection = TextSelection.collapsed(
+        offset: widget.draft.customText.length,
+      );
+  }
+
+  @override
+  void didUpdateWidget(covariant _CustomAnswerRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.draft.customText != _controller.text) {
+      _controller.text = widget.draft.customText;
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.draft.customText.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final active = draft.customText.trim().isNotEmpty;
-    final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(offset: draft.customText.length);
+    final active = widget.draft.customText.trim().isNotEmpty;
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
       decoration: BoxDecoration(
@@ -3939,7 +3970,7 @@ class _CustomAnswerRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (question.multiSelect)
+          if (widget.question.multiSelect)
             _QuestionCheckbox(checked: active)
           else
             _QuestionNumberChip(
@@ -3952,7 +3983,7 @@ class _CustomAnswerRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
-              controller: controller,
+              controller: _controller,
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
@@ -3968,10 +3999,10 @@ class _CustomAnswerRow extends StatelessWidget {
                 fontSize: 14,
                 height: 24 / 14,
               ),
-              onChanged: (text) => onDraftChange(
+              onChanged: (text) => widget.onDraftChange(
                 QuestionDraft(
-                  selected: question.multiSelect
-                      ? draft.selected
+                  selected: widget.question.multiSelect
+                      ? widget.draft.selected
                       : const <String>{},
                   customText: text,
                 ),
@@ -3987,7 +4018,7 @@ class _CustomAnswerRow extends StatelessWidget {
 
 /// Optionless question: the free-form answer is the whole body (web
 /// `.customTextarea`).
-class _CustomAnswerField extends StatelessWidget {
+class _CustomAnswerField extends StatefulWidget {
   const _CustomAnswerField({
     required this.question,
     required this.draft,
@@ -3999,12 +4030,43 @@ class _CustomAnswerField extends StatelessWidget {
   final void Function(QuestionDraft) onDraftChange;
 
   @override
+  State<_CustomAnswerField> createState() => _CustomAnswerFieldState();
+}
+
+class _CustomAnswerFieldState extends State<_CustomAnswerField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.draft.customText)
+      ..selection = TextSelection.collapsed(
+        offset: widget.draft.customText.length,
+      );
+  }
+
+  @override
+  void didUpdateWidget(covariant _CustomAnswerField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.draft.customText != _controller.text) {
+      _controller.text = widget.draft.customText;
+      _controller.selection = TextSelection.collapsed(
+        offset: widget.draft.customText.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final controller = TextEditingController(text: draft.customText)
-      ..selection = TextSelection.collapsed(offset: draft.customText.length);
     return TextField(
-      controller: controller,
+      controller: _controller,
       minLines: 2,
       maxLines: 4,
       decoration: InputDecoration(
@@ -4031,7 +4093,7 @@ class _CustomAnswerField extends StatelessWidget {
         fontSize: 14,
         height: 24 / 14,
       ),
-      onChanged: (text) => onDraftChange(
+      onChanged: (text) => widget.onDraftChange(
         QuestionDraft(selected: const <String>{}, customText: text),
       ),
     );

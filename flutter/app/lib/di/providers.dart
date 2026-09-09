@@ -249,7 +249,7 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, Strin
   // The seed fallback covers only the pre-load window; a removed backend
   // takes its dependents down with it before this can matter.
   final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
-  return HarnessRepositoryImpl(
+  final repo = HarnessRepositoryImpl(
     ref.watch(dshRpcClientProvider(uri)),
     ref.watch(backendConnectionProvider((backendId, uri))),
     onDiagnostic: (diagnostic) {
@@ -277,6 +277,8 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, Strin
       );
     },
   );
+  ref.onDispose(repo.dispose);
+  return repo;
 });
 
 /// System (OS-level) notifications, single instance shared by every
@@ -407,9 +409,9 @@ final foregroundNotificationEventsProvider =
               appNotificationCenterProvider(backend.id),
               (previous, next) {
                 unawaited(eventSubs[backend.id]?.cancel());
-                eventSubs[backend.id] = next.foregroundEvents.listen(
-                  controller.add,
-                );
+                eventSubs[backend.id] = next.foregroundEvents.listen((event) {
+                  if (!controller.isClosed) controller.add(event);
+                });
               },
               fireImmediately: true,
             );

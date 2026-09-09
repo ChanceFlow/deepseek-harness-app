@@ -8,6 +8,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import '../state_stream.dart';
+import '../../logging/error_log_collector.dart';
 import 'goal_ui_state.dart';
 
 class GoalController {
@@ -16,9 +17,17 @@ class GoalController {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
+        if (_selectedSessionId != null && _goalSub == null) {
+          _bindGoal(_selectedSessionId);
+          unawaited(_repository.openSession(_selectedSessionId!));
+        }
         _publish();
       }),
     );
+    if (initialSessionId != null) {
+      _bindGoal(initialSessionId);
+      unawaited(_repository.openSession(initialSessionId));
+    }
   }
 
   final ChatRepository _repository;
@@ -100,11 +109,12 @@ class GoalController {
   }
 
   void _selectSession(String sessionId) {
-    if (_selectedSessionId == sessionId) return;
+    if (_selectedSessionId == sessionId && _goalSub != null) return;
     _selectedSessionId = sessionId;
     _goal = null;
     _bindGoal(sessionId);
     _publish();
+    unawaited(_repository.openSession(sessionId));
   }
 
   void _create(String objective, int? maxRounds) {
@@ -194,9 +204,14 @@ class GoalController {
       _errorMessage = null;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'GoalController'},
+      );
       return null;
     }
   }

@@ -79,6 +79,7 @@ class TimelineReducer {
         // connected publish (web session.ts:482-490 parity: the mirror
         // re-baselines on the session/subscribed frame).
         _removeByKey('queue');
+      case 'event':
       case 'session/event':
         final event = asJsonObject(frame['event']);
         if (event != null) _ingestEvent(event);
@@ -466,16 +467,21 @@ class TimelineReducer {
       case 'block-end':
         final block = asJsonObject(chunk['block']);
         if (block != null) {
-          if (wireType(block) == 'text') {
-            text
-              ..clear()
-              ..write(_extractText(block));
-          }
-          final blockReasoning = _extractReasoning(block);
-          if (blockReasoning != null) {
-            reasoning = (reasoning ??= StringBuffer())
-              ..clear()
-              ..write(blockReasoning);
+          final blockType = wireType(block);
+          if (blockType == 'text') {
+            final str = wireString(block, 'text');
+            if (str != null) {
+              text
+                ..clear()
+                ..write(str);
+            }
+          } else if (blockType == 'reasoning') {
+            final str = wireString(block, 'text');
+            if (str != null) {
+              reasoning = (reasoning ??= StringBuffer())
+                ..clear()
+                ..write(str);
+            }
           }
           _partialDirty = true;
         }

@@ -146,6 +146,7 @@ final class DshRemoteInvoker {
       throw DshBusinessException(
         code: failure?.code ?? 'internal',
         message: failure?.message ?? '$endpoint failed',
+        details: failure?.details,
       );
     }
     final value = result.value;
@@ -171,6 +172,7 @@ final class DshRemoteInvoker {
         throw DshBusinessException(
           code: failure?.code ?? 'internal',
           message: failure?.message ?? '$endpoint failed',
+          details: failure?.details,
         );
       }
       return result.value;
@@ -188,6 +190,7 @@ final class DshRemoteInvoker {
       throw DshBusinessException(
         code: failure?.code ?? 'internal',
         message: failure?.message ?? '$endpoint failed',
+        details: failure?.details,
       );
     }
   }

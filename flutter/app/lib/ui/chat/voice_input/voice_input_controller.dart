@@ -307,10 +307,10 @@ class VoiceInputController {
     _audioSub = null;
     await _amplitudeSub?.cancel();
     _amplitudeSub = null;
-    await _recorder.stop();
 
     String finalResult = '';
     try {
+      await _recorder.stop();
       final activeEngine = _activeEngine;
       if (activeEngine == null) {
         // Session never initialized an engine (e.g. cancelled mid-start);
@@ -331,13 +331,15 @@ class VoiceInputController {
     } finally {
       unawaited(_activeEngine?.dispose());
       _activeEngine = null;
-      _emit(
-        _state.copyWith(
-          phase: VoiceInputPhase.idle,
-          duration: Duration.zero,
-          amplitude: 0.0,
-        ),
-      );
+      if (_state.phase != VoiceInputPhase.error) {
+        _emit(
+          _state.copyWith(
+            phase: VoiceInputPhase.idle,
+            duration: Duration.zero,
+            amplitude: 0.0,
+          ),
+        );
+      }
     }
     return finalResult;
   }

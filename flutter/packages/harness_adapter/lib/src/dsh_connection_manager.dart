@@ -133,7 +133,7 @@ class DshConnectionManager {
       _hostDescription.value = null;
       _state.value = ConnectionState(
         phase: ConnectionPhase.reconnecting,
-        hostDescription: _state.value.hostDescription,
+        hostDescription: null,
         generation: _state.value.generation,
       );
       // A generation that reached CONNECTED was healthy until stream loss;

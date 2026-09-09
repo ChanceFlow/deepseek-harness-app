@@ -8,6 +8,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import '../state_stream.dart';
+import '../../logging/error_log_collector.dart';
 import 'models_ui_state.dart';
 
 class ModelsController {
@@ -19,6 +20,9 @@ class ModelsController {
         _publish();
       }),
     );
+    if (initialSessionId != null) {
+      unawaited(_loadModels(initialSessionId));
+    }
   }
 
   final ChatRepository _repository;
@@ -128,9 +132,14 @@ class ModelsController {
       _errorMessage = null;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'ModelsController'},
+      );
       return null;
     }
   }

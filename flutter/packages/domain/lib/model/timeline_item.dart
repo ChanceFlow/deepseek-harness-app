@@ -347,8 +347,10 @@ final class QuestionItem {
     multiSelect,
     detail,
     header,
-    Object.hashAll(optionDescriptions.keys),
-    Object.hashAll(optionDescriptions.values),
+    optionDescriptions.entries.fold<int>(
+      0,
+      (acc, entry) => acc ^ Object.hash(entry.key, entry.value),
+    ),
     intent,
   );
 }
