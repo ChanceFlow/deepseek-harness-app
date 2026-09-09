@@ -1600,8 +1600,9 @@ void main() {
 
       socket.releaseMuxFrames();
       await pumpEventQueue();
-      // The seed emission only: every chunk deferred to the window timer.
-      expect(windows, hasLength(1));
+      // Every chunk is deferred to the window timer; on a loaded or fast runner
+      // the 16ms coalescing timer may already have fired.
+      expect(windows.length, inInclusiveRange(1, 2));
 
       // The coalescing timer is wall-clock; under CI load it can lag any
       // fixed bet. Wait (bounded) for the coalesced publish to land.
