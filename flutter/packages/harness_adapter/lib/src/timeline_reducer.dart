@@ -587,12 +587,6 @@ class TimelineReducer {
         wireString(data, 'callId') ??
         'tool-result:$_lastSeq';
     final resultText = _extractText(toolMessage);
-    // dsh writes tool failures in either the `tool/result` event's optional
-    // `error` field or the ToolResultBlock's `isError` flag.
-    final isError =
-        wireBool(toolMessage, 'isError') ||
-        (resultBlock != null && wireBool(resultBlock, 'isError')) ||
-        data['error'] != null;
 
     var index = -1;
     TimelineToolCall? previous;
@@ -604,6 +598,20 @@ class TimelineReducer {
         break;
       }
     }
+
+    // dsh writes tool failures in either the `tool/result` event's optional
+    // `error` field or the ToolResultBlock's `isError` flag.
+    // Non-zero bash/pwsh exit codes are reported as [exit code: N] or [killed by signal: ...].
+    final isExitCodeError =
+        (previous?.name == 'bash' || previous?.name == 'pwsh') &&
+        (resultText.contains(RegExp(r'\[exit code: [1-9]\d*\]')) ||
+            resultText.contains('[killed by signal:') ||
+            resultText.contains('[sandbox: file access denied'));
+    final isError =
+        wireBool(toolMessage, 'isError') ||
+        (resultBlock != null && wireBool(resultBlock, 'isError')) ||
+        data['error'] != null ||
+        isExitCodeError;
     final newItem = TimelineToolCall(
       id: callId,
       name: previous?.name ?? 'unknown',

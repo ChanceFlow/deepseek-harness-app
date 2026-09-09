@@ -12,6 +12,7 @@ Subagent scans across all modules identified remaining DSH 0.1.2 wire drifts and
 5. In-flight IME corruption: `_CustomAnswerRow` and `_CustomAnswerField` allocated `TextEditingController` inside `build()`, leaking controllers and disrupting Chinese/Japanese composition.
 6. Silent controller error swallowing: `_runCatchingForUi` across all controllers caught exceptions without forwarding them to `ErrorLogCollector.instance.captureError`. In `SubagentController` and `WorkspaceController`, chained actions cleared `_errorMessage` before display.
 7. Missing domain equality: `BackendRegistryState` and `CommandExecution` lacked equality operators. `chatRepositoryProvider` never registered `ref.onDispose(repo.dispose)`, and `VoiceInputController` executed recorder stopping outside `try`.
+8. Delayed timeline and session list updates: prompts sent had no optimistic visual feedback before HTTP admission; `session/follow` stream was never opened on the mux socket, leaving token chunks unstreamed; `/api/events.host` 502'd on gateway port 3083, freezing session list status updates; auto-scroll froze during thinking because `_followSignature()` ignored reasoning growth.
 
 ## Decision
 
@@ -22,6 +23,7 @@ Subagent scans across all modules identified remaining DSH 0.1.2 wire drifts and
 5. Converted custom answer inputs in `ChatScreen` to `StatefulWidget`s managing persistent `TextEditingController` instances across lifecycle hooks.
 6. Bridged all controller `_runCatchingForUi` methods to `ErrorLogCollector.instance.captureError`, and prevented subsequent actions from resetting errors when initial mutations fail.
 7. Added value equality and hash codes to `BackendRegistryState` and `CommandExecution`, made `QuestionItem.hashCode` order-independent, registered `ref.onDispose(repo.dispose)` on `chatRepositoryProvider`, and wrapped recorder stop inside `VoiceInputController`'s `try` block.
+8. Added immediate optimistic user messages on prompt submit in `ChatController._sendPrompt`; dynamically opened and managed the `session/follow` logical stream on `/api/remote.mux` in `HarnessRepositoryImpl`; wired `turn/start`, `turn/end`, and `workspace/follow` `upsert` frames to immediately synchronize `_sessions.value`; included reasoning growth in `_followSignature()` to keep auto-scroll active during model thinking; and preserved collapsed thought summaries when settled.
 
 ## Alternatives considered
 
