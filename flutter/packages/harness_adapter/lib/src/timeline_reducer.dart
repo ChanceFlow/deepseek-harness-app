@@ -116,6 +116,7 @@ class TimelineReducer {
         );
       case 'question/resolved':
         _removeByKey('question:${wireString(frame, 'questionRpcId')}');
+      case 'queue':
       case 'session/queue':
         // The whole-snapshot items array is required by the wire contract
         // (muxFrameSchema: `items` is a non-optional array; an emptied queue
@@ -141,6 +142,7 @@ class TimelineReducer {
           key: 'queue',
           item: TimelineQueue(items: queueItems),
         );
+      case 'jobs':
       case 'session/jobs':
         final jobsArray = asJsonArray(frame['jobs']);
         final jobs =

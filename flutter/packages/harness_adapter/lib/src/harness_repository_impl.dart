@@ -32,6 +32,7 @@ import 'package:network/dsh_exceptions.dart';
 import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 
+import 'adapter_diagnostics.dart';
 import 'dsh_connection_manager.dart';
 import 'dsh_remote_invoker.dart';
 import 'session_stats_fold.dart';
@@ -57,7 +58,11 @@ final class _HistoryPage {
 }
 
 class HarnessRepositoryImpl implements ChatRepository {
-  HarnessRepositoryImpl(this._rpcClient, this._connectionManager) {
+  HarnessRepositoryImpl(
+    this._rpcClient,
+    this._connectionManager, {
+    this._onDiagnostic,
+  }) {
     _invoker = DshRemoteInvoker(_rpcClient);
     _connectionManager.start();
     _collectConnection();
@@ -67,6 +72,7 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   final DshRpcClient _rpcClient;
   final DshConnectionManager _connectionManager;
+  final AdapterDiagnosticListener? _onDiagnostic;
   late final DshRemoteInvoker _invoker;
 
   final StateStream<int> _connectionGeneration = StateStream<int>(0);
@@ -390,7 +396,17 @@ class HarnessRepositoryImpl implements ChatRepository {
       await state.ensureLoaded(
         (beforeSeq) => _loadHistory(sessionId, beforeSeq),
       );
-    } catch (_) {
+    } catch (e, st) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'openSession history load failed for $sessionId: $e',
+          level: AdapterDiagnosticLevel.warning,
+          context: 'session.open',
+          error: e,
+          stackTrace: st,
+          metadata: <String, Object?>{'sessionId': sessionId},
+        ),
+      );
       // A failed first load stays pending; the next generation retries it.
     }
   }
@@ -1172,6 +1188,22 @@ class HarnessRepositoryImpl implements ChatRepository {
     _subs.add(
       _connectionManager.muxFrames.listen((frame) {
         final type = wireString(frame.payload, 'type');
+        if (frame.rpcId == 'session-control' ||
+            (type == 'baseline' &&
+                (frame.payload.containsKey('projections') ||
+                    frame.payload.containsKey('queues') ||
+                    asJsonObject(frame.payload['value'])
+                            ?.containsKey('projections') ==
+                        true))) {
+          if (type == 'baseline') {
+            _handleControlBaseline(frame);
+            return;
+          }
+          if (type == 'projection' || type == 'session/projection') {
+            _handleProjection(frame);
+            return;
+          }
+        }
         if (frame.rpcId == 'workspace-follow' ||
             type == 'baseline' ||
             type == 'upsert' ||
@@ -1181,7 +1213,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           _handleWorkspaceFollowFrame(frame);
           return;
         }
-        if (type == 'session/projection') {
+        if (type == 'session/projection' || type == 'projection') {
           _handleProjection(frame);
           return;
         }
@@ -1434,6 +1466,154 @@ class HarnessRepositoryImpl implements ChatRepository {
           breakdown = _parseContextBreakdownProjection(value);
         }
         _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
+      case 'agentPreset':
+        final preset = wireString(frame.payload, 'value');
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, agentPreset: preset)
+                  : item,
+            )
+            .toList();
+      default:
+        _onDiagnostic?.call(
+          AdapterDiagnostic(
+            message: 'Unhandled projection key: ${frame.payload['key']}',
+            level: AdapterDiagnosticLevel.debug,
+            context: 'mux.projection',
+            metadata: <String, Object?>{
+              'key': frame.payload['key'],
+              'sessionId': sessionId,
+            },
+          ),
+        );
+    }
+  }
+
+  void _handleControlBaseline(ServerRequest frame) {
+    final rawBaseline = asJsonObject(frame.payload['value']) ?? frame.payload;
+    final projections = asJsonObject(rawBaseline['projections']);
+    if (projections != null) {
+      for (final entry in projections.entries) {
+        final sessionId = entry.key;
+        final block = asJsonObject(entry.value);
+        if (block == null) continue;
+        final asOfSeq = wireLong(block, 'asOfSeq');
+        final values = asJsonObject(block['values']);
+        if (values != null) {
+          _applySessionProjectionValues(sessionId, values, asOfSeq);
+        }
+      }
+    }
+    final queues = asJsonObject(rawBaseline['queues']);
+    if (queues != null) {
+      for (final entry in queues.entries) {
+        final sessionId = entry.key;
+        final items = asJsonArray(entry.value);
+        if (items != null) {
+          final queueFrame = ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/queue',
+            payload: <String, Object?>{
+              'type': 'queue',
+              'sessionId': sessionId,
+              'items': items,
+            },
+          );
+          unawaited(
+            _sessionStates[sessionId]?.handleFrame(queueFrame) ??
+                Future<void>.value(),
+          );
+        }
+      }
+    }
+    final jobs = asJsonObject(rawBaseline['jobs']);
+    if (jobs != null) {
+      for (final entry in jobs.entries) {
+        final sessionId = entry.key;
+        final jobsList = asJsonArray(entry.value);
+        if (jobsList != null) {
+          final jobsFrame = ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/jobs',
+            payload: <String, Object?>{
+              'type': 'jobs',
+              'sessionId': sessionId,
+              'jobs': jobsList,
+            },
+          );
+          unawaited(
+            _sessionStates[sessionId]?.handleFrame(jobsFrame) ??
+                Future<void>.value(),
+          );
+        }
+      }
+    }
+  }
+
+  void _applySessionProjectionValues(
+    String sessionId,
+    JsonMap values,
+    int seq,
+  ) {
+    final pressureValue = values['contextPressure'];
+    if (pressureValue != null && pressureValue != 'null') {
+      final pressure = _parseContextPressureProjection(pressureValue);
+      _sessionStateFor(sessionId).updateContextPressure(pressure, seq);
+    }
+    final breakdownValue = values['contextBreakdown'];
+    if (breakdownValue != null && breakdownValue != 'null') {
+      final breakdown = _parseContextBreakdownProjection(breakdownValue);
+      _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
+    }
+    final planValue = values['plan'];
+    if (planValue != null && planValue != 'null') {
+      _planProjectionStateFor(sessionId).value = _parsePlanProjection(
+        planValue,
+      );
+    }
+    final todosValue = values['todos'];
+    if (todosValue != null && todosValue != 'null') {
+      _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
+        todosValue,
+      );
+    }
+    final goalValue = values['goal'];
+    if (goalValue != null && goalValue != 'null') {
+      _goalProjectionStateFor(sessionId).value = _parseGoalProjection(
+        goalValue,
+      );
+    }
+    final permValue = values['permissions'];
+    if (permValue != null && permValue != 'null') {
+      final obj = asJsonObject(permValue);
+      if (obj != null) {
+        final select = _tryDecode(
+          () => _toDomainPermissionSelect(PermissionSelectWire.fromJson(obj)),
+          'permissions',
+        );
+        _permissionProjectionStateFor(sessionId).value = select;
+      }
+    }
+    final titleValue = wireString(values, 'title');
+    if (titleValue != null && titleValue != 'null') {
+      _sessions.value = _sessions.value
+          .map(
+            (item) => item.id == sessionId
+                ? _copySession(item, title: titleValue)
+                : item,
+          )
+          .toList();
+    }
+    final presetValue = wireString(values, 'agentPreset');
+    if (presetValue != null && presetValue != 'null') {
+      _sessions.value = _sessions.value
+          .map(
+            (item) => item.id == sessionId
+                ? _copySession(item, agentPreset: presetValue)
+                : item,
+          )
+          .toList();
     }
   }
 
@@ -1742,6 +1922,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     for (final session in listing) {
       if (session.asOfSeq >= 0) {
         _sessionCursors[session.sessionId] = session.asOfSeq;
+      }
+      final values = session.projectionValues;
+      if (values != null) {
+        _applySessionProjectionValues(
+          session.sessionId,
+          values,
+          session.asOfSeq,
+        );
       }
       final parsed = _imageLimitsFromProjections(session);
       if (parsed != null && _imageLimits.value != parsed) {
@@ -2060,7 +2248,8 @@ class HarnessRepositoryImpl implements ChatRepository {
       );
 
   String? _frameSessionId(ServerRequest frame) =>
-      wireString(frame.payload, 'sessionId');
+      wireString(frame.payload, 'sessionId') ??
+      wireString(asJsonObject(frame.payload['value']) ?? const {}, 'sessionId');
 
   void _markSessionNoLongerBlank(String sessionId) {
     _sessions.value = _sessions.value
@@ -2192,12 +2381,30 @@ class HarnessRepositoryImpl implements ChatRepository {
     return decoded;
   }
 
-  T? _tryDecode<T>(T Function() decode) {
+  T? _tryDecode<T>(T Function() decode, [String? context]) {
     try {
       return decode();
-    } on FormatException {
+    } on FormatException catch (e, st) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'FormatException in ${context ?? T}: $e',
+          level: AdapterDiagnosticLevel.error,
+          context: context,
+          error: e,
+          stackTrace: st,
+        ),
+      );
       return null;
-    } on TypeError {
+    } on TypeError catch (e, st) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'TypeError in ${context ?? T}: $e',
+          level: AdapterDiagnosticLevel.error,
+          context: context,
+          error: e,
+          stackTrace: st,
+        ),
+      );
       return null;
     }
   }

@@ -24,6 +24,7 @@ import 'package:network/dsh_exceptions.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
+import 'package:harness_adapter/src/adapter_diagnostics.dart';
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
 import 'package:harness_adapter/src/dsh_wire_types.dart';
 import 'package:harness_adapter/src/harness_repository_impl.dart';
@@ -1052,6 +1053,160 @@ void main() {
       expect(pageCalls, hasLength(2));
       final retryReq = asJsonObject(pageCalls.last['args'])?['request'] as Map?;
       expect(retryReq?['throughSeq'], -1);
+    },
+  );
+
+  test('session.list seeds initial contextPressure and breakdown into session state', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-seed',
+        'updatedAt': 3,
+        'running': false,
+        'blank': false,
+        'projections': <String, Object?>{
+          'asOfSeq': 10,
+          'values': <String, Object?>{
+            'contextPressure': <String, Object?>{
+              'pressureTokens': 1500,
+              'projectedTokens': 1600,
+              'contextWindow': 128000,
+            },
+            'contextBreakdown': <String, Object?>{
+              'systemTokens': 500,
+              'toolsTokens': 800,
+              'messageTokens': 200,
+            },
+          },
+        },
+      },
+    ]);
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    final pressure = await repository
+        .observeContextPressure('session-seed')
+        .first;
+    expect(pressure, isNotNull);
+    expect(pressure?.pressureTokens, 1500);
+    expect(pressure?.projectedTokens, 1600);
+    expect(pressure?.contextWindow, 128000);
+
+    final breakdown = await repository
+        .observeContextBreakdown('session-seed')
+        .first;
+    expect(breakdown, isNotNull);
+    expect(breakdown?.systemTokens, 500);
+    expect(breakdown?.toolsTokens, 800);
+    expect(breakdown?.messageTokens, 200);
+  });
+
+  test(
+    'session-control baseline and live projection frame update contextPressure',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-ctrl',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/control',
+            payload: <String, Object?>{
+              'type': 'baseline',
+              'value': <String, Object?>{
+                'projections': <String, Object?>{
+                  'session-ctrl': <String, Object?>{
+                    'asOfSeq': 5,
+                    'values': <String, Object?>{
+                      'contextPressure': <String, Object?>{
+                        'pressureTokens': 2000,
+                        'projectedTokens': 2200,
+                        'contextWindow': 64000,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ),
+          ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/control',
+            payload: <String, Object?>{
+              'type': 'projection',
+              'sessionId': 'session-ctrl',
+              'key': 'contextPressure',
+              'seq': 6,
+              'value': <String, Object?>{
+                'pressureTokens': 3000,
+                'projectedTokens': 3200,
+                'contextWindow': 64000,
+              },
+            },
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final pressure = await repository
+          .observeContextPressure('session-ctrl')
+          .firstWhere((p) => p?.pressureTokens == 3000);
+      expect(pressure?.pressureTokens, 3000);
+      expect(pressure?.projectedTokens, 3200);
+    },
+  );
+
+  test(
+    'diagnostic callback receives error on malformed projection decode',
+    () async {
+      final diagnostics = <AdapterDiagnostic>[];
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-bad',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/control',
+            payload: <String, Object?>{
+              'type': 'projection',
+              'sessionId': 'session-bad',
+              'key': 'contextPressure',
+              'seq': 1,
+              'value': 'not-a-map',
+            },
+          ),
+        ],
+      );
+      HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(rpc, socket, exponentialDshBackoffDelay),
+        onDiagnostic: diagnostics.add,
+      );
+      await pumpEventQueue();
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      expect(diagnostics, isNotEmpty);
+      expect(
+        diagnostics.any((d) => d.message.contains('contextPressure')),
+        isTrue,
+      );
     },
   );
 
