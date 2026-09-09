@@ -91,6 +91,18 @@ class DshConnectionManager {
   Stream<ServerRequest> get muxFrames => _muxFrames.stream;
   Stream<ServerRequest> get hostFrames => _hostFrames.stream;
 
+  /// Sends a raw JSON message to the mux WebSocket if connected.
+  void sendMuxMessage(String message) {
+    final socket = _eventSocket;
+    if (socket is DshWritableEventSocket) {
+      try {
+        socket.send(_remoteMuxPath, message);
+      } catch (_) {
+        // Socket may not be connected or ready yet.
+      }
+    }
+  }
+
   void start() {
     if (_started) return;
     _started = true;

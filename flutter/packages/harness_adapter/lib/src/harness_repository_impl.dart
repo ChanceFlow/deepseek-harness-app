@@ -114,6 +114,49 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// session stops running while it is NOT this one (web SessionManager
   /// `completedNotifications`).
   String? _openSessionId;
+  String? _followedSessionId;
+
+  void _followSession(String sessionId) {
+    if (_followedSessionId == sessionId) return;
+    if (_followedSessionId != null) {
+      _connectionManager.sendMuxMessage(
+        jsonEncode(<String, Object?>{
+          'type': 'cancel',
+          'streamId': 'session-follow-$_followedSessionId',
+        }),
+      );
+    }
+    _followedSessionId = sessionId;
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'open',
+        'streamId': 'session-follow-$sessionId',
+        'endpoint': 'session/follow',
+        'payload': <String, Object?>{
+          'args': <String, Object?>{
+            'request': <String, Object?>{
+              'address': <String, Object?>{
+                'kind': 'session',
+                'sessionId': sessionId,
+              },
+            },
+          },
+        },
+      }),
+    );
+  }
+
+  void _updateSessionRunning(String sessionId, bool running) {
+    _prevRunningBySession[sessionId] = running;
+    _sessions.value = _sessions.value.map((item) {
+      if (item.id != sessionId) return item;
+      return _copySession(
+        item,
+        running: running,
+        blank: item.blank && !running,
+      );
+    }).toList();
+  }
 
   /// Last observed running bit per session, driving the true→false edge
   /// that arms the completion reminder.
@@ -388,6 +431,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     // Looking at the session consumes its completion reminder (dot clears)
     // and makes it the armed-selection for future running finishes.
     _openSessionId = sessionId;
+    _followSession(sessionId);
     if (_prevRunningBySession[sessionId] == false ||
         _prevRunningBySession[sessionId] == null) {
       _setSessionCompleted(sessionId, false);
@@ -1178,6 +1222,10 @@ class HarnessRepositoryImpl implements ChatRepository {
         if (connection.phase == ConnectionPhase.connected &&
             connection.generation != _connectionGeneration.value) {
           _connectionGeneration.value = connection.generation;
+          if (_openSessionId != null) {
+            _followedSessionId = null;
+            _followSession(_openSessionId!);
+          }
           unawaited(_resync(connection));
         }
       }),
@@ -1216,6 +1264,39 @@ class HarnessRepositoryImpl implements ChatRepository {
         if (type == 'session/projection' || type == 'projection') {
           _handleProjection(frame);
           return;
+        }
+        if (frame.rpcId.startsWith('session-follow-')) {
+          final streamSessionId = frame.rpcId.substring(
+            'session-follow-'.length,
+          );
+          if (type == 'snapshot') {
+            final cursor = wireLong(frame.payload, 'cursor');
+            if (cursor >= 0) _sessionCursors[streamSessionId] = cursor;
+            final projections = asJsonObject(frame.payload['projections']);
+            if (projections != null) {
+              final values = asJsonObject(projections['values']);
+              if (values != null) {
+                _applySessionProjectionValues(
+                  streamSessionId,
+                  values,
+                  wireLong(projections, 'asOfSeq'),
+                );
+              }
+            }
+            return;
+          }
+          if (type == 'event' || type == 'session/event') {
+            final event = asJsonObject(frame.payload['event']);
+            if (event != null) {
+              final eventType = wireString(event, 'type');
+              if (eventType == 'turn/start') {
+                _updateSessionRunning(streamSessionId, true);
+              } else if (eventType == 'turn/end') {
+                _updateSessionRunning(streamSessionId, false);
+                unawaited(refreshSessions().catchError((_) {}));
+              }
+            }
+          }
         }
         final sessionId = _frameSessionId(frame);
         if (type == 'session/subscribed' && sessionId != null) {
@@ -1772,8 +1853,10 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyWorkspaceListing(listing);
       case 'upsert':
         _applyWorkspaceChanged(frame);
+        unawaited(refreshSessions().catchError((_) {}));
       case 'remove':
         _applyWorkspaceRemoved(frame);
+        unawaited(refreshSessions().catchError((_) {}));
       case 'order':
         _applyWorkspaceOrderFrame(frame);
       case 'archived':
@@ -2062,13 +2145,15 @@ class HarnessRepositoryImpl implements ChatRepository {
       },
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
-    if (history.asOfSeq >= 0) {
-      _sessionCursors[sessionId] = history.asOfSeq;
-    } else if (history.events.isNotEmpty) {
-      final lastSeq = wireLong(history.events.last, 'seq');
-      _sessionCursors[sessionId] = lastSeq;
-    } else {
-      _sessionCursors[sessionId] = -1;
+    if (beforeSeq == null) {
+      if (history.asOfSeq >= 0) {
+        _sessionCursors[sessionId] = history.asOfSeq;
+      } else if (history.events.isNotEmpty) {
+        final lastSeq = wireLong(history.events.last, 'seq');
+        _sessionCursors[sessionId] = lastSeq;
+      } else {
+        _sessionCursors[sessionId] = -1;
+      }
     }
     final pv = history.projectionValues;
     if (pv != null) {
@@ -2266,9 +2351,16 @@ class HarnessRepositoryImpl implements ChatRepository {
             .toList(),
       );
 
-  String? _frameSessionId(ServerRequest frame) =>
-      wireString(frame.payload, 'sessionId') ??
-      wireString(asJsonObject(frame.payload['value']) ?? const {}, 'sessionId');
+  String? _frameSessionId(ServerRequest frame) {
+    if (frame.rpcId.startsWith('session-follow-')) {
+      return frame.rpcId.substring('session-follow-'.length);
+    }
+    return wireString(frame.payload, 'sessionId') ??
+        wireString(
+          asJsonObject(frame.payload['value']) ?? const {},
+          'sessionId',
+        );
+  }
 
   void _markSessionNoLongerBlank(String sessionId) {
     _sessions.value = _sessions.value
@@ -2566,7 +2658,8 @@ final class _SessionState {
         return;
       }
       _reducer.ingestFrame(frame);
-      if (wireType(frame.payload) == 'session/event') {
+      final frameType = wireType(frame.payload);
+      if (frameType == 'session/event' || frameType == 'event') {
         _statsFold.ingestEvent(frame.payload['event']);
         sessionStats.value = _statsFold.value;
       }
@@ -2581,14 +2674,15 @@ final class _SessionState {
   /// notification per frame); everything else — turn boundaries, tool
   /// calls, approvals, queue and job frames — publishes immediately.
   static bool _isStreamingChunk(ServerRequest frame) {
-    if (wireType(frame.payload) != 'session/event') return false;
+    final type = wireType(frame.payload);
+    if (type != 'session/event' && type != 'event') return false;
     final event = asJsonObject(frame.payload['event']);
     if (event == null || wireType(event) != 'assistant/chunk') return false;
     final chunk = asJsonObject(
       (asJsonObject(event['data']) ?? const <String, Object?>{})['chunk'],
     );
-    final type = chunk == null ? null : wireType(chunk);
-    return type != null && type != 'finish' && type != 'usage';
+    final chunkType = chunk == null ? null : wireType(chunk);
+    return chunkType != null && chunkType != 'finish' && chunkType != 'usage';
   }
 
   Future<bool> loadOlder(Future<_HistoryPage> Function(int beforeSeq) loader) {

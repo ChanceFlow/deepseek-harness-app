@@ -831,7 +831,7 @@ class _ChatPanelState extends State<ChatPanel> {
     if (items.isNotEmpty) {
       final last = items.last;
       final growth = last is TimelineMessage
-          ? ':${last.value.text.length}'
+          ? ':${last.value.text.length}:${last.value.reasoning?.length ?? 0}'
           : '';
       buffer.write('${items.length}:${timelineKey(last)}$growth');
     }
@@ -1185,6 +1185,7 @@ class _ChatPanelState extends State<ChatPanel> {
         .where((item) => item.id == sessionId)
         .firstOrNull;
     final busy =
+        uiState.isSending ||
         (session?.running ?? false) ||
         uiState.timeline.any(
           (item) => item is TimelineMessage && item.value.streaming,

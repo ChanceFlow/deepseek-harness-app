@@ -10,6 +10,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
@@ -585,6 +586,38 @@ class ChatController {
         'images': images.length,
       },
     );
+    // Optimistic user message for immediate visual feedback before network roundtrip
+    if (prompt.isNotEmpty || images.isNotEmpty) {
+      final optimisticMessage = TimelineMessage(
+        ChatMessage(
+          id: 'optimistic-${DateTime.now().microsecondsSinceEpoch}',
+          sessionId: sessionId,
+          role: MessageRole.user,
+          text: prompt,
+          images: [
+            for (final img in images)
+              AttachmentRef(
+                attachmentId: img.id,
+                name: img.name,
+                mediaType: img.mediaType,
+                bytes: img.byteSize,
+                width: 0,
+                height: 0,
+              ),
+          ],
+          createdAtEpochMs: DateTime.now().millisecondsSinceEpoch,
+          streaming: false,
+        ),
+      );
+      final currentItems = List<TimelineItem>.of(_timelineWindow.items)
+        ..add(optimisticMessage);
+      _timelineWindow = TimelineWindow(
+        items: currentItems,
+        hasMoreOlder: _timelineWindow.hasMoreOlder,
+        isLoadingOlder: _timelineWindow.isLoadingOlder,
+        isLoading: _timelineWindow.isLoading,
+      );
+    }
     unawaited(() async {
       _isSending = true;
       _publish();
