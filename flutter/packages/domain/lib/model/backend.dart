@@ -93,4 +93,25 @@ final class BackendRegistryState {
     activeId: activeId,
     errorMessage: errorMessage,
   );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BackendRegistryState &&
+          _listEquals(other.backends, backends) &&
+          other.activeId == activeId &&
+          other.errorMessage == errorMessage);
+
+  @override
+  int get hashCode =>
+      Object.hash(Object.hashAll(backends), activeId, errorMessage);
+}
+
+bool _listEquals<T>(List<T> a, List<T> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }

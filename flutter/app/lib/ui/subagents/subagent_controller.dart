@@ -27,6 +27,7 @@ import 'package:domain/repository/chat_repository.dart';
 
 import '../shared/session_tree.dart';
 import '../state_stream.dart';
+import '../../logging/error_log_collector.dart';
 import 'subagent_ui_state.dart';
 
 class SubagentController {
@@ -386,18 +387,21 @@ class SubagentController {
       _isSendingChild = true;
       _publish();
       try {
-        await _runCatchingForUi(
+        final sendResult = await _runCatchingForUi(
           () => _repository.sendSubagentPrompt(
             directParentId,
             childId,
             text.trim(),
           ),
         );
-        final reloaded = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(directParentId, childId, mode),
-        );
-        if (reloaded != null && _selectedChildId == childId) {
-          _childTimeline = reloaded;
+        if (sendResult != null) {
+          final reloaded = await _runCatchingForUi(
+            () =>
+                _repository.loadSubagentHistory(directParentId, childId, mode),
+          );
+          if (reloaded != null && _selectedChildId == childId) {
+            _childTimeline = reloaded;
+          }
         }
       } finally {
         _isSendingChild = false;
@@ -411,13 +415,17 @@ class SubagentController {
         parentSessionId ?? _selectedChildParentId ?? _selectedParentId;
     if (directParentId == null) return;
     unawaited(() async {
-      await _runCatchingForUi(
-        () => _repository.interruptSubagent(directParentId, childSessionId),
-      );
-      if (directParentId == _selectedParentId) {
-        await _loadCatalog(directParentId);
-      } else if (_branchCatalogs.containsKey(directParentId)) {
-        await _loadBranch(directParentId);
+      var ok = false;
+      await _runCatchingForUi(() async {
+        await _repository.interruptSubagent(directParentId, childSessionId);
+        ok = true;
+      });
+      if (ok) {
+        if (directParentId == _selectedParentId) {
+          await _loadCatalog(directParentId);
+        } else if (_branchCatalogs.containsKey(directParentId)) {
+          await _loadBranch(directParentId);
+        }
       }
     }());
   }
@@ -477,9 +485,14 @@ class SubagentController {
       _errorMessage = null;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'SubagentController'},
+      );
       return null;
     }
   }

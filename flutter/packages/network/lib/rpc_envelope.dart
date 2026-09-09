@@ -113,7 +113,12 @@ final class ServerRequest {
     final type = map['type'] as String? ?? 'server-request';
     final rpcId = (map['rpcId'] ?? map['streamId'] ?? '') as String;
     final method = (map['method'] ?? map['endpoint'] ?? type) as String;
-    final payloadRaw = map['payload'] ?? map['value'];
+    final payloadRaw =
+        map['payload'] ??
+        map['value'] ??
+        (map['error'] != null
+            ? <String, Object?>{'error': map['error'], 'type': 'error'}
+            : null);
     final JsonMap payloadMap;
     if (payloadRaw is Map<String, Object?>) {
       payloadMap = payloadRaw;

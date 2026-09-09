@@ -25,4 +25,15 @@ final class CommandExecution {
   /// The handler's human-readable outcome (success carries one only when
   /// the command produced text; errors always do).
   final String? text;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CommandExecution &&
+          other.commandId == commandId &&
+          other.kind == kind &&
+          other.text == text);
+
+  @override
+  int get hashCode => Object.hash(commandId, kind, text);
 }

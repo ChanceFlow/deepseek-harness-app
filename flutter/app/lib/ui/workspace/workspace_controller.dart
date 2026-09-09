@@ -9,6 +9,7 @@ import 'package:domain/model/workspace.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import '../state_stream.dart';
+import '../../logging/error_log_collector.dart';
 import 'workspace_ui_state.dart';
 
 class WorkspaceController {
@@ -231,10 +232,12 @@ class WorkspaceController {
   void _createDirectory(String parentPath, String name) {
     if (name.trim().isEmpty) return;
     unawaited(() async {
-      await _runCatchingForUi(
+      final created = await _runCatchingForUi(
         () => _repository.createDirectory(parentPath, name.trim()),
       );
-      await _loadDirectory(parentPath);
+      if (created != null) {
+        await _loadDirectory(parentPath);
+      }
     }());
   }
 
@@ -293,9 +296,14 @@ class WorkspaceController {
       _errorMessage = null;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'WorkspaceController'},
+      );
       return null;
     }
   }

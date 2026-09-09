@@ -24,7 +24,11 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
 
   @override
   void send(String path, String message) {
-    _sockets[path]?.add(message);
+    final socket = _sockets[path];
+    if (socket == null || socket.readyState != WebSocket.open) {
+      throw DshTransportException('cannot send on $path: socket is not open');
+    }
+    socket.add(message);
   }
 
   @override
@@ -85,6 +89,10 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
             cancelOnError: true,
           );
         } catch (error) {
+          if (identical(_sockets[path], webSocket)) {
+            _sockets.remove(path);
+          }
+          await _closeQuietly(webSocket);
           controller.addError(
             DshTransportException('event stream $path failed', error),
           );
@@ -93,7 +101,9 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
       },
       onCancel: () async {
         cancelled = true;
-        _sockets.remove(path);
+        if (identical(_sockets[path], webSocket)) {
+          _sockets.remove(path);
+        }
         await webSocketSub?.cancel();
         await _closeQuietly(webSocket);
       },
@@ -102,7 +112,11 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
   }
 
   Future<void> _closeQuietly(WebSocket? webSocket) async {
-    if (webSocket == null || webSocket.readyState != WebSocket.open) return;
+    if (webSocket == null ||
+        (webSocket.readyState != WebSocket.open &&
+            webSocket.readyState != WebSocket.connecting)) {
+      return;
+    }
     try {
       // Bounded graceful close: a peer that never answers the close frame
       // must not hang the caller (subscription cancel / generation teardown).

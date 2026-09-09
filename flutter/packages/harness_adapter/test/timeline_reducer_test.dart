@@ -109,6 +109,58 @@ void main() {
     expect(settled.value.streaming, isFalse);
   });
 
+  test('streaming chunk block-end retains and updates text and reasoning without wipe', () {
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r1',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': event(1, 'assistant/chunk', <String, Object?>{
+            'turn': 1,
+            'step': 1,
+            'chunk': <String, Object?>{
+              'type': 'text-delta',
+              'index': 0,
+              'text': 'hello world',
+            },
+          }),
+        },
+      ),
+    );
+    expect(reducer.snapshot().single, isA<TimelineMessage>());
+    expect(
+      (reducer.snapshot().single as TimelineMessage).value.text,
+      'hello world',
+    );
+
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r2',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': event(2, 'assistant/chunk', <String, Object?>{
+            'turn': 1,
+            'step': 1,
+            'chunk': <String, Object?>{
+              'type': 'block-end',
+              'index': 0,
+              'block': <String, Object?>{
+                'type': 'text',
+                'text': 'hello world completed',
+              },
+            },
+          }),
+        },
+      ),
+    );
+    final afterBlockEnd = reducer.snapshot().single as TimelineMessage;
+    expect(afterBlockEnd.value.text, 'hello world completed');
+    expect(afterBlockEnd.value.streaming, isTrue);
+  });
+
   test('tool call pairs with result', () {
     final history = <JsonMap>[
       event(1, 'tool/call', <String, Object?>{

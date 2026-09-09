@@ -1566,23 +1566,26 @@ class HarnessRepositoryImpl implements ChatRepository {
       final breakdown = _parseContextBreakdownProjection(breakdownValue);
       _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
     }
-    final planValue = values['plan'];
-    if (planValue != null && planValue != 'null') {
-      _planProjectionStateFor(sessionId).value = _parsePlanProjection(
-        planValue,
-      );
+    if (values.containsKey('plan')) {
+      final planValue = values['plan'];
+      _planProjectionStateFor(sessionId)
+          .value = (planValue != null && planValue != 'null')
+          ? _parsePlanProjection(planValue)
+          : null;
     }
-    final todosValue = values['todos'];
-    if (todosValue != null && todosValue != 'null') {
-      _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
-        todosValue,
-      );
+    if (values.containsKey('todos')) {
+      final todosValue = values['todos'];
+      _todoProjectionStateFor(sessionId)
+          .value = (todosValue != null && todosValue != 'null')
+          ? _parseTodosProjection(todosValue)
+          : const <TodoItem>[];
     }
-    final goalValue = values['goal'];
-    if (goalValue != null && goalValue != 'null') {
-      _goalProjectionStateFor(sessionId).value = _parseGoalProjection(
-        goalValue,
-      );
+    if (values.containsKey('goal')) {
+      final goalValue = values['goal'];
+      _goalProjectionStateFor(sessionId)
+          .value = (goalValue != null && goalValue != 'null')
+          ? _parseGoalProjection(goalValue)
+          : null;
     }
     final permValue = values['permissions'];
     if (permValue != null && permValue != 'null') {
@@ -2067,23 +2070,39 @@ class HarnessRepositoryImpl implements ChatRepository {
     } else {
       _sessionCursors[sessionId] = -1;
     }
-    final goalValue = history.projectionValues?['goal'];
-    if (goalValue != null) {
-      _goalProjectionStateFor(sessionId).value = _parseGoalProjection(
-        goalValue,
-      );
-    }
-    final planValue = history.projectionValues?['plan'];
-    if (planValue != null) {
-      _planProjectionStateFor(sessionId).value = _parsePlanProjection(
-        planValue,
-      );
-    }
-    final todosValue = history.projectionValues?['todos'];
-    if (todosValue != null) {
-      _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
-        todosValue,
-      );
+    final pv = history.projectionValues;
+    if (pv != null) {
+      if (pv.containsKey('goal')) {
+        final goalValue = pv['goal'];
+        _goalProjectionStateFor(sessionId)
+            .value = (goalValue != null && goalValue != 'null')
+            ? _parseGoalProjection(goalValue)
+            : null;
+      }
+      if (pv.containsKey('plan')) {
+        final planValue = pv['plan'];
+        _planProjectionStateFor(sessionId)
+            .value = (planValue != null && planValue != 'null')
+            ? _parsePlanProjection(planValue)
+            : null;
+      }
+      if (pv.containsKey('todos')) {
+        final todosValue = pv['todos'];
+        _todoProjectionStateFor(sessionId)
+            .value = (todosValue != null && todosValue != 'null')
+            ? _parseTodosProjection(todosValue)
+            : const <TodoItem>[];
+      }
+      final presetValue = wireString(pv, 'agentPreset');
+      if (presetValue != null && presetValue != 'null') {
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, agentPreset: presetValue)
+                  : item,
+            )
+            .toList();
+      }
     }
     final pressureValue = history.projectionValues?['contextPressure'];
     if (pressureValue != null) {
