@@ -633,7 +633,7 @@ class TimelineReducer {
       default:
         message = null;
     }
-    if (message != null || kind != null) {
+    if (message != null || (kind != null && kind != 'completed')) {
       _items.add(
         TimelineError(
           id: 'turn-end:$_lastSeq',

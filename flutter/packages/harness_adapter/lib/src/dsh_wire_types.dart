@@ -563,8 +563,7 @@ CredentialStatus decodeCredentialView(String ref, JsonMap view) =>
     );
 
 List<CredentialStatus> decodeCredentialsDescribeValue(JsonMap value) {
-  final credentials =
-      asJsonObject(value['credentials']) ?? const <String, Object?>{};
+  final credentials = asJsonObject(value['credentials']) ?? value;
   final statuses = credentials.entries
       .map(
         (entry) => decodeCredentialView(
