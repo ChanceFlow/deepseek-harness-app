@@ -5,6 +5,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:dev/dev.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -22,6 +23,7 @@ DebugToolBootstrap? debugBootstrap;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _initDisplayMode();
   _initErrorLogging();
   // One system notifier, initialized here (permission request + launch-time
   // locale + cold-start tap capture) and handed to the DI layer through an
@@ -35,6 +37,20 @@ Future<void> main() async {
       child: const DshApp(),
     ),
   );
+}
+
+/// Unlocks Android high-refresh-rate display mode (90Hz/120Hz) for fluid
+/// touch gestures, scroll physics, and transitions.
+void _initDisplayMode() {
+  if (!kIsWeb &&
+      Platform.isAndroid &&
+      !Platform.environment.containsKey('FLUTTER_TEST')) {
+    unawaited(
+      FlutterDisplayMode.setHighRefreshRate().catchError((Object _) {
+        // Ignored: older Android OS versions or unsupported devices cleanly fall back.
+      }),
+    );
+  }
 }
 
 /// Initialize in-app error log collection hooks and restore saved errors.

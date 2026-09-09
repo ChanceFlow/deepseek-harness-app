@@ -822,7 +822,7 @@ class _BranchLoadingRowState extends State<_BranchLoadingRow>
         ),
         title: ClipRect(
           child: SweepHighlight(
-            controller: MediaQuery.disableAnimationsOf(context) ? null : _sweep,
+            controller: DshMotion.isReducedMotion(context) ? null : _sweep,
             child: Text(
               l10n.loadingSubagents,
               style: theme.textTheme.bodySmall?.copyWith(
