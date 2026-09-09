@@ -13,6 +13,7 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/repository/chat_repository.dart';
 
+import '../../logging/error_log_collector.dart';
 import '../state_stream.dart';
 import 'settings_ui_state.dart';
 
@@ -221,9 +222,17 @@ class SettingsController {
     _credentialError = null;
     try {
       _credentials = await _repository.describeCredentials(refs);
-    } catch (error) {
+    } catch (error, stackTrace) {
       _credentials = const <CredentialStatus>[];
       _credentialError = error.toString();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{
+          'controller': 'SettingsController',
+          'action': '_loadCredentials',
+        },
+      );
     }
   }
 
@@ -232,9 +241,14 @@ class SettingsController {
       _errorMessage = null;
       _publish();
       return await block();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
       _publish();
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'SettingsController'},
+      );
       return null;
     }
   }

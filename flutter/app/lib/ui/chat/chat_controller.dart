@@ -362,9 +362,17 @@ class ChatController {
         _editGoal(action.objective);
       case ImagePickError():
         _errorMessage = action.message;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Image pick error: ${action.message}',
+          level: 'warning',
+        );
         _publish();
       case CommandImageRefusal():
         _errorMessage = action.message;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Command image refusal: ${action.message}',
+          level: 'warning',
+        );
         _publish();
       case SelectAgentPreset():
         _selectAgentPreset(action);
@@ -724,8 +732,18 @@ class ChatController {
           images,
           retryOnTransportAbort: detached,
         );
-      } catch (error) {
+      } catch (error, stackTrace) {
         _errorMessage = error.toString();
+        ErrorLogCollector.instance.captureError(
+          error,
+          stackTrace: stackTrace,
+          context: <String, Object?>{
+            'controller': 'ChatController',
+            'action': 'executeCommand',
+            'sessionId': sessionId,
+            'command': line,
+          },
+        );
         // A detached dispatch never holds the composer, but an immediate
         // transport/admission failure still surfaces in the error strip —
         // there is no `command/done` to fold into a command card.
@@ -761,6 +779,10 @@ class ChatController {
       if (execution.kind == CommandOutcomeKind.error) {
         _errorMessage = execution.text;
         _commandFailed = execution.text == null;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Command execution failed ($sessionId): ${execution.text}',
+          level: 'warning',
+        );
         _telemetry?.event(
           'chat.command.error',
           attributes: {
@@ -837,7 +859,11 @@ class ChatController {
         _attachmentBytes[ref.attachmentId] = downloaded.data;
       });
       return downloaded.data;
-    } catch (_) {
+    } catch (e) {
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to read attachment ${ref.attachmentId} for $sessionId: $e',
+        level: 'warning',
+      );
       return null;
     }
   }
@@ -1059,6 +1085,10 @@ class ChatController {
       } catch (error) {
         // A remembered route the host can no longer serve stays
         // unapplied; the seat keeps the host's own current selection.
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to apply model preferences for $sessionId: $error',
+          level: 'warning',
+        );
         _telemetry?.count('chat.model.prefs.apply_failed');
         _telemetry?.event(
           'chat.model.prefs.apply_failed',

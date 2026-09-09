@@ -14,6 +14,8 @@ import 'dart:async';
 
 import 'package:domain/model/backend.dart';
 
+import '../logging/error_log_collector.dart';
+import '../logging/error_log_entry.dart' show ErrorLogLevel;
 import '../ui/state_stream.dart';
 import 'backend_store.dart';
 
@@ -108,7 +110,7 @@ class BackendRegistryController {
         backends: data.backends,
         activeId: activeId,
       );
-    } on BackendStoreException catch (error) {
+    } on BackendStoreException catch (error, stack) {
       // A corrupt document never blocks the app: fall back to the seed
       // (re-reading the same file would throw again), with the
       // corruption reported on the state.
@@ -117,6 +119,15 @@ class BackendRegistryController {
         backends: seed.backends,
         activeId: seed.backends.first.id,
         errorMessage: _encodeError(error),
+      );
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stack,
+        level: ErrorLogLevel.warning,
+        context: const <String, Object?>{
+          'controller': 'BackendRegistryController',
+          'action': '_load',
+        },
       );
     } finally {
       if (!_loadedCompleter.isCompleted) _loadedCompleter.complete();
@@ -297,6 +308,10 @@ class BackendRegistryController {
                 : BackendErrorCode.writeFailed.name;
             _state = _state.withError(encoded);
             _publish();
+            ErrorLogCollector.instance.addBreadcrumb(
+              'Backend store write failed: $error',
+              level: 'warning',
+            );
           }),
     );
   }

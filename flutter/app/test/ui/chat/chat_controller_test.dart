@@ -133,9 +133,14 @@ class FakeChatRepository implements ChatRepository {
     ];
   }
 
+  bool failListSkills = false;
+
   @override
   Future<List<SkillEntry>> listSkills(String sessionId) async {
     skillListCalls.add(sessionId);
+    if (failListSkills) {
+      throw Exception('Network error listing skills');
+    }
     return const <SkillEntry>[
       SkillEntry(name: 'generate-image', description: 'Generate images'),
     ];
@@ -1856,6 +1861,69 @@ void main() {
     expect(rendered.plan, const PlanState(active: true, pending: false));
     // Precedence: Question takeover (priority 1) preempts Approval (priority 0)
     expect(find.text('Continue?'), findsOneWidget);
+  });
+
+  test('listSkills failure records breadcrumb in ErrorLogCollector', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    )..failListSkills = true;
+    final controller = ChatController(repository);
+    addTearDown(controller.dispose);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+
+    expect(
+      ErrorLogCollector.instance.breadcrumbs.any(
+        (b) => b.contains(
+          'Failed to load skills for ${FakeChatRepository.initialSession.id}',
+        ),
+      ),
+      isTrue,
+    );
+  });
+
+  test(
+    'listAgentPresets failure records breadcrumb in ErrorLogCollector',
+    () async {
+      final repository = FakeChatRepository()..agentPresetRoster = null;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await pumpEventQueue();
+
+      expect(
+        ErrorLogCollector.instance.breadcrumbs.any(
+          (b) => b.contains('Failed to load agent presets'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test('command dispatch error captures error in ErrorLogCollector', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    )..commandFailures.add('/compact');
+    final controller = ChatController(repository);
+    addTearDown(controller.dispose);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+
+    controller.onAction(const SendPrompt('/compact'));
+    await pumpEventQueue();
+
+    expect(controller.state.errorMessage, contains('connection aborted'));
+    expect(
+      ErrorLogCollector.instance.entries.any(
+        (e) =>
+            e.message.contains('connection aborted') &&
+            e.context?['action'] == 'executeCommand',
+      ),
+      isTrue,
+    );
   });
 }
 

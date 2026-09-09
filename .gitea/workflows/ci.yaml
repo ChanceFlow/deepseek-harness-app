@@ -186,9 +186,11 @@ jobs:
           # rode the baked, since-dead address). Rewrite it from the live
           # egress env — the same injection the Dockerfile performs at
           # build time, with the address the variable carries now.
+          GRADLE_DIR="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          mkdir -p "$GRADLE_DIR"
           printf 'systemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\n' \
             "$EGRESS_HOST" "$EGRESS_PORT" "$EGRESS_HOST" "$EGRESS_PORT" \
-            > /root/.gradle/gradle.properties
+            > "$GRADLE_DIR/gradle.properties"
           export GRADLE_OPTS="-Dhttp.proxyHost=$EGRESS_HOST -Dhttp.proxyPort=$EGRESS_PORT -Dhttps.proxyHost=$EGRESS_HOST -Dhttps.proxyPort=$EGRESS_PORT"
           for attempt in 1 2 3; do
             ./gradlew :app:compileDebugKotlin && exit 0

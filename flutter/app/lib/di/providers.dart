@@ -66,6 +66,7 @@ import '../ui/chat/voice_input/voice_input_ui_state.dart';
 import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 import '../logging/error_log_collector.dart';
+import '../logging/error_log_entry.dart';
 import '../ui/settings/error_logs/error_logs_controller.dart';
 
 import 'package:dev/dev.dart' show DebugTelemetry;
@@ -210,14 +211,29 @@ final backendConnectionProvider = Provider.family
             '[Connection $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
             level: diagnostic.level.name,
           );
-          if (diagnostic.level == AdapterDiagnosticLevel.error ||
-              diagnostic.error != null) {
+          if (diagnostic.level == AdapterDiagnosticLevel.error) {
             ErrorLogCollector.instance.captureError(
               diagnostic.error ?? diagnostic.message,
               stackTrace: diagnostic.stackTrace,
+              level: ErrorLogLevel.error,
               context: <String, Object?>{
                 'backendId': key.$1,
+                'uri': key.$2.toString(),
                 'diagnostic_context': diagnostic.context,
+                ...diagnostic.metadata,
+              },
+            );
+          } else if (diagnostic.level == AdapterDiagnosticLevel.warning &&
+              diagnostic.error != null) {
+            ErrorLogCollector.instance.captureError(
+              diagnostic.error!,
+              stackTrace: diagnostic.stackTrace,
+              level: ErrorLogLevel.warning,
+              context: <String, Object?>{
+                'backendId': key.$1,
+                'uri': key.$2.toString(),
+                'diagnostic_context': diagnostic.context,
+                'diagnostic_message': diagnostic.message,
                 ...diagnostic.metadata,
               },
             );
@@ -283,14 +299,27 @@ final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, Strin
         '[Adapter $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
         level: diagnostic.level.name,
       );
-      if (diagnostic.level == AdapterDiagnosticLevel.error ||
-          diagnostic.error != null) {
+      if (diagnostic.level == AdapterDiagnosticLevel.error) {
         ErrorLogCollector.instance.captureError(
           diagnostic.error ?? diagnostic.message,
           stackTrace: diagnostic.stackTrace,
+          level: ErrorLogLevel.error,
           context: <String, Object?>{
             'backendId': backendId,
             'diagnostic_context': diagnostic.context,
+            ...diagnostic.metadata,
+          },
+        );
+      } else if (diagnostic.level == AdapterDiagnosticLevel.warning &&
+          diagnostic.error != null) {
+        ErrorLogCollector.instance.captureError(
+          diagnostic.error!,
+          stackTrace: diagnostic.stackTrace,
+          level: ErrorLogLevel.warning,
+          context: <String, Object?>{
+            'backendId': backendId,
+            'diagnostic_context': diagnostic.context,
+            'diagnostic_message': diagnostic.message,
             ...diagnostic.metadata,
           },
         );
