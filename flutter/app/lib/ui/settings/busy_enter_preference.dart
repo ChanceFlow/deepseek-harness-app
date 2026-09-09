@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 import '../../local_state/local_state_store.dart';
+import '../../logging/error_log_collector.dart';
 import '../state_stream.dart';
 
 /// KV key shared with the composer's busy-send path.
@@ -75,8 +76,12 @@ class BusyEnterPreferenceController {
     try {
       _store.write(kBusyEnterBehaviorKey, behavior.wireName);
       await _store.flush();
-    } catch (_) {
+    } catch (e) {
       _state.value = before;
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to persist busy enter behavior: $e',
+        level: 'warning',
+      );
     }
   }
 }

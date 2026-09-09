@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'config.dart';
 import 'di/providers.dart' show systemNotifierProvider;
 import 'logging/error_log_collector.dart';
+import 'logging/error_log_entry.dart' show ErrorLogLevel;
 import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
 import 'ui/settings/locale_preference.dart';
@@ -25,17 +26,30 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _initDisplayMode();
   _initErrorLogging();
-  // One system notifier, initialized here (permission request + launch-time
-  // locale + cold-start tap capture) and handed to the DI layer through an
-  // override so the provider consumers share the exact initialized instance.
-  final notifier = SystemNotifier();
-  await notifier.initialize();
-  _initDebugTools();
-  runApp(
-    ProviderScope(
-      overrides: [systemNotifierProvider.overrideWithValue(notifier)],
-      child: const DshApp(),
-    ),
+  await runZonedGuarded(
+    () async {
+      // One system notifier, initialized here (permission request + launch-time
+      // locale + cold-start tap capture) and handed to the DI layer through an
+      // override so the provider consumers share the exact initialized instance.
+      final notifier = SystemNotifier();
+      await notifier.initialize();
+      _initDebugTools();
+      runApp(
+        ProviderScope(
+          overrides: [systemNotifierProvider.overrideWithValue(notifier)],
+          child: const DshApp(),
+        ),
+      );
+    },
+    (error, stack) {
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stack,
+        level: ErrorLogLevel.fatal,
+        type: 'uncaught-zone:${error.runtimeType}',
+      );
+      DebugTelemetry.instance?.log('uncaught-zone: $error', level: 'error');
+    },
   );
 }
 
@@ -46,8 +60,11 @@ void _initDisplayMode() {
       Platform.isAndroid &&
       !Platform.environment.containsKey('FLUTTER_TEST')) {
     unawaited(
-      FlutterDisplayMode.setHighRefreshRate().catchError((Object _) {
-        // Ignored: older Android OS versions or unsupported devices cleanly fall back.
+      FlutterDisplayMode.setHighRefreshRate().catchError((Object error) {
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Display mode switch failed: $error',
+          level: 'warning',
+        );
       }),
     );
   }
@@ -69,12 +86,18 @@ void _initErrorLogging() {
                 'App launch: storage ready (v$kDshAppVersion+$kDshBuildNumber)',
               );
             })
-            .catchError((Object _) {
-              // Documents directory resolution failure is swallowed.
+            .catchError((Object error) {
+              ErrorLogCollector.instance.addBreadcrumb(
+                'App launch: storage init failed: $error',
+                level: 'warning',
+              );
             }),
       );
-    } catch (_) {
-      // Swallowed: error logging setup must never crash app startup.
+    } catch (e) {
+      ErrorLogCollector.instance.addBreadcrumb(
+        'App launch: storage setup failed: $e',
+        level: 'warning',
+      );
     }
   }
 }

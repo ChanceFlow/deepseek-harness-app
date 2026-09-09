@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 import '../../local_state/local_state_store.dart';
+import '../../logging/error_log_collector.dart';
 import '../state_stream.dart';
 
 /// KV key shared with `DshApp`'s locale resolution.
@@ -86,8 +87,12 @@ class LocalePreferenceController {
     try {
       _store.write(kAppLocalePreferenceKey, preference.wireName);
       await _store.flush();
-    } catch (_) {
+    } catch (e) {
       _state.value = before;
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to persist locale preference: $e',
+        level: 'warning',
+      );
     }
   }
 }
