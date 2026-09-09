@@ -17,12 +17,12 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
 
 - **Endpoint naming & decoupling**:
   - `DshRpcEndpoints` in `rpc_map.dart` acts as the single central registry for all Typert Remote endpoints (`session/*`, `skills/list`, `subagents/*`, `goals/*`, `agentPresets/*`, `directoryPicker/*`, `workspace/*`, `settings/*`, `credentials/*`, `commands/execute`).
-  - `DshRemoteInvoker` decouples repository business logic from wire transport details, implementing transparent version fallback via `kDshEndpointFallbacks` when a 404 is encountered against an older API Proxy backend.
+  - `DshRemoteInvoker` decouples repository business logic from wire transport details, packaging requests according to Typert descriptors without legacy 0.1.1 fallback shims (`kDshEndpointFallbacks` empty).
 - **Payload packaging & descriptor matching**:
-  - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation, while unwrapping on fallback to legacy flat endpoints.
+  - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation.
   - `session/prompt` (`sendMessage`) injects required client-minted `'requestId'` (`req-...`), avoiding gateway descriptor boundary rejection.
-  - `session/modelCatalog` takes no parameters in DSH 0.1.2; `DshRemoteInvoker._prepareArgs` strips arguments before sending to prevent descriptor mismatch errors (`unexpected "sessionId"`), while preserving `sessionId` on 404 fallback to legacy `session.models`.
-  - `session/page` replaces `session.history` in DSH 0.1.2; `DshRemoteInvoker` translates backwards-history requests to `session/page` with session/subagent address, live cursor discovery, and `throughSeq` cursor.
+  - `session/modelCatalog` takes no parameters in DSH 0.1.2; `DshRemoteInvoker._prepareArgs` normalizes arguments to empty `{}` before sending, and `SessionModelsValueWire` decodes `default` and `routableProviders`.
+  - `session/page` is directly invoked for both session history and subagent history; `DshRemoteInvoker` wraps the request with session/subagent address and cursor without attempting legacy 404-prone endpoints.
   - `SessionHistoryValueWire` automatically unrolls packed `chunkrow/*` delta rows into standard `assistant/chunk` events.
   - `decodeGoalRefValue` parses top-level `{ id, revision }` from DSH 0.1.2 mutations (`edit`, `pause`, `resume`, `complete`, `clear`).
   - `AgentPresetListValueWire` treats `hasDocument` as optional (`wireBool` default false) matching DSH 0.1.2 `AgentPresetRoster`, and `agentPresets/select` supports scalar string response values.

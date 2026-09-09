@@ -216,11 +216,18 @@ final class ModelCatalogFailureWire {
 final class SessionModelsValueWire {
   SessionModelsValueWire.fromJson(JsonMap json)
     : current = ModelSelectionWire.fromJson(
-        asJsonObject(json['current']) ??
+        asJsonObject(json['default']) ??
+            asJsonObject(json['current']) ??
             asJsonObject(json['defaultSelection']) ??
             const <String, Object?>{'provider': '', 'model': ''},
       ),
-      routable = wireBool(json, 'routable'),
+      routable = json.containsKey('routable')
+          ? wireBool(json, 'routable')
+          : (asJsonArray(json['routableProviders']) ?? const <Object?>[])
+                .contains(
+                  asJsonObject(json['default'])?['provider'] ??
+                      asJsonObject(json['current'])?['provider'],
+                ),
       groups =
           (asJsonArray(json['groups'] ?? json['entries']) ?? const <Object?>[])
               .map(asJsonObject)
