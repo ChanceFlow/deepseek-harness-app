@@ -57,6 +57,10 @@ disagreeing with its facts.
   defaults are the cheapest correct answer and the one an agent cannot get
   subtly wrong. A repeated value becomes a named constant in `theme.dart`
   on its second use (5).
+- **Motion carries physics and feedback, not ornament.** Page transitions and
+  sheet presentations ride standard Material 3 motion tokens in `theme.dart`
+  (`DshMotion`). Zero hard cuts: tabs cross-fade, sheets lift smoothly, and
+  all buttons provide tactile press feedback (2, 4, 5).
 
 ## Deciding a new surface
 

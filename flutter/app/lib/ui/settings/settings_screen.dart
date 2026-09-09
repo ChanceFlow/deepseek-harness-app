@@ -1688,8 +1688,8 @@ class _PresetCard extends StatelessWidget {
     final String description =
         agentPresetDisplayDescription(entry, l10n) ?? l10n.noDescription;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
+      duration: DshMotion.durationShort,
+      curve: DshMotion.curveStandard,
       decoration: BoxDecoration(
         color: active
             ? scheme.surfaceContainerHigh
@@ -1838,8 +1838,8 @@ class _DeepSeekCard extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
+      duration: DshMotion.durationShort,
+      curve: DshMotion.curveStandard,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         border: Border.all(color: scheme.outlineVariant),
@@ -2096,8 +2096,8 @@ class _NamespaceCardState extends State<_NamespaceCard> {
                   const SizedBox(width: 8),
                   AnimatedRotation(
                     turns: _open ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
+                    duration: DshMotion.durationShort,
+                    curve: DshMotion.curveStandard,
                     child: Icon(
                       Icons.keyboard_arrow_down,
                       size: 20,

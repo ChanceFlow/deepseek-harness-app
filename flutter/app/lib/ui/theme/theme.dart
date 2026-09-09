@@ -7,6 +7,7 @@
 /// from competing with the transcript.
 library;
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 /// Colors Material 3 ships no role for. This extension is their one home: a
@@ -97,6 +98,41 @@ const double kSidebarWidth = 320;
 /// `WorkspaceBrowser.module.css`).
 const double kRailControlGap = 12;
 
+/// Global unified motion design tokens: durations, easing curves, and
+/// accessibility helpers for all animations across the app.
+abstract final class DshMotion {
+  /// 100ms: micro-interactions (icon rotation, state-dot morph, splash, fade).
+  static const Duration durationMicro = Duration(milliseconds: 100);
+
+  /// 200ms: small components and controls (buttons, tooltips, badges, chips).
+  static const Duration durationShort = Duration(milliseconds: 200);
+
+  /// 300ms: medium containers and disclosures (toasts, sheets, accordions, FABs).
+  static const Duration durationMedium = Duration(milliseconds: 300);
+
+  /// 450ms: full-page route transitions and large surface changes.
+  static const Duration durationLong = Duration(milliseconds: 450);
+
+  /// Material 3 emphasized easing: for expressive entry and container transforms.
+  static const Curve curveEmphasized = Curves.easeInOutCubicEmphasized;
+
+  /// Decelerate entry curve: elements entering the viewport calmly settle in place.
+  static const Curve curveEnter = Curves.easeOutCubic;
+
+  /// Accelerate exit curve: elements exiting the viewport depart crisply.
+  static const Curve curveExit = Curves.easeInCubic;
+
+  /// Standard easing: in-viewport translation, scaling, and property morphing.
+  static const Curve curveStandard = Curves.easeInOutCubic;
+
+  /// Tactile spring-like curve: for button press release and bounce feedback.
+  static const Curve curveSpring = Curves.easeOutBack;
+
+  /// Whether reduced-motion accessibility mode is active on the host device.
+  static bool isReducedMotion(BuildContext context) =>
+      MediaQuery.disableAnimationsOf(context);
+}
+
 class DshTheme {
   const DshTheme._();
 
@@ -169,6 +205,53 @@ class DshTheme {
         highlightElevation: 1,
         hoverElevation: 1,
         focusElevation: 1,
+      ),
+      // Global Material 3 page transitions: smooth Zoom transitions on
+      // Android and desktop, Cupertino slide on iOS/macOS.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(
+            allowSnapshotting: true,
+          ),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: ZoomPageTransitionsBuilder(
+            allowSnapshotting: true,
+          ),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: ZoomPageTransitionsBuilder(
+            allowSnapshotting: true,
+          ),
+        },
+      ),
+      // All button styles share DshMotion.durationShort for tactile feedback.
+      filledButtonTheme: const FilledButtonThemeData(
+        style: ButtonStyle(animationDuration: DshMotion.durationShort),
+      ),
+      elevatedButtonTheme: const ElevatedButtonThemeData(
+        style: ButtonStyle(animationDuration: DshMotion.durationShort),
+      ),
+      outlinedButtonTheme: const OutlinedButtonThemeData(
+        style: ButtonStyle(animationDuration: DshMotion.durationShort),
+      ),
+      textButtonTheme: const TextButtonThemeData(
+        style: ButtonStyle(animationDuration: DshMotion.durationShort),
+      ),
+      iconButtonTheme: const IconButtonThemeData(
+        style: ButtonStyle(animationDuration: DshMotion.durationShort),
+      ),
+      // Accordion/Disclosure expansion animation style.
+      expansionTileTheme: const ExpansionTileThemeData(
+        expansionAnimationStyle: AnimationStyle(
+          duration: DshMotion.durationMedium,
+          curve: DshMotion.curveStandard,
+          reverseCurve: DshMotion.curveExit,
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kShapeCard),
+        ),
       ),
     );
   }

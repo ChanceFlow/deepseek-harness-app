@@ -137,7 +137,7 @@ class _TurnStatusRowState extends State<TurnStatusRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced = DshMotion.isReducedMotion(context);
     final style = theme.textTheme.labelLarge?.copyWith(
       fontWeight: FontWeight.w600,
       color: scheme.primary,
