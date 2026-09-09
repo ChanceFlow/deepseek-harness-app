@@ -1084,7 +1084,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     final result = await _call(
       DshRpcEndpoints.sessionModelCatalog,
       DshRpcEndpoints.sessionModelCatalog,
-      <String, Object?>{},
+      {'sessionId': sessionId},
     ).valueOrThrow();
     return _toDomainSessionModels(SessionModelsValueWire.fromJson(result));
   }

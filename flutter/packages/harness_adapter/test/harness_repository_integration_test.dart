@@ -861,6 +861,22 @@ void main() {
   );
 
   test(
+    'loadModels strips arguments for canonical session/modelCatalog',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      await pumpEventQueue();
+
+      final models = await repository.loadModels('session-1');
+      expect(models.current.model, 'glm-x');
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 1);
+      final payloads = rpc.payloads(DshRpcEndpoints.sessionModelCatalog);
+      expect(payloads, isNotEmpty);
+      expect(payloads.first['args'], isEmpty);
+    },
+  );
+
+  test(
     'workspace/list 404 is tolerated gracefully without surfacing an error',
     () async {
       final rpc = HarnessFakeRpc();

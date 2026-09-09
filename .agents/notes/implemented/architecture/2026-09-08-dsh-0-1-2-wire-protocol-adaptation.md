@@ -21,7 +21,7 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
 - **Payload packaging & descriptor matching**:
   - `DshRemoteInvoker` automatically wraps payload maps in `<String, Object?>{'args': payload}` and ensures endpoints declaring a `request` or `_request` descriptor parameter match DSH 0.1.2 boundary validation, while unwrapping on fallback to legacy flat endpoints.
   - `session/prompt` (`sendMessage`) injects required client-minted `'requestId'` (`req-...`), avoiding gateway descriptor boundary rejection.
-  - `session/modelCatalog` takes no parameters in DSH 0.1.2; maps `default` and `routableProviders` without legacy `sessionId` argument.
+  - `session/modelCatalog` takes no parameters in DSH 0.1.2; `DshRemoteInvoker._prepareArgs` strips arguments before sending to prevent descriptor mismatch errors (`unexpected "sessionId"`), while preserving `sessionId` on 404 fallback to legacy `session.models`.
   - `session/page` replaces `session.history` in DSH 0.1.2; `DshRemoteInvoker` translates backwards-history requests to `session/page` with session/subagent address, live cursor discovery, and `throughSeq` cursor.
   - `SessionHistoryValueWire` automatically unrolls packed `chunkrow/*` delta rows into standard `assistant/chunk` events.
   - `decodeGoalRefValue` parses top-level `{ id, revision }` from DSH 0.1.2 mutations (`edit`, `pause`, `resume`, `complete`, `clear`).
