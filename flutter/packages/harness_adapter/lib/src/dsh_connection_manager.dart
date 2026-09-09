@@ -242,6 +242,15 @@ class DshConnectionManager {
                 'payload': <String, Object?>{'args': <String, Object?>{}},
               }),
             );
+            socket.send(
+              currentPath,
+              jsonEncode(<String, Object?>{
+                'type': 'open',
+                'streamId': 'session-control',
+                'endpoint': 'session/control',
+                'payload': <String, Object?>{'args': <String, Object?>{}},
+              }),
+            );
           }
           if (!opened.isCompleted) opened.complete();
         },

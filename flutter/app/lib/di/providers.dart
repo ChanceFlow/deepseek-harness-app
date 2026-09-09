@@ -67,6 +67,9 @@ import '../ui/subagents/subagent_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 import '../logging/error_log_collector.dart';
 import '../ui/settings/error_logs/error_logs_controller.dart';
+
+import 'package:dev/dev.dart' show DebugTelemetry;
+
 import '../ui/settings/error_logs/error_logs_ui_state.dart';
 
 import 'package:asr/asr.dart';
@@ -238,17 +241,43 @@ final backendConnectionStateProvider = StreamProvider.family
     });
 
 /// The domain-facing repository per backend.
-final chatRepositoryProvider = Provider.family
-    .autoDispose<ChatRepository, String>((ref, backendId) {
-      final backend = ref.watch(backendByIdProvider(backendId));
-      // The seed fallback covers only the pre-load window; a removed backend
-      // takes its dependents down with it before this can matter.
-      final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
-      return HarnessRepositoryImpl(
-        ref.watch(dshRpcClientProvider(uri)),
-        ref.watch(backendConnectionProvider((backendId, uri))),
+final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, String>((
+  ref,
+  backendId,
+) {
+  final backend = ref.watch(backendByIdProvider(backendId));
+  // The seed fallback covers only the pre-load window; a removed backend
+  // takes its dependents down with it before this can matter.
+  final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
+  return HarnessRepositoryImpl(
+    ref.watch(dshRpcClientProvider(uri)),
+    ref.watch(backendConnectionProvider((backendId, uri))),
+    onDiagnostic: (diagnostic) {
+      final levelStr = diagnostic.level.name.toUpperCase();
+      ErrorLogCollector.instance.addBreadcrumb(
+        '[Adapter $levelStr] ${diagnostic.context ?? ""}: ${diagnostic.message}',
+        level: diagnostic.level.name,
       );
-    });
+      if (diagnostic.level == AdapterDiagnosticLevel.error) {
+        ErrorLogCollector.instance.captureError(
+          diagnostic.error ?? diagnostic.message,
+          stackTrace: diagnostic.stackTrace,
+          context: <String, Object?>{
+            'backendId': backendId,
+            'diagnostic_context': diagnostic.context,
+            ...diagnostic.metadata,
+          },
+        );
+      }
+      DebugTelemetry.instance?.log(
+        '${diagnostic.context ?? "adapter"}: ${diagnostic.message}',
+        level: diagnostic.level == AdapterDiagnosticLevel.error
+            ? 'error'
+            : 'warn',
+      );
+    },
+  );
+});
 
 /// System (OS-level) notifications, single instance shared by every
 /// backend's notification center.
