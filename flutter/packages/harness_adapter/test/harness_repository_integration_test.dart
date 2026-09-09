@@ -647,8 +647,6 @@ class HarnessFakeRpc implements DshRpcClient {
       case 'agentPreset/select':
         return <String, Object?>{'agentPreset': 'minimal'};
       case 'session/modelCatalog':
-      case 'session.models':
-      case 'session/models':
         return <String, Object?>{
           'defaultSelection': <String, Object?>{
             'provider': 'deepseek',
