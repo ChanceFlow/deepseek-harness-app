@@ -163,7 +163,7 @@ class _ReasoningRowState extends State<ReasoningRow>
                         color: scheme.onSurface,
                       ),
                     ),
-                    if (!_expanded && _summary.isNotEmpty) ...[
+                    if (!_expanded && _effectiveElapsed == null) ...[
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
