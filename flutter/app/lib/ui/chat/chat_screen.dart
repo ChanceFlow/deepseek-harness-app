@@ -1047,7 +1047,7 @@ class _ChatPanelState extends State<ChatPanel> {
         await _timelineScroll.animateTo(
           target,
           duration: _followDuration(live.pixels, target),
-          curve: Curves.easeOutCubic,
+          curve: DshMotion.curveEnter,
         );
       }
     } finally {
