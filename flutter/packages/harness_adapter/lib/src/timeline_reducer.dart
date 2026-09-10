@@ -33,6 +33,8 @@ class TimelineReducer {
   /// reply re-copied the whole text on every chunk.
   StringBuffer? _partialText;
   StringBuffer? _partialReasoning;
+  int? _partialReasoningStartMs;
+  Duration? _partialReasoningDuration;
   bool _partialDirty = false;
 
   void reset(List<JsonMap> history) {
@@ -422,20 +424,36 @@ class TimelineReducer {
     final step = wireLong(data, 'step');
     final message = asJsonObject(data['message']);
     if (message == null) return;
+    final reasoning = _extractReasoning(message);
+    final matchingPartial = _partialKey == _turnStepKey(turn, step);
+    final Duration? reasoningDuration;
+    if (reasoning != null || matchingPartial) {
+      if (matchingPartial) {
+        reasoningDuration = _partialReasoningDuration;
+      } else if (_partialReasoningDuration != null) {
+        reasoningDuration = _partialReasoningDuration;
+      } else {
+        reasoningDuration = null;
+      }
+    } else {
+      reasoningDuration = null;
+    }
+
     final finalItem = TimelineMessage(
       ChatMessage(
         id: wireString(message, 'id') ?? 'assistant:$_lastSeq',
         sessionId: sessionId,
         role: MessageRole.assistant,
         text: _extractText(message),
-        reasoning: _extractReasoning(message),
+        reasoning: reasoning,
+        reasoningDuration: reasoningDuration,
         createdAtEpochMs: wireLong(event, 'time'),
         images: _extractImages(message),
         seq: _lastSeq,
       ),
     );
 
-    if (_partialKey == _turnStepKey(turn, step)) {
+    if (matchingPartial) {
       _items[_partialIndex] = finalItem;
       _clearPartial();
     } else {
@@ -461,9 +479,23 @@ class TimelineReducer {
         text.write(wireString(chunk, 'text') ?? '');
         _partialDirty = true;
       case 'reasoning-delta':
+        if (_partialReasoningStartMs == null) {
+          final time = wireLong(event, 'time');
+          _partialReasoningStartMs = time > 0
+              ? time
+              : DateTime.now().millisecondsSinceEpoch;
+        }
         reasoning = (reasoning ??= StringBuffer())
           ..write(wireString(chunk, 'text') ?? '');
         _partialDirty = true;
+      case 'block-start':
+        final blockType = wireString(chunk, 'blockType');
+        if (blockType == 'reasoning' && _partialReasoningStartMs == null) {
+          final time = wireLong(event, 'time');
+          _partialReasoningStartMs = time > 0
+              ? time
+              : DateTime.now().millisecondsSinceEpoch;
+        }
       case 'block-end':
         final block = asJsonObject(chunk['block']);
         if (block != null) {
@@ -476,6 +508,16 @@ class TimelineReducer {
                 ..write(str);
             }
           } else if (blockType == 'reasoning') {
+            if (_partialReasoningStartMs != null) {
+              final time = wireLong(event, 'time');
+              final nowMs = time > 0
+                  ? time
+                  : DateTime.now().millisecondsSinceEpoch;
+              final diff = nowMs - _partialReasoningStartMs!;
+              if (diff > 0) {
+                _partialReasoningDuration = Duration(milliseconds: diff);
+              }
+            }
             final str = wireString(block, 'text');
             if (str != null) {
               reasoning = (reasoning ??= StringBuffer())
@@ -499,6 +541,8 @@ class TimelineReducer {
     _finalizePartial();
     _partialKey = key;
     _partialIndex = _items.length;
+    _partialReasoningStartMs = null;
+    _partialReasoningDuration = null;
     _items.add(
       TimelineMessage(
         ChatMessage(
@@ -535,6 +579,7 @@ class TimelineReducer {
         role: value.role,
         text: _partialText?.toString() ?? value.text,
         reasoning: _partialReasoning?.toString() ?? value.reasoning,
+        reasoningDuration: _partialReasoningDuration ?? value.reasoningDuration,
         streaming: streaming,
         createdAtEpochMs: value.createdAtEpochMs,
         images: value.images,
@@ -559,6 +604,8 @@ class TimelineReducer {
     _partialIndex = -1;
     _partialText = null;
     _partialReasoning = null;
+    _partialReasoningStartMs = null;
+    _partialReasoningDuration = null;
     _partialDirty = false;
   }
 

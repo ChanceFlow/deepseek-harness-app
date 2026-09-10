@@ -3642,5 +3642,106 @@ void main() {
         expect(find.text('pubspec.yaml'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'Cursor/Windsurf style: realistic agent execution with interleaved thoughts and tools folds into Thought row and ToolGroupRow',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Session 1', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: const [
+              TimelineTurnBoundary(1),
+              TimelineMessage(
+                ChatMessage(
+                  id: 'th-1',
+                  sessionId: 's1',
+                  role: MessageRole.assistant,
+                  text: '',
+                  reasoning: 'First inspect project files',
+                  reasoningDuration: Duration(seconds: 4),
+                  seq: 2,
+                ),
+              ),
+              TimelineToolCall(
+                id: 't1',
+                name: 'read',
+                arguments: '{"file_path":"AGENTS.md"}',
+                result: '# AGENTS.md',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineMessage(
+                ChatMessage(
+                  id: 'th-2',
+                  sessionId: 's1',
+                  role: MessageRole.assistant,
+                  text: '',
+                  reasoning: 'Now search for timeline item references',
+                  reasoningDuration: Duration(seconds: 6),
+                  seq: 3,
+                ),
+              ),
+              TimelineToolCall(
+                id: 't2',
+                name: 'grep',
+                arguments: '{"pattern":"TimelineItem"}',
+                result: 'match',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineMessage(
+                ChatMessage(
+                  id: 'a1',
+                  sessionId: 's1',
+                  role: MessageRole.assistant,
+                  text: 'Found the timeline items and checked AGENTS.md.',
+                  seq: 4,
+                ),
+              ),
+            ],
+          ),
+          <ChatAction>[],
+        );
+
+        // Turn boundary rendered
+        expect(find.text('Turn 1'), findsOneWidget);
+
+        // Thoughts merged into single Thought header with combined duration (4s + 6s = 10s)
+        expect(find.text('Thought 10s'), findsOneWidget);
+
+        // Interleaved tools folded into Action Chip
+        expect(find.text('Explored 1 file, 1 search'), findsOneWidget);
+
+        // Assistant final answer rendered
+        expect(
+          find.text('Found the timeline items and checked AGENTS.md.'),
+          findsOneWidget,
+        );
+
+        // Raw tool call rows are collapsed behind the action chip
+        expect(find.text('AGENTS.md'), findsNothing);
+
+        // Tap action chip to expand
+        await tester.tap(find.text('Explored 1 file, 1 search'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('AGENTS.md'), findsOneWidget);
+
+        // Tap thought to expand
+        await tester.tap(find.text('Thought 10s'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('First inspect project files'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Now search for timeline item references'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
