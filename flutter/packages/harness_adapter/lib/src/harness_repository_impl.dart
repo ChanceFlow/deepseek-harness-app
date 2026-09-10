@@ -456,6 +456,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       return;
     }
     final state = _sessionStateFor(sessionId);
+    final wasOpened = state.isOpened;
     state.markOpened();
     // Looking at the session consumes its completion reminder (dot clears)
     // and makes it the armed-selection for future running finishes.
@@ -466,9 +467,13 @@ class HarnessRepositoryImpl implements ChatRepository {
       _setSessionCompleted(sessionId, false);
     }
     try {
-      await state.ensureLoaded(
-        (beforeSeq) => _loadHistory(sessionId, beforeSeq),
-      );
+      if (wasOpened) {
+        await state.reload((beforeSeq) => _loadHistory(sessionId, beforeSeq));
+      } else {
+        await state.ensureLoaded(
+          (beforeSeq) => _loadHistory(sessionId, beforeSeq),
+        );
+      }
     } catch (e, st) {
       _onDiagnostic?.call(
         AdapterDiagnostic(
@@ -1387,6 +1392,12 @@ class HarnessRepositoryImpl implements ChatRepository {
                     wireLong(projections, 'asOfSeq'),
                   );
                 }
+              }
+              final history = SessionHistoryValueWire.fromJson(frame.payload);
+              if (history.events.isNotEmpty) {
+                unawaited(
+                  _sessionStates[streamSessionId]?.installSnapshot(history),
+                );
               }
               return;
             }
@@ -3040,6 +3051,65 @@ final class _SessionState {
         _loading = false;
         _publish();
       }
+    });
+  }
+
+  /// Reload the latest history tail page and re-baseline the window. Used when
+  /// re-opening a session that was opened earlier so messages that landed while
+  /// away are reflected immediately.
+  Future<void> reload(Future<_HistoryPage> Function(int? beforeSeq) loader) {
+    return _mutex.synchronized(() async {
+      _loading = true;
+      _publish();
+      try {
+        final page = await loader(null);
+        _history = stableSortedBy(
+          page.events,
+          (event) => wireLong(event, 'seq'),
+        );
+        _hasMoreOlder = page.hasMore;
+        _reducer.reset(_history);
+        _statsFold.reset(_history);
+        _framesAfterOpen = List.of(_pending);
+        for (final frame in _pending) {
+          _reducer.ingestFrame(frame);
+          if (wireType(frame.payload) == 'session/event') {
+            _statsFold.ingestEvent(frame.payload['event']);
+          }
+        }
+        sessionStats.value = _statsFold.value;
+        _pending = <ServerRequest>[];
+        _ready = true;
+        _isOpened = true;
+      } finally {
+        _loading = false;
+        _publish();
+      }
+    });
+  }
+
+  /// Apply one complete window snapshot from the session/follow opening frame.
+  Future<void> installSnapshot(SessionHistoryValueWire snapshot) {
+    return _mutex.synchronized(() async {
+      _history = stableSortedBy(
+        snapshot.events,
+        (event) => wireLong(event, 'seq'),
+      );
+      _hasMoreOlder = snapshot.hasMore;
+      _reducer.reset(_history);
+      _statsFold.reset(_history);
+      _framesAfterOpen = List.of(_pending);
+      for (final frame in _pending) {
+        _reducer.ingestFrame(frame);
+        if (wireType(frame.payload) == 'session/event') {
+          _statsFold.ingestEvent(frame.payload['event']);
+        }
+      }
+      sessionStats.value = _statsFold.value;
+      _pending = <ServerRequest>[];
+      _ready = true;
+      _isOpened = true;
+      _publish();
     });
   }
 
