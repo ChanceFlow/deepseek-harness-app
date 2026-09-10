@@ -2389,17 +2389,21 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
                             expansion: widget.expansion,
                           ),
                         ),
-                        TimelineContextInjection() => ContextInjectionRow(
-                          key: ValueKey(timelineKey(entry)),
-                          injection: entry,
-                          inline: true,
+                        TimelineContextInjection() => Material(
+                          type: MaterialType.transparency,
+                          child: ContextInjectionRow(
+                            key: ValueKey(timelineKey(entry)),
+                            injection: entry,
+                          ),
                         ),
-                        TimelineMessage(:final value) => ReasoningRow(
-                          key: ValueKey(timelineKey(entry)),
-                          text: value.reasoning ?? '',
-                          running: value.streaming,
-                          elapsedDuration: value.reasoningDuration,
-                          inline: true,
+                        TimelineMessage(:final value) => Material(
+                          type: MaterialType.transparency,
+                          child: ReasoningRow(
+                            key: ValueKey(timelineKey(entry)),
+                            text: value.reasoning ?? '',
+                            running: value.streaming,
+                            elapsedDuration: value.reasoningDuration,
+                          ),
                         ),
                         _ => const SizedBox.shrink(),
                       },

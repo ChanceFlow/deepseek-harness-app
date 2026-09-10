@@ -4846,4 +4846,97 @@ void main() {
       expect(sid, isNot('subagent-child'));
     }
   });
+
+  test(
+    'switching back to an already-opened session reloads latest history',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        resyncSessionRow('s1'),
+        resyncSessionRow('s2'),
+      ]);
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      // Open s1 first time with initial history
+      rpc.historyEvents['s1'] = <Object?>[
+        resyncAssistantTextEvent(1, 'initial s1 message'),
+      ];
+      await repository.openSession('s1');
+      await pumpEventQueue();
+
+      final firstTimeline = await repository.observeTimeline('s1').first;
+      expect(
+        firstTimeline.whereType<TimelineMessage>().single.value.text,
+        'initial s1 message',
+      );
+
+      // Switch to s2
+      rpc.historyEvents['s2'] = <Object?>[
+        resyncAssistantTextEvent(2, 'initial s2 message'),
+      ];
+      await repository.openSession('s2');
+      await pumpEventQueue();
+
+      // While on s2, new events landed in s1 on the server (e.g. from desktop client)
+      rpc.historyEvents['s1'] = <Object?>[
+        resyncAssistantTextEvent(1, 'initial s1 message'),
+        resyncAssistantTextEvent(3, 'new message from desktop'),
+      ];
+
+      // Switch back to s1: openSession must reload and reflect the new message
+      await repository.openSession('s1');
+      await pumpEventQueue();
+
+      final updatedTimeline = await repository.observeTimeline('s1').first;
+      final messages = updatedTimeline.whereType<TimelineMessage>().toList();
+      expect(messages, hasLength(2));
+      expect(messages.last.value.text, 'new message from desktop');
+    },
+  );
+
+  test(
+    'session follow snapshot frame updates timeline with latest history',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('s1')]);
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await pumpEventQueue();
+
+      rpc.historyEvents['s1'] = <Object?>[
+        resyncAssistantTextEvent(1, 'old message'),
+      ];
+      await repository.openSession('s1');
+      await pumpEventQueue();
+
+      // Emit follow snapshot frame carrying updated history records
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'session-follow-s1',
+          method: 'session/follow',
+          payload: <String, Object?>{
+            'type': 'snapshot',
+            'cursor': 5,
+            'records': <Object?>[
+              <String, Object?>{
+                'type': 'event',
+                'event': resyncAssistantTextEvent(
+                  5,
+                  'updated from follow snapshot',
+                ),
+              },
+            ],
+            'hasMore': false,
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      final timeline = await repository.observeTimeline('s1').first;
+      expect(
+        timeline.whereType<TimelineMessage>().single.value.text,
+        'updated from follow snapshot',
+      );
+    },
+  );
 }

@@ -22,10 +22,11 @@ the tool run in half, because `foldTimelineActivities` treated
 2. **Injections are steps, not boundaries.** An injection joins the phase
    instead of flushing it, so tool runs on either side of a recall stay one
    card.
-3. **The card owns the phase's only disclosure.** Its members render inline
-   when it opens: `ReasoningRow` and `ContextInjectionRow` gained an `inline`
-   mode that drops their own chevron and fold, and `ToolCallRow` keeps the
-   expansion it already had.
+3. **The card opens into an activity step list.** Opening the card reveals its
+   members in order as collapsible rows: `ReasoningRow`, `ContextInjectionRow`,
+   and `ToolCallRow` each display their one-line summary by default, allowing the
+   reader to inspect the step list at a glance and expand individual items on
+   demand without dumping full reasoning or injection bodies into the timeline.
 4. **The collapsed header names the phase.** Tool calls present → the semantic
    tool summary (`Explored 3 files, 2 searches`), with the phase's thinking time
    appended (`· Thought 10s`) so a phase that both thought and worked keeps both
@@ -45,8 +46,11 @@ the tool run in half, because `foldTimelineActivities` treated
 - **Merge every phase's thought block to the card's end**: rejected — the
   merged thought belongs where the thinking happened, and tools that ran before
   it must not read as having run after it.
-- **Nest each member's own disclosure inside the card**: rejected — a card full
-  of folded rows is the stack this change removes.
+- **Dump full reasoning and injection bodies immediately upon opening the card**:
+  rejected — displaying verbose multi-line thoughts and long recalled contexts
+  directly in the card pushes tool rows off screen and overwhelms the
+  transcript; keeping each member collapsed to its one-line header gives the
+  reader a concise list first.
 - **Fold consecutive injections into their own card when no tools ran**:
   rejected — the phase rule stays uniform; a run of injections is one card,
   headed by the role of its first member.
@@ -54,7 +58,8 @@ the tool run in half, because `foldTimelineActivities` treated
 ## Consequences
 
 - A phase reads as one line (`Explored 3 files, 2 searches · Thought 10s`) that
-  opens into the reasoning, the injected context and every tool row in order.
+  opens into a concise list of steps, with thoughts, context injections, and
+  tool calls individually expandable on demand.
 - `ActivityGroupRow` replaced `ToolGroupRow`; folding tests, the Cursor-style
   transcript test and the injection test were rewritten against the card, and
   the design fixture gained a phase that reasons, is handed a recall and then

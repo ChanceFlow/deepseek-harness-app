@@ -28,6 +28,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/approval_panel.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
+import 'package:app/ui/chat/reasoning_row.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
@@ -469,6 +470,9 @@ void main() {
       expect(find.text('Yesterday debugging'), findsOneWidget);
       expect(find.text('Session recall'), findsOneWidget);
       expect(find.text('compacted 12 events'), findsOneWidget);
+
+      await tester.tap(find.text('goal'));
+      await tester.pumpAndSettle();
       expect(find.text('goal objective: Ship the MVP'), findsOneWidget);
     },
   );
@@ -3736,8 +3740,18 @@ void main() {
         await tester.tap(find.text('Explored 1 file, 1 search'));
         await tester.pumpAndSettle();
 
-        // Opened: the thought block and the tool rows in phase order.
+        // Opened: the thought row and the tool rows in phase order.
         expect(find.text('AGENTS.md'), findsOneWidget);
+        expect(find.text('Thought 10s'), findsNWidgets(2));
+
+        // Disclose the thought row to view its reasoning text.
+        await tester.tap(
+          find.descendant(
+            of: find.byType(ReasoningRow),
+            matching: find.text('Thought 10s'),
+          ),
+        );
+        await tester.pumpAndSettle();
         expect(
           find.textContaining('First inspect project files'),
           findsOneWidget,
