@@ -4533,6 +4533,30 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     );
   }
 
+  void _applyCommandToDraft(String name) {
+    if (hostCommandIsBare('/$name')) {
+      widget.onAction(SendPrompt('/$name'));
+      return;
+    }
+    final current = _draftController.text;
+    final String newDraft;
+    if (current.startsWith('/')) {
+      final spaceIdx = current.indexOf(' ');
+      final remainder = spaceIdx != -1 ? current.substring(spaceIdx + 1) : '';
+      newDraft = remainder.isEmpty ? '/$name ' : '/$name $remainder';
+    } else {
+      final trimmed = current.trim();
+      newDraft = trimmed.isEmpty ? '/$name ' : '/$name $trimmed';
+    }
+    _draftController.text = newDraft;
+    _draftController.selection = TextSelection.collapsed(
+      offset: newDraft.length,
+    );
+    _draftEdits++;
+    _persistDraft();
+    setState(() {});
+  }
+
   void _persistDraft() {
     unawaited(widget.sessionState?.writeDraft(_draftController.text));
   }
@@ -4643,44 +4667,14 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       }
     });
 
-    // Textarea on top, action row below, primary actions bottom-right.
-    // The surface underneath belongs to the dock: drawing a second card
-    // here is what made the input edge read as a box inside a box.
+    // Single-row composer with progressive disclosure accessory trays.
+    // The surface underneath belongs to the dock.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
       child: Column(
-        // The control row spans the dock so its two clusters can sit at
-        // opposite edges; centered controls read as an accident.
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _draftController,
-            enabled: widget.enabled,
-            minLines: 1,
-            // Four-line cap: past it the field scrolls internally, so a
-            // long draft cannot grow the dock tall enough to squeeze the
-            // transcript off-screen on a phone.
-            maxLines: 4,
-            // Web sends on Enter and newlines on Shift+Enter; soft
-            // keyboards have no reliable Shift+Enter, so the keyboard
-            // action key inserts the newline and the send button is the
-            // only submit gesture.
-            textInputAction: TextInputAction.newline,
-            onChanged: (_) {
-              _draftEdits++;
-              _persistDraft();
-              setState(() {});
-            },
-            decoration: InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              // Web swaps the placeholder while the plan target is active
-              // (InputBar: planActive ? t('placeholder.plan') : ...).
-              hintText: _planTarget
-                  ? l10n.planPlaceholder
-                  : l10n.messagePlaceholder,
-            ),
-          ),
           if (widget.pendingImages.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -4716,107 +4710,12 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 ),
               ),
             ),
-          SlashSkillCandidates(
-            draft: _draftController.text,
-            skills: widget.skills,
-            enabled: widget.enabled,
-            onPick: (name) {
-              _draftController.text = '/$name ';
-              setState(() {});
-            },
-          ),
-          // The recording surface is not here: it is the bubble the microphone
-          // seat anchors, so a session never pushes the input row around or
-          // covers the draft the live transcript is landing in.
-          // Space, not a rule, separates the draft from the control row:
-          // the dock already spends one hairline on the plan strip, and a
-          // second inside the same card reads as ruling for its own sake.
-          const SizedBox(height: 8),
-          // Web InputBar controls regrouped for touch: input tools and
-          // contextual seats form the left cluster, the occupancy ring
-          // and primary control the right. Wrap drops the primary
-          // cluster to its own right-aligned run when a narrow phone
-          // cannot fit both on one line.
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            alignment: WrapAlignment.spaceBetween,
-            runAlignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
+          if (_planTarget)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4, left: 4),
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _PlusButton(
-                    enabled: widget.enabled,
-                    onPickImages: attachAllowed ? _pickImages : null,
-                    skills: widget.skills,
-                    onPickCommand: (name) {
-                      if (hostCommandIsBare('/$name')) {
-                        widget.onAction(SendPrompt('/$name'));
-                        return;
-                      }
-                      _draftController.text = '/$name ';
-                      setState(() {});
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  VoiceMicButton(
-                    // Live whenever the reader, rather than the engine, holds
-                    // the turn: a tap or a hold opens a capture, and only a
-                    // loading or decoding session declines.
-                    enabled:
-                        widget.enabled && !voiceInputState.isWaitingOnEngine,
-                    uiState: voiceInputState,
-                    onStart: () {
-                      _preRecordingDraft = _draftController.text;
-                      unawaited(voiceController.startRecording());
-                    },
-                    onFinish: () => unawaited(voiceController.stopRecording()),
-                    // A discarded capture leaves no trace: the draft it was
-                    // building goes back to whatever was there before.
-                    onCancel: () {
-                      unawaited(voiceController.cancelRecording());
-                      _draftController.text = _preRecordingDraft;
-                      _draftController.selection = TextSelection.collapsed(
-                        offset: _draftController.text.length,
-                      );
-                      _persistDraft();
-                      setState(() {});
-                    },
-                    onOpenSettings: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (ctx) => const AsrModelsRoute(),
-                        ),
-                      );
-                    },
-                  ),
-                  // Web trailing group: the model seat precedes the
-                  // access seat in the tools cluster.
-                  if (widget.onSelectModel != null) ...[
-                    const SizedBox(width: 12),
-                    ModelSelect(
-                      models: widget.models,
-                      locked: !widget.enabled,
-                      onSelect: widget.onSelectModel!,
-                      onRefresh: widget.onRefreshModels ?? () {},
-                      modelPrefs: widget.modelPrefs,
-                    ),
-                  ],
-                  // Web .modes order: the access seat precedes the plan
-                  // pill.
-                  if (widget.permissions case final permissions?) ...[
-                    const SizedBox(width: 12),
-                    PermissionSelectChip(
-                      value: permissions,
-                      locked: !widget.enabled,
-                      onAction: widget.onAction,
-                    ),
-                  ],
-                  // Web conversation.input.plan seat: the warn pill
-                  // renders only while the plan target is active and
-                  // exits via `/plan off`.
                   PlanChip(
                     plan: widget.plan,
                     locked: !widget.enabled,
@@ -4825,40 +4724,119 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                   ),
                 ],
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ContextRing(
-                    pressure: widget.contextPressure,
-                    breakdown: widget.contextBreakdown,
-                  ),
-                  const SizedBox(width: 12),
-                  // Web keeps Stop primary while a turn runs and lets
-                  // keyboard Enter queue/steer; soft keyboards have no
-                  // reliable Enter-as-send, so an explicit send control
-                  // appears beside Stop whenever a draft is ready. Its
-                  // delivery mode follows the busy-Enter preference.
-                  if (widget.running &&
-                      widget.enabled &&
-                      !widget.isSending &&
-                      _canSend()) ...[
-                    _PrimarySendButton(
-                      running: false,
-                      sending: false,
-                      enabled: true,
-                      onSend: _send,
+            ),
+          SlashSkillCandidates(
+            draft: _draftController.text,
+            skills: widget.skills,
+            enabled: widget.enabled,
+            onPick: _applyCommandToDraft,
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _PlusButton(
+                enabled: widget.enabled,
+                onPickImages: attachAllowed ? _pickImages : null,
+                skills: widget.skills,
+                onPickCommand: _applyCommandToDraft,
+              ),
+              const SizedBox(width: 2),
+              VoiceMicButton(
+                enabled: widget.enabled && !voiceInputState.isWaitingOnEngine,
+                uiState: voiceInputState,
+                onStart: () {
+                  _preRecordingDraft = _draftController.text;
+                  unawaited(voiceController.startRecording());
+                },
+                onFinish: () => unawaited(voiceController.stopRecording()),
+                onCancel: () {
+                  unawaited(voiceController.cancelRecording());
+                  _draftController.text = _preRecordingDraft;
+                  _draftController.selection = TextSelection.collapsed(
+                    offset: _draftController.text.length,
+                  );
+                  _persistDraft();
+                  setState(() {});
+                },
+                onOpenSettings: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (ctx) => const AsrModelsRoute(),
                     ),
-                    const SizedBox(width: 12),
-                  ],
-                  _PrimarySendButton(
-                    // Web primary: Send, or Stop while the turn runs.
-                    running: widget.running,
-                    sending: widget.isSending,
-                    enabled: widget.enabled && _canSend(),
-                    onStop: widget.onStop,
-                    onSend: _send,
+                  );
+                },
+              ),
+              if (widget.onSelectModel != null) ...[
+                const SizedBox(width: 2),
+                ModelSelect(
+                  models: widget.models,
+                  locked: !widget.enabled,
+                  onSelect: widget.onSelectModel!,
+                  onRefresh: widget.onRefreshModels ?? () {},
+                  modelPrefs: widget.modelPrefs,
+                ),
+              ],
+              if (widget.permissions case final permissions?) ...[
+                const SizedBox(width: 2),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 135),
+                  child: PermissionSelectChip(
+                    value: permissions,
+                    locked: !widget.enabled,
+                    onAction: widget.onAction,
                   ),
-                ],
+                ),
+              ],
+              const SizedBox(width: 4),
+              Expanded(
+                child: TextField(
+                  controller: _draftController,
+                  enabled: widget.enabled,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  onChanged: (_) {
+                    _draftEdits++;
+                    _persistDraft();
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    hintText: _planTarget
+                        ? l10n.planPlaceholder
+                        : l10n.messagePlaceholder,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              ContextRing(
+                pressure: widget.contextPressure,
+                breakdown: widget.contextBreakdown,
+              ),
+              const SizedBox(width: 4),
+              if (widget.running &&
+                  widget.enabled &&
+                  !widget.isSending &&
+                  _canSend()) ...[
+                _PrimarySendButton(
+                  running: false,
+                  sending: false,
+                  enabled: true,
+                  onSend: _send,
+                ),
+                const SizedBox(width: 4),
+              ],
+              _PrimarySendButton(
+                running: widget.running,
+                sending: widget.isSending,
+                enabled: widget.enabled && _canSend(),
+                onStop: widget.onStop,
+                onSend: _send,
               ),
             ],
           ),
@@ -4935,54 +4913,130 @@ class SlashSkillCandidates extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final query = draft.substring(1).toLowerCase();
-    final candidates = skills
+    final l10n = AppLocalizations.of(context)!;
+    final commands = hostCommands(l10n);
+    final matchingCommands = commands
+        .where(
+          (cmd) => query.isEmpty || cmd.name.toLowerCase().startsWith(query),
+        )
+        .take(5)
+        .toList();
+    final matchingSkills = skills
         .where(
           (skill) =>
               query.isEmpty || skill.name.toLowerCase().startsWith(query),
         )
-        .take(6)
+        .take(5)
         .toList();
-    if (candidates.isEmpty) return const SizedBox.shrink();
+    if (matchingCommands.isEmpty && matchingSkills.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(maxHeight: 220),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scheme.outlineVariant),
         ),
-        child: Padding(
+        child: ListView(
+          shrinkWrap: true,
           padding: const EdgeInsets.all(4),
-          child: Column(
-            children: [
-              for (final skill in candidates)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => onPick(skill.name),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final cmd in matchingCommands)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => onPick(cmd.name),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Row(
                       children: [
+                        Icon(Icons.terminal, size: 16, color: scheme.primary),
+                        const SizedBox(width: 8),
                         Text(
-                          '/${skill.name}',
-                          style: theme.textTheme.titleSmall,
-                        ),
-                        Text(
-                          skill.description,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          '/${cmd.name}',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (cmd.hint != null) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            cmd.hint!,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            cmd.description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+            for (final skill in matchingSkills)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => onPick(skill.name),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 16,
+                          color: scheme.secondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '/${skill.name}',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            skill.description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
