@@ -63,6 +63,7 @@ class PermissionSelectChip extends StatelessWidget {
     required this.locked,
     required this.onAction,
     super.key,
+    this.compact = false,
   });
 
   final PermissionSelect value;
@@ -70,6 +71,12 @@ class PermissionSelectChip extends StatelessWidget {
   /// Seat lock: a locked composer (no session / send in flight) offers
   /// no switching.
   final bool locked;
+
+  /// Drop the label, keeping the mode glyph and the chevron: web
+  /// `PermissionSelect.module.css` `@container (max-width: 460px)` hides
+  /// `.triggerLabel` on a narrow composer row so the row keeps fitting.
+  /// The tooltip and the sheet keep the mode's full name reachable.
+  final bool compact;
 
   /// Command dispatch — selection rides the existing send path.
   final void Function(ChatAction) onAction;
@@ -161,19 +168,21 @@ class PermissionSelectChip extends StatelessWidget {
                     size: 14,
                     color: scheme.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      _label(l10n),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: scheme.onSurfaceVariant,
+                  if (!compact) ...[
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _label(l10n),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(width: 2),
                   Icon(
                     Icons.keyboard_arrow_down,

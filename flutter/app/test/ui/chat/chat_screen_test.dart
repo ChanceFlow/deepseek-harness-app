@@ -10,6 +10,7 @@ import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -28,6 +29,7 @@ import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/approval_panel.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
 import 'package:app/ui/chat/stats_line.dart';
@@ -3743,5 +3745,138 @@ void main() {
         );
       },
     );
+  });
+
+  group('composer dock bands', () {
+    const access = PermissionSelect(
+      currentValue: 'workspace-write',
+      options: [
+        PermissionPresetOption(
+          value: 'read-only',
+          name: 'Read only',
+          description: 'Reads without changing anything',
+        ),
+        PermissionPresetOption(
+          value: 'workspace-write',
+          name: 'Workspace write',
+          description: 'Writes inside the workspace',
+        ),
+      ],
+    );
+
+    Finder composerField() => find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+
+    testWidgets('the draft keeps a usable width on a narrow phone', (
+      tester,
+    ) async {
+      // Regression (2026-09-11): the single-row dock seated every control on
+      // the draft's own line. With the access chip mounted the fixed seats
+      // alone are wider than a phone dock, so Expanded(TextField) collapsed
+      // to zero width — visible in the tree, unusable by a reader. The field
+      // now owns its band, and no seat count may squeeze it again.
+      for (final width in <double>[320, 360, 393]) {
+        final actions = <ChatAction>[];
+        await _pump(
+          tester,
+          const ChatUiState(
+            sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+            selectedSessionId: 's1',
+            models: _catalog,
+            permissions: access,
+          ),
+          actions,
+          width: width,
+        );
+
+        expect(
+          tester.getSize(composerField()).width,
+          greaterThan(200),
+          reason: 'draft band collapsed at ${width}dp',
+        );
+        expect(tester.takeException(), isNull);
+
+        await tester.enterText(composerField(), 'hello $width');
+        await tester.pump();
+        expect(find.text('hello $width'), findsOneWidget);
+        await tester.tap(find.byTooltip('Send'));
+        await tester.pump();
+        expect(
+          actions,
+          contains(SendPrompt('hello $width', mode: PromptMode.queue)),
+        );
+        expect(tester.takeException(), isNull);
+      }
+    });
+
+    testWidgets('a running turn keeps stop, send and a usable draft', (
+      tester,
+    ) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              blank: false,
+              running: true,
+            ),
+          ],
+          selectedSessionId: 's1',
+          models: _catalog,
+          permissions: access,
+        ),
+        actions,
+        width: 320,
+      );
+
+      await tester.enterText(composerField(), 'queue this');
+      await tester.pump();
+
+      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(find.byTooltip('Send'), findsOneWidget);
+      expect(tester.getSize(composerField()).width, greaterThan(150));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the access chip drops its label on a narrow dock', (
+      tester,
+    ) async {
+      // Web PermissionSelect `@container (max-width: 460px)`: the trigger
+      // keeps the mode glyph and the chevron, drops the label.
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+          selectedSessionId: 's1',
+          permissions: access,
+        ),
+        <ChatAction>[],
+        width: 360,
+      );
+      expect(find.text('Workspace write'), findsNothing);
+      expect(find.byIcon(permissionGlyph('workspace-write')), findsOneWidget);
+
+      // A two-pane surface puts the dock just under the cut at 800dp
+      // (measured 454dp), so the wide arm pumps a desktop-scale surface
+      // where the dock clears the cut.
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+          selectedSessionId: 's1',
+          permissions: access,
+        ),
+        <ChatAction>[],
+        width: 1000,
+      );
+      expect(find.text('Workspace write'), findsOneWidget);
+    });
   });
 }

@@ -54,7 +54,10 @@ Future<void> _pump(
   ChatUiState uiState,
   List<ChatAction> actions,
 ) {
-  tester.view.physicalSize = const Size(800, 1280);
+  // Wide enough that the dock clears the composer's 460dp label cut: these
+  // tests read the chip's label, and the phone-width collapsed form is pinned
+  // in chat_screen_test.dart §composer dock bands.
+  tester.view.physicalSize = const Size(1000, 1280);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

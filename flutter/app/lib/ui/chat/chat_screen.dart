@@ -4342,6 +4342,25 @@ final class QuestionDraft {
   }
 }
 
+/// Dock width under which the composer's access chip drops its label,
+/// keeping the mode glyph and the chevron (web `PermissionSelect.module.css`
+/// `@container (max-width: 460px)`: "the 460px cut is the point where the row
+/// (attach + modes + model + send) starts squeezing labels").
+const double _kComposerLabelCut = 460;
+
+/// Dock widths under which the action row splits into two lines instead of
+/// squeezing. One line has to cover the attach seat, the mic and the compact
+/// access chip on the left (136dp) and the model seat, the meter and the
+/// primary action on the right (136dp), plus the queue-send seat while a
+/// draft waits on a running turn (186dp): 272dp idle, 322dp queued. The cuts
+/// carry 8dp of slack over those measurements, and the dock's widget tests
+/// hold them against the seats themselves. Below a cut the row wraps rather
+/// than shrinking a seat below its M3 footprint (web `InputBar.module.css`
+/// `.row { flex-wrap: wrap }`: "the trailing group moves to its own line
+/// instead of the left group shrinking").
+const double _kComposerRowWidth = 280;
+const double _kComposerQueuedRowWidth = 330;
+
 class ComposerBar extends ConsumerStatefulWidget {
   const ComposerBar({
     required this.enabled,
@@ -4612,10 +4631,17 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       }
     });
 
-    // Single-row composer with progressive disclosure accessory trays.
-    // The surface underneath belongs to the dock.
+    // Web InputBar parity: the draft owns the card's top band and every
+    // control rides one action row under it (`InputBar.module.css` `.card`:
+    // "textarea on top, action row below, primary action controls
+    // bottom-right"). One shared row cannot hold both on a phone — the seats
+    // alone are wider than a 360dp dock, so the field's `Expanded` collapsed
+    // to zero width and the reader had nowhere to type. The bands are
+    // independent: no seat count can squeeze the field again.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+      // 4dp of side clearance: the action row's seats need the width on a
+      // 360dp phone (see [_kComposerRowWidth]).
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4676,114 +4702,157 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             enabled: widget.enabled,
             onPick: _applyCommandToDraft,
           ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _PlusButton(
-                enabled: widget.enabled,
-                onPickImages: attachAllowed ? _pickImages : null,
-                skills: widget.skills,
-                onPickCommand: _applyCommandToDraft,
+          // Band 1 — the draft, edge to edge.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+            child: TextField(
+              controller: _draftController,
+              enabled: widget.enabled,
+              minLines: 1,
+              maxLines: 4,
+              textInputAction: TextInputAction.newline,
+              onChanged: (_) {
+                _draftEdits++;
+                _persistDraft();
+                setState(() {});
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 8,
+                ),
+                hintText: _planTarget
+                    ? l10n.planPlaceholder
+                    : l10n.messagePlaceholder,
               ),
-              const SizedBox(width: 2),
-              VoiceMicButton(
-                enabled: widget.enabled && !voiceInputState.isWaitingOnEngine,
-                uiState: voiceInputState,
-                onStart: () {
-                  _preRecordingDraft = _draftController.text;
-                  unawaited(voiceController.startRecording());
-                },
-                onFinish: () => unawaited(voiceController.stopRecording()),
-                onCancel: () {
-                  unawaited(voiceController.cancelRecording());
-                  _draftController.text = _preRecordingDraft;
-                  _draftController.selection = TextSelection.collapsed(
-                    offset: _draftController.text.length,
-                  );
-                  _persistDraft();
-                  setState(() {});
-                },
-                onOpenSettings: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (ctx) => const AsrModelsRoute(),
+            ),
+          ),
+          // Band 2 — the action row (web `.row`): attaches and the access
+          // mode on the left, the model seat, context meter and the primary
+          // action on the right, so the send thumb lands on the bottom-right
+          // corner. The access chip is the row's only elastic seat: it takes
+          // the slack and drops its label on a narrow dock. When even that
+          // does not fit — a 320dp phone with a draft waiting on a running
+          // turn — the trailing group moves to its own line rather than
+          // shrinking a seat below its M3 footprint.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // The queue-send seat only exists while a draft waits on a
+                // running turn, and it is the difference between a row that
+                // fits a phone and one that does not.
+                final queueSeat =
+                    widget.running &&
+                    widget.enabled &&
+                    !widget.isSending &&
+                    _canSend();
+                final rowWidth = queueSeat
+                    ? _kComposerQueuedRowWidth
+                    : _kComposerRowWidth;
+                final tools = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PlusButton(
+                      enabled: widget.enabled,
+                      onPickImages: attachAllowed ? _pickImages : null,
+                      skills: widget.skills,
+                      onPickCommand: _applyCommandToDraft,
                     ),
-                  );
-                },
-              ),
-              if (widget.onSelectModel != null) ...[
-                const SizedBox(width: 2),
-                ModelSelect(
-                  models: widget.models,
-                  locked: !widget.enabled,
-                  onSelect: widget.onSelectModel!,
-                  onRefresh: widget.onRefreshModels ?? () {},
-                  modelPrefs: widget.modelPrefs,
-                ),
-              ],
-              if (widget.permissions case final permissions?) ...[
-                const SizedBox(width: 2),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 135),
-                  child: PermissionSelectChip(
-                    value: permissions,
-                    locked: !widget.enabled,
-                    onAction: widget.onAction,
-                  ),
-                ),
-              ],
-              const SizedBox(width: 4),
-              Expanded(
-                child: TextField(
-                  controller: _draftController,
-                  enabled: widget.enabled,
-                  minLines: 1,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.newline,
-                  onChanged: (_) {
-                    _draftEdits++;
-                    _persistDraft();
-                    setState(() {});
-                  },
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 8,
+                    VoiceMicButton(
+                      enabled:
+                          widget.enabled && !voiceInputState.isWaitingOnEngine,
+                      uiState: voiceInputState,
+                      onStart: () {
+                        _preRecordingDraft = _draftController.text;
+                        unawaited(voiceController.startRecording());
+                      },
+                      onFinish: () =>
+                          unawaited(voiceController.stopRecording()),
+                      onCancel: () {
+                        unawaited(voiceController.cancelRecording());
+                        _draftController.text = _preRecordingDraft;
+                        _draftController.selection = TextSelection.collapsed(
+                          offset: _draftController.text.length,
+                        );
+                        _persistDraft();
+                        setState(() {});
+                      },
+                      onOpenSettings: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (ctx) => const AsrModelsRoute(),
+                          ),
+                        );
+                      },
                     ),
-                    hintText: _planTarget
-                        ? l10n.planPlaceholder
-                        : l10n.messagePlaceholder,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              ContextRing(
-                pressure: widget.contextPressure,
-                breakdown: widget.contextBreakdown,
-              ),
-              const SizedBox(width: 4),
-              if (widget.running &&
-                  widget.enabled &&
-                  !widget.isSending &&
-                  _canSend()) ...[
-                _PrimarySendButton(
-                  running: false,
-                  sending: false,
-                  enabled: true,
-                  onSend: _send,
-                ),
-                const SizedBox(width: 4),
-              ],
-              _PrimarySendButton(
-                running: widget.running,
-                sending: widget.isSending,
-                enabled: widget.enabled && _canSend(),
-                onStop: widget.onStop,
-                onSend: _send,
-              ),
-            ],
+                    if (widget.permissions case final permissions?)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 135),
+                        child: PermissionSelectChip(
+                          value: permissions,
+                          locked: !widget.enabled,
+                          onAction: widget.onAction,
+                          compact: constraints.maxWidth < _kComposerLabelCut,
+                        ),
+                      ),
+                  ],
+                );
+                final actions = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.onSelectModel != null)
+                      ModelSelect(
+                        models: widget.models,
+                        locked: !widget.enabled,
+                        onSelect: widget.onSelectModel!,
+                        onRefresh: widget.onRefreshModels ?? () {},
+                        modelPrefs: widget.modelPrefs,
+                      ),
+                    const SizedBox(width: 2),
+                    ContextRing(
+                      pressure: widget.contextPressure,
+                      breakdown: widget.contextBreakdown,
+                    ),
+                    const SizedBox(width: 2),
+                    if (queueSeat) ...[
+                      _PrimarySendButton(
+                        running: false,
+                        sending: false,
+                        enabled: true,
+                        onSend: _send,
+                      ),
+                      const SizedBox(width: 2),
+                    ],
+                    _PrimarySendButton(
+                      running: widget.running,
+                      sending: widget.isSending,
+                      enabled: widget.enabled && _canSend(),
+                      onStop: widget.onStop,
+                      onSend: _send,
+                    ),
+                  ],
+                );
+                if (constraints.maxWidth < rowWidth) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      tools,
+                      Align(alignment: Alignment.centerRight, child: actions),
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: tools),
+                    actions,
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
