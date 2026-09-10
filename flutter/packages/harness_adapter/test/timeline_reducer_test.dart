@@ -161,6 +161,156 @@ void main() {
     expect(afterBlockEnd.value.streaming, isTrue);
   });
 
+  test('assistant chunk events with reasoning start and end calculate reasoningDuration', () {
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r1',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{
+            'type': 'assistant/chunk',
+            'seq': 1,
+            'time': 1000,
+            'data': <String, Object?>{
+              'turn': 1,
+              'step': 1,
+              'chunk': <String, Object?>{
+                'type': 'block-start',
+                'index': 0,
+                'blockType': 'reasoning',
+              },
+            },
+          },
+        },
+      ),
+    );
+
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r2',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{
+            'type': 'assistant/chunk',
+            'seq': 2,
+            'time': 11000,
+            'data': <String, Object?>{
+              'turn': 1,
+              'step': 1,
+              'chunk': <String, Object?>{
+                'type': 'block-end',
+                'index': 0,
+                'block': <String, Object?>{
+                  'type': 'reasoning',
+                  'text': 'pondering life',
+                },
+              },
+            },
+          },
+        },
+      ),
+    );
+
+    final partialMsg = reducer.snapshot().single as TimelineMessage;
+    expect(partialMsg.value.reasoningDuration, const Duration(seconds: 10));
+    expect(partialMsg.value.reasoning, 'pondering life');
+
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r3',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{
+            'type': 'assistant/message',
+            'seq': 3,
+            'time': 12000,
+            'data': <String, Object?>{
+              'turn': 1,
+              'step': 1,
+              'message': <String, Object?>{
+                'id': 'assistant-1',
+                'role': 'assistant',
+                'content': <Object?>[
+                  <String, Object?>{
+                    'type': 'reasoning',
+                    'text': 'pondering life',
+                  },
+                  textBlock('42'),
+                ],
+              },
+            },
+          },
+        },
+      ),
+    );
+
+    final finalMsg = reducer.snapshot().single as TimelineMessage;
+    expect(finalMsg.value.reasoningDuration, const Duration(seconds: 10));
+    expect(finalMsg.value.reasoning, 'pondering life');
+    expect(finalMsg.value.text, '42');
+  });
+
+  test('reasoning-delta sets start time when block-start is not sent', () {
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r1',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{
+            'type': 'assistant/chunk',
+            'seq': 1,
+            'time': 2000,
+            'data': <String, Object?>{
+              'turn': 1,
+              'step': 1,
+              'chunk': <String, Object?>{
+                'type': 'reasoning-delta',
+                'text': 'thinking...',
+              },
+            },
+          },
+        },
+      ),
+    );
+
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'r2',
+        method: 'session/event',
+        payload: <String, Object?>{
+          'type': 'session/event',
+          'event': <String, Object?>{
+            'type': 'assistant/chunk',
+            'seq': 2,
+            'time': 7000,
+            'data': <String, Object?>{
+              'turn': 1,
+              'step': 1,
+              'chunk': <String, Object?>{
+                'type': 'block-end',
+                'index': 0,
+                'block': <String, Object?>{
+                  'type': 'reasoning',
+                  'text': 'thinking done',
+                },
+              },
+            },
+          },
+        },
+      ),
+    );
+
+    final msg = reducer.snapshot().single as TimelineMessage;
+    expect(msg.value.reasoningDuration, const Duration(seconds: 5));
+    expect(msg.value.reasoning, 'thinking done');
+  });
+
   test('tool call pairs with result', () {
     final history = <JsonMap>[
       event(1, 'tool/call', <String, Object?>{

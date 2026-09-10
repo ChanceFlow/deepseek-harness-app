@@ -53,6 +53,7 @@ import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
+import 'timeline_folding.dart';
 import 'todo_panel.dart';
 import 'tool_group_summary.dart';
 import 'tool_row_model.dart';
@@ -62,6 +63,7 @@ import '../theme/theme.dart';
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
 export 'session_panel.dart';
+export 'timeline_folding.dart' show TimelineToolGroup, foldTimelineActivities;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -1233,7 +1235,7 @@ class _ChatPanelState extends State<ChatPanel> {
       );
     }
     final items = _timelineItems;
-    final groupedItems = _groupConsecutiveTools(items);
+    final groupedItems = foldTimelineActivities(items);
     final steering = _pendingSteering;
     // The status line rides the tail of the transcript: with nothing
     // visible to be a tail after (a queue-only window), it renders nothing
@@ -1288,39 +1290,6 @@ class _ChatPanelState extends State<ChatPanel> {
     );
   }
 
-  /// Groups consecutive tool calls into [TimelineToolGroup]s so that tool runs
-  /// collapse into a single real-time updating summary row by default.
-  static List<Object> _groupConsecutiveTools(List<TimelineItem> items) {
-    final result = <Object>[];
-    var currentGroup = <TimelineToolCall>[];
-
-    void flush() {
-      if (currentGroup.isEmpty) return;
-      if (currentGroup.length == 1) {
-        result.add(currentGroup.single);
-      } else {
-        result.add(
-          TimelineToolGroup(
-            id: currentGroup.first.id,
-            calls: List<TimelineToolCall>.unmodifiable(currentGroup),
-          ),
-        );
-      }
-      currentGroup = <TimelineToolCall>[];
-    }
-
-    for (final item in items) {
-      if (item is TimelineToolCall) {
-        currentGroup.add(item);
-      } else {
-        flush();
-        result.add(item);
-      }
-    }
-    flush();
-    return result;
-  }
-
   /// Vertical rhythm between two transcript rows. A run of steps is one
   /// paragraph and closes up; a message opens a new one. Equal gaps
   /// everywhere read as a list of unrelated lines, which is what the
@@ -1339,10 +1308,12 @@ class _ChatPanelState extends State<ChatPanel> {
     return aboveIsStep && belowIsStep ? step : block;
   }
 
-  static bool _opensBlock(Object row) =>
-      row is TimelineMessage ||
-      row is SessionQueueItem ||
-      identical(row, _turnStatusSlot);
+  static bool _opensBlock(Object row) {
+    if (row is TimelineMessage) {
+      return row.value.text.trim().isNotEmpty;
+    }
+    return row is SessionQueueItem || identical(row, _turnStatusSlot);
+  }
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
   /// neutral selector fill (the composer's idle circle convention), so it
@@ -2190,32 +2161,6 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
         ),
       ],
     );
-  }
-}
-
-/// A group of consecutive tool calls in a turn, rendered as a compact,
-/// cursor-style collapsible section that is collapsed by default.
-final class TimelineToolGroup {
-  const TimelineToolGroup({required this.id, required this.calls});
-
-  final String id;
-  final List<TimelineToolCall> calls;
-
-  @override
-  bool operator ==(Object other) =>
-      other is TimelineToolGroup &&
-      other.id == id &&
-      _listEquals(other.calls, calls);
-
-  @override
-  int get hashCode => Object.hash(id, Object.hashAll(calls));
-
-  static bool _listEquals<T>(List<T> a, List<T> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 }
 

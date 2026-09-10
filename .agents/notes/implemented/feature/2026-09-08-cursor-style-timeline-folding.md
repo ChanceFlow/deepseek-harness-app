@@ -35,9 +35,26 @@ Windsurf Cascade:
    expanded thought content.
 4. **Localization**: Added bilingual ARB keys to `app_en.arb` and `app_zh.arb`
    and regenerated localizations via `flutter gen-l10n`.
+5. **Phase-level execution folding and modularization**: Extracted `foldTimelineActivities`
+   and `TimelineToolGroup` into `flutter/app/lib/ui/chat/timeline_folding.dart`.
+   Assistant messages with empty text (intermediate step thoughts or protocol
+   artifacts) no longer fragment tool runs within an execution phase;
+   intermediate thoughts merge into a unified `Thought` header with cumulative
+   duration, and multiple tool calls coalesce into `TimelineToolGroup`. Standalone
+   single tool calls remain direct `ToolCallRow`s to prevent double-expansion friction.
+6. **Wire reasoning duration derivation**: Tracked reasoning block start and
+   end timestamps in `TimelineReducer` (`packages/harness_adapter/lib/src/timeline_reducer.dart`)
+   to populate `ChatMessage.reasoningDuration`, ensuring historical sessions and
+   live streams both carry duration headers.
 
 ## Alternatives considered
 
+- **Fragment tool groups at intermediate thought steps**: Rejected — autonomous
+  agent loops emit thoughts or empty assistant messages between steps, which
+  previously broke grouping into runs of 1 and completely bypassed `ToolGroupRow`.
+- **Wrap single isolated tool calls into group chips**: Rejected — wrapping a
+  single tool call forces two taps to inspect output; single calls already display
+  as compact rows.
 - **Hardcode tool labels in widget code**: Rejected — violates the root bilingual
   ARB contract (`flutter/app/AGENTS.md`) and causes drift between locales.
 - **Display raw tool lists without folding**: Rejected — autonomous agent turns
