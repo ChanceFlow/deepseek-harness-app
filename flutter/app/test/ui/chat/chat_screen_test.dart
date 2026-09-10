@@ -421,7 +421,7 @@ void main() {
   });
 
   testWidgets(
-    'context injections render as disclosure rows, not user bubbles',
+    'context injections fold into one activity card, not user bubbles',
     (tester) async {
       final actions = <ChatAction>[];
       await _pump(
@@ -454,17 +454,21 @@ void main() {
         actions,
       );
 
-      // Web ContextInjectionRow: the header names the role beside the
-      // durable producer; the body stays collapsed until tapped.
-      expect(find.text('Context injection'), findsNWidgets(2));
-      expect(find.text('Session recall'), findsOneWidget);
-      expect(find.text('goal'), findsOneWidget);
-      expect(find.text('Yesterday debugging'), findsOneWidget);
-      expect(find.text('compacted 12 events'), findsOneWidget);
+      // Consecutive injections are one phase of the run: an activity card
+      // headed by the role its first member plays, with every producer and
+      // body behind the card's own fold.
+      expect(find.byType(ActivityGroupRow), findsOneWidget);
+      expect(find.text('Context injection'), findsOneWidget);
+      expect(find.text('goal'), findsNothing);
       expect(find.text('goal objective: Ship the MVP'), findsNothing);
 
-      await tester.tap(find.text('Context injection').first);
+      await tester.tap(find.text('Context injection'));
       await tester.pumpAndSettle();
+
+      expect(find.text('goal'), findsOneWidget);
+      expect(find.text('Yesterday debugging'), findsOneWidget);
+      expect(find.text('Session recall'), findsOneWidget);
+      expect(find.text('compacted 12 events'), findsOneWidget);
       expect(find.text('goal objective: Ship the MVP'), findsOneWidget);
     },
   );
@@ -3646,7 +3650,7 @@ void main() {
     );
 
     testWidgets(
-      'Cursor/Windsurf style: realistic agent execution with interleaved thoughts and tools folds into Thought row and ToolGroupRow',
+      'Cursor/Windsurf style: realistic agent execution with interleaved thoughts and tools folds into one activity card',
       (tester) async {
         await _pump(
           tester,
@@ -3710,11 +3714,11 @@ void main() {
         // Turn boundary rendered
         expect(find.text('Turn 1'), findsOneWidget);
 
-        // Thoughts merged into single Thought header with combined duration (4s + 6s = 10s)
-        expect(find.text('Thought 10s'), findsOneWidget);
-
-        // Interleaved tools folded into Action Chip
+        // One phase, one card: the tool summary heads it and the phase's
+        // thinking time (4s + 6s) rides the same collapsed line.
         expect(find.text('Explored 1 file, 1 search'), findsOneWidget);
+        expect(find.text('Thought 10s'), findsOneWidget);
+        expect(find.byType(ActivityGroupRow), findsOneWidget);
 
         // Assistant final answer rendered
         expect(
@@ -3722,19 +3726,18 @@ void main() {
           findsOneWidget,
         );
 
-        // Raw tool call rows are collapsed behind the action chip
+        // Members stay inside the card until it opens
         expect(find.text('AGENTS.md'), findsNothing);
+        expect(
+          find.textContaining('First inspect project files'),
+          findsNothing,
+        );
 
-        // Tap action chip to expand
         await tester.tap(find.text('Explored 1 file, 1 search'));
         await tester.pumpAndSettle();
 
+        // Opened: the thought block and the tool rows in phase order.
         expect(find.text('AGENTS.md'), findsOneWidget);
-
-        // Tap thought to expand
-        await tester.tap(find.text('Thought 10s'));
-        await tester.pumpAndSettle();
-
         expect(
           find.textContaining('First inspect project files'),
           findsOneWidget,

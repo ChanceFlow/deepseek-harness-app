@@ -39,9 +39,12 @@ Windsurf Cascade:
    and `TimelineToolGroup` into `flutter/app/lib/ui/chat/timeline_folding.dart`.
    Assistant messages with empty text (intermediate step thoughts or protocol
    artifacts) no longer fragment tool runs within an execution phase;
-   intermediate thoughts merge into a unified `Thought` header with cumulative
-   duration, and multiple tool calls coalesce into `TimelineToolGroup`. Standalone
-   single tool calls remain direct `ToolCallRow`s to prevent double-expansion friction.
+   intermediate thoughts merge into a unified thought block with cumulative
+   duration, and a phase's members coalesce into one card. Standalone
+   single tool calls remain direct `ToolCallRow`s to prevent double-expansion
+   friction. The phase shape was later revised — the card now holds the
+   thoughts and the injected-context rows too; see
+   [one activity card per phase](2026-09-10-one-activity-card-per-phase.md).
 6. **Wire reasoning duration derivation**: Tracked reasoning block start and
    end timestamps in `TimelineReducer` (`packages/harness_adapter/lib/src/timeline_reducer.dart`)
    to populate `ChatMessage.reasoningDuration`, ensuring historical sessions and
@@ -64,8 +67,11 @@ Windsurf Cascade:
 
 ## Consequences
 
-Agent activity streams present a clean, rhythmic timeline where thoughts and
-tool batches tuck into lightweight, collapsible action chips. Users can tap any
-action chip to expand individual steps and inspect detailed inputs and outputs.
+Agent activity streams present a clean, rhythmic timeline where each
+execution phase tucks into one lightweight, collapsible card. Users can tap the
+card to expand its steps and inspect detailed inputs and outputs — since
+[one activity card per phase](2026-09-10-one-activity-card-per-phase.md) that
+card carries the phase's thoughts and injected context as well as its tool
+calls.
 Semantic tests and widget tests assert both the collapsed summaries and the
 interactive expand/collapse transitions.
