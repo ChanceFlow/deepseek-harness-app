@@ -46,10 +46,21 @@ class TimelineReducer {
     // reason — reference session.ts:419-426). The mirror is re-baselined
     // in-band by the next `session/subscribed` frame, never here.
     TimelineQueue? queueMirror;
+    // A pending request is live state too, not history: `approval/requested`
+    // and `question/requested` never land in the session log, and the host
+    // re-sends a still-pending request only on a new mux generation. A
+    // rebuild that drops one takes the reader's only way to answer off the
+    // screen until the next reconnect — the runtime keeps its `PendingWait`
+    // carrier alive across the same rebuild for the same reason
+    // (manager.ts `pendingInteractions`). A frame replayed after the reset
+    // upserts by the same key, so nothing is duplicated.
+    final liveWaits = <TimelineItem>[];
     for (final item in _items) {
       if (item is TimelineQueue) {
-        queueMirror = item;
-        break;
+        queueMirror ??= item;
+      } else if (item is TimelineApprovalRequest ||
+          item is TimelineQuestionRequest) {
+        liveWaits.add(item);
       }
     }
     _items.clear();
@@ -62,6 +73,7 @@ class TimelineReducer {
       _ingestEvent(event);
     }
     if (queueMirror != null) _items.add(queueMirror);
+    _items.addAll(liveWaits);
   }
 
   List<TimelineItem> snapshot() {

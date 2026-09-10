@@ -83,33 +83,61 @@ Two downlink-only WebSocket streams are required:
   and a cancelled downlink closes with a 2 s bound instead of waiting on the
   peer's close frame.
 
-### 4.3 Interactive frames
+### 4.3 Interactive requests
 
-Answerable mux frames use the echoed `rpcId` on `POST /api/respond`:
+A decision the reader must make — `ask_user_question`, its `plan-review`
+intent, and a tool-approval prompt — arrives as a **forwarded Remote Event
+waterfall** on the `$events` stream, not as a mux frame:
+
+- The client opens the logical stream on `/api/remote.mux` with
+  `{type: open, streamId: remote-events, endpoint: $events, payload: {args: {}}}`.
+- Downlink items are `{type: item, streamId: remote-events, value: …}` whose
+  value is `{type: 'ready', clientId, host}`, `{type: 'emit', event, args}`,
+  `{type: 'waterfall', event, eventId, agentId, request}`, or
+  `{type: 'cancel', eventId}`.
+- `user-questions/request` and `approval/request` are the waterfall events this
+  client answers; every other forwarded waterfall is delegated back with a
+  `next` outcome. The frame's `agentId` is the session the request belongs to
+  (the host projects the Agent out of `request`).
+- The answer is a `POST` to the `$events/result` RPC:
 
 ```text
-approval/requested  ->  allowed-once | rejected
-question/requested  ->  answers per question id
+$events/result  { clientId, eventId, outcome }
+outcome         { kind: 'result', value } | { kind: 'next' } | { kind: 'rejected', error }
+value           user-questions: { answers: [{ id, selected, custom? }] }
+                approval:       allowed-once | rejected
 ```
 
-`/api/respond` returns a carrier receipt (`RpcReceipt`), not a server response.
+A dismissed question refuses the waterfall with `{name: 'UserQuestionError',
+code: 'ASK_CANCELLED'}`. Answering or cancelling settles the local card; a
+`cancel` item ends a request the host dropped, and a new stream generation
+re-delivers every still-pending waterfall to the registering client.
+
+The 0.1.1 mux frames (`question/requested`, `approval/requested` and their
+`/resolved` counterparts, answered on `POST /api/respond` with a carrier
+receipt) stay supported as the legacy path, and the adapter folds both
+transports into one pipeline.
 
 ### 4.4 Registry-level pending interactions
 
-The interactive frames above also feed a registry-global pending map,
-independent of any open session store: `approval/requested` tracks a
-per-session `approval` wait keyed by `approvalId`, `question/requested`
-tracks a `question`/`planReview` wait keyed by the frame's `rpcId` (a single
-binary plan-review intent classifies as `planReview`), and the matching
-`approval/resolved` / `question/resolved` frames drop the key. `session.list`
-rows then carry a derived `SessionSummary.pendingInteraction`
-(`approval` / `planReview` / `question`), which notification detection and
-navigation surfaces read. Replays are idempotent by key; keys for sessions
-that disappear from `session.list` are pruned, and a session's keys
-re-baseline in-band on its mux-generation `session/subscribed` frame — the
-generation's replay follows that frame on the same stream, so clearing on
-the connected publish would race the burst and wipe a baseline that already
-landed.
+Both transports feed a registry-global pending map, independent of any open
+session store: a question tracks a `question`/`planReview` wait keyed by the
+request id (a single binary plan-review intent classifies as `planReview`), an
+approval tracks an `approval` wait keyed by its `approvalId`, and the matching
+resolution — `question/resolved` / `approval/resolved`, a `cancel` item, or the
+client's own answer — drops the key. `session.list` rows then carry a derived
+`SessionSummary.pendingInteraction` (`approval` / `planReview` / `question`),
+which notification detection and navigation surfaces read. Replays are
+idempotent by key; keys for sessions that disappear from `session.list` are
+pruned, and a session's keys re-baseline in-band on its mux-generation
+`session/subscribed` frame — the generation's replay follows that frame on the
+same stream, so clearing on the connected publish would race the burst and wipe
+a baseline that already landed.
+
+A pending request is live state, not history: `question/requested` and
+`approval/requested` never enter the session log, so a history rebuild (the
+reconnect resync) keeps the open request cards instead of dropping them with
+the events they replaced.
 
 ## 5. Connection Lifecycle
 

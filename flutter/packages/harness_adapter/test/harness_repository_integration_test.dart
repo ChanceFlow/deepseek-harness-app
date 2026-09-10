@@ -1058,6 +1058,260 @@ void main() {
     },
   );
 
+  test(r'a 0.1.2 forwarded waterfall opens the decision card and answers through $events/result', () async {
+    // DSH 0.1.2 never sends the 0.1.1 `question/requested` /
+    // `approval/requested` mux frames: an interactive decision arrives as an
+    // Agent-scoped waterfall on the `$events` forwarded-event stream, and
+    // the client answers by returning the listener's value through
+    // `$events/result`. Without this path a live question had no card at all.
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('session-ask')]);
+    rpc.historyEvents['session-ask'] = <JsonMap>[
+      resyncAssistantTextEvent(1, 'working'),
+    ];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'ready',
+            'clientId': 'client-7',
+            'host': <String, Object?>{'home': '/home/user'},
+          },
+        ),
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'waterfall',
+            'event': 'user-questions/request',
+            'eventId': 'evt-q1',
+            'agentId': 'session-ask',
+            'request': <String, Object?>{
+              'questions': <Object?>[
+                <String, Object?>{
+                  'id': 'q1',
+                  'header': 'Deploy',
+                  'question': 'Which backend?',
+                  'options': <Object?>[
+                    <String, Object?>{'label': 'local'},
+                    <String, Object?>{'label': 'remote'},
+                  ],
+                },
+              ],
+            },
+          },
+        ),
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'waterfall',
+            'event': 'approval/request',
+            'eventId': 'evt-a1',
+            'agentId': 'session-ask',
+            'request': <String, Object?>{
+              'toolName': 'bash',
+              'callId': 'call-9',
+              'reason': 'run the migration',
+            },
+          },
+        ),
+      ],
+    );
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      DshConnectionManager(rpc, socket, (_) => 10000),
+    );
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+    await repository.openSession('session-ask');
+    await pumpEventQueue();
+
+    final window = await repository
+        .observeTimelineWindow('session-ask')
+        .firstWhere(
+          (w) =>
+              w.items.whereType<TimelineQuestionRequest>().isNotEmpty &&
+              w.items.whereType<TimelineApprovalRequest>().isNotEmpty,
+        );
+    final question = window.items.whereType<TimelineQuestionRequest>().single;
+    expect(question.requestId, 'evt-q1');
+    expect(question.questions.single.question, 'Which backend?');
+    final approval = window.items.whereType<TimelineApprovalRequest>().single;
+    expect(approval.approvalId, 'evt-a1');
+    expect(approval.toolName, 'bash');
+    expect(approval.reason, 'run the migration');
+
+    // The answer returns the waterfall's value, binding the stream's client
+    // id and the request's own event id.
+    await repository.answerQuestions(
+      'evt-q1',
+      const QuestionEvidence(
+        sessionId: 'session-ask',
+        answers: <QuestionAnswer>[
+          QuestionAnswer(questionId: 'q1', selectedOptions: <String>['remote']),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    final answerCall = rpc
+        .payloads(DshRpcEndpoints.eventsResult)
+        .map((payload) => asJsonObject(payload['args']) ?? payload)
+        .single;
+    expect(answerCall['clientId'], 'client-7');
+    expect(answerCall['eventId'], 'evt-q1');
+    expect(answerCall['outcome'], <String, Object?>{
+      'kind': 'result',
+      'value': <String, Object?>{
+        'answers': <Object?>[
+          <String, Object?>{
+            'id': 'q1',
+            'selected': <Object?>['remote'],
+          },
+        ],
+      },
+    });
+
+    await repository.respondToApproval(
+      const ApprovalAnswer(
+        requestId: 'evt-a1',
+        sessionId: 'session-ask',
+        approvalId: 'evt-a1',
+        allowed: false,
+      ),
+    );
+    await pumpEventQueue();
+    final approvalCall = rpc
+        .payloads(DshRpcEndpoints.eventsResult)
+        .map((payload) => asJsonObject(payload['args']) ?? payload)
+        .last;
+    expect(approvalCall['eventId'], 'evt-a1');
+    expect(approvalCall['outcome'], <String, Object?>{
+      'kind': 'result',
+      'value': 'rejected',
+    });
+
+    // Answering settles the card locally too: the host's own resolution
+    // frame is not guaranteed to follow an answered waterfall.
+    final settled = repository.observeTimelineWindow('session-ask').first;
+    await pumpEventQueue();
+    expect((await settled).items.whereType<TimelineApprovalRequest>(), isEmpty);
+  });
+
+  test('a cancelled forwarded waterfall withdraws its card', () async {
+    // The host ends an unanswered request's lifetime (the turn was cancelled,
+    // the Agent scope went away): a `cancel` item names the event, and the
+    // card leaves the transcript with the pending projection.
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('session-cancel')]);
+    rpc.historyEvents['session-cancel'] = <JsonMap>[];
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+    addTearDown(repository.dispose);
+    await repository.openSession('session-cancel');
+    await pumpEventQueue();
+
+    socket
+      ..emitMuxFrame(
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'ready',
+            'clientId': 'client-7',
+            'host': <String, Object?>{'home': '/home/user'},
+          },
+        ),
+      )
+      ..emitMuxFrame(
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'waterfall',
+            'event': 'user-questions/request',
+            'eventId': 'evt-q2',
+            'agentId': 'session-cancel',
+            'request': <String, Object?>{
+              'questions': <Object?>[
+                <String, Object?>{'id': 'q1', 'question': 'Continue?'},
+              ],
+            },
+          },
+        ),
+      );
+    await pumpEventQueue();
+
+    expect(
+      (await repository.observeTimelineWindow('session-cancel').first).items
+          .whereType<TimelineQuestionRequest>(),
+      hasLength(1),
+    );
+
+    socket.emitMuxFrame(
+      ServerRequest(
+        rpcId: 'remote-events',
+        method: 'item',
+        payload: <String, Object?>{'type': 'cancel', 'eventId': 'evt-q2'},
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      (await repository.observeTimelineWindow('session-cancel').first).items
+          .whereType<TimelineQuestionRequest>(),
+      isEmpty,
+    );
+  });
+
+  test(
+    'a forked session keeps its root window: lineage is not a subagent mark',
+    () async {
+      // `session/fork` gives the child its source's parentSessionId lineage
+      // while the session stays one the reader chats in; only the host's
+      // `origin: 'subagent'` marks a child transcript. Treating lineage as a
+      // subagent mark left a forked session with no history, no follow stream
+      // and therefore no question/approval card.
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-fork',
+          'parentSessionId': 'session-source',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      rpc.historyEvents['session-fork'] = <JsonMap>[
+        resyncAssistantTextEvent(1, 'forked transcript'),
+      ];
+      final diagnostics = <AdapterDiagnostic>[];
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(rpc, ScriptedHarnessSocket(), (_) => 10000),
+        onDiagnostic: diagnostics.add,
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      await repository.openSession('session-fork');
+      await pumpEventQueue();
+
+      final window = await repository
+          .observeTimelineWindow('session-fork')
+          .firstWhere((w) => w.items.isNotEmpty);
+      expect(window.items, hasLength(1));
+      expect(rpc.payloads(DshRpcEndpoints.sessionPage), isNotEmpty);
+      expect(
+        diagnostics.where((d) => d.context == 'session.open'),
+        isEmpty,
+        reason: 'a forked session is not a subagent child',
+      );
+    },
+  );
+
   test(
     'session/page with empty session past-cursor -1 recovers empty page',
     () async {

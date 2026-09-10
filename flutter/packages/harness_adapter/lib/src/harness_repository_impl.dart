@@ -182,6 +182,17 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// manager.ts:714-732): the host omits the baseline for an emptied queue.
   final Map<String, List<ServerRequest>> _pendingBuffers =
       <String, List<ServerRequest>>{};
+
+  /// Forwarded Remote Event client identity (`$events` `ready` item). Every
+  /// waterfall answer binds to it, so an unanswered request is only
+  /// answerable once the opening item of the current stream generation landed.
+  String? _remoteEventClientId;
+
+  /// Pending interactive requests delivered as 0.1.2 waterfalls, keyed by the
+  /// request id the UI answers with. The reducer holds the card; this map
+  /// holds what the answer must echo back to the host.
+  final Map<String, _RemoteEventWait> _pendingRemoteEvents =
+      <String, _RemoteEventWait>{};
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
@@ -493,12 +504,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     return false;
   }
 
-  /// True when the session summary indicates a subagent child session.
+  /// True when the session summary marks a subagent child: `origin` is the
+  /// host's coarse durable navigation origin (`sessionListFields` in
+  /// apiproxy). `parentSessionId` alone never proves it — a forked session
+  /// inherits its source's lineage (the `session/fork` contract) while
+  /// staying an ordinary session the reader chats in.
   bool _isSubagent(String sessionId) {
     for (final item in _sessions.value) {
-      if (item.id == sessionId) {
-        return item.origin == 'subagent' || item.parentSessionId != null;
-      }
+      if (item.id == sessionId) return item.origin == 'subagent';
     }
     return false;
   }
@@ -711,6 +724,17 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> respondToApproval(ApprovalAnswer answer) async {
+    if (_pendingRemoteEvents[answer.requestId]?.kind ==
+        _RemoteEventKind.approval) {
+      // 0.1.2 forwarded waterfall: the decision is the listener's return
+      // value — the approval domain's own outcome vocabulary.
+      await _sendRemoteEventOutcome(answer.requestId, <String, Object?>{
+        'kind': 'result',
+        'value': answer.allowed ? 'allowed-once' : 'rejected',
+      });
+      _settleRemoteEvent(answer.requestId);
+      return;
+    }
     final value = <String, Object?>{
       'sessionId': answer.sessionId,
       'approvalId': answer.approvalId,
@@ -727,6 +751,25 @@ class HarnessRepositoryImpl implements ChatRepository {
     String requestId,
     QuestionEvidence evidence,
   ) async {
+    final answers = evidence.answers
+        .map(
+          (answer) => <String, Object?>{
+            'id': answer.questionId,
+            'selected': answer.selectedOptions,
+            if (answer.customText != null) 'custom': answer.customText,
+          },
+        )
+        .toList();
+    if (_pendingRemoteEvents[requestId]?.kind == _RemoteEventKind.question) {
+      // 0.1.2 forwarded waterfall: the answer IS the listener's return value,
+      // so it travels as this request's `$events/result` outcome.
+      await _sendRemoteEventOutcome(requestId, <String, Object?>{
+        'kind': 'result',
+        'value': <String, Object?>{'answers': answers},
+      });
+      _settleRemoteEvent(requestId);
+      return;
+    }
     final value = <String, Object?>{
       'sessionId': evidence.sessionId,
       'answer': {
@@ -746,6 +789,20 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> cancelQuestions(String requestId, String sessionId) async {
+    if (_pendingRemoteEvents[requestId]?.kind == _RemoteEventKind.question) {
+      // A dismissed question refuses the waterfall with the question domain's
+      // own error, so the host resolves the tool call as cancelled.
+      await _sendRemoteEventOutcome(requestId, <String, Object?>{
+        'kind': 'rejected',
+        'error': <String, Object?>{
+          'name': 'UserQuestionError',
+          'message': 'the user cancelled ask_user_question',
+          'code': 'ASK_CANCELLED',
+        },
+      });
+      _settleRemoteEvent(requestId);
+      return;
+    }
     await _rpcClient.respond(
       requestId,
       RpcResult(
@@ -1280,6 +1337,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       _connectionManager.muxFrames.listen(
         (frame) {
           final type = wireString(frame.payload, 'type');
+          if (frame.rpcId == 'remote-events') {
+            _handleRemoteEventItem(frame);
+            return;
+          }
           if (frame.rpcId == 'session-control' ||
               (type == 'baseline' &&
                   (frame.payload.containsKey('projections') ||
@@ -1369,31 +1430,11 @@ class HarnessRepositoryImpl implements ChatRepository {
           // approval/plan-review alerts must fire for sessions never opened
           // here). Stable keys make replays
           // idempotent.
-          _foldPendingFrame(frame);
-          if (sessionId == null) return;
-          final state = _sessionStates[sessionId];
-          if (state == null) {
-            // Web SessionManager parity: answerable live frames (approval/
-            // question requested, queue) that reach an uninstantiated session
-            // are buffered, not dropped — a later open replays them, so the
-            // question/approval card still renders even though the transcript
-            // backfill only carries the running tool call.
-            _bufferPendingFrame(sessionId, frame);
+          if (sessionId == null) {
+            _foldPendingFrame(frame);
             return;
           }
-          unawaited(
-            state.handleFrame(frame).catchError((Object e, StackTrace st) {
-              _onDiagnostic?.call(
-                AdapterDiagnostic(
-                  message: 'handleFrame failed for $sessionId: $e',
-                  level: AdapterDiagnosticLevel.error,
-                  error: e,
-                  stackTrace: st,
-                  context: 'session.frame',
-                ),
-              );
-            }),
-          );
+          _routeSessionFrame(sessionId, frame);
         },
         onError: (Object error, StackTrace stack) => _onDiagnostic?.call(
           AdapterDiagnostic(
@@ -2610,6 +2651,197 @@ class HarnessRepositoryImpl implements ChatRepository {
     };
   }
 
+  /// Routes one interactive request into the session's own pipeline: the
+  /// registry fold that drives the roster dot and the alerts, then either the
+  /// live window or the pre-instantiation buffer. Both the 0.1.1 mux frames
+  /// and the 0.1.2 waterfalls travel this path.
+  void _routeSessionFrame(String sessionId, ServerRequest frame) {
+    _foldPendingFrame(frame);
+    final state = _sessionStates[sessionId];
+    if (state == null) {
+      // Web SessionManager parity: answerable live requests (approval/
+      // question requested, queue) that reach an uninstantiated session are
+      // buffered, not dropped — a later open replays them, so the card still
+      // renders even though the transcript backfill only carries the running
+      // tool call.
+      _bufferPendingFrame(sessionId, frame);
+      return;
+    }
+    unawaited(
+      state.handleFrame(frame).catchError((Object e, StackTrace st) {
+        _onDiagnostic?.call(
+          AdapterDiagnostic(
+            message: 'handleFrame failed for $sessionId: $e',
+            level: AdapterDiagnosticLevel.error,
+            error: e,
+            stackTrace: st,
+            context: 'session.frame',
+          ),
+        );
+      }),
+    );
+  }
+
+  /// One forwarded Remote Event item from the `$events` stream — DSH 0.1.2's
+  /// delivery path for an interactive decision. `ready` binds the answer
+  /// target of this stream generation, `waterfall` is a request the reader
+  /// decides, `cancel` ends one unanswered request, and `emit` is an ordinary
+  /// forwarded host event.
+  void _handleRemoteEventItem(ServerRequest frame) {
+    switch (wireString(frame.payload, 'type')) {
+      case 'ready':
+        _remoteEventClientId = wireString(frame.payload, 'clientId');
+      case 'emit':
+        _applyForwardedEvent(
+          wireString(frame.payload, 'event'),
+          asJsonArray(frame.payload['args']) ?? const <Object?>[],
+        );
+      case 'waterfall':
+        _deliverWaterfall(frame);
+      case 'cancel':
+        final eventId = wireString(frame.payload, 'eventId');
+        if (eventId != null) _settleRemoteEvent(eventId);
+    }
+  }
+
+  /// Folds one `waterfall` item into the request pipeline. The host projects
+  /// the Agent out of the request and carries its identity on the frame;
+  /// session-controller resolves an Agent identity to its session, so
+  /// `agentId` is the session this request belongs to.
+  void _deliverWaterfall(ServerRequest frame) {
+    final event = wireString(frame.payload, 'event');
+    final eventId = wireString(frame.payload, 'eventId');
+    final sessionId = wireString(frame.payload, 'agentId');
+    final request = asJsonObject(frame.payload['request']);
+    if (event == null ||
+        eventId == null ||
+        sessionId == null ||
+        request == null) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'remote event waterfall is missing its identity',
+          level: AdapterDiagnosticLevel.error,
+          context: 'remote.event',
+          metadata: <String, Object?>{'event': event, 'eventId': eventId},
+        ),
+      );
+      return;
+    }
+    final ServerRequest envelope;
+    final _RemoteEventKind kind;
+    switch (event) {
+      case 'user-questions/request':
+        kind = _RemoteEventKind.question;
+        envelope = ServerRequest(
+          rpcId: eventId,
+          method: 'question/requested',
+          payload: <String, Object?>{
+            'type': 'question/requested',
+            'sessionId': sessionId,
+            'questions': asJsonArray(request['questions']) ?? const <Object?>[],
+          },
+        );
+      case 'approval/request':
+        kind = _RemoteEventKind.approval;
+        envelope = ServerRequest(
+          rpcId: eventId,
+          method: 'approval/requested',
+          payload: <String, Object?>{
+            'type': 'approval/requested',
+            'sessionId': sessionId,
+            'approvalId': eventId,
+            'toolName': wireString(request, 'toolName') ?? 'unknown',
+            if (wireString(request, 'callId') case final callId?)
+              'callId': callId,
+            if (wireString(request, 'reason') case final reason?)
+              'reason': reason,
+          },
+        );
+      default:
+        // A forwarded waterfall this client does not answer: delegate to the
+        // next listener so the host's own answerer still sees it.
+        unawaited(
+          _sendRemoteEventOutcome(eventId, const <String, Object?>{
+            'kind': 'next',
+          }),
+        );
+        return;
+    }
+    _pendingRemoteEvents[eventId] = _RemoteEventWait(
+      sessionId: sessionId,
+      kind: kind,
+    );
+    _routeSessionFrame(sessionId, envelope);
+  }
+
+  /// Ends one unanswered waterfall — the host dropped its lifetime (the turn
+  /// was cancelled, the Agent scope went away) or the reader decided it — so
+  /// the card leaves every surface.
+  void _settleRemoteEvent(String eventId) {
+    final wait = _pendingRemoteEvents.remove(eventId);
+    if (wait == null) return;
+    final isQuestion = wait.kind == _RemoteEventKind.question;
+    _routeSessionFrame(
+      wait.sessionId,
+      ServerRequest(
+        rpcId: eventId,
+        method: isQuestion ? 'question/resolved' : 'approval/resolved',
+        payload: isQuestion
+            ? <String, Object?>{
+                'type': 'question/resolved',
+                'sessionId': wait.sessionId,
+                'questionRpcId': eventId,
+                'outcome': 'cancelled',
+              }
+            : <String, Object?>{
+                'type': 'approval/resolved',
+                'sessionId': wait.sessionId,
+                'approvalId': eventId,
+                'outcome': 'cancelled',
+              },
+      ),
+    );
+  }
+
+  /// Answers one pending waterfall through the Gateway's `$events/result`
+  /// RPC. The outcome is the waterfall listener's return value: `result`
+  /// carries the decision, `next` delegates to the following answerer, and
+  /// `rejected` reports a refusal.
+  Future<void> _sendRemoteEventOutcome(String eventId, JsonMap outcome) async {
+    final clientId = _remoteEventClientId;
+    if (clientId == null) {
+      throw DshBusinessException(
+        code: 'remote-event-unbound',
+        message:
+            'the forwarded event stream has no client id yet; the decision '
+            'cannot be delivered to the host',
+      );
+    }
+    await _invoker.execute(DshRpcEndpoints.eventsResult, <String, Object?>{
+      'clientId': clientId,
+      'eventId': eventId,
+      'outcome': outcome,
+    });
+  }
+
+  /// Folds one ordinary forwarded host event. Only events this client renders
+  /// are read; the rest are ignored — the forwarded set is an open host
+  /// allowlist (`API_REMOTE_FORWARDED_EVENTS`).
+  void _applyForwardedEvent(String? event, List<Object?> args) {
+    if (event != 'agent-preset/selected') return;
+    if (args.length < 2) return;
+    final sessionId = args[0];
+    final agentPreset = args[1];
+    if (sessionId is! String || agentPreset is! String) return;
+    _sessions.value = _sessions.value
+        .map(
+          (item) => item.id == sessionId
+              ? _copySession(item, agentPreset: agentPreset)
+              : item,
+        )
+        .toList();
+  }
+
   StateStream<GoalProjection?> _goalProjectionStateFor(String sessionId) =>
       _goalProjections.putIfAbsent(
         sessionId,
@@ -2934,3 +3166,17 @@ final class _SessionState {
     _coalescedPublish = null;
   }
 }
+
+/// One pending 0.1.2 forwarded waterfall this client owes an answer.
+final class _RemoteEventWait {
+  const _RemoteEventWait({required this.sessionId, required this.kind});
+
+  /// Session the request is filed against (the frame's Agent identity).
+  final String sessionId;
+
+  /// Which decision surface the request belongs to.
+  final _RemoteEventKind kind;
+}
+
+/// The forwarded waterfall events this client answers.
+enum _RemoteEventKind { question, approval }
