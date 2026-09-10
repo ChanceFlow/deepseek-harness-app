@@ -999,6 +999,40 @@ ChatUiState timelineFoldingStateZh() {
         arguments: '{"pattern":"query_$i"}',
         status: ToolRunStatus.completed,
       ),
+    // The phase that reasons, is handed recalled context and then runs
+    // tools: one activity card with every member behind its own fold. It
+    // rides the tail so the shot renders it without chasing the scroll.
+    const TimelineMessage(
+      ChatMessage(
+        id: 'th4',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        reasoning:
+            'Weigh the recalled decision about the wire seam before touching '
+            'the tree: the adapter owns every dsh type, and the app never sees '
+            'one.',
+        reasoningDuration: Duration(seconds: 7),
+        text: '',
+        createdAtEpochMs: kNow + 4000,
+        seq: 5,
+      ),
+    ),
+    const TimelineContextInjection(
+      id: 'ctx4',
+      text:
+          'Earlier decision: the adapter owns every dsh type; app and domain '
+          'never see one.',
+      producerLabel: 'recall · wire seam',
+      isRecall: true,
+      summary: 'recalled 1 decision',
+    ),
+    for (var i = 1; i <= 4; i++)
+      TimelineToolCall(
+        id: 'tf4_$i',
+        name: 'read',
+        arguments: '{"file_path":"adapter_$i.dart"}',
+        status: ToolRunStatus.completed,
+      ),
   ];
 
   return ChatUiState(

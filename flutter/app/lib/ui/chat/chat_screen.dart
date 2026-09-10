@@ -63,7 +63,8 @@ import '../theme/theme.dart';
 // The sidebar widget lives in session_panel.dart; re-exported so existing
 // importers of this library keep resolving `SessionPanel` unchanged.
 export 'session_panel.dart';
-export 'timeline_folding.dart' show TimelineToolGroup, foldTimelineActivities;
+export 'timeline_folding.dart'
+    show TimelineActivityGroup, foldTimelineActivities;
 
 /// Decodes one durable attachment lazily; returns null on any failure.
 typedef AttachmentLoader = Future<Uint8List?> Function(
@@ -1261,9 +1262,9 @@ class _ChatPanelState extends State<ChatPanel> {
       ),
       itemBuilder: (context, index) {
         final row = rows[index];
-        if (row is TimelineToolGroup) {
-          return ToolGroupRow(
-            key: ValueKey('tool-group:${row.id}:${row.calls.length}'),
+        if (row is TimelineActivityGroup) {
+          return ActivityGroupRow(
+            key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
             group: row,
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
@@ -2164,11 +2165,13 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   }
 }
 
-/// Cursor-style collapsible tool execution block: groups multiple consecutive
-/// tool calls into a single summary line (e.g. "4 tool calls · bash 2 · edit 2")
-/// that is collapsed by default and expands on demand to reveal individual tool rows.
-class ToolGroupRow extends StatefulWidget {
-  const ToolGroupRow({
+/// One folded execution phase: the thoughts, injected context and tool calls
+/// that ran between two transcript anchors, behind a single collapsed header.
+/// The card owns the phase's only disclosure — its members render inline, so a
+/// phase that reasoned, was handed context and then ran tools reads as one
+/// step instead of a stack of folded rows.
+class ActivityGroupRow extends StatefulWidget {
+  const ActivityGroupRow({
     required this.group,
     required this.onAction,
     required this.loadAttachment,
@@ -2176,16 +2179,16 @@ class ToolGroupRow extends StatefulWidget {
     this.expansion,
   });
 
-  final TimelineToolGroup group;
+  final TimelineActivityGroup group;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
   final ToolExpansionPersistence? expansion;
 
   @override
-  State<ToolGroupRow> createState() => _ToolGroupRowState();
+  State<ActivityGroupRow> createState() => _ActivityGroupRowState();
 }
 
-class _ToolGroupRowState extends State<ToolGroupRow>
+class _ActivityGroupRowState extends State<ActivityGroupRow>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
   late final AnimationController _sweep = AnimationController(
@@ -2194,7 +2197,8 @@ class _ToolGroupRowState extends State<ToolGroupRow>
   );
 
   bool get _isRunning =>
-      widget.group.calls.any((call) => call.status == ToolRunStatus.running);
+      widget.group.calls.any((call) => call.status == ToolRunStatus.running) ||
+      (widget.group.thought?.value.streaming ?? false);
 
   @override
   void initState() {
@@ -2203,7 +2207,7 @@ class _ToolGroupRowState extends State<ToolGroupRow>
   }
 
   @override
-  void didUpdateWidget(covariant ToolGroupRow oldWidget) {
+  void didUpdateWidget(covariant ActivityGroupRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_isRunning && !_sweep.isAnimating) {
       _sweep.repeat();
@@ -2223,15 +2227,43 @@ class _ToolGroupRowState extends State<ToolGroupRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final entries = widget.group.entries;
     final calls = widget.group.calls;
+    final thought = widget.group.thought;
+    final firstInjection = entries
+        .whereType<TimelineContextInjection>()
+        .firstOrNull;
 
     final summary = deriveToolGroupSummary(calls, l10n);
-    final title = summary.title;
-    final subtitle = summary.subtitle;
     final running = summary.runningCalls;
     final failed = summary.failedCalls;
-    final showSubtitle =
+    final thoughtLabel = thought == null
+        ? null
+        : reasoningLabel(
+            l10n,
+            running: thought.value.streaming,
+            elapsed: thought.value.reasoningDuration,
+          );
+    // The header names the phase: the tool summary while tools ran, and the
+    // thought or the injection when the phase only reasoned or was handed
+    // context. The thinking time rides the subtitle so a phase that both
+    // thought and worked keeps both facts on its collapsed line.
+    final title = calls.isNotEmpty
+        ? summary.title
+        : thoughtLabel ??
+              (firstInjection?.isRecall ?? false
+                  ? l10n.recallLabel
+                  : firstInjection == null
+                  ? ''
+                  : l10n.contextInjectionLabel);
+    final baseSubtitle = summary.subtitle;
+    final showBaseSubtitle =
         running > 0 || (title.contains('operation') || title.contains('操作'));
+    final subtitle = <String>[
+      if (showBaseSubtitle && baseSubtitle.isNotEmpty && baseSubtitle != title)
+        baseSubtitle,
+      if (calls.isNotEmpty && thoughtLabel != null) thoughtLabel,
+    ].join(' · ');
 
     final settledCount = calls.length - running - failed;
     final leadingWidget = Row(
@@ -2244,6 +2276,14 @@ class _ToolGroupRowState extends State<ToolGroupRow>
         if (running == 0)
           if (failed > 0)
             Icon(Icons.close, size: 14, color: scheme.error)
+          else if (calls.isEmpty && thought != null)
+            Icon(
+              Icons.psychology_outlined,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            )
+          else if (calls.isEmpty)
+            Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant)
           else if (summary.filesExplored > 0 || summary.searches > 0)
             Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant)
           else
@@ -2283,9 +2323,7 @@ class _ToolGroupRowState extends State<ToolGroupRow>
                         color: scheme.onSurface,
                       ),
                     ),
-                    if (showSubtitle &&
-                        subtitle.isNotEmpty &&
-                        subtitle != title) ...[
+                    if (subtitle.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -2339,16 +2377,32 @@ class _ToolGroupRowState extends State<ToolGroupRow>
                 ),
                 padding: const EdgeInsets.only(left: 8),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final call in calls)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: ToolCallRow(
-                          key: ValueKey(timelineKey(call)),
-                          call: call,
-                          expansion: widget.expansion,
+                    for (final entry in entries)
+                      switch (entry) {
+                        TimelineToolCall() => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: ToolCallRow(
+                            key: ValueKey(timelineKey(entry)),
+                            call: entry,
+                            expansion: widget.expansion,
+                          ),
                         ),
-                      ),
+                        TimelineContextInjection() => ContextInjectionRow(
+                          key: ValueKey(timelineKey(entry)),
+                          injection: entry,
+                          inline: true,
+                        ),
+                        TimelineMessage(:final value) => ReasoningRow(
+                          key: ValueKey(timelineKey(entry)),
+                          text: value.reasoning ?? '',
+                          running: value.streaming,
+                          elapsedDuration: value.reasoningDuration,
+                          inline: true,
+                        ),
+                        _ => const SizedBox.shrink(),
+                      },
                   ],
                 ),
               ),
@@ -5861,16 +5915,95 @@ class _CommandRowState extends State<CommandRow>
 /// the durable producer the source identifies; the expanded body carries
 /// the injected content.
 class ContextInjectionRow extends StatelessWidget {
-  const ContextInjectionRow({required this.injection, super.key});
+  const ContextInjectionRow({
+    required this.injection,
+    super.key,
+    this.inline = false,
+  });
 
   final TimelineContextInjection injection;
 
-  @override
-  Widget build(BuildContext context) {
+  /// Render the header and the body without a disclosure of this row's own:
+  /// the activity card already opened for this phase.
+  final bool inline;
+
+  /// The row header: glyph, the role this context plays, the durable
+  /// producer, and the optional summary.
+  Widget _headerRow(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final injection = this.injection;
+    return Row(
+      children: [
+        Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Text(
+          injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        if (injection.producerLabel case final label?) ...[
+          Container(
+            width: 2,
+            height: 2,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: scheme.outline,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+        if (injection.summary case final summary?) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              summary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The injected content.
+  Widget _body(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 2, bottom: 4),
+    child: MarkdownText(text: injection.text),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (inline) {
+      // The activity card already opened for this phase: the injection shows
+      // its header and content with no disclosure of its own.
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _headerRow(context),
+            if (injection.text.trim().isNotEmpty) _body(context),
+          ],
+        ),
+      );
+    }
     final hasBody = injection.text.trim().isNotEmpty;
     return ExpansionTile(
       // No body means a non-interactive disclosure: the native tile drops
@@ -5881,58 +6014,8 @@ class ContextInjectionRow extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       minTileHeight: 28,
       tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-      title: Row(
-        children: [
-          Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          if (injection.producerLabel case final label?) ...[
-            Container(
-              width: 2,
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: scheme.outline,
-                shape: BoxShape.circle,
-              ),
-            ),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-          if (injection.summary case final summary?) ...[
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2, bottom: 4),
-          child: MarkdownText(text: injection.text),
-        ),
-      ],
+      title: _headerRow(context),
+      children: [_body(context)],
     );
   }
 }

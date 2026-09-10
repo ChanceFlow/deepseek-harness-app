@@ -70,11 +70,17 @@ void main() {
 
     final folded = foldTimelineActivities(items);
 
-    expect(folded, hasLength(4));
+    // One phase, one card: the phase's thoughts merge into a single block at
+    // the position of the first one, and the tool calls keep their order.
+    expect(folded, hasLength(3));
     expect(folded[0], const TimelineTurnBoundary(1));
 
-    expect(folded[1], isA<TimelineMessage>());
-    final mergedThought = (folded[1] as TimelineMessage).value;
+    expect(folded[1], isA<TimelineActivityGroup>());
+    final group = folded[1] as TimelineActivityGroup;
+    expect(group.id, 'm1');
+    expect(group.calls, <TimelineToolCall>[t1, t2]);
+
+    final mergedThought = group.thought!.value;
     expect(mergedThought.id, 'm2');
     expect(mergedThought.sessionId, 's1');
     expect(mergedThought.role, MessageRole.assistant);
@@ -82,10 +88,57 @@ void main() {
     expect(mergedThought.reasoning, 'think 1\n\nthink 2');
     expect(mergedThought.reasoningDuration, const Duration(seconds: 3));
     expect(mergedThought.seq, 42);
+    expect(
+      group.entries.map(
+        (entry) => entry is TimelineMessage ? 'thought' : 'tool',
+      ),
+      <String>['thought', 'tool', 'tool'],
+    );
 
-    expect(folded[2], TimelineToolGroup(id: 't1', calls: [t1, t2]));
+    expect(folded[2], textMessage(id: 'm3', text: 'Done.'));
+  });
 
-    expect(folded[3], textMessage(id: 'm3', text: 'Done.'));
+  test(
+    'a phase folds its thoughts, injected context and tool calls into one card',
+    () {
+      final thought = thoughtMessage(id: 'th1', reasoning: 'consider the wire');
+      const injection = TimelineContextInjection(
+        id: 'ctx-1',
+        text: 'recalled material',
+        producerLabel: 'yesterday',
+        isRecall: true,
+      );
+      final t1 = toolCall(id: 't1', name: 'read');
+      final t2 = toolCall(id: 't2', name: 'edit');
+
+      final folded = foldTimelineActivities(<TimelineItem>[
+        thought,
+        injection,
+        t1,
+        t2,
+      ]);
+
+      expect(folded, hasLength(1));
+      final group = folded.single as TimelineActivityGroup;
+      expect(group.id, 'th1');
+      // The injection is a step in the run, not a phase boundary: it rides the
+      // card with the thought and the calls.
+      expect(group.entries, <TimelineItem>[thought, injection, t1, t2]);
+      expect(group.calls, <TimelineToolCall>[t1, t2]);
+      expect(group.thought!.value.reasoning, 'consider the wire');
+    },
+  );
+
+  test('a lone injected context keeps its own row', () {
+    const injection = TimelineContextInjection(
+      id: 'ctx-1',
+      text: 'goal objective: ship it',
+      producerLabel: 'goal',
+    );
+
+    expect(foldTimelineActivities(<TimelineItem>[injection]), <TimelineItem>[
+      injection,
+    ]);
   });
 
   test(
@@ -127,8 +180,12 @@ void main() {
       t2,
     ]);
 
-    expect(folded, [
-      TimelineToolGroup(id: 't1', calls: [t1, t2]),
+    expect(folded, <Object>[
+      isA<TimelineActivityGroup>().having(
+        (g) => g.calls,
+        'calls',
+        <TimelineToolCall>[t1, t2],
+      ),
     ]);
   });
 
@@ -149,10 +206,18 @@ void main() {
       msg2,
     ]);
 
-    expect(folded, [
-      TimelineToolGroup(id: 't1a', calls: [tool1a, tool1b]),
+    expect(folded, <Object>[
+      isA<TimelineActivityGroup>().having(
+        (g) => g.calls,
+        'calls',
+        <TimelineToolCall>[tool1a, tool1b],
+      ),
       msg1,
-      TimelineToolGroup(id: 't2a', calls: [tool2a, tool2b]),
+      isA<TimelineActivityGroup>().having(
+        (g) => g.calls,
+        'calls',
+        <TimelineToolCall>[tool2a, tool2b],
+      ),
       msg2,
     ]);
   });
@@ -210,13 +275,13 @@ void main() {
     expect(folded, [t1, userMsg, t2, question, t3]);
   });
 
-  test('TimelineToolGroup value equality and hashCode', () {
+  test('TimelineActivityGroup value equality and hashCode', () {
     final t1 = toolCall(id: 't1');
     final t2 = toolCall(id: 't2');
-    final group1 = TimelineToolGroup(id: 't1', calls: [t1, t2]);
-    final group2 = TimelineToolGroup(id: 't1', calls: [t1, t2]);
-    final groupDiffId = TimelineToolGroup(id: 'diff', calls: [t1, t2]);
-    final groupDiffCalls = TimelineToolGroup(id: 't1', calls: [t1]);
+    final group1 = TimelineActivityGroup(id: 't1', entries: [t1, t2]);
+    final group2 = TimelineActivityGroup(id: 't1', entries: [t1, t2]);
+    final groupDiffId = TimelineActivityGroup(id: 'diff', entries: [t1, t2]);
+    final groupDiffCalls = TimelineActivityGroup(id: 't1', entries: [t1]);
 
     expect(group1, equals(group2));
     expect(group1.hashCode, equals(group2.hashCode));
