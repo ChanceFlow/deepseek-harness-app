@@ -294,6 +294,21 @@ class DshConnectionManager {
                 'payload': <String, Object?>{'args': <String, Object?>{}},
               }),
             );
+            // Forwarded Remote Events (`$events`): the 0.1.2 delivery path for
+            // an interactive decision. The host pushes an Agent-scoped
+            // waterfall and the client answers with one `$events/result`
+            // call; a 0.1.2 host never sends the 0.1.1 `question/requested` /
+            // `approval/requested` mux frames, so a question nobody opens this
+            // stream for has no card at all.
+            socket.send(
+              currentPath,
+              jsonEncode(<String, Object?>{
+                'type': 'open',
+                'streamId': 'remote-events',
+                'endpoint': r'$events',
+                'payload': <String, Object?>{'args': <String, Object?>{}},
+              }),
+            );
           }
           if (!opened.isCompleted) opened.complete();
         },

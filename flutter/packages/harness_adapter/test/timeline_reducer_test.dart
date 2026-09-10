@@ -1027,6 +1027,96 @@ void main() {
     },
   );
 
+  test('a history rebuild keeps a pending question and approval', () {
+    // Both requests are live state, not history: the host re-sends a
+    // still-pending one only on a new mux generation, so the rebuild that
+    // ensureLoaded runs must not take the reader's answer surface away.
+    final reducer = TimelineReducer('s1');
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'rpc-question',
+        method: 'question/requested',
+        payload: <String, Object?>{
+          'type': 'question/requested',
+          'sessionId': 's1',
+          'questions': <Object?>[
+            <String, Object?>{
+              'id': 'q1',
+              'question': 'Which backend?',
+              'options': <Object?>[
+                <String, Object?>{'label': 'local'},
+              ],
+            },
+          ],
+        },
+      ),
+    );
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'rpc-approval',
+        method: 'approval/requested',
+        payload: <String, Object?>{
+          'type': 'approval/requested',
+          'sessionId': 's1',
+          'approvalId': 'approval-1',
+          'toolName': 'bash',
+        },
+      ),
+    );
+
+    reducer.reset(<JsonMap>[
+      event(3, 'turn/start', <String, Object?>{'turn': 1}),
+    ]);
+
+    final kept = reducer.snapshot();
+    expect(kept.whereType<TimelineTurnBoundary>(), hasLength(1));
+    expect(
+      kept.whereType<TimelineQuestionRequest>().single.questions.single.id,
+      'q1',
+    );
+    expect(
+      kept.whereType<TimelineApprovalRequest>().single.approvalId,
+      'approval-1',
+    );
+
+    // The replayed resolution still removes it, and a replay of the request
+    // after the rebuild does not duplicate it.
+    // The generation's burst replays a still-pending request under its live
+    // rpcId, which upserts the preserved item instead of appending a twin.
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'rpc-question',
+        method: 'question/requested',
+        payload: <String, Object?>{
+          'type': 'question/requested',
+          'sessionId': 's1',
+          'questions': <Object?>[
+            <String, Object?>{'id': 'q1', 'question': 'Which backend?'},
+          ],
+        },
+      ),
+    );
+    expect(
+      reducer.snapshot().whereType<TimelineQuestionRequest>().length,
+      1,
+      reason: 'the replay upserts by the request id, never appends a twin',
+    );
+
+    reducer.ingestFrame(
+      ServerRequest(
+        rpcId: 'rpc-resolved',
+        method: 'question/resolved',
+        payload: <String, Object?>{
+          'type': 'question/resolved',
+          'sessionId': 's1',
+          'questionRpcId': 'rpc-question',
+          'outcome': 'answered',
+        },
+      ),
+    );
+    expect(reducer.snapshot().whereType<TimelineQuestionRequest>(), isEmpty);
+  });
+
   test('session/queue frames fail loud on missing or unknown fields', () {
     final reducer = TimelineReducer('s1');
     ServerRequest frame(JsonMap payload) =>
