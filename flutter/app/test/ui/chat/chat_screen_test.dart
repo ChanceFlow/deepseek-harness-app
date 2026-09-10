@@ -2315,6 +2315,42 @@ void main() {
   });
 
   testWidgets(
+    'plus menu: picking /plan with existing draft preserves text and prepends /plan',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+          selectedSessionId: 's1',
+        ),
+        actions,
+      );
+
+      final composerField = find
+          .descendant(
+            of: find.byType(ComposerBar),
+            matching: find.byType(TextField),
+          )
+          .first;
+      await tester.enterText(composerField, 'build snake game');
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Commands'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('/plan'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<TextField>(composerField).controller?.text,
+        '/plan build snake game',
+      );
+      expect(actions.whereType<SendPrompt>(), isEmpty);
+    },
+  );
+
+  testWidgets(
     'plus menu: picking bare /compact dispatches SendPrompt and preserves draft',
     (tester) async {
       final actions = <ChatAction>[];
@@ -2674,6 +2710,36 @@ void main() {
       tester.widget<TextField>(composerField).controller?.text,
       '/review ',
     );
+  });
+
+  testWidgets('slash host command candidates filter and land /plan text', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+      ),
+      actions,
+    );
+
+    final composerField = find
+        .descendant(
+          of: find.byType(ComposerBar),
+          matching: find.byType(TextField),
+        )
+        .first;
+    await tester.enterText(composerField, '/pl');
+    await tester.pump();
+    expect(find.text('/plan'), findsOneWidget);
+
+    await tester.tap(find.text('/plan'));
+    await tester.pump();
+    expect(tester.widget<TextField>(composerField).controller?.text, '/plan ');
   });
 
   testWidgets('attachment placeholder shows metadata and retries', (

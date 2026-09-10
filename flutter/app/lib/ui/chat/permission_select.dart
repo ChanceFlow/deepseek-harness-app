@@ -162,14 +162,16 @@ class PermissionSelectChip extends StatelessWidget {
                     color: scheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    _label(l10n),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: scheme.onSurfaceVariant,
+                  Flexible(
+                    child: Text(
+                      _label(l10n),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 2),
