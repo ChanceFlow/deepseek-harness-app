@@ -130,8 +130,10 @@ On any stream loss or handshake failure:
 After a new generation connects, the repository:
 
 1. Refetches `session/list`.
-2. Marks all open session stores stale.
-3. Refetches `session/history` for each open session.
+2. Marks every opened root session store stale.
+3. Refetches `session/page` for each of those sessions. A subagent child is
+   never rebuilt here: its history is addressable only through its durable
+   parent address, which the subagent view owns.
 4. Replays buffered mux frames that arrived while history was loading.
 
 The mux-open burst flows before the `CONNECTED` publish, so no live mirror is
