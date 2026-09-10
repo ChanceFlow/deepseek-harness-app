@@ -190,6 +190,12 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, StateStream<List<TodoItem>?>>{};
   final Map<String, StateStream<PermissionSelect?>> _permissionProjections =
       <String, StateStream<PermissionSelect?>>{};
+  final Map<String, StateStream<ContextPressure?>> _contextPressureProjections =
+      <String, StateStream<ContextPressure?>>{};
+  final Map<String, StateStream<ContextBreakdown?>>
+  _contextBreakdownProjections = <String, StateStream<ContextBreakdown?>>{};
+  final Map<String, int> _contextPressureSeqs = <String, int>{};
+  final Map<String, int> _contextBreakdownSeqs = <String, int>{};
   final Mutex _resyncMutex = Mutex();
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
@@ -427,7 +433,19 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> openSession(String sessionId) async {
+    if (_isSubagent(sessionId)) {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message:
+              'openSession called for subagent session $sessionId; subagents must use loadSubagentHistory',
+          level: AdapterDiagnosticLevel.warning,
+          context: 'session.open',
+        ),
+      );
+      return;
+    }
     final state = _sessionStateFor(sessionId);
+    state.markOpened();
     // Looking at the session consumes its completion reminder (dot clears)
     // and makes it the armed-selection for future running finishes.
     _openSessionId = sessionId;
@@ -471,6 +489,16 @@ class HarnessRepositoryImpl implements ChatRepository {
   bool _isCompleted(String sessionId) {
     for (final item in _sessions.value) {
       if (item.id == sessionId) return item.completed;
+    }
+    return false;
+  }
+
+  /// True when the session summary indicates a subagent child session.
+  bool _isSubagent(String sessionId) {
+    for (final item in _sessions.value) {
+      if (item.id == sessionId) {
+        return item.origin == 'subagent' || item.parentSessionId != null;
+      }
     }
     return false;
   }
@@ -948,11 +976,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
-      _sessionStateFor(sessionId).contextPressure.stream;
+      _contextPressureStateFor(sessionId).stream;
 
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
-      _sessionStateFor(sessionId).contextBreakdown.stream;
+      _contextBreakdownStateFor(sessionId).stream;
 
   @override
   Stream<PermissionSelect?> observePermissions(String sessionId) =>
@@ -1589,14 +1617,14 @@ class HarnessRepositoryImpl implements ChatRepository {
         if (value != null && value != 'null') {
           pressure = _parseContextPressureProjection(value);
         }
-        _sessionStateFor(sessionId).updateContextPressure(pressure, seq);
+        _updateContextPressure(sessionId, pressure, seq);
       case 'contextBreakdown':
         final value = frame.payload['value'];
         ContextBreakdown? breakdown;
         if (value != null && value != 'null') {
           breakdown = _parseContextBreakdownProjection(value);
         }
-        _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
+        _updateContextBreakdown(sessionId, breakdown, seq);
       case 'agentPreset':
         final preset = wireString(frame.payload, 'value');
         _sessions.value = _sessions.value
@@ -1690,12 +1718,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     final pressureValue = values['contextPressure'];
     if (pressureValue != null && pressureValue != 'null') {
       final pressure = _parseContextPressureProjection(pressureValue);
-      _sessionStateFor(sessionId).updateContextPressure(pressure, seq);
+      _updateContextPressure(sessionId, pressure, seq);
     }
     final breakdownValue = values['contextBreakdown'];
     if (breakdownValue != null && breakdownValue != 'null') {
       final breakdown = _parseContextBreakdownProjection(breakdownValue);
-      _sessionStateFor(sessionId).updateContextBreakdown(breakdown, seq);
+      _updateContextBreakdown(sessionId, breakdown, seq);
     }
     if (values.containsKey('plan')) {
       final planValue = values['plan'];
@@ -2043,6 +2071,8 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   Future<void> _resync(ConnectionState connection) async {
     await _resyncMutex.synchronized(() async {
+      _contextPressureSeqs.clear();
+      _contextBreakdownSeqs.clear();
       // The only out-of-band prep left is the per-session window re-arm.
       // Every live mirror (pending statuses, the queue projection and the
       // queue entries in the frame buffer) re-baselines in-band on the
@@ -2051,6 +2081,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       // clearing here would race — and wipe — a baseline that already
       // landed (web author comment, reference session.ts:419-426).
       for (final state in _sessionStates.values) {
+        if (!state.isOpened || _isSubagent(state.sessionId)) continue;
         state.prepareResync();
       }
       // Web SessionManager `handleConnected` parity: the list pull and every
@@ -2062,7 +2093,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       // on that session's `_mutex`; the resync mutex still serializes
       // generations, and this action awaits the whole batch, so a following
       // generation's prep never overlaps an in-flight branch.
-      final states = _sessionStates.values.toList();
+      final states = _sessionStates.values
+          .where((state) => state.isOpened && !_isSubagent(state.sessionId))
+          .toList();
       await Future.wait<void>(<Future<void>>[
         () async {
           try {
@@ -2242,6 +2275,12 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
+    if (_isSubagent(sessionId)) {
+      throw StateError(
+        'cannot load history for subagent session $sessionId with session/page; '
+        'subagents require loadSubagentHistory with their durable parent address',
+      );
+    }
     final throughSeq = beforeSeq ?? _sessionCursors[sessionId] ?? 999999999;
     final value = await _call(
       DshRpcEndpoints.sessionPage,
@@ -2306,14 +2345,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     final pressureValue = history.projectionValues?['contextPressure'];
     if (pressureValue != null) {
       final pressure = _parseContextPressureProjection(pressureValue);
-      _sessionStateFor(sessionId)
-          .updateContextPressure(pressure, history.asOfSeq);
+      _updateContextPressure(sessionId, pressure, history.asOfSeq);
     }
     final breakdownValue = history.projectionValues?['contextBreakdown'];
     if (breakdownValue != null) {
       final breakdown = _parseContextBreakdownProjection(breakdownValue);
-      _sessionStateFor(sessionId)
-          .updateContextBreakdown(breakdown, history.asOfSeq);
+      _updateContextBreakdown(sessionId, breakdown, history.asOfSeq);
     }
     return _HistoryPage(events: history.events, hasMore: history.hasMore);
   }
@@ -2598,6 +2635,40 @@ class HarnessRepositoryImpl implements ChatRepository {
     () => StateStream<PermissionSelect?>(null),
   );
 
+  StateStream<ContextPressure?> _contextPressureStateFor(String sessionId) =>
+      _contextPressureProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<ContextPressure?>(null),
+      );
+
+  StateStream<ContextBreakdown?> _contextBreakdownStateFor(String sessionId) =>
+      _contextBreakdownProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<ContextBreakdown?>(null),
+      );
+
+  void _updateContextPressure(
+    String sessionId,
+    ContextPressure? pressure,
+    int seq,
+  ) {
+    final currentSeq = _contextPressureSeqs[sessionId] ?? -1;
+    if (seq < currentSeq) return;
+    _contextPressureSeqs[sessionId] = seq;
+    _contextPressureStateFor(sessionId).value = pressure;
+  }
+
+  void _updateContextBreakdown(
+    String sessionId,
+    ContextBreakdown? breakdown,
+    int seq,
+  ) {
+    final currentSeq = _contextBreakdownSeqs[sessionId] ?? -1;
+    if (seq < currentSeq) return;
+    _contextBreakdownSeqs[sessionId] = seq;
+    _contextBreakdownStateFor(sessionId).value = breakdown;
+  }
+
   Object _parseJsonValue(String text) {
     final Object? decoded = jsonDecode(text);
     if (decoded == null) {
@@ -2677,12 +2748,6 @@ final class _SessionState {
   final StateStream<TimelineWindow> window = StateStream<TimelineWindow>(
     const TimelineWindow(),
   );
-  final StateStream<ContextPressure?> contextPressure =
-      StateStream<ContextPressure?>(null);
-  final StateStream<ContextBreakdown?> contextBreakdown =
-      StateStream<ContextBreakdown?>(null);
-  int _contextPressureSeq = -1;
-  int _contextBreakdownSeq = -1;
   final StateStream<SessionWindowStats> sessionStats =
       StateStream<SessionWindowStats>(const SessionWindowStats());
   final SessionStatsFold _statsFold = SessionStatsFold();
@@ -2692,20 +2757,15 @@ final class _SessionState {
   bool _loading = false;
   bool _hasMoreOlder = false;
   bool _loadingOlder = false;
+  bool _isOpened = false;
   List<JsonMap> _history = <JsonMap>[];
   List<ServerRequest> _pending = <ServerRequest>[];
   List<ServerRequest> _framesAfterOpen = <ServerRequest>[];
 
-  void updateContextPressure(ContextPressure? value, int seq) {
-    if (seq < _contextPressureSeq) return;
-    _contextPressureSeq = seq;
-    contextPressure.value = value;
-  }
+  bool get isOpened => _isOpened;
 
-  void updateContextBreakdown(ContextBreakdown? value, int seq) {
-    if (seq < _contextBreakdownSeq) return;
-    _contextBreakdownSeq = seq;
-    contextBreakdown.value = value;
+  void markOpened() {
+    _isOpened = true;
   }
 
   /// Pending frame-cadence publish (streaming chunks); null when the next
@@ -2743,6 +2803,7 @@ final class _SessionState {
         sessionStats.value = _statsFold.value;
         _pending = <ServerRequest>[];
         _ready = true;
+        _isOpened = true;
       } finally {
         _loading = false;
         _publish();
@@ -2751,12 +2812,11 @@ final class _SessionState {
   }
 
   void prepareResync() {
+    if (!_isOpened) return;
     _ready = false;
     _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
-    _contextPressureSeq = -1;
-    _contextBreakdownSeq = -1;
     // `_framesAfterOpen` keeps its stale entries on purpose: after this prep
     // every arriving frame parks in `_pending` until `ensureLoaded` replaces
     // the list with the replayed generation's frames, so no out-of-band

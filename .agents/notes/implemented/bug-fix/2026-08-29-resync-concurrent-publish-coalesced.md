@@ -45,7 +45,7 @@ window):
   `session/subscribed` frame — see
   [queue-rebaseline-in-band](2026-08-29-queue-rebaseline-in-band.md)) inside
   the resync mutex, then fires the
-  list/workspaces pull and every opened session's `ensureLoaded` together
+  list/workspaces pull and every opened root session's `ensureLoaded` together
   via `Future.wait` — the web `handleConnected` parity. Recovery is
   first-settled-first-published: each session releases its `_pending`
   frames when its own history lands; the selected session needs no special

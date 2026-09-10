@@ -128,10 +128,15 @@ JsonMap _assistantMessageEvent() => <String, Object?>{
 
 Future<HarnessRepositoryImpl> harnessRepository(
   HarnessFakeRpc rpc,
-  ScriptedHarnessSocket socket,
-) async {
+  ScriptedHarnessSocket socket, {
+  void Function(AdapterDiagnostic)? onDiagnostic,
+}) async {
   final manager = DshConnectionManager(rpc, socket, (_) => 10000);
-  final repository = HarnessRepositoryImpl(rpc, manager);
+  final repository = HarnessRepositoryImpl(
+    rpc,
+    manager,
+    onDiagnostic: onDiagnostic,
+  );
   await pumpEventQueue();
   return repository;
 }
@@ -880,10 +885,15 @@ JsonMap resyncAssistantTextEvent(int seq, String text) => <String, Object?>{
 /// generation (and with it one repository resync) in tests.
 Future<HarnessRepositoryImpl> resyncFixture(
   HarnessFakeRpc rpc,
-  ReconnectableHarnessSocket socket,
-) async {
+  ReconnectableHarnessSocket socket, {
+  void Function(AdapterDiagnostic)? onDiagnostic,
+}) async {
   final manager = DshConnectionManager(rpc, socket, (_) => 0);
-  final repository = HarnessRepositoryImpl(rpc, manager);
+  final repository = HarnessRepositoryImpl(
+    rpc,
+    manager,
+    onDiagnostic: onDiagnostic,
+  );
   await pumpEventQueue();
   await Future<void>.delayed(const Duration(milliseconds: 20));
   await pumpEventQueue();
@@ -4455,5 +4465,131 @@ void main() {
       (await repository.observeTimeline('c').first).whereType<TimelineQueue>(),
       isEmpty,
     );
+  });
+
+  test('resync ignores subagent sessions and unopened sessions during window rebuild', () async {
+    // Dsh wire parity: session.list carries both root and subagent sessions
+    // (with origin: 'subagent' and parentSessionId). Subagents cannot be
+    // loaded via session/page with address.kind: 'session' (the host throws
+    // session/agent-busy: subagent Sessions require their durable parent address).
+    // Resync must rebuild only opened, non-subagent session windows.
+    final rpc = HarnessFakeRpc(<Object?>[
+      resyncSessionRow('root-1'),
+      <String, Object?>{
+        'sessionId': 'subagent-1',
+        'parentSessionId': 'root-1',
+        'origin': 'subagent',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+        'projections': <String, Object?>{
+          'asOfSeq': 10,
+          'values': <String, Object?>{
+            'contextPressure': <String, Object?>{
+              'pressureTokens': 1500,
+              'projectedTokens': 1600,
+              'contextWindow': 128000,
+            },
+            'contextBreakdown': <String, Object?>{
+              'systemTokens': 500,
+              'toolsTokens': 800,
+              'messageTokens': 200,
+            },
+          },
+        },
+      },
+      resyncSessionRow('unopened-root'),
+    ]);
+    final diagnostics = <AdapterDiagnostic>[];
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(
+      rpc,
+      socket,
+      onDiagnostic: diagnostics.add,
+    );
+
+    // Verify that subagent-1 projections are accessible without creating
+    // an opened session window.
+    final pressure = await repository
+        .observeContextPressure('subagent-1')
+        .first;
+    expect(pressure?.pressureTokens, 1500);
+
+    // Even if observeTimeline is called on unopened-root, it has not been opened.
+    final unopenedTimelineStream = repository.observeTimeline('unopened-root');
+    expect(unopenedTimelineStream, isNotNull);
+
+    // Only root-1 is explicitly opened.
+    await repository.openSession('root-1');
+    await pumpEventQueue();
+
+    // Disconnect and drive resync.
+    socket.terminate();
+    await pumpEventQueue();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await pumpEventQueue();
+
+    // Ensure no resync.session diagnostic warnings occurred.
+    final resyncWarnings = diagnostics.where(
+      (d) => d.context == 'resync.session',
+    );
+    expect(resyncWarnings, isEmpty);
+
+    // Verify that session/history (or session/page) was reloaded for root-1 only,
+    // never for subagent-1 or unopened-root.
+    final historyPayloads = rpc
+        .payloads('session/history')
+        .followedBy(rpc.payloads('session/page'));
+    for (final payload in historyPayloads) {
+      final args = asJsonObject(payload['args']) ?? payload;
+      final request = asJsonObject(args['request']) ?? args;
+      final address = asJsonObject(request['address']);
+      final sid =
+          address?['sessionId'] ?? request['sessionId'] ?? payload['sessionId'];
+      expect(sid, isNot('subagent-1'));
+      expect(sid, isNot('unopened-root'));
+    }
+  });
+
+  test('openSession on subagent session emits warning and does not call session.page', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'subagent-child',
+        'parentSessionId': 'parent-root',
+        'origin': 'subagent',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final diagnostics = <AdapterDiagnostic>[];
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(
+      rpc,
+      socket,
+      onDiagnostic: diagnostics.add,
+    );
+    await pumpEventQueue();
+
+    await repository.openSession('subagent-child');
+    await pumpEventQueue();
+
+    // Diagnostic emitted naming subagent and loadSubagentHistory
+    final warning = diagnostics.firstWhere((d) => d.context == 'session.open');
+    expect(warning.message, contains('subagent-child'));
+    expect(warning.message, contains('loadSubagentHistory'));
+
+    // No history/page calls made for subagent-child with address.kind: 'session'
+    final historyPayloads = rpc
+        .payloads('session/history')
+        .followedBy(rpc.payloads('session/page'));
+    for (final payload in historyPayloads) {
+      final args = asJsonObject(payload['args']) ?? payload;
+      final request = asJsonObject(args['request']) ?? args;
+      final address = asJsonObject(request['address']);
+      final sid =
+          address?['sessionId'] ?? request['sessionId'] ?? payload['sessionId'];
+      expect(sid, isNot('subagent-child'));
+    }
   });
 }
