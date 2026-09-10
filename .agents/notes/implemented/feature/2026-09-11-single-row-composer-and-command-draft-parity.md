@@ -15,6 +15,10 @@ Status: implemented
    - Center: `Expanded(TextField)` with borderless input, 1 to 4 lines dynamic expansion.
    - Right cluster: `ContextRing` and primary action (`_PrimarySendButton` for Send/Stop).
    - Ephemeral states (`PlanChip` when plan mode is active, pending image thumbnails, and `SlashSkillCandidates` autocomplete) move to dynamic accessory trays above the single row that take zero height when idle.
+   - **Superseded**: the one-row layout cannot hold the draft field beside a
+     live session's seats — the field collapsed to zero width on a phone. The
+     dock is two bands again; see
+     [the two-band dock note](../bug-fix/2026-09-10-composer-two-band-dock.md).
 2. **Non-destructive command claim (`_applyCommandToDraft`)**: Picking an input-hinted command (`/plan`, `/goal`, `/permission`, `/feedback`) or skill replaces only the leading slash token if present, preserving any existing draft text after a space (`'/$name $remainder'` or `'/$name $trimmed'`). Bare commands (e.g. `/compact`) dispatch immediately via detached `SendPrompt('/$name')` without touching the user's draft, matching Reference Web (`InputMachine.onBeginCommand`).
 3. **Comprehensive slash candidate search**: `SlashSkillCandidates` now merges both `hostCommands(l10n)` and `widget.skills`, ranking and rendering matching host commands (with terminal icon, hint, and description) alongside skills.
 4. **Flexible permission chip layout**: Wrap `PermissionSelectChip`'s internal label text in `Flexible` and constrain maximum width so that on narrow split-pane widths (e.g. 442dp), the single-row flex never overflows.
@@ -27,7 +31,7 @@ Status: implemented
 
 ## Consequences
 
-- The composer dock is strictly a single 48~52dp row in its idle state, saving over 50dp of vertical space across every chat session.
+- The composer dock is a single 48~52dp row in its idle state while the host publishes no access chip; with one mounted the layout is superseded by [the two-band dock](../bug-fix/2026-09-10-composer-two-band-dock.md), which is 102dp idle on a 360dp phone.
 - Users can compose messages and prepend `/plan` or `/goal` at any time without losing typed text.
 - Typing `/` in the composer reveals both host commands and skills.
 - All existing and new widget tests pass without regressions.

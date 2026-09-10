@@ -12,6 +12,7 @@ import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/settings.dart';
@@ -155,9 +156,14 @@ const List<TimelineItem> _conversation = <TimelineItem>[
 /// A turn in flight: steps, a plan, stats, and a reply long enough to push
 /// the transcript past the viewport. [timeline] swaps the conversation for
 /// a shot that needs a different fold (the outline's turn groups) while
-/// keeping the session chrome identical.
-ChatUiState busyState({List<TimelineItem>? timeline}) {
+/// keeping the session chrome identical. [permissions] mounts the dock's
+/// access chip, which a live host always publishes.
+ChatUiState busyState({
+  List<TimelineItem>? timeline,
+  PermissionSelect? permissions,
+}) {
   return ChatUiState(
+    permissions: permissions,
     sessions: kSessions,
     selectedSessionId: 's1',
     timeline: timeline ?? _conversation,
@@ -198,6 +204,34 @@ ChatUiState busyState({List<TimelineItem>? timeline}) {
     ),
   );
 }
+
+/// The dock with every seat a host can mount — the access chip included —
+/// plus a draft waiting to be queued while the turn runs. The draft band is
+/// only crowded here: every other fixture mounts no access chip, so their
+/// action rows happen to fit a 360dp phone.
+ChatUiState composerCrowdedState() => busyState(permissions: kDockAccess);
+
+/// The preset table a live host publishes: three switchable presets.
+const PermissionSelect kDockAccess = PermissionSelect(
+  currentValue: 'workspace-write',
+  options: <PermissionPresetOption>[
+    PermissionPresetOption(
+      value: 'read-only',
+      name: 'read-only',
+      description: 'Reads files without changing anything',
+    ),
+    PermissionPresetOption(
+      value: 'workspace-write',
+      name: 'workspace-write',
+      description: 'Writes inside the workspace directory',
+    ),
+    PermissionPresetOption(
+      value: 'danger-full-access',
+      name: 'danger-full-access',
+      description: 'Runs every action without asking',
+    ),
+  ],
+);
 
 /// The outline's own fold: one settled turn carrying a failed tool (the
 /// ledger header wears the error dot and an error-ink failure count) and

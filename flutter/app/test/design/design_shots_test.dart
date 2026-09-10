@@ -113,6 +113,19 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'transcript', state: busyState()),
+  // The dock with every seat the host mounts and a draft waiting on a
+  // running turn: the state where a phone-width action row runs out of room.
+  DesignShot(
+    name: 'composer-crowded',
+    state: composerCrowdedState(),
+    act: (tester) async {
+      await tester.enterText(
+        find.byType(TextField).first,
+        'Hold this until the turn settles, then queue it.',
+      );
+      await settle(tester);
+    },
+  ),
   DesignShot(name: 'prose', state: proseState()),
   DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),
   DesignShot(name: 'empty', state: emptyState(), dark: false),
