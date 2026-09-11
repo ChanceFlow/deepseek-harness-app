@@ -9,6 +9,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
+import android.os.Process
 import android.os.StatFs
 import android.provider.MediaStore
 import androidx.core.app.ActivityCompat
@@ -56,6 +57,35 @@ class MainActivity : FlutterActivity() {
                                 result.error("stat_failed", e.message, null)
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // The ABI of the code this process runs, for the downloadable ASR
+        // runtime: the libraries are per-ABI and no longer ship in the APK,
+        // so the download has to match the installed build. `Process.is64Bit`
+        // says which ABI class this process is, and the device's supported
+        // list names the candidates in preference order — a 32-bit build on a
+        // 64-bit device must not fetch the 64-bit libraries. The unfiltered
+        // list follows as a fallback.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "abis" -> {
+                        val is64Bit = Process.is64Bit()
+                        val abis = ArrayList<String>()
+                        for (abi in Build.SUPPORTED_ABIS) {
+                            val abiIs64Bit =
+                                abi == "arm64-v8a" || abi == "x86_64" || abi == "riscv64"
+                            if (abiIs64Bit == is64Bit) {
+                                abis.add(abi)
+                            }
+                        }
+                        for (abi in Build.SUPPORTED_ABIS) {
+                            abis.add(abi)
+                        }
+                        result.success(abis.distinct())
                     }
                     else -> result.notImplemented()
                 }

@@ -43,6 +43,20 @@ class AsrTranscriptionChunk {
 /// Lifecycle state of an [AsrEngine].
 enum AsrEngineState { uninitialized, ready, listening, transcribing, disposed }
 
+/// The on-device runtime is not installed, so a local engine cannot start.
+///
+/// The runtime is downloaded, not bundled (`AsrRuntimeManager`): a caller
+/// that catches this tells the user where to install it instead of reporting
+/// a generic failure.
+class AsrRuntimeMissingException implements Exception {
+  const AsrRuntimeMissingException();
+
+  @override
+  String toString() =>
+      'AsrRuntimeMissingException: the on-device speech runtime is not '
+      'installed';
+}
+
 /// Abstract interface for speech recognition engines.
 ///
 /// Implementations are either on-device ([SherpaOfflineAsrEngine]-style,

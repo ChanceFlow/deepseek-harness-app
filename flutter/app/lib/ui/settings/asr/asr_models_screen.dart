@@ -48,7 +48,25 @@ class AsrModelsScreen extends StatelessWidget {
   final AsrModelsUiState uiState;
   final void Function(AsrModelsAction) onAction;
 
-  String _formatBytes(int bytes) {
+  /// The runtime row's second line: state, ABI and the download it costs.
+  static String _runtimeDetail(AppLocalizations l10n, AsrRuntimeState runtime) {
+    final String size = runtime.totalBytes > 0
+        ? AsrModelsScreen._formatBytes(runtime.totalBytes)
+        : '';
+    const String version = 'sherpa-onnx $kSherpaOnnxVersion';
+    return switch (runtime.status) {
+      AsrRuntimeStatus.ready => '$version · ${l10n.asrRuntimeReady}',
+      AsrRuntimeStatus.downloading => l10n.asrRuntimeProgress(
+        size,
+        (runtime.fraction * 100).round(),
+      ),
+      AsrRuntimeStatus.failed => l10n.asrRuntimeFailed,
+      AsrRuntimeStatus.unknown ||
+      AsrRuntimeStatus.missing => l10n.asrRuntimeSize(version, size),
+    };
+  }
+
+  static String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     const List<String> units = <String>['B', 'KB', 'MB', 'GB'];
     int unitIndex = 0;
@@ -123,6 +141,115 @@ class AsrModelsScreen extends StatelessWidget {
                 ),
               ),
             ],
+
+            // On-device runtime Card: the sherpa-onnx libraries the offline
+            // engine maps. They are downloaded, not bundled (a release APK
+            // used to carry 26 MB of them for every install), so the offline
+            // engine only works once this row says installed.
+            if (uiState.runtime case final AsrRuntimeState runtime)
+              Card(
+                elevation: 0,
+                color: scheme.surfaceContainerLow,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(kShapeCard),
+                  side: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              l10n.asrRuntimeTitle,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          _StatusBadge(
+                            status: switch (runtime.status) {
+                              AsrRuntimeStatus.ready =>
+                                AsrModelStatus.downloaded,
+                              AsrRuntimeStatus.downloading =>
+                                AsrModelStatus.downloading,
+                              AsrRuntimeStatus.failed => AsrModelStatus.failed,
+                              AsrRuntimeStatus.unknown ||
+                              AsrRuntimeStatus.missing => AsrModelStatus.idle,
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.asrRuntimeDesc,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        uiState.runtimeAvailable
+                            ? _runtimeDetail(l10n, runtime)
+                            : l10n.asrRuntimeUnavailable,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (runtime.isDownloading) ...<Widget>[
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(value: runtime.fraction),
+                      ],
+                      if (runtime.errorMessage
+                          case final String error) ...<Widget>[
+                        const SizedBox(height: 8),
+                        Text(
+                          error,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: <Widget>[
+                          if (runtime.isReady)
+                            OutlinedButton.icon(
+                              onPressed: runtime.isDownloading
+                                  ? null
+                                  : () => onAction(
+                                      const UninstallAsrRuntimeAction(),
+                                    ),
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: Text(l10n.asrRuntimeDelete),
+                            )
+                          else
+                            FilledButton.icon(
+                              onPressed:
+                                  runtime.isDownloading ||
+                                      !uiState.runtimeAvailable
+                                  ? null
+                                  : () => onAction(
+                                      const InstallAsrRuntimeAction(),
+                                    ),
+                              icon: const Icon(
+                                Icons.download_outlined,
+                                size: 18,
+                              ),
+                              label: Text(l10n.asrRuntimeInstall),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // Preferences Card: Default source + Cellular toggle
             Card(

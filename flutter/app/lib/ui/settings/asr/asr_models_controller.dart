@@ -42,6 +42,8 @@ class AsrModelsUiState {
     this.errorMessage,
     this.isLoading = false,
     this.cloud,
+    this.runtime,
+    this.runtimeAvailable = true,
   });
 
   final List<AsrModelCardState> models;
@@ -58,6 +60,15 @@ class AsrModelsUiState {
   /// settings store loads (or when the surface runs without one).
   final OnlineAsrSettings? cloud;
 
+  /// Install state of the downloaded on-device runtime (sherpa-onnx +
+  /// onnxruntime); null on a surface that owns no runtime manager.
+  final AsrRuntimeState? runtime;
+
+  /// Whether this build publishes a runtime for the device's ABI. False on a
+  /// device the release has no libraries for, where installing is impossible
+  /// rather than merely not done yet.
+  final bool runtimeAvailable;
+
   AsrModelsUiState copyWith({
     List<AsrModelCardState>? models,
     ModelSource? defaultSource,
@@ -70,6 +81,8 @@ class AsrModelsUiState {
     bool clearError = false,
     bool? isLoading,
     OnlineAsrSettings? cloud,
+    AsrRuntimeState? runtime,
+    bool? runtimeAvailable,
   }) {
     return AsrModelsUiState(
       models: models ?? this.models,
@@ -82,6 +95,8 @@ class AsrModelsUiState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isLoading: isLoading ?? this.isLoading,
       cloud: cloud ?? this.cloud,
+      runtime: runtime ?? this.runtime,
+      runtimeAvailable: runtimeAvailable ?? this.runtimeAvailable,
     );
   }
 }
@@ -136,6 +151,16 @@ class RefreshAsrStateAction extends AsrModelsAction {
   const RefreshAsrStateAction();
 }
 
+/// Downloads and installs the on-device ASR runtime.
+class InstallAsrRuntimeAction extends AsrModelsAction {
+  const InstallAsrRuntimeAction();
+}
+
+/// Deletes the installed on-device ASR runtime.
+class UninstallAsrRuntimeAction extends AsrModelsAction {
+  const UninstallAsrRuntimeAction();
+}
+
 /// Switches voice input between on-device and online transcription.
 class SetVoiceInputModeAction extends AsrModelsAction {
   const SetVoiceInputModeAction(this.mode);
@@ -162,16 +187,26 @@ class SaveTencentConfigAction extends AsrModelsAction {
 
 /// Controller managing ASR models UI lifecycle.
 class AsrModelsController {
-  AsrModelsController({this.manager, this._cloudSettings}) {
+  AsrModelsController({
+    this.manager,
+    this.runtimeManager,
+    OnlineAsrSettingsStore? cloudSettings,
+    // ignore: prefer_initializing_formals
+  }) : _cloudSettings = cloudSettings {
     _init();
   }
 
   final AsrModelManager? manager;
+
+  /// Owns the downloaded sherpa-onnx runtime; null on a surface that only
+  /// manages models (tests, desktop).
+  final AsrRuntimeManager? runtimeManager;
   final OnlineAsrSettingsStore? _cloudSettings;
   final StreamController<AsrModelsUiState> _stateController =
       StreamController<AsrModelsUiState>.broadcast();
   StreamSubscription<Map<String, ModelRegistryEntry>>? _registrySub;
   StreamSubscription<OnlineAsrSettings>? _cloudSettingsSub;
+  StreamSubscription<AsrRuntimeState>? _runtimeSub;
 
   AsrModelsUiState _state = const AsrModelsUiState(isLoading: true);
   AsrModelsUiState get state => _state;
@@ -181,6 +216,13 @@ class AsrModelsController {
     _cloudSettingsSub = _cloudSettings?.updates.listen((OnlineAsrSettings s) {
       _emit(_state.copyWith(cloud: s));
     });
+    _runtimeSub = runtimeManager?.states.listen((AsrRuntimeState runtime) {
+      _emit(_state.copyWith(runtime: runtime));
+      // A finished install changes what the offline engine can do; the
+      // registry refresh keeps the model cards' gating in step.
+      if (runtime.isReady) unawaited(_refresh());
+    });
+    unawaited(runtimeManager?.refresh());
     if (manager == null) {
       _emit(_state.copyWith(isLoading: false, cloud: _cloudSettings?.settings));
       return;
@@ -221,6 +263,7 @@ class AsrModelsController {
         activeModelId: manager!.activeModelId,
         isLoading: false,
         cloud: _cloudSettings?.settings,
+        runtimeAvailable: runtimeManager?.artifact != null,
       ),
     );
   }
@@ -258,6 +301,10 @@ class AsrModelsController {
         _emit(_state.copyWith(clearError: true));
       case RefreshAsrStateAction():
         unawaited(_refresh());
+      case InstallAsrRuntimeAction():
+        unawaited(_installRuntime());
+      case UninstallAsrRuntimeAction():
+        unawaited(_uninstallRuntime());
       case SetVoiceInputModeAction(:final VoiceInputMode mode):
         unawaited(_setVoiceInputMode(mode));
       case SetCloudProviderAction(:final OnlineAsrProvider provider):
@@ -267,6 +314,22 @@ class AsrModelsController {
       case SaveTencentConfigAction(:final TencentHunyuanAsrConfig config):
         unawaited(_saveTencent(config));
     }
+  }
+
+  Future<void> _installRuntime() async {
+    final AsrRuntimeManager? runtime = runtimeManager;
+    if (runtime == null) return;
+    try {
+      await runtime.install();
+    } catch (error) {
+      _emit(_state.copyWith(errorMessage: error.toString()));
+    }
+  }
+
+  Future<void> _uninstallRuntime() async {
+    final AsrRuntimeManager? runtime = runtimeManager;
+    if (runtime == null) return;
+    await runtime.uninstall();
   }
 
   Future<void> _setVoiceInputMode(VoiceInputMode mode) async {
@@ -345,6 +408,7 @@ class AsrModelsController {
   void dispose() {
     unawaited(_registrySub?.cancel());
     unawaited(_cloudSettingsSub?.cancel());
+    unawaited(_runtimeSub?.cancel());
     unawaited(_stateController.close());
   }
 }

@@ -20,6 +20,7 @@
 library;
 
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -28,9 +29,20 @@ import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 /// Real on-device recognizer built on sherpa-onnx.
 class SherpaOfflineAsrEngine implements AsrEngine {
-  SherpaOfflineAsrEngine();
+  SherpaOfflineAsrEngine({AsrRuntimeManager? runtimeManager})
+    : _runtime = runtimeManager;
+
+  /// Locates the downloaded sherpa-onnx runtime; null on a caller that maps
+  /// the libraries itself (the loader then resolves them from the app's
+  /// native library directory, which no release APK populates any more).
+  final AsrRuntimeManager? _runtime;
 
   static bool _bindingsInitialized = false;
+
+  /// Keeps the preloaded onnxruntime image referenced for the process
+  /// lifetime: the c-api library resolves it as a `DT_NEEDED`, and releasing
+  /// the handle could unload it under a live recognizer.
+  static DynamicLibrary? _preloadedOnnxRuntime;
 
   final StreamController<AsrTranscriptionChunk> _chunkController =
       StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
@@ -73,7 +85,7 @@ class SherpaOfflineAsrEngine implements AsrEngine {
       );
     }
     if (!_bindingsInitialized) {
-      sherpa.initBindings();
+      await _initializeBindings();
       _bindingsInitialized = true;
     }
 
@@ -92,6 +104,26 @@ class SherpaOfflineAsrEngine implements AsrEngine {
     }
 
     _state = AsrEngineState.ready;
+  }
+
+  /// Points the sherpa-onnx bindings at the installed runtime.
+  ///
+  /// The libraries are downloaded (`AsrRuntimeManager`), so they live in app
+  /// storage rather than the APK's native library directory: `initBindings`
+  /// takes the directory and opens `libsherpa-onnx-c-api.so` from it by
+  /// absolute path, and onnxruntime — the c-api library's `DT_NEEDED` — is
+  /// preloaded from the same directory first, because the linker's search
+  /// paths no longer contain either file.
+  Future<void> _initializeBindings() async {
+    final AsrRuntimeManager? runtime = _runtime;
+    if (runtime == null) {
+      sherpa.initBindings();
+      return;
+    }
+    final String? dir = await runtime.installedLibraryDir();
+    if (dir == null) throw const AsrRuntimeMissingException();
+    _preloadedOnnxRuntime ??= DynamicLibrary.open('$dir/libonnxruntime.so');
+    sherpa.initBindings(dir);
   }
 
   void _disposeRecognizers() {

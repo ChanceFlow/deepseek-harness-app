@@ -21,7 +21,9 @@
 #                                            is the latest STABLE v* tag with
 #                                            its patch bumped (v0.0.2 -> 0.0.3)
 #   - artifacts:       dsh-android-<versionName>-<abi>.apk (+ .sha256 sidecar),
-#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64)
+#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64), plus the
+#                      downloadable ASR runtime per ABI
+#                      (asr-runtime-<sherpaVersion>-<abi>-<lib>.so)
 #   - release titles:  DSH Android <versionName>
 #   - dev channel:     rolling prerelease on the tag `dev` (no `v` prefix —
 #     deliberately outside the `v*` tag trigger); every dev build replaces
@@ -209,6 +211,26 @@ jobs:
             NAME="dsh-android-$VERSION-$abi.apk"
             cp "$SRC" "$RUNNER_TEMP/artifacts/$NAME"
             (cd "$RUNNER_TEMP/artifacts" && sha256sum "$NAME" > "$NAME.sha256")
+          done
+
+          # The on-device ASR runtime is downloaded, not bundled: the APK
+          # excludes these libraries and the app fetches the pair matching its
+          # own ABI from this release (`packages/asr` AsrRuntimeManager, whose
+          # manifest pins the sizes and hashes regenerated from the same
+          # packages this step copies).
+          PUB="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          SHERPA="$(basename "$(ls -d "$PUB"/sherpa_onnx-* | head -1)")"
+          SHERPA="${SHERPA#sherpa_onnx-}"
+          for pair in \
+            "arm64-v8a:sherpa_onnx_android_arm64" \
+            "armeabi-v7a:sherpa_onnx_android_armeabi" \
+            "x86_64:sherpa_onnx_android_x86_64"; do
+            abi="${pair%%:*}"
+            pkg="${pair##*:}"
+            jni="$(ls -d "$PUB/$pkg"-*/android/src/main/jniLibs/"$abi" | head -1)"
+            for lib in libonnxruntime.so libsherpa-onnx-c-api.so; do
+              cp "$jni/$lib" "$RUNNER_TEMP/artifacts/asr-runtime-$SHERPA-$abi-$lib"
+            done
           done
           ls -1 "$RUNNER_TEMP/artifacts"
           echo "artifact=$RUNNER_TEMP/artifacts" >> "$GITHUB_OUTPUT"

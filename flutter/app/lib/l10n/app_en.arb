@@ -1570,6 +1570,40 @@
   "asrDefaultSourceDesc": "Choose preferred model mirror repository",
   "asrAllowCellular": "Allow cellular downloads",
   "asrAllowCellularDesc": "Download models over mobile data (may incur carrier data fees)",
+  "asrRuntimeTitle": "On-device engine",
+  "asrRuntimeDesc": "Speech recognition runs locally with sherpa-onnx. The engine is downloaded during setup instead of shipping inside the APK, which keeps the download small.",
+  "asrRuntimeReady": "Installed",
+  "asrRuntimeProgress": "{size} \u00b7 {percent}%",
+  "@asrRuntimeProgress": {
+    "description": "Runtime download progress: bytes and percent.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "asrRuntimeFailed": "Install failed",
+  "asrRuntimeSize": "{version} \u00b7 {size} to download",
+  "@asrRuntimeSize": {
+    "description": "Runtime identity and one-time download size.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "asrRuntimeUnavailable": "Not available for this device",
+  "asrRuntimeInstall": "Install engine",
+  "asrRuntimeDelete": "Delete engine",
+  "voiceInputNoRuntimeTitle": "Speech Engine Required",
+  "voiceInputNoRuntimeBody": "Install the on-device speech engine in Settings \u2192 Voice input to use offline voice input.",
+  "voiceInputRuntimeNotInstalled": "The on-device speech engine isn''t installed. Install it in Settings \u2192 Voice input.",
   "asrModelStatusIdle": "Not downloaded",
   "asrModelStatusDownloading": "Downloading",
   "asrModelStatusDownloaded": "Installed",

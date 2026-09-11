@@ -41,7 +41,11 @@ adb install dsh-android-<version>-arm64-v8a.apk
 | `-armeabi-v7a` | 更早的 32 位手机 |
 | `-x86_64` | 模拟器与 Chromebook |
 
-每个 APK 都有自己的 `.sha256` 校验文件。
+每个 APK 都有自己的 `.sha256` 校验文件。每个发布还按 ABI 附带可下载的 ASR
+运行时（`asr-runtime-<sherpaVersion>-<abi>-libonnxruntime.so` 与
+`…-libsherpa-onnx-c-api.so`）：启用离线语音输入时，应用会抓取与自身 ABI 匹配的
+那一对，并校验 `packages/asr/lib/src/runtime/asr_runtime_manifest.dart` 里的
+尺寸与哈希。
 
 ### 2. 在电脑上启动主机
 
@@ -96,7 +100,8 @@ URL 为种子，所以在你添加第二台主机（笔记本、构建机、隧�
 - **端侧语音输入与 ASR** — 100% 离线端侧语音识别（流式 Zipformer，
   离线 SenseVoice 与 Fun-ASR-Nano），集成实时声浪波形底栏、计时器与流式文字上屏；
   另有可选的在线模式，可使用用户自备密钥将同一路麦克风音频流式送至火山引擎豆包
-  或腾讯混元实时语音识别。
+  或腾讯混元实时语音识别。模型与 sherpa-onnx 引擎都在你启用时按需下载，都不打进
+  APK（光引擎每个安装就占 26 MB），因此没开这个功能前安装包一直很小。
 - **多主机** — 在本机配置多个 dsh 主机，随时切换由哪个驱动聊天。按主机还可选择
   接受该主机的 TLS 证书，用于自签名或内网 CA 签发的场景。
 - **工作区** — 从路径或应用内主机目录浏览器创建、重命名、删除、手动排序。
