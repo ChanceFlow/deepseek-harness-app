@@ -54,14 +54,19 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   `workingNotificationBody`、`waitingApprovalBody`、`waitingPlanReviewBody`、
   `waitingAnswerBody`；done 复用 `turnCompleteTitle`。en/zh 同改，
   gen-l10n 重跑。
-- 无 FCM/无后台保活：进程被杀后通知停止更新，重启后 reconcile 接管。
+- 无 FCM：进程被杀后通知停止更新，重启后 reconcile 接管。后台**执行**保活
+  不在本 note 的范围内：需求当时只是可见性，2026-09-11 起由
+  [后台保活前台服务](2026-09-11-background-keep-alive-foreground-service.md)
+  以"有在飞的活"为范围提供（对可见性需求的结论不变）。
 
 ## Alternatives considered
 
 - **单条聚合通知**（"N 个会话在工作中"）：被否，用户要按会话看到"在做
   什么"，且拆成每会话一行天然获得系统的分组折叠。
 - **WorkManager / 前台服务**：被否，需求只是可见性而非执行保活，常驻通
-  知不需要 FGS 的进程承诺与权限成本。
+  知不需要 FGS 的进程承诺与权限成本。执行保活的需求后来出现，由
+  [后台保活前台服务](2026-09-11-background-keep-alive-foreground-service.md)
+  另行采纳 FGS；此处对"仅可见性"情形的结论不变。
 - **fold 自持 running 边沿**（仿 NotificationDetector）：被否，domain 已
   有 completed 事实，重复造边沿会让冷启动无法直接投影出期望态，且 fold
   不再是可单测的纯函数。

@@ -4500,6 +4500,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'seconds'**
   String get scheduleUnitSeconds;
+
+  /// System notification channel name for the keep-alive foreground service.
+  ///
+  /// In en, this message translates to:
+  /// **'Background connection'**
+  String get keepAliveChannelName;
+
+  /// System notification channel description for the keep-alive foreground service.
+  ///
+  /// In en, this message translates to:
+  /// **'Keeps the connection to your host open while agent work is in flight.'**
+  String get keepAliveChannelDescription;
+
+  /// Title of the ongoing notification the keep-alive foreground service posts.
+  ///
+  /// In en, this message translates to:
+  /// **'Keeping your session connected'**
+  String get keepAliveNotificationTitle;
+
+  /// Body of the ongoing notification the keep-alive foreground service posts.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent work continues in the background; you will be notified when it finishes.'**
+  String get keepAliveNotificationBody;
+
+  /// Title of the Settings row that states and requests the Android battery-optimization exemption.
+  ///
+  /// In en, this message translates to:
+  /// **'Background connection'**
+  String get batteryOptimizationTitle;
+
+  /// Body of the exemption row while the app is not on the system's battery-optimization exemption list.
+  ///
+  /// In en, this message translates to:
+  /// **'Android can suspend this app\'\'s network and close the connection while the screen is off. Allow background running so agent work keeps its connection.'**
+  String get batteryOptimizationNotExemptBody;
+
+  /// Body of the exemption row once the app is on the system's battery-optimization exemption list.
+  ///
+  /// In en, this message translates to:
+  /// **'Background running is allowed, so the system will not suspend the connection while agent work is in flight.'**
+  String get batteryOptimizationExemptBody;
+
+  /// Label of the button that opens the system dialog requesting the battery-optimization exemption.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get batteryOptimizationAllowAction;
+
+  /// Stated under the exemption row when the system dialog could not be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the battery optimization dialog on this device.'**
+  String get batteryOptimizationRequestFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -62,6 +62,14 @@ class _AppRootState extends ConsumerState<AppRoot> {
   @override
   Widget build(BuildContext context) {
     final destination = ref.watch(appDestinationProvider);
+    // Watched for the app's lifetime: the coordinator owns the keep-alive
+    // foreground service that holds the connection open while agent work is
+    // in flight, and it needs the enabled-backend watch set to stay live.
+    ref.watch(keepAliveCoordinatorProvider);
+    // Also watched for the app's lifetime: it turns the platform's
+    // network-availability hints into an immediate reconnect for every
+    // enabled backend instead of waiting out the loss backoff.
+    ref.watch(networkReconnectProvider);
     // Foreground events become the toast; a later event replaces the one
     // on screen. The merged provider is watched here so every backend's
     // notification center stays alive for the app's lifetime.

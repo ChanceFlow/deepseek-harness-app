@@ -53,9 +53,14 @@ import '../config.dart';
 import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
+import '../notifications/notification_localizations.dart';
 import '../notifications/system_notifier.dart';
 import '../notifications/watched_session.dart';
 import '../local_state/local_state_providers.dart';
+import '../platform/keep_alive_coordinator.dart';
+import '../platform/keep_alive_service.dart';
+import '../platform/network_reconnect.dart';
+import '../platform/network_status.dart';
 import '../ui/chat/chat_controller.dart';
 import '../ui/chat/chat_local_state.dart';
 import '../ui/chat/chat_ui_state.dart';
@@ -396,6 +401,37 @@ final backendConnectionStateProvider = StreamProvider.family
       yield* manager.state.stream;
     });
 
+/// Android default-network availability hints. One instance for the app; the
+/// [NetworkStatus] seam registers the host's connectivity callback on its
+/// first listener and releases it on the last cancellation.
+final networkStatusProvider = Provider<NetworkStatus>((ref) {
+  final status = NetworkStatus();
+  ref.onDispose(() => unawaited(status.dispose()));
+  return status;
+});
+
+/// Wakes every enabled backend's connection the moment the device's network
+/// comes back.
+///
+/// A generation lost to a network drop has already started its backoff, and
+/// that delay was chosen for a network that no longer exists. Each
+/// availability hint asks every live manager for a fresh generation at once,
+/// so unlocking the phone or rejoining Wi-Fi recovers in a loop turn instead
+/// of after up to the 10 s cap. Read by [AppRoot] to keep the binder — and
+/// with it the host callback — alive for the app's lifetime.
+final networkReconnectProvider = Provider<NetworkReconnectBinder>((ref) {
+  final binder = NetworkReconnectBinder(
+    available: ref.watch(networkStatusProvider).available,
+    reconnectAll: () {
+      for (final manager in ref.read(allBackendConnectionsProvider).values) {
+        manager.reconnectNow();
+      }
+    },
+  )..start();
+  ref.onDispose(binder.dispose);
+  return binder;
+});
+
 /// The domain-facing repository per backend.
 final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, String>((
   ref,
@@ -549,6 +585,133 @@ class _LifecycleSignal with WidgetsBindingObserver {
     if (!_controller.isClosed) _controller.add(null);
   }
 }
+
+/// The keep-alive foreground-service seam. Overridden where the platform
+/// channel does not exist (widget tests, desktop hosts).
+final keepAliveServiceProvider = Provider<KeepAliveService>(
+  (ref) => const KeepAliveService(),
+);
+
+/// The keep-alive notification's copy, resolved at request time from the
+/// platform locale — the same launch-locale rule [SystemNotifier] follows
+/// for every other notification.
+final keepAliveNotificationCopyProvider = Provider<KeepAliveCopyResolver>((
+  ref,
+) {
+  return () {
+    final l10n = resolveAppLocalizations(
+      WidgetsBinding.instance.platformDispatcher.locale,
+    );
+    return KeepAliveNotificationCopy(
+      title: l10n.keepAliveNotificationTitle,
+      text: l10n.keepAliveNotificationBody,
+      channelName: l10n.keepAliveChannelName,
+      channelDescription: l10n.keepAliveChannelDescription,
+    );
+  };
+});
+
+/// The Android foreground service that holds the mux open while agent work
+/// is in flight.
+///
+/// Android freezes a cached process — screen lock included — which stops the
+/// Dart isolate and kills the socket; the service keeps the process out of
+/// that state and holds a partial wake lock, so a turn started before the
+/// phone was pocketed still finishes and notifies. It is scoped to work in
+/// flight: the first running (or user-waiting) session starts it, the last
+/// one settling stops it after [kKeepAliveLinger].
+///
+/// The merged fact comes from each enabled backend's notification center —
+/// the one owner of the session stream — and is re-read on lifecycle changes
+/// so a start Android refused in the background is retried on resume. On a
+/// host without the channel this provider is inert.
+final keepAliveCoordinatorProvider = Provider<KeepAliveCoordinator>((ref) {
+  final coordinator = KeepAliveCoordinator(
+    service: ref.watch(keepAliveServiceProvider),
+    copy: ref.watch(keepAliveNotificationCopyProvider),
+    onFailure: (error, stackTrace) {
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        level: ErrorLogLevel.warning,
+        context: const <String, Object?>{'component': 'keepAliveCoordinator'},
+      );
+      DebugTelemetry.instance?.log(
+        'keepAliveCoordinator: $error',
+        level: 'warn',
+      );
+    },
+  );
+
+  final centers = <String, AppNotificationCenter>{};
+  final centerSubs = <String, ProviderSubscription<AppNotificationCenter>>{};
+  final streamSubs = <String, StreamSubscription<bool>>{};
+
+  void recompute() {
+    coordinator.update(
+      workInFlight: centers.values.any((center) => center.hasWorkInFlight),
+    );
+  }
+
+  void reconcile() {
+    final state =
+        ref.read(backendRegistryStateProvider).value ??
+        const BackendRegistryState();
+    final enabled = <String>{
+      for (final backend in state.enabledBackends) backend.id,
+    };
+    for (final id in centerSubs.keys.toList()) {
+      if (enabled.contains(id)) continue;
+      unawaited(streamSubs.remove(id)?.cancel());
+      centerSubs.remove(id)?.close();
+      centers.remove(id);
+    }
+    for (final backend in state.enabledBackends) {
+      if (centerSubs.containsKey(backend.id)) continue;
+      centerSubs[backend.id] = ref.listen<AppNotificationCenter>(
+        appNotificationCenterProvider(backend.id),
+        (previous, next) {
+          unawaited(streamSubs[backend.id]?.cancel());
+          streamSubs[backend.id] = next.workInFlightChanges.listen(
+            (_) => recompute(),
+          );
+          centers[backend.id] = next;
+          recompute();
+        },
+        fireImmediately: true,
+      );
+    }
+    recompute();
+  }
+
+  final registrySub = ref.listen<AsyncValue<BackendRegistryState>>(
+    backendRegistryStateProvider,
+    (previous, next) => reconcile(),
+    fireImmediately: true,
+  );
+  // The lifecycle signal is the retry point for a start Android refused
+  // while the app was in the background.
+  final lifecycleSub = ref
+      .watch(appLifecycleChangesProvider)
+      .listen((_) => recompute());
+
+  ref.onDispose(() {
+    registrySub.close();
+    unawaited(lifecycleSub.cancel());
+    for (final sub in streamSubs.values) {
+      unawaited(sub.cancel());
+    }
+    streamSubs.clear();
+    for (final sub in centerSubs.values) {
+      sub.close();
+    }
+    centerSubs.clear();
+    centers.clear();
+    unawaited(coordinator.dispose());
+  });
+
+  return coordinator;
+});
 
 /// Merged foreground channel across every enabled backend: the app-root
 /// toast host listens here and watches the family, which keeps every

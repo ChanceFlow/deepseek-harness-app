@@ -753,5 +753,14 @@
   "scheduleUnitMinute": "分钟",
   "scheduleUnitMinutes": "分钟",
   "scheduleUnitSecond": "秒",
-  "scheduleUnitSeconds": "秒"
+  "scheduleUnitSeconds": "秒",
+  "keepAliveChannelName": "后台连接",
+  "keepAliveChannelDescription": "在 agent 任务运行期间保持与主机的连接。",
+  "keepAliveNotificationTitle": "正在保持会话连接",
+  "keepAliveNotificationBody": "后台任务继续执行，完成后会通知你。",
+  "batteryOptimizationTitle": "后台连接",
+  "batteryOptimizationNotExemptBody": "熄屏后 Android 可能暂停本应用的网络并断开连接。允许后台运行可让 agent 任务保持连接。",
+  "batteryOptimizationExemptBody": "已允许后台运行，系统不会在 agent 任务进行时暂停连接。",
+  "batteryOptimizationAllowAction": "允许",
+  "batteryOptimizationRequestFailed": "无法在此设备上打开电池优化对话框。"
 }

@@ -90,6 +90,56 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // Keep-alive foreground service control. Dart starts it while agent
+        // work is in flight and stops it when the last session settles; the
+        // notification copy is passed in so user-visible text stays owned by
+        // the ARB locales. A refused start (Android 12+ rejects foreground
+        // starts from the background) answers with an error the caller
+        // records, never a crash.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/keep_alive")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        val title = call.argument<String>("title")
+                        val text = call.argument<String>("text")
+                        if (title == null || text == null) {
+                            result.error("bad_args", "title and text are required", null)
+                        } else {
+                            val channelName = call.argument<String>("channelName") ?: title
+                            val channelDescription =
+                                call.argument<String>("channelDescription") ?: text
+                            try {
+                                DshKeepAliveService.start(
+                                    this,
+                                    title,
+                                    text,
+                                    channelName,
+                                    channelDescription,
+                                )
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("start_refused", e.message, null)
+                            }
+                        }
+                    }
+                    "stop" -> {
+                        DshKeepAliveService.stop(this)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Battery-optimization exemption status and its system dialog. The
+        // Settings row reads the status and opens the dialog; a build without
+        // the manifest permission answers "nothing opened" instead of
+        // pretending otherwise.
+        BatteryOptimizationBridge.register(this, flutterEngine.dartExecutor.binaryMessenger)
+
+        // Default-network availability hints: the client reconnects the mux
+        // the moment the network returns instead of waiting out its backoff.
+        NetworkStatusBridge.register(this, flutterEngine)
+
         // Live capture diagnostics: what the native side sees, for the
         // in-app debug strip. Distinguishes "device feeds silence"
         // (maxAbs stays 0) from "events never reach Dart" (reads grow,

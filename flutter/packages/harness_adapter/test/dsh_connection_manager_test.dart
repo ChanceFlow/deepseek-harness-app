@@ -296,6 +296,141 @@ void main() {
     });
   });
 
+  test(
+    'reconnectNow skips a pending backoff and restarts the sequence at 0',
+    () {
+      fakeAsync((async) {
+        final attempts = <int>[];
+        final socket = ScriptedSocket();
+        final manager = DshConnectionManager(socket, (attempt) {
+          attempts.add(attempt);
+          return 1000;
+        });
+
+        manager.start();
+        async.flushMicrotasks();
+        // Two consecutive losses raise the sequence to attempt 1, leaving a 1s
+        // backoff wait pending.
+        socket.closeAllStreams();
+        async.flushMicrotasks();
+        expect(attempts, <int>[0]);
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+        socket.closeAllStreams();
+        async.flushMicrotasks();
+        expect(attempts, <int>[0, 1]);
+        expect(manager.state.value.phase, ConnectionPhase.reconnecting);
+        expect(socket.connectCount, 2);
+
+        // No time passes: the request itself starts the next generation.
+        manager.reconnectNow();
+        async.flushMicrotasks();
+
+        expect(
+          socket.connectCount,
+          3,
+          reason: 'the generation dials on the interrupt, not after 1s',
+        );
+
+        // The next loss backs off from the base again, not from attempt 2.
+        socket.closeAllStreams();
+        async.flushMicrotasks();
+        expect(attempts, <int>[0, 1, 0]);
+        manager.stop();
+      });
+    },
+  );
+
+  test('reconnectNow tears a live generation down and reconnects at once', () {
+    fakeAsync((async) {
+      final diagnostics = <AdapterDiagnostic>[];
+      final attempts = <int>[];
+      final socket = SequencedSocket(<List<ServerRequest>>[
+        <ServerRequest>[readyFrame(home: '/first')],
+        <ServerRequest>[readyFrame(home: '/second')],
+      ]);
+      final manager = DshConnectionManager(socket, (attempt) {
+        attempts.add(attempt);
+        return 5000;
+      }, onDiagnostic: diagnostics.add);
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 1));
+      expect(manager.state.value.phase, ConnectionPhase.connected);
+      expect(manager.state.value.hostDescription?.home, '/first');
+      expect(socket.connectCount, 1);
+
+      manager.reconnectNow();
+      async.flushMicrotasks();
+
+      expect(
+        socket.connectCount,
+        2,
+        reason: 'the live generation was torn down',
+      );
+      expect(manager.state.value.phase, ConnectionPhase.connected);
+      expect(manager.state.value.generation, 2);
+      expect(manager.state.value.hostDescription?.home, '/second');
+      expect(
+        attempts,
+        isEmpty,
+        reason:
+            'a reconnect request skips the retry policy, it does not delay it',
+      );
+      final request = diagnostics.firstWhere(
+        (d) => d.message.startsWith('Immediate reconnect requested'),
+      );
+      expect(request.level, AdapterDiagnosticLevel.debug);
+      expect(request.context, 'connection_manager');
+      expect(request.message, contains('tearing down the live generation'));
+      manager.stop();
+    });
+  });
+
+  test('reconnectNow before start leaves the first generation untouched', () {
+    fakeAsync((async) {
+      final socket = ScriptedSocket(frames: <ServerRequest>[readyFrame()]);
+      final manager = DshConnectionManager(socket, (_) => 1000);
+
+      manager.reconnectNow();
+      async.elapse(const Duration(seconds: 1));
+      expect(socket.connectCount, 0);
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 1));
+
+      expect(socket.connectCount, 1);
+      expect(manager.state.value.phase, ConnectionPhase.connected);
+      expect(manager.state.value.generation, 1);
+      manager.stop();
+    });
+  });
+
+  test('reconnectNow is a no-op after stop', () {
+    fakeAsync((async) {
+      final attempts = <int>[];
+      final socket = ScriptedSocket(frames: <ServerRequest>[readyFrame()]);
+      final manager = DshConnectionManager(socket, (attempt) {
+        attempts.add(attempt);
+        return 1000;
+      });
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 1));
+      expect(socket.connectCount, 1);
+
+      manager.stop();
+      manager.reconnectNow();
+      async.elapse(const Duration(seconds: 30));
+
+      expect(socket.connectCount, 1, reason: 'a stopped manager dials nothing');
+      expect(attempts, isEmpty);
+    });
+  });
+
   test('exponential backoff reaches its configured cap', () {
     for (final injectedRandom in <int Function(int)>[
       (_) => 0,
