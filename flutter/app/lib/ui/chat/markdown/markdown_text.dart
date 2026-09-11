@@ -26,6 +26,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../theme/theme.dart';
+import 'code_highlight.dart';
 import 'incremental.dart';
 import 'markdown_parser.dart';
 
@@ -34,6 +35,10 @@ const double _kMarkerColumn = 22;
 
 /// Indent one nesting level adds.
 const double _kNestIndent = 16;
+
+/// Line count from which a fenced block grows a line-number gutter. Below it
+/// the numbers cost a column and buy nothing.
+const int _kLineNumberFloor = 8;
 
 class MarkdownText extends StatefulWidget {
   const MarkdownText({required this.text, super.key});
@@ -384,21 +389,98 @@ class _MarkdownTextState extends State<MarkdownText> {
               ),
             ],
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Text(
-              block.code,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
-                height: 1.45,
-                color: scheme.onSurface,
-              ),
-            ),
-          ),
+          _codeBody(context, block),
         ],
       ),
     );
   }
+
+  /// The fence body: a fixed line-number gutter beside a horizontally
+  /// scrolling, token-coloured body.
+  ///
+  /// Highlighting runs only on a closed fence in a language
+  /// [codeLanguageIsKnown] accepts. A streaming fence re-lexes on every chunk
+  /// and its tail is exactly the text still moving, so it renders plain until
+  /// it settles — the same reasoning that freezes all but the last two blocks
+  /// ([incremental.dart]).
+  Widget _codeBody(BuildContext context, CodeBlock block) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final base = theme.textTheme.bodySmall?.copyWith(
+      fontFamily: 'monospace',
+      height: 1.45,
+      color: scheme.onSurface,
+    );
+    final highlighted = !block.open && codeLanguageIsKnown(block.language);
+    final tokens = highlighted
+        ? tokenizeCode(block.code, block.language)
+        : <CodeToken>[CodeToken(CodeTokenKind.plain, block.code)];
+    final lineCount = '\n'.allMatches(block.code).length + 1;
+    // A short snippet reads fine without them; the gutter earns its column
+    // once a reader is locating a line rather than reading the whole block.
+    final showNumbers = lineCount >= _kLineNumberFloor;
+    final numbers = [for (var line = 1; line <= lineCount; line++) '$line']
+        .join('\n');
+
+    final body = highlighted
+        ? Text.rich(
+            TextSpan(
+              children: [
+                for (final token in tokens)
+                  if (token.text.isNotEmpty)
+                    TextSpan(
+                      text: token.text,
+                      style: _tokenStyle(scheme, token.kind),
+                    ),
+              ],
+            ),
+            style: base,
+            softWrap: false,
+          )
+        : Text(block.code, style: base, softWrap: false);
+
+    final scroller = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: body,
+    );
+    if (!showNumbers) return scroller;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Text(
+            numbers,
+            style: base?.copyWith(
+              color: scheme.outline,
+              // Digits must not shuffle the gutter as the count grows.
+              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+            ),
+            textAlign: TextAlign.right,
+            softWrap: false,
+          ),
+        ),
+        Expanded(child: scroller),
+      ],
+    );
+  }
+
+  /// Paint one token class. `plain` keeps the code body's own ink, so an
+  /// unclassified run reads exactly as it did before highlighting.
+  static TextStyle? _tokenStyle(ColorScheme scheme, CodeTokenKind kind) =>
+      switch (kind) {
+        CodeTokenKind.plain => null,
+        CodeTokenKind.comment => TextStyle(
+          color: scheme.onSurfaceVariant,
+          fontStyle: FontStyle.italic,
+        ),
+        CodeTokenKind.string => TextStyle(color: scheme.syntaxString),
+        CodeTokenKind.number => TextStyle(color: scheme.syntaxNumber),
+        CodeTokenKind.keyword => TextStyle(
+          color: scheme.syntaxKeyword,
+          fontWeight: FontWeight.w600,
+        ),
+      };
 
   /// Resolve theme styles first, then build spans in a plain builder.
   InlineSpan _inlineSpan(BuildContext context, List<MarkdownInline> inlines) {

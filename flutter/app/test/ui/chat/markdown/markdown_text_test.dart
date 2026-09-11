@@ -23,6 +23,51 @@ Future<void> _pump(WidgetTester tester, String body) {
   );
 }
 
+/// Pumps the same tree under one brightness, so a colour assertion can be made
+/// twice: a value baked into the widget passes one and fails the other. The
+/// settle pump is the theme lerp `MaterialApp` runs between two themes — read
+/// the colours before it ends and the old scheme is still on screen.
+Future<void> _pumpThemed(
+  WidgetTester tester,
+  String body,
+  ThemeData theme,
+) async {
+  await tester.pumpWidget(
+    l10nApp(
+      theme: theme,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: MarkdownText(text: body),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// The ink a rendered code body carries: [ink] is the body's own style — what
+/// a span with no override inherits — and [spans] is the colour painted per
+/// span, `null` where the span deliberately overrides nothing.
+({Color? ink, Map<String, Color?> spans}) _codeColors(
+  WidgetTester tester,
+  String plain,
+) {
+  final rich = tester
+      .widgetList<RichText>(find.byType(RichText))
+      .firstWhere((widget) => widget.text.toPlainText() == plain);
+  final spans = <String, Color?>{};
+  rich.text.visitChildren((span) {
+    if (span is TextSpan && span.text != null) {
+      spans[span.text!] = span.style?.color;
+    }
+    return true;
+  });
+  return (ink: rich.text.style?.color, spans: spans);
+}
+
 void main() {
   testWidgets('a numbered list renders the source numbers', (tester) async {
     await _pump(tester, '3. third\n4. fourth');
@@ -73,6 +118,101 @@ void main() {
     await _pump(tester, '```dart\nvar a = 1;');
 
     expect(find.text('streaming'), findsOneWidget);
+  });
+
+  testWidgets('a closed fence paints its tokens from the scheme roles', (
+    tester,
+  ) async {
+    // Same body, both brightnesses: a token colour baked into the widget
+    // would pass one of these and fail the other.
+    for (final theme in [DshTheme.light(), DshTheme.dark()]) {
+      final scheme = theme.colorScheme;
+      await _pumpThemed(tester, '```dart\nfinal n = 42; // note\n```', theme);
+
+      final painted = _codeColors(tester, 'final n = 42; // note');
+      expect(
+        painted.spans['final'],
+        scheme.syntaxKeyword,
+        reason: 'keyword ink for ${theme.brightness}',
+      );
+      expect(
+        painted.spans['42'],
+        scheme.syntaxNumber,
+        reason: 'number ink for ${theme.brightness}',
+      );
+      expect(
+        painted.spans['// note'],
+        scheme.onSurfaceVariant,
+        reason: 'comment ink for ${theme.brightness}',
+      );
+      // An identifier overrides nothing and so keeps the body's own ink,
+      // which is what holds the rest of the code unemphasised.
+      expect(
+        painted.spans['n '],
+        isNull,
+        reason: 'identifier carries no override for ${theme.brightness}',
+      );
+      expect(
+        painted.ink,
+        scheme.onSurface,
+        reason: 'body ink for ${theme.brightness}',
+      );
+    }
+  });
+
+  testWidgets('a string literal takes the string token colour', (tester) async {
+    final theme = DshTheme.dark();
+    await _pumpThemed(tester, '```json\n{"a": "b"}\n```', theme);
+
+    final painted = _codeColors(tester, '{"a": "b"}');
+    expect(painted.spans['"a"'], theme.colorScheme.syntaxString);
+    expect(painted.spans['"b"'], theme.colorScheme.syntaxString);
+  });
+
+  testWidgets('an unknown fence keeps the plain body ink', (tester) async {
+    final theme = DshTheme.light();
+    await _pumpThemed(tester, '```brainfuck\n+++[>+<]\n```', theme);
+
+    // No tokenizer means no guessed colour: the body renders as one run on
+    // the same ink it had before highlighting existed.
+    final painted = _codeColors(tester, '+++[>+<]');
+    expect(painted.spans.values.toSet(), {theme.colorScheme.onSurface});
+    expect(painted.ink, theme.colorScheme.onSurface);
+  });
+
+  testWidgets('a streaming fence stays plain until it closes', (tester) async {
+    final theme = DshTheme.light();
+    await _pumpThemed(tester, '```dart\nfinal n = 42;', theme);
+
+    // The tail is exactly the text still moving, so it is not re-lexed on
+    // every chunk.
+    final painted = _codeColors(tester, 'final n = 42;');
+    expect(painted.spans.values.toSet(), {theme.colorScheme.onSurface});
+    expect(painted.ink, theme.colorScheme.onSurface);
+  });
+
+  testWidgets('a long fence grows a line-number gutter', (tester) async {
+    final lines = [for (var i = 1; i <= 9; i++) 'var v$i = $i;'].join('\n');
+    await _pump(tester, '```dart\n$lines\n```');
+
+    final gutter = find.text([for (var i = 1; i <= 9; i++) '$i'].join('\n'));
+    expect(gutter, findsOneWidget);
+
+    // The gutter holds a column of its own, left of the body: a reader
+    // locating a line must not have to scroll it away.
+    final body = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .firstWhere((widget) => widget.text.toPlainText() == lines);
+    expect(
+      tester.getRect(gutter).right,
+      lessThanOrEqualTo(tester.getRect(find.byWidget(body)).left),
+    );
+  });
+
+  testWidgets('a short fence spends no column on numbers', (tester) async {
+    await _pump(tester, '```dart\nvar a = 1;\nvar b = 2;\n```');
+
+    expect(find.text('1\n2'), findsNothing);
   });
 
   testWidgets('the body is selectable', (tester) async {

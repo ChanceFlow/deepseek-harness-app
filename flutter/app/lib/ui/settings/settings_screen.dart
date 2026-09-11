@@ -912,7 +912,7 @@ class _AsrModelsEntryRow extends ConsumerWidget {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kShapeChip),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
@@ -944,7 +944,7 @@ class _AsrModelsEntryRow extends ConsumerWidget {
                 color: asrState.installedCount > 0
                     ? scheme.primaryContainer
                     : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
               ),
               child: Text(
                 l10n.asrInstalledCount(
@@ -991,7 +991,7 @@ class _ErrorLogsEntryRow extends ConsumerWidget {
           ),
         );
       },
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kShapeChip),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
@@ -1023,7 +1023,7 @@ class _ErrorLogsEntryRow extends ConsumerWidget {
                 color: hasFatal || hasErrors
                     ? scheme.errorContainer
                     : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
               ),
               child: Text(
                 l10n.errorLogsCountBadge(count),
@@ -1215,7 +1215,7 @@ class _HostSheetRow extends ConsumerWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Padding(
@@ -1673,7 +1673,7 @@ class _AgentPresetRow extends StatelessWidget {
                     Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(kShapeChip),
                         hoverColor: scheme.surfaceContainerHigh,
                         onTap: () {
                           Navigator.of(sheetContext).pop();
@@ -1851,7 +1851,7 @@ class _PresetBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(kShapePill),
         border: filled || inverted
             ? null
             : Border.all(color: scheme.outlineVariant),
@@ -2273,7 +2273,7 @@ class _ModeButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(kShapeDock),
         hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Padding(
@@ -2284,7 +2284,7 @@ class _ModeButton extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected ? scheme.primaryContainer : null,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(kShapeDock),
               border: selected
                   ? null
                   : Border.all(color: scheme.outlineVariant),
@@ -2324,7 +2324,7 @@ InputDecoration _dsInputDecoration(BuildContext context, {String? hint}) {
   final ThemeData theme = Theme.of(context);
   final ColorScheme scheme = theme.colorScheme;
   final OutlineInputBorder border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(kShapeChip),
     borderSide: BorderSide(color: scheme.outlineVariant),
   );
   return InputDecoration(
@@ -2337,7 +2337,7 @@ InputDecoration _dsInputDecoration(BuildContext context, {String? hint}) {
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
     enabledBorder: border,
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(kShapeChip),
       borderSide: BorderSide(color: scheme.primary),
     ),
   );
@@ -2472,7 +2472,7 @@ class _StateBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: configured ? scheme.primaryContainer : null,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(kShapePill),
       ),
       child: Text(
         label ?? (configured ? l10n.stateConfigured : l10n.stateNotSet),

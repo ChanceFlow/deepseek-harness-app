@@ -2197,6 +2197,24 @@ abstract class AppLocalizations {
   /// **'Input'**
   String get inputLabel;
 
+  /// No description provided for @diffLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Diff'**
+  String get diffLabel;
+
+  /// No description provided for @viewDiff.
+  ///
+  /// In en, this message translates to:
+  /// **'Diff'**
+  String get viewDiff;
+
+  /// No description provided for @viewFullFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Full file'**
+  String get viewFullFile;
+
   /// No description provided for @outputLabel.
   ///
   /// In en, this message translates to:
@@ -4015,7 +4033,7 @@ abstract class AppLocalizations {
   /// **'{tokens} tok'**
   String messageTokenUsage(String tokens);
 
-  /// Settings row title for the light/dark/system theme choice.
+  /// Settings row title for the light/dark/OLED/system theme choice.
   ///
   /// In en, this message translates to:
   /// **'Appearance'**
@@ -4032,6 +4050,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get settingsAppearanceDark;
+
+  /// Theme preference segment for the pure-black OLED appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'OLED'**
+  String get settingsAppearanceOled;
 
   /// Theme preference segment following the device setting.
   ///

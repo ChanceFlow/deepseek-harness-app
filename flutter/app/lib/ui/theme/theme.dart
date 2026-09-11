@@ -42,6 +42,32 @@ extension DshSchemeColors on ColorScheme {
   Color get statusGlint => brightness == Brightness.light
       ? const Color(0xFFD3E2FF)
       : const Color(0xFFFFFFFF);
+
+  /// Code-token colours for fenced blocks ([code_highlight.dart] classifies
+  /// them, the markdown renderer paints them). Material 3 carries no syntax
+  /// roles, and these three have to stay apart from each other *and* from
+  /// `onSurface`, which the rest of the code body keeps wearing.
+  ///
+  /// Every value holds >= 4.5:1 against the surface a code block actually
+  /// sits on — `surfaceContainerHigh`, #E5E1EB light / #34343B dark /
+  /// #232329 in the OLED appearance — not against the page. Measured
+  /// keyword / string / number: 7.29 / 5.00 / 4.94 in light, 5.17 / 6.14 /
+  /// 7.14 in dark, 6.54 / 7.77 / 9.03 on the OLED code surface.
+  Color get syntaxKeyword => brightness == Brightness.light
+      ? const Color(0xFF6A1B9A)
+      : const Color(0xFFCE93D8);
+
+  /// String-literal token: green in both brightnesses, the reading a code
+  /// fence carries everywhere else, and deliberately not `success` so a state
+  /// colour never doubles as a token colour.
+  Color get syntaxString => brightness == Brightness.light
+      ? const Color(0xFF1B6D24)
+      : const Color(0xFF81C784);
+
+  /// Numeric-literal token.
+  Color get syntaxNumber => brightness == Brightness.light
+      ? const Color(0xFFA0430A)
+      : const Color(0xFFFFB74D);
 }
 
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
@@ -59,12 +85,20 @@ const List<BoxShadow> kM3ShadowElevation3 = [
 /// DeepSeek's brand violet — the one seed every role derives from.
 const Color kDshBrandSeed = Color(0xFF4D6BFE);
 
-/// Corner radii, largest to smallest: sheets and dialogs, the composer
-/// dock, cards and menus, chips and rows. Four steps, no ad-hoc radius.
+/// Corner radii for the app's surfaces: sheets and dialogs, the composer
+/// dock, cards, menu sheets, chips and rows, and the stadium pill. A
+/// surface takes a step from this scale; `verify_theme_native` rejects a
+/// numeric radius at every other call site.
 const double kShapeSheet = 28;
 const double kShapeDock = 20;
 const double kShapeCard = 14;
 const double kShapeChip = 8;
+
+/// The stadium step: a full pill. Error and status badges read as pills,
+/// not as the rounded rectangles `kShapeChip` draws, and Material 3
+/// carries a pill as its own badge form. The value exceeds half the
+/// tallest badge, so every height resolves to a stadium.
+const double kShapePill = 999;
 
 /// The menu-surface bottom-sheet card (the web MenuDropdown family):
 /// picker sheets — model seat, workspaces, prompt mode, parent session —
@@ -141,11 +175,40 @@ class DshTheme {
   /// Dark scheme seeded from the brand violet.
   static ThemeData dark() => _build(Brightness.dark);
 
-  static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(
+  /// The optional OLED appearance: the M3 dark roles on a pure-black page.
+  ///
+  /// Only the surface family moves — `surface` (the page and the transcript)
+  /// becomes true black, so an OLED panel lights no pixel behind the content
+  /// the reader spends the session in, and the container family steps up
+  /// from it in near-black tones:
+  ///
+  /// | role | OLED | standard dark |
+  /// |---|---|---|
+  /// | `surface` | `#000000` | `#121318` |
+  /// | `surfaceContainerLow` | `#0F0F13` | `#1B1B21` |
+  /// | `surfaceContainer` | `#15151B` | `#1F1F25` |
+  /// | `surfaceContainerHigh` | `#232329` | `#292A2F` |
+  /// | `surfaceContainerHighest` | `#2F2F36` | `#34343A` |
+  ///
+  /// The page-to-chrome step is 1.155:1, at or above the dark scheme's
+  /// 1.132:1, so the two-tone rule survives pure black. What pure black does
+  /// not carry is a shadow: elevation shadows are black on black. They are
+  /// not what separates chrome here — the container ladder is, and the
+  /// `outlineVariant` hairlines the app already draws read 2.25:1 on the
+  /// pure-black page where they read 1.99:1 on the dark grey.
+  ///
+  /// Every ink role keeps its M3 dark value. Measured against `#000000`:
+  /// `onSurface` 16.21, `onSurfaceVariant` 12.30, `primary` 12.34,
+  /// `error` 12.37, `warning` 10.98, `success` 10.44, `syntaxKeyword` 8.79,
+  /// `syntaxString` 10.44, `syntaxNumber` 12.13 — all clear 4.5:1 with room.
+  static ThemeData oled() => _build(Brightness.dark, oled: true);
+
+  static ThemeData _build(Brightness brightness, {bool oled = false}) {
+    final seeded = ColorScheme.fromSeed(
       seedColor: kDshBrandSeed,
       brightness: brightness,
     );
+    final scheme = oled ? _oledSurfaceFamily(seeded) : seeded;
     final base = ThemeData(colorScheme: scheme);
     return base.copyWith(
       scaffoldBackgroundColor: scheme.surface,
@@ -254,6 +317,22 @@ class DshTheme {
       ),
     );
   }
+
+  /// The OLED surface family: the page at true black and the containers on
+  /// a near-black ladder above it. Every other role keeps the seeded dark
+  /// value, so the ink palette and the [DshSchemeColors] dark branch are
+  /// untouched. `surfaceContainerLowest` collapses onto the page — on a
+  /// black page the least-emphasis container is the page.
+  static ColorScheme _oledSurfaceFamily(ColorScheme base) => base.copyWith(
+    surface: const Color(0xFF000000),
+    surfaceDim: const Color(0xFF000000),
+    surfaceBright: const Color(0xFF1A1A20),
+    surfaceContainerLowest: const Color(0xFF000000),
+    surfaceContainerLow: const Color(0xFF0F0F13),
+    surfaceContainer: const Color(0xFF15151B),
+    surfaceContainerHigh: const Color(0xFF232329),
+    surfaceContainerHighest: const Color(0xFF2F2F36),
+  );
 
   /// Reading-first scale: a taller body measure for transcript prose,
   /// quieter labels for chrome, and titles that carry weight rather than

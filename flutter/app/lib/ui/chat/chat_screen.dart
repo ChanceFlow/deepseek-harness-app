@@ -14,6 +14,7 @@ import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
@@ -451,7 +452,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final onAction = widget.onAction;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useTwoPanes = constraints.maxWidth >= 720;
+        // A phone in landscape clears the width breakpoint (780x390) while
+        // standing only 390dp tall: the pane split would spend 320dp of that
+        // on a sidebar and leave the transcript a ~100dp slit, so the split
+        // waits for a surface that has the height to carry it.
+        final useTwoPanes =
+            constraints.maxWidth >= kTwoPaneMinWidth &&
+            constraints.maxHeight >= kTwoPaneMinHeight;
         if (useTwoPanes) {
           return Scaffold(
             appBar: _chatAppBar(context, uiState, onAction, compact: false),
@@ -679,20 +686,35 @@ class ChatHeaderActions extends StatelessWidget {
         .where((session) => session.id == sessionId)
         .firstOrNull;
     final archivable = selectedSession?.blank != true;
+    final hasActiveJobs = uiState.jobs.any(
+      (j) => j.status == JobStatus.running,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        JobListAction(jobs: uiState.jobs),
-        SessionLogExportAction(uiState: uiState, onAction: onAction),
-        if (uiState.selectedSessionId case final sessionId?)
-          if (backendId case final host?)
-            TrajectoryEntryButton(backendId: host, sessionId: sessionId),
+        if (hasActiveJobs || !compact) JobListAction(jobs: uiState.jobs),
+        if (!compact) ...[
+          SessionLogExportAction(uiState: uiState, onAction: onAction),
+          if (uiState.selectedSessionId case final sessionId?)
+            if (backendId case final host?)
+              TrajectoryEntryButton(backendId: host, sessionId: sessionId),
+        ],
         if (compact)
           PopupMenuButton<_SessionVerb>(
             tooltip: l10n.sessionMenuTooltip,
             icon: const Icon(Icons.more_vert),
             onSelected: (verb) {
               switch (verb) {
+                case _SessionVerb.trajectory:
+                  if (backendId != null) {
+                    openTrajectoryLedger(
+                      context,
+                      backendId: backendId!,
+                      sessionId: sessionId,
+                    );
+                  }
+                case _SessionVerb.export:
+                  onAction(ExportSessionLog(sessionId));
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
@@ -704,6 +726,24 @@ class ChatHeaderActions extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
+              if (backendId != null)
+                PopupMenuItem(
+                  value: _SessionVerb.trajectory,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.route_outlined),
+                    title: Text(l10n.trajectoryEntryTooltip),
+                  ),
+                ),
+              if (uiState.canExportSessionLog)
+                PopupMenuItem(
+                  value: _SessionVerb.export,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.file_download_outlined),
+                    title: Text(l10n.sessionLogExportTooltip),
+                  ),
+                ),
               if (onOpenSubagents != null)
                 PopupMenuItem(
                   value: _SessionVerb.subagents,
@@ -770,7 +810,7 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { subagents, rename, fork, archive }
+enum _SessionVerb { trajectory, export, subagents, rename, fork, archive }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.
@@ -1447,7 +1487,7 @@ class _ChatPanelState extends State<ChatPanel> {
   /// through the repository seam and handles loading, failure, binary, and
   /// truncation itself; the panel only resolves the session the row belongs
   /// to.
-  void _openFilePreview(String path) {
+  void _openFilePreview(String path, {EditDiffModel? diff}) {
     final sessionId = widget.uiState.selectedSessionId;
     if (sessionId == null) return;
     unawaited(
@@ -1456,6 +1496,7 @@ class _ChatPanelState extends State<ChatPanel> {
         sessionId: sessionId,
         path: path,
         readFile: widget.readWorkspaceFile,
+        initialDiff: diff,
       ),
     );
   }
@@ -1521,61 +1562,70 @@ class _ChatPanelState extends State<ChatPanel> {
       if (showTurnStatus) _turnStatusSlot,
       ...steering,
     ];
-    return ListView.separated(
-      controller: _timelineScroll,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      itemCount: rows.length,
-      separatorBuilder: (_, index) => SizedBox(
-        height: _gapAfter(
-          rows[index],
-          index + 1 < rows.length ? rows[index + 1] : null,
+    // A transcript on a tablet would otherwise run the full pane width and
+    // hand the reader 200-character lines: the reading column is capped and
+    // centred, so a wide surface gains margins instead of longer paragraphs.
+    // The cap binds only above it, which is why a phone is untouched.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kReadingMeasure),
+        child: ListView.separated(
+          controller: _timelineScroll,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          itemCount: rows.length,
+          separatorBuilder: (_, index) => SizedBox(
+            height: _gapAfter(
+              rows[index],
+              index + 1 < rows.length ? rows[index + 1] : null,
+            ),
+          ),
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            if (identical(row, _olderHistorySlot)) {
+              return OlderHistoryRow(
+                isLoading: uiState.isLoadingOlder,
+                onLoadOlder: () {
+                  _recordScrollAnchor();
+                  _autoLoadDispatched = true;
+                  widget.onAction(const LoadOlderHistoryAction());
+                },
+              );
+            }
+            if (row is TimelineActivityGroup) {
+              return ActivityGroupRow(
+                key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
+                group: row,
+                onAction: widget.onAction,
+                loadAttachment: widget.loadAttachment,
+                onPreviewFile: _openFilePreview,
+                expansion: _sessionState,
+                onOpenChild: _openWorkflowMember,
+              );
+            }
+            if (row is TimelineItem) {
+              return TimelineRow(
+                key: ValueKey(timelineKey(row)),
+                item: row,
+                onAction: widget.onAction,
+                loadAttachment: widget.loadAttachment,
+                onPreviewFile: _openFilePreview,
+                expansion: _sessionState,
+                onOpenChild: _openWorkflowMember,
+                producedPaths: row is TimelineMessage
+                    ? producedByMessage[row.value.id]
+                    : null,
+              );
+            }
+            if (row is SessionQueueItem) {
+              return PendingSteeringRow(
+                key: ValueKey('steering:${row.itemId}'),
+                text: row.text,
+              );
+            }
+            return const TurnStatusRow(key: ValueKey('turn-status'));
+          },
         ),
       ),
-      itemBuilder: (context, index) {
-        final row = rows[index];
-        if (identical(row, _olderHistorySlot)) {
-          return OlderHistoryRow(
-            isLoading: uiState.isLoadingOlder,
-            onLoadOlder: () {
-              _recordScrollAnchor();
-              _autoLoadDispatched = true;
-              widget.onAction(const LoadOlderHistoryAction());
-            },
-          );
-        }
-        if (row is TimelineActivityGroup) {
-          return ActivityGroupRow(
-            key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
-            group: row,
-            onAction: widget.onAction,
-            loadAttachment: widget.loadAttachment,
-            onPreviewFile: _openFilePreview,
-            expansion: _sessionState,
-            onOpenChild: _openWorkflowMember,
-          );
-        }
-        if (row is TimelineItem) {
-          return TimelineRow(
-            key: ValueKey(timelineKey(row)),
-            item: row,
-            onAction: widget.onAction,
-            loadAttachment: widget.loadAttachment,
-            onPreviewFile: _openFilePreview,
-            expansion: _sessionState,
-            onOpenChild: _openWorkflowMember,
-            producedPaths: row is TimelineMessage
-                ? producedByMessage[row.value.id]
-                : null,
-          );
-        }
-        if (row is SessionQueueItem) {
-          return PendingSteeringRow(
-            key: ValueKey('steering:${row.itemId}'),
-            text: row.text,
-          );
-        }
-        return const TurnStatusRow(key: ValueKey('turn-status'));
-      },
     );
   }
 
@@ -1614,17 +1664,21 @@ class _ChatPanelState extends State<ChatPanel> {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: AppLocalizations.of(context)!.jumpToBottomTooltip,
-      child: DshTappable(
-        child: FloatingActionButton.small(
+      child: _tactileFab(
+        context,
+        enabled: true,
+        FloatingActionButton.small(
           heroTag: null,
           shape: const CircleBorder(),
           backgroundColor: scheme.surfaceContainerLow,
           foregroundColor: scheme.onSurfaceVariant,
           elevation: 2,
-          highlightElevation: 3,
+          highlightElevation: 2,
           hoverElevation: 3,
           focusElevation: 3,
           disabledElevation: 0,
+          splashColor: Colors.transparent,
+          enableFeedback: false,
           onPressed: _jumpToBottom,
           child: const Icon(Icons.arrow_downward, size: 22),
         ),
@@ -1949,13 +2003,13 @@ class _PlanChipState extends State<PlanChip> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kShapePill),
             onTap: widget.locked ? null : widget.onExit,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: scheme.errorContainer,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(kShapePill),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -2072,7 +2126,7 @@ class TimelineRow extends StatelessWidget {
   final AttachmentLoader loadAttachment;
 
   /// File-preview action for a tool row's generated/edited path.
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   /// Tool-row expansion persistence of the selected session; null keeps
   /// expansion in memory only.
@@ -2099,7 +2153,9 @@ class TimelineRow extends StatelessWidget {
         usage: (item as TimelineMessage).usage,
         firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
         producedPaths: producedPaths,
-        onPreviewFile: onPreviewFile,
+        onPreviewFile: onPreviewFile == null
+            ? null
+            : (path) => onPreviewFile!(path),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction() => CompactionRow(
@@ -2533,7 +2589,7 @@ class _PendingImageThumbnailState extends State<PendingImageThumbnail> {
     final bytes = _bytes;
     if (bytes == null) return const SizedBox(width: 36, height: 36);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(kShapeChip),
       child: Image.memory(
         bytes,
         cacheWidth: 128,
@@ -2656,7 +2712,7 @@ class ActivityGroupRow extends StatefulWidget {
   final AttachmentLoader loadAttachment;
 
   /// File-preview action for a grouped tool row's generated/edited path.
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   final ToolExpansionPersistence? expansion;
 
@@ -2679,15 +2735,27 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
       widget.group.calls.any((call) => call.status == ToolRunStatus.running) ||
       (widget.group.thought?.value.streaming ?? false);
 
+  bool get _hasFailure =>
+      widget.group.calls.any((call) => call.status == ToolRunStatus.failed);
+
   @override
   void initState() {
     super.initState();
+    if (_hasFailure && !_isRunning) _expanded = true;
     if (_isRunning) _sweep.repeat();
   }
 
   @override
   void didUpdateWidget(covariant ActivityGroupRow oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final wasRunning =
+        oldWidget.group.calls.any(
+          (call) => call.status == ToolRunStatus.running,
+        ) ||
+        (oldWidget.group.thought?.value.streaming ?? false);
+    if (wasRunning && !_isRunning && _hasFailure && !_expanded) {
+      setState(() => _expanded = true);
+    }
     if (_isRunning && !_sweep.isAnimating) {
       _sweep.repeat();
     } else if (!_isRunning && _sweep.isAnimating) {
@@ -2773,7 +2841,7 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kShapeCard),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -2935,7 +3003,7 @@ class ToolCallRow extends StatefulWidget {
   /// Expansion persistence keyed by this row's [timelineKey] value;
   /// null keeps expansion in memory only.
   final ToolExpansionPersistence? expansion;
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   @override
   State<ToolCallRow> createState() => _ToolCallRowState();
@@ -2966,6 +3034,10 @@ class _ToolCallRowState extends State<ToolCallRow>
         }),
       );
     }
+    if (widget.call.status == ToolRunStatus.failed &&
+        !_tileController.isExpanded) {
+      _tileController.expand();
+    }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
   }
 
@@ -2978,6 +3050,10 @@ class _ToolCallRowState extends State<ToolCallRow>
     }
     if (!running && oldWidget.call.status == ToolRunStatus.running) {
       _sweep.stop(canceled: true);
+      if (widget.call.status == ToolRunStatus.failed &&
+          !_tileController.isExpanded) {
+        _tileController.expand();
+      }
     }
   }
 
@@ -3107,15 +3183,18 @@ class _ToolCallRowState extends State<ToolCallRow>
                 margin: const EdgeInsets.only(top: 4),
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(kShapeCard),
                   border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (model.body case final body?)
+                    if (model.diff case final diff?)
+                      _diffSection(context, diff)
+                    else if (model.body case final body?)
                       _ioSection(context, l10n.inputLabel, body, failed: false),
-                    if (model.body != null && model.output != null)
+                    if ((model.diff != null || model.body != null) &&
+                        model.output != null)
                       Container(
                         height: 1,
                         color: scheme.outlineVariant,
@@ -3129,7 +3208,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                         failed: failed,
                       ),
                     if (model.filePath case final filePath?)
-                      _fileActionBar(context, filePath),
+                      _fileActionBar(context, filePath, diff: model.diff),
                   ],
                 ),
               ),
@@ -3139,7 +3218,11 @@ class _ToolCallRowState extends State<ToolCallRow>
     );
   }
 
-  Widget _fileActionBar(BuildContext context, String path) {
+  Widget _fileActionBar(
+    BuildContext context,
+    String path, {
+    EditDiffModel? diff,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -3151,7 +3234,7 @@ class _ToolCallRowState extends State<ToolCallRow>
         children: [
           if (widget.onPreviewFile != null)
             OutlinedButton.icon(
-              onPressed: () => widget.onPreviewFile!(path),
+              onPressed: () => widget.onPreviewFile!(path, diff: diff),
               icon: const Icon(Icons.visibility_outlined, size: 14),
               label: Text(
                 l10n.previewFile,
@@ -3249,6 +3332,121 @@ class _ToolCallRowState extends State<ToolCallRow>
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               await Clipboard.setData(ClipboardData(text: payload));
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(l10n.copiedTooltip),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(milliseconds: 1400),
+                ),
+              );
+            },
+            icon: Icon(Icons.copy_outlined, color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _diffSection(BuildContext context, EditDiffModel diff) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final fullDiffText = [
+      for (final line in diff.lines)
+        '${line.kind == DiffLineKind.delete
+            ? '-'
+            : line.kind == DiffLineKind.insert
+            ? '+'
+            : ' '} ${line.text}',
+    ].join('\n');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.diffLabel,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.outline,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final line in diff.lines)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: switch (line.kind) {
+                              DiffLineKind.delete =>
+                                scheme.errorContainer.withValues(alpha: 0.35),
+                              DiffLineKind.insert =>
+                                scheme.primaryContainer.withValues(alpha: 0.35),
+                              DiffLineKind.equal => Colors.transparent,
+                            },
+                            borderRadius: BorderRadius.circular(kShapeChip),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                child: Text(
+                                  switch (line.kind) {
+                                    DiffLineKind.delete => '-',
+                                    DiffLineKind.insert => '+',
+                                    DiffLineKind.equal => ' ',
+                                  },
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: switch (line.kind) {
+                                      DiffLineKind.delete => scheme.error,
+                                      DiffLineKind.insert => scheme.primary,
+                                      DiffLineKind.equal =>
+                                        scheme.onSurfaceVariant,
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                line.text,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'monospace',
+                                  color: scheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            tooltip: l10n.copyTooltip,
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await Clipboard.setData(ClipboardData(text: fullDiffText));
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(l10n.copiedTooltip),
@@ -3362,7 +3560,9 @@ class _GoalBarStripState extends State<GoalBarStrip> {
           padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(kShapeDock),
+            ),
             border: Border(
               top: BorderSide(color: scheme.outlineVariant),
               left: BorderSide(color: scheme.outlineVariant),
@@ -3442,7 +3642,9 @@ class _GoalBarStripState extends State<GoalBarStrip> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kShapeDock),
+          ),
           border: Border(
             top: BorderSide(color: scheme.outlineVariant),
             left: BorderSide(color: scheme.outlineVariant),
@@ -3573,7 +3775,9 @@ class _QueueDockState extends State<QueueDock> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(kShapeDock),
+        ),
         border: Border(
           top: BorderSide(color: scheme.outlineVariant),
           left: BorderSide(color: scheme.outlineVariant),
@@ -3587,7 +3791,7 @@ class _QueueDockState extends State<QueueDock> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () => setState(() => _collapsed = !_collapsed),
                 child: SizedBox(
                   height: 36,
@@ -3749,19 +3953,19 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                             isDense: true,
                             hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(
                                 color: scheme.outlineVariant,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(
                                 color: scheme.outlineVariant,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(color: scheme.primary),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -4184,7 +4388,7 @@ class _QuestionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kShapeCard),
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
@@ -4373,7 +4577,7 @@ class _QuestionOptionTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(kShapeChip),
             ),
             child: Text(
               AppLocalizations.of(context)!.questionRecommended,
@@ -4391,7 +4595,7 @@ class _QuestionOptionTile extends StatelessWidget {
       ],
     );
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kShapeChip),
     );
     // The option rows need their own Material ancestor: the question card
     // behind them is a decorated container, and ListTile paints its
@@ -4444,7 +4648,7 @@ class _QuestionCheckbox extends StatelessWidget {
             border: Border.all(
               color: checked ? scheme.onSurface : scheme.outlineVariant,
             ),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(kShapeChip),
           ),
           child: checked
               ? Icon(Icons.check, size: 12, color: scheme.onSurface)
@@ -4469,7 +4673,7 @@ class _QuestionNumberChip extends StatelessWidget {
       height: 20,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       alignment: Alignment.center,
       child: child,
@@ -4536,7 +4740,7 @@ class _CustomAnswerRowState extends State<_CustomAnswerRow> {
         border: Border.all(
           color: active ? scheme.outlineVariant : Colors.transparent,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kShapeCard),
       ),
       child: Row(
         children: [
@@ -4650,11 +4854,11 @@ class _CustomAnswerFieldState extends State<_CustomAnswerField> {
         fillColor: scheme.surfaceContainerHigh,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
       ),
@@ -4763,7 +4967,9 @@ class _QuestionCardFooter extends StatelessWidget {
 }
 
 /// One 24×24 round icon button (web `.iconButton`): tertiary glyph on the
-/// interactive hover fill; 36px+ touch target through padding.
+/// interactive hover fill; 36px+ touch target through padding. `DshTappable`
+/// owns the tap and the press feedback — the hover fill is the whole visual
+/// state, so the seat carries no ink.
 class _RoundIconButton extends StatefulWidget {
   const _RoundIconButton({
     required this.tooltip,
@@ -4801,7 +5007,9 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
               : Colors.transparent,
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
-          child: InkWell(
+          child: DshTappable(
+            enabled: widget.enabled,
+            enableHaptic: true,
             onTap: widget.enabled ? widget.onPressed : null,
             child: SizedBox(
               width: 36,
@@ -4863,7 +5071,7 @@ class _PlanReviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kShapeCard),
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
@@ -4971,6 +5179,24 @@ final class QuestionDraft {
 /// `@container (max-width: 460px)`: "the 460px cut is the point where the row
 /// (attach + modes + model + send) starts squeezing labels").
 const double _kComposerLabelCut = 460;
+
+/// Width at which the session sidebar may split off the chat pane, and the
+/// height it must also clear.
+///
+/// 720dp is the width a phone in landscape reaches, and a phone in landscape
+/// is ~390dp tall: splitting there spends 320dp of the width on a sidebar and
+/// leaves the transcript a ~100dp slit. Both axes have to clear, so the split
+/// arrives on a tablet and never on a rotated phone.
+const double kTwoPaneMinWidth = 720;
+const double kTwoPaneMinHeight = 500;
+
+/// Reading measure the transcript column is capped at on a wide surface.
+///
+/// 760dp holds roughly 70-90 characters of the body face, the range a
+/// paragraph stays readable in; a tablet pane wider than this gets margins
+/// instead of longer lines. Below it the cap does nothing, so a phone lays
+/// out exactly as it did.
+const double kReadingMeasure = 760;
 
 /// Dock widths under which the action row splits into two lines instead of
 /// squeezing. One line has to cover the attach seat, the mic and the compact
@@ -5630,7 +5856,7 @@ class SlashSkillCandidates extends StatelessWidget {
         constraints: const BoxConstraints(maxHeight: 220),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(kShapeMenuSheet),
           border: Border.all(color: scheme.outlineVariant),
         ),
         child: ListView(
@@ -5641,7 +5867,7 @@ class SlashSkillCandidates extends StatelessWidget {
               Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                   onTap: () => onPick(cmd.name),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -5688,7 +5914,7 @@ class SlashSkillCandidates extends StatelessWidget {
               Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                   onTap: () => onPick(skill.name),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -5777,7 +6003,7 @@ class PopupMenuEntryShim extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(kShapeChip),
           onTap: enabled ? () => _open(context) : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -5830,7 +6056,7 @@ class PopupMenuEntryShim extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   onModeChange(PromptMode.queue);
@@ -5874,7 +6100,7 @@ class PopupMenuEntryShim extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: running
                     ? () {
                         Navigator.of(sheetContext).pop();
@@ -5954,17 +6180,26 @@ class _PlusButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      tooltip: l10n.commandsTooltip,
-      onPressed: enabled ? () => _open(context) : null,
-      icon: const Icon(Icons.add, size: 22),
-      // Native tool control: a standard 40px M3 icon button drawn straight
-      // on the dock surface, with the interactive fill kept for hover.
-      style: IconButton.styleFrom(
-        foregroundColor: scheme.onSurfaceVariant,
-        disabledForegroundColor: scheme.outline,
-        hoverColor: scheme.surfaceContainerHigh,
-        shape: const CircleBorder(),
+    return DshTappable(
+      enabled: enabled,
+      enableHaptic: true,
+      child: IconButton(
+        tooltip: l10n.commandsTooltip,
+        onPressed: enabled ? () => _open(context) : null,
+        icon: const Icon(Icons.add, size: 22),
+        // Native tool control: a standard 40px M3 icon button drawn straight
+        // on the dock surface, with the interactive fill kept for hover and
+        // the splash suppressed — the seat's press feedback is DshTappable's
+        // scale and its one haptic, not a second ripple.
+        style: IconButton.styleFrom(
+          foregroundColor: scheme.onSurfaceVariant,
+          disabledForegroundColor: scheme.outline,
+          hoverColor: scheme.surfaceContainerHigh,
+          highlightColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          enableFeedback: false,
+          shape: const CircleBorder(),
+        ),
       ),
     );
   }
@@ -6018,7 +6253,7 @@ class _CommandRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -6029,7 +6264,7 @@ class _CommandRow extends StatelessWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                 ),
                 child: Icon(
                   icon,
@@ -6133,7 +6368,7 @@ class _CommandSheet extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                   ),
                   child: Text(
                     '$visibleCount',
@@ -6179,6 +6414,23 @@ class _CommandSheet extends StatelessWidget {
   }
 }
 
+/// A tactile FAB: `DshTappable` supplies the seat's only press feedback, so
+/// the FAB's pressed overlay (the theme's `highlightColor`) is switched off
+/// around it. The FAB's own splash and pressed lift are off at the call site
+/// (`splashColor: Colors.transparent`, `highlightElevation == elevation`),
+/// and [enabled] mirrors the FAB's `onPressed`, so a disabled seat does not
+/// scale or click.
+Widget _tactileFab(BuildContext context, Widget fab, {required bool enabled}) {
+  return DshTappable(
+    enabled: enabled,
+    enableHaptic: true,
+    child: Theme(
+      data: Theme.of(context).copyWith(highlightColor: Colors.transparent),
+      child: fab,
+    ),
+  );
+}
+
 /// Primary control, commercial-app form: a 34px circle that stays NEUTRAL
 /// (selector fill, tertiary glyph) while the draft is empty — no idle
 /// blue — and takes the primaryContainer fill with its onPrimaryContainer
@@ -6222,29 +6474,37 @@ class _PrimarySendButton extends StatelessWidget {
       // "no idle blue" rule carried into the component. heroTag is
       // disabled so sibling send/stop FABs do not fight over the shared
       // hero.
-      child: FloatingActionButton.small(
-        heroTag: null,
-        shape: const CircleBorder(),
-        backgroundColor: fill,
-        foregroundColor: glyph,
-        elevation: 2,
-        highlightElevation: 3,
-        hoverElevation: 3,
-        focusElevation: 3,
-        disabledElevation: 0,
-        onPressed: active ? (running ? onStop : onSend) : null,
-        child: running
-            // Stop glyph: 10x10 rounded-3 square.
-            ? Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: glyph,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              )
-            // Send glyph: the up arrow.
-            : const Icon(Icons.arrow_upward, size: 22),
+      child: _tactileFab(
+        context,
+        enabled: active,
+        FloatingActionButton.small(
+          heroTag: null,
+          shape: const CircleBorder(),
+          backgroundColor: fill,
+          foregroundColor: glyph,
+          elevation: 2,
+          // The press is the wrapper's scale; a lift on top of it would be
+          // a second animation on the same gesture.
+          highlightElevation: 2,
+          hoverElevation: 3,
+          focusElevation: 3,
+          disabledElevation: 0,
+          splashColor: Colors.transparent,
+          enableFeedback: false,
+          onPressed: active ? (running ? onStop : onSend) : null,
+          child: running
+              // Stop glyph: 10x10 rounded-3 square.
+              ? Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: glyph,
+                    borderRadius: BorderRadius.circular(kShapeChip),
+                  ),
+                )
+              // Send glyph: the up arrow.
+              : const Icon(Icons.arrow_upward, size: 22),
+        ),
       ),
     );
   }

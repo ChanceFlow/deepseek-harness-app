@@ -32,24 +32,25 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 | Modal scrim | `scrim` |
 | Warning, waiting-on-user | `warning` (a non-role color, see below) |
 | Success, completed state | `success` (a non-role color, see below) |
+| Code token in a fence | `syntaxKeyword`, `syntaxString`, `syntaxNumber` (non-role) |
 | Ink host that must stay invisible | `Colors.transparent` |
 
 - **`theme.dart` is the home for a color Material 3 has no role for.** It
   holds the elevation shadow constants and the `DshSchemeColors` extension,
-  so a call site writes `scheme.success`, not a green. A new non-role color
-  is declared there and gains a row above in the same change;
+  so a call site writes `scheme.success`, not a green. A new one is declared
+  there and gains a row above;
   `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
   `ThemeExtension` under `lib/` outside that file.
 - **Two tones separate content from chrome.** The transcript sits on
-  `surface`, every frame around it on `surfaceContainer`. One filled seat per
+  `surface`, every frame on `surfaceContainer`. One filled seat per
   surface: the primary action.
 - **Space divides; a rule is a decision.** An `ExpansionTile` takes
   `Border()` for both shapes. A row is as tall as its line: shrink the
   ambient icon size rather than wear the 24px chevron; one-line rows take
   `height: 1.2`.
-- **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
-  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
-  reason, not a number typed at a call site.
+- **Shape comes from the named scale** in `theme.dart`: `kShapeSheet` 28,
+  `kShapeDock` 20, `kShapeCard` 14, `kShapeMenuSheet` 12, `kShapeChip` 8,
+  `kShapePill` 999. A further radius needs a reason, not a call-site number.
 - **Motion follows `DshMotion` tokens in `theme.dart`.** Durations
   (`durationMicro/Short/Medium/Long`) and curves (`curveEmphasized/Enter/Exit/Standard`).
   Controls provide tactile feedback (`DshTappable`); pages ride

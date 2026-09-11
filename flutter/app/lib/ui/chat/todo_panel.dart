@@ -9,6 +9,8 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/todo.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/theme.dart';
+
 /// The collapsed strip's line: the plan-summary rule the `todo_write` tool
 /// row already speaks (`plan-summary.ts`) — "done/total completed" plus the
 /// running item. Mid-run the open question is which item is being worked,
@@ -88,7 +90,7 @@ class _TodoPanelState extends State<TodoPanel> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () => setState(() => _collapsed = !_collapsed),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),

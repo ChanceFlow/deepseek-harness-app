@@ -167,7 +167,7 @@ void main() {
                 result: 'Wrote 10 bytes',
                 status: ToolRunStatus.completed,
               ),
-              onPreviewFile: (String path) => previewedPath = path,
+              onPreviewFile: (String path, {diff}) => previewedPath = path,
             ),
           ),
         ),
@@ -184,6 +184,64 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(previewedPath, 'lib/main.dart');
+    },
+  );
+
+  test('deriveToolRowModel parses edit tool calls into unified diff lines', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    const call = TimelineToolCall(
+      id: 'c8',
+      name: 'edit',
+      arguments: '{"file_path":"lib/foo.dart","old_string":"foo = 1;","new_string":"foo = 2;"}',
+      status: ToolRunStatus.completed,
+    );
+    final model = deriveToolRowModel(call, l10n);
+    expect(model.variant, ToolRowVariant.edit);
+    expect(model.diff, isNotNull);
+    final diff = model.diff!;
+    expect(diff.filePath, 'lib/foo.dart');
+    expect(diff.lines.length, 2);
+    expect(diff.lines[0].kind, DiffLineKind.delete);
+    expect(diff.lines[0].text, 'foo = 1;');
+    expect(diff.lines[1].kind, DiffLineKind.insert);
+    expect(diff.lines[1].text, 'foo = 2;');
+  });
+
+  testWidgets(
+    'expanded edit tool call renders inline diff with delete and insert markers',
+    (tester) async {
+      EditDiffModel? previewedDiff;
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: ToolCallRow(
+              call: const TimelineToolCall(
+                id: 'c9',
+                name: 'edit',
+                arguments: '{"file_path":"lib/bar.dart","old_string":"oldLine","new_string":"newLine"}',
+                status: ToolRunStatus.completed,
+              ),
+              onPreviewFile: (String path, {diff}) => previewedDiff = diff,
+            ),
+          ),
+        ),
+      );
+
+      // Expand the tile
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Diff'), findsOneWidget);
+      expect(find.text('-'), findsOneWidget);
+      expect(find.text('oldLine'), findsOneWidget);
+      expect(find.text('+'), findsOneWidget);
+      expect(find.text('newLine'), findsOneWidget);
+
+      await tester.tap(find.text('Preview'));
+      await tester.pumpAndSettle();
+
+      expect(previewedDiff, isNotNull);
+      expect(previewedDiff?.filePath, 'lib/bar.dart');
     },
   );
 }

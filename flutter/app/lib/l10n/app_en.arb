@@ -765,6 +765,9 @@
   "semanticsRunning": "Running",
   "semanticsFailed": "Failed",
   "inputLabel": "Input",
+  "diffLabel": "Diff",
+  "viewDiff": "Diff",
+  "viewFullFile": "Full file",
   "outputLabel": "Output",
   "runStatusRunning": "Running…",
   "turnStatusWorking": "Deep diving…",
@@ -2243,7 +2246,7 @@
   },
   "settingsAppearanceTitle": "Appearance",
   "@settingsAppearanceTitle": {
-    "description": "Settings row title for the light/dark/system theme choice."
+    "description": "Settings row title for the light/dark/OLED/system theme choice."
   },
   "settingsAppearanceLight": "Light",
   "@settingsAppearanceLight": {
@@ -2252,6 +2255,10 @@
   "settingsAppearanceDark": "Dark",
   "@settingsAppearanceDark": {
     "description": "Theme preference segment for the dark color scheme."
+  },
+  "settingsAppearanceOled": "OLED",
+  "@settingsAppearanceOled": {
+    "description": "Theme preference segment for the pure-black OLED appearance."
   },
   "settingsAppearanceSystem": "System",
   "@settingsAppearanceSystem": {

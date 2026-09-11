@@ -150,6 +150,15 @@ const _recording = VoiceInputUiState(
   hasInstalledModels: true,
 );
 
+/// A live capture the engine is already transcribing.
+const _transcribing = VoiceInputUiState(
+  phase: VoiceInputPhase.recording,
+  duration: Duration(seconds: 3),
+  amplitude: 0.5,
+  liveTranscription: 'open the settings screen',
+  hasInstalledModels: true,
+);
+
 /// Presses and holds the seat long enough to be a hold rather than a tap.
 Future<TestGesture> _pressAndHold(WidgetTester tester) async {
   final hold = await tester.startGesture(
@@ -188,6 +197,75 @@ void main() {
         lessThan(seat.top),
         reason: 'the bubble sits above the seat',
       );
+    });
+
+    testWidgets('the bubble shows the engine transcription as it lands', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(_seat(_transcribing));
+      await tester.pump(const Duration(milliseconds: 40));
+
+      // The words the engine heard ride the bubble itself: the draft field
+      // they are also written into sits behind it, so the reader would
+      // otherwise be speaking blind.
+      expect(find.text('open the settings screen'), findsOneWidget);
+    });
+
+    testWidgets('a tap-started capture offers discard and send seats', (
+      WidgetTester tester,
+    ) async {
+      var finished = 0;
+      var canceled = 0;
+      // A tap-started capture is the hands-free path: no finger is down, so
+      // the bubble must carry the two endings rather than leave release as
+      // the only way out.
+      await tester.pumpWidget(
+        _seat(
+          _transcribing,
+          onFinish: () => finished++,
+          onCancel: () => canceled++,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Send'), findsOneWidget);
+
+      // The bubble rides a composited follower, so the seats are driven
+      // through their own callbacks: what this holds is the wiring from the
+      // seat's `onCancel` to the discard path, not the overlay's hit test.
+      tester
+          .widget<OutlinedButton>(
+            find.ancestor(
+              of: find.text('Cancel'),
+              matching: find.byType(OutlinedButton),
+            ),
+          )
+          .onPressed!
+          .call();
+      await tester.pump();
+
+      expect(canceled, 1);
+      expect(finished, 0, reason: 'discarding a capture never sends it');
+    });
+
+    testWidgets('a hold keeps the bubble gesture-only', (
+      WidgetTester tester,
+    ) async {
+      var finished = 0;
+      await tester.pumpWidget(_seat(_transcribing, onFinish: () => finished++));
+      await tester.pump();
+
+      final hold = await _pressAndHold(tester);
+
+      // While a finger is down the release is the ending; a button under it
+      // would be a second, contradictory one.
+      expect(find.text('Cancel'), findsNothing);
+      expect(find.text('Send'), findsNothing);
+
+      await hold.up();
+      await tester.pump();
+      expect(finished, 1);
     });
 
     testWidgets('a tap on an idle seat opens a capture and sounds it', (

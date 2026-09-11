@@ -1230,6 +1230,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inputLabel => '输入';
 
   @override
+  String get diffLabel => '改动';
+
+  @override
+  String get viewDiff => '变更对比';
+
+  @override
+  String get viewFullFile => '完整文件';
+
+  @override
   String get outputLabel => '输出';
 
   @override
@@ -2271,6 +2280,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAppearanceDark => '深色';
+
+  @override
+  String get settingsAppearanceOled => '纯黑';
 
   @override
   String get settingsAppearanceSystem => '跟随系统';

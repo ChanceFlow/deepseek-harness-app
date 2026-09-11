@@ -23,6 +23,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/theme.dart';
 import 'markdown/markdown_text.dart';
+import 'tool_row_model.dart' show DiffLineKind, EditDiffModel;
 
 /// Reads a text window of [path] inside [sessionId]'s workspace.
 typedef WorkspaceFileReader = Future<WorkspaceFileContent> Function(
@@ -37,6 +38,7 @@ Future<void> showFilePreviewSheet(
   required String sessionId,
   required String path,
   required WorkspaceFileReader readFile,
+  EditDiffModel? initialDiff,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -47,22 +49,30 @@ Future<void> showFilePreviewSheet(
       curve: DshMotion.curveEmphasized,
       reverseCurve: DshMotion.curveExit,
     ),
-    builder: (sheetContext) =>
-        FilePreviewSheet(sessionId: sessionId, path: path, readFile: readFile),
+    builder: (sheetContext) => FilePreviewSheet(
+      sessionId: sessionId,
+      path: path,
+      readFile: readFile,
+      initialDiff: initialDiff,
+    ),
   );
 }
+
+enum _FilePreviewTab { diff, full }
 
 class FilePreviewSheet extends StatefulWidget {
   const FilePreviewSheet({
     required this.sessionId,
     required this.path,
     required this.readFile,
+    this.initialDiff,
     super.key,
   });
 
   final String sessionId;
   final String path;
   final WorkspaceFileReader readFile;
+  final EditDiffModel? initialDiff;
 
   @override
   State<FilePreviewSheet> createState() => _FilePreviewSheetState();
@@ -72,6 +82,9 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
   WorkspaceFileContent? _content;
   bool _loading = true;
   bool _failed = false;
+  late _FilePreviewTab _selectedTab = widget.initialDiff != null
+      ? _FilePreviewTab.diff
+      : _FilePreviewTab.full;
 
   @override
   void initState() {
@@ -126,7 +139,14 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _header(context, l10n, copyable: content != null && !binary),
+                _header(
+                  context,
+                  l10n,
+                  copyable:
+                      (content != null && !binary) ||
+                      widget.initialDiff != null,
+                ),
+                if (widget.initialDiff != null) _tabBar(context, l10n),
                 Divider(height: 1, color: scheme.outlineVariant),
                 Flexible(
                   child: _body(context, l10n, binary: binary, content: content),
@@ -186,6 +206,30 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
     );
   }
 
+  Widget _tabBar(BuildContext context, AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: SegmentedButton<_FilePreviewTab>(
+        segments: [
+          ButtonSegment(
+            value: _FilePreviewTab.diff,
+            label: Text(l10n.viewDiff),
+            icon: const Icon(Icons.difference_outlined, size: 14),
+          ),
+          ButtonSegment(
+            value: _FilePreviewTab.full,
+            label: Text(l10n.viewFullFile),
+            icon: const Icon(Icons.description_outlined, size: 14),
+          ),
+        ],
+        selected: {_selectedTab},
+        onSelectionChanged: (selected) {
+          setState(() => _selectedTab = selected.first);
+        },
+      ),
+    );
+  }
+
   Widget _body(
     BuildContext context,
     AppLocalizations l10n, {
@@ -194,6 +238,71 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final diff = widget.initialDiff;
+    if (_selectedTab == _FilePreviewTab.diff && diff != null) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final line in diff.lines)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: switch (line.kind) {
+                      DiffLineKind.delete => scheme.errorContainer.withValues(
+                        alpha: 0.35,
+                      ),
+                      DiffLineKind.insert => scheme.primaryContainer.withValues(
+                        alpha: 0.35,
+                      ),
+                      DiffLineKind.equal => Colors.transparent,
+                    },
+                    borderRadius: BorderRadius.circular(kShapeChip),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        child: Text(
+                          switch (line.kind) {
+                            DiffLineKind.delete => '-',
+                            DiffLineKind.insert => '+',
+                            DiffLineKind.equal => ' ',
+                          },
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: switch (line.kind) {
+                              DiffLineKind.delete => scheme.error,
+                              DiffLineKind.insert => scheme.primary,
+                              DiffLineKind.equal => scheme.onSurfaceVariant,
+                            },
+                          ),
+                        ),
+                      ),
+                      Text(
+                        line.text,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 48),
@@ -293,11 +402,24 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
   }
 
   Future<void> _copyContent() async {
-    final content = _content;
-    if (content == null) return;
+    final diff = widget.initialDiff;
+    final String textToCopy;
+    if (_selectedTab == _FilePreviewTab.diff && diff != null) {
+      textToCopy = [
+        for (final line in diff.lines)
+          '${line.kind == DiffLineKind.delete
+              ? '-'
+              : line.kind == DiffLineKind.insert
+              ? '+'
+              : ' '} ${line.text}',
+      ].join('\n');
+    } else {
+      textToCopy = _content?.text ?? '';
+    }
+    if (textToCopy.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    await Clipboard.setData(ClipboardData(text: content.text));
+    await Clipboard.setData(ClipboardData(text: textToCopy));
     messenger.showSnackBar(
       SnackBar(
         content: Text(l10n.copiedFeedback),

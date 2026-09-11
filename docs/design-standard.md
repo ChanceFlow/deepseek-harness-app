@@ -3,7 +3,7 @@
 Taste does not survive a handoff. This document derives the client's surface
 from facts about the product, so the next component has an answer before it
 is drawn and a reviewer can name which fact a change violates. The resulting
-numbers — the `ColorScheme` role map, the four radii, the three gaps — live
+numbers — the `ColorScheme` role map, the six radii, the three gaps — live
 in [flutter/app/AGENTS.md](../flutter/app/AGENTS.md); here is where they come
 from and how to derive the next one.
 
@@ -73,17 +73,18 @@ Answer in order; a blocked question sends the change back, not forward.
 3. **What does it cost in vertical pixels while idle?** Name the number and
    say what the reader gains for it.
 4. **Which existing step does it take?** A tone from the role map, a radius
-   from the four, a gap from the three. A new step is a decision note.
+   from the six, a gap from the three. A new step is a decision note.
 5. **What proves it?** A widget test that pumps the real tree and asserts
    the rendered role or behavior ([docs/testing.md](testing.md)).
 
 ## Enforcement
 
-`verify_theme_native` rejects a raw color or a theme extension anywhere
-under `flutter/app/lib/` outside `theme.dart`, so the role map is the only
-way through. Widget tests assert colors by role under both brightnesses, so
-a hard-coded value fails one of them. The rest — whether a change earns its
-pixels — is review holding a diff against the five facts above.
+`verify_theme_native` rejects a raw color, a theme extension, or a numeric
+radius anywhere under `flutter/app/lib/` outside `theme.dart`, so no other
+value gets through. Widget tests assert colors by role under both
+brightnesses, so a hard-coded value fails one of them. The rest — whether a
+change earns its pixels — is review holding a diff against the five facts
+above.
 
 ## Looking at it
 

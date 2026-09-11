@@ -352,7 +352,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                   onTap: () => widget.onCreateSession(null),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 6),
@@ -925,7 +925,9 @@ class _SearchCapsule extends StatelessWidget {
         backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
         side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant)),
         shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kShapeChip),
+          ),
         ),
         constraints: const BoxConstraints.tightFor(height: 36),
         padding: const WidgetStatePropertyAll(
@@ -982,7 +984,9 @@ class _BackendSectionHeader extends StatelessWidget {
       selected: slice.active,
       tileColor: Colors.transparent,
       selectedTileColor: scheme.secondaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kShapeChip),
+      ),
       leading: BackendConnectionDot(backendId: backend.id),
       title: Text(
         backend.label,
@@ -1002,7 +1006,7 @@ class _BackendSectionHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
           color: slice.active ? scheme.primaryContainer : null,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(kShapePill),
         ),
         child: Text(
           slice.active ? l10n.backendStatusActive : l10n.backendStatusStandby,
@@ -1264,7 +1268,7 @@ class _NewSessionDialog extends StatelessWidget {
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                     onTap: () {
                       onCreateSession(null);
                       Navigator.of(context).pop();
@@ -1276,7 +1280,7 @@ class _NewSessionDialog extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: scheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(kShapeChip),
                         border: Border.all(color: scheme.outlineVariant),
                       ),
                       child: Row(
@@ -1312,7 +1316,7 @@ class _NewSessionDialog extends StatelessWidget {
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(kShapeChip),
                         onTap: () {
                           onCreateSession(workspace.workspaceId);
                           Navigator.of(context).pop();
@@ -1324,7 +1328,7 @@ class _NewSessionDialog extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: scheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(kShapeChip),
                             border: Border.all(color: scheme.outlineVariant),
                           ),
                           child: Row(

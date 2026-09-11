@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../shared/tappable_feedback.dart';
 import '../../theme/theme.dart';
 import 'voice_input_ui_state.dart';
 
@@ -209,6 +210,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
   }
 
   void _start() {
+    primaryFocus?.unfocus();
     unawaited(HapticFeedback.mediumImpact());
     unawaited(playVoiceSound(VoiceSound.start));
     widget.onStart();
@@ -238,7 +240,10 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
   void _handleHoldMove(LongPressMoveUpdateDetails details) {
     if (!_holding) return;
     final armed = details.localOffsetFromOrigin.dy <= -kVoiceCancelSlide;
-    if (armed != _armed) setState(() => _armed = armed);
+    if (armed != _armed) {
+      unawaited(HapticFeedback.selectionClick());
+      setState(() => _armed = armed);
+    }
   }
 
   void _handleHoldUp() {
@@ -306,48 +311,64 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
             armed: _armed,
             holding: _holding,
             uiState: _uiState,
+            onCancel: _discard,
+            onFinish: _finish,
           ),
         ),
-        child: IconButton(
-          // While a session runs the seat is the send control that the
-          // release gesture is, so it says so.
-          tooltip: _live ? l10n.voiceInputDone : l10n.voiceInputTooltip,
-          onPressed: widget.enabled ? _handleTap : null,
-          // The hold's hit box is the icon slot, so the slot is the whole
-          // seat: no dead ring where a thumb would hit the tooltip instead.
-          iconSize: kVoiceSeatBox,
-          style: IconButton.styleFrom(
-            padding: EdgeInsets.zero,
-            minimumSize: const Size.square(kVoiceSeatBox),
-            foregroundColor: _live
-                ? scheme.onErrorContainer
-                : scheme.onSurfaceVariant,
-            disabledForegroundColor: scheme.outline,
-            backgroundColor: _live ? scheme.errorContainer : null,
-            shape: const CircleBorder(),
-          ),
-          // The hold is recognised inside the button rather than around it,
-          // because a Material `Tooltip` shows itself on long press: a
-          // detector outside the seat loses that arena and the press only ever
-          // reveals the tooltip. As the deepest competitor here it wins a hold
-          // while a tap still falls through to the button, which is what keeps
-          // both gestures on one seat.
-          icon: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPressStart: _handleHoldStart,
-            onLongPressMoveUpdate: _handleHoldMove,
-            onLongPressUp: _handleHoldUp,
-            child: SizedBox(
-              width: kVoiceSeatBox,
-              height: kVoiceSeatBox,
-              child: Center(
-                child: AnimatedScale(
-                  duration: Durations.short2,
-                  curve: Easing.standard,
-                  scale: live
-                      ? 1 + 0.16 * _uiState.amplitude.clamp(0.0, 1.0)
-                      : 1.0,
-                  child: Icon(_live ? Icons.mic : Icons.mic_outlined, size: 22),
+        child: DshTappable(
+          // The seat's own start/finish/discard impacts are the click this
+          // gesture produces, so the wrapper supplies only the scale.
+          enabled: widget.enabled,
+          enableHaptic: false,
+          child: IconButton(
+            // While a session runs the seat is the send control that the
+            // release gesture is, so it says so.
+            tooltip: _live ? l10n.voiceInputDone : l10n.voiceInputTooltip,
+            onPressed: widget.enabled ? _handleTap : null,
+            // The hold's hit box is the icon slot, so the slot is the whole
+            // seat: no dead ring where a thumb would hit the tooltip instead.
+            iconSize: kVoiceSeatBox,
+            style: IconButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(kVoiceSeatBox),
+              foregroundColor: _live
+                  ? scheme.onErrorContainer
+                  : scheme.onSurfaceVariant,
+              disabledForegroundColor: scheme.outline,
+              backgroundColor: _live ? scheme.errorContainer : null,
+              // Press feedback is the wrapper's scale plus the seat's own
+              // phase impacts; a ripple under it would be a second animation.
+              highlightColor: Colors.transparent,
+              splashFactory: NoSplash.splashFactory,
+              enableFeedback: false,
+              shape: const CircleBorder(),
+            ),
+            // The hold is recognised inside the button rather than around it,
+            // because a Material `Tooltip` shows itself on long press: a
+            // detector outside the seat loses that arena and the press only ever
+            // reveals the tooltip. As the deepest competitor here it wins a hold
+            // while a tap still falls through to the button, which is what keeps
+            // both gestures on one seat.
+            icon: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPressStart: _handleHoldStart,
+              onLongPressMoveUpdate: _handleHoldMove,
+              onLongPressUp: _handleHoldUp,
+              child: SizedBox(
+                width: kVoiceSeatBox,
+                height: kVoiceSeatBox,
+                child: Center(
+                  child: AnimatedScale(
+                    duration: Durations.short2,
+                    curve: Easing.standard,
+                    scale: live
+                        ? 1 + 0.16 * _uiState.amplitude.clamp(0.0, 1.0)
+                        : 1.0,
+                    child: Icon(
+                      _live ? Icons.mic : Icons.mic_outlined,
+                      size: 22,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -409,6 +430,8 @@ class _VoiceRecordBubble extends StatelessWidget {
     required this.armed,
     required this.holding,
     required this.uiState,
+    this.onCancel,
+    this.onFinish,
   });
 
   final LayerLink link;
@@ -416,6 +439,8 @@ class _VoiceRecordBubble extends StatelessWidget {
   final bool armed;
   final bool holding;
   final VoiceInputUiState uiState;
+  final VoidCallback? onCancel;
+  final VoidCallback? onFinish;
 
   @override
   Widget build(BuildContext context) {
@@ -434,6 +459,156 @@ class _VoiceRecordBubble extends StatelessWidget {
       (_, _, _) => l10n.voiceInputTapToFinish,
     };
 
+    final bubble = SizedBox(
+      width: kVoiceBubbleWidth,
+      child: CustomPaint(
+        painter: _BubbleShell(
+          fill: armed ? scheme.errorContainer : scheme.surfaceContainer,
+          hairline: scheme.outlineVariant,
+          shadow: scheme.shadow,
+          // The tail answers to the seat, wherever the viewport pushed the
+          // card to stay out of it.
+          tailX: kVoiceBubbleWidth / 2 - shift,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12 + kVoiceBubbleTail),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  _RecordPhaseIndicator(recording: recording, motion: motion),
+                  const SizedBox(width: 6),
+                  Text(
+                    formatVoiceDuration(uiState.duration),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                      color: armed ? scheme.onErrorContainer : scheme.onSurface,
+                      // The clock steps once a second; fixed-width digits
+                      // stop the row shuffling under it.
+                      fontFeatures: const <FontFeature>[
+                        FontFeature.tabularFigures(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _LiveVoiceMeter(
+                      envelope: uiState.envelope,
+                      level: uiState.amplitude,
+                      live: uiState.isRecording,
+                      capturing: recording,
+                      // A hold that means "discard" stops showing the
+                      // reader's voice and starts showing its own state.
+                      dim: waiting || armed,
+                      motion: motion,
+                    ),
+                  ),
+                ],
+              ),
+              if (uiState.liveTranscription.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: armed
+                        ? scheme.error.withValues(alpha: 0.12)
+                        : scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(kShapeChip),
+                  ),
+                  constraints: const BoxConstraints(maxHeight: 52),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      uiState.liveTranscription,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: armed
+                            ? scheme.onErrorContainer
+                            : scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                hint,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: armed
+                      ? scheme.onErrorContainer
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+              if (!holding &&
+                  uiState.isRecording &&
+                  onCancel != null &&
+                  onFinish != null) ...[
+                const SizedBox(height: 8),
+                // Both seats share the bubble's 212dp content width: the
+                // card is a fixed 236dp so its tail keeps pointing at the
+                // seat, and two intrinsic-width buttons overflow it.
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onCancel,
+                        icon: const Icon(Icons.close, size: 14),
+                        label: Text(
+                          l10n.cancel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onFinish,
+                        icon: const Icon(Icons.check, size: 14),
+                        label: Text(
+                          l10n.send,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              // Debug-only strip: native capture telemetry, so the data flow
+              // is visible on-screen without adb/logcat.
+              if (kDebugMode && uiState.debugStats != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    formatDebugStats(uiState.debugStats!) ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: scheme.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
     return CompositedTransformFollower(
       link: link,
       showWhenUnlinked: false,
@@ -442,97 +617,7 @@ class _VoiceRecordBubble extends StatelessWidget {
       // pointer is what ties the bubble to the control that opened it.
       followerAnchor: Alignment.bottomCenter,
       offset: Offset(shift, -kVoiceBubbleGap),
-      child: IgnorePointer(
-        child: SizedBox(
-          width: kVoiceBubbleWidth,
-          child: CustomPaint(
-            painter: _BubbleShell(
-              fill: armed ? scheme.errorContainer : scheme.surfaceContainer,
-              hairline: scheme.outlineVariant,
-              shadow: scheme.shadow,
-              // The tail answers to the seat, wherever the viewport pushed the
-              // card to stay out of it.
-              tailX: kVoiceBubbleWidth / 2 - shift,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                12,
-                12,
-                12,
-                12 + kVoiceBubbleTail,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      _RecordPhaseIndicator(
-                        recording: recording,
-                        motion: motion,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        formatVoiceDuration(uiState.duration),
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace',
-                          color: armed
-                              ? scheme.onErrorContainer
-                              : scheme.onSurface,
-                          // The clock steps once a second; fixed-width digits
-                          // stop the row shuffling under it.
-                          fontFeatures: const <FontFeature>[
-                            FontFeature.tabularFigures(),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _LiveVoiceMeter(
-                          envelope: uiState.envelope,
-                          level: uiState.amplitude,
-                          live: uiState.isRecording,
-                          capturing: recording,
-                          // A hold that means "discard" stops showing the
-                          // reader's voice and starts showing its own state.
-                          dim: waiting || armed,
-                          motion: motion,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    hint,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: armed
-                          ? scheme.onErrorContainer
-                          : scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  // Debug-only strip: native capture telemetry, so the data flow
-                  // is visible on-screen without adb/logcat.
-                  if (kDebugMode && uiState.debugStats != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        formatDebugStats(uiState.debugStats!) ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontFamily: 'monospace',
-                          color: scheme.primary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: holding ? IgnorePointer(child: bubble) : bubble,
     );
   }
 }
