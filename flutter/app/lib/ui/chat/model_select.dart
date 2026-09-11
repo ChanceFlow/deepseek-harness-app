@@ -10,6 +10,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/menu_sheet.dart';
+import '../shared/tappable_feedback.dart';
 
 import 'chat_local_state.dart';
 
@@ -55,22 +56,30 @@ class ModelSelect extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      // Long-press discloses the active model; the sheet carries the rest.
-      tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
-      onPressed: locked ? null : () => _open(context),
-      // The settings-style glyph (the tune vocabulary the sheet header
-      // uses) — not a sparkle.
-      icon: const Icon(Icons.tune, size: 22),
-      // Native tool control, same family as the composer ➕: a standard
-      // 40px M3 icon button drawn straight on the dock. The control row
-      // fills exactly one seat — send — so a filled tool would read as a
-      // second primary.
-      style: IconButton.styleFrom(
-        foregroundColor: scheme.onSurfaceVariant,
-        disabledForegroundColor: scheme.outline,
-        hoverColor: scheme.surfaceContainerHigh,
-        shape: const CircleBorder(),
+    return DshTappable(
+      enabled: !locked,
+      enableHaptic: true,
+      child: IconButton(
+        // Long-press discloses the active model; the sheet carries the rest.
+        tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
+        onPressed: locked ? null : () => _open(context),
+        // The settings-style glyph (the tune vocabulary the sheet header
+        // uses) — not a sparkle.
+        icon: const Icon(Icons.tune, size: 22),
+        // Native tool control, same family as the composer ➕: a standard
+        // 40px M3 icon button drawn straight on the dock. The control row
+        // fills exactly one seat — send — so a filled tool would read as a
+        // second primary. The press feedback is DshTappable's scale and its
+        // one haptic, so the button's own splash stays off.
+        style: IconButton.styleFrom(
+          foregroundColor: scheme.onSurfaceVariant,
+          disabledForegroundColor: scheme.outline,
+          hoverColor: scheme.surfaceContainerHigh,
+          highlightColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          enableFeedback: false,
+          shape: const CircleBorder(),
+        ),
       ),
     );
   }

@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../shared/tappable_feedback.dart';
 import '../../theme/theme.dart';
 import 'voice_input_ui_state.dart';
 
@@ -314,46 +315,60 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
             onFinish: _finish,
           ),
         ),
-        child: IconButton(
-          // While a session runs the seat is the send control that the
-          // release gesture is, so it says so.
-          tooltip: _live ? l10n.voiceInputDone : l10n.voiceInputTooltip,
-          onPressed: widget.enabled ? _handleTap : null,
-          // The hold's hit box is the icon slot, so the slot is the whole
-          // seat: no dead ring where a thumb would hit the tooltip instead.
-          iconSize: kVoiceSeatBox,
-          style: IconButton.styleFrom(
-            padding: EdgeInsets.zero,
-            minimumSize: const Size.square(kVoiceSeatBox),
-            foregroundColor: _live
-                ? scheme.onErrorContainer
-                : scheme.onSurfaceVariant,
-            disabledForegroundColor: scheme.outline,
-            backgroundColor: _live ? scheme.errorContainer : null,
-            shape: const CircleBorder(),
-          ),
-          // The hold is recognised inside the button rather than around it,
-          // because a Material `Tooltip` shows itself on long press: a
-          // detector outside the seat loses that arena and the press only ever
-          // reveals the tooltip. As the deepest competitor here it wins a hold
-          // while a tap still falls through to the button, which is what keeps
-          // both gestures on one seat.
-          icon: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPressStart: _handleHoldStart,
-            onLongPressMoveUpdate: _handleHoldMove,
-            onLongPressUp: _handleHoldUp,
-            child: SizedBox(
-              width: kVoiceSeatBox,
-              height: kVoiceSeatBox,
-              child: Center(
-                child: AnimatedScale(
-                  duration: Durations.short2,
-                  curve: Easing.standard,
-                  scale: live
-                      ? 1 + 0.16 * _uiState.amplitude.clamp(0.0, 1.0)
-                      : 1.0,
-                  child: Icon(_live ? Icons.mic : Icons.mic_outlined, size: 22),
+        child: DshTappable(
+          // The seat's own start/finish/discard impacts are the click this
+          // gesture produces, so the wrapper supplies only the scale.
+          enabled: widget.enabled,
+          enableHaptic: false,
+          child: IconButton(
+            // While a session runs the seat is the send control that the
+            // release gesture is, so it says so.
+            tooltip: _live ? l10n.voiceInputDone : l10n.voiceInputTooltip,
+            onPressed: widget.enabled ? _handleTap : null,
+            // The hold's hit box is the icon slot, so the slot is the whole
+            // seat: no dead ring where a thumb would hit the tooltip instead.
+            iconSize: kVoiceSeatBox,
+            style: IconButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(kVoiceSeatBox),
+              foregroundColor: _live
+                  ? scheme.onErrorContainer
+                  : scheme.onSurfaceVariant,
+              disabledForegroundColor: scheme.outline,
+              backgroundColor: _live ? scheme.errorContainer : null,
+              // Press feedback is the wrapper's scale plus the seat's own
+              // phase impacts; a ripple under it would be a second animation.
+              highlightColor: Colors.transparent,
+              splashFactory: NoSplash.splashFactory,
+              enableFeedback: false,
+              shape: const CircleBorder(),
+            ),
+            // The hold is recognised inside the button rather than around it,
+            // because a Material `Tooltip` shows itself on long press: a
+            // detector outside the seat loses that arena and the press only ever
+            // reveals the tooltip. As the deepest competitor here it wins a hold
+            // while a tap still falls through to the button, which is what keeps
+            // both gestures on one seat.
+            icon: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPressStart: _handleHoldStart,
+              onLongPressMoveUpdate: _handleHoldMove,
+              onLongPressUp: _handleHoldUp,
+              child: SizedBox(
+                width: kVoiceSeatBox,
+                height: kVoiceSeatBox,
+                child: Center(
+                  child: AnimatedScale(
+                    duration: Durations.short2,
+                    curve: Easing.standard,
+                    scale: live
+                        ? 1 + 0.16 * _uiState.amplitude.clamp(0.0, 1.0)
+                        : 1.0,
+                    child: Icon(
+                      _live ? Icons.mic : Icons.mic_outlined,
+                      size: 22,
+                    ),
+                  ),
                 ),
               ),
             ),
