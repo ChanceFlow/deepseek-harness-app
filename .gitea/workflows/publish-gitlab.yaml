@@ -45,9 +45,10 @@ env:
 
 jobs:
   mirror:
-    # Prebaked local image — see the same note in publish-github.yaml:
-    # pulling ubuntu-latest from docker.gitea.com timed out on 2026-08-26
-    # and the mirrors silently lagged 3 days.
+    # Host execution on the CI label — see the same note in
+    # publish-github.yaml: git/python3/curl come from the runner machine, so
+    # no image is pulled. Pulling ubuntu-latest from docker.gitea.com timed out
+    # on 2026-08-26 and the mirrors silently lagged 3 days.
     runs-on: flutter-android
     steps:
       - name: Gate check token

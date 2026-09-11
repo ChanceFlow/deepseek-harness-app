@@ -24,18 +24,19 @@ public mirror:
   AOT, asset merge, R8, packaging and signing of
   `assembleDebug`/`assembleRelease` are all skipped. Warm, the task is
   seconds; the job stays bounded for a cold gradle.
-- The forge job rides the prebaked `flutter-android` image (SDK, JDK and
-  Flutter on PATH, dependency caches baked at image build) and restores the
-  release build's `gradle-v1-` cache (`actions/cache`, keyed on
-  `flutter/pubspec.lock`) when the cache service answers — a miss falls
-  back to the baked cache and egress downloads, which flake, so the
+- The forge job runs on the `flutter-android` label, which this forge
+  registers as host execution: Flutter, the Android SDK and the JDK come from
+  the runner's `PATH`, and the host's own `~/.gradle` holds the artifacts the
+  task resolves — no cache step is involved
+  ([2026-09-11-ci-runner-host-mode.md](2026-09-11-ci-runner-host-mode.md)).
+  Egress downloads still flake, so the
   compile is bounded and retried like the pub resolve above. The Flutter
   embedding resolves through gradle from `download.flutter.io` — no
   `flutter precache` and no `bin/cache` engine artifacts are involved. The
-  egress address rides `vars.EGRESS_PROXY` and the compile step rewrites
-  the image's user-level `gradle.properties` from it at runtime: the image
-  bakes that file at build time and its `systemProp` proxy outranks every
-  env layer, so a stale baked address silently eats every egress download.
+  egress address rides `vars.EGRESS_PROXY` and the compile step rewrites the
+  user-level `gradle.properties` from it at runtime: Gradle's JVM reads that
+  file and its `systemProp` proxy outranks every env layer, so an address left
+  there from an earlier route silently eats every egress download.
   An internal address is never committed, and the leak rule covers both
   internal subnets.
 - `flutter pub get` runs before the compile because its outputs are compile
@@ -69,6 +70,5 @@ returns to the PR that caused it instead of the release channel after the
 merge. The verdict covers `MainActivity.kt` — the app's only hand-written
 Kotlin — and any future native source under `flutter/app/android`; plugin
 code stays out (its own project compiles it during the full release build).
-The `gradle-v1-` cache is now restored by two consumers (the release build
-and this gate) and its key still moves only when `flutter/pubspec.lock`
-moves.
+No cache key moves with this gate: the host's `~/.gradle` is the runner
+machine's own directory and carries the artifacts between jobs.

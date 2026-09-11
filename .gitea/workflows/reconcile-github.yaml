@@ -36,9 +36,10 @@ env:
 
 jobs:
   reconcile:
-    # Prebaked local image — see the same note in publish-github.yaml:
-    # docker.gitea.com pulls stalled on 2026-08-26 and the mirror alerting
-    # chain broke with them.
+    # Host execution on the CI label — see the same note in
+    # publish-github.yaml: git/python3/curl come from the runner machine, so
+    # no image is pulled. docker.gitea.com pulls stalled on 2026-08-26 and the
+    # mirror alerting chain broke with them.
     runs-on: flutter-android
     steps:
       - name: Checkout (full history)

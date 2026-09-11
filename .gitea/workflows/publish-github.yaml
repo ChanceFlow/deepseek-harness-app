@@ -56,10 +56,11 @@ env:
 
 jobs:
   mirror:
-    # Prebaked local image, not ubuntu-latest: the 2026-08-26 mirrors died
-    # because the runner had no ubuntu-latest cached and pulling
-    # docker.gitea.com timed out — GitHub then silently lagged 3 days.
-    # This image ships git/python3/curl/node and needs no per-run pull.
+    # Runs on the label the CI workflows use, which this forge registers as
+    # HOST execution: git/python3/curl come from the runner machine, so the
+    # job needs neither an ubuntu-latest pull nor a container image. The
+    # 2026-08-26 mirrors died pulling docker.gitea.com and left GitHub
+    # lagging 3 days; nothing is pulled on this path.
     runs-on: flutter-android
     steps:
       - name: Checkout (full history)

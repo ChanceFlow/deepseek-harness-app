@@ -18,6 +18,14 @@
 # initialize it without any internal access.
 name: CI
 
+# A superseded push is waste: the newest push to a ref cancels the older run.
+# Branch builds share one group per ref, so a push never cancels another
+# branch's verdict. A cancelled `master` run is not a lost verdict — the run
+# for the next merge covers its tree.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: ["master"]
