@@ -601,6 +601,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavPlugins => '插件';
 
   @override
+  String get settingsNavPluginSettings => '插件设置';
+
+  @override
   String get settingsNavAgentPresets => 'Agent 预设';
 
   @override
@@ -614,6 +617,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsScopeFollowActive => '跟随当前主机';
+
+  @override
+  String get settingsScopeFactsTitle => '此主机';
 
   @override
   String get settingsLoopbackHint =>
@@ -868,7 +874,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsReadOnlyNotice => '此部署中的设置文档为只读。';
 
   @override
-  String get modelsFooter => '提供方凭据保存在宿主机；下方的「提供方」区段可直接在本机增删与填写密钥。';
+  String get modelsFooter => '提供方凭据保存在宿主机；「提供方」页面可直接在本机增删与填写密钥。';
 
   @override
   String get apiKeyConfigured => 'API 密钥已配置';
@@ -2330,6 +2336,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAppearanceUnavailable => '主机主题设置不可用。';
+
+  @override
+  String get settingsValueUnavailable => '不可用';
 
   @override
   String get settingsAppearanceSaveFailed => '无法保存主题选择。';

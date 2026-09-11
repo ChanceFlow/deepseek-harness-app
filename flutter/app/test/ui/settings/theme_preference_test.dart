@@ -378,22 +378,15 @@ void main() {
     await _pumpRow(tester, controller);
 
     // The OLED seat states that its store is missing; the host seats stay live.
-    final SegmentedButton<ThemePreference> selector = tester
-        .widget<SegmentedButton<ThemePreference>>(
-          find.byType(SegmentedButton<ThemePreference>),
+    RadioListTile<ThemePreference> seat(ThemePreference option) =>
+        tester.widget<RadioListTile<ThemePreference>>(
+          find.byWidgetPredicate(
+            (Widget w) =>
+                w is RadioListTile<ThemePreference> && w.value == option,
+          ),
         );
-    expect(
-      selector.segments
-          .firstWhere((s) => s.value == ThemePreference.oled)
-          .enabled,
-      isFalse,
-    );
-    expect(
-      selector.segments
-          .firstWhere((s) => s.value == ThemePreference.light)
-          .enabled,
-      isTrue,
-    );
+    expect(seat(ThemePreference.oled).enabled, isFalse);
+    expect(seat(ThemePreference.light).enabled, isTrue);
 
     await tester.tap(find.text('Light'));
     await tester.pumpAndSettle();

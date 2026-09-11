@@ -1022,6 +1022,12 @@ abstract class AppLocalizations {
   /// **'Plugins'**
   String get settingsNavPlugins;
 
+  /// No description provided for @settingsNavPluginSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugin settings'**
+  String get settingsNavPluginSettings;
+
   /// No description provided for @settingsNavAgentPresets.
   ///
   /// In en, this message translates to:
@@ -1051,6 +1057,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Follow the active host'**
   String get settingsScopeFollowActive;
+
+  /// No description provided for @settingsScopeFactsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This host'**
+  String get settingsScopeFactsTitle;
 
   /// No description provided for @settingsLoopbackHint.
   ///
@@ -1535,7 +1547,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelsFooter.
   ///
   /// In en, this message translates to:
-  /// **'Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.'**
+  /// **'Provider credentials live on the host; the Providers page adds, keys, and removes them from this device.'**
   String get modelsFooter;
 
   /// No description provided for @apiKeyConfigured.
@@ -4140,6 +4152,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Host theme settings are unavailable.'**
   String get settingsAppearanceUnavailable;
+
+  /// No description provided for @settingsValueUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get settingsValueUnavailable;
 
   /// Stated when the host refused the appearance write.
   ///

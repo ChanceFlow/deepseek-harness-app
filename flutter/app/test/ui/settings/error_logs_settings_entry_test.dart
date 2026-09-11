@@ -42,10 +42,6 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Error Logs'), findsOneWidget);
-        expect(
-          find.text('View and export application error logs'),
-          findsOneWidget,
-        );
         expect(find.text('2 errors'), findsOneWidget);
 
         // Tap on the error logs row to navigate to ErrorLogsRoute
@@ -90,7 +86,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('错误日志'), findsOneWidget);
-      expect(find.text('查看并导出应用运行错误记录'), findsOneWidget);
       expect(find.text('0 条错误'), findsOneWidget);
     });
   });

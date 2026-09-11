@@ -29,10 +29,13 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/settings/settings_screen.dart';
+import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:asr/asr.dart';
+import 'package:domain/model/settings.dart';
+import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -196,14 +199,23 @@ final List<DesignShot> shots = <DesignShot>[
     state: questionState(),
     locale: const Locale('zh'),
   ),
-  // Settings shots: the two-category surface (App / Host) on a
-  // two-host registry fixture. The default view (Host settings,
-  // General) and the registry page pair with the same-named before
-  // shots; the App category and its zh twin are new surfaces.
+  // Settings shots: the index over a two-host registry fixture, then each
+  // surface a row opens. The index and the host sheet pair with the
+  // same-named before shots; the pages and the choice sheets are new
+  // surfaces this pass introduced.
   const DesignShot(
     name: 'settings-general',
     host: _settingsHost,
     act: _loadRegistry,
+  ),
+  // The zh twin: the index reads 主机 / 应用设置 and the language row states
+  // 跟随系统.
+  const DesignShot(
+    name: 'settings-general-zh',
+    host: _settingsHost,
+    locale: Locale('zh'),
+    act: _loadRegistry,
+    dark: false,
   ),
   const DesignShot(
     name: 'settings-hosts',
@@ -211,20 +223,37 @@ final List<DesignShot> shots = <DesignShot>[
     act: _openHostsPage,
     dark: false,
   ),
+  // The one surface that selects the default agent preset: the root row
+  // states it, this page offers it once.
   const DesignShot(
-    name: 'settings-app',
+    name: 'settings-agent-presets',
     host: _settingsHost,
-    act: _openAppCategory,
+    act: _openAgentPresetsPage,
+  ),
+  const DesignShot(
+    name: 'settings-credentials',
+    host: _settingsHost,
+    act: _openCredentialsPage,
     dark: false,
   ),
-  // The zh twin: the App category reads 应用设置 and the language
-  // row's capsules carry their own-language display names.
   const DesignShot(
-    name: 'settings-app-zh',
+    name: 'settings-plugins',
     host: _settingsHost,
-    locale: Locale('zh'),
-    act: _openAppCategoryZh,
+    act: _openPluginsPage,
     dark: false,
+  ),
+  // A single-choice picker is a sheet, not a page: three options cost the
+  // index one row instead of three capsules.
+  const DesignShot(
+    name: 'settings-language',
+    host: _settingsHost,
+    act: _openLanguageSheet,
+    dark: false,
+  ),
+  const DesignShot(
+    name: 'settings-appearance',
+    host: _settingsAppearanceHost,
+    act: _openAppearanceSheet,
   ),
   DesignShot(
     name: 'voice-recording',
@@ -475,7 +504,54 @@ ThemeData _withRealFonts(ThemeData base) {
 /// document (scope bar + Hosts rows), a temp-backed shared store
 /// (preference rows), and quiet transport seams for every host URL
 /// the document names.
-Widget _settingsHost(ThemeData theme, Locale? locale) {
+Widget _settingsHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(theme, locale);
+
+/// The same tree with the scoped host answering `settings.describe` for the
+/// `ui-theme` namespace. Without it the appearance row can only ever state
+/// that the host did not answer, which is not the surface this shot
+/// reviews.
+Widget _settingsAppearanceHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(theme, locale, repository: _FakeThemeNamespaceRepository());
+
+/// One scoped repository method: the `ui-theme` namespace the appearance row
+/// reads. Nothing else in these fixtures calls the settings plane.
+class _FakeThemeNamespaceRepository implements ChatRepository {
+  @override
+  Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
+    writable: true,
+    hasDocument: true,
+    namespaces: <SettingsNamespace>[
+      SettingsNamespace(
+        ns: kThemeSettingsNamespace,
+        applies: SettingsApplies.live,
+        revision: 4,
+        hasUserLayer: true,
+        secretCount: 0,
+        value: <String, Object?>{kThemePreferenceField: 'dark'},
+      ),
+    ],
+    credentialRefs: <String>[],
+  );
+
+  @override
+  Future<SettingsNamespace> updateSetting(
+    String ns,
+    String key,
+    String jsonValue, {
+    int? expectedRevision,
+  }) async => (await describeSettings()).namespaces.first;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
+
+Widget _settingsTree(
+  ThemeData theme,
+  Locale? locale, {
+  ChatRepository? repository,
+}) {
   final registryDir = Directory.systemTemp.createTempSync(
     'dsh-design-registry',
   );
@@ -493,6 +569,8 @@ Widget _settingsHost(ThemeData theme, Locale? locale) {
         (ref) async =>
             LocalStateStore(File('${stateDir.path}/local_state.json')),
       ),
+      if (repository != null)
+        chatRepositoryProvider('default').overrideWithValue(repository),
       for (final uri in [
         Uri.parse('http://10.0.2.2:3080'),
         Uri.parse('http://10.0.2.2:3081'),
@@ -973,15 +1051,31 @@ Future<void> _openHostsPage(WidgetTester tester) async {
   await settle(tester);
 }
 
-Future<void> _openAppCategory(WidgetTester tester) async {
+/// One root row, opened. Every settings surface this pass added hangs off
+/// a row of the index, so the act is always "load the registry, bring the
+/// row into frame, tap it".
+Future<void> _tapSettingsRow(WidgetTester tester, String title) async {
   await _loadRegistry(tester);
+  await tester.ensureVisible(find.text(title));
+  await settle(tester);
+  await tester.tap(find.text(title).hitTestable());
   await settle(tester);
 }
 
-Future<void> _openAppCategoryZh(WidgetTester tester) async {
-  await _loadRegistry(tester);
-  await settle(tester);
-}
+Future<void> _openAgentPresetsPage(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Agent preset');
+
+Future<void> _openCredentialsPage(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Credentials');
+
+Future<void> _openPluginsPage(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Plugin settings');
+
+Future<void> _openLanguageSheet(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Language');
+
+Future<void> _openAppearanceSheet(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Appearance');
 
 Future<void> _render(
   WidgetTester tester,

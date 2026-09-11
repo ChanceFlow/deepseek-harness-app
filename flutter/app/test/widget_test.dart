@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart'
-    show Icons, ListView, NavigationBar, Offset, Size, TextField;
+    show Icons, NavigationBar, Size, TextField;
 import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/backends/backend_store.dart';
@@ -258,18 +258,19 @@ void main() {
     expect(find.text('Chat'), findsOneWidget);
     expect(store.read('app.localePreference'), isNull);
 
-    // Settings → Language row in App preferences section.
+    // Settings → Language row of the App preferences section.
     await tester.tap(find.text('Settings').last);
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).last, const Offset(0, -250));
     await tester.pumpAndSettle();
     expect(find.text('Language').hitTestable(), findsOneWidget);
 
-    // Picking 中文 pins the app locale: DshApp re-resolves MaterialApp
-    // through the shared store, and the shell re-localizes — the
-    // bottom bar labels are the observable surface (the Settings tab's
-    // own header repeats 设置, so the assertions scope to the bar).
+    // Picking 中文 in the row's sheet pins the app locale: DshApp
+    // re-resolves MaterialApp through the shared store, and the shell
+    // re-localizes — the bottom bar labels are the observable surface (the
+    // Settings tab's own header repeats 设置, so the assertions scope to the
+    // bar).
     final navBarLabels = find.byType(NavigationBar);
+    await tester.tap(find.text('Language').hitTestable());
+    await tester.pumpAndSettle();
     await tester.tap(find.text('中文').hitTestable());
     await tester.pumpAndSettle();
     expect(store.read('app.localePreference'), 'zh');
@@ -288,7 +289,9 @@ void main() {
     expect(find.text('Chat'), findsNothing);
 
     // Follow system releases the pin; the shell returns to the device
-    // locale.
+    // locale. The row now states 跟随系统 in the localized chrome.
+    await tester.tap(find.text('语言').hitTestable());
+    await tester.pumpAndSettle();
     await tester.tap(find.text('跟随系统').hitTestable());
     await tester.pumpAndSettle();
     expect(store.read('app.localePreference'), 'system');

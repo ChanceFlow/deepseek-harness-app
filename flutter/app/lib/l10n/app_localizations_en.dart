@@ -664,6 +664,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNavPlugins => 'Plugins';
 
   @override
+  String get settingsNavPluginSettings => 'Plugin settings';
+
+  @override
   String get settingsNavAgentPresets => 'Agent presets';
 
   @override
@@ -678,6 +681,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsScopeFollowActive => 'Follow the active host';
+
+  @override
+  String get settingsScopeFactsTitle => 'This host';
 
   @override
   String get settingsLoopbackHint =>
@@ -953,7 +959,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsFooter =>
-      'Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.';
+      'Provider credentials live on the host; the Providers page adds, keys, and removes them from this device.';
 
   @override
   String get apiKeyConfigured => 'API key configured';
@@ -2484,6 +2490,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsAppearanceUnavailable =>
       'Host theme settings are unavailable.';
+
+  @override
+  String get settingsValueUnavailable => 'Unavailable';
 
   @override
   String get settingsAppearanceSaveFailed => 'Couldn\'t save the theme choice.';

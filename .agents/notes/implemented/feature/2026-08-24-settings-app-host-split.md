@@ -17,24 +17,29 @@ pages said "backend" (后端) while every other surface said "host"
 
 ## Decision
 
-### Grouped card layout on a single scrollable stream
+### The App/Host split and one host sheet
 
-The Settings tab presents settings in a unified, single scrollable stream using
-Material 3 grouped cards with section headings:
-- **Host & Connection** (`_HostSection`): the scoped host tile with live status,
-  endpoint, active badge, and manage affordance to open the host management sheet.
-- **App Preferences** (`_AppPreferencesSection`): client-side preferences like
-  Language.
-- **Chat & Agent** (`_ChatAgentSection`): conversational preferences like Enter key
-  behavior and agent presets.
-- **Models & Credentials** (`_ModelsCredentialsSection`): API keys (DeepSeek, etc.)
-  and credential records.
-- **Plugins & Advanced** (`_PluginsAdvancedSection`): namespace configurations and
-  plugin overrides.
+What this note owns is the split and the vocabulary, not the layout. The
+tab's presentation moved to the
+[index note](2026-09-12-settings-index-and-subpages.md): the root is now
+an index of one-line rows, and each subject below is a pushed page or a
+modal sheet instead of a card on one scroll. The subjects themselves are
+unchanged:
 
-This removes the friction of multi-layer capsule tab switching while keeping all
-controls organized and accessible. The host management sheet continues to own the
-host registry and scope operations.
+- **Host & connection**: the scoped host tile, which opens the host
+  management sheet, plus the battery-optimization exemption. The
+  writable/settings-document facts ride the host sheet's footer.
+- **App preferences**: the client-side preferences, language first.
+- **Chat & agent**: the busy-Enter behavior and the default agent
+  preset.
+- **Models & credentials**: API keys (DeepSeek, etc.) and credential
+  records, over the provider directory.
+- **Plugins & advanced**: the namespace configurations and the
+  read-only plugin inventory.
+
+This removes the friction of multi-layer capsule tab switching while
+keeping all controls organized and accessible. The host management sheet
+continues to own the host registry and scope operations.
 
 Scope semantics are unchanged ([settings backend scope](2026-08-21-settings-backend-scope.md)):
 follow-active until pinned, pin survives chat-active switches, a gone
@@ -75,8 +80,12 @@ layer never shows them to a user.
   edit sheet owns the active switch, the row owns scope.
 - **Host-scoped language (the web's shape)**: rejected for mobile —
   the language must work before any host is reachable.
-- **Landing list with subpages**: rejected — the capsule/IndexedStack
-  vocabulary keeps one-tap flips and per-page state.
+- **Landing list with subpages**: rejected here — the capsule/IndexedStack
+  vocabulary keeps one-tap flips and per-page state. Adopted later for a
+  different reason by the
+  [index note](2026-09-12-settings-index-and-subpages.md), which lists
+  every surface up front and pushes the ones with content; the
+  capsule/IndexedStack form stays rejected.
 - **Busy-Enter on the App page (storage-semantics argument)**:
   rejected after a first pass tried it — the row describes
   interaction with a host turn (web parity: the host's
@@ -96,11 +105,12 @@ layer never shows them to a user.
   host, add, edit/repoint/guards, unreachable gate) in
   `settings_screen_test.dart`; the former scope-bar widget tests are
   host-sheet tests.
-- Design shots: `settings-general` / `settings-hosts` (the sheet)
-  pair against the first-pass renders; `settings-app` /
-  `settings-app-zh` carry the App page. The review harness's `host`
-  builder (a root-scope tree per shot) stays.
+- Design shots: `settings-general` / `settings-general-zh` carry the
+  index, `settings-hosts` the sheet, and the
+  [index note](2026-09-12-settings-index-and-subpages.md)'s pages and
+  choice sheets the rest. The review harness's `host` builder (a
+  root-scope tree per shot) stays.
 - The i18n note's device-locale behavior is amended here (see
   [bilingual i18n](2026-08-20-bilingual-i18n-zh-en.md)); busy-Enter
   keeps the [settings parity](2026-08-20-settings-section-parity.md)
-  General placement, its mobile storage staying device-local.
+  Chat & agent placement, its mobile storage staying device-local.

@@ -419,11 +419,13 @@
   "settingsNavGeneral": "General",
   "settingsNavModels": "Models",
   "settingsNavPlugins": "Plugins",
+  "settingsNavPluginSettings": "Plugin settings",
   "settingsNavAgentPresets": "Agent presets",
   "settingsNavCredentials": "Credentials",
   "settingsScopeTitle": "Choose a host",
   "settingsScopeHint": "These settings pages describe the chosen host - independent of the host Chat uses.",
   "settingsScopeFollowActive": "Follow the active host",
+  "settingsScopeFactsTitle": "This host",
   "settingsLoopbackHint": "settings/credentials are loopback-only on the host; connect via adb reverse",
   "setChatHost": "Set as chat host",
   "addBackend": "Add host",
@@ -652,7 +654,7 @@
   },
   "modelsIntro": "Enter your API keys to use models from the following providers.",
   "settingsReadOnlyNotice": "The settings document is read-only in this deployment.",
-  "modelsFooter": "Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.",
+  "modelsFooter": "Provider credentials live on the host; the Providers page adds, keys, and removes them from this device.",
   "apiKeyConfigured": "API key configured",
   "apiKeyMissing": "API key missing",
   "credentialsIntro": "Secret references named by the host namespaces.",
@@ -2299,6 +2301,7 @@
     "description": "Theme preference segment following the device setting."
   },
   "settingsAppearanceUnavailable": "Host theme settings are unavailable.",
+  "settingsValueUnavailable": "Unavailable",
   "@settingsAppearanceUnavailable": {
     "description": "Stated when the host does not expose the ui-theme preference field."
   },

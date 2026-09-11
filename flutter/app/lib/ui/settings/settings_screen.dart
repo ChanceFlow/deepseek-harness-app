@@ -1,13 +1,18 @@
-/// Settings screen — Modern grouped section cards layout for DSH Mobile.
+/// Settings tab — an index of one-line rows over pushed sub-pages.
 ///
-/// Organized into distinct functional sections on a unified scrolling surface:
-/// 1. **Host & Connection** — Identity, live connection status, endpoint,
-///    write status, settings document status, and host management entry.
-/// 2. **App Preferences** — Device-local preferences (interface language).
-/// 3. **Chat & Agent** — Busy-Enter behavior, default preset picker, and
-///    the full preset roster cards.
-/// 4. **Models & Credentials** — DeepSeek API key and host secret references.
-/// 5. **Plugins & Advanced** — Host settings namespaces with in-place editors.
+/// The root names every subject the app can configure and states the current
+/// value where there is one; the subject itself lives one tap away, so no
+/// long-form surface competes for the root's pixels. Where a surface belongs:
+///
+/// - **Pushed page** — anything with content of its own: agent presets,
+///   credentials, providers, host settings namespaces, plugin inventory,
+///   About, and the ASR and error-log surfaces already built as pages.
+/// - **Modal sheet** — a single choice over a short list: interface language,
+///   appearance, busy-Enter behavior, and every editor (a credential's value,
+///   a host's address). Sheet plumbing is [showSettingsSheet].
+/// - **The host sheet** — the registry, the settings scope, and the scoped
+///   host's write/document facts, so the host dimension stays one row plus
+///   one sheet ([host settings split](../../../../../.agents/notes/implemented/feature/2026-08-24-settings-app-host-split.md)).
 library;
 
 import 'dart:async';
@@ -25,15 +30,14 @@ import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
 import '../theme/theme.dart';
-import 'about_section.dart';
 import 'backend_reachability.dart';
 import 'battery_optimization_section.dart';
 import 'busy_enter_preference.dart';
-import 'llm_providers.dart';
 import 'locale_preference.dart';
-import 'plugin_inventory_section.dart';
 import 'settings_backend_scope.dart';
+import 'settings_chrome.dart';
 import 'settings_controller.dart';
+import 'settings_pages.dart';
 import 'settings_ui_state.dart';
 import 'theme_preference.dart';
 
@@ -70,30 +74,42 @@ class SettingsRoute extends ConsumerWidget {
       builder: (BuildContext context, AsyncSnapshot<SettingsUiState> snapshot) {
         final SettingsUiState uiState =
             snapshot.data ?? const SettingsUiState();
-        return SettingsScreen(uiState: uiState, onAction: controller.onAction);
+        return SettingsScreen(
+          uiState: uiState,
+          onAction: controller.onAction,
+          uiStateStream: controller.uiState,
+        );
       },
     );
   }
 }
 
-/// The credential reference the official DeepSeek route resolves by default.
-const String _kDeepSeekCredentialRef = 'DEEPSEEK_API_KEY';
-
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     required this.uiState,
     required this.onAction,
+    this.uiStateStream,
     super.key,
   });
 
   final SettingsUiState uiState;
   final void Function(SettingsAction) onAction;
 
+  /// The controller's stream when the tab is controller-backed. A pushed
+  /// sub-page re-renders from it, so a write the page triggers is visible
+  /// without going back; a caller holding only a snapshot leaves it null.
+  final Stream<SettingsUiState>? uiStateStream;
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final SettingsSnapshot? snapshot = uiState.snapshot;
+    final SettingsChannel channel = SettingsChannel(
+      state: uiState,
+      onAction: onAction,
+      stream: uiStateStream,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -118,54 +134,17 @@ class SettingsScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 children: <Widget>[
-                  // 1. Host & Connection section
-                  _HostSection(
-                    uiState: uiState,
-                    snapshot: snapshot,
-                    onAction: onAction,
-                  ),
+                  _HostSection(uiState: uiState, snapshot: snapshot),
                   const SizedBox(height: 24),
-
-                  // 2. App Preferences section
-                  const _AppPreferencesSection(),
+                  const _AppSection(),
                   const SizedBox(height: 24),
-
-                  // 3. Chat & Agent section
-                  _ChatAgentSection(
-                    snapshot: snapshot,
-                    roster: uiState.roster,
-                    busy: uiState.isLoading,
-                    onAction: onAction,
-                  ),
+                  _ChatSection(channel: channel),
                   const SizedBox(height: 24),
-
-                  // 4. Models & Credentials section
-                  _ModelsCredentialsSection(
-                    snapshot: snapshot,
-                    credentials: uiState.credentials,
-                    credentialError: uiState.credentialError,
-                    onAction: onAction,
-                  ),
+                  _ModelsSection(channel: channel),
                   const SizedBox(height: 24),
-
-                  // 5. Providers section
-                  const SettingsLlmProvidersSection(),
+                  _PluginsSection(channel: channel),
                   const SizedBox(height: 24),
-
-                  // 6. Plugins & Advanced section
-                  _PluginsAdvancedSection(
-                    snapshot: snapshot,
-                    busy: uiState.isLoading,
-                    onAction: onAction,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // 7. Plugin inventory section
-                  const SettingsPluginInventorySection(),
-                  const SizedBox(height: 24),
-
-                  // 8. About section
-                  const SettingsAboutSection(),
+                  const _AboutSection(),
                 ],
               ),
             ),
@@ -195,7 +174,7 @@ class _SettingsHeader extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
-          _CircleAction(
+          SettingsCircleAction(
             icon: Icons.refresh,
             tooltip: l10n.refresh,
             onTap: onRefresh,
@@ -206,96 +185,29 @@ class _SettingsHeader extends StatelessWidget {
   }
 }
 
-/// Unified section heading with optional subtitle.
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.title, this.intro});
-
-  final String title;
-  final String? intro;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (intro != null) ...<Widget>[
-            const SizedBox(height: 2),
-            Text(
-              intro!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+/// Opens one Settings sub-page on the root navigator, so the system back
+/// gesture and the app-bar back button both return to the index.
+void _pushSettingsPage(BuildContext context, Widget page) {
+  unawaited(
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (BuildContext _) => page)),
+  );
 }
 
-/// Standard grouped container card for setting items.
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(kShapeCard),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-}
-
-/// Thin hairline divider between items inside a section card.
-class _CardDivider extends StatelessWidget {
-  const _CardDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Divider(height: 1, thickness: 1, color: scheme.outlineVariant);
-  }
-}
-
-/// SECTION 1: Host & Connection section.
+/// SECTION 1: the scoped host — its identity, the host sheet behind it, and
+/// the battery exemption that keeps the connection alive with the screen off.
 class _HostSection extends ConsumerWidget {
-  const _HostSection({
-    required this.uiState,
-    required this.snapshot,
-    required this.onAction,
-  });
+  const _HostSection({required this.uiState, required this.snapshot});
 
   final SettingsUiState uiState;
   final SettingsSnapshot? snapshot;
-  final void Function(SettingsAction) onAction;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
+    final SettingsSnapshot? snapshot = this.snapshot;
 
     final String scopedId = ref.watch(settingsBackendScopeProvider);
     final BackendRegistryState? registry = ref
@@ -308,9 +220,9 @@ class _HostSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(title: l10n.settingsSectionHost),
+        SettingsSectionHeading(title: l10n.settingsSectionHost),
         if (backend == null && uiState.isLoading)
-          const _SectionCard(
+          const SettingsSectionCard(
             children: <Widget>[
               Padding(
                 padding: EdgeInsets.all(24),
@@ -319,7 +231,7 @@ class _HostSection extends ConsumerWidget {
             ],
           )
         else if (snapshot == null && !uiState.isLoading)
-          _SectionCard(
+          SettingsSectionCard(
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -351,8 +263,8 @@ class _HostSection extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     FilledButton.tonal(
-                      onPressed: () => _openHostSheet(context, ref),
-                      style: _filledCapsule(context),
+                      onPressed: () => _openHostSheet(context, ref, snapshot),
+                      style: settingsFilledCapsule(context),
                       child: Text(l10n.settingsCategoryHost),
                     ),
                   ],
@@ -360,55 +272,22 @@ class _HostSection extends ConsumerWidget {
               ),
             ],
           )
-        else ...<Widget>[
-          _SectionCard(
+        else if (backend != null)
+          SettingsSectionCard(
             children: <Widget>[
-              if (backend != null) ...<Widget>[
-                _HostHeaderTile(
-                  backend: backend,
-                  scopedId: scopedId,
-                  activeId: registry?.activeId,
-                  onManage: () => _openHostSheet(context, ref),
-                ),
-                const _CardDivider(),
-              ],
-              if (snapshot != null) ...<Widget>[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _GeneralRow(
-                    title: l10n.hostWritesLabel,
-                    description: l10n.hostWritesDescription,
-                    value: snapshot!.writable
-                        ? l10n.writableValue
-                        : l10n.readOnlyValue,
-                    tone: snapshot!.writable
-                        ? _FactTone.positive
-                        : _FactTone.warning,
-                  ),
-                ),
-                const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _GeneralRow(
-                    title: l10n.settingsDocumentLabel,
-                    description: l10n.settingsDocumentDescription,
-                    value: snapshot!.hasDocument
-                        ? l10n.presentValue
-                        : l10n.noneValue,
-                    tone: snapshot!.hasDocument
-                        ? _FactTone.positive
-                        : _FactTone.neutral,
-                  ),
-                ),
-              ],
+              _HostHeaderTile(
+                backend: backend,
+                scopedId: scopedId,
+                activeId: registry?.activeId,
+                onManage: () => _openHostSheet(context, ref, snapshot),
+              ),
             ],
           ),
-        ],
         // The battery-optimization exemption is device-local and independent
         // of host settings, so it keeps its own card and stays visible even
         // while the host describe is loading or unavailable.
         const SizedBox(height: 12),
-        const _SectionCard(
+        const SettingsSectionCard(
           children: <Widget>[SettingsBatteryOptimizationRow()],
         ),
       ],
@@ -479,7 +358,10 @@ class _HostHeaderTile extends ConsumerWidget {
               ),
               if (backend.id == activeId) ...<Widget>[
                 const SizedBox(width: 8),
-                _StateBadge(configured: true, label: l10n.backendStatusActive),
+                SettingsBadge(
+                  label: l10n.backendStatusActive,
+                  tone: SettingsBadgeTone.primary,
+                ),
               ],
               const SizedBox(width: 6),
               Icon(
@@ -495,9 +377,9 @@ class _HostHeaderTile extends ConsumerWidget {
   }
 }
 
-/// SECTION 2: App Preferences section (Language, Appearance & ASR Models).
-class _AppPreferencesSection extends StatelessWidget {
-  const _AppPreferencesSection();
+/// SECTION 2: device-local preferences, each one choice deep.
+class _AppSection extends StatelessWidget {
+  const _AppSection();
 
   @override
   Widget build(BuildContext context) {
@@ -505,31 +387,19 @@ class _AppPreferencesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
+        SettingsSectionHeading(
           title: l10n.settingsSectionApp,
           intro: l10n.appSettingsIntro,
         ),
-        const _SectionCard(
+        const SettingsSectionCard(
           children: <Widget>[
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: _LanguageRow(),
-            ),
-            _CardDivider(),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: ThemePreferenceRow(),
-            ),
-            _CardDivider(),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: _AsrModelsEntryRow(),
-            ),
-            _CardDivider(),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: _ErrorLogsEntryRow(),
-            ),
+            _LanguageRow(),
+            SettingsCardDivider(),
+            SettingsAppearanceEntryRow(),
+            SettingsCardDivider(),
+            _AsrModelsEntryRow(),
+            SettingsCardDivider(),
+            _ErrorLogsEntryRow(),
           ],
         ),
       ],
@@ -537,123 +407,28 @@ class _AppPreferencesSection extends StatelessWidget {
   }
 }
 
-/// SECTION 3: Chat & Agent section (Busy-Enter + Agent Presets).
-class _ChatAgentSection extends StatelessWidget {
-  const _ChatAgentSection({
-    required this.snapshot,
-    required this.roster,
-    required this.busy,
-    required this.onAction,
-  });
+/// SECTION 3: how a session starts and behaves — the busy-Enter behavior and
+/// the default agent preset.
+class _ChatSection extends StatelessWidget {
+  const _ChatSection({required this.channel});
 
-  final SettingsSnapshot? snapshot;
-  final AgentPresetRoster? roster;
-  final bool busy;
-  final void Function(SettingsAction) onAction;
+  final SettingsChannel channel;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final List<AgentPresetEntry> entries =
-        roster?.entries ?? const <AgentPresetEntry>[];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
+        SettingsSectionHeading(
           title: l10n.settingsSectionChat,
           intro: l10n.generalIntro,
         ),
-        _SectionCard(
+        SettingsSectionCard(
           children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: _EnterBehaviorRow(),
-            ),
-            if (entries.isNotEmpty) ...<Widget>[
-              const _CardDivider(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _AgentPresetRow(
-                  roster: roster!,
-                  writable: snapshot?.writable ?? false,
-                  busy: busy,
-                  onAction: onAction,
-                ),
-              ),
-              const _CardDivider(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      l10n.settingsNavAgentPresets,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.agentPresetsIntro,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    for (final (AgentPresetTrust trust, String heading)
-                        in <(AgentPresetTrust, String)>[
-                          (AgentPresetTrust.system, l10n.presetGroupBuiltIn),
-                          (AgentPresetTrust.user, l10n.presetGroupCustom),
-                        ])
-                      if (entries.any(
-                        (AgentPresetEntry entry) => entry.trust == trust,
-                      )) ...<Widget>[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4, bottom: 8),
-                          child: Text(
-                            heading,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
-                        ),
-                        for (final AgentPresetEntry entry in entries.where(
-                          (AgentPresetEntry e) => e.trust == trust,
-                        )) ...<Widget>[
-                          _PresetCard(
-                            key: ValueKey<String>(entry.id),
-                            entry: entry,
-                            onAction: onAction,
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                      ],
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.presetsFooter,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (roster != null) ...<Widget>[
-              const _CardDivider(),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  l10n.presetsFooter,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
+            const _EnterBehaviorEntryRow(),
+            const SettingsCardDivider(),
+            _AgentPresetEntryRow(channel: channel),
           ],
         ),
       ],
@@ -661,104 +436,35 @@ class _ChatAgentSection extends StatelessWidget {
   }
 }
 
-/// SECTION 4: Models & Credentials section.
-class _ModelsCredentialsSection extends StatelessWidget {
-  const _ModelsCredentialsSection({
-    required this.snapshot,
-    required this.credentials,
-    required this.credentialError,
-    required this.onAction,
-  });
+/// SECTION 4: the credential records and the provider directory behind them.
+class _ModelsSection extends StatelessWidget {
+  const _ModelsSection({required this.channel});
 
-  final SettingsSnapshot? snapshot;
-  final List<CredentialStatus> credentials;
-  final String? credentialError;
-  final void Function(SettingsAction) onAction;
+  final SettingsChannel channel;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final CredentialStatus? deepSeek = credentials
-        .where((CredentialStatus c) => c.ref == _kDeepSeekCredentialRef)
-        .firstOrNull;
-    final List<CredentialStatus> otherCredentials = credentials
-        .where((CredentialStatus c) => c.ref != _kDeepSeekCredentialRef)
-        .toList();
-    final bool writable = snapshot?.writable ?? false;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
-          title: l10n.settingsSectionModels,
-          intro: l10n.modelsIntro,
-        ),
-        _SectionCard(
+        SettingsSectionHeading(title: l10n.settingsSectionModels),
+        SettingsSectionCard(
           children: <Widget>[
-            if (snapshot != null && !writable)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text(
-                  l10n.settingsReadOnlyNotice,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
+            SettingsNavRow(
+              title: l10n.settingsNavCredentials,
+              leading: const Icon(Icons.key_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                SettingsCredentialsPage(channel: channel),
               ),
-            if (deepSeek != null) ...<Widget>[
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: _DeepSeekCard(credential: deepSeek, onAction: onAction),
-              ),
-            ],
-            if (otherCredentials.isNotEmpty) ...<Widget>[
-              if (deepSeek != null) const _CardDivider(),
-              for (int i = 0; i < otherCredentials.length; i++) ...<Widget>[
-                if (i > 0) const _CardDivider(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _CredentialRow(
-                    key: ValueKey<String>(otherCredentials[i].ref),
-                    credential: otherCredentials[i],
-                    onAction: onAction,
-                  ),
-                ),
-              ],
-            ],
-            if (credentialError case final String error) ...<Widget>[
-              const _CardDivider(),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  l10n.credentialStateUnavailable(error),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-            if (credentials.isEmpty) ...<Widget>[
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  l10n.noCredentialsReferenced,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-            const _CardDivider(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              child: Text(
-                l10n.modelsFooter,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+            ),
+            const SettingsCardDivider(),
+            SettingsNavRow(
+              title: l10n.settingsSectionProviders,
+              leading: const Icon(Icons.hub_outlined),
+              onTap: () =>
+                  _pushSettingsPage(context, const SettingsProvidersPage()),
             ),
           ],
         ),
@@ -767,56 +473,41 @@ class _ModelsCredentialsSection extends StatelessWidget {
   }
 }
 
-/// SECTION 5: Plugins & Advanced section.
-class _PluginsAdvancedSection extends StatelessWidget {
-  const _PluginsAdvancedSection({
-    required this.snapshot,
-    required this.busy,
-    required this.onAction,
-  });
+/// SECTION 5: the host settings namespaces and the read-only plugin roster.
+class _PluginsSection extends StatelessWidget {
+  const _PluginsSection({required this.channel});
 
-  final SettingsSnapshot? snapshot;
-  final bool busy;
-  final void Function(SettingsAction) onAction;
+  final SettingsChannel channel;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final List<SettingsNamespace> namespaces =
-        snapshot?.namespaces ?? const <SettingsNamespace>[];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
+        SettingsSectionHeading(
           title: l10n.settingsSectionPlugins,
           intro: l10n.pluginsIntro,
         ),
-        _SectionCard(
+        SettingsSectionCard(
           children: <Widget>[
-            if (namespaces.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  l10n.noPluginSettings,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else
-              for (int i = 0; i < namespaces.length; i++) ...<Widget>[
-                if (i > 0) const _CardDivider(),
-                _NamespaceCard(
-                  key: ValueKey<String>(namespaces[i].ns),
-                  namespace: namespaces[i],
-                  writable: snapshot?.writable ?? false,
-                  busy: busy,
-                  onAction: onAction,
-                ),
-              ],
+            SettingsNavRow(
+              title: l10n.settingsNavPluginSettings,
+              leading: const Icon(Icons.extension_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                SettingsPluginsPage(channel: channel),
+              ),
+            ),
+            const SettingsCardDivider(),
+            SettingsNavRow(
+              title: l10n.settingsSectionPluginInventory,
+              leading: const Icon(Icons.widgets_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                const SettingsPluginInventoryPage(),
+              ),
+            ),
           ],
         ),
       ],
@@ -824,81 +515,91 @@ class _PluginsAdvancedSection extends StatelessWidget {
   }
 }
 
-/// Language preference row: the interface language as a capsule selector.
+/// SECTION 6: About. The row names itself; no heading repeats it.
+class _AboutSection extends StatelessWidget {
+  const _AboutSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return SettingsSectionCard(
+      children: <Widget>[
+        SettingsNavRow(
+          title: l10n.settingsSectionAbout,
+          leading: const Icon(Icons.info_outline),
+          onTap: () => _pushSettingsPage(context, const SettingsAboutPage()),
+        ),
+      ],
+    );
+  }
+}
+
+/// Language preference row: the interface language, chosen in a sheet so the
+/// three options cost the index one line instead of three capsules.
 class _LanguageRow extends ConsumerWidget {
   const _LanguageRow();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final LocalePreferenceController? controller = ref
         .watch(localePreferenceProvider)
         .value;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            l10n.languageLabel,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            l10n.languageDescription,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (controller == null)
-            _languageCapsules(context, AppLocalePreference.system, null)
-          else
-            StreamBuilder<AppLocalePreference>(
-              stream: controller.uiState,
-              initialData: controller.state,
-              builder:
-                  (
-                    BuildContext context,
-                    AsyncSnapshot<AppLocalePreference> snapshot,
-                  ) => _languageCapsules(
-                    context,
-                    snapshot.data ?? AppLocalePreference.system,
-                    controller.select,
-                  ),
-            ),
-        ],
-      ),
+    if (controller == null) {
+      return SettingsNavRow(
+        title: l10n.languageLabel,
+        leading: const Icon(Icons.language_outlined),
+        enabled: false,
+        onTap: () {},
+      );
+    }
+    return StreamBuilder<AppLocalePreference>(
+      stream: controller.uiState,
+      initialData: controller.state,
+      builder:
+          (BuildContext context, AsyncSnapshot<AppLocalePreference> snapshot) {
+            final AppLocalePreference current =
+                snapshot.data ?? AppLocalePreference.system;
+            return SettingsNavRow(
+              title: l10n.languageLabel,
+              leading: const Icon(Icons.language_outlined),
+              value: _languageLabel(l10n, current),
+              onTap: () => _choose(context, controller, current),
+            );
+          },
     );
   }
 
-  Widget _languageCapsules(
+  Future<void> _choose(
     BuildContext context,
+    LocalePreferenceController controller,
     AppLocalePreference current,
-    ValueChanged<AppLocalePreference>? onSelect,
-  ) {
+  ) async {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Wrap(
-      spacing: 8,
-      children: <Widget>[
-        for (final AppLocalePreference option in AppLocalePreference.values)
-          _ModeButton(
-            label: switch (option) {
-              AppLocalePreference.system => l10n.languageOptionSystem,
-              AppLocalePreference.zh => l10n.languageOptionZh,
-              AppLocalePreference.en => l10n.languageOptionEn,
-            },
-            selected: option == current,
-            onTap: onSelect == null ? null : () => onSelect(option),
-          ),
-      ],
-    );
+    final AppLocalePreference? picked =
+        await showSettingsChoiceSheet<AppLocalePreference>(
+          context,
+          title: l10n.languageLabel,
+          description: l10n.languageDescription,
+          current: current,
+          choices: <SettingsChoice<AppLocalePreference>>[
+            for (final AppLocalePreference option in AppLocalePreference.values)
+              SettingsChoice<AppLocalePreference>(
+                value: option,
+                label: _languageLabel(l10n, option),
+              ),
+          ],
+        );
+    if (picked != null) await controller.select(picked);
   }
 }
+
+String _languageLabel(AppLocalizations l10n, AppLocalePreference option) =>
+    switch (option) {
+      AppLocalePreference.system => l10n.languageOptionSystem,
+      AppLocalePreference.zh => l10n.languageOptionZh,
+      AppLocalePreference.en => l10n.languageOptionEn,
+    };
 
 /// ASR models entry row navigating to on-device speech recognition management.
 class _AsrModelsEntryRow extends ConsumerWidget {
@@ -906,72 +607,22 @@ class _AsrModelsEntryRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final AsrModelsUiState asrState =
         ref.watch(asrModelsUiStateProvider).value ?? const AsrModelsUiState();
-
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (BuildContext _) => const AsrModelsRoute(),
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(kShapeChip),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    l10n.asrModelsTitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.asrModelsDescription,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: asrState.installedCount > 0
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(kShapeChip),
-              ),
-              child: Text(
-                l10n.asrInstalledCount(
-                  asrState.installedCount,
-                  asrState.totalCount > 0 ? asrState.totalCount : 4,
-                ),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: asrState.installedCount > 0
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
-          ],
+    return SettingsNavRow(
+      title: l10n.asrModelsTitle,
+      leading: const Icon(Icons.mic_none_outlined),
+      trailing: SettingsBadge(
+        label: l10n.asrInstalledCount(
+          asrState.installedCount,
+          asrState.totalCount > 0 ? asrState.totalCount : 4,
         ),
+        tone: asrState.installedCount > 0
+            ? SettingsBadgeTone.primary
+            : SettingsBadgeTone.neutral,
       ),
+      onTap: () => _pushSettingsPage(context, const AsrModelsRoute()),
     );
   }
 }
@@ -982,102 +633,151 @@ class _ErrorLogsEntryRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final ErrorLogsUiState errorState =
         ref.watch(errorLogsUiStateProvider).value ?? const ErrorLogsUiState();
-    final int count = errorState.totalCount;
-    final bool hasFatal = errorState.fatalCount > 0;
-    final bool hasErrors = errorState.errorCount > 0;
-
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (BuildContext _) => const ErrorLogsRoute(),
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(kShapeChip),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    l10n.errorLogsTitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.errorLogsDescription,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: hasFatal || hasErrors
-                    ? scheme.errorContainer
-                    : scheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(kShapeChip),
-              ),
-              child: Text(
-                l10n.errorLogsCountBadge(count),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: hasFatal || hasErrors
-                      ? scheme.error
-                      : scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 20, color: scheme.onSurfaceVariant),
-          ],
-        ),
+    final bool failed = errorState.fatalCount > 0 || errorState.errorCount > 0;
+    return SettingsNavRow(
+      title: l10n.errorLogsTitle,
+      leading: const Icon(Icons.bug_report_outlined),
+      trailing: SettingsBadge(
+        label: l10n.errorLogsCountBadge(errorState.totalCount),
+        tone: failed ? SettingsBadgeTone.error : SettingsBadgeTone.neutral,
       ),
+      onTap: () => _pushSettingsPage(context, const ErrorLogsRoute()),
     );
   }
 }
 
-/// The host sheet: managing hosts, switching active, pinning scope.
-Future<void> _openHostSheet(BuildContext context, WidgetRef ref) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (BuildContext sheetContext) {
-      final ColorScheme scheme = Theme.of(sheetContext).colorScheme;
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(kShapeSheet),
-            border: Border.all(color: scheme.outlineVariant),
-            boxShadow: kM3ShadowElevation3,
-          ),
-          child: const SafeArea(top: false, child: _HostSheet()),
-        ),
+/// The busy-Enter behavior row: the current mode in words, chosen in a sheet.
+class _EnterBehaviorEntryRow extends ConsumerWidget {
+  const _EnterBehaviorEntryRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final BusyEnterPreferenceController? controller = ref
+        .watch(busyEnterPreferenceProvider)
+        .value;
+    if (controller == null) {
+      return SettingsNavRow(
+        title: l10n.busyPreferenceLabel,
+        leading: const Icon(Icons.keyboard_return),
+        enabled: false,
+        onTap: () {},
       );
-    },
+    }
+    return StreamBuilder<BusyEnterBehavior>(
+      stream: controller.uiState,
+      initialData: controller.state,
+      builder:
+          (BuildContext context, AsyncSnapshot<BusyEnterBehavior> snapshot) {
+            final BusyEnterBehavior current =
+                snapshot.data ?? BusyEnterBehavior.queue;
+            return SettingsNavRow(
+              title: l10n.busyPreferenceLabel,
+              leading: const Icon(Icons.keyboard_return),
+              value: _busyBehaviorLabel(l10n, current),
+              onTap: () => _choose(context, controller, current),
+            );
+          },
+    );
+  }
+
+  Future<void> _choose(
+    BuildContext context,
+    BusyEnterPreferenceController controller,
+    BusyEnterBehavior current,
+  ) async {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final BusyEnterBehavior? picked =
+        await showSettingsChoiceSheet<BusyEnterBehavior>(
+          context,
+          title: l10n.busyPreferenceLabel,
+          description: l10n.busyPreferenceDescription,
+          current: current,
+          choices: <SettingsChoice<BusyEnterBehavior>>[
+            for (final BusyEnterBehavior option in BusyEnterBehavior.values)
+              SettingsChoice<BusyEnterBehavior>(
+                value: option,
+                label: _busyBehaviorLabel(l10n, option),
+              ),
+          ],
+        );
+    if (picked != null) await controller.select(picked);
+  }
+}
+
+String _busyBehaviorLabel(AppLocalizations l10n, BusyEnterBehavior option) =>
+    switch (option) {
+      BusyEnterBehavior.queue => l10n.busyBehaviorQueue,
+      BusyEnterBehavior.steer => l10n.busyBehaviorSteer,
+    };
+
+/// The default agent preset: one row stating the current default, opening the
+/// one page that selects it. There is no second picker beside it.
+class _AgentPresetEntryRow extends StatelessWidget {
+  const _AgentPresetEntryRow({required this.channel});
+
+  final SettingsChannel channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return SettingsLive(
+      channel: channel,
+      builder:
+          (
+            BuildContext context,
+            SettingsUiState state,
+            void Function(SettingsAction) _,
+          ) {
+            final AgentPresetRoster? roster = state.roster;
+            final AgentPresetEntry? current = _pickerOptions(roster)
+                .firstOrNull;
+            final AgentPresetEntry? shown = roster?.defaultEntry ?? current;
+            return SettingsNavRow(
+              title: l10n.agentPresetPreferenceLabel,
+              leading: const Icon(Icons.smart_toy_outlined),
+              value: shown == null ? null : agentPresetDisplayName(shown, l10n),
+              // Always navigable: an unloaded or empty roster is a page that
+              // states it, never a dead row.
+              onTap: () => _pushSettingsPage(
+                context,
+                SettingsAgentPresetsPage(channel: channel),
+              ),
+            );
+          },
+    );
+  }
+}
+
+/// The presets a session can actually be started with: a broken one stays
+/// listed on the roster page (its directory still owns the id) but is never
+/// offered as the default (web `presetOptions`).
+List<AgentPresetEntry> _pickerOptions(AgentPresetRoster? roster) =>
+    roster?.entries
+        .where((AgentPresetEntry entry) => entry.broken == null)
+        .toList() ??
+    const <AgentPresetEntry>[];
+
+/// The host sheet: the settings scope, the registry, and the scoped host's
+/// own facts. It is the whole host dimension — no page repeats it.
+Future<void> _openHostSheet(
+  BuildContext context,
+  WidgetRef ref,
+  SettingsSnapshot? snapshot,
+) {
+  return showSettingsSheet<void>(
+    context,
+    builder: (BuildContext sheetContext) => _HostSheet(snapshot: snapshot),
   );
 }
 
 class _HostSheet extends ConsumerWidget {
-  const _HostSheet();
+  const _HostSheet({required this.snapshot});
+
+  final SettingsSnapshot? snapshot;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1093,80 +793,112 @@ class _HostSheet extends ConsumerWidget {
         .watch(settingsBackendScopeProvider.notifier)
         .isPinned;
     if (registry == null) return const SizedBox.shrink();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(l10n.settingsScopeTitle, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 4),
-        Text(
-          l10n.settingsScopeHint,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (registry.errorMessage case final String message)
-          _RegistryErrorLine(message: describeBackendError(l10n, message)),
-        if (pinned && registry.backends.length > 1)
-          _HostSheetRow(
-            leading: Icon(
-              Icons.autorenew,
-              size: 18,
+    final SettingsSnapshot? facts = snapshot;
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(l10n.settingsScopeTitle, style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            l10n.settingsScopeHint,
+            style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
-            title: l10n.settingsScopeFollowActive,
-            subtitle: null,
-            active: false,
-            selected: false,
-            onTap: () {
-              Navigator.of(context).pop();
-              ref.read(settingsBackendScopeProvider.notifier).followActive();
-            },
           ),
-        for (final BackendConfig backend in registry.backends)
-          _HostSheetRow(
-            backendId: backend.id,
-            title: backend.label,
-            subtitle: '${backend.baseUri.host}:${backend.baseUri.port}',
-            active: backend.id == registry.activeId,
-            selected: backend.id == scopedId,
-            enabled: backend.enabled,
-            // Tapping pins the settings scope; the scope only ever
-            // describes a connected host, so a disabled row's tap does
-            // nothing (the switch is its control).
-            onTap: backend.enabled
-                ? () {
-                    Navigator.of(context).pop();
-                    ref
-                        .read(settingsBackendScopeProvider.notifier)
-                        .select(backend.id);
-                  }
-                : null,
-            onToggleEnabled: () => _dispatchBackendAction(
-              ref,
-              SetBackendEnabled(backend.id, !backend.enabled),
+          const SizedBox(height: 12),
+          if (registry.errorMessage case final String message)
+            _RegistryErrorLine(message: describeBackendError(l10n, message)),
+          if (pinned && registry.backends.length > 1)
+            _HostSheetRow(
+              leading: Icon(
+                Icons.autorenew,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              title: l10n.settingsScopeFollowActive,
+              subtitle: null,
+              active: false,
+              selected: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                ref.read(settingsBackendScopeProvider.notifier).followActive();
+              },
             ),
-            onEdit: () => _openBackendSheet(
-              context,
-              ref,
-              backend,
-              removeBlockedReason: _removeBlockedReason(
-                registry,
+          for (final BackendConfig backend in registry.backends)
+            _HostSheetRow(
+              backendId: backend.id,
+              title: backend.label,
+              subtitle: '${backend.baseUri.host}:${backend.baseUri.port}',
+              active: backend.id == registry.activeId,
+              selected: backend.id == scopedId,
+              enabled: backend.enabled,
+              // Tapping pins the settings scope; the scope only ever
+              // describes a connected host, so a disabled row's tap
+              // does nothing (the switch is its control).
+              onTap: backend.enabled
+                  ? () {
+                      Navigator.of(context).pop();
+                      ref
+                          .read(settingsBackendScopeProvider.notifier)
+                          .select(backend.id);
+                    }
+                  : null,
+              onToggleEnabled: () => _dispatchBackendAction(
+                ref,
+                SetBackendEnabled(backend.id, !backend.enabled),
+              ),
+              onEdit: () => _openBackendSheet(
+                context,
+                ref,
                 backend,
-                l10n,
+                removeBlockedReason: _removeBlockedReason(
+                  registry,
+                  backend,
+                  l10n,
+                ),
               ),
             ),
+          const SizedBox(height: 4),
+          Center(
+            child: OutlinedButton(
+              onPressed: () => _openBackendSheet(context, ref, null),
+              style: settingsOutlineCapsule(context),
+              child: Text(l10n.addBackend),
+            ),
           ),
-        const SizedBox(height: 4),
-        Center(
-          child: OutlinedButton(
-            onPressed: () => _openBackendSheet(context, ref, null),
-            style: _outlineCapsule(context),
-            child: Text(l10n.addBackend),
-          ),
-        ),
-      ],
+          // The scoped host's own settings plane: the facts the root used to
+          // carry, stated where the scope is chosen.
+          if (facts != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Divider(height: 1, thickness: 1, color: scheme.outlineVariant),
+            const SizedBox(height: 8),
+            Text(
+              l10n.settingsScopeFactsTitle,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            SettingsFactRow(
+              title: l10n.hostWritesLabel,
+              description: l10n.hostWritesDescription,
+              value: facts.writable ? l10n.writableValue : l10n.readOnlyValue,
+              tone: facts.writable
+                  ? SettingsFactTone.positive
+                  : SettingsFactTone.warning,
+            ),
+            SettingsFactRow(
+              title: l10n.settingsDocumentLabel,
+              description: l10n.settingsDocumentDescription,
+              value: facts.hasDocument ? l10n.presentValue : l10n.noneValue,
+              tone: facts.hasDocument
+                  ? SettingsFactTone.positive
+                  : SettingsFactTone.neutral,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1256,14 +988,14 @@ class _HostSheetRow extends ConsumerWidget {
               ),
               if (active) ...<Widget>[
                 const SizedBox(width: 8),
-                _StateBadge(configured: true, label: l10n.backendStatusActive),
+                SettingsBadge(
+                  label: l10n.backendStatusActive,
+                  tone: SettingsBadgeTone.primary,
+                ),
               ],
               if (!enabled) ...<Widget>[
                 const SizedBox(width: 8),
-                _StateBadge(
-                  configured: false,
-                  label: l10n.backendStatusDisabled,
-                ),
+                SettingsBadge(label: l10n.backendStatusDisabled),
               ],
               if (selected) ...<Widget>[
                 const SizedBox(width: 8),
@@ -1283,7 +1015,7 @@ class _HostSheetRow extends ConsumerWidget {
               ],
               if (onEdit != null) ...<Widget>[
                 const SizedBox(width: 4),
-                _CircleAction(
+                SettingsCircleAction(
                   icon: Icons.edit_outlined,
                   iconSize: 16,
                   tooltip: l10n.editBackend,
@@ -1345,7 +1077,7 @@ class _ErrorBanner extends StatelessWidget {
               ),
             ),
           ),
-          _CircleAction(
+          SettingsCircleAction(
             icon: Icons.close,
             iconSize: 14,
             tooltip: l10n.dismiss,
@@ -1387,74 +1119,51 @@ Future<void> _openBackendSheet(
   BackendConfig? backend, {
   String? removeBlockedReason,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showSettingsSheet<void>(
+    context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (BuildContext sheetContext) {
-      final double insets = MediaQuery.of(sheetContext).viewInsets.bottom;
-      final ColorScheme scheme = Theme.of(sheetContext).colorScheme;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(kShapeSheet),
-            border: Border.all(color: scheme.outlineVariant),
-            boxShadow: kM3ShadowElevation3,
-          ),
-          child: _BackendSheet(
-            backend: backend,
-            removeBlockedReason: backend == null ? null : removeBlockedReason,
-            onSave: (String label, String baseUrl, bool trustHostCertificate) {
-              if (backend == null) {
-                _dispatchBackendAction(
-                  ref,
-                  AddBackend(
-                    label,
-                    baseUrl,
-                    trustHostCertificate: trustHostCertificate,
-                  ),
-                );
-                return;
-              }
-              if (label != backend.label) {
-                _dispatchBackendAction(ref, RenameBackend(backend.id, label));
-              }
-              if (baseUrl != backend.baseUri.toString()) {
-                _dispatchBackendAction(
-                  ref,
-                  UpdateBackendUrl(backend.id, baseUrl),
-                );
-              }
-              if (trustHostCertificate != backend.trustHostCertificate) {
-                _dispatchBackendAction(
-                  ref,
-                  SetBackendTrustHostCertificate(
-                    backend.id,
-                    trustHostCertificate,
-                  ),
-                );
-              }
-            },
-            onRemove: backend == null || removeBlockedReason != null
-                ? null
-                : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
-            onSetChatHost:
-                backend != null &&
-                    backend.enabled &&
-                    backend.id !=
-                        ref.read(backendRegistryStateProvider).value?.activeId
-                ? () {
-                    _dispatchBackendAction(ref, SelectBackend(backend.id));
-                    Navigator.of(sheetContext).pop();
-                  }
-                : null,
-          ),
-        ),
-      );
-    },
+    builder: (BuildContext sheetContext) => _BackendSheet(
+      backend: backend,
+      removeBlockedReason: backend == null ? null : removeBlockedReason,
+      onSave: (String label, String baseUrl, bool trustHostCertificate) {
+        if (backend == null) {
+          _dispatchBackendAction(
+            ref,
+            AddBackend(
+              label,
+              baseUrl,
+              trustHostCertificate: trustHostCertificate,
+            ),
+          );
+          return;
+        }
+        if (label != backend.label) {
+          _dispatchBackendAction(ref, RenameBackend(backend.id, label));
+        }
+        if (baseUrl != backend.baseUri.toString()) {
+          _dispatchBackendAction(ref, UpdateBackendUrl(backend.id, baseUrl));
+        }
+        if (trustHostCertificate != backend.trustHostCertificate) {
+          _dispatchBackendAction(
+            ref,
+            SetBackendTrustHostCertificate(backend.id, trustHostCertificate),
+          );
+        }
+      },
+      onRemove: backend == null || removeBlockedReason != null
+          ? null
+          : () => _dispatchBackendAction(ref, RemoveBackend(backend.id)),
+      onSetChatHost:
+          backend != null &&
+              backend.enabled &&
+              backend.id !=
+                  ref.read(backendRegistryStateProvider).value?.activeId
+          ? () {
+              _dispatchBackendAction(ref, SelectBackend(backend.id));
+              Navigator.of(sheetContext).pop();
+            }
+          : null,
+    ),
   );
 }
 
@@ -1490,1135 +1199,6 @@ class _RegistryErrorLine extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-List<AgentPresetEntry> _pickerOptions(AgentPresetRoster? roster) =>
-    roster?.entries
-        .where((AgentPresetEntry entry) => entry.broken == null)
-        .toList() ??
-    const <AgentPresetEntry>[];
-
-class _EnterBehaviorRow extends ConsumerWidget {
-  const _EnterBehaviorRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final BusyEnterPreferenceController? controller = ref
-        .watch(busyEnterPreferenceProvider)
-        .value;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            l10n.busyPreferenceLabel,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            l10n.busyPreferenceDescription,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (controller == null)
-            _enterBehaviorCapsules(context, BusyEnterBehavior.queue, null)
-          else
-            StreamBuilder<BusyEnterBehavior>(
-              stream: controller.uiState,
-              initialData: controller.state,
-              builder:
-                  (
-                    BuildContext context,
-                    AsyncSnapshot<BusyEnterBehavior> snapshot,
-                  ) => _enterBehaviorCapsules(
-                    context,
-                    snapshot.data ?? BusyEnterBehavior.queue,
-                    controller.select,
-                  ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _enterBehaviorCapsules(
-    BuildContext context,
-    BusyEnterBehavior current,
-    ValueChanged<BusyEnterBehavior>? onSelect,
-  ) {
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Wrap(
-      spacing: 8,
-      children: <Widget>[
-        for (final BusyEnterBehavior option in BusyEnterBehavior.values)
-          _ModeButton(
-            label: switch (option) {
-              BusyEnterBehavior.queue => l10n.busyBehaviorQueue,
-              BusyEnterBehavior.steer => l10n.busyBehaviorSteer,
-            },
-            selected: option == current,
-            onTap: onSelect == null ? null : () => onSelect(option),
-          ),
-      ],
-    );
-  }
-}
-
-class _AgentPresetRow extends StatelessWidget {
-  const _AgentPresetRow({
-    required this.roster,
-    required this.writable,
-    required this.busy,
-    required this.onAction,
-  });
-
-  final AgentPresetRoster roster;
-  final bool writable;
-  final bool busy;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final List<AgentPresetEntry> options = _pickerOptions(roster);
-    final AgentPresetEntry current =
-        roster.defaultEntry ?? roster.entries.first;
-    final bool enabled = writable && !busy && options.isNotEmpty;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? () => _openPicker(context, options) : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      l10n.agentPresetLabel,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l10n.agentPresetPreferenceDescription,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                agentPresetDisplayName(current, l10n),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: scheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openPicker(
-    BuildContext context,
-    List<AgentPresetEntry> options,
-  ) {
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final String currentId = (roster.defaultEntry ?? roster.entries.first).id;
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        final ColorScheme scheme = Theme.of(sheetContext).colorScheme;
-        final ThemeData theme = Theme.of(sheetContext);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(kShapeSheet),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    l10n.agentPresetLabel,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  for (final AgentPresetEntry option in options)
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(kShapeChip),
-                        hoverColor: scheme.surfaceContainerHigh,
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          onAction(SelectAgentPresetDefaultAction(option.id));
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  agentPresetDisplayName(option, l10n),
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ),
-                              if (option.id == currentId)
-                                Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: scheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _PresetCard extends StatelessWidget {
-  const _PresetCard({required this.entry, required this.onAction, super.key});
-
-  final AgentPresetEntry entry;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final bool broken = entry.broken != null;
-    final bool active = entry.isDefault;
-    final String description =
-        agentPresetDisplayDescription(entry, l10n) ?? l10n.noDescription;
-    return AnimatedContainer(
-      duration: DshMotion.durationShort,
-      curve: DshMotion.curveStandard,
-      decoration: BoxDecoration(
-        color: active
-            ? scheme.surfaceContainerHigh
-            : scheme.surfaceContainerHighest,
-        border: Border.all(
-          color: broken
-              ? theme.colorScheme.error
-              : active
-              ? scheme.primary
-              : scheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(kShapeCard),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kShapeCard),
-          hoverColor: scheme.surfaceContainerHigh,
-          onTap: broken || active
-              ? null
-              : () => onAction(SelectAgentPresetDefaultAction(entry.id)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Flexible(
-                      child: Text(
-                        agentPresetDisplayName(entry, l10n),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (broken) ...<Widget>[
-                      const SizedBox(width: 8),
-                      _PresetBadge(label: l10n.presetBrokenBadge, filled: true),
-                    ],
-                    if (entry.trust == AgentPresetTrust.user) ...<Widget>[
-                      const SizedBox(width: 8),
-                      _PresetBadge(label: l10n.presetGroupCustom),
-                    ],
-                    if (active) ...<Widget>[
-                      const SizedBox(width: 8),
-                      const Spacer(),
-                      _PresetBadge(
-                        label: l10n.presetInUseBadge,
-                        inverted: true,
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Tooltip(
-                  message: description,
-                  child: Text(
-                    description,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                if (broken) ...<Widget>[
-                  const SizedBox(height: 6),
-                  Text(
-                    entry.broken!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Text(
-                  entry.id,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.outline,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PresetBadge extends StatelessWidget {
-  const _PresetBadge({
-    required this.label,
-    this.filled = false,
-    this.inverted = false,
-  });
-
-  final String label;
-  final bool filled;
-  final bool inverted;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final Color background;
-    final Color foreground;
-    if (filled) {
-      background = theme.colorScheme.error;
-      foreground = scheme.surfaceContainerHighest;
-    } else if (inverted) {
-      background = scheme.primary;
-      foreground = scheme.onPrimary;
-    } else {
-      background = Colors.transparent;
-      foreground = scheme.onSurfaceVariant;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(kShapePill),
-        border: filled || inverted
-            ? null
-            : Border.all(color: scheme.outlineVariant),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(color: foreground),
-      ),
-    );
-  }
-}
-
-class _DeepSeekCard extends StatelessWidget {
-  const _DeepSeekCard({required this.credential, required this.onAction});
-
-  final CredentialStatus credential;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return AnimatedContainer(
-      duration: DshMotion.durationShort,
-      curve: DshMotion.curveStandard,
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(kShapeCard),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kShapeCard),
-          hoverColor: scheme.surfaceContainerHigh,
-          onTap: () => _openSheet(context),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'DeepSeek',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        credential.configured
-                            ? l10n.apiKeyConfigured
-                            : l10n.apiKeyMissing,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _StatusDot(
-                  color: credential.configured ? scheme.success : scheme.error,
-                ),
-                const SizedBox(width: 6),
-                _StateBadge(configured: credential.configured),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openSheet(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        final double insets = MediaQuery.of(sheetContext).viewInsets.bottom;
-        final ColorScheme scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(kShapeSheet),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: _CredentialSheet(credential: credential, onAction: onAction),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _GeneralRow extends StatelessWidget {
-  const _GeneralRow({
-    required this.title,
-    required this.description,
-    required this.value,
-    required this.tone,
-  });
-
-  final String title;
-  final String description;
-  final String value;
-  final _FactTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final (Color dotColor, Color textColor) = _toneColors(scheme, tone);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  description,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          _StatusDot(color: dotColor),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-enum _FactTone { positive, warning, neutral }
-
-(Color, Color) _toneColors(ColorScheme scheme, _FactTone tone) =>
-    switch (tone) {
-      _FactTone.positive => (scheme.success, scheme.onSurfaceVariant),
-      _FactTone.warning => (scheme.error, scheme.onErrorContainer),
-      _FactTone.neutral => (scheme.outline, scheme.onSurfaceVariant),
-    };
-
-class _StatusDot extends StatelessWidget {
-  const _StatusDot({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
-class _NamespaceCard extends StatefulWidget {
-  const _NamespaceCard({
-    required this.namespace,
-    required this.writable,
-    required this.busy,
-    required this.onAction,
-    super.key,
-  });
-
-  final SettingsNamespace namespace;
-  final bool writable;
-  final bool busy;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  State<_NamespaceCard> createState() => _NamespaceCardState();
-}
-
-class _NamespaceCardState extends State<_NamespaceCard> {
-  final TextEditingController _keyController = TextEditingController();
-  final TextEditingController _valueController = TextEditingController();
-  bool _open = false;
-  bool _replaceMode = false;
-
-  @override
-  void dispose() {
-    _keyController.dispose();
-    _valueController.dispose();
-    super.dispose();
-  }
-
-  bool get _canSave => _replaceMode
-      ? _valueController.text.trim().isNotEmpty
-      : _keyController.text.trim().isNotEmpty &&
-            _valueController.text.trim().isNotEmpty;
-
-  void _save() {
-    final SettingsNamespace namespace = widget.namespace;
-    widget.onAction(
-      _replaceMode
-          ? ReplaceSettingAction(
-              ns: namespace.ns,
-              sectionJson: _valueController.text,
-              expectedRevision: namespace.revision,
-            )
-          : UpdateSettingAction(
-              ns: namespace.ns,
-              key: _keyController.text,
-              jsonValue: _valueController.text,
-              expectedRevision: namespace.revision,
-            ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final SettingsNamespace namespace = widget.namespace;
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          InkWell(
-            onTap: () => setState(() => _open = !_open),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          namespace.ns,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _namespaceMeta(namespace, l10n),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedRotation(
-                    turns: _open ? 0.5 : 0,
-                    duration: DshMotion.durationShort,
-                    curve: DshMotion.curveStandard,
-                    child: Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 20,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_open) _buildBody(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: widget.writable
-          ? _buildEditor(context)
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
-              child: Text(
-                l10n.namespaceReadOnlyHint,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onErrorContainer,
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _buildEditor(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _ModeButton(
-                label: l10n.patchKey,
-                selected: !_replaceMode,
-                onTap: () => setState(() => _replaceMode = false),
-              ),
-              _ModeButton(
-                label: l10n.replaceSection,
-                selected: _replaceMode,
-                onTap: () => setState(() => _replaceMode = true),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (!_replaceMode) ...<Widget>[
-            _FieldLabel(l10n.topLevelKey),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _keyController,
-              decoration: _dsInputDecoration(context),
-              onChanged: (String _) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-          ],
-          _FieldLabel(_replaceMode ? l10n.wholeUserLayerJson : l10n.jsonValue),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _valueController,
-            decoration: _dsInputDecoration(
-              context,
-              hint: _replaceMode
-                  ? l10n.jsonKeyValueExampleHint
-                  : l10n.jsonValueExampleHint,
-            ),
-            maxLines: _replaceMode ? 4 : 1,
-            onChanged: (String _) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.casRevisionLine(widget.namespace.revision),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              OutlinedButton(
-                onPressed: () {
-                  _keyController.clear();
-                  _valueController.clear();
-                  setState(() {});
-                },
-                style: _outlineCapsule(context),
-                child: Text(l10n.discard),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _canSave && !widget.busy ? _save : null,
-                style: _filledCapsule(context),
-                child: Text(l10n.save),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.label, required this.selected, this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kShapeDock),
-        hoverColor: scheme.surfaceContainerHigh,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: selected ? scheme.primaryContainer : null,
-              borderRadius: BorderRadius.circular(kShapeDock),
-              border: selected
-                  ? null
-                  : Border.all(color: scheme.outlineVariant),
-            ),
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: selected
-                    ? theme.colorScheme.onSurface
-                    : scheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Text(
-      label,
-      style: Theme.of(context).textTheme.labelMedium
-          ?.copyWith(color: scheme.onSurfaceVariant),
-    );
-  }
-}
-
-InputDecoration _dsInputDecoration(BuildContext context, {String? hint}) {
-  final ThemeData theme = Theme.of(context);
-  final ColorScheme scheme = theme.colorScheme;
-  final OutlineInputBorder border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(kShapeChip),
-    borderSide: BorderSide(color: scheme.outlineVariant),
-  );
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: scheme.onSurfaceVariant,
-    ),
-    filled: true,
-    fillColor: scheme.surfaceContainerLow,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-    enabledBorder: border,
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(kShapeChip),
-      borderSide: BorderSide(color: scheme.primary),
-    ),
-  );
-}
-
-ButtonStyle _filledCapsule(BuildContext context) {
-  return FilledButton.styleFrom(
-    minimumSize: const Size(64, 36),
-    padding: const EdgeInsets.symmetric(horizontal: 14),
-    shape: const StadiumBorder(),
-    textStyle: Theme.of(context).textTheme.bodyMedium,
-  );
-}
-
-ButtonStyle _outlineCapsule(BuildContext context) {
-  final ColorScheme scheme = Theme.of(context).colorScheme;
-  return OutlinedButton.styleFrom(
-    minimumSize: const Size(64, 36),
-    padding: const EdgeInsets.symmetric(horizontal: 14),
-    shape: const StadiumBorder(),
-    foregroundColor: scheme.onSurfaceVariant,
-    side: BorderSide(color: scheme.outlineVariant),
-    textStyle: Theme.of(context).textTheme.bodyMedium,
-  );
-}
-
-ButtonStyle _dangerCapsule(BuildContext context) {
-  return TextButton.styleFrom(
-    minimumSize: const Size(64, 36),
-    padding: const EdgeInsets.symmetric(horizontal: 14),
-    shape: const StadiumBorder(),
-    foregroundColor: Theme.of(context).colorScheme.error,
-    textStyle: Theme.of(context).textTheme.bodyMedium,
-  );
-}
-
-class _CredentialRow extends StatelessWidget {
-  const _CredentialRow({
-    required this.credential,
-    required this.onAction,
-    super.key,
-  });
-
-  final CredentialStatus credential;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _openSheet(context),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      credential.ref,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _credentialMeta(credential, l10n),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              _StateBadge(configured: credential.configured),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: scheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openSheet(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        final double insets = MediaQuery.of(sheetContext).viewInsets.bottom;
-        final ColorScheme scheme = Theme.of(sheetContext).colorScheme;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(8, 0, 8, 8 + insets),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(kShapeSheet),
-              border: Border.all(color: scheme.outlineVariant),
-              boxShadow: kM3ShadowElevation3,
-            ),
-            child: _CredentialSheet(credential: credential, onAction: onAction),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _StateBadge extends StatelessWidget {
-  const _StateBadge({required this.configured, this.label});
-
-  final bool configured;
-  final String? label;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: configured ? scheme.primaryContainer : null,
-        borderRadius: BorderRadius.circular(kShapePill),
-      ),
-      child: Text(
-        label ?? (configured ? l10n.stateConfigured : l10n.stateNotSet),
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: scheme.onSurfaceVariant),
-      ),
-    );
-  }
-}
-
-class _CredentialSheet extends StatefulWidget {
-  const _CredentialSheet({required this.credential, required this.onAction});
-
-  final CredentialStatus credential;
-  final void Function(SettingsAction) onAction;
-
-  @override
-  State<_CredentialSheet> createState() => _CredentialSheetState();
-}
-
-class _CredentialSheetState extends State<_CredentialSheet> {
-  final TextEditingController _valueController = TextEditingController();
-
-  @override
-  void dispose() {
-    _valueController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    final CredentialStatus credential = widget.credential;
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  l10n.storeCredentialTitle(credential.ref),
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              _StateBadge(configured: credential.configured),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _credentialMeta(credential, l10n),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (credential.writable)
-            _buildEditor(context)
-          else
-            Text(
-              l10n.credentialReadOnlyHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onErrorContainer,
-              ),
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              if (credential.configured && credential.writable)
-                TextButton(
-                  onPressed: () {
-                    widget.onAction(UnsetCredentialAction(credential.ref));
-                    Navigator.of(context).pop();
-                  },
-                  style: _dangerCapsule(context),
-                  child: Text(l10n.unset),
-                ),
-              const Spacer(),
-              OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: _outlineCapsule(context),
-                child: Text(l10n.cancel),
-              ),
-              if (credential.writable) ...<Widget>[
-                const SizedBox(width: 8),
-                ListenableBuilder(
-                  listenable: _valueController,
-                  builder: (BuildContext context, Widget? _) => FilledButton(
-                    onPressed: _valueController.text.trim().isNotEmpty
-                        ? () {
-                            widget.onAction(
-                              SetCredentialAction(
-                                credential.ref,
-                                _valueController.text.trim(),
-                              ),
-                            );
-                            Navigator.of(context).pop();
-                          }
-                        : null,
-                    style: _filledCapsule(context),
-                    child: Text(l10n.save),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEditor(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ThemeData theme = Theme.of(context);
-    final AppLocalizations l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _FieldLabel(l10n.secretValueLabel),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _valueController,
-          autofocus: true,
-          obscureText: true,
-          decoration: _dsInputDecoration(context, hint: l10n.secretValueHint),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          l10n.secretValueHintLine,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -2690,201 +1270,136 @@ class _BackendSheetState extends State<_BackendSheet> {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final bool editing = widget.backend != null;
     final bool urlValid = _validUrl(_urlController.text);
-    return SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            editing ? l10n.editBackend : l10n.addBackend,
-            style: theme.textTheme.titleMedium,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          editing ? l10n.editBackend : l10n.addBackend,
+          style: theme.textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        SettingsFieldLabel(l10n.backendLabel),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _labelController,
+          autofocus: !editing,
+          decoration: settingsInputDecoration(
+            context,
+            hint: l10n.backendLabelHint,
           ),
-          const SizedBox(height: 12),
-          _FieldLabel(l10n.backendLabel),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _labelController,
-            autofocus: !editing,
-            decoration: _dsInputDecoration(
-              context,
-              hint: l10n.backendLabelHint,
+          onChanged: (String _) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        SettingsFieldLabel(l10n.backendBaseUrlLabel),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _urlController,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          decoration: settingsInputDecoration(
+            context,
+            hint: l10n.backendBaseUrlHint,
+          ),
+          onChanged: (String _) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          urlValid ? l10n.baseUrlDerivationHint : l10n.baseUrlValidHint,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: urlValid ? scheme.onSurfaceVariant : scheme.error,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // The sheet's ink host stays a Material of its own, so the tile's
+        // splash paints on the sheet surface rather than under it.
+        Material(
+          color: Colors.transparent,
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _trustHostCertificate,
+            onChanged: (bool value) =>
+                setState(() => _trustHostCertificate = value),
+            title: Text(
+              l10n.backendTrustCertificateTitle,
+              style: theme.textTheme.bodyMedium,
             ),
-            onChanged: (String _) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          _FieldLabel(l10n.backendBaseUrlLabel),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _urlController,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: _dsInputDecoration(
-              context,
-              hint: l10n.backendBaseUrlHint,
-            ),
-            onChanged: (String _) => setState(() {}),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            urlValid ? l10n.baseUrlDerivationHint : l10n.baseUrlValidHint,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: urlValid
-                  ? scheme.onSurfaceVariant
-                  : theme.colorScheme.error,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // The sheet's decorated Container above would hide ListTile ink
-          // and background, so the tile sits on its own Material.
-          Material(
-            color: Colors.transparent,
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _trustHostCertificate,
-              onChanged: (bool value) =>
-                  setState(() => _trustHostCertificate = value),
-              title: Text(
-                l10n.backendTrustCertificateTitle,
-                style: theme.textTheme.bodyMedium,
+            subtitle: Text(
+              l10n.backendTrustCertificateDescription,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
-              subtitle: Text(
-                l10n.backendTrustCertificateDescription,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Runs on the explicit tap only; saving is never gated by it (a
-          // host can be offline while it is configured).
-          BackendReachabilityCheck(
-            baseUri: _parsedUrl,
-            trustHostCertificate: _trustHostCertificate,
-          ),
-          if (widget.onSetChatHost != null) ...<Widget>[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: widget.onSetChatHost,
-                style: _outlineCapsule(context),
-                child: Text(l10n.setChatHost),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              if (editing)
-                Expanded(
-                  child: widget.onRemove != null
-                      ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton(
-                            onPressed: widget.onRemove,
-                            style: _dangerCapsule(context),
-                            child: Text(l10n.remove),
-                          ),
-                        )
-                      : Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Text(
-                            widget.removeBlockedReason ?? '',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                )
-              else
-                const Spacer(),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: _outlineCapsule(context),
-                child: Text(l10n.cancel),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _canSave
-                    ? () {
-                        widget.onSave(
-                          _labelController.text.trim(),
-                          _urlController.text.trim(),
-                          _trustHostCertificate,
-                        );
-                        Navigator.of(context).pop();
-                      }
-                    : null,
-                style: _filledCapsule(context),
-                child: Text(editing ? l10n.save : l10n.add),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CircleAction extends StatelessWidget {
-  const _CircleAction({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-    this.iconSize = 18,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final double iconSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          hoverColor: scheme.surfaceContainerHigh,
-          onTap: onTap,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 12),
+        // Runs on the explicit tap only; saving is never gated by it (a
+        // host can be offline while it is configured).
+        BackendReachabilityCheck(
+          baseUri: _parsedUrl,
+          trustHostCertificate: _trustHostCertificate,
+        ),
+        if (widget.onSetChatHost != null) ...<Widget>[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: widget.onSetChatHost,
+              style: settingsOutlineCapsule(context),
+              child: Text(l10n.setChatHost),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            if (editing)
+              Expanded(
+                child: widget.onRemove != null
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: widget.onRemove,
+                          style: settingsDangerCapsule(context),
+                          child: Text(l10n.remove),
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Text(
+                          widget.removeBlockedReason ?? '',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+              )
+            else
+              const Spacer(),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: settingsOutlineCapsule(context),
+              child: Text(l10n.cancel),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _canSave
+                  ? () {
+                      widget.onSave(
+                        _labelController.text.trim(),
+                        _urlController.text.trim(),
+                        _trustHostCertificate,
+                      );
+                      Navigator.of(context).pop();
+                    }
+                  : null,
+              style: settingsFilledCapsule(context),
+              child: Text(editing ? l10n.save : l10n.add),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
-
-String _namespaceMeta(SettingsNamespace namespace, AppLocalizations l10n) =>
-    <String>[
-      l10n.namespaceMetaApplies(namespace.applies.name),
-      l10n.namespaceMetaRevision(namespace.revision),
-      if (namespace.hasUserLayer) l10n.userLayerLabel,
-      if (namespace.secretCount > 0)
-        l10n.secretsSetCount(namespace.secretCount),
-    ].join(' · ');
-
-String _credentialMeta(CredentialStatus credential, AppLocalizations l10n) =>
-    <String>[
-      credential.configured
-          ? l10n.credentialMetaConfigured
-          : l10n.credentialMetaNotConfigured,
-      if (credential.source case final String source)
-        l10n.credentialMetaSource(source),
-      credential.writable
-          ? l10n.credentialMetaWritable
-          : l10n.credentialMetaReadOnly,
-    ].join(' · ');
