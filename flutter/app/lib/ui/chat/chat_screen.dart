@@ -757,6 +757,17 @@ class _ChatPanelState extends State<ChatPanel> {
   double? _restoredOffset;
   bool _restoreDecided = true;
 
+  /// Distance from the top of the transcript within which scrolling up
+  /// automatically triggers background paging of earlier history.
+  static const double kAutoLoadOlderThreshold = 160.0;
+
+  /// Single-flight guard preventing multiple auto-load dispatches per scroll burst.
+  bool _autoLoadDispatched = false;
+
+  /// Distance from the bottom of the timeline before older history was requested.
+  /// Preserved across prepended-item layout to anchor viewport reading position.
+  double? _anchorDistanceFromBottom;
+
   /// Debounced reading-position write; the last observed pixels ride
   /// along so a switch or dispose can flush them for the leaving session.
   Timer? _readOffsetSave;
@@ -793,6 +804,8 @@ class _ChatPanelState extends State<ChatPanel> {
       _showJumpToBottom = false;
       _lastFollowSignature = null;
       _lastTrailingUserKey = null;
+      _anchorDistanceFromBottom = null;
+      _autoLoadDispatched = false;
       _bindSession();
       _scheduleFollow();
       return;
@@ -829,6 +842,33 @@ class _ChatPanelState extends State<ChatPanel> {
     _lastFollowSignature = signature;
     if (_needsInitialJump || appendedUser || (tipMoved && _pinned)) {
       _scheduleFollow();
+    }
+    // Seamless viewport anchoring: when older history arrives above,
+    // adjust scroll offset by the expanded height so the content currently
+    // viewed remains at the exact same screen position.
+    final oldOlder = oldWidget.uiState.isLoadingOlder;
+    final newOlder = widget.uiState.isLoadingOlder;
+    if (oldOlder && !newOlder) {
+      _autoLoadDispatched = false;
+      if (_anchorDistanceFromBottom != null) {
+        final anchorDistance = _anchorDistanceFromBottom!;
+        _anchorDistanceFromBottom = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_timelineScroll.hasClients) return;
+          final position = _timelineScroll.position;
+          if (!position.hasContentDimensions) return;
+          final newMax = position.maxScrollExtent;
+          final target = (newMax - anchorDistance).clamp(0.0, newMax);
+          if ((target - position.pixels).abs() > 1.0) {
+            _followDepth++;
+            try {
+              _timelineScroll.jumpTo(target);
+            } finally {
+              _followDepth--;
+            }
+          }
+        });
+      }
     }
   }
 
@@ -876,6 +916,34 @@ class _ChatPanelState extends State<ChatPanel> {
     _pinned = position.maxScrollExtent - position.pixels <= kFollowThreshold;
     _scheduleReadOffsetSave(position.pixels);
     _syncJumpToBottomButton();
+    _checkAutoLoadOlder(position);
+  }
+
+  /// Automatically triggers background loading of earlier history when the
+  /// reader scrolls near the top of the transcript.
+  void _checkAutoLoadOlder(ScrollPosition position) {
+    if (_needsInitialJump || !_restoreDecided || _followDepth > 0) return;
+    final uiState = widget.uiState;
+    if (!uiState.hasMoreOlder ||
+        uiState.isLoadingOlder ||
+        _autoLoadDispatched) {
+      return;
+    }
+    if (position.maxScrollExtent <= 0) return;
+    if (position.pixels <= kAutoLoadOlderThreshold) {
+      _recordScrollAnchor();
+      _autoLoadDispatched = true;
+      widget.onAction(const LoadOlderHistoryAction());
+    }
+  }
+
+  /// Captures the distance from the bottom before prepending items so the
+  /// reading position can be seamlessly restored.
+  void _recordScrollAnchor() {
+    if (!_timelineScroll.hasClients) return;
+    final position = _timelineScroll.position;
+    if (!position.hasContentDimensions) return;
+    _anchorDistanceFromBottom = position.maxScrollExtent - position.pixels;
   }
 
   /// The jump-to-bottom FAB is visible only when the reader is away from
@@ -1275,7 +1343,11 @@ class _ChatPanelState extends State<ChatPanel> {
         if (identical(row, _olderHistorySlot)) {
           return OlderHistoryRow(
             isLoading: uiState.isLoadingOlder,
-            onLoadOlder: () => widget.onAction(const LoadOlderHistoryAction()),
+            onLoadOlder: () {
+              _recordScrollAnchor();
+              _autoLoadDispatched = true;
+              widget.onAction(const LoadOlderHistoryAction());
+            },
           );
         }
         if (row is TimelineActivityGroup) {
@@ -1666,8 +1738,9 @@ class _PlanChipState extends State<PlanChip> {
   }
 }
 
-/// Paging button / loading state at the head of the transcript when older
-/// session history is available or being fetched.
+/// Mobile-first history indicator at the head of the transcript:
+/// - When loading: clean centered CircularProgressIndicator with localized copy
+/// - When idle (e.g. at the head): unobtrusive TextButton allowing manual trigger
 class OlderHistoryRow extends StatelessWidget {
   const OlderHistoryRow({
     required this.isLoading,
@@ -1686,47 +1759,50 @@ class OlderHistoryRow extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: OutlinedButton(
-          key: const ValueKey('chat-load-older-button'),
-          onPressed: isLoading ? null : onLoadOlder,
-          style: OutlinedButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(kShapeCard),
-            ),
-            side: BorderSide(color: scheme.outlineVariant),
-            foregroundColor: scheme.onSurfaceVariant,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
-          child: isLoading
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: scheme.onSurfaceVariant,
-                      ),
+        padding: const EdgeInsets.symmetric(vertical: 10.0),
+        child: isLoading
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
                     ),
-                    const SizedBox(width: 8),
-                    Text(l10n.chatLoadingOlder),
-                  ],
-                )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.history_rounded,
-                      size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    l10n.chatLoadingOlder,
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 6),
-                    Text(l10n.chatLoadOlder),
-                  ],
+                  ),
+                ],
+              )
+            : TextButton.icon(
+                key: const ValueKey('chat-load-older-button'),
+                onPressed: onLoadOlder,
+                icon: Icon(
+                  Icons.history_rounded,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
                 ),
-        ),
+                label: Text(
+                  l10n.chatLoadOlder,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
       ),
     );
   }

@@ -1335,6 +1335,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatLoadingOlder => '正在加载更早记录…';
 
   @override
+  String get chatBeginningOfHistory => '已到达会话起点';
+
+  @override
+  String get chatLoadOlderRetry => '加载更早记录失败，点击重试';
+
+  @override
   String get queue => '排队发送';
 
   @override

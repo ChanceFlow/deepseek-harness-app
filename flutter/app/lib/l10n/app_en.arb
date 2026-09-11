@@ -688,6 +688,14 @@
   "@chatLoadingOlder": {
     "description": "Progress state while earlier conversation history is being loaded."
   },
+  "chatBeginningOfHistory": "Beginning of conversation",
+  "@chatBeginningOfHistory": {
+    "description": "Notice shown at the very top of the transcript when all earlier history has been loaded."
+  },
+  "chatLoadOlderRetry": "Couldn''t load earlier messages. Tap to retry.",
+  "@chatLoadOlderRetry": {
+    "description": "Retry affordance when loading older history fails."
+  },
   "queue": "Queue",
   "thinkLabel": "Think",
   "commandPlanDescription": "Enter or leave plan mode",
