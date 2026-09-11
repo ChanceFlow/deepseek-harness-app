@@ -32,16 +32,17 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
 | Modal scrim | `scrim` |
 | Warning, waiting-on-user | `warning` (a non-role color, see below) |
 | Success, completed state | `success` (a non-role color, see below) |
+| Code token in a fence | `syntaxKeyword`, `syntaxString`, `syntaxNumber` (non-role) |
 | Ink host that must stay invisible | `Colors.transparent` |
 
 - **`theme.dart` is the home for a color Material 3 has no role for.** It
   holds the elevation shadow constants and the `DshSchemeColors` extension,
-  so a call site writes `scheme.success`, not a green. A new non-role color
-  is declared there and gains a row above in the same change;
+  so a call site writes `scheme.success`, not a green. A new one is declared
+  there and gains a row above;
   `verify_theme_native` rejects a `Color(0x…)`, `Colors.<name>`, or
   `ThemeExtension` under `lib/` outside that file.
 - **Two tones separate content from chrome.** The transcript sits on
-  `surface`, every frame around it on `surfaceContainer`. One filled seat per
+  `surface`, every frame on `surfaceContainer`. One filled seat per
   surface: the primary action.
 - **Space divides; a rule is a decision.** An `ExpansionTile` takes
   `Border()` for both shapes. A row is as tall as its line: shrink the

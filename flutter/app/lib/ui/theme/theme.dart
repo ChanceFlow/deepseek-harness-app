@@ -42,6 +42,31 @@ extension DshSchemeColors on ColorScheme {
   Color get statusGlint => brightness == Brightness.light
       ? const Color(0xFFD3E2FF)
       : const Color(0xFFFFFFFF);
+
+  /// Code-token colours for fenced blocks ([code_highlight.dart] classifies
+  /// them, the markdown renderer paints them). Material 3 carries no syntax
+  /// roles, and these three have to stay apart from each other *and* from
+  /// `onSurface`, which the rest of the code body keeps wearing.
+  ///
+  /// Every value holds >= 4.5:1 against the surface a code block actually
+  /// sits on — `surfaceContainerHigh`, #E5E1EB light / #34343B dark — not
+  /// against the page. Measured keyword / string / number: 7.29 / 5.00 / 4.94
+  /// in light, 5.17 / 6.14 / 7.14 in dark.
+  Color get syntaxKeyword => brightness == Brightness.light
+      ? const Color(0xFF6A1B9A)
+      : const Color(0xFFCE93D8);
+
+  /// String-literal token: green in both brightnesses, the reading a code
+  /// fence carries everywhere else, and deliberately not `success` so a state
+  /// colour never doubles as a token colour.
+  Color get syntaxString => brightness == Brightness.light
+      ? const Color(0xFF1B6D24)
+      : const Color(0xFF81C784);
+
+  /// Numeric-literal token.
+  Color get syntaxNumber => brightness == Brightness.light
+      ? const Color(0xFFA0430A)
+      : const Color(0xFFFFB74D);
 }
 
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
