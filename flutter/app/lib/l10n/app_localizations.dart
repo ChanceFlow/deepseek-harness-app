@@ -134,6 +134,18 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get retry;
 
+  /// Manual reconnect action for an unreachable host.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get reconnect;
+
+  /// Connection banner naming the unreachable host.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'\'t reach {host}'**
+  String connectionHostUnreachable(String host);
+
   /// Back navigation tooltip.
   ///
   /// In en, this message translates to:
@@ -1136,6 +1148,12 @@ abstract class AppLocalizations {
   /// **'Unknown host.'**
   String get backendErrorUnknown;
 
+  /// Generic fallback when a host-configuration failure cannot be classified.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t load host configuration.'**
+  String get backendErrorLoadFailed;
+
   /// Error displayed when attempting to activate a disabled host.
   ///
   /// In en, this message translates to:
@@ -1334,6 +1352,174 @@ abstract class AppLocalizations {
   /// **'This deployment exposes no plugin settings.'**
   String get noPluginSettings;
 
+  /// Settings section title listing the host's loaded plugins and agent-preset compositions.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugin inventory'**
+  String get settingsSectionPluginInventory;
+
+  /// Settings section intro describing what the read-only plugin inventory covers.
+  ///
+  /// In en, this message translates to:
+  /// **'The plugins this host loads and the composition each agent preset builds.'**
+  String get pluginInventoryIntro;
+
+  /// Notice stating the inventory surface cannot change plugin configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only. Enable, disable, and configure plugins on the host.'**
+  String get pluginInventoryReadOnlyNotice;
+
+  /// Placeholder and accessible name for the inventory filter field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search module name or entry ID'**
+  String get pluginInventorySearchHint;
+
+  /// Loading state while the plugin inventory is being read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading plugins…'**
+  String get pluginInventoryLoading;
+
+  /// Empty state when the snapshot carries no entries and no presets.
+  ///
+  /// In en, this message translates to:
+  /// **'This host exposes no plugins.'**
+  String get pluginInventoryEmpty;
+
+  /// Empty state when the inventory query matches nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No plugins match this search.'**
+  String get pluginInventoryNoMatch;
+
+  /// Generic failure state for the inventory read; deliberately omits transport details.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugins are temporarily unavailable.'**
+  String get pluginInventoryLoadFailed;
+
+  /// Enablement tag for an unconditionally enabled plugin.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get pluginInventoryEnabledTag;
+
+  /// Enablement tag for a disabled plugin.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get pluginInventoryDisabledTag;
+
+  /// Enablement tag for a plugin gated by an unresolved condition.
+  ///
+  /// In en, this message translates to:
+  /// **'Conditional'**
+  String get pluginInventoryConditionalTag;
+
+  /// Tag replacing the enablement tag when the plugin's root fiber failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get pluginInventoryFailedTag;
+
+  /// Group title for agent-preset plugin compositions.
+  ///
+  /// In en, this message translates to:
+  /// **'Session plugins'**
+  String get pluginInventoryPresetGroupTitle;
+
+  /// Group subtitle explaining preset compositions are per session.
+  ///
+  /// In en, this message translates to:
+  /// **'Composed per session by agent presets.'**
+  String get pluginInventoryPresetGroupIntro;
+
+  /// Group title for the Loader's global plugin entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Global plugins'**
+  String get pluginInventoryGlobalGroupTitle;
+
+  /// Group subtitle explaining the global plugin plane.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared by the system and every session.'**
+  String get pluginInventoryGlobalGroupIntro;
+
+  /// Plugin count for a group or preset.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} plugins'**
+  String pluginInventoryPluginCount(int count);
+
+  /// Count of failed plugin entries in the global group.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failed'**
+  String pluginInventoryFailedCount(int count);
+
+  /// Badge on the agent preset a session naming no preset composes.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get pluginInventoryDefaultBadge;
+
+  /// Label prefixing the host-reported reason a preset composition cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Composition unavailable'**
+  String get pluginInventoryPresetBrokenLabel;
+
+  /// Detail label for the full module specifier.
+  ///
+  /// In en, this message translates to:
+  /// **'Module'**
+  String get pluginInventoryModuleLabel;
+
+  /// Detail label for the plugin's root-fiber phase.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get pluginInventoryStatusLabel;
+
+  /// Detail label for a preset row's disabled condition expression.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled when'**
+  String get pluginInventoryConditionLabel;
+
+  /// Fiber phase label: the entry is waiting on dependencies.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for dependencies'**
+  String get pluginInventoryPhasePending;
+
+  /// Fiber phase label: the entry is loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get pluginInventoryPhaseLoading;
+
+  /// Fiber phase label: the entry's root fiber is active.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get pluginInventoryPhaseActive;
+
+  /// Fiber phase label: the entry's root fiber failed to start.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start'**
+  String get pluginInventoryPhaseFailed;
+
+  /// Fiber phase label: the entry's root fiber is unloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Unloading'**
+  String get pluginInventoryPhaseUnloading;
+
   /// No description provided for @modelsIntro.
   ///
   /// In en, this message translates to:
@@ -1349,7 +1535,7 @@ abstract class AppLocalizations {
   /// No description provided for @modelsFooter.
   ///
   /// In en, this message translates to:
-  /// **'Custom providers are managed on the host: this client covers the DeepSeek API key only.'**
+  /// **'Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.'**
   String get modelsFooter;
 
   /// No description provided for @apiKeyConfigured.
@@ -1501,6 +1687,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'http or https with a host, e.g. http://127.0.0.1:3080'**
   String get baseUrlValidHint;
+
+  /// No description provided for @backendTrustCertificateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust this host\'\'s certificate'**
+  String get backendTrustCertificateTitle;
+
+  /// No description provided for @backendTrustCertificateDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept this host\'\'s TLS certificate even when Android cannot verify it — for a self-signed or internal-CA gateway. Only this host is affected, and anyone who can intercept the connection could impersonate it. Leave off unless you control the gateway.'**
+  String get backendTrustCertificateDescription;
 
   /// No description provided for @remove.
   ///
@@ -2401,6 +2599,30 @@ abstract class AppLocalizations {
   /// **'record feedback about this session'**
   String get commandFeedbackDescription;
 
+  /// No description provided for @commandExportDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Download this session log as a ZIP archive'**
+  String get commandExportDescription;
+
+  /// No description provided for @sessionLogExportTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Download session log'**
+  String get sessionLogExportTooltip;
+
+  /// Confirmation that the session-log archive was written, naming where it landed.
+  ///
+  /// In en, this message translates to:
+  /// **'Session log saved to {location}'**
+  String sessionLogExportSaved(String location);
+
+  /// Failure notice when the session-log archive could not be downloaded or saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t export the session log'**
+  String get sessionLogExportFailed;
+
   /// Composer refusal for a submission carrying images bound for a host command that does not accept them.
   ///
   /// In en, this message translates to:
@@ -3193,6 +3415,18 @@ abstract class AppLocalizations {
   /// **'Failed to load file preview'**
   String get filePreviewFailed;
 
+  /// Preview notice for a binary or undecodable file.
+  ///
+  /// In en, this message translates to:
+  /// **'This file isn\'\'t text, so it can\'\'t be previewed.'**
+  String get filePreviewBinary;
+
+  /// Preview notice for a zero-byte text file.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is empty.'**
+  String get filePreviewEmpty;
+
   /// Notice banner when file preview is truncated.
   ///
   /// In en, this message translates to:
@@ -3205,11 +3439,1037 @@ abstract class AppLocalizations {
   /// **'This session is currently locked by another process or CLI.'**
   String get sessionAlreadyOwnedError;
 
+  /// Headline for a chat action that failed; the host detail follows.
+  ///
+  /// In en, this message translates to:
+  /// **'That action couldn\'\'t be completed.'**
+  String get chatActionFailed;
+
+  /// Full-screen error when the chat state stream fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t load this conversation.'**
+  String get chatLoadFailed;
+
   /// Notice when system prompt is replaced or appended mid-conversation.
   ///
   /// In en, this message translates to:
   /// **'System prompt updated'**
   String get systemPromptUpdated;
+
+  /// App-bar and entry label for the session trajectory ledger view.
+  ///
+  /// In en, this message translates to:
+  /// **'Trajectory'**
+  String get trajectoryTitle;
+
+  /// Placeholder for the trajectory ledger's local search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search ledger'**
+  String get trajectorySearchHint;
+
+  /// Tooltip for the button clearing the trajectory search query.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get trajectorySearchClear;
+
+  /// Trajectory search result count; matches out of the records loaded in the window.
+  ///
+  /// In en, this message translates to:
+  /// **'{matches} of {total}'**
+  String trajectorySearchMatches(int matches, int total);
+
+  /// Button loading the previous session history page into the ledger.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older history'**
+  String get trajectoryLoadOlder;
+
+  /// Button label while an older history page is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading older history…'**
+  String get trajectoryLoadingOlder;
+
+  /// Retry hint shown when an older history page request failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t load older history. Try again.'**
+  String get trajectoryLoadOlderFailed;
+
+  /// Empty state when the local ledger search matches nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No records match this search in the loaded window.'**
+  String get trajectoryNoMatches;
+
+  /// Empty state when the session log has produced no ledger records.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has no trajectory records yet.'**
+  String get trajectoryEmpty;
+
+  /// Turn rule heading for rows logged before the session's first turn/start.
+  ///
+  /// In en, this message translates to:
+  /// **'Before the first turn'**
+  String get trajectoryBeforeFirstTurn;
+
+  /// Turn rule heading naming one turn number.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {turn}'**
+  String trajectoryTurnLabel(int turn);
+
+  /// Turn rule metadata: record and tool counts for one turn.
+  ///
+  /// In en, this message translates to:
+  /// **'{records, plural, =1{1 record} other{{records} records}} · {tools, plural, =1{1 tool} other{{tools} tools}}'**
+  String trajectoryTurnSummary(int records, int tools);
+
+  /// Inline marker opening one step inside a turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {step}'**
+  String trajectoryStepLabel(int step);
+
+  /// Record count shown beside a step marker.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 record} other{{count} records}}'**
+  String trajectoryStepRecordCount(int count);
+
+  /// Ledger record kind label for a user prompt.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get trajectoryKindUser;
+
+  /// Ledger record kind label for injected context (non-user role message).
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get trajectoryKindContext;
+
+  /// Ledger record kind label for an assistant message.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get trajectoryKindAssistant;
+
+  /// Ledger record kind label for a tool call.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool'**
+  String get trajectoryKindTool;
+
+  /// Ledger record kind label for a context compaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Compacted'**
+  String get trajectoryKindCompaction;
+
+  /// Ledger record kind label for a host slash command.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get trajectoryKindCommand;
+
+  /// Ledger record kind label for a turn or session error.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get trajectoryKindError;
+
+  /// Status shown for an assistant record still receiving tokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Streaming'**
+  String get trajectoryStatusStreaming;
+
+  /// Inspector field label for the record's turn number.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn'**
+  String get trajectoryFactTurn;
+
+  /// Inspector field label for the record's step number.
+  ///
+  /// In en, this message translates to:
+  /// **'Step'**
+  String get trajectoryFactStep;
+
+  /// Inspector field label for the record kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get trajectoryFactKind;
+
+  /// Inspector field label for the record lifecycle state.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get trajectoryFactStatus;
+
+  /// Inspector field label for the record's logged start timestamp.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get trajectoryFactStarted;
+
+  /// Inspector field label for the first model output token of a recorded assistant stream.
+  ///
+  /// In en, this message translates to:
+  /// **'First token'**
+  String get trajectoryFactFirstToken;
+
+  /// Inspector field label for a record's own duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get trajectoryFactDuration;
+
+  /// Inspector field label naming the root call that owns a nested code-dispatch call.
+  ///
+  /// In en, this message translates to:
+  /// **'Parent call'**
+  String get trajectoryFactParentCall;
+
+  /// Inspector value for a row that belongs to no logged step.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside a step'**
+  String get trajectoryFactOutsideStep;
+
+  /// Inspector value when the session log does not carry the requested fact.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get trajectoryFactUnavailable;
+
+  /// Inspector value when the session log carries no timing boundary for the record.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get trajectoryTimingNotRecorded;
+
+  /// Inspector note explaining why a duration cannot be computed.
+  ///
+  /// In en, this message translates to:
+  /// **'The session log carries no settle timestamp for this record.'**
+  String get trajectoryDurationNotRecorded;
+
+  /// Inspector section heading for provider token accounting.
+  ///
+  /// In en, this message translates to:
+  /// **'Token usage'**
+  String get trajectoryUsageSection;
+
+  /// Inspector notice when a record carries no token accounting.
+  ///
+  /// In en, this message translates to:
+  /// **'The host reported no usage for this record.'**
+  String get trajectoryUsageNotReported;
+
+  /// Inspector usage row label for billed input tokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Input'**
+  String get trajectoryUsageInput;
+
+  /// Inspector usage row label for input tokens served from a provider cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache read'**
+  String get trajectoryUsageCachedRead;
+
+  /// Inspector usage row label for input tokens written into a provider cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache write'**
+  String get trajectoryUsageCacheWrite;
+
+  /// Inspector usage row label for completion tokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Output'**
+  String get trajectoryUsageOutput;
+
+  /// Inspector usage row label for reasoning tokens within the output count.
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning'**
+  String get trajectoryUsageReasoning;
+
+  /// Inspector section heading for a record's full input payload.
+  ///
+  /// In en, this message translates to:
+  /// **'Input'**
+  String get trajectoryInputSection;
+
+  /// Inspector section heading for a record's full output payload.
+  ///
+  /// In en, this message translates to:
+  /// **'Output'**
+  String get trajectoryOutputSection;
+
+  /// Token count shown in the inspector.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} tok'**
+  String trajectoryTokenCount(int value);
+
+  /// Turn rule token summary: compact billed input and output counts.
+  ///
+  /// In en, this message translates to:
+  /// **'in {input} · out {output}'**
+  String trajectoryTurnUsage(String input, String output);
+
+  /// Tooltip for the chat header action that opens the trajectory ledger.
+  ///
+  /// In en, this message translates to:
+  /// **'Trajectory'**
+  String get trajectoryEntryTooltip;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Providers'**
+  String get settingsSectionProviders;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a provider, enter its API key, and discover the models it serves.'**
+  String get providersIntro;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'The settings document is read-only in this deployment.'**
+  String get providersReadOnlyNotice;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t load providers: {error}'**
+  String providersLoadFailed(String error);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Credential state unavailable: {error}'**
+  String providerCredentialUnavailable(String error);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get providerStateLive;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Dormant'**
+  String get providerStateDormant;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand-declared'**
+  String get providerDeclared;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs repair: {error}'**
+  String providerNeedsRepair(String error);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'No configurable providers on this host.'**
+  String get providersEmpty;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Add provider'**
+  String get addProvider;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings family'**
+  String get addProviderFamilyLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Route id'**
+  String get addProviderRouteLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'acme-gateway'**
+  String get addProviderRouteHint;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Use lower-case letters, digits, and single hyphens, starting with a letter.'**
+  String get addProviderRouteInvalid;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'That route already exists.'**
+  String get addProviderRouteTaken;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name (optional)'**
+  String get addProviderDisplayNameLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Base URL (optional)'**
+  String get addProviderBaseUrlLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an http:// or https:// URL.'**
+  String get addProviderBaseUrlInvalid;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol (optional)'**
+  String get addProviderProtocolLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Model ids, one per line (optional)'**
+  String get addProviderModelsLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'A route the adapter does not already know needs at least one.'**
+  String get addProviderModelsHint;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Route {route}'**
+  String providerRouteLine(String route);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Key reference {ref}'**
+  String providerKeyRefLine(String ref);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'The value goes to the host credential store and is never shown again.'**
+  String get providerKeyHint;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove provider'**
+  String get providerRemoveAction;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {name}?'**
+  String providerRemoveConfirm(String name);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'The stored profile is removed. A stored API key is left in place.'**
+  String get providerRemoveBody;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover models'**
+  String get discoverModels;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'The endpoint advertised no models.'**
+  String get discoverModelsEmpty;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Model discovery failed: {error}'**
+  String discoverModelsFailed(String error);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Advertised models'**
+  String get discoveredModelsTitle;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Context {tokens}'**
+  String modelContextWindowLine(int tokens);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Max output {tokens}'**
+  String modelMaxTokensLine(int tokens);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider routes and profiles live in the host settings document; keys ride the host credential plane.'**
+  String get providerFooter;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsSectionAbout;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'App version'**
+  String get aboutVersionLabel;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} (build {build})'**
+  String aboutVersionLine(String version, String build);
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Documentation'**
+  String get aboutDocs;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a bug or send feedback'**
+  String get aboutFeedback;
+
+  /// Localized screen copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t open that link.'**
+  String get aboutLinkFailed;
+
+  /// Caption above the produced-file chips a finished turn closes with.
+  ///
+  /// In en, this message translates to:
+  /// **'Files changed'**
+  String get producedFilesLabel;
+
+  /// Overflow counter after the produced-file chips shown.
+  ///
+  /// In en, this message translates to:
+  /// **'+ {count, plural, =1{1 file} other{{count} files}}'**
+  String producedFilesMore(int count);
+
+  /// Accessible label of one produced-file chip; the name is the path.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name}'**
+  String producedFilesOpen(String name);
+
+  /// Decode throughput on a finalized assistant message's action row.
+  ///
+  /// In en, this message translates to:
+  /// **'{tps} tok/s'**
+  String messageTokensPerSecond(String tps);
+
+  /// Reported token total on a finalized assistant message's action row.
+  ///
+  /// In en, this message translates to:
+  /// **'{tokens} tok'**
+  String messageTokenUsage(String tokens);
+
+  /// Settings row title for the light/dark/system theme choice.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearanceTitle;
+
+  /// Theme preference segment for the light color scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsAppearanceLight;
+
+  /// Theme preference segment for the dark color scheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsAppearanceDark;
+
+  /// Theme preference segment following the device setting.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsAppearanceSystem;
+
+  /// Stated when the host does not expose the ui-theme preference field.
+  ///
+  /// In en, this message translates to:
+  /// **'Host theme settings are unavailable.'**
+  String get settingsAppearanceUnavailable;
+
+  /// Stated when the host refused the appearance write.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t save the theme choice.'**
+  String get settingsAppearanceSaveFailed;
+
+  /// Header band of the card shown while a dynamic Cordis plugin activation waits on the reader's decision.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugin approval'**
+  String get cordisApprovalHeader;
+
+  /// Label above the purpose the model supplied at cordis_define time, on the Cordis approval card.
+  ///
+  /// In en, this message translates to:
+  /// **'Purpose'**
+  String get cordisPurposeLabel;
+
+  /// Label for the stable plugin instance id on the Cordis approval card.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugin ID'**
+  String get cordisPluginIdLabel;
+
+  /// Label for the package version id on the Cordis approval card.
+  ///
+  /// In en, this message translates to:
+  /// **'Package ID'**
+  String get cordisPackageIdLabel;
+
+  /// Lifecycle-intent chip for a first-time Cordis plugin activation.
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get cordisModeRun;
+
+  /// Lifecycle-intent chip for a Cordis plugin activation that updates an already-loaded package.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get cordisModeUpdate;
+
+  /// Explains why the Cordis approval card offers Reject only.
+  ///
+  /// In en, this message translates to:
+  /// **'This phone can only reject: approving needs the browser plugin runtime that reports the activation it created, and this client doesn\'\'t have one. Rejecting releases the blocked tool call and runs neither half.'**
+  String get cordisRejectOnlyNotice;
+
+  /// Stated when dynamicCordisRunner/resolveRequestRun refused the rejection this client sent.
+  ///
+  /// In en, this message translates to:
+  /// **'The host didn\'\'t accept the plugin decision.'**
+  String get cordisAnswerFailed;
+
+  /// Host edit-sheet button that runs the reachability probe for the typed base URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get backendTestConnection;
+
+  /// Bounded in-progress line while the reachability probe is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing connection…'**
+  String get backendProbeRunning;
+
+  /// Probe outcome: a well-formed answer (including a business error) came back.
+  ///
+  /// In en, this message translates to:
+  /// **'Reachable. The host answered the dsh contract.'**
+  String get backendProbeReachable;
+
+  /// Probe outcome: connection refused, DNS failure, or the request deadline elapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'No dsh answered at this address. Check the base URL, that the gateway is running, and that this phone can reach it.'**
+  String get backendProbeUnreachable;
+
+  /// Probe outcome: TLS handshake failure, pointing at the per-host certificate-trust toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'TLS handshake failed. The host\'\'s certificate is not trusted — if you control this gateway, turn on “Trust this host\'\'s certificate” above.'**
+  String get backendProbeCertificateNotTrusted;
+
+  /// Probe outcome: HTTP 401; the deployment authenticates (or dsh web requires its printed URL token) and this client performs none.
+  ///
+  /// In en, this message translates to:
+  /// **'The gateway requires pairing or credentials this client does not have (deployment authentication, or the URL token dsh web prints). This client performs no authentication.'**
+  String get backendProbeAuthenticationRequired;
+
+  /// Probe outcome: HTTP 404 on the probe route, distinct from a connect failure.
+  ///
+  /// In en, this message translates to:
+  /// **'Something answered, but it is not a dsh host: there is no dsh RPC route at this address.'**
+  String get backendProbeNotDshSurface;
+
+  /// Probe outcome: a non-2xx status other than 401 or 404.
+  ///
+  /// In en, this message translates to:
+  /// **'The host answered HTTP {status}, which the dsh contract does not use.'**
+  String backendProbeUnexpectedStatus(int status);
+
+  /// Probe outcome: a 2xx body that does not decode as a JSON-RPC envelope.
+  ///
+  /// In en, this message translates to:
+  /// **'The host answered, but not with a dsh JSON-RPC response.'**
+  String get backendProbeUnenvelopedResponse;
+
+  /// Probe outcome: a failure outside the transport's recognized vocabulary.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not classify the connection failure.'**
+  String get backendProbeUnknown;
+
+  /// Caveat shown when a TLS handshake failed without naming a certificate, so the class cannot be proven.
+  ///
+  /// In en, this message translates to:
+  /// **'The failure was a TLS handshake error; it may be a certificate the system rejects or another TLS mismatch.'**
+  String get backendProbeAmbiguousTls;
+
+  /// Stated with a failed probe so the user knows the host still saves.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving is not blocked — a host can be offline while you configure it.'**
+  String get backendProbeSaveNotBlocked;
+
+  /// Member count on a workflow-run card header and on each phase header.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1 {1 member} other {{count} members}}'**
+  String workflowMemberCount(int count);
+
+  /// Shown inside an expanded workflow-run card whose run recorded no members.
+  ///
+  /// In en, this message translates to:
+  /// **'No members started'**
+  String get workflowRunEmpty;
+
+  /// Phase header for a workflow member whose event carried no phase field.
+  ///
+  /// In en, this message translates to:
+  /// **'Unphased'**
+  String get workflowPhaseUnassigned;
+
+  /// Phase header for a workflow member whose phase field was the empty string.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty phase name'**
+  String get workflowPhaseEmpty;
+
+  /// Member row label for a workflow member whose label was the empty string.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty member name'**
+  String get workflowMemberEmpty;
+
+  /// Accessibility label of a workflow member row that opens the member's child transcript.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name}'**
+  String workflowMemberOpen(String name);
+
+  /// Workflow run or member status.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get workflowStatusRunning;
+
+  /// Workflow run or member status.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get workflowStatusCompleted;
+
+  /// Workflow run or member status.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get workflowStatusFailed;
+
+  /// Workflow run or member status.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get workflowStatusCancelled;
+
+  /// Workflow run or member status for a run whose turn closed with no terminal event.
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted'**
+  String get workflowStatusInterrupted;
+
+  /// Phase status roll-up fragment.
+  ///
+  /// In en, this message translates to:
+  /// **'Running {count}'**
+  String workflowStatusCountRunning(int count);
+
+  /// Phase status roll-up fragment.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed {count}'**
+  String workflowStatusCountCompleted(int count);
+
+  /// Phase status roll-up fragment.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed {count}'**
+  String workflowStatusCountFailed(int count);
+
+  /// Phase status roll-up fragment.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled {count}'**
+  String workflowStatusCountCancelled(int count);
+
+  /// Phase status roll-up fragment.
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted {count}'**
+  String workflowStatusCountInterrupted(int count);
+
+  /// Hook audit row whose hook/result has not folded yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get hookAuditPending;
+
+  /// The durable decision a hook returned (for example deny or allow).
+  ///
+  /// In en, this message translates to:
+  /// **'{decision}'**
+  String hookAuditDecision(String decision);
+
+  /// Hook run duration shown on the collapsed audit row.
+  ///
+  /// In en, this message translates to:
+  /// **'{durationMs} ms'**
+  String hookAuditDurationMs(int durationMs);
+
+  /// Label for the hook point (PreToolUse, Stop, ...) in the audit detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Point'**
+  String get hookAuditPoint;
+
+  /// Label for the hook bridge dialect in the audit detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Dialect'**
+  String get hookAuditDialect;
+
+  /// Hook bridge dialect name.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code'**
+  String get hookDialectClaudeCode;
+
+  /// Hook bridge dialect name.
+  ///
+  /// In en, this message translates to:
+  /// **'Codex'**
+  String get hookDialectCodex;
+
+  /// Label for the matcher pattern that selected the hook, when it declared one.
+  ///
+  /// In en, this message translates to:
+  /// **'Matcher'**
+  String get hookAuditMatcher;
+
+  /// Label for the hook decision in the audit detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Decision'**
+  String get hookAuditDecisionLabel;
+
+  /// Label for the hook process exit code in the audit detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit code'**
+  String get hookAuditExitCode;
+
+  /// Value for a hook audit field the host did not report, such as an exit code for a hook that never ran.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reported'**
+  String get hookAuditUnknown;
+
+  /// Label for the trimmed stderr summary in the audit detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Stderr'**
+  String get hookAuditStderr;
+
+  /// Value when a hook wrote nothing to stderr.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get hookAuditNoStderr;
+
+  /// Tooltip of the composer sandbox chip while the mode fact is unreported.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has not reported its sandbox mode. The host\'\'s deployment default applies.'**
+  String get sandboxModeUnknownTooltip;
+
+  /// Tooltip of the composer sandbox chip when the mode is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Sandbox: {mode}'**
+  String sandboxModeTooltip(String mode);
+
+  /// Sandbox mode name.
+  ///
+  /// In en, this message translates to:
+  /// **'Read only'**
+  String get sandboxModeReadOnly;
+
+  /// Sandbox mode name.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace write'**
+  String get sandboxModeWorkspaceWrite;
+
+  /// Sandbox mode name.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access'**
+  String get sandboxModeDangerFullAccess;
+
+  /// Title of the composer dock's active-reminder strip.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get scheduleStripTitle;
+
+  /// Active reminder count on the strip header.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1 {1 reminder} other {{count} reminders}}'**
+  String scheduleReminderCount(int count);
+
+  /// The session's reminder set before the schedule/change stream has published anything; distinct from an empty set.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reported by this host'**
+  String get scheduleUnknown;
+
+  /// The session's reminder set is known and empty.
+  ///
+  /// In en, this message translates to:
+  /// **'None active'**
+  String get scheduleEmpty;
+
+  /// The next reminder target on the collapsed strip header.
+  ///
+  /// In en, this message translates to:
+  /// **'Next {at}'**
+  String scheduleNextAt(String at);
+
+  /// Count of reminders whose target has passed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} overdue'**
+  String scheduleOverdueCount(int count);
+
+  /// Reminders past the strip's row cap.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String scheduleMoreCount(int count);
+
+  /// Frequency of a one-shot reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Once'**
+  String get scheduleFrequencyOnce;
+
+  /// Frequency of a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {value} {unit}'**
+  String scheduleFrequencyEvery(int value, String unit);
+
+  /// Singular day unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'day'**
+  String get scheduleUnitDay;
+
+  /// Plural day unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get scheduleUnitDays;
+
+  /// Singular hour unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'hour'**
+  String get scheduleUnitHour;
+
+  /// Plural hour unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'hours'**
+  String get scheduleUnitHours;
+
+  /// Singular minute unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'minute'**
+  String get scheduleUnitMinute;
+
+  /// Plural minute unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'minutes'**
+  String get scheduleUnitMinutes;
+
+  /// Singular second unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'second'**
+  String get scheduleUnitSecond;
+
+  /// Plural second unit for a fixed-rate reminder.
+  ///
+  /// In en, this message translates to:
+  /// **'seconds'**
+  String get scheduleUnitSeconds;
 }
 
 class _AppLocalizationsDelegate

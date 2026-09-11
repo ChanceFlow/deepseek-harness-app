@@ -67,7 +67,7 @@ class SearchTestFakeRepository extends ChatRepository {
       AppStateStream<ConnectionState>(
         const ConnectionState(
           phase: ConnectionPhase.connected,
-          hostDescription: HostDescription(version: 'test', cwd: '/tmp'),
+          hostDescription: HostDescription(home: '/home/tester'),
         ),
       ).stream;
 

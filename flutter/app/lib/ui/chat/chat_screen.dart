@@ -11,53 +11,72 @@ import 'dart:convert';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
+import 'package:domain/model/command.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/token_usage.dart';
+import 'package:domain/model/workspace_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
+import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
 import 'command_roster.dart';
+import 'host_unreachable_banner.dart';
+import 'file_preview_sheet.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
+import 'message_run_metrics.dart';
 import 'model_select.dart';
 import 'permission_select.dart';
+import 'produced_files.dart';
+import 'produced_files_row.dart';
+import 'session_log_export_action.dart';
 import 'session_panel.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../subagents/subagent_controller.dart';
 import 'approval_panel.dart';
-import '../subagents/subagent_screen.dart';
+import 'cordis_request_panel.dart';
+import '../subagents/subagent_route.dart';
 
 import 'activity_dot.dart';
 import 'context_ring.dart';
+import 'hook_audit_row.dart';
+import 'sandbox_mode_fact.dart';
+import 'schedule_reminder_strip.dart';
 import 'stats_line.dart';
 import '../shared/dock_anchor.dart';
+import '../shared/error_view.dart';
 import '../shared/menu_sheet.dart';
 import '../shared/tappable_feedback.dart';
 import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
+import '../trajectory/trajectory_entry.dart';
 import 'timeline_folding.dart';
 import 'todo_panel.dart';
 import 'tool_group_summary.dart';
 import 'tool_row_model.dart';
 import 'turn_status_row.dart';
+import 'workflow_run_row.dart';
 import '../theme/theme.dart';
 
 // The sidebar widget lives in session_panel.dart; re-exported so existing
@@ -95,47 +114,90 @@ class ChatRoute extends ConsumerWidget {
     // streams while the app is open) recomputes nothing here — only a
     // real roster or registry change rebuilds this route.
     final slices = ref.watch(backendSessionSlicesProvider(resolved));
+    // The connection banner's facts: the host's label (or authority) and
+    // its phase. Reading the domain-state provider keeps the adapter's
+    // connection manager out of the UI layer.
+    final backend = ref.watch(backendByIdProvider(resolved));
+    final connection = ref.watch(backendConnectionStateProvider(resolved));
+    final l10n = AppLocalizations.of(context)!;
+    final hostLabel = () {
+      final label = backend?.label.trim() ?? '';
+      if (label.isNotEmpty) return label;
+      return backend?.baseUri.authority ?? resolved;
+    }();
+    final reconnectUri = backend?.baseUri;
     return ref
         .watch(chatUiStateProvider(resolved))
         .when(
-          data: (uiState) => ChatScreen(
-            uiState: uiState,
-            onAction: controller.onAction,
-            loadAttachment: controller.loadAttachmentBytes,
-            backendId: resolved,
-            backendSlices: slices,
-            onRefreshModels: controller.refreshModels,
-            onSelectBackend: (backendId) => ref
-                .read(backendRegistryProvider.future)
-                .then(
-                  (registry) => registry.onAction(SelectBackend(backendId)),
+          data: (uiState) => Column(
+            children: [
+              HostUnreachableBanner(
+                key: ValueKey('connection-banner:$resolved'),
+                hostLabel: hostLabel,
+                phase: connection.value?.phase,
+                onReconnect: reconnectUri == null
+                    ? null
+                    : () => ref.invalidate(
+                        backendConnectionProvider((resolved, reconnectUri)),
+                      ),
+              ),
+              Expanded(
+                child: ChatScreen(
+                  uiState: uiState,
+                  onAction: controller.onAction,
+                  loadAttachment: controller.loadAttachmentBytes,
+                  readWorkspaceFile: controller.readWorkspaceFile,
+                  backendId: resolved,
+                  backendSlices: slices,
+                  onRefreshModels: controller.refreshModels,
+                  onSelectBackend: (backendId) => ref
+                      .read(backendRegistryProvider.future)
+                      .then(
+                        (registry) =>
+                            registry.onAction(SelectBackend(backendId)),
+                      ),
+                  onSelectBackendSession: (backendId, sessionId) {
+                    if (backendId == resolved) {
+                      controller.onAction(SelectSession(sessionId));
+                      return;
+                    }
+                    // Switch the registry first, then select on the target
+                    // backend's own controller — the chat surface rebinds to
+                    // it with the session already chosen.
+                    unawaited(
+                      ref
+                          .read(backendRegistryProvider.future)
+                          .then(
+                            (registry) =>
+                                registry.onAction(SelectBackend(backendId)),
+                          ),
+                    );
+                    ref
+                        .read(chatControllerProvider(backendId))
+                        .onAction(SelectSession(sessionId));
+                  },
+                  // Web SessionNodeItem session verbs (sidebar long-press):
+                  // dispatch on whichever backend owns the row.
+                  dispatchSessionAction: (backendId, action) => ref
+                      .read(chatControllerProvider(backendId))
+                      .onAction(action),
                 ),
-            onSelectBackendSession: (backendId, sessionId) {
-              if (backendId == resolved) {
-                controller.onAction(SelectSession(sessionId));
-                return;
-              }
-              // Switch the registry first, then select on the target
-              // backend's own controller — the chat surface rebinds to
-              // it with the session already chosen.
-              unawaited(
-                ref
-                    .read(backendRegistryProvider.future)
-                    .then(
-                      (registry) => registry.onAction(SelectBackend(backendId)),
-                    ),
-              );
-              ref
-                  .read(chatControllerProvider(backendId))
-                  .onAction(SelectSession(sessionId));
-            },
-            // Web SessionNodeItem session verbs (sidebar long-press):
-            // dispatch on whichever backend owns the row.
-            dispatchSessionAction: (backendId, action) =>
-                ref.read(chatControllerProvider(backendId)).onAction(action),
+              ),
+            ],
           ),
-          error: (error, _) =>
-              Scaffold(body: Center(child: Text(error.toString()))),
+          // A failed chat-state stream is a localized sentence with a
+          // retry, never a raw exception dump.
+          error: (error, _) => Scaffold(
+            body: Center(
+              child: LocalizedErrorView(
+                message: l10n.chatLoadFailed,
+                onRetry: () {
+                  ref.invalidate(chatControllerProvider(resolved));
+                  ref.invalidate(chatUiStateProvider(resolved));
+                },
+              ),
+            ),
+          ),
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
         );
@@ -148,6 +210,7 @@ class ChatScreen extends StatefulWidget {
     required this.onAction,
     super.key,
     this.loadAttachment = _noAttachment,
+    this.readWorkspaceFile = _noWorkspaceFileRead,
     this.onRefreshModels,
     this.backendId,
     this.localState,
@@ -160,6 +223,9 @@ class ChatScreen extends StatefulWidget {
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Repository seam for the file-preview sheet (`workspaceFiles/read`).
+  final WorkspaceFileReader readWorkspaceFile;
 
   /// The backend this surface presents (drives pushed session-tool
   /// pages); null falls back to the active backend at push time.
@@ -193,6 +259,15 @@ class ChatScreen extends StatefulWidget {
 
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
+  }
+
+  /// Bare pumps own no repository: a preview opened without a real reader
+  /// surfaces the localized failure instead of silently doing nothing.
+  static Future<WorkspaceFileContent> _noWorkspaceFileRead(
+    String sessionId,
+    String path,
+  ) async {
+    throw UnsupportedError('workspaceFiles/read is not wired');
   }
 
   @override
@@ -362,6 +437,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ChatHeaderActions(
           uiState: uiState,
           onAction: onAction,
+          backendId: widget.backendId,
           onOpenSubagents: _openSubagents,
           compact: compact,
         ),
@@ -424,11 +500,13 @@ class _ChatScreenState extends State<ChatScreen> {
                             uiState: uiState,
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
+                            readWorkspaceFile: widget.readWorkspaceFile,
                             models: uiState.models,
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
                             onRefreshModels: widget.onRefreshModels,
                             localState: _effectiveLocalState,
+                            backendId: widget.backendId,
                           ),
                         ),
                       ],
@@ -487,11 +565,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     uiState: uiState,
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
+                    readWorkspaceFile: widget.readWorkspaceFile,
                     models: uiState.models,
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
                     onRefreshModels: widget.onRefreshModels,
                     localState: _effectiveLocalState,
+                    backendId: widget.backendId,
                   ),
                 ),
               ],
@@ -531,12 +611,18 @@ class ChatHeaderActions extends StatelessWidget {
     required this.uiState,
     required this.onAction,
     super.key,
+    this.backendId,
     this.onOpenSubagents,
     this.compact = false,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
+
+  /// The host this bar belongs to; the trajectory ledger needs it to scope
+  /// its controller. Null while no host is resolved, which also hides the
+  /// ledger seat.
+  final String? backendId;
 
   /// Phone bars carry the glanceable seats — running jobs — and fold the
   /// session verbs into an overflow menu; a 400dp bar cannot spend six
@@ -597,6 +683,10 @@ class ChatHeaderActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         JobListAction(jobs: uiState.jobs),
+        SessionLogExportAction(uiState: uiState, onAction: onAction),
+        if (uiState.selectedSessionId case final sessionId?)
+          if (backendId case final host?)
+            TrajectoryEntryButton(backendId: host, sessionId: sessionId),
         if (compact)
           PopupMenuButton<_SessionVerb>(
             tooltip: l10n.sessionMenuTooltip,
@@ -699,17 +789,26 @@ class ChatPanel extends StatefulWidget {
     required this.uiState,
     required this.onAction,
     required this.loadAttachment,
+    required this.readWorkspaceFile,
     super.key,
     this.outline = false,
     this.models,
     this.onSelectModel,
     this.onRefreshModels,
     this.localState,
+    this.backendId,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Repository seam the file-preview sheet reads through.
+  final WorkspaceFileReader readWorkspaceFile;
+
+  /// The backend this surface presents; drives the pushed subagent record a
+  /// workflow member row opens. Null leaves member rows read-only.
+  final String? backendId;
 
   final bool outline;
   final SessionModels? models;
@@ -780,6 +879,26 @@ class _ChatPanelState extends State<ChatPanel> {
     _bindSession();
     // First mount lands at the bottom like the web's restore-or-bottom.
     _scheduleFollow();
+  }
+
+  /// One workflow member's child transcript, on the same subagent surface
+  /// the catalog pushes: the route opens the parent's tree and lands on the
+  /// member's record once its catalog row supplies the mode
+  /// `subagent.history` requires. Without a backend (a bare pump) there is
+  /// no repository to address, so the card stays read-only.
+  void _openWorkflowMember(WorkflowMember member) {
+    final backendId = widget.backendId;
+    final sessionId = widget.uiState.selectedSessionId;
+    if (backendId == null || sessionId == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SubagentRecordRoute(
+          backendId: backendId,
+          initialSessionId: sessionId,
+          initialChildId: member.childId,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1161,10 +1280,29 @@ class _ChatPanelState extends State<ChatPanel> {
     return null;
   }
 
-  /// Whether an interactive decision (plan review, question, or approval)
-  /// is pending and taking over the composer seat.
+  /// First pending dynamic-Cordis activation that actually needs a decision;
+  /// it takes over the composer seat like an approval.
+  ///
+  /// A request with `requiresApproval: false` is not a pending decision:
+  /// the host already started its own half and only needs a browser page to
+  /// attach the Client half, which this client cannot do. Showing a Reject
+  /// there would invite the reader to cancel a run nobody asked them about
+  /// and would not release any blocked tool call, so those requests never
+  /// mount a card. `/export`-style special cases do not apply — the host
+  /// either forwarded a request or it did not.
+  CordisRunRequest? get _pendingCordisRequest {
+    for (final request in widget.uiState.cordisRunRequests) {
+      if (request.requiresApproval) return request;
+    }
+    return null;
+  }
+
+  /// Whether an interactive decision (plan review, question, approval, or a
+  /// plugin activation) is pending and taking over the composer seat.
   bool get _hasPendingDecision =>
-      _pendingQuestion != null || _pendingApproval != null;
+      _pendingQuestion != null ||
+      _pendingApproval != null ||
+      _pendingCordisRequest != null;
 
   /// Extract the command from the tool call paired with the pending approval.
   String? _commandForApproval(TimelineApprovalRequest approval) {
@@ -1280,6 +1418,37 @@ class _ChatPanelState extends State<ChatPanel> {
     );
   }
 
+  /// The failed-action strip: localized copy, the controller's existing
+  /// retry action, and a dismiss that clears the message.
+  Widget _errorBanner(ChatErrorCopy copy, {VoidCallback? onRetry}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ChatErrorBanner(
+        message: copy.message,
+        detail: copy.detail,
+        onRetry: onRetry,
+        onDismiss: () => widget.onAction(const DismissError()),
+      ),
+    );
+  }
+
+  /// Opens the file-preview sheet for a tool row's path. The sheet reads
+  /// through the repository seam and handles loading, failure, binary, and
+  /// truncation itself; the panel only resolves the session the row belongs
+  /// to.
+  void _openFilePreview(String path) {
+    final sessionId = widget.uiState.selectedSessionId;
+    if (sessionId == null) return;
+    unawaited(
+      showFilePreviewSheet(
+        context,
+        sessionId: sessionId,
+        path: path,
+        readFile: widget.readWorkspaceFile,
+      ),
+    );
+  }
+
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
     if (uiState.timeline.isEmpty) {
       if (uiState.isTimelineLoading) {
@@ -1314,6 +1483,19 @@ class _ChatPanelState extends State<ChatPanel> {
     final items = _timelineItems;
     final groupedItems = foldTimelineActivities(items);
     final steering = _pendingSteering;
+    // The produced-files row closes a finished turn. The newest turn only
+    // counts as finished once the session stops running, so its row appears
+    // at the turn's end rather than under a reply the model may still extend.
+    final bool sessionBusy =
+        uiState.isSending ||
+        (session?.running ?? false) ||
+        uiState.timeline.any(
+          (item) => item is TimelineMessage && item.value.streaming,
+        );
+    final producedByMessage = producedFilesByClosingMessage(
+      items,
+      latestTurnClosed: !sessionBusy,
+    );
     // The status line rides the tail of the transcript: with nothing
     // visible to be a tail after (a queue-only window), it renders nothing
     // — the queue dock and the composer seat already carry the run.
@@ -1356,7 +1538,9 @@ class _ChatPanelState extends State<ChatPanel> {
             group: row,
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
+            onPreviewFile: _openFilePreview,
             expansion: _sessionState,
+            onOpenChild: _openWorkflowMember,
           );
         }
         if (row is TimelineItem) {
@@ -1365,7 +1549,12 @@ class _ChatPanelState extends State<ChatPanel> {
             item: row,
             onAction: widget.onAction,
             loadAttachment: widget.loadAttachment,
+            onPreviewFile: _openFilePreview,
             expansion: _sessionState,
+            onOpenChild: _openWorkflowMember,
+            producedPaths: row is TimelineMessage
+                ? producedByMessage[row.value.id]
+                : null,
           );
         }
         if (row is SessionQueueItem) {
@@ -1455,19 +1644,15 @@ class _ChatPanelState extends State<ChatPanel> {
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: Column(
           children: [
-            if (uiState.errorMessage case final error?) ...[
-              Text(
-                error,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              const SizedBox(height: 8),
-            ] else if (uiState.commandFailed) ...[
-              Text(
-                l10n.commandFailed,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              const SizedBox(height: 8),
-            ],
+            if (uiState.errorMessage case final error?)
+              _errorBanner(
+                describeChatError(l10n, error),
+                onRetry: () => widget.onAction(const RetrySessions()),
+              )
+            else if (uiState.cordisAnswerFailed)
+              _errorBanner((message: l10n.cordisAnswerFailed, detail: null))
+            else if (uiState.commandFailed)
+              _errorBanner((message: l10n.commandFailed, detail: null)),
             for (final rejection in uiState.imageRejections)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -1539,6 +1724,13 @@ class _ChatPanelState extends State<ChatPanel> {
                 if (!_hasPendingDecision) ...[
                   TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
                   GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
+                  // The session's durable reminders: nothing else on this
+                  // surface shows them (the pinned deployment composes no
+                  // `schedule` projection), and the dock is where the rest
+                  // of the session's standing state already lives. An
+                  // unreported set states itself rather than disappearing.
+                  if (selectedSessionId != null)
+                    ScheduleReminderStrip(reminders: uiState.schedules),
                 ],
                 // The queue dock is a display strip, not a filled seat:
                 // it rides alongside the approval card the way web's
@@ -1569,6 +1761,12 @@ class _ChatPanelState extends State<ChatPanel> {
                     command: _commandForApproval(approval),
                     onAction: widget.onAction,
                   )
+                else if (_pendingCordisRequest case final cordis?)
+                  CordisRequestPanel(
+                    key: ValueKey('cordis-takeover:${cordis.requestId}'),
+                    request: cordis,
+                    onAction: widget.onAction,
+                  )
                 else
                   Row(
                     children: [
@@ -1589,12 +1787,14 @@ class _ChatPanelState extends State<ChatPanel> {
                           pendingImages: uiState.pendingImages,
                           imageLimits: uiState.imageLimits,
                           skills: uiState.skills,
+                          commands: uiState.commands,
                           contextPressure: uiState.contextPressure,
                           contextBreakdown: uiState.contextBreakdown,
                           onAction: widget.onAction,
                           sessionId: selectedSessionId,
                           sessionState: _sessionState,
                           permissions: uiState.permissions,
+                          sandboxMode: uiState.sandboxMode,
                           // Web ComposerSubmissionPolicy: queue outside a
                           // running turn; inside it the persisted busy-Enter
                           // preference decides (the send button is the only
@@ -1642,6 +1842,27 @@ class _InputDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isKeyboardOpen = mediaQuery.viewInsets.bottom > 0;
+    if (!isKeyboardOpen) {
+      return Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(kShapeDock),
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: kM3ShadowElevation1,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(mainAxisSize: MainAxisSize.min, children: children),
+      );
+    }
+    final availableHeight =
+        mediaQuery.size.height -
+        mediaQuery.viewInsets.bottom -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom;
+    final maxDockHeight = (availableHeight * 0.50).clamp(160.0, 360.0);
+
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
@@ -1650,7 +1871,13 @@ class _InputDock extends StatelessWidget {
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: children),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxDockHeight),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(mainAxisSize: MainAxisSize.min, children: children),
+        ),
+      ),
     );
   }
 }
@@ -1814,16 +2041,30 @@ class TimelineRow extends StatelessWidget {
     required this.onAction,
     required this.loadAttachment,
     super.key,
+    this.onPreviewFile,
     this.expansion,
+    this.producedPaths,
+    this.onOpenChild,
   });
 
   final TimelineItem item;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
 
+  /// File-preview action for a tool row's generated/edited path.
+  final void Function(String path)? onPreviewFile;
+
   /// Tool-row expansion persistence of the selected session; null keeps
   /// expansion in memory only.
   final ToolExpansionPersistence? expansion;
+
+  /// Paths this turn's successful mutations produced; non-null only on the
+  /// turn's closing assistant message.
+  final List<String>? producedPaths;
+
+  /// Jump target for a workflow member's child session; null renders the
+  /// card read-only (a nested child record has no further navigation seat).
+  final WorkflowMemberOpener? onOpenChild;
 
   @override
   Widget build(BuildContext context) {
@@ -1835,6 +2076,10 @@ class TimelineRow extends StatelessWidget {
         onFork: value.seq == null
             ? null
             : () => onAction(ForkSession(value.sessionId, atSeq: value.seq)),
+        usage: (item as TimelineMessage).usage,
+        firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
+        producedPaths: producedPaths,
+        onPreviewFile: onPreviewFile,
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction() => CompactionRow(
@@ -1846,12 +2091,22 @@ class TimelineRow extends StatelessWidget {
       ),
       TimelineToolCall() => ToolCallRow(
         call: item as TimelineToolCall,
+        onPreviewFile: onPreviewFile,
         expansion: expansion,
       ),
       TimelineApprovalRequest() => const SizedBox.shrink(),
       TimelineQuestionRequest() => const SizedBox.shrink(),
       TimelineQueue() => const SizedBox.shrink(),
       TimelineJobs() => const SizedBox.shrink(),
+      // Hook audits and workflow runs are decoded durable facts with their
+      // own transcript rows. A hook deny sits at its log position so the
+      // refusal reads next to the tool row it explains; a workflow run is
+      // its own collapsible card.
+      TimelineHookAudit(:final audit) => HookAuditRow(audit: audit),
+      final TimelineWorkflowRun run => WorkflowRunRow(
+        run: run,
+        onOpenChild: onOpenChild,
+      ),
       TimelineError(:final message, :final code) => SizedBox(
         width: double.infinity,
         child: Text(switch (code) {
@@ -1875,6 +2130,10 @@ class MessageRow extends StatelessWidget {
     required this.loadAttachment,
     super.key,
     this.onFork,
+    this.usage,
+    this.firstTokenAtEpochMs,
+    this.producedPaths,
+    this.onPreviewFile,
   });
 
   final ChatMessage message;
@@ -1884,6 +2143,20 @@ class MessageRow extends StatelessWidget {
   /// contains it). Null while the message carries no logged position —
   /// a locally composed row has nothing to anchor.
   final VoidCallback? onFork;
+
+  /// Provider token accounting this assistant message carried; null when
+  /// the host reported none.
+  final TokenUsage? usage;
+
+  /// Timestamp of this message's first output delta; null when unrecorded.
+  final int? firstTokenAtEpochMs;
+
+  /// Paths the turn's successful mutations produced; rendered between the
+  /// body and the action row on the closing assistant message.
+  final List<String>? producedPaths;
+
+  /// Opens a produced path with the in-app preview sheet.
+  final void Function(String path)? onPreviewFile;
 
   @override
   Widget build(BuildContext context) {
@@ -1920,6 +2193,8 @@ class MessageRow extends StatelessWidget {
       );
     }
     // Assistant: flat markdown column (Think row + body + media).
+    final l10n = AppLocalizations.of(context)!;
+    final paths = producedPaths;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1937,6 +2212,15 @@ class MessageRow extends StatelessWidget {
             ref: ref,
             loadAttachment: loadAttachment,
           ),
+        // The turn's produced files close the body, above the action row —
+        // the reference turn-tail order (ProducedFiles, then
+        // MessageIconActions). Streaming hides it: the row belongs to a
+        // finished turn.
+        if (!message.streaming &&
+            paths != null &&
+            paths.isNotEmpty &&
+            onPreviewFile != null)
+          ProducedFilesRow(paths: paths, onOpenFile: onPreviewFile!),
         if (message.streaming) ...[
           // Once text flows the streaming tail is the blinking caret;
           // the pre-first-token wait is said once, by the turn-status
@@ -1949,6 +2233,12 @@ class MessageRow extends StatelessWidget {
             timeEpochMs: message.createdAtEpochMs,
             clockAtStart: false,
             onFork: onFork,
+            metrics: messageRunMetricsText(
+              usage: usage,
+              firstTokenAtEpochMs: firstTokenAtEpochMs,
+              messageAtEpochMs: message.createdAtEpochMs,
+              l10n: l10n,
+            ),
           ),
       ],
     );
@@ -2336,13 +2626,22 @@ class ActivityGroupRow extends StatefulWidget {
     required this.onAction,
     required this.loadAttachment,
     super.key,
+    this.onPreviewFile,
     this.expansion,
+    this.onOpenChild,
   });
 
   final TimelineActivityGroup group;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// File-preview action for a grouped tool row's generated/edited path.
+  final void Function(String path)? onPreviewFile;
+
   final ToolExpansionPersistence? expansion;
+
+  /// Jump target for a grouped workflow member's child session.
+  final WorkflowMemberOpener? onOpenChild;
 
   @override
   State<ActivityGroupRow> createState() => _ActivityGroupRowState();
@@ -2546,6 +2845,7 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
                           child: ToolCallRow(
                             key: ValueKey(timelineKey(entry)),
                             call: entry,
+                            onPreviewFile: widget.onPreviewFile,
                             expansion: widget.expansion,
                           ),
                         ),
@@ -2563,6 +2863,21 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
                             text: value.reasoning ?? '',
                             running: value.streaming,
                             elapsedDuration: value.reasoningDuration,
+                          ),
+                        ),
+                        TimelineHookAudit(:final audit) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: HookAuditRow(
+                            key: ValueKey(timelineKey(entry)),
+                            audit: audit,
+                          ),
+                        ),
+                        final TimelineWorkflowRun run => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: WorkflowRunRow(
+                            key: ValueKey(timelineKey(entry)),
+                            run: run,
+                            onOpenChild: widget.onOpenChild,
                           ),
                         ),
                         _ => const SizedBox.shrink(),
@@ -2907,9 +3222,9 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
           IconButton(
             visualDensity: VisualDensity.compact,
-            iconSize: 16,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            iconSize: 18,
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             tooltip: l10n.copyTooltip,
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
@@ -4469,14 +4784,16 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
           child: InkWell(
             onTap: widget.enabled ? widget.onPressed : null,
             child: SizedBox(
-              width: 24,
-              height: 24,
-              child: Icon(
-                widget.icon,
-                size: 16,
-                color: widget.enabled
-                    ? scheme.onSurfaceVariant
-                    : scheme.outline,
+              width: 36,
+              height: 36,
+              child: Center(
+                child: Icon(
+                  widget.icon,
+                  size: 18,
+                  color: widget.enabled
+                      ? scheme.onSurfaceVariant
+                      : scheme.outline,
+                ),
               ),
             ),
           ),
@@ -4659,6 +4976,7 @@ class ComposerBar extends ConsumerStatefulWidget {
     required this.onAction,
     required this.onSend,
     super.key,
+    this.commands,
     this.onStop,
     this.plan,
     this.models,
@@ -4670,6 +4988,7 @@ class ComposerBar extends ConsumerStatefulWidget {
     this.sessionId,
     this.sessionState,
     this.permissions,
+    this.sandboxMode,
   });
 
   final bool enabled;
@@ -4679,6 +4998,10 @@ class ComposerBar extends ConsumerStatefulWidget {
   final ImageLimits imageLimits;
   final List<SkillEntry> skills;
   final void Function(ChatAction) onAction;
+
+  /// The selected session's live host-command roster (`commands/list`);
+  /// null keeps the static built-ins standing in (see [command_roster]).
+  final List<CommandDescriptor>? commands;
 
   /// Submit [text] and resolve with the host's acceptance: the composer
   /// keeps the draft (and its persisted value) until this future settles
@@ -4697,6 +5020,11 @@ class ComposerBar extends ConsumerStatefulWidget {
   /// Permission-preset projection (web conversation.input.access);
   /// null hides the access chip.
   final PermissionSelect? permissions;
+
+  /// The selected session's decoded sandbox-mode fact; null means no
+  /// `sandbox/mode` event has folded, and the composer states that rather
+  /// than showing a mode the host never reported.
+  final SandboxModeFact? sandboxMode;
 
   /// Plan collaboration state (web input.plan): while the target is plan
   /// mode the placeholder swaps and the warn pill rides the tools row.
@@ -4722,6 +5050,7 @@ class ComposerBar extends ConsumerStatefulWidget {
 
 class _ComposerBarState extends ConsumerState<ComposerBar> {
   final TextEditingController _draftController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   String _preRecordingDraft = '';
 
   /// Counts reader keystrokes on the field (the [TextField] onChanged
@@ -4751,6 +5080,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   @override
   void dispose() {
     _draftController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -4784,11 +5114,15 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     );
   }
 
-  void _applyCommandToDraft(String name) {
-    if (hostCommandIsBare('/$name')) {
+  void _handlePlusCommand(String name) {
+    if (hostCommandIsBare('/$name', _commandRoster)) {
       widget.onAction(SendPrompt('/$name'));
       return;
     }
+    _applyCommandToDraft(name);
+  }
+
+  void _applyCommandToDraft(String name) {
     final current = _draftController.text;
     final String newDraft;
     if (current.startsWith('/')) {
@@ -4805,6 +5139,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     );
     _draftEdits++;
     _persistDraft();
+    _focusNode.requestFocus();
     setState(() {});
   }
 
@@ -4850,6 +5185,12 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
+
+    // Display roster: the host's live names with the localized static
+    // descriptions wherever this client knows the name.
+    final displayCommands = widget.commands == null
+        ? hostCommands(l10n)
+        : hostCommandsFor(l10n, widget.commands!);
 
     final voiceController = ref.watch(voiceInputControllerProvider);
     final voiceInputState =
@@ -4986,6 +5327,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           SlashSkillCandidates(
             draft: _draftController.text,
             skills: widget.skills,
+            commands: displayCommands,
             enabled: widget.enabled,
             onPick: _applyCommandToDraft,
           ),
@@ -4994,6 +5336,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
             child: TextField(
               controller: _draftController,
+              focusNode: _focusNode,
               enabled: widget.enabled,
               minLines: 1,
               maxLines: 4,
@@ -5046,7 +5389,8 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                       enabled: widget.enabled,
                       onPickImages: attachAllowed ? _pickImages : null,
                       skills: widget.skills,
-                      onPickCommand: _applyCommandToDraft,
+                      commands: displayCommands,
+                      onPickCommand: _handlePlusCommand,
                     ),
                     VoiceMicButton(
                       enabled:
@@ -5083,6 +5427,20 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                           locked: !widget.enabled,
                           onAction: widget.onAction,
                           compact: constraints.maxWidth < _kComposerLabelCut,
+                          // The session's real confinement level rides this
+                          // seat's tooltip: a preset composes a sandbox mode
+                          // with an approval policy, so the effective
+                          // `sandbox/mode` fact can differ from the preset's
+                          // own name and must be stated separately. A
+                          // dedicated chip was rejected — a second chip does
+                          // not fit a 320dp dock's action row, and a hidden
+                          // seat cannot state an unreported mode.
+                          tooltipDetail: widget.sessionId == null
+                              ? null
+                              : sandboxModeDetail(
+                                  widget.sandboxMode,
+                                  AppLocalizations.of(context)!,
+                                ),
                         ),
                       ),
                   ],
@@ -5153,6 +5511,12 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     return plan.pending ? !plan.active : plan.active;
   }
 
+  /// The slash-decision facts this composer consults: the live roster once
+  /// a pull settled, the static built-ins before that.
+  List<HostCommand> get _commandRoster => widget.commands == null
+      ? kHostCommandNames
+      : hostCommandFacts(widget.commands!);
+
   bool _canSend() =>
       _draftController.text.trim().isNotEmpty ||
       widget.pendingImages.isNotEmpty;
@@ -5163,7 +5527,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     // anything is consumed — the draft and the images stay in place and
     // nothing executes.
     if (widget.pendingImages.isNotEmpty) {
-      final refused = hostCommandImageRefusal(_draftController.text.trim());
+      final refused = hostCommandImageRefusal(
+        _draftController.text.trim(),
+        _commandRoster,
+      );
       if (refused != null) {
         widget.onAction(
           CommandImageRefusal(
@@ -5198,6 +5565,7 @@ class SlashSkillCandidates extends StatelessWidget {
   const SlashSkillCandidates({
     required this.draft,
     required this.skills,
+    required this.commands,
     required this.enabled,
     required this.onPick,
     super.key,
@@ -5205,6 +5573,9 @@ class SlashSkillCandidates extends StatelessWidget {
 
   final String draft;
   final List<SkillEntry> skills;
+
+  /// Display roster for the host commands the candidate list offers.
+  final List<HostCommand> commands;
   final bool enabled;
   final void Function(String name) onPick;
 
@@ -5214,8 +5585,6 @@ class SlashSkillCandidates extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final query = draft.substring(1).toLowerCase();
-    final l10n = AppLocalizations.of(context)!;
-    final commands = hostCommands(l10n);
     final matchingCommands = commands
         .where(
           (cmd) => query.isEmpty || cmd.name.toLowerCase().startsWith(query),
@@ -5551,12 +5920,14 @@ class _PlusButton extends StatelessWidget {
     required this.enabled,
     required this.onPickImages,
     required this.skills,
+    required this.commands,
     required this.onPickCommand,
   });
 
   final bool enabled;
   final VoidCallback? onPickImages;
   final List<SkillEntry> skills;
+  final List<HostCommand> commands;
   final void Function(String name) onPickCommand;
 
   @override
@@ -5588,6 +5959,7 @@ class _PlusButton extends StatelessWidget {
       builder: (sheetContext) => _CommandSheet(
         canPickImages: onPickImages != null,
         skills: skills,
+        commands: commands,
         onPickCommand: (name) {
           Navigator.of(sheetContext).pop();
           onPickCommand(name);
@@ -5695,12 +6067,14 @@ class _CommandSheet extends StatelessWidget {
   const _CommandSheet({
     required this.canPickImages,
     required this.skills,
+    required this.commands,
     required this.onPickCommand,
     required this.onPickImagesNow,
   });
 
   final bool canPickImages;
   final List<SkillEntry> skills;
+  final List<HostCommand> commands;
   final void Function(String name) onPickCommand;
   final VoidCallback onPickImagesNow;
 
@@ -5708,7 +6082,6 @@ class _CommandSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final commands = hostCommands(l10n);
     final int visibleCount = commands.length + skills.length + 1;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -5895,6 +6268,8 @@ String timelineKey(TimelineItem item) => switch (item) {
   TimelineQuestionRequest(:final requestId) => 'question:$requestId',
   TimelineQueue() => 'queue',
   TimelineJobs() => 'jobs',
+  TimelineHookAudit(:final audit) => 'hook:${audit.handlerId}:${audit.point}',
+  TimelineWorkflowRun(:final runId, :final status) => 'workflow:$runId:$status',
   TimelineError(:final id) => 'error:$id',
 };
 

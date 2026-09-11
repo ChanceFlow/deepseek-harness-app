@@ -19,7 +19,7 @@ scripts/                           Gates (verify_*.py) and generators; gates_man
 reference/deepseek-harness/        Pinned submodule — the dsh wire source of truth (read-only)
 docs/                              spec.md (wire contract + coverage), design-standard.md, testing.md, prose-standard.md
 .agents/notes/                     Public decision records — the repo's memory
-.agents/skills/                    Vendored Flutter/Dart skills (BSD-3-Clause, flutter/agent-plugins)
+.agents/skills/                    Project skills (single-entry flutter-dart, dsh-*)
 ```
 
 ## Commands

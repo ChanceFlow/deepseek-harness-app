@@ -21,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:app/platform/disk_space.dart';
 
+import 'dsh_reachability.dart';
 import 'http_engine.dart';
 
 import 'package:domain/model/backend.dart';
@@ -28,7 +29,9 @@ import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart' show SessionSummary;
 import 'package:domain/model/workspace.dart' show WorkspaceSummary;
 import 'package:domain/repository/chat_repository.dart';
+import 'package:domain/repository/session_log_export_repository.dart';
 import 'package:harness_adapter/harness_adapter.dart';
+import 'package:network/dsh_download_client.dart';
 import 'package:network/dsh_event_socket.dart' show DshEventSocket;
 import 'package:network/dsh_rpc_client.dart' show DshRpcClient;
 import 'package:network/http_dsh_rpc_client.dart';
@@ -37,6 +40,7 @@ import 'package:network/web_socket_dsh_event_socket.dart';
 // Re-exported so tests can override the seams without importing the
 // network package directly (import gate keeps that to this file).
 export 'package:network/dsh_event_socket.dart';
+export 'package:network/dsh_exceptions.dart';
 export 'package:network/dsh_rpc_client.dart';
 export 'package:network/rpc_envelope.dart';
 
@@ -59,11 +63,13 @@ import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
 import '../ui/root/app_destination.dart';
+import '../ui/settings/llm_providers.dart';
 import '../ui/settings/settings_controller.dart';
 import '../ui/settings/asr/asr_models_controller.dart';
 import '../ui/chat/voice_input/voice_input_controller.dart';
 import '../ui/chat/voice_input/voice_input_ui_state.dart';
 import '../ui/subagents/subagent_controller.dart';
+import '../ui/trajectory/trajectory_controller.dart';
 import '../ui/workspace/workspace_controller.dart';
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart';
@@ -164,18 +170,51 @@ final backendByIdProvider = Provider.family.autoDispose<BackendConfig?, String>(
 /// The engine lives for the application lifetime; client wrappers are closed
 /// on autoDispose with disposal errors swallowed so they never escape into
 /// Riverpod's unhandled zone.
+///
+/// A backend the user marked *trust this host's certificate* instead rides
+/// `trustedHostRpcClient` — a dart:io client that accepts a failing
+/// certificate for that exact host only. Cronet has no certificate-verify
+/// override (`cronet_http` 1.9.0), so the opt-in costs that backend the
+/// HTTP/3 upgrade; every untrusted backend keeps Cronet.
 final dshRpcClientProvider = Provider.family.autoDispose<DshRpcClient, Uri>(
   _buildRpcClient,
   name: 'dshRpcClient',
 );
 
-/// Android rides the embedded-Cronet engine (opportunistic HTTP/3, see
-/// `http_engine.dart`); non-Android hosts and engine-construction failure
-/// fall back to `HttpDshRpcClient`'s default `IOClient` path unchanged.
-/// The engine lives for the application lifetime; client wrappers are closed
-/// on autoDispose with disposal errors swallowed so they never escape into
-/// Riverpod's unhandled zone.
+/// Whether the user opted this exact backend in to trusting its certificate.
+///
+/// Selects the flag alone (not the whole registry) so a rename or an
+/// enable/disable never rebuilds the transport and reconnects; only flipping
+/// the opt-in does. A URL edit changes the provider family key by itself.
+/// Non-`https` backends never carry an override: there is no certificate to
+/// validate.
+bool _trustsHostCertificate(Ref ref, Uri uri) {
+  if (uri.scheme != 'https') return false;
+  return ref.watch(
+    backendRegistryStateProvider.select((registry) {
+      final backend = registry.value?.backends
+          .where((candidate) => candidate.baseUri == uri)
+          .firstOrNull;
+      return backend?.trustHostCertificate ?? false;
+    }),
+  );
+}
+
 DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
+  if (_trustsHostCertificate(ref, uri)) {
+    final trusted = trustedHostRpcClient(
+      uri.host,
+      connectionTimeout: kDshRpcConnectTimeout,
+    );
+    ref.onDispose(() {
+      try {
+        trusted.close();
+      } catch (_) {
+        // Swallowed: client teardown must never crash the app.
+      }
+    });
+    return HttpDshRpcClient(uri, httpClient: trusted);
+  }
   final engine = dshHttp3Engine();
   if (engine == null) {
     return HttpDshRpcClient(uri);
@@ -190,8 +229,85 @@ DshRpcClient _buildRpcClient(Ref ref, Uri uri) {
   return HttpDshRpcClient(uri, httpClient: engine);
 }
 
+/// One reachability probe, shared by the Settings host sheet.
+///
+/// A plain value with no lifecycle: each `probe` call builds its own
+/// transport for the (URL, trust) pair it is given and closes it. The
+/// registry-keyed [dshRpcClientProvider] family cannot serve this — the
+/// sheet probes addresses the registry does not contain yet, and it selects
+/// certificate trust out of the registry rather than the sheet's toggle.
+/// The probe lives in `lib/di/dsh_reachability.dart`, next to the transport
+/// seams it reuses.
+final dshReachabilityProbeProvider = Provider<DshReachabilityProbe>(
+  (ref) => const DshReachabilityProbe(),
+);
+
+/// The binary download leg, one per backend URL.
+///
+/// The session-log archive is a plain HTTP GET, not a JSON-RPC envelope, so
+/// it gets its own client rather than a call through [DshRpcClient]. The
+/// transport policy is the RPC leg's, unchanged: a backend the user opted
+/// into trusting rides the dart:io certificate override, every other
+/// backend rides the shared Cronet engine.
+final dshDownloadClientProvider = Provider.family
+    .autoDispose<DshDownloadClient, Uri>(
+      _buildDownloadClient,
+      name: 'dshDownloadClient',
+    );
+
+DshDownloadClient _buildDownloadClient(Ref ref, Uri uri) {
+  if (_trustsHostCertificate(ref, uri)) {
+    final trusted = trustedHostRpcClient(
+      uri.host,
+      connectionTimeout: kDshRpcConnectTimeout,
+    );
+    ref.onDispose(() {
+      try {
+        trusted.close();
+      } catch (_) {
+        // Swallowed: client teardown must never crash the app.
+      }
+    });
+    return HttpDshDownloadClient(uri, httpClient: trusted);
+  }
+  final engine = dshHttp3Engine();
+  if (engine == null) {
+    return HttpDshDownloadClient(uri);
+  }
+  ref.onDispose(() {
+    try {
+      engine.close();
+    } catch (_) {
+      // Swallowed: client teardown must never crash the app.
+    }
+  });
+  return HttpDshDownloadClient(uri, httpClient: engine);
+}
+
+/// The session-log archive seam per backend. It holds no lifecycle of its
+/// own: the download client above owns the HTTP connection.
+final sessionLogExportProvider = Provider.family
+    .autoDispose<SessionLogExportRepository, String>((ref, backendId) {
+      final backend = ref.watch(backendByIdProvider(backendId));
+      final uri = backend?.baseUri ?? Uri.parse(kDshBaseUrl);
+      return DshSessionLogExportRepository(
+        ref.watch(dshDownloadClientProvider(uri)),
+      );
+    });
+
+/// The event socket, one per backend URL. The WS leg is always dart:io/// (`WebSocket.connect`); a trusted backend hands it a `customClient` whose
+/// certificate policy accepts a failing certificate for that exact host so
+/// the `wss` handshake succeeds. Untrusted backends pass null and keep the
+/// platform default.
 final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
-  (ref, uri) => WebSocketDshEventSocket(uri),
+  (ref, uri) {
+    if (!_trustsHostCertificate(ref, uri)) {
+      return WebSocketDshEventSocket(uri);
+    }
+    final trusted = trustedCertificateHttpClient(uri.host);
+    ref.onDispose(trusted.close);
+    return WebSocketDshEventSocket(uri, customClient: trusted);
+  },
   name: 'dshEventSocket',
 );
 
@@ -202,7 +318,6 @@ final dshEventSocketProvider = Provider.family.autoDispose<DshEventSocket, Uri>(
 final backendConnectionProvider = Provider.family
     .autoDispose<DshConnectionManager, (String, Uri)>((ref, key) {
       final manager = DshConnectionManager(
-        ref.watch(dshRpcClientProvider(key.$2)),
         ref.watch(dshEventSocketProvider(key.$2)),
         exponentialDshBackoffDelay,
         onDiagnostic: (diagnostic) {
@@ -525,6 +640,9 @@ final chatControllerProvider = Provider.family
         sessionSelection: ref.watch(
           sessionSelectionPersistenceProvider(backendId).future,
         ),
+        // The session-log archive is a plain HTTP GET, so it rides its own
+        // seam rather than the wire repository.
+        sessionLogExport: ref.watch(sessionLogExportProvider(backendId)),
       );
       ref.onDispose(controller.dispose);
       return controller;
@@ -605,6 +723,24 @@ final subagentControllerProvider = Provider.family
       return controller;
     });
 
+/// Trajectory ledger controller (UDF), one per backend + session.
+///
+/// The ledger reads the same session timeline window the chat surface does,
+/// so the key carries the session id — opening the ledger for another
+/// session binds its own controller rather than re-pointing a shared one.
+final trajectoryControllerProvider = Provider.family
+    .autoDispose<TrajectoryController, ({String backendId, String sessionId})>((
+      ref,
+      key,
+    ) {
+      final controller = TrajectoryController(
+        ref.watch(chatRepositoryProvider(key.backendId)),
+        sessionId: key.sessionId,
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
+
 /// Goal screen controller (UDF), one per backend.
 final goalControllerProvider = Provider.family
     .autoDispose<GoalController, String>((ref, backendId) {
@@ -619,6 +755,16 @@ final goalControllerProvider = Provider.family
 final settingsControllerProvider = Provider.family
     .autoDispose<SettingsController, String>((ref, backendId) {
       final controller = SettingsController(
+        ref.watch(chatRepositoryProvider(backendId)),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
+
+/// Provider/model administration controller (UDF), one per backend.
+final llmProvidersControllerProvider = Provider.family
+    .autoDispose<LlmProvidersController, String>((ref, backendId) {
+      final controller = LlmProvidersController(
         ref.watch(chatRepositoryProvider(backendId)),
       );
       ref.onDispose(controller.dispose);

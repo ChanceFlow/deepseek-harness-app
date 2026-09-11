@@ -5,6 +5,7 @@ import 'package:domain/model/chat_message.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
+import 'package:harness_adapter/src/adapter_diagnostics.dart';
 import 'package:harness_adapter/src/timeline_reducer.dart';
 
 JsonMap event(int seq, String type, JsonMap data) => <String, Object?>{
@@ -1292,5 +1293,298 @@ void main() {
     final snapshot = reducer.snapshot();
     expect(snapshot.length, 1);
     expect(snapshot.single, isA<TimelineMessage>());
+  });
+
+  test('an unrecognised event type reports a debug diagnostic naming type and '
+      'seq without logging payload contents', () {
+    // The pinned 0.1.5 event map is merge-extensible and carries types this
+    // client has no fold for (`team/*`, future package events, …). Dropping
+    // them silently makes a parity gap unmeasurable, so the reducer reports
+    // each unrecognised type on its diagnostic sink while publishing no item.
+    final diagnostics = <AdapterDiagnostic>[];
+    final reducer = TimelineReducer('s1', onDiagnostic: diagnostics.add);
+    reducer.reset(<JsonMap>[
+      event(1, 'team/created', <String, Object?>{'secret': 'user-secret-text'}),
+      event(2, 'tool-workflow/step', <String, Object?>{'stepId': 'wf-1'}),
+      event(3, 'user/message', <String, Object?>{
+        'id': 'u1',
+        'content': <Object?>[textBlock('Hi team')],
+        'source': <String, Object?>{'kind': 'user'},
+      }),
+    ]);
+
+    expect(diagnostics, hasLength(2));
+    final first = diagnostics.first;
+    expect(first.level, AdapterDiagnosticLevel.debug);
+    expect(first.context, 'timeline.event');
+    expect(first.message, contains('team/created'));
+    expect(first.message, contains('seq 1'));
+    expect(first.metadata['type'], 'team/created');
+    expect(first.metadata['seq'], 1);
+    expect(first.metadata['sessionId'], 's1');
+    // Only the type and seq travel: an event payload can carry user text.
+    expect(first.toString(), isNot(contains('user-secret-text')));
+    expect(diagnostics.last.metadata['type'], 'tool-workflow/step');
+    expect(diagnostics.last.metadata['seq'], 2);
+    // The fold still publishes only the known item.
+    expect(reducer.snapshot().single, isA<TimelineMessage>());
+  });
+
+  // -------------------------------------------------------------------
+  // Trajectory ledger facts: step ownership, per-step token accounting,
+  // and nested code-dispatch calls. The wire shapes come from the pinned
+  // submodule (`packages/core/session/src/types.ts` SessionEventMap and
+  // `packages/core/tools/src/types.ts` PTC dispatch events).
+  // -------------------------------------------------------------------
+
+  test('step/start places the following messages and tools in a step', () {
+    final history = <JsonMap>[
+      event(1, 'turn/start', <String, Object?>{'turn': 1}),
+      event(2, 'step/start', <String, Object?>{'turn': 1, 'step': 1}),
+      event(3, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'call-1',
+        'name': 'bash',
+        'arguments': 'ls',
+      }),
+      event(4, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'a1',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('done')],
+        },
+      }),
+      event(5, 'step/start', <String, Object?>{'turn': 1, 'step': 2}),
+      event(6, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 2,
+        'message': <String, Object?>{
+          'id': 'a2',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('again')],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+    final snapshot = reducer.snapshot();
+
+    // The step marker itself publishes no ledger row.
+    expect(snapshot.whereType<TimelineMessage>(), hasLength(2));
+    final first = snapshot.whereType<TimelineMessage>().first;
+    final second = snapshot.whereType<TimelineMessage>().last;
+    expect(first.step, 1);
+    expect(second.step, 2);
+    final tool = snapshot.whereType<TimelineToolCall>().single;
+    expect(tool.step, 1);
+    // The tool row keeps the call's own logged timestamp.
+    expect(tool.startedAtEpochMs, 1);
+  });
+
+  test('a turn boundary sums its steps\' token accounting', () {
+    final history = <JsonMap>[
+      event(1, 'turn/start', <String, Object?>{'turn': 1}),
+      event(2, 'step/start', <String, Object?>{'turn': 1, 'step': 1}),
+      event(3, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'a1',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('one')],
+        },
+        'usage': <String, Object?>{
+          'inputTokens': 100,
+          'outputTokens': 10,
+          'cacheReadTokens': 5,
+        },
+      }),
+      event(4, 'step/start', <String, Object?>{'turn': 1, 'step': 2}),
+      event(5, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 2,
+        'message': <String, Object?>{
+          'id': 'a2',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('two')],
+        },
+        'usage': <String, Object?>{'inputTokens': 50, 'outputTokens': 4},
+      }),
+      event(6, 'turn/end', <String, Object?>{
+        'turn': 1,
+        'reason': <String, Object?>{'kind': 'completed'},
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+    final boundary = reducer
+        .snapshot()
+        .whereType<TimelineTurnBoundary>()
+        .single;
+
+    expect(boundary.usage, isNotNull);
+    expect(boundary.usage!.inputTokens, 150);
+    expect(boundary.usage!.outputTokens, 14);
+    // Only the first step reported cache reads; the total keeps the bucket
+    // that was sent rather than inventing a split for the second.
+    expect(boundary.usage!.cacheReadTokens, 5);
+    expect(boundary.usage!.reasoningTokens, isNull);
+  });
+
+  test('a turn whose steps reported no usage keeps a null total', () {
+    final reducer = TimelineReducer('s1');
+    reducer.reset(<JsonMap>[
+      event(1, 'turn/start', <String, Object?>{'turn': 1}),
+      event(2, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'a1',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('one')],
+        },
+      }),
+      event(3, 'turn/end', <String, Object?>{
+        'turn': 1,
+        'reason': <String, Object?>{'kind': 'completed'},
+      }),
+    ]);
+
+    final boundary = reducer
+        .snapshot()
+        .whereType<TimelineTurnBoundary>()
+        .single;
+    expect(boundary.usage, isNull);
+  });
+
+  test('an assistant stream yields the first-token timestamp', () {
+    final reducer = TimelineReducer('s1');
+    reducer.reset(<JsonMap>[
+      event(1, 'assistant/message', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'a1',
+          'role': 'assistant',
+          'content': <Object?>[textBlock('hi')],
+        },
+        'stream': <Object?>[
+          <String, Object?>{
+            'type': 'chunk',
+            'time': 240,
+            'chunk': <String, Object?>{
+              'type': 'block-start',
+              'blockType': 'text',
+            },
+          },
+          <String, Object?>{
+            'type': 'text-chunks',
+            'time0': 300,
+            'index': 0,
+            'dt': <Object?>[25],
+            'texts': <Object?>['h', 'i'],
+          },
+        ],
+      }),
+    ]);
+
+    final message = reducer.snapshot().whereType<TimelineMessage>().single;
+    expect(message.firstTokenAtEpochMs, 300);
+  });
+
+  test('a code-dispatch sub-call nests under its root call and settles', () {
+    final history = <JsonMap>[
+      event(1, 'turn/start', <String, Object?>{'turn': 1}),
+      event(2, 'step/start', <String, Object?>{'turn': 1, 'step': 1}),
+      event(3, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'root-1',
+        'name': 'run_code',
+        'arguments': '{"code":"..."}',
+      }),
+      event(4, 'tool/ptc-dispatch-start', <String, Object?>{
+        'rootCallId': 'root-1',
+        'parentCallId': 'root-1',
+        'subCallId': 'root-1:ptc:1',
+        'name': 'read',
+        'arguments': <String, Object?>{'file_path': 'a.txt'},
+      }),
+      event(5, 'tool/ptc-dispatch', <String, Object?>{
+        'rootCallId': 'root-1',
+        'parentCallId': 'root-1',
+        'subCallId': 'root-1:ptc:1',
+        'name': 'read',
+        'arguments': <String, Object?>{'file_path': 'a.txt'},
+        'isError': false,
+        'content': <Object?>[textBlock('file body')],
+      }),
+      event(6, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'id': 'm1',
+          'role': 'tool',
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'root-1',
+              'content': <Object?>[textBlock('program done')],
+            },
+          ],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+    final snapshot = reducer.snapshot();
+
+    // The nested call is not a top-level ledger row: it belongs to the one
+    // root tool row, which the ledger expands.
+    final root = snapshot.whereType<TimelineToolCall>().single;
+    expect(root.name, 'run_code');
+    expect(root.children, hasLength(1));
+    final sub = root.children.single;
+    expect(sub.id, 'root-1:ptc:1');
+    expect(sub.name, 'read');
+    expect(sub.parentCallId, 'root-1');
+    // Nesting inherits the enclosing step, and the dispatch pair carries the
+    // sub-call's own start timestamp.
+    expect(sub.step, 1);
+    expect(sub.startedAtEpochMs, 1);
+    expect(sub.status, ToolRunStatus.completed);
+    expect(sub.result, 'file body');
+    expect(sub.arguments, '{"file_path":"a.txt"}');
+    // A nested failure settles the sub-call, never the root.
+    expect(sub.isError, isFalse);
+  });
+
+  test('a dispatch settling without its start still publishes the outcome', () {
+    // A history page cut can separate the pair; the settled outcome is a real
+    // logged fact and must not vanish.
+    final reducer = TimelineReducer('s1');
+    reducer.reset(<JsonMap>[
+      event(9, 'tool/ptc-dispatch', <String, Object?>{
+        'rootCallId': 'root-9',
+        'parentCallId': 'root-9',
+        'subCallId': 'root-9:ptc:1',
+        'name': 'bash',
+        'arguments': <String, Object?>{'command': 'false'},
+        'isError': true,
+        'content': <Object?>[textBlock('boom')],
+      }),
+    ]);
+
+    final call = reducer.snapshot().whereType<TimelineToolCall>().single;
+    expect(call.id, 'root-9:ptc:1');
+    expect(call.isError, isTrue);
+    expect(call.status, ToolRunStatus.failed);
+    expect(call.result, 'boom');
   });
 }

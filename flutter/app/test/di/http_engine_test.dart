@@ -8,6 +8,7 @@ library;
 
 import 'package:app/di/http_engine.dart';
 import 'package:app/di/providers.dart';
+import 'package:domain/model/backend.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -58,5 +59,77 @@ void main() {
     // Disposing the container must not throw even though client.close() throws.
     expect(() => container.dispose(), returnsNormally);
     expect(client.closed, isTrue);
+  });
+
+  test('the certificate rule accepts the exact host only', () {
+    expect(trustedCertificateHostMatches('gw.internal', 'gw.internal'), isTrue);
+    expect(
+      trustedCertificateHostMatches('gw.internal', 'evil.internal'),
+      isFalse,
+    );
+    expect(
+      trustedCertificateHostMatches('gw.internal', 'gw.internal.evil'),
+      isFalse,
+    );
+    expect(trustedCertificateHostMatches('gw.internal', '127.0.0.1'), isFalse);
+  });
+
+  test('a trusted https backend bypasses the Cronet engine', () {
+    final fake = _ThrowingOnCloseHttpClient();
+    var engineBuilt = false;
+    customHttpEngineBuilder = () {
+      engineBuilt = true;
+      return fake;
+    };
+    final uri = Uri.parse('https://gw.internal:8443');
+    final container = ProviderContainer(
+      overrides: [
+        backendRegistryStateProvider.overrideWithValue(
+          AsyncData<BackendRegistryState>(
+            BackendRegistryState(
+              backends: [
+                BackendConfig(
+                  id: 'gw',
+                  label: 'Gateway',
+                  baseUri: uri,
+                  trustHostCertificate: true,
+                ),
+              ],
+              activeId: 'gw',
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final client = container.read(dshRpcClientProvider(uri));
+    expect(client, isNot(same(fake)));
+    expect(engineBuilt, isFalse);
+    container.dispose();
+  });
+
+  test('an untrusted https backend keeps the Cronet engine', () {
+    final engine = _ThrowingOnCloseHttpClient();
+    customHttpEngineBuilder = () => engine;
+    final uri = Uri.parse('https://gw.internal:8443');
+    final container = ProviderContainer(
+      overrides: [
+        backendRegistryStateProvider.overrideWithValue(
+          AsyncData<BackendRegistryState>(
+            BackendRegistryState(
+              backends: [
+                BackendConfig(id: 'gw', label: 'Gateway', baseUri: uri),
+              ],
+              activeId: 'gw',
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final client = container.read(dshRpcClientProvider(uri));
+    expect(client, isNotNull);
+    container.dispose();
+    expect(engine.closed, isTrue);
   });
 }

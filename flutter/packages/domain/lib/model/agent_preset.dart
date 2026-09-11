@@ -1,8 +1,8 @@
 /// Agent-preset roster vocabulary.
 ///
 /// Mirrors the `agentPreset.list` response
-/// (reference/deepseek-harness/packages/host/apiproxy/src/api/
-/// agent-presets.schema.ts): the roster a surface offers when composing
+/// (reference/deepseek-harness/packages/preset/agent-presets/src/types.ts):
+/// the roster a surface offers when composing
 /// a session's agent, plus the deployment-level facts riding the same
 /// response.
 library;

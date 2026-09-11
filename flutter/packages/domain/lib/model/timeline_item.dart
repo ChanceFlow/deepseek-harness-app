@@ -4,10 +4,18 @@
 library;
 
 import 'chat_message.dart';
+import 'hook.dart';
 import 'jobs.dart';
 import 'session.dart';
+import 'token_usage.dart';
+import 'tool_presentation.dart';
 
 enum ToolRunStatus { running, completed, failed }
+
+/// Lifecycle of one durable workflow run or member. `interrupted` is the
+/// projected state of a run whose turn closed before its terminal event
+/// arrived.
+enum WorkflowRunStatus { running, completed, failed, cancelled, interrupted }
 
 /// Lifecycle of a host command folded from its `command/run` +
 /// `command/done` pair (web's persistent flow node).
@@ -20,34 +28,92 @@ sealed class TimelineItem {
 }
 
 /// One chat message row.
+///
+/// [step] is the logged `step/start` step that owns the row (assistant
+/// messages carry their step on the wire; user and context rows are step 0
+/// — outside any step). [usage] is the provider token accounting the
+/// `assistant/message` event carried; null when the adapter reported none.
+/// [firstTokenAtEpochMs] is the timestamp of the first model output delta
+/// the recorded stream holds, and [stepStartedAtEpochMs] the owning
+/// `step/start` event's logged time; together they are the reference's
+/// time-to-first-token boundary (`firstTokenTime − stepStartTime`,
+/// `client/ui-chat/src/client/contract/turn-metrics.ts`). Either is null
+/// when the folded window did not carry it — never a fabricated value.
 final class TimelineMessage extends TimelineItem {
-  const TimelineMessage(this.value);
+  const TimelineMessage(
+    this.value, {
+    this.step = 0,
+    this.usage,
+    this.firstTokenAtEpochMs,
+    this.stepStartedAtEpochMs,
+  });
 
   final ChatMessage value;
+  final int step;
+  final TokenUsage? usage;
+  final int? firstTokenAtEpochMs;
+
+  /// The owning `step/start` event's logged time; null when that event fell
+  /// outside the folded window.
+  final int? stepStartedAtEpochMs;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is TimelineMessage && other.value == value);
+      (other is TimelineMessage &&
+          other.value == value &&
+          other.step == step &&
+          other.usage == usage &&
+          other.firstTokenAtEpochMs == firstTokenAtEpochMs &&
+          other.stepStartedAtEpochMs == stepStartedAtEpochMs);
 
   @override
-  int get hashCode => Object.hash('message', value);
+  int get hashCode => Object.hash(
+    'message',
+    value,
+    step,
+    usage,
+    firstTokenAtEpochMs,
+    stepStartedAtEpochMs,
+  );
 }
 
 /// Turn boundary from a logged `turn/start`; groups the transcript
 /// ledger-style.
+///
+/// [usage] is the sum of the turn's per-step token accounting, folded when
+/// the matching `turn/end` closes the turn. It is a convenience total over
+/// figures the host did send — never an estimate.
+///
+/// [startedAtEpochMs] and [endedAtEpochMs] are the `turn/start` and
+/// `turn/end` events' own logged times, so a surface can show the turn's
+/// wall time. The end stays null until the matching `turn/end` folds, and
+/// either stays null when a window cut removed its event.
 final class TimelineTurnBoundary extends TimelineItem {
-  const TimelineTurnBoundary(this.turn);
+  const TimelineTurnBoundary(
+    this.turn, {
+    this.usage,
+    this.startedAtEpochMs,
+    this.endedAtEpochMs,
+  });
 
   final int turn;
+  final TokenUsage? usage;
+  final int? startedAtEpochMs;
+  final int? endedAtEpochMs;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is TimelineTurnBoundary && other.turn == turn);
+      (other is TimelineTurnBoundary &&
+          other.turn == turn &&
+          other.usage == usage &&
+          other.startedAtEpochMs == startedAtEpochMs &&
+          other.endedAtEpochMs == endedAtEpochMs);
 
   @override
-  int get hashCode => Object.hash('turn', turn);
+  int get hashCode =>
+      Object.hash('turn', turn, usage, startedAtEpochMs, endedAtEpochMs);
 }
 
 /// Context compaction from a logged `compaction/summary` event.
@@ -174,6 +240,14 @@ final class TimelineContextInjection extends TimelineItem {
   );
 }
 
+/// One tool invocation, root or nested.
+///
+/// [step] is the logged step that owns the call, [parentCallId] the
+/// enclosing root call when this call ran nested inside a code-dispatch
+/// program (`tool/ptc-dispatch-start`), and [children] the nested calls it
+/// dispatched in start order. [startedAtEpochMs] is the `tool/call` (or
+/// dispatch-start) timestamp; the contract carries no settle timestamp on
+/// the result event, so no duration is derived.
 final class TimelineToolCall extends TimelineItem {
   const TimelineToolCall({
     required this.id,
@@ -182,6 +256,11 @@ final class TimelineToolCall extends TimelineItem {
     this.result,
     this.isError = false,
     this.status = ToolRunStatus.running,
+    this.step = 0,
+    this.parentCallId,
+    this.children = const <TimelineToolCall>[],
+    this.startedAtEpochMs,
+    this.presentation,
   });
 
   final String id;
@@ -190,6 +269,34 @@ final class TimelineToolCall extends TimelineItem {
   final String? result;
   final bool isError;
   final ToolRunStatus status;
+  final int step;
+
+  /// Enclosing root call id for a nested dispatch; null on a root call.
+  final String? parentCallId;
+
+  /// Nested dispatches this call owns, in dispatch order.
+  final List<TimelineToolCall> children;
+
+  /// Unix epoch milliseconds the call was logged; null when unknown.
+  final int? startedAtEpochMs;
+
+  /// The tool's persisted result presentation (the `tool/result` event's
+  /// `meta`), or null when the tool persisted none or the payload carries
+  /// no known card. Null is the reference's own generic fallback.
+  final ToolResultPresentation? presentation;
+
+  /// Whether this call ran nested inside another call's code dispatch.
+  bool get isNested => parentCallId != null;
+
+  /// This call and every descendant, depth-first in dispatch order. Used by
+  /// the ledger to render the subtool tree as a flat, selectable list.
+  List<TimelineToolCall> get flattened {
+    final out = <TimelineToolCall>[this];
+    for (final child in children) {
+      out.addAll(child.flattened);
+    }
+    return out;
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -200,11 +307,155 @@ final class TimelineToolCall extends TimelineItem {
           other.arguments == arguments &&
           other.result == result &&
           other.isError == isError &&
+          other.status == status &&
+          other.step == step &&
+          other.parentCallId == parentCallId &&
+          other.startedAtEpochMs == startedAtEpochMs &&
+          other.presentation == presentation &&
+          _listEquals(other.children, children));
+
+  @override
+  int get hashCode => Object.hash(
+    'tool',
+    id,
+    name,
+    arguments,
+    result,
+    isError,
+    status,
+    step,
+    parentCallId,
+    Object.hashAll(children),
+    startedAtEpochMs,
+    presentation,
+  );
+}
+
+/// One hook audit row folded from a `hook/invoked` + `hook/result` pair
+/// (log-only session events; paired by `handlerId`).
+///
+/// A blocking `PreToolUse` deny settles as `decision: 'deny'` here, so the
+/// refusal has an audit trail in transcript order instead of reading as an
+/// ordinary tool failure.
+final class TimelineHookAudit extends TimelineItem {
+  const TimelineHookAudit(this.audit);
+
+  final HookAudit audit;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TimelineHookAudit && other.audit == audit);
+
+  @override
+  int get hashCode => Object.hash('hook', audit);
+}
+
+/// One member of a durable workflow run.
+final class WorkflowMember {
+  const WorkflowMember({
+    required this.seq,
+    required this.label,
+    required this.childId,
+    required this.status,
+  });
+
+  /// Member sequence inside the run.
+  final int seq;
+
+  final String label;
+
+  /// The member's child session id, the jump target for its transcript.
+  final String childId;
+
+  final WorkflowRunStatus status;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkflowMember &&
+          other.seq == seq &&
+          other.label == label &&
+          other.childId == childId &&
           other.status == status);
 
   @override
+  int get hashCode => Object.hash(seq, label, childId, status);
+}
+
+/// One phase group inside a workflow run.
+final class WorkflowPhase {
+  const WorkflowPhase({
+    required this.key,
+    required this.phase,
+    required this.members,
+  });
+
+  /// Collision-free identity key of the phase (the reference's
+  /// `workflowPhaseKey`): `missing` for an omitted phase, else
+  /// `value:<length>:<phase>`.
+  final String key;
+
+  /// The exact phase string; null is the absent field (distinct from an
+  /// empty string).
+  final String? phase;
+
+  final List<WorkflowMember> members;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkflowPhase &&
+          other.key == key &&
+          other.phase == phase &&
+          _listEquals(other.members, members));
+
+  @override
+  int get hashCode => Object.hash(key, phase, Object.hashAll(members));
+}
+
+/// One durable workflow run folded from the `tool-workflow/*` event family,
+/// keyed by `runId`.
+///
+/// A history tail that carries only member/terminal updates stays pending —
+/// no item is published — until the unique `tool-workflow/run-start`
+/// arrives, matching the reference's conversation-node replay: `start`
+/// anchors the node and `update` folds into it. A run whose turn closed
+/// with no terminal event presents as `interrupted`, and the workflow tool's
+/// own `tool/result` row is left untouched.
+final class TimelineWorkflowRun extends TimelineItem {
+  const TimelineWorkflowRun({
+    required this.runId,
+    required this.name,
+    required this.status,
+    required this.phases,
+    this.stopReason,
+  });
+
+  final String runId;
+  final String name;
+  final WorkflowRunStatus status;
+
+  /// The wire stop reason (`completed` / `cancelled` / `error`), or null
+  /// while the run has no terminal event.
+  final String? stopReason;
+
+  /// Phase groups in first-seen phase order.
+  final List<WorkflowPhase> phases;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TimelineWorkflowRun &&
+          other.runId == runId &&
+          other.name == name &&
+          other.status == status &&
+          other.stopReason == stopReason &&
+          _listEquals(other.phases, phases));
+
+  @override
   int get hashCode =>
-      Object.hash('tool', id, name, arguments, result, isError, status);
+      Object.hash(runId, name, status, stopReason, Object.hashAll(phases));
 }
 
 final class TimelineApprovalRequest extends TimelineItem {

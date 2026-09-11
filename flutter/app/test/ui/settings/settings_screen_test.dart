@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/backends/backend_store.dart';
 import 'package:app/config.dart';
+import 'package:app/di/dsh_reachability.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
@@ -88,27 +89,29 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
-    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
-      return RpcResult(
-        ok: true,
-        value: <String, Object?>{
-          'version': 'test',
-          'cwd': '/tmp',
-          'provider': 'deepseek',
-          'model': 'test-model',
-          'attachedSessions': 0,
-          'canOpenPath': true,
-        },
-      );
-    }
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 
   @override
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
+
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake.
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/tester'},
+  },
+);
 
 class _QuietSocket implements DshEventSocket {
   final StreamController<ServerRequest> _frames =
@@ -117,9 +120,48 @@ class _QuietSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => _frames.add(_readyFrame()));
     return _frames.stream;
   }
 }
+
+/// An RPC stub for the reachability probe: the sheet's "Test connection"
+/// never touches a socket in these tests.
+class _ProbeRpc implements DshRpcClient {
+  _ProbeRpc(this._respond);
+
+  final Future<RpcResult> Function() _respond;
+
+  @override
+  Future<RpcResult> call(
+    String endpoint,
+    String method,
+    JsonMap payload, {
+    Duration? timeout,
+  }) => _respond();
+
+  @override
+  Future<void> respond(String rpcId, RpcResult result) async {}
+}
+
+DshReachabilityProbe _probeReturning(Future<RpcResult> Function() respond) {
+  final _ProbeRpc client = _ProbeRpc(respond);
+  return DshReachabilityProbe(
+    transportFactory: (Uri baseUri, {required bool trustHostCertificate}) =>
+        DshProbeTransport(client),
+  );
+}
+
+/// The probe most tests get: reports an unreachable host without opening a
+/// socket, so only the tests that drive "Test connection" observe anything.
+DshReachabilityProbe _unreachableProbe() => _probeReturning(() async {
+  throw DshTransportException(
+    'transport failure for api/settings/describe',
+    const SocketException('Connection refused'),
+  );
+});
 
 BackendStore _backendStore({String? document}) {
   final Directory dir = Directory.systemTemp.createTempSync(
@@ -142,8 +184,33 @@ BackendStore _backendStore({String? document}) {
   return BackendStore(file, seedBaseUrl: kDshBaseUrl);
 }
 
+/// Pumps real IO forward until [finder] matches, or fails after [timeout].
+///
+/// The registry load and every persist are real file IO, which a widget test's
+/// fake-async zone does not advance on its own. A fixed delay was the old
+/// budget here and it flaked under a loaded runner; waiting on the condition
+/// returns as soon as the tree is ready and only fails when it never is.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final DateTime deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('timed out after $timeout waiting for $finder');
+}
+
 Future<void> _letRegistryLoad(WidgetTester tester) async {
-  for (int i = 0; i < 6; i++) {
+  // A bounded real-IO pump for the async load. No single finder is present in
+  // every configuration, so the interaction helpers wait on their own target
+  // (`openHostSheet` on the host label) rather than this gating on one.
+  for (int i = 0; i < 40; i++) {
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 20));
     });
@@ -478,7 +545,7 @@ void main() {
       expect(find.text('API key configured'), findsOneWidget);
       expect(find.text('Configured'), findsOneWidget);
       expect(
-        find.textContaining('Custom providers are managed on the host'),
+        find.textContaining('the Providers section below'),
         findsOneWidget,
       );
 
@@ -673,6 +740,7 @@ void main() {
     String document = twoBackendsDoc,
     SettingsUiState uiState = const SettingsUiState(snapshot: _snapshot),
     Locale? locale,
+    DshReachabilityProbe? probe,
   }) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -683,6 +751,9 @@ void main() {
         overrides: [
           backendStoreProvider.overrideWith(
             (Ref ref) async => _backendStore(document: document),
+          ),
+          dshReachabilityProbeProvider.overrideWithValue(
+            probe ?? _unreachableProbe(),
           ),
           for (final Uri uri in <Uri>[
             Uri.parse(kDshBaseUrl),
@@ -711,6 +782,7 @@ void main() {
   }
 
   Future<void> openHostSheet(WidgetTester tester, String barLabel) async {
+    await _pumpUntil(tester, find.text(barLabel).hitTestable());
     await tester.tap(find.text(barLabel).hitTestable().first);
     await tester.pumpAndSettle();
   }
@@ -735,12 +807,14 @@ void main() {
       find.descendant(of: sheet, matching: find.text('Add host')),
       findsOneWidget,
     );
+    // No pinned route publishes a host version, so the row subtitle is the
+    // endpoint alone — never a fabricated version.
     expect(
-      find.descendant(of: sheet, matching: find.text('10.0.2.2:3080 · vtest')),
+      find.descendant(of: sheet, matching: find.text('10.0.2.2:3080')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: sheet, matching: find.text('10.0.2.2:3081 · vtest')),
+      find.descendant(of: sheet, matching: find.text('10.0.2.2:3081')),
       findsOneWidget,
     );
 
@@ -964,6 +1038,140 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Remove'), findsNothing);
     expect(find.textContaining('Switch away before removing'), findsOneWidget);
+  });
+
+  testWidgets('trusting a host certificate is an explicit edit-sheet opt-in', (
+    WidgetTester tester,
+  ) async {
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
+
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+
+    final Finder trustSwitch = find.widgetWithText(
+      SwitchListTile,
+      "Trust this host's certificate",
+    );
+    expect(trustSwitch, findsOneWidget);
+    expect(tester.widget<SwitchListTile>(trustSwitch).value, isFalse);
+    expect(find.textContaining('could impersonate it'), findsOneWidget);
+
+    await tester.tap(trustSwitch);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(trustSwitch).value, isTrue);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    // The opt-in persists through the registry, so reopening the sheet
+    // shows it already on.
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.widgetWithText(
+              SwitchListTile,
+              "Trust this host's certificate",
+            ),
+          )
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets('host sheet tests a connection: in progress, then classified', (
+    WidgetTester tester,
+  ) async {
+    final Completer<RpcResult> pending = Completer<RpcResult>();
+    await pumpHostSettings(
+      tester,
+      probe: _probeReturning(() => pending.future),
+    );
+    await openHostSheet(tester, 'Laptop');
+
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await tester.pump();
+
+    // Bounded in-progress state while the probe is in flight.
+    expect(find.text('Testing connection…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    pending.complete(RpcResult(ok: true, value: <String, Object?>{}));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Testing connection…'), findsNothing);
+    expect(
+      find.text('Reachable. The host answered the dsh contract.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a failed connection test does not block saving the host', (
+    WidgetTester tester,
+  ) async {
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
+
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+
+    final Finder fields = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(1), 'http://10.0.2.2:3082');
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('No dsh answered at this address'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Saving is not blocked'), findsOneWidget);
+
+    // The failed probe never gates the save.
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('10.0.2.2:3082'), findsOneWidget);
+    expect(find.text('Base URL'), findsNothing);
+  });
+
+  testWidgets('editing the address clears a stale reachability outcome', (
+    WidgetTester tester,
+  ) async {
+    await pumpHostSettings(tester);
+    await openHostSheet(tester, 'Laptop');
+
+    await tester.tap(find.byTooltip('Edit host').at(1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Test connection'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('No dsh answered at this address'),
+      findsOneWidget,
+    );
+
+    // A different address must not keep showing the old address's verdict.
+    final Finder fields = find.descendant(
+      of: find.byType(BottomSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(fields.at(1), 'http://10.0.2.2:3099');
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('No dsh answered at this address'),
+      findsNothing,
+    );
   });
 
   testWidgets('unreachable host card opens the host sheet', (

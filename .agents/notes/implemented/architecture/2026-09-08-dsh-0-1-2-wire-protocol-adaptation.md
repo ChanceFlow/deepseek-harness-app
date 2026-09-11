@@ -31,17 +31,17 @@ The Flutter client fully aligns with the DSH 0.1.2 wire protocol:
   - `ImageLimits` domain model decodes `maxImageDimension` from the session projection.
   - `RpcResult.fromJson` accepts non-map primitives (e.g. string path from `directoryPicker/createDirectory`) without throwing `FormatException`.
   - `executeCommand` strips its ad-hoc manual `'args'` wrapper.
-  - `dsh_connection_manager.dart` treats `/api/events.host` as optional, falls back to `/api/events.mux` for DSH 0.1.1, and uses `DshRemoteInvoker.invokeOrNullOnNotFound` for `host/describe`, achieving readiness across DSH 0.1.2 and 0.1.1.
+  - `dsh_connection_manager.dart` dials the one `/api/remote.mux` downlink and readies a generation on the `$events` ready frame. The 0.1.1 `/api/events.mux` fallback, the optional `/api/events.host` leg, and the `host/describe` probe are all removed ([later decision](../bug-fix/2026-09-11-drops-routes-the-pinned-host-does-not-register.md)).
   - `HttpDshRpcClient.call` in `package:network` guarantees that any payload sent on the wire contains the single `args` object wrapper.
 - **Workspace streaming and auto-grouping**:
   - DSH 0.1.2 provides workspace state via the `workspace/follow` stream over `/api/remote.mux`. `DshConnectionManager` subscribes via `workspace-follow` stream id upon WebSocket connect; `HarnessRepositoryImpl` decodes the `baseline` and increment frames (`upsert`, `remove`, `order`, `archived`) to populate `_workspaces` and `_archivedSessionIds`.
   - If workspaces are initially empty, `_inferWorkspacesFromSessionsIfEmpty` groups sessions by their `cwd` as an immediate local baseline, eliminating the blank/ungrouped session display.
-  - Unary `workspace/list` 404 is tolerated gracefully for legacy backends.
+  - The roster arrives only on `workspace/follow`; the pre-0.1.5 unary `workspace/list` probe is deleted in the [later decision](../bug-fix/2026-09-11-drops-routes-the-pinned-host-does-not-register.md).
 - **WebSocket connection point**:
   - `dsh_connection_manager.dart` replaces `_eventsMuxPath = '/api/events.mux'` with `_remoteMuxPath = '/api/remote.mux'`.
   - All test fixtures and sockets across `network` and `harness_adapter` connect to `/api/remote.mux`.
   - `HarnessFakeRpc` test double supports both slash and dot notation and unwraps `payload['args']` when inspecting arguments.
-  - Test mocks in `app/test/` support both `host/describe` and `session/list`.
+  - Test mocks in `app/test/` drive the mux downlink and answer the `$events` ready frame.
 
 ## Alternatives considered
 

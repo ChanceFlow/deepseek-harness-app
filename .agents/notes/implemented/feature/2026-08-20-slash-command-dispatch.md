@@ -36,8 +36,9 @@ an input hint, bare-only otherwise (`if (!bare) return undefined` → the
 prompt channel); unknown names and skills fall through to the prompt
 channel (the model serves them).
 
-The Flutter port follows that table on the static roster
-(`command_roster.dart`, names/hints mirrored verbatim):
+The Flutter port follows that table (`command_roster.dart`), consulting
+the live `commands/list` roster once a pull settles and the static list
+(names/hints mirrored verbatim) before that:
 
 - Adapter (`harness_repository_impl.dart`): `executeCommand(sessionId,
   line)` posts `commands/execute`, decodes `CommandExecutionWire` (kind
@@ -69,10 +70,11 @@ The Flutter port follows that table on the static roster
 - **Relying on `session.prompt` per its orphaned doc comment**:
   rejected — the live handler proves otherwise; the comment describes
   no code path that exists.
-- **Fetching the live roster via `commands/list`**: deferred — the
-  static roster is verbatim-accurate today (verified against a live
-  `commands/list`); the fetch adds an async dependency to the submit
-  path and is recorded as a known limitation in spec §16.
+- **Fetching the live roster via `commands/list`**: originally deferred;
+  now wired — see
+  [cordis-approval-and-live-command-roster](2026-09-11-cordis-approval-and-live-command-roster.md),
+  which makes the decisions above consult the live roster and keeps the
+  static list only as the pre-first-pull fallback.
 - **Routing every slash-syntax line through `commands/execute`**: the
   miss-fallback makes it nearly equivalent, but it would execute
   bare-only commands WITH args (`/compact extra`) where the web sends
@@ -84,7 +86,8 @@ The ➕ menu and the plan chip work through the real host registry: plan
 mode toggles, goals create, permission presets switch, compaction runs
 — each with its `command/run`/`command/done` pair in the log. Command
 result texts on success are not surfaced (projections are the
-feedback); error texts land in the chat error banner. New host commands
-require a roster entry until `commands/list` is fetched. The
+feedback); error texts land in the chat error banner. Host- and
+plugin-registered commands dispatch from the live `commands/list` roster;
+the static list backs the pre-first-pull state. The
 `sessions.ts` prompt doc comment remains the reference's own bug — this
 note records the empirical contract so nobody re-trusts it.

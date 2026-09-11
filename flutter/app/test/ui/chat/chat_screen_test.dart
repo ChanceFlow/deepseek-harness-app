@@ -47,8 +47,9 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 

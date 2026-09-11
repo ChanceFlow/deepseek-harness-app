@@ -3,11 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('kDebugTelemetryEnabled (compile-time telemetry switch)', () {
-    test('defaults to true so a build that forgets the define reports', () {
-      // Test runs without DSH_TELEMETRY_ENABLED; the default must favour
-      // reporting (the pre-release contract prefers observability over
-      // silence). The release pipeline overrides it explicitly per channel.
-      expect(kDebugTelemetryEnabled, isTrue);
+    test('defaults to false — telemetry is opt-in', () {
+      // Test runs without DSH_TELEMETRY_ENABLED; the default must keep a
+      // build silent, so only an explicit
+      // `--dart-define=DSH_TELEMETRY_ENABLED=true` turns reporting on.
+      expect(kDebugTelemetryEnabled, isFalse);
+    });
+
+    test('an omitted define never reports implicitly', () {
+      // Pins the stdlib semantics the switch relies on: reading the key
+      // with no define yields the opt-out default, never a silent `true`.
+      expect(const bool.fromEnvironment('DSH_TELEMETRY_ENABLED'), isFalse);
     });
 
     test('DebugBuildInfo keeps the version provenance fields', () {

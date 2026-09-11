@@ -17,7 +17,9 @@ anti-corruption layer.
 - No WebView UI, no React Native, no server-driven UI.
 - No changes to the dsh backend in this phase.
 - No client-side agent/tool execution; the backend remains the only harness runtime.
-- No authentication layer in the first milestone; deployment hardening is external.
+- No client-side authentication: when authentication is desired, the separate
+  `dsh-go-gateway` project provides it at the deployment layer (it can run with
+  `DSH_GW_AUTH=none` for local/private deployments).
 
 ## 3. Architecture
 
@@ -66,17 +68,24 @@ whose `code` is machine-readable and whose `details` is code-specific.
 
 ### 4.2 Event streams
 
-Two downlink-only WebSocket streams are required:
+One downlink-only WebSocket stream is required:
 
 ```text
-/api/remote.mux
-/api/events.host
+/api/remote.mux     required — the mux downlink
 ```
+
+`/api/remote.mux` is the only downlink the host serves on current revisions.
+The earlier `/api/events.mux` fallback is removed: it keyed on an HTTP 404 the
+host never returns, so it could not fire. `/api/events.host` is not a route at
+all — the gateway hangs its upgrade rather than answering, then closes the
+dial as a 502 — so the client no longer dials it, and the `hostFrames` seam
+and its folds are deleted. Every forwarded Host event the client folds rides
+the mux `$events` stream (§4.5).
 
 - Server frames are `ServerRequest` envelopes: `type`, `rpcId`, `method`, `payload`.
 - `method` equals the frame payload `type`, e.g. `session/event`.
 - Client messages on these sockets are protocol violations; the host closes 1008.
-- GET on either path without an upgrade returns 426.
+- GET on the path without an upgrade returns 426.
 - The client offers `permessage-deflate` on the upgrade handshake; the host
   decides whether it negotiates. The client sends no keep-alive pings
   (dart:io 3.13's `pingInterval` can close healthy sockets with goingAway)
@@ -139,13 +148,155 @@ A pending request is live state, not history: `question/requested` and
 reconnect resync) keeps the open request cards instead of dropping them with
 the events they replaced.
 
+### 4.5 Forwarded Host events
+
+The `$events` stream also carries ordinary forwarded Host events as
+`{type: 'emit', event, args}` items. The client folds the names it has a
+consumer for and acknowledges the rest on the diagnostic sink — the
+forwarded set is an open host allowlist
+(`API_REMOTE_FORWARDED_EVENTS` in
+`packages/api/remotes/src/remote-events.ts`):
+
+- `agent-preset/selected` — `args [sessionId, agentPreset]` folds the session
+  summary's `agentPreset` in place (§15).
+- `api-session/status` — `args [sessionId, running]`
+  (`packages/api/session-controller/src/types.ts`). The running→idle edge for a
+  session that is not the one on screen arms the sidebar's
+  finished-but-unviewed completion dot; running again or opening the session
+  clears it, and the first observation of a session seeds the running baseline
+  without arming. `session/list` pulls fold the same edge through the same
+  baseline, so a turn that finished while the stream was down still arms on the
+  reconnect pull.
+- `api-session/added` — the single arg is the new session's `SessionSummary`,
+  the same summary `session.list` carries (`types.ts`). It upserts the roster
+  row in place — decoded by the `SessionWire` summary decoder, with the
+  summary's projection hints applied and the folded finished-but-unviewed bit
+  preserved — so a session created by another client appears without a
+  `session.list` round-trip.
+- `commands/change` (no args) — the registry's membership moved, so any cached
+  roster is stale. `ChatRepository.observeCommandRosterChanges` publishes the
+  tick; a surface re-pulls `listCommands`.
+- `cordis/request-run` — the single arg is a `DynamicCordisRunRequest`
+  (`packages/extensions/cordis-host-runner/src/types.ts`): a `cordis_run`
+  tool call whose plugin ships a browser half is blocked host-side until this
+  is answered. It folds into the pending-request mirror behind
+  `ChatRepository.observeCordisRunRequests`; the answer rides
+  `dynamicCordisRunner/resolveRequestRun` (§4.8).
+- `cordis/request-run-resolved` — `{requestId, outcome}`; another page
+  answered or the host cancelled it, so the local pending mirror drops the
+  request.
+- `approval/request` / `user-questions/request` — waterfalls, delivered
+  through the pending-request pipeline above rather than this fold.
+
+The remaining allowlisted names (`api-session/activity`, `api-session/error`,
+`api-session/removed`, `credentials/reference-updated`,
+`goal/activation-changed`, the `cordis/dynamic-*` and `cordis/inspect-*`
+family, `llm/adapters-updated`, `settings/document-updated`) are forwarded
+and currently have no fold here; each is enumerated in the adapter's switch so
+a new name is a deliberate gap rather than a silent drop.
+
+The pinned 0.1.5 tree registers no host-frame vocabulary and serves no
+`/api/events.host` route: the host dropped `host/session-status`,
+`host/session-added` and `host/session-removed` by 0.1.2-alpha.1, and the
+client neither dials the leg nor listens for those names. Session running
+state and peer session creation therefore have exactly one frame source each —
+`api-session/status` and `api-session/added` above. `api-session/removed` is
+forwarded but has no fold here yet, so a session removed by another client
+leaves the roster until the next `session/list` pull.
+
+### 4.6 Wire coverage
+
+`scripts/verify_wire_pin.py` derives this block from two registries — the
+client's `DshRpcEndpoints` constants in
+`flutter/packages/harness_adapter/lib/src/rpc_map.dart` and the pinned tree's
+Typert Remote registration sites (`class … extends TypertRemoteService` plus
+`@Remote` decorators under `reference/deepseek-harness/packages/**/src`, and
+the Gateway's `$events/result` constant) — and fails when either registry
+moves without this block and the README coverage sentence moving with it. It
+also fails a declared-only allowlist name that the wire layer actually
+invokes.
+
+<!-- wire-pin:coverage:begin -->
+declared = 54
+upstream = 84
+identical = 52
+missing = 32
+client-only = 2
+out-of-scope = agentPresets/read, agentPresets/copy, agentPresets/deletePreset
+<!-- wire-pin:coverage:end -->
+
+`declared` counts the client's endpoint constants; `upstream` counts every
+unary Typert Remote method the pinned source tree registers (a superset of any
+one deployment's loaded plugins; logical streams are excluded); `identical` is
+their intersection; `missing` is registered upstream but not wired by the
+client; `client-only` is declared by the client but not registered at 0.1.5 —
+the reviewed names in
+[scripts/gates_manifest.json](../scripts/gates_manifest.json)
+(`wire_pin.declared_only_allowlist`). That list excuses a *declaration* only:
+a name on it must have no call site under
+`flutter/packages/harness_adapter/lib/src`, and one that is invoked fails the
+gate as a defect. `out-of-scope` lists registered methods the client
+intentionally does not wire: a name here must be a real pin method and must
+stay unwired.
+
+### 4.7 Non-RPC routes
+
+One host route is a plain HTTP GET outside the typert RPC envelope: it answers
+with a file body, so it has no `result` to unwrap and no method name for the
+Remote registry. The client declares it in `DshHttpRoutes`
+(`flutter/packages/harness_adapter/lib/src/rpc_map.dart`), deliberately
+outside `DshRpcEndpoints`, whose members §4.6 compares against the pinned
+Remote surface.
+
+| Route | Methods | Body | Client surface |
+|---|---|---|---|
+| `/api/session.export` | `GET`, `HEAD` | `application/zip` | `SessionLogExportRepository.exportSessionLog` |
+
+`GET /api/session.export?sessionId=<id>[&includeDescendants=true]` streams
+the session tree's log archive: `session.jsonl` for the root, one
+`subagents/<id>/…` tree per descendant when `includeDescendants=true`, and
+`media/<attachmentId>.<ext>` for every referenced attachment, with
+`content-disposition: attachment; filename="dsh-session-<id>.zip"` (the id
+collapsed to `[A-Za-z0-9_-]`). The host answers 400 for a missing or empty
+`sessionId` or an `includeDescendants` other than `true`/`false`, 404 when the
+session is unknown, 500 when the export services are unconfigured or the
+stored log cannot be read, and otherwise 200 with `content-type:
+application/zip`. Sources:
+`reference/deepseek-harness/packages/session-query/session-log-export/src/index.ts`
+(`SESSION_LOG_EXPORT_PATH`, the 400/404/500 branches) and `.../src/archive.ts`
+(`sessionLogZipFilename`).
+
+The client downloads the whole archive and buffers it, so a body truncated
+below its declared length fails the call instead of settling as a short file.
+Its deadline is a third case beside the adapter's short unary deadline and its
+explicitly unbounded agent calls: 5 minutes, long enough for a large tree over
+a slow link and still bounded (`kSessionLogExportTimeout`).
+
+
 ## 5. Connection Lifecycle
 
-A connection generation is healthy only when all three readiness facts hold:
+A connection generation is healthy when both required readiness facts hold:
 
-1. `host/describe` RPC succeeded.
-2. `/api/remote.mux` WebSocket fired `onOpen`.
-3. `/api/events.host` WebSocket fired `onOpen`.
+1. `/api/remote.mux` WebSocket fired `onOpen`.
+2. The mux delivered the `$events` registration answer: an item
+   `{type: 'item', streamId: 'remote-events', value: {type: 'ready', clientId,
+   host: {home}}}` (`reference/deepseek-harness/packages/api/gateway/src/
+   stream-protocol.ts` `RemoteEventReadyFrame`). This is the pinned contract's
+   readiness handshake — the reference client publishes exactly this frame's
+   host facts as `ConnectionHostInfo` (`.../client/connection/src/client/
+   connection.ts`, `.../api/gateway/src/client/remote-events.ts`) — and the
+   client adopts it in place of the removed `host/describe` probe. A `ready`
+   frame without its required `host.home`, a mux stream that closes before it,
+   or one that does not arrive before the 30 s deadline fails the generation
+   loudly; no default host description is substituted.
+
+`HostDescription` carries only what the ready frame publishes: the account
+`home` used to abbreviate displayed paths, plus a `version` that stays null —
+no pinned route publishes a host version, so it is never fabricated. The
+0.1.1 probe's other fields are gone: `cwd`, `provider`, and `model` are
+per-session facts (`session/list` rows and `session/modelCatalog`), and
+`attachedSessions` and `canOpenPath` are published nowhere. There is one
+downlink leg only; §4.2.
 
 After readiness, the client publishes `ConnectionPhase.CONNECTED`.
 
@@ -157,7 +308,8 @@ On any stream loss or handshake failure:
 
 After a new generation connects, the repository:
 
-1. Refetches `session/list`.
+1. Refetches `session/list` (the workspace roster needs no pull: it rides the
+   `workspace/follow` stream's per-generation baseline, §4.4).
 2. Marks every opened root session store stale.
 3. Refetches `session/page` for each of those sessions. A subagent child is
    never rebuilt here: its history is addressable only through its durable
@@ -174,14 +326,22 @@ on the same stream.
 
 Raw dsh session events are folded by `TimelineReducer` into neutral items.
 `seq` is the deduplication boundary: an event whose `seq <= lastSeq` is ignored.
+The dsh event map is merge-extensible, so an unrecognised type contributes no
+item instead of throwing; it is not swallowed, though — the reducer reports the
+type and its `seq` at debug on the adapter diagnostic channel (`timeline.event`,
+never the payload), so a wire-coverage gap stays measurable.
 
 | dsh event | Android timeline item |
 |---|---|
+| `turn/start` | `TimelineItem.TurnBoundary`; a later `turn/end` folds the turn's summed step `usage` onto it |
+| `step/start` | no item — records its `(turn, step)` as the step owning the rows that follow (code-dispatch sub-calls carry no step on their own event) |
 | `user/message` | `TimelineItem.Message` with `MessageRole.USER` |
 | `assistant/chunk` | live `TimelineItem.Message` with `streaming = true` |
-| `assistant/message` | final `TimelineItem.Message` with `streaming = false` |
-| `tool/call` | `TimelineItem.ToolCall` with `status = RUNNING` |
+| `assistant/message` | final `TimelineItem.Message` with `streaming = false`, carrying its step's `usage` and the recorded stream's first-token time |
+| `tool/call` | `TimelineItem.ToolCall` with `status = RUNNING`, its step, and its logged start time |
 | `tool/result` | paired `TimelineItem.ToolCall` with result/error status |
+| `tool/ptc-dispatch-start` | nested `TimelineItem.ToolCall` (`parentCallId` set) under its root call's `children` |
+| `tool/ptc-dispatch` | settles the paired nested call; a start outside the folded window still publishes the settled outcome as a row |
 | `turn/end` (error/aborted/interrupted/max-tokens) | `TimelineItem.Error` — `code` = the wire kind; `message` = host error detail only (empty for non-error kinds); the client localizes known kinds by `code`, falling back to `message` |
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
@@ -205,14 +365,26 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - `ChatViewModel` never exposes `MutableStateFlow`.
 - Layout is local: the same `ChatUiState` renders one- or two-pane depending on
   available width; server data never dictates layout.
+- The session header carries the session-log download action
+  (`session_log_export_action.dart`): a compact seat that streams the open
+  session's ZIP, turns into a spinner while the archive is in flight, and
+  announces the settled outcome in a snack bar — the success line names the
+  location the platform wrote to, the failure line is localized (the cause
+  goes to the error log). It renders nothing without a selected session or
+  without a composed export seam.
 
 ## 8. Security & Deployment
 
 - The dsh backend's `/api` trust fence is reachability-only, not authentication.
+  When authentication is desired, the separate `dsh-go-gateway` project provides
+  it at the deployment layer (`DSH_GW_AUTH=none` for local/private deployments);
+  the client itself performs none.
 - The client sends no `Origin`/`sec-fetch-site` headers; it relies on `Host`.
 - Default base URL is `http://10.0.2.2:3080` for the emulator; set with
   `-PDSH_BASE_URL=http://<lan-ip>:3080`.
-- Cleartext is enabled in debug manifests only.
+- Cleartext HTTP is permitted only for the loopback/emulator routes the app's
+  own default uses (`127.0.0.1`, `localhost`, `10.0.2.2`) via the committed
+  `network_security_config.xml`; every other host must be HTTPS.
 - Production requires TLS termination in front of the backend.
 
 ## 9. Testing Strategy
@@ -223,6 +395,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   hermetic HarnessRepository fake-host integration tests for host workspace frames
   and mux session-event delivery.
 - `app`: ViewModel tests with a fake `ChatRepository`.
+- Binary-download seam and session-log route: both run against a real
+  loopback `HttpServer` (success, exact query parameters, non-200, and a body
+  truncated below its declared length); the export's UI states run through the
+  real chat controller over the fake repository.
 - Integration with a real `dsh web` is opt-in: set `DSH_E2E_URL` and run
   `LocalDshE2eTest`; it is skipped otherwise.
 
@@ -292,11 +468,14 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   response carries the complete order and the adapter re-sorts the local list
   with it (the same path `host/workspace-order-changed` frames take, unknown
   ids keep relative order at the end). Drag-and-drop stays out of scope.
-- **Plugin management is not a wire capability.** The host api exposes no
-  plugin RPC (plugins compose host-side via cordis manifests and profiles);
-  nothing for an Android client to reproduce — the deferred line retires.
-  Skill authoring likewise stays host/filesystem-side; the client surface is
-  the `/` candidate source.
+- **Plugin management is read-only over the wire.** `pluginInventory/list`
+  (`packages/host/plugin-inventory/`) returns the Cordis Loader's current
+  non-group entries and, when a roster is composed, each agent preset's
+  plugin composition; `ChatRepository.listPluginInventory` decodes it. The
+  earlier "no plugin RPC" claim was false — the host composes plugins
+  host-side, but it does publish this read-only inventory. Mutating verbs
+  (mount/unmount, preset authoring) stay host-side. Skill authoring likewise
+  stays host/filesystem-side; the client surface is the `/` candidate source.
 - **Markdown rendering is a minimal in-app slice.** Message bodies parse into
   blocks (fenced code with language label, headings 1-6, bullet and ordered
   lists nested to two rendered levels, block quotes, GFM pipe tables,
@@ -363,16 +542,16 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 15. Agent Presets & Permissions
 
-- `agentPreset.list` (not loopback-pinned) decodes the roster: entries
+- `agentPresets/list` decodes the roster: entries
   (`id`, `trust system|user`, `isDefault`, optional `name`/`description`/
   `broken`) plus `authorable` and `hasDocument`. A bad `trust` value or a
   missing required field fails loud.
-- `agentPreset.select` switches a blank session's preset and returns the
+- `agentPresets/select` switches a blank session's preset and returns the
   echoed id; host refusals (`agent-preset-locked`, `agent-preset-not-found`,
   `agent-preset-invalid`, `agent-preset-read-only`) surface as
   `DshBusinessException` with the host code.
-- The forwarded owner event `agent-preset/selected` (a `host/remote-event`
-  frame with `args [sessionId, agentPreset]`) folds the session summary's
+- The forwarded owner event `agent-preset/selected` (a `$events` `emit` item
+  with `args [sessionId, agentPreset]`, §4.5) folds the session summary's
   `agentPreset` in place. Other forwarded events are ignored — the
   allowlist is open and host-owned.
 - The `permissions` session projection (mux `session/projection`, key
@@ -381,9 +560,11 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `observePermissions`. A `null`-valued or malformed frame yields null —
   the same hidden state as a host composing no permission service.
   Unknown projection keys are ignored (the key set is open).
-- `agentPreset.read`/`copy`/`openDocument`/`remove` are loopback-pinned and
-  stay uncovered: a mobile client cannot manage the roster, only read it
-  and switch blank sessions.
+- `agentPresets/read`, `agentPresets/copy`, and `agentPresets/deletePreset`
+  stay uncovered: a mobile client cannot manage the roster, only read it and
+  switch blank sessions. 0.1.5 removed the 0.1.1 per-method loopback pin
+  (`PRIVILEGED_METHODS`), so these are out of scope by product decision, not by
+  a host-side privilege fence (§4.6).
 
 ## 16. Host Commands
 
@@ -411,7 +592,7 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   command that does not accept them (web envelope policy: the draft and
   images stay in place); an accepting command dispatches with the
   images, and an error result keeps them for correction.
-- A bare-only command (no input hint — today only `compact`) dispatches
+- A bare-only command (no input hint — `compact` and `export`) dispatches
   detached: the composer never holds its sending state while the host
   runs the command for as long as the HTTP request survives (the host
   aborts a command when its request connection drops). The outcome
@@ -427,6 +608,108 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   consecutive drop surfaces in the error banner. The first attempt's
   aborted `command/done` and the retry's outcome each fold into their
   own command cards.
-- `commands/list` stays uncovered: the roster's names/descriptions/hints
-  are mirrored statically (`command_roster.dart`); fetching the live
-  catalog is deferred.
+- `/export` is the roster's one client-local command. The host registers
+  it (description `Download this Session log as a ZIP archive`) but its
+  handler only answers `Session log download requested.` — the browser
+  owns the transfer there. A bare `/export` therefore never rides
+  `commands/execute`: the controller runs the download itself (§4.7) and
+  reports the platform's save location. Args follow the bare-only rule
+  and ride the prompt channel, matching `compact`.
+- `commands/list` is wired: `ChatRepository.listCommands(agentId)` decodes the
+  addressed agent's live descriptor array (`{name, description, input?: {hint,
+  attachments?}}`, name-sorted by the host). No advertised `input` is the
+  wire's bare-only signal; an advertised hint makes the command
+  args-tolerant. A subagent-owned child is refused `session/agent-busy`.
+  The composer's `/` candidates, its ➕ sheet, and the submit decision table
+  (`hostCommandLineFor` / `hostCommandImageRefusal` / `hostCommandIsBare`)
+  consult the live roster once a pull settles; the static list in
+  `command_roster.dart` is only the pre-first-pull fallback, which also
+  carries a failed pull (`session/agent-busy`). `commands/change`
+  invalidates every cached roster and re-pulls the selected session.
+
+### 4.8 Session-event folds added on the 0.1.5 pin
+
+The reducer folds five event families the client previously dropped. Each
+decoder reads its field names from the pinned source named below; a required
+field that is absent or mistyped throws with that field name, and each type is
+enumerated in the reducer's switch so a genuinely unknown type still reaches
+the §4.5 diagnostic.
+
+- **Tool result presentation.** The host's `presentCall`/`presentResult`
+  functions never cross the wire: `SessionWireEvent`
+  (`packages/api/session-controller/src/types.ts`) admits only `type`, `seq`,
+  `time`, `data`, `ignorable`, `surfaceOp`, and `sourceEventSeqs`, and
+  `assertSessionWireEvent` rejects any other member. A `{for: 'call'|'result'}`
+  `view` payload therefore does not exist at 0.1.5; what the host ships is each
+  tool's persisted `output.presentationMeta` as the `tool/result` event's
+  `meta` member. The adapter narrows that opaque member into
+  `ToolResultPresentation` arms — `read` (path, offset, numbered lines,
+  totalLines, lang), `diff` (path/oldText/newText hunks, read-only: the
+  reference diff card carries no accept/reject), `search` (`shape` `matches`
+  with per-file grouped lines, or `paths`; `truncated`/`total`), `web`
+  (`kind` `search` with sources/answer, or `fetch` with url/statusCode), and
+  the persistent-terminal `viewport`/`waitReason`/`sessionStatus` payload. A
+  payload with no recognized shape yields `null` — the reference's generic
+  fallback; a recognized card with a missing member throws. `bash` persists no
+  metadata, so its terminal card stays re-derived from the result text, as in
+  the reference.
+- **Hook audit.** `hook/invoked` + `hook/result` are log-only
+  (`packages/hooks/hook-protocol/src/events.ts`; not a `SurfaceEventType`).
+  They fold into one `TimelineHookAudit` row paired by `handlerId`, so a
+  blocking `PreToolUse` deny reads as an audit record (`decision`, `exitCode`,
+  `stderrSummary`, `durationMs`) instead of an ordinary tool failure.
+- **Sandbox mode.** The log-only `sandbox/mode` event
+  (`packages/sandbox/sandbox-policy/src/session-mode.ts`) folds to the
+  session's effective `SandboxModeFact` (mode + `source: 'delegation'`);
+  `ChatRepository.observeSandboxMode` publishes it. This is the durable fact;
+  the `[sandbox: file access denied under …]` text in a tool result remains a
+  model-facing marker, not the state source.
+- **Schedule reminders.** The versioned `schedule/change` stream
+  (`packages/schedule/schedule/src/types.ts`) folds into the active
+  `ScheduleReminder` list: create, delete, and dispatch — a one-shot leaves
+  the set, a fixed-rate record advances to its next anchor-aligned target.
+  The fold is window-tolerant because the reducer replays a history page, not
+  the complete log: a delete/dispatch naming a record created before the page
+  is a no-op rather than an error, while the window-independent contract
+  violations (`version` other than 1, a one-shot dispatch carrying
+  `acceptedAt`, a fixed-rate dispatch without one) still fail loud.
+  `ChatRepository.observeSchedules` publishes the list.
+- **Durable workflow runs.** The four `tool-workflow/*` events
+  (`packages/workflow/tool-workflow/src/types.ts`) fold into one
+  `TimelineWorkflowRun` keyed by `runId`, following the reference
+  conversation node (`packages/client/ui-workflow-run/src/client/
+  workflow-definition.ts`): a tail carrying only updates stays pending until
+  the unique `run-start` arrives, members group into phases by first-seen
+  order (the absent phase is the distinct `missing` key), and a run whose turn
+  closed with no terminal event presents as `interrupted` for the run and its
+  unsettled members — the workflow tool's own `tool/result` row is unchanged.
+- **Cordis plugin approvals.** See §4.5 for the forwarded request and
+  `dynamicCordisRunner/resolveRequestRun` for the answer. The host's
+  `DynamicCordisRunResolution` union is modelled in full
+  (`CordisRunApproved`/`CordisRunRejected`/`CordisRunFailed`). An approval
+  names the exact `pluginRunId` an answering page created by loading the
+  plugin's browser half; the Android client has no such runtime, so rejection
+  is the decision it can deliver — and the one that releases the blocked
+  `cordis_run` call. Settled requests also drop on
+  `cordis/request-run-resolved`, and the pending mirror clears at a `$events`
+  generation boundary because forwarded `emit` items are not replayed
+  (`packages/api/gateway/src/index.ts`); re-deriving pending approvals from
+  `dynamicCordisRunner/inventory` (the web panel's `reconcileApprovals`) is
+  not wired here.
+- **Latency boundaries.** `TimelineMessage.stepStartedAtEpochMs` is the
+  owning `step/start` event's logged `time` and `firstTokenAtEpochMs` the
+  first token delta's; their difference is the reference's TTFT
+  (`client/ui-chat/src/client/contract/turn-metrics.ts`,
+  `assistantStepReading`). `TimelineTurnBoundary.startedAtEpochMs` /
+  `endedAtEpochMs` are the `turn/start` / `turn/end` event times, so a
+  surface can show a turn's wall time. A field whose event fell outside the
+  folded window stays null and the UI omits it — no figure is derived or
+  defaulted.
+- **UI mounts deferred.** Folding `TimelineHookAudit` and
+  `TimelineWorkflowRun` publishes timeline items; the transcript's render
+  arms for them are placeholders that draw nothing. The sandbox and
+  schedule streams still mount no surface. The Cordis-request stream feeds
+  the composer-seat approval card (`CordisRequestPanel`, reject-only), and
+  the composer consults `listCommands` (see §4.7). Remaining mounts are UI
+  changes under `flutter/app/lib/ui/**`, tracked separately from this wire
+  pass.

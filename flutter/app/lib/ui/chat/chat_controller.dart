@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -21,17 +22,23 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
+import 'package:domain/model/workspace_file.dart';
 import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
+import 'package:domain/repository/session_log_export_repository.dart'
+    show SessionLogExportRepository;
 import 'package:dev/dev.dart' show DebugTelemetry;
 
 import '../../logging/error_log_collector.dart';
+import '../../platform/session_log_saver.dart';
 import '../state_stream.dart';
 import 'command_roster.dart';
 import 'chat_local_state.dart';
@@ -65,6 +72,8 @@ class ChatController {
     this._repository, {
     Future<ModelPreferencePersistence?>? modelPreferences,
     Future<SessionSelectionPersistence?>? sessionSelection,
+    this._sessionLogExport,
+    this._saveSessionLog = saveSessionLogZip,
   }) {
     _refresh();
     _subscribeBaselines();
@@ -74,6 +83,15 @@ class ChatController {
   }
 
   final ChatRepository _repository;
+
+  /// The session-log archive seam; null when the deployment composed none,
+  /// in which case the header action hides and `/export` reports failure
+  /// instead of asking a host that only answers "download requested".
+  final SessionLogExportRepository? _sessionLogExport;
+
+  /// The platform write step, injected so tests drive the outcome without a
+  /// method channel.
+  final SessionLogSaver _saveSessionLog;
 
   /// Debug telemetry facade; null in release or when uninitialized, so
   /// every instrumentation site is a no-op outside debug builds.
@@ -92,6 +110,7 @@ class ChatController {
   bool _isSending = false;
   String? _errorMessage;
   bool _commandFailed = false;
+  bool _cordisAnswerFailed = false;
   List<ImageRejection> _imageRejections = const <ImageRejection>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   Timer? _searchTimer;
@@ -108,6 +127,7 @@ class ChatController {
   PlanState? _plan;
   List<TodoItem>? _todos;
   List<SkillEntry> _skills = const <SkillEntry>[];
+  List<CordisRunRequest> _cordisRunRequests = const <CordisRunRequest>[];
   SessionModels? _models;
 
   /// The session whose directory [_models] currently holds; the
@@ -117,6 +137,11 @@ class ChatController {
   ModelPreferencePersistence? _modelPrefsStore;
   bool _prefsLoaded = false;
   String? _modelPrefsDecidedFor;
+  SessionLogExportState? _sessionLogExportState;
+
+  /// One export at a time: a second tap while the archive streams is
+  /// ignored rather than starting a rival download.
+  bool _exportInFlight = false;
   bool _disposed = false;
 
   /// Selected-session persistence (web `dsh.sessions.current` parity);
@@ -132,9 +157,29 @@ class ChatController {
   PermissionSelect? _permissions;
   AgentPresetRoster? _agentPresets;
 
+  /// The selected session's durable sandbox-mode fact; null until a
+  /// `sandbox/mode` event folds for it (the deployment default applies and
+  /// stays unnamed here).
+  SandboxModeFact? _sandboxMode;
+
+  /// The selected session's active durable reminders; null until the
+  /// `schedule/change` fold publishes for it.
+  List<ScheduleReminder>? _schedules;
+
   /// One skill.list RPC per session, mirroring the Web catalog cache.
   final Map<String, List<SkillEntry>> _skillsBySession =
       <String, List<SkillEntry>>{};
+
+  /// Live command roster of the selected session (`commands/list`); null
+  /// until the first pull settles and again after a failed one, in which
+  /// case the static roster stands in as the pre-first-pull fallback. A
+  /// non-null value — including an empty list — is the host's own roster.
+  List<CommandDescriptor>? _commands;
+
+  /// One `commands/list` pull per session, invalidated wholesale by
+  /// `commands/change` (the web live directory's `invalidateAll`).
+  final Map<String, List<CommandDescriptor>> _commandsBySession =
+      <String, List<CommandDescriptor>>{};
 
   /// One session.models load per session (composer model seat); the seat
   /// refreshes on open like the web ModelSelect.
@@ -163,6 +208,8 @@ class ChatController {
   StreamSubscription<void>? _statsSub;
   StreamSubscription<void>? _goalSub;
   StreamSubscription<void>? _permissionsSub;
+  StreamSubscription<void>? _sandboxSub;
+  StreamSubscription<void>? _schedulesSub;
 
   ChatUiState get state => _state.value;
 
@@ -205,6 +252,8 @@ class ChatController {
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
     unawaited(_permissionsSub?.cancel());
+    unawaited(_sandboxSub?.cancel());
+    unawaited(_schedulesSub?.cancel());
     _subs.clear();
   }
 
@@ -232,6 +281,9 @@ class ChatController {
       plan: _plan,
       todos: _todos,
       skills: _skills,
+      cordisRunRequests: _cordisRunRequests,
+      cordisAnswerFailed: _cordisAnswerFailed,
+      commands: _commands,
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
       sessionStats: _sessionStats,
@@ -241,6 +293,10 @@ class ChatController {
       permissions: _permissions,
       agentPresets: _agentPresets,
       modelPrefs: _prefsLoaded ? _modelPrefs : null,
+      sessionLogExport: _sessionLogExportState,
+      canExportSessionLog: _sessionLogExport != null,
+      sandboxMode: _sandboxMode,
+      schedules: _schedules,
     );
   }
 
@@ -295,6 +351,26 @@ class ChatController {
         _publishUpstream();
       }),
     );
+    // Pending dynamic-Cordis activations are registry-global (the request
+    // carries its own session): one subscription feeds every session's
+    // surface, and the host's `cordis/request-run-resolved` broadcast drops
+    // a request out of the list — the settled state.
+    _subs.add(
+      _repository.observeCordisRunRequests().listen((requests) {
+        _cordisRunRequests = requests;
+        _publishUpstream();
+      }),
+    );
+    // `commands/change` invalidates every session's cached roster (the web
+    // live directory's `invalidateAll`); the selected session re-pulls
+    // immediately, other sessions on their next select.
+    _subs.add(
+      _repository.observeCommandRosterChanges().listen((_) {
+        _commandsBySession.clear();
+        final sessionId = _selectedSessionId;
+        if (sessionId != null) _loadCommands(sessionId);
+      }),
+    );
   }
 
   void onAction(ChatAction action) {
@@ -315,6 +391,7 @@ class ChatController {
       case DismissError():
         _errorMessage = null;
         _commandFailed = false;
+        _cordisAnswerFailed = false;
         _imageRejections = const <ImageRejection>[];
         _publish();
       case RetrySessions():
@@ -323,6 +400,8 @@ class ChatController {
         _loadOlderHistory();
       case RespondApproval():
         _respondApproval(action);
+      case RejectCordisRun():
+        _rejectCordisRun(action);
       case AnswerQuestionAction():
         _answerQuestion(action);
       case DismissQuestionAction():
@@ -376,6 +455,55 @@ class ChatController {
         _publish();
       case SelectAgentPreset():
         _selectAgentPreset(action);
+      case ExportSessionLog():
+        unawaited(_exportSessionLog(action.sessionId));
+    }
+  }
+
+  /// Downloads one session's log archive and writes it through the platform
+  /// save step, publishing progress for the header action.
+  ///
+  /// The archive is buffered before anything touches the filesystem, so a
+  /// truncated download never leaves a partial file behind. A second request
+  /// while one is streaming is ignored; a failure is recorded for the error
+  /// log and published as [SessionLogExportPhase.failed] for the localized
+  /// notice.
+  Future<void> _exportSessionLog(String sessionId) async {
+    final export = _sessionLogExport;
+    if (_exportInFlight) return;
+    _exportInFlight = true;
+    _sessionLogExportState = const SessionLogExportState.exporting();
+    _publish();
+    _telemetry?.count('chat.session_log_export');
+    _telemetry?.event(
+      'chat.session_log_export',
+      attributes: {'sessionId': sessionId},
+    );
+    try {
+      if (export == null) {
+        throw UnsupportedError('exportSessionLog: no export seam composed');
+      }
+      final archive = await export.exportSessionLog(sessionId);
+      final location = await _saveSessionLog(
+        filename: archive.filename,
+        bytes: archive.bytes,
+      );
+      _sessionLogExportState = SessionLogExportState.saved(location);
+    } catch (error, stackTrace) {
+      _sessionLogExportState = const SessionLogExportState.failed();
+      _telemetry?.count('chat.session_log_export_failed');
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'controller': 'ChatController',
+          'action': 'exportSessionLog',
+          'sessionId': sessionId,
+        },
+      );
+    } finally {
+      _exportInFlight = false;
+      if (!_disposed) _publish();
     }
   }
 
@@ -385,6 +513,7 @@ class ChatController {
     _timelineWindow = const TimelineWindow();
     _bindSelected(sessionId);
     _loadSkills(sessionId);
+    _loadCommands(sessionId);
     _loadModels(sessionId);
     _publish();
     unawaited(_runCatchingForUi(() => _repository.openSession(sessionId)));
@@ -406,6 +535,8 @@ class ChatController {
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
     unawaited(_permissionsSub?.cancel());
+    unawaited(_sandboxSub?.cancel());
+    unawaited(_schedulesSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
@@ -416,6 +547,9 @@ class ChatController {
       _models = null;
       _modelsSessionId = null;
       _permissions = null;
+      _commands = null;
+      _sandboxMode = null;
+      _schedules = null;
       _timelineSub = null;
       _planSub = null;
       _todosSub = null;
@@ -424,6 +558,8 @@ class ChatController {
       _statsSub = null;
       _goalSub = null;
       _permissionsSub = null;
+      _sandboxSub = null;
+      _schedulesSub = null;
       return;
     }
     // Session-scoped projections reset on rebind: the leaving
@@ -440,7 +576,10 @@ class ChatController {
     _models = null;
     _modelsSessionId = null;
     _skills = const <SkillEntry>[];
+    _commands = null;
     _permissions = null;
+    _sandboxMode = null;
+    _schedules = null;
     _timelineSub = _repository.observeTimelineWindow(sessionId).listen((
       window,
     ) {
@@ -479,6 +618,18 @@ class ChatController {
       permissions,
     ) {
       _permissions = permissions;
+      _publishUpstream();
+    });
+    // The sandbox-mode override and the durable reminder set are
+    // log-only session facts with no `session/*` projection at the pin:
+    // they arrive only from these streams, so an unreported value stays
+    // null and renders as unknown rather than as a default.
+    _sandboxSub = _repository.observeSandboxMode(sessionId).listen((fact) {
+      _sandboxMode = fact;
+      _publishUpstream();
+    });
+    _schedulesSub = _repository.observeSchedules(sessionId).listen((reminders) {
+      _schedules = reminders;
       _publishUpstream();
     });
   }
@@ -545,6 +696,45 @@ class ChatController {
     }());
   }
 
+  /// Live host-command roster for the `/` composer source and the submit
+  /// decision table: one `commands/list` pull per session, cached until
+  /// `commands/change` invalidates every entry. A pull failure — a
+  /// subagent-owned session answers `session/agent-busy`, and a bare test
+  /// double may not implement the route at all — leaves the static roster
+  /// standing in rather than emptying the menu.
+  void _loadCommands(String sessionId) {
+    final cached = _commandsBySession[sessionId];
+    if (cached != null) {
+      _commands = cached;
+      _publish();
+      return;
+    }
+    unawaited(() async {
+      try {
+        final roster = await _repository.listCommands(sessionId);
+        _commandsBySession[sessionId] = roster;
+        if (_selectedSessionId == sessionId) {
+          _commands = roster;
+          _publish();
+        }
+      } catch (e) {
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to load commands for $sessionId: $e',
+          level: 'warn',
+        );
+        if (_selectedSessionId == sessionId) {
+          _commands = null;
+          _publish();
+        }
+      }
+    }());
+  }
+
+  /// The host-command facts a submit consults: the selected session's live
+  /// roster once a pull settled, the static built-ins before that.
+  List<HostCommand> get _commandRoster =>
+      _commands == null ? kHostCommandNames : hostCommandFacts(_commands!);
+
   void _loadOlderHistory() {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
@@ -578,14 +768,25 @@ class ChatController {
     // Input-hinted commands take args; bare-only commands (no hint)
     // execute only without args; skills and unknown names fall through
     // to the prompt channel (the model serves them).
-    final commandLine = hostCommandLineFor(action.text.trim());
+    //
+    // `/export` is the exception: the host's handler only answers
+    // "Session log download requested." because the browser owns the
+    // transfer. On the phone the client owns it, so a bare `/export` runs
+    // the download here instead of round-tripping.
+    final submitted = action.text.trim();
+    if (isBareSessionLogExport(submitted)) {
+      unawaited(_exportSessionLog(sessionId));
+      action.onSettled?.call(true);
+      return;
+    }
+    final commandLine = hostCommandLineFor(submitted, _commandRoster);
     if (commandLine != null) {
       unawaited(() async {
         final accepted = await _executeHostCommand(
           sessionId,
           commandLine,
           images,
-          detached: hostCommandIsBare(action.text.trim()),
+          detached: hostCommandIsBare(action.text.trim(), _commandRoster),
         );
         action.onSettled?.call(accepted);
       }());
@@ -867,6 +1068,14 @@ class ChatController {
       return null;
     }
   }
+
+  /// Reads a text window of a workspace file for the file-preview sheet
+  /// (`workspaceFiles/read`). The controller stays locale-free: a failure
+  /// propagates to the sheet, which renders the localized message.
+  Future<WorkspaceFileContent> readWorkspaceFile(
+    String sessionId,
+    String path,
+  ) => _repository.readWorkspaceFile(sessionId, path);
 
   Future<T> _locked<T>(Future<T> Function() action) {
     final run = _attachmentLock.then((_) => action());
@@ -1170,6 +1379,7 @@ class ChatController {
       _bindSelected(resolved);
       _loadModels(resolved);
       _loadSkills(resolved);
+      _loadCommands(resolved);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(resolved));
       _telemetry?.count('chat.session.create');
@@ -1234,6 +1444,57 @@ class ChatController {
         ),
       ),
     );
+  }
+
+  /// Reject one pending dynamic-Cordis activation request
+  /// (`dynamicCordisRunner/resolveRequestRun`).
+  ///
+  /// Rejection is the only decision this client can deliver honestly: an
+  /// approval names the exact Client activation a browser plugin runtime
+  /// created, and this client has none. A rejection refuses both halves and
+  /// is what releases the blocked `cordis_run` tool call. A refusal of the
+  /// answer itself (the request already settled, the host rejected the
+  /// resolution, transport) raises [ChatUiState.cordisAnswerFailed] for the
+  /// localized sentence; the raw host detail goes to the error log, where
+  /// it is actionable, rather than to the reader.
+  void _rejectCordisRun(RejectCordisRun action) {
+    _telemetry?.count('chat.cordis.reject');
+    _telemetry?.event(
+      'chat.cordis.reject',
+      attributes: {'requestId': action.requestId},
+    );
+    unawaited(() async {
+      _errorMessage = null;
+      _commandFailed = false;
+      _cordisAnswerFailed = false;
+      _publish();
+      try {
+        await _repository.resolveCordisRunRequest(
+          action.requestId,
+          const CordisRunRejected(),
+        );
+      } catch (error, stackTrace) {
+        _cordisAnswerFailed = true;
+        _publish();
+        ErrorLogCollector.instance.captureError(
+          error,
+          stackTrace: stackTrace,
+          context: <String, Object?>{
+            'controller': 'ChatController',
+            'action': 'resolveCordisRunRequest',
+            'requestId': action.requestId,
+          },
+        );
+        _telemetry?.count('chat.cordis.reject_failed');
+        _telemetry?.event(
+          'chat.cordis.reject_failed',
+          attributes: {
+            'requestId': action.requestId,
+            'error': error.toString(),
+          },
+        );
+      }
+    }());
   }
 
   void _answerQuestion(AnswerQuestionAction action) {
@@ -1402,6 +1663,7 @@ class ChatController {
       _bindSelected(forked.id);
       _loadModels(forked.id);
       _loadSkills(forked.id);
+      _loadCommands(forked.id);
       _publish();
       await _runCatchingForUi(() => _repository.openSession(forked.id));
       _telemetry?.count('chat.session.fork');
@@ -1436,6 +1698,7 @@ class ChatController {
     try {
       _errorMessage = null;
       _commandFailed = false;
+      _cordisAnswerFailed = false;
       _publish();
       return await block();
     } catch (error, stackTrace) {

@@ -76,8 +76,9 @@ intake 代码全删),崩溃与遥测统一走 OTLP/HTTP 到自托管 SigNoz。
   `DSH_TELEMETRY_ENABLED`(正式 tag `0.1.0`→false;`0.0.3-alpha.N`/
   `0.1.0-alpha.1`→true)。代码里不跑正则(运行时无法编译期折叠):
   版本号判定在 workflow 完成,注入编译期布尔。忘了传定义则默认
-  `true`,行为朝"上报"侧偏(可观测性优先,本地
-  `flutter build apk --release` 不带定义时因此带遥测)。
+  `false`,即遥测 opt-in:只有显式传 `DSH_TELEMETRY_ENABLED=true`
+  的构建才上报,本地 `flutter build apk --release` 或 F-Droid 配方
+  不带定义时保持静默。
 - `packages/dev` 依赖变为 flutter + dartastic_opentelemetry(app 侧
   path_provider 传目录);intake 相关的 dart-define 全删,新增
   `DSH_DEBUG_OTLP_URL`、`DSH_APP_VERSION`、`DSH_TELEMETRY_ENABLED`。

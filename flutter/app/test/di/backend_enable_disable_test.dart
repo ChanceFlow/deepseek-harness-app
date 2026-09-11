@@ -43,21 +43,9 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    Map<String, Object?> payload,
-  ) async {
-    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
-      return RpcResult(
-        ok: true,
-        value: <String, Object?>{
-          'version': 'test',
-          'cwd': '/tmp',
-          'provider': 'deepseek',
-          'model': 'test-model',
-          'attachedSessions': 0,
-          'canOpenPath': true,
-        },
-      );
-    }
+    Map<String, Object?> payload, {
+    Duration? timeout,
+  }) async {
     if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(
         ok: true,
@@ -70,6 +58,20 @@ class _FakeRpc implements DshRpcClient {
   @override
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
+
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake.
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/tester'},
+  },
+);
 
 /// An event socket that counts opens and reports whether any delivered
 /// stream still has a listener — the observable face of
@@ -89,6 +91,9 @@ class _TrackingSocket implements DshEventSocket {
     final controller = StreamController<ServerRequest>.broadcast();
     _delivered.add(controller);
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the generation
+    // handshake frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => controller.add(_readyFrame()));
     return controller.stream;
   }
 }

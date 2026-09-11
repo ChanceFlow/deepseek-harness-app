@@ -25,7 +25,8 @@ The Flutter client aligns with DSH 0.1.5 contracts:
   - `ChatRepository` and `HarnessRepositoryImpl` expose `readWorkspaceFile`, `statWorkspaceFile`, and `listWorkspaceDirectory`.
 - **Mobile file preview & deliverable artifact actions**:
   - `ToolCallRow` inspects `model.filePath` for file-modifying tools (`write`, `edit`, `read`) and renders action buttons ("Preview" and "Copy path").
-  - `WorkspaceFilePreviewSheet` loads file content via `readWorkspaceFile` into a Material 3 modal bottom sheet (`kShapeSheet` radius 28), formatting Markdown files with `MarkdownText` and code/text files with monospace scrolling and line counts.
+  - The chat surface passes a real preview action into both production `ToolCallRow` sites — the flat `TimelineRow` path and the grouped `ActivityGroupRow` path — from `ChatController.readWorkspaceFile`, so the button is no longer test-only.
+  - `FilePreviewSheet` (`flutter/app/lib/ui/chat/file_preview_sheet.dart`) opens as a Material 3 modal bottom sheet (`kShapeSheet` radius 28) and loads the window through that repository seam. Loading renders a progress indicator; a read failure renders the localized `filePreviewFailed` with a retry; a NUL byte or a run of Unicode replacement characters renders `filePreviewBinary`; an empty window renders `filePreviewEmpty`; `eof == false` renders `filePreviewTruncated(lines)`. Markdown documents render through `MarkdownText`; every other text file is wrapped in a fenced block so it takes the existing code surface, and Copy content uses `copyContent`.
 - **Flock lease error classification**:
   - `ChatController` classifies `session-persistence/already-owned` errors into `SESSION_ALREADY_OWNED`, surfaced as a localized explanation rather than an unhandled error.
 

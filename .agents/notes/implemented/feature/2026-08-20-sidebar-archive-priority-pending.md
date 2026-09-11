@@ -56,13 +56,15 @@ sessions.
   keep their existing sheet (move/delete controls only).
 - **Finished-but-unviewed fold** (harness_repository_impl.dart): the
   adapter tracks last-seen `running` per session and folds the
-  running→idle edge from every observation source (frames and pulls;
-  web `syncCompletedNotifications`) into a `completed` bit on
-  `SessionSummary` (web `completedNotifications`) while the session is
-  unviewed. First observation records the baseline without arming;
-  running or opening clears the bit; refreshes preserve and extend it.
-  The `observeSessions` projection forwards the bit (dropping it
-  silently resets).
+  running→idle edge from every observation source — the [`$events`
+  forwarded `api-session/status`
+  event](../bug-fix/2026-09-11-completion-dot-event-source.md), or a
+  `session/list` pull — into a
+  `completed` bit on `SessionSummary` (web `syncCompletedNotifications`)
+  while the session is unviewed. First observation records the baseline
+  without arming; running or opening clears the bit; refreshes preserve
+  and extend it. The `observeSessions` projection forwards the bit
+  (dropping it silently resets).
 
 ## Alternatives considered
 
@@ -85,12 +87,11 @@ The sidebar leads with running and needs-your-attention sessions
 (yellow dot), then recent activity, matching the user's "focus on what
 is active" direction while the Workspaces tab owns management
 (rename/delete/archive/move). Long-press verbs on session rows reach
-both surfaces; archive stays per-session (no workspace-level concept,
-matching the reference). The pending status is only as current as the
-last frame — a cold session shows no pending until its frames replay;
-unarchive remains unexposed. The completed bit is client-derived: it
-survives refreshes and reconnect pulls; idle-at-first-observation never
-arms.
+both surfaces; archive stays per-session. The pending status is only as
+current as the last frame — a cold session shows no pending until its
+frames replay; unarchive remains unexposed. The completed bit is
+client-derived: it survives refreshes and reconnect pulls;
+idle-at-first-observation never arms.
 
 ## Testing
 

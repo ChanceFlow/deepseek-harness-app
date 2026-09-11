@@ -6,8 +6,11 @@
 library;
 
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/plugin_inventory.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/token_usage.dart';
 
 import 'rpc_map.dart';
 import 'wire_json.dart';
@@ -688,8 +691,7 @@ List<SkillEntryWire> decodeSkillListValue(JsonMap value) =>
 
 // ---------------------------------------------------------------------------
 // Agent presets (agentPreset.list / agentPreset.select —
-// reference/deepseek-harness/packages/host/apiproxy/src/api/
-// agent-presets.schema.ts)
+// reference/deepseek-harness/packages/preset/agent-presets/src/types.ts)
 // ---------------------------------------------------------------------------
 
 final class AgentPresetEntryWire {
@@ -784,6 +786,148 @@ final class CommandResultWire {
 }
 
 // ---------------------------------------------------------------------------
+// Command registry roster (commands/list value — a bare JSON array; the
+// envelope parks a non-object result under `value`, so the shape mirrors the
+// `llm/*` listings). Reference:
+// packages/interaction/commands/src/types.ts `CommandDescriptor`.
+// ---------------------------------------------------------------------------
+
+final class CommandDescriptorWire {
+  CommandDescriptorWire.fromJson(JsonMap json)
+    : name = _reqString(json, 'name'),
+      description = _reqString(json, 'description'),
+      input = _nullable(json['input'], CommandInputDescriptorWire.fromJson);
+
+  final String name;
+  final String description;
+  final CommandInputDescriptorWire? input;
+}
+
+/// `CommandInputDescriptor`: the `hint` is required when `input` is present;
+/// `attachments` is optional and defaults to false.
+final class CommandInputDescriptorWire {
+  CommandInputDescriptorWire.fromJson(JsonMap json)
+    : hint = _reqString(json, 'hint'),
+      attachments = json.containsKey('attachments')
+          ? wireBool(json, 'attachments')
+          : false;
+
+  final String hint;
+  final bool attachments;
+}
+
+/// Decodes the `commands/list` result: the addressed agent's effective
+/// command descriptors, name-sorted by the host. The result is a bare array,
+/// so it rides the envelope's `value` slot.
+List<CommandDescriptor> decodeCommandDescriptorList(JsonMap value) {
+  final raw = value['value'];
+  if (raw is! List) {
+    throw FormatException(
+      '${DshRpcEndpoints.commandsList} "value" must be a JSON array, '
+      'got: ${value.keys.toList()}',
+    );
+  }
+  return raw.map((Object? entry) {
+    final obj = asJsonObject(entry);
+    if (obj == null) {
+      throw const FormatException(
+        '${DshRpcEndpoints.commandsList} entry is not an object',
+      );
+    }
+    final wire = CommandDescriptorWire.fromJson(obj);
+    return CommandDescriptor(
+      name: wire.name,
+      description: wire.description,
+      inputHint: wire.input?.hint,
+      acceptsAttachments: wire.input?.attachments ?? false,
+    );
+  }).toList();
+}
+
+// ---------------------------------------------------------------------------
+// Plugin inventory (pluginInventory/list value). Reference:
+// packages/host/plugin-inventory/src/types.ts.
+// ---------------------------------------------------------------------------
+
+PluginFiberPhase? _pluginFiberPhase(Object? value) {
+  if (value == null) return null;
+  return switch (value) {
+    'pending' => PluginFiberPhase.pending,
+    'loading' => PluginFiberPhase.loading,
+    'active' => PluginFiberPhase.active,
+    'failed' => PluginFiberPhase.failed,
+    'unloading' => PluginFiberPhase.unloading,
+    final other => throw FormatException(
+      'plugin inventory "fiberPhase" has unknown value "$other"',
+    ),
+  };
+}
+
+PresetRowEnablement _presetRowEnablement(Object? value) {
+  if (value is bool) {
+    return value ? PresetRowEnablement.enabled : PresetRowEnablement.disabled;
+  }
+  if (value == 'conditional') return PresetRowEnablement.conditional;
+  throw FormatException(
+    'plugin inventory preset row "enabled" must be a boolean or '
+    '"conditional", got: $value',
+  );
+}
+
+PluginInventoryEntry _pluginEntryFromJson(JsonMap json) => PluginInventoryEntry(
+  entryId: _reqString(json, 'entryId'),
+  moduleName: _reqString(json, 'moduleName'),
+  enabled: _reqBool(json, 'enabled'),
+  fiberPhase: _pluginFiberPhase(json['fiberPhase']),
+);
+
+AgentPresetPluginRow _presetRowFromJson(JsonMap json) => AgentPresetPluginRow(
+  entryId: wireString(json, 'entryId'),
+  moduleName: _reqString(json, 'moduleName'),
+  enabled: _presetRowEnablement(json['enabled']),
+  condition: wireString(json, 'condition'),
+  fiberPhase: _pluginFiberPhase(json['fiberPhase']),
+);
+
+AgentPresetPluginGroup _presetGroupFromJson(JsonMap json) =>
+    AgentPresetPluginGroup(
+      id: _reqString(json, 'id'),
+      trust: _reqString(json, 'trust'),
+      name: wireString(json, 'name'),
+      isDefault: _reqBool(json, 'isDefault'),
+      broken: wireString(json, 'broken'),
+      rows: wireRequiredObjectArray(
+        json,
+        'rows',
+      ).map(_presetRowFromJson).toList(),
+    );
+
+/// Decodes the `pluginInventory/list` result. `entries` is required;
+/// `agentPresets` is present only when a roster is composed.
+PluginInventorySnapshot decodePluginInventorySnapshot(JsonMap value) =>
+    PluginInventorySnapshot(
+      entries: wireRequiredObjectArray(
+        value,
+        'entries',
+      ).map(_pluginEntryFromJson).toList(),
+      agentPresets: value.containsKey('agentPresets')
+          ? wireRequiredObjectArray(
+              value,
+              'agentPresets',
+            ).map(_presetGroupFromJson).toList()
+          : const <AgentPresetPluginGroup>[],
+    );
+
+/// One `dynamicCordisRunner/resolveRequestRun` acknowledgment
+/// (`DynamicCordisResolveAck`): false for a late, unknown, or stale answer.
+final class CordisResolveAckWire {
+  CordisResolveAckWire.fromJson(JsonMap json)
+    : accepted = _reqBool(json, 'accepted');
+
+  final bool accepted;
+}
+
+// ---------------------------------------------------------------------------
 // Workspace Files (DSH 0.1.5 workspaceFiles service)
 // ---------------------------------------------------------------------------
 
@@ -841,6 +985,131 @@ final class WorkspaceDirectoryListingWire {
   final String path;
   final List<WorkspaceDirectoryEntryWire> entries;
   final bool truncated;
+}
+
+// ---------------------------------------------------------------------------
+// Assistant token usage and recorded stream timing
+// (reference packages/llm/llm/src/types.ts `TokenUsage` and
+// packages/llm/llm/src/assistant-stream.ts `AssistantStreamRecord`)
+// ---------------------------------------------------------------------------
+
+/// Decode the `assistant/message` event's optional `usage`.
+///
+/// [value] is the raw event member: absent or null yields null (the adapter
+/// reported no accounting), anything that is not an object fails loud.
+/// `inputTokens` and `outputTokens` are non-optional on the reference
+/// record, so their absence is host breakage, not a zero.
+TokenUsage? decodeTokenUsage(Object? value) {
+  if (value == null) return null;
+  final json = asJsonObject(value);
+  if (json == null) {
+    throw const FormatException('assistant/message "usage" is not an object');
+  }
+  return TokenUsage(
+    inputTokens: _reqLong(json, 'inputTokens'),
+    outputTokens: _reqLong(json, 'outputTokens'),
+    totalTokens: wireLongOrNull(json, 'totalTokens'),
+    cacheReadTokens: wireLongOrNull(json, 'cacheReadTokens'),
+    cacheWriteTokens: wireLongOrNull(json, 'cacheWriteTokens'),
+    reasoningTokens: wireLongOrNull(json, 'reasoningTokens'),
+  );
+}
+
+/// Epoch millisecond of the first model output token in one recorded
+/// assistant stream, or null when the stream carries none.
+///
+/// The durable `assistant/message` stream is a list of packed delta runs
+/// (`{type: '*-chunks', time0, dt, texts|args}`) and raw records
+/// (`{type: 'chunk', time, chunk}`). A packed run's member `i` sits at
+/// `time0 + sum(dt[0..i-1])`; a token delta is a non-empty text/reasoning
+/// fragment or a tool-call fragment carrying arguments or a name
+/// (`assistantStreamFirstTokenTime` walks the same order). Malformed runs
+/// are skipped rather than throwing: the first-token figure is an optional
+/// inspector fact, and a bad run must not fail the whole session replay.
+int? assistantStreamFirstTokenTime(Object? stream) {
+  final records = asJsonArray(stream);
+  if (records == null) return null;
+  for (final entry in records) {
+    final record = asJsonObject(entry);
+    if (record == null) continue;
+    switch (wireType(record)) {
+      case 'text-chunks':
+      case 'reasoning-chunks':
+        final time = _firstRunMemberTime(record, 'texts', _nonEmpty);
+        if (time != null) return time;
+      case 'tool-call-chunks':
+        // A name-bearing run starts at its first member; otherwise the run's
+        // first member qualifies when it carries an arguments fragment.
+        final time = wireString(record, 'name') != null
+            ? wireLongOrNull(record, 'time0')
+            : _firstRunMemberTime(record, 'args', _nonEmpty);
+        if (time != null) return time;
+      case 'chunk':
+        final chunk = asJsonObject(record['chunk']);
+        if (chunk == null) continue;
+        final isToken = switch (wireType(chunk)) {
+          'text-delta' ||
+          'reasoning-delta' => (wireString(chunk, 'text') ?? '') != '',
+          'tool-call-delta' =>
+            (wireString(chunk, 'argumentsDelta') ?? '') != '' ||
+                chunk.containsKey('name'),
+          _ => false,
+        };
+        if (isToken) return wireLongOrNull(record, 'time');
+    }
+  }
+  return null;
+}
+
+/// Reconstructed timestamp of the first member of one packed delta run that
+/// satisfies [accept], accumulating the run's inter-member gaps.
+///
+/// The run is validated as a whole before any member time is read, matching
+/// the reference's `validateRecord` + `firstRunMemberTime` order: a run whose
+/// `texts`/`args` or `dt` members are malformed is unusable, and reading a
+/// prefix of it would report a boundary the log does not support. Null means
+/// "this run carries no usable boundary", never "the first member is at
+/// time0".
+int? _firstRunMemberTime(
+  JsonMap record,
+  String membersKey,
+  bool Function(String) accept,
+) {
+  final rawMembers = asJsonArray(record[membersKey]);
+  if (rawMembers == null) return null;
+  final members = <String>[];
+  for (final member in rawMembers) {
+    if (member is! String) return null;
+    members.add(member);
+  }
+  final gapCount = members.isEmpty ? 0 : members.length - 1;
+  final rawGaps = asJsonArray(record['dt']);
+  if (rawGaps == null || rawGaps.length < gapCount) return null;
+  final gaps = <int>[];
+  for (var index = 0; index < gapCount; index++) {
+    final gap = _asInt(rawGaps[index]);
+    if (gap == null) return null;
+    gaps.add(gap);
+  }
+  final start = wireLongOrNull(record, 'time0');
+  if (start == null) return null;
+  var time = start;
+  for (var index = 0; index < members.length; index++) {
+    if (index > 0) time += gaps[index - 1];
+    if (accept(members[index])) return time;
+  }
+  return null;
+}
+
+bool _nonEmpty(String value) => value != '';
+
+int? _asInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) {
+    final truncated = value.truncateToDouble();
+    return value == truncated ? truncated.toInt() : null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

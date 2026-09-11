@@ -26,6 +26,9 @@ releases:
   building `flutter/app/` in release mode.
 - Submodule `reference/deepseek-harness` is enabled via `submodules: yes`.
 - Anti-feature `NonFreeNet` is declared for network LLM backend access.
+- The recipe's required dart-defines, Flutter `srclibs` toolchain, and
+  pubspec-derived version fields are owned by
+  [2026-09-11-android-release-build-contract.md](2026-09-11-android-release-build-contract.md).
 - Submission contracts and native dependency handling are documented in
   [docs/fdroid-submission-guide.md](../../../../docs/fdroid-submission-guide.md).
 

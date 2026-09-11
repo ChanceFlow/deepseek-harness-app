@@ -21,10 +21,13 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/todo.dart';
@@ -66,6 +69,13 @@ class _Repository extends Fake implements ChatRepository {
   @override
   Stream<ImageLimits?> observeImageLimits() =>
       const Stream<ImageLimits?>.empty();
+
+  @override
+  Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
+      const Stream<List<CordisRunRequest>>.empty();
+
+  @override
+  Stream<void> observeCommandRosterChanges() => const Stream<void>.empty();
 
   @override
   Future<void> refreshSessions() async {}
@@ -114,6 +124,16 @@ class _Repository extends Fake implements ChatRepository {
   @override
   Stream<PermissionSelect?> observePermissions(String sessionId) =>
       const Stream<PermissionSelect?>.empty();
+
+  // The sandbox-mode and schedule facts are log-only session streams; an
+  // empty answer is the unreported state the controller renders as unknown.
+  @override
+  Stream<SandboxModeFact?> observeSandboxMode(String sessionId) =>
+      const Stream<SandboxModeFact?>.empty();
+
+  @override
+  Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
+      const Stream<List<ScheduleReminder>>.empty();
 
   @override
   Future<SessionModels> loadModels(String sessionId) async =>

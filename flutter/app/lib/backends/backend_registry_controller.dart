@@ -13,6 +13,7 @@ library;
 import 'dart:async';
 
 import 'package:domain/model/backend.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart' show ErrorLogLevel;
@@ -24,10 +25,15 @@ sealed class BackendAction {
 }
 
 final class AddBackend extends BackendAction {
-  const AddBackend(this.label, this.baseUrl);
+  const AddBackend(
+    this.label,
+    this.baseUrl, {
+    this.trustHostCertificate = false,
+  });
 
   final String label;
   final String baseUrl;
+  final bool trustHostCertificate;
 }
 
 final class RenameBackend extends BackendAction {
@@ -65,6 +71,16 @@ final class SetBackendEnabled extends BackendAction {
 
   final String backendId;
   final bool enabled;
+}
+
+/// Opts this host in or out of accepting a certificate that fails system
+/// validation (self-signed / internal-CA gateway). The DI layer applies the
+/// override to this host only, and only while enabled.
+final class SetBackendTrustHostCertificate extends BackendAction {
+  const SetBackendTrustHostCertificate(this.backendId, this.trust);
+
+  final String backendId;
+  final bool trust;
 }
 
 class BackendRegistryController {
@@ -138,7 +154,7 @@ class BackendRegistryController {
   void onAction(BackendAction action) {
     switch (action) {
       case AddBackend():
-        _add(action.label, action.baseUrl);
+        _add(action.label, action.baseUrl, action.trustHostCertificate);
       case RenameBackend():
         _rename(action.backendId, action.label);
       case UpdateBackendUrl():
@@ -149,6 +165,8 @@ class BackendRegistryController {
         _select(action.backendId);
       case SetBackendEnabled():
         _setEnabled(action.backendId, action.enabled);
+      case SetBackendTrustHostCertificate():
+        _setTrustHostCertificate(action.backendId, action.trust);
     }
   }
 
@@ -169,7 +187,7 @@ class BackendRegistryController {
     return id;
   }
 
-  void _add(String label, String baseUrl) {
+  void _add(String label, String baseUrl, bool trustHostCertificate) {
     final uri = _parseBaseUrl(baseUrl);
     if (uri == null) {
       _fail(BackendErrorCode.badBaseUrl, detail: baseUrl);
@@ -180,7 +198,12 @@ class BackendRegistryController {
       _fail(BackendErrorCode.emptyLabel);
       return;
     }
-    final backend = BackendConfig(id: _mintId(), label: trimmed, baseUri: uri);
+    final backend = BackendConfig(
+      id: _mintId(),
+      label: trimmed,
+      baseUri: uri,
+      trustHostCertificate: trustHostCertificate,
+    );
     _state = _state.withBackends([..._state.backends, backend]);
     _publish();
     _persist();
@@ -273,6 +296,20 @@ class BackendRegistryController {
     _persist();
   }
 
+  void _setTrustHostCertificate(String backendId, bool trust) {
+    final index = _state.backends.indexWhere((b) => b.id == backendId);
+    if (index < 0) {
+      _fail(BackendErrorCode.unknownBackend, detail: backendId);
+      return;
+    }
+    if (_state.backends[index].trustHostCertificate == trust) return;
+    final backends = [..._state.backends];
+    backends[index] = backends[index].copyWith(trustHostCertificate: trust);
+    _state = _state.withBackends(backends);
+    _publish();
+    _persist();
+  }
+
   void _fail(BackendErrorCode code, {String? detail}) {
     _state = _state.withError(
       detail != null && detail.isNotEmpty ? '${code.name}:$detail' : code.name,
@@ -290,31 +327,41 @@ class BackendRegistryController {
   }
 
   void _persist() {
-    unawaited(
-      _store
-          .save(
-            BackendStoreData(
-              backends: _state.backends,
-              activeId: _state.activeId,
-            ),
-          )
-          .then((_) {
-            _state = _state.withError(null);
-            _publish();
-          })
-          .catchError((Object error) {
-            final encoded = error is BackendStoreException
-                ? _encodeError(error)
-                : BackendErrorCode.writeFailed.name;
-            _state = _state.withError(encoded);
-            _publish();
-            ErrorLogCollector.instance.addBreadcrumb(
-              'Backend store write failed: $error',
-              level: 'warning',
-            );
-          }),
-    );
+    // The future is kept so a test can observe a mutation's bytes on disk by
+    // awaiting the write instead of polling a wall-clock budget, which is what
+    // made this path flake under a loaded runner.
+    _pendingPersist = _store
+        .save(
+          BackendStoreData(
+            backends: _state.backends,
+            activeId: _state.activeId,
+          ),
+        )
+        .then((_) {
+          _state = _state.withError(null);
+          _publish();
+        })
+        .catchError((Object error) {
+          final encoded = error is BackendStoreException
+              ? _encodeError(error)
+              : BackendErrorCode.writeFailed.name;
+          _state = _state.withError(encoded);
+          _publish();
+          ErrorLogCollector.instance.addBreadcrumb(
+            'Backend store write failed: $error',
+            level: 'warning',
+          );
+        });
+    unawaited(_pendingPersist!);
   }
+
+  Future<void>? _pendingPersist;
+
+  /// The in-flight persist, or null before the first write. Settles once the
+  /// document is on disk (or the write failed), so a test can await it rather
+  /// than poll.
+  @visibleForTesting
+  Future<void>? get pendingPersist => _pendingPersist;
 
   Future<void> dispose() async {
     await _states.close();

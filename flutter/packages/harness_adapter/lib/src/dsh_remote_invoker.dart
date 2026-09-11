@@ -132,14 +132,29 @@ final class DshRemoteInvoker {
   }
 
   /// Executes one Remote unary call against [endpoint] in DSH 0.1.2.
-  Future<RpcResult> call(String endpoint, JsonMap payload) async {
+  ///
+  /// [timeout] is the caller's request deadline and is forwarded verbatim to
+  /// the transport; `null` means the call is deliberately unbounded. It is a
+  /// required argument so every call site states which it is — see
+  /// `_callUnbounded` in `harness_repository_impl.dart` for the long-running
+  /// exemption list.
+  Future<RpcResult> call(
+    String endpoint,
+    JsonMap payload, {
+    required Duration? timeout,
+  }) async {
     final rawArgs = payload.containsKey('args') && payload.length == 1
         ? (asJsonObject(payload['args']) ?? payload)
         : payload;
     final primaryArgs = _prepareArgs(endpoint, rawArgs);
     final primaryWrapped = <String, Object?>{'args': primaryArgs};
 
-    var result = await _rpcClient.call(endpoint, endpoint, primaryWrapped);
+    var result = await _rpcClient.call(
+      endpoint,
+      endpoint,
+      primaryWrapped,
+      timeout: timeout,
+    );
     if (!result.ok && endpoint == DshRpcEndpoints.sessionPage) {
       final msg = result.error?.message ?? '';
       final match = RegExp(r'past cursor (-?\d+)').firstMatch(msg);
@@ -152,7 +167,12 @@ final class DshRemoteInvoker {
           final retryPayload = <String, Object?>{
             'args': <String, Object?>{'request': retryReq},
           };
-          result = await _rpcClient.call(endpoint, endpoint, retryPayload);
+          result = await _rpcClient.call(
+            endpoint,
+            endpoint,
+            retryPayload,
+            timeout: timeout,
+          );
         }
       }
     }
@@ -161,8 +181,12 @@ final class DshRemoteInvoker {
 
   /// Calls [endpoint] and returns its non-null [RpcResult.value], throwing a
   /// [DshBusinessException] on error outcomes or missing response value.
-  Future<JsonMap> invoke(String endpoint, JsonMap payload) async {
-    final result = await call(endpoint, payload);
+  Future<JsonMap> invoke(
+    String endpoint,
+    JsonMap payload, {
+    required Duration? timeout,
+  }) async {
+    final result = await call(endpoint, payload, timeout: timeout);
     if (!result.ok) {
       final failure = result.error;
       throw DshBusinessException(
@@ -181,32 +205,13 @@ final class DshRemoteInvoker {
     return value;
   }
 
-  /// Calls [endpoint] and returns its value, or returns null if the endpoint
-  /// is not mounted (HTTP 404) on the backend.
-  Future<JsonMap?> invokeOrNullOnNotFound(
-    String endpoint,
-    JsonMap payload,
-  ) async {
-    try {
-      final result = await call(endpoint, payload);
-      if (!result.ok) {
-        final failure = result.error;
-        throw DshBusinessException(
-          code: failure?.code ?? 'internal',
-          message: failure?.message ?? '$endpoint failed',
-          details: failure?.details,
-        );
-      }
-      return result.value;
-    } on DshTransportException catch (e) {
-      if (e.message.contains('404')) return null;
-      rethrow;
-    }
-  }
-
   /// Calls [endpoint] for void mutations, ensuring success.
-  Future<void> execute(String endpoint, JsonMap payload) async {
-    final result = await call(endpoint, payload);
+  Future<void> execute(
+    String endpoint,
+    JsonMap payload, {
+    required Duration? timeout,
+  }) async {
+    final result = await call(endpoint, payload, timeout: timeout);
     if (!result.ok) {
       final failure = result.error;
       throw DshBusinessException(

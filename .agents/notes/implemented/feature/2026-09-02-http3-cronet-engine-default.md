@@ -82,11 +82,12 @@ today's path.
   cannot reach the backend on those networks until the bump to 1.10.0
   (which carries the fix and the DNS knobs) ships. Watch the changelog
   and bump early.
-- Certificate validation is strict with no bypass: self-signed test
-  gateways fail opaque (indistinguishable from "h3 unreachable"). Real
-  certificates or an installed CA are prerequisites for grayscale
-  verification; cleartext dev paths are unaffected
-  (`android:usesCleartextTraffic="true"`).
+- Cronet has no certificate-verification override, so a self-signed
+  gateway fails opaque. A backend the user marks *trust this host's
+  certificate* steps off Cronet to a scoped dart:io client and loses
+  HTTP/3 for it; the
+  [scoped-cleartext note](../architecture/2026-09-11-scoped-cleartext-and-host-certificate-trust.md)
+  owns that. Untrusted hosts stay strict.
 - The shipped APK carries the embedded Cronet library: `libcronet.143.0.7445.0.so`
   measured at 6.5 MB (arm64) / 4.2 MB (armeabi-v7a) / 7.2 MB (x86_64)
   uncompressed — the fat APK grows by roughly that payload. Accepted; the

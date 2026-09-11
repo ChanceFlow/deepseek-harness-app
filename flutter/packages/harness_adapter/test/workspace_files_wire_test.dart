@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
 import 'package:harness_adapter/src/dsh_wire_types.dart';
 import 'package:harness_adapter/src/harness_repository_impl.dart';
@@ -106,7 +108,7 @@ void main() {
       'readWorkspaceFile invokes workspaceFiles/read with correct payload',
       () async {
         final rpc = _FakeFilesRpc();
-        final manager = DshConnectionManager(rpc, _FakeSocket(), (_) => 10000);
+        final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
         final repo = HarnessRepositoryImpl(rpc, manager);
 
         final content = await repo.readWorkspaceFile(
@@ -133,7 +135,7 @@ void main() {
 
     test('statWorkspaceFile invokes workspaceFiles/stat', () async {
       final rpc = _FakeFilesRpc();
-      final manager = DshConnectionManager(rpc, _FakeSocket(), (_) => 10000);
+      final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
       final repo = HarnessRepositoryImpl(rpc, manager);
 
       final stat = await repo.statWorkspaceFile('session-1', 'doc.txt');
@@ -145,7 +147,7 @@ void main() {
 
     test('listWorkspaceDirectory invokes workspaceFiles/list', () async {
       final rpc = _FakeFilesRpc();
-      final manager = DshConnectionManager(rpc, _FakeSocket(), (_) => 10000);
+      final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
       final repo = HarnessRepositoryImpl(rpc, manager);
 
       final listing = await repo.listWorkspaceDirectory('session-1', '');
@@ -168,8 +170,9 @@ class _FakeFilesRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     calls.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
     if (endpoint == 'workspaceFiles/read') {
       return RpcResult(
@@ -219,8 +222,20 @@ class _FakeFilesRpc implements DshRpcClient {
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
 
+/// A downlink seam that answers the generation handshake and then stays open.
 class _FakeSocket implements DshEventSocket {
   @override
-  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) =>
-      const Stream<ServerRequest>.empty();
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) async* {
+    onOpen?.call();
+    yield ServerRequest(
+      rpcId: 'remote-events',
+      method: 'item',
+      payload: <String, Object?>{
+        'type': 'ready',
+        'clientId': 'client-1',
+        'host': <String, Object?>{'home': '/home/tester'},
+      },
+    );
+    await Completer<void>().future;
+  }
 }

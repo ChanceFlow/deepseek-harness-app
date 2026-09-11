@@ -1,6 +1,8 @@
 /// Chat screen UI state and user intents (UDF).
 library;
 
+import 'package:domain/model/command.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -9,6 +11,8 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -48,6 +52,13 @@ final class ChatUiState {
     this.permissions,
     this.agentPresets,
     this.modelPrefs,
+    this.sessionLogExport,
+    this.canExportSessionLog = false,
+    this.cordisRunRequests = const <CordisRunRequest>[],
+    this.cordisAnswerFailed = false,
+    this.commands,
+    this.sandboxMode,
+    this.schedules,
   });
 
   final List<SessionSummary> sessions;
@@ -123,12 +134,107 @@ final class ChatUiState {
   /// model is picked again); null while persistence is absent or still
   /// loading, in which case the seat opens on the model's own default.
   final ModelSeatPreferences? modelPrefs;
+
+  /// The session-log export this screen is running or last finished; null
+  /// before any export.
+  final SessionLogExportState? sessionLogExport;
+
+  /// Whether this deployment composed a session-log export seam. False
+  /// hides the header action entirely rather than offering a seat that can
+  /// only fail.
+  final bool canExportSessionLog;
+
+  /// Pending dynamic-Cordis plugin activation requests the host forwarded
+  /// (`cordis/request-run`). A request stays here until a client answers it
+  /// or `cordis/request-run-resolved` reports it settled; an empty list is
+  /// the settled state.
+  final List<CordisRunRequest> cordisRunRequests;
+
+  /// The host refused the last Cordis rejection this client sent; the UI
+  /// renders the localized [l10n.cordisAnswerFailed] line (the controller
+  /// stays locale-free).
+  final bool cordisAnswerFailed;
+
+  /// The selected session's live host-command roster (`commands/list`), in
+  /// the host's name-sorted order. Null means no pull has settled — either
+  /// it never ran or it failed (a subagent-owned session answers
+  /// `session/agent-busy`) — and the static roster stands in as the
+  /// pre-first-pull fallback. A non-null value, including an empty list, is
+  /// the host's own roster and overrides the static list.
+  final List<CommandDescriptor>? commands;
+
+  /// The selected session's effective sandbox-mode fact, folded from its
+  /// `sandbox/mode` events. Null means no such fact has arrived: the
+  /// deployment default applies and the client does not know which mode
+  /// that is. Never substitute a default here — an unknown mode renders as
+  /// unknown.
+  final SandboxModeFact? sandboxMode;
+
+  /// The selected session's active durable reminders, folded from its
+  /// versioned `schedule/change` stream. Null means nothing has been
+  /// published for this session yet (the pinned `dsh web` composes no
+  /// `schedule` projection, so the event stream is the only source); an
+  /// empty list is the host's own "no active reminders".
+  final List<ScheduleReminder>? schedules;
+}
+
+/// Where one session-log export stands. Facts only — the UI layer owns the
+/// localized wording, and [location] arrives verbatim from the platform
+/// save step on success.
+enum SessionLogExportPhase { exporting, saved, failed }
+
+/// One export's progress. [location] is the platform's user-facing save
+/// target on success and null otherwise; a failure's cause is recorded
+/// through the error-log collector rather than shown untranslated.
+final class SessionLogExportState {
+  const SessionLogExportState.exporting()
+    : phase = SessionLogExportPhase.exporting,
+      location = null;
+
+  const SessionLogExportState.saved(String this.location)
+    : phase = SessionLogExportPhase.saved;
+
+  const SessionLogExportState.failed()
+    : phase = SessionLogExportPhase.failed,
+      location = null;
+
+  final SessionLogExportPhase phase;
+  final String? location;
+
+  /// Value equality lets the success affordance fire on a transition rather
+  /// than on every rebuild: a second attempt republishes `exporting` first,
+  /// so `saved` is never a no-op repeat.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SessionLogExportState &&
+          other.phase == phase &&
+          other.location == location);
+
+  @override
+  int get hashCode => Object.hash(phase, location);
 }
 
 /// Base intent type; subclasses carry value equality like the Kotlin
 /// data classes they replace.
 sealed class ChatAction {
   const ChatAction();
+}
+
+/// Download the session's log archive and hand it to the platform save
+/// path. Both the header action and a bare `/export` submission dispatch
+/// this; a no-op when the deployment composed no export seam.
+final class ExportSessionLog extends ChatAction {
+  const ExportSessionLog(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ExportSessionLog && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => sessionId.hashCode;
 }
 
 final class SelectSession extends ChatAction {
@@ -552,4 +658,26 @@ final class SelectAgentPreset extends ChatAction {
 
   @override
   int get hashCode => Object.hash(sessionId, agentPreset);
+}
+
+/// Reject one pending dynamic-Cordis activation request.
+///
+/// Rejection is the only decision this client delivers honestly. An
+/// approval's `ok:true` arm names the exact Client activation
+/// (`CordisRunApproved.pluginRunId`) the answering page created or attached
+/// to, and only a browser plugin runtime can produce one; the host rejects a
+/// resolution whose run id does not match the active half. A rejection needs
+/// no such identity, refuses both halves, and is what releases the blocked
+/// `cordis_run` tool call.
+final class RejectCordisRun extends ChatAction {
+  const RejectCordisRun(this.requestId);
+
+  final String requestId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RejectCordisRun && other.requestId == requestId;
+
+  @override
+  int get hashCode => Object.hash('reject-cordis-run', requestId);
 }

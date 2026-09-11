@@ -2,8 +2,8 @@
 /// `contextBreakdown` projections against the reference shapes
 /// (reference/deepseek-harness/packages/llm/token-meter/src/usage-projection.ts,
 /// reference/deepseek-harness/packages/llm/token-meter/src/breakdown-projection.ts,
-/// reference/deepseek-harness/packages/host/apiproxy/src/api/sessions.schema.ts,
-/// reference/deepseek-harness/packages/host/apiproxy/src/api/events.schema.ts).
+/// reference/deepseek-harness/packages/api/session-controller/src/types.ts —
+/// the `session.list` row and its projection hints).
 library;
 
 import 'package:harness_adapter/harness_adapter.dart';

@@ -25,11 +25,16 @@ import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
 import '../theme/theme.dart';
+import 'about_section.dart';
+import 'backend_reachability.dart';
 import 'busy_enter_preference.dart';
+import 'llm_providers.dart';
 import 'locale_preference.dart';
+import 'plugin_inventory_section.dart';
 import 'settings_backend_scope.dart';
 import 'settings_controller.dart';
 import 'settings_ui_state.dart';
+import 'theme_preference.dart';
 
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.backendId});
@@ -142,12 +147,24 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // 5. Plugins & Advanced section
+                  // 5. Providers section
+                  const SettingsLlmProvidersSection(),
+                  const SizedBox(height: 24),
+
+                  // 6. Plugins & Advanced section
                   _PluginsAdvancedSection(
                     snapshot: snapshot,
                     busy: uiState.isLoading,
                     onAction: onAction,
                   ),
+                  const SizedBox(height: 24),
+
+                  // 7. Plugin inventory section
+                  const SettingsPluginInventorySection(),
+                  const SizedBox(height: 24),
+
+                  // 8. About section
+                  const SettingsAboutSection(),
                 ],
               ),
             ),
@@ -470,7 +487,7 @@ class _HostHeaderTile extends ConsumerWidget {
   }
 }
 
-/// SECTION 2: App Preferences section (Language & ASR Models).
+/// SECTION 2: App Preferences section (Language, Appearance & ASR Models).
 class _AppPreferencesSection extends StatelessWidget {
   const _AppPreferencesSection();
 
@@ -489,6 +506,11 @@ class _AppPreferencesSection extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: _LanguageRow(),
+            ),
+            _CardDivider(),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: ThemePreferenceRow(),
             ),
             _CardDivider(),
             Padding(
@@ -1377,9 +1399,16 @@ Future<void> _openBackendSheet(
           child: _BackendSheet(
             backend: backend,
             removeBlockedReason: backend == null ? null : removeBlockedReason,
-            onSave: (String label, String baseUrl) {
+            onSave: (String label, String baseUrl, bool trustHostCertificate) {
               if (backend == null) {
-                _dispatchBackendAction(ref, AddBackend(label, baseUrl));
+                _dispatchBackendAction(
+                  ref,
+                  AddBackend(
+                    label,
+                    baseUrl,
+                    trustHostCertificate: trustHostCertificate,
+                  ),
+                );
                 return;
               }
               if (label != backend.label) {
@@ -1389,6 +1418,15 @@ Future<void> _openBackendSheet(
                 _dispatchBackendAction(
                   ref,
                   UpdateBackendUrl(backend.id, baseUrl),
+                );
+              }
+              if (trustHostCertificate != backend.trustHostCertificate) {
+                _dispatchBackendAction(
+                  ref,
+                  SetBackendTrustHostCertificate(
+                    backend.id,
+                    trustHostCertificate,
+                  ),
                 );
               }
             },
@@ -2587,7 +2625,8 @@ class _BackendSheet extends StatefulWidget {
   });
 
   final BackendConfig? backend;
-  final void Function(String label, String baseUrl) onSave;
+  final void Function(String label, String baseUrl, bool trustHostCertificate)
+  onSave;
   final VoidCallback? onRemove;
   final String? removeBlockedReason;
   final VoidCallback? onSetChatHost;
@@ -2599,6 +2638,7 @@ class _BackendSheet extends StatefulWidget {
 class _BackendSheetState extends State<_BackendSheet> {
   late final TextEditingController _labelController;
   late final TextEditingController _urlController;
+  late bool _trustHostCertificate;
 
   @override
   void initState() {
@@ -2608,6 +2648,7 @@ class _BackendSheetState extends State<_BackendSheet> {
     _urlController = TextEditingController(
       text: backend?.baseUri.toString() ?? 'http://',
     );
+    _trustHostCertificate = backend?.trustHostCertificate ?? false;
   }
 
   @override
@@ -2626,6 +2667,13 @@ class _BackendSheetState extends State<_BackendSheet> {
 
   bool get _canSave =>
       _labelController.text.trim().isNotEmpty && _validUrl(_urlController.text);
+
+  /// The typed base URL once it is valid; null while the text is not (the
+  /// reachability check stays disabled).
+  Uri? get _parsedUrl {
+    final String raw = _urlController.text.trim();
+    return _validUrl(raw) ? Uri.parse(raw) : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2678,6 +2726,35 @@ class _BackendSheetState extends State<_BackendSheet> {
                   : theme.colorScheme.error,
             ),
           ),
+          const SizedBox(height: 8),
+          // The sheet's decorated Container above would hide ListTile ink
+          // and background, so the tile sits on its own Material.
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _trustHostCertificate,
+              onChanged: (bool value) =>
+                  setState(() => _trustHostCertificate = value),
+              title: Text(
+                l10n.backendTrustCertificateTitle,
+                style: theme.textTheme.bodyMedium,
+              ),
+              subtitle: Text(
+                l10n.backendTrustCertificateDescription,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Runs on the explicit tap only; saving is never gated by it (a
+          // host can be offline while it is configured).
+          BackendReachabilityCheck(
+            baseUri: _parsedUrl,
+            trustHostCertificate: _trustHostCertificate,
+          ),
           if (widget.onSetChatHost != null) ...<Widget>[
             const SizedBox(height: 12),
             SizedBox(
@@ -2728,6 +2805,7 @@ class _BackendSheetState extends State<_BackendSheet> {
                         widget.onSave(
                           _labelController.text.trim(),
                           _urlController.text.trim(),
+                          _trustHostCertificate,
                         );
                         Navigator.of(context).pop();
                       }

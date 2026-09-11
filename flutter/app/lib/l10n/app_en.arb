@@ -23,6 +23,19 @@
   "@retry": {
     "description": "Generic retry action."
   },
+  "reconnect": "Reconnect",
+  "@reconnect": {
+    "description": "Manual reconnect action for an unreachable host."
+  },
+  "connectionHostUnreachable": "Can''t reach {host}",
+  "@connectionHostUnreachable": {
+    "description": "Connection banner naming the unreachable host.",
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
   "back": "Back",
   "@back": {
     "description": "Back navigation tooltip."
@@ -467,6 +480,10 @@
   "@backendErrorUnknown": {
     "description": "Error displayed when referring to an unknown host."
   },
+  "backendErrorLoadFailed": "Couldn''t load host configuration.",
+  "@backendErrorLoadFailed": {
+    "description": "Generic fallback when a host-configuration failure cannot be classified."
+  },
   "backendErrorDisabled": "Enable the host before activating it.",
   "@backendErrorDisabled": {
     "description": "Error displayed when attempting to activate a disabled host."
@@ -511,9 +528,131 @@
   "presetInUseBadge": "In use",
   "pluginsIntro": "Configure and inspect the plugins installed in this deployment.",
   "noPluginSettings": "This deployment exposes no plugin settings.",
+  "settingsSectionPluginInventory": "Plugin inventory",
+  "@settingsSectionPluginInventory": {
+    "description": "Settings section title listing the host's loaded plugins and agent-preset compositions."
+  },
+  "pluginInventoryIntro": "The plugins this host loads and the composition each agent preset builds.",
+  "@pluginInventoryIntro": {
+    "description": "Settings section intro describing what the read-only plugin inventory covers."
+  },
+  "pluginInventoryReadOnlyNotice": "Read-only. Enable, disable, and configure plugins on the host.",
+  "@pluginInventoryReadOnlyNotice": {
+    "description": "Notice stating the inventory surface cannot change plugin configuration."
+  },
+  "pluginInventorySearchHint": "Search module name or entry ID",
+  "@pluginInventorySearchHint": {
+    "description": "Placeholder and accessible name for the inventory filter field."
+  },
+  "pluginInventoryLoading": "Reading plugins…",
+  "@pluginInventoryLoading": {
+    "description": "Loading state while the plugin inventory is being read."
+  },
+  "pluginInventoryEmpty": "This host exposes no plugins.",
+  "@pluginInventoryEmpty": {
+    "description": "Empty state when the snapshot carries no entries and no presets."
+  },
+  "pluginInventoryNoMatch": "No plugins match this search.",
+  "@pluginInventoryNoMatch": {
+    "description": "Empty state when the inventory query matches nothing."
+  },
+  "pluginInventoryLoadFailed": "Plugins are temporarily unavailable.",
+  "@pluginInventoryLoadFailed": {
+    "description": "Generic failure state for the inventory read; deliberately omits transport details."
+  },
+  "pluginInventoryEnabledTag": "Enabled",
+  "@pluginInventoryEnabledTag": {
+    "description": "Enablement tag for an unconditionally enabled plugin."
+  },
+  "pluginInventoryDisabledTag": "Disabled",
+  "@pluginInventoryDisabledTag": {
+    "description": "Enablement tag for a disabled plugin."
+  },
+  "pluginInventoryConditionalTag": "Conditional",
+  "@pluginInventoryConditionalTag": {
+    "description": "Enablement tag for a plugin gated by an unresolved condition."
+  },
+  "pluginInventoryFailedTag": "Failed",
+  "@pluginInventoryFailedTag": {
+    "description": "Tag replacing the enablement tag when the plugin's root fiber failed."
+  },
+  "pluginInventoryPresetGroupTitle": "Session plugins",
+  "@pluginInventoryPresetGroupTitle": {
+    "description": "Group title for agent-preset plugin compositions."
+  },
+  "pluginInventoryPresetGroupIntro": "Composed per session by agent presets.",
+  "@pluginInventoryPresetGroupIntro": {
+    "description": "Group subtitle explaining preset compositions are per session."
+  },
+  "pluginInventoryGlobalGroupTitle": "Global plugins",
+  "@pluginInventoryGlobalGroupTitle": {
+    "description": "Group title for the Loader's global plugin entries."
+  },
+  "pluginInventoryGlobalGroupIntro": "Shared by the system and every session.",
+  "@pluginInventoryGlobalGroupIntro": {
+    "description": "Group subtitle explaining the global plugin plane."
+  },
+  "pluginInventoryPluginCount": "{count} plugins",
+  "@pluginInventoryPluginCount": {
+    "description": "Plugin count for a group or preset.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pluginInventoryFailedCount": "{count} failed",
+  "@pluginInventoryFailedCount": {
+    "description": "Count of failed plugin entries in the global group.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pluginInventoryDefaultBadge": "Default",
+  "@pluginInventoryDefaultBadge": {
+    "description": "Badge on the agent preset a session naming no preset composes."
+  },
+  "pluginInventoryPresetBrokenLabel": "Composition unavailable",
+  "@pluginInventoryPresetBrokenLabel": {
+    "description": "Label prefixing the host-reported reason a preset composition cannot be read."
+  },
+  "pluginInventoryModuleLabel": "Module",
+  "@pluginInventoryModuleLabel": {
+    "description": "Detail label for the full module specifier."
+  },
+  "pluginInventoryStatusLabel": "Status",
+  "@pluginInventoryStatusLabel": {
+    "description": "Detail label for the plugin's root-fiber phase."
+  },
+  "pluginInventoryConditionLabel": "Disabled when",
+  "@pluginInventoryConditionLabel": {
+    "description": "Detail label for a preset row's disabled condition expression."
+  },
+  "pluginInventoryPhasePending": "Waiting for dependencies",
+  "@pluginInventoryPhasePending": {
+    "description": "Fiber phase label: the entry is waiting on dependencies."
+  },
+  "pluginInventoryPhaseLoading": "Loading",
+  "@pluginInventoryPhaseLoading": {
+    "description": "Fiber phase label: the entry is loading."
+  },
+  "pluginInventoryPhaseActive": "Running",
+  "@pluginInventoryPhaseActive": {
+    "description": "Fiber phase label: the entry's root fiber is active."
+  },
+  "pluginInventoryPhaseFailed": "Failed to start",
+  "@pluginInventoryPhaseFailed": {
+    "description": "Fiber phase label: the entry's root fiber failed to start."
+  },
+  "pluginInventoryPhaseUnloading": "Unloading",
+  "@pluginInventoryPhaseUnloading": {
+    "description": "Fiber phase label: the entry's root fiber is unloading."
+  },
   "modelsIntro": "Enter your API keys to use models from the following providers.",
   "settingsReadOnlyNotice": "The settings document is read-only in this deployment.",
-  "modelsFooter": "Custom providers are managed on the host: this client covers the DeepSeek API key only.",
+  "modelsFooter": "Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.",
   "apiKeyConfigured": "API key configured",
   "apiKeyMissing": "API key missing",
   "credentialsIntro": "Secret references named by the host namespaces.",
@@ -539,6 +678,8 @@
   "backendBaseUrlHint": "http://127.0.0.1:3080",
   "baseUrlDerivationHint": "RPC and event paths derive from this base.",
   "baseUrlValidHint": "http or https with a host, e.g. http://127.0.0.1:3080",
+  "backendTrustCertificateTitle": "Trust this host''s certificate",
+  "backendTrustCertificateDescription": "Accept this host''s TLS certificate even when Android cannot verify it — for a self-signed or internal-CA gateway. Only this host is affected, and anyone who can intercept the connection could impersonate it. Leave off unless you control the gateway.",
   "remove": "Remove",
   "add": "Add",
   "userLayerLabel": "user layer",
@@ -703,6 +844,22 @@
   "commandCompactDescription": "Compact older conversation history",
   "commandPermissionDescription": "Switch the permission preset (sandbox mode + approval policy)",
   "commandFeedbackDescription": "record feedback about this session",
+  "commandExportDescription": "Download this session log as a ZIP archive",
+  "sessionLogExportTooltip": "Download session log",
+  "sessionLogExportSaved": "Session log saved to {location}",
+  "@sessionLogExportSaved": {
+    "description": "Confirmation that the session-log archive was written, naming where it landed.",
+    "placeholders": {
+      "location": {
+        "type": "String",
+        "example": "Download/dsh-session-session-1.zip"
+      }
+    }
+  },
+  "sessionLogExportFailed": "Couldn''t export the session log",
+  "@sessionLogExportFailed": {
+    "description": "Failure notice when the session-log archive could not be downloaded or saved."
+  },
   "commandImagesUnsupported": "/{command} does not accept image attachments; remove them first",
   "@commandImagesUnsupported": {
     "description": "Composer refusal for a submission carrying images bound for a host command that does not accept them.",
@@ -1474,7 +1631,7 @@
   "voiceInputGoToSettings": "Go to Settings",
   "voiceInputCancel": "Cancel",
   "voiceInputDone": "Done",
-  "voiceInputSlideToSend": "Release to send \u00b7 slide up to cancel",
+  "voiceInputSlideToSend": "Release to send · slide up to cancel",
   "voiceInputReleaseToCancel": "Release to cancel",
   "voiceInputTapToFinish": "Tap the mic to finish",
   "voiceInputInitializing": "Getting ready…",
@@ -1562,6 +1719,14 @@
   "@filePreviewFailed": {
     "description": "Error message when file preview cannot be loaded."
   },
+  "filePreviewBinary": "This file isn''t text, so it can''t be previewed.",
+  "@filePreviewBinary": {
+    "description": "Preview notice for a binary or undecodable file."
+  },
+  "filePreviewEmpty": "This file is empty.",
+  "@filePreviewEmpty": {
+    "description": "Preview notice for a zero-byte text file."
+  },
   "filePreviewTruncated": "Previewing first {count} lines",
   "@filePreviewTruncated": {
     "description": "Notice banner when file preview is truncated.",
@@ -1575,8 +1740,892 @@
   "@sessionAlreadyOwnedError": {
     "description": "Error message when a session write lease is held by another process."
   },
+  "chatActionFailed": "That action couldn''t be completed.",
+  "@chatActionFailed": {
+    "description": "Headline for a chat action that failed; the host detail follows."
+  },
+  "chatLoadFailed": "Couldn''t load this conversation.",
+  "@chatLoadFailed": {
+    "description": "Full-screen error when the chat state stream fails."
+  },
   "systemPromptUpdated": "System prompt updated",
   "@systemPromptUpdated": {
     "description": "Notice when system prompt is replaced or appended mid-conversation."
+  },
+  "trajectoryTitle": "Trajectory",
+  "@trajectoryTitle": {
+    "description": "App-bar and entry label for the session trajectory ledger view."
+  },
+  "trajectorySearchHint": "Search ledger",
+  "@trajectorySearchHint": {
+    "description": "Placeholder for the trajectory ledger's local search field."
+  },
+  "trajectorySearchClear": "Clear search",
+  "@trajectorySearchClear": {
+    "description": "Tooltip for the button clearing the trajectory search query."
+  },
+  "trajectorySearchMatches": "{matches} of {total}",
+  "@trajectorySearchMatches": {
+    "description": "Trajectory search result count; matches out of the records loaded in the window.",
+    "placeholders": {
+      "matches": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryLoadOlder": "Load older history",
+  "@trajectoryLoadOlder": {
+    "description": "Button loading the previous session history page into the ledger."
+  },
+  "trajectoryLoadingOlder": "Loading older history…",
+  "@trajectoryLoadingOlder": {
+    "description": "Button label while an older history page is in flight."
+  },
+  "trajectoryLoadOlderFailed": "Couldn''t load older history. Try again.",
+  "@trajectoryLoadOlderFailed": {
+    "description": "Retry hint shown when an older history page request failed."
+  },
+  "trajectoryNoMatches": "No records match this search in the loaded window.",
+  "@trajectoryNoMatches": {
+    "description": "Empty state when the local ledger search matches nothing."
+  },
+  "trajectoryEmpty": "This session has no trajectory records yet.",
+  "@trajectoryEmpty": {
+    "description": "Empty state when the session log has produced no ledger records."
+  },
+  "trajectoryBeforeFirstTurn": "Before the first turn",
+  "@trajectoryBeforeFirstTurn": {
+    "description": "Turn rule heading for rows logged before the session's first turn/start."
+  },
+  "trajectoryTurnLabel": "Turn {turn}",
+  "@trajectoryTurnLabel": {
+    "description": "Turn rule heading naming one turn number.",
+    "placeholders": {
+      "turn": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryTurnSummary": "{records, plural, =1{1 record} other{{records} records}} · {tools, plural, =1{1 tool} other{{tools} tools}}",
+  "@trajectoryTurnSummary": {
+    "description": "Turn rule metadata: record and tool counts for one turn.",
+    "placeholders": {
+      "records": {
+        "type": "int"
+      },
+      "tools": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryStepLabel": "Step {step}",
+  "@trajectoryStepLabel": {
+    "description": "Inline marker opening one step inside a turn.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryStepRecordCount": "{count, plural, =1{1 record} other{{count} records}}",
+  "@trajectoryStepRecordCount": {
+    "description": "Record count shown beside a step marker.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryKindUser": "User",
+  "@trajectoryKindUser": {
+    "description": "Ledger record kind label for a user prompt."
+  },
+  "trajectoryKindContext": "Context",
+  "@trajectoryKindContext": {
+    "description": "Ledger record kind label for injected context (non-user role message)."
+  },
+  "trajectoryKindAssistant": "Assistant",
+  "@trajectoryKindAssistant": {
+    "description": "Ledger record kind label for an assistant message."
+  },
+  "trajectoryKindTool": "Tool",
+  "@trajectoryKindTool": {
+    "description": "Ledger record kind label for a tool call."
+  },
+  "trajectoryKindCompaction": "Compacted",
+  "@trajectoryKindCompaction": {
+    "description": "Ledger record kind label for a context compaction."
+  },
+  "trajectoryKindCommand": "Command",
+  "@trajectoryKindCommand": {
+    "description": "Ledger record kind label for a host slash command."
+  },
+  "trajectoryKindError": "Error",
+  "@trajectoryKindError": {
+    "description": "Ledger record kind label for a turn or session error."
+  },
+  "trajectoryStatusStreaming": "Streaming",
+  "@trajectoryStatusStreaming": {
+    "description": "Status shown for an assistant record still receiving tokens."
+  },
+  "trajectoryFactTurn": "Turn",
+  "@trajectoryFactTurn": {
+    "description": "Inspector field label for the record's turn number."
+  },
+  "trajectoryFactStep": "Step",
+  "@trajectoryFactStep": {
+    "description": "Inspector field label for the record's step number."
+  },
+  "trajectoryFactKind": "Kind",
+  "@trajectoryFactKind": {
+    "description": "Inspector field label for the record kind."
+  },
+  "trajectoryFactStatus": "Status",
+  "@trajectoryFactStatus": {
+    "description": "Inspector field label for the record lifecycle state."
+  },
+  "trajectoryFactStarted": "Started",
+  "@trajectoryFactStarted": {
+    "description": "Inspector field label for the record's logged start timestamp."
+  },
+  "trajectoryFactFirstToken": "First token",
+  "@trajectoryFactFirstToken": {
+    "description": "Inspector field label for the first model output token of a recorded assistant stream."
+  },
+  "trajectoryFactDuration": "Duration",
+  "@trajectoryFactDuration": {
+    "description": "Inspector field label for a record's own duration."
+  },
+  "trajectoryFactParentCall": "Parent call",
+  "@trajectoryFactParentCall": {
+    "description": "Inspector field label naming the root call that owns a nested code-dispatch call."
+  },
+  "trajectoryFactOutsideStep": "Outside a step",
+  "@trajectoryFactOutsideStep": {
+    "description": "Inspector value for a row that belongs to no logged step."
+  },
+  "trajectoryFactUnavailable": "Unavailable",
+  "@trajectoryFactUnavailable": {
+    "description": "Inspector value when the session log does not carry the requested fact."
+  },
+  "trajectoryTimingNotRecorded": "Not recorded",
+  "@trajectoryTimingNotRecorded": {
+    "description": "Inspector value when the session log carries no timing boundary for the record."
+  },
+  "trajectoryDurationNotRecorded": "The session log carries no settle timestamp for this record.",
+  "@trajectoryDurationNotRecorded": {
+    "description": "Inspector note explaining why a duration cannot be computed."
+  },
+  "trajectoryUsageSection": "Token usage",
+  "@trajectoryUsageSection": {
+    "description": "Inspector section heading for provider token accounting."
+  },
+  "trajectoryUsageNotReported": "The host reported no usage for this record.",
+  "@trajectoryUsageNotReported": {
+    "description": "Inspector notice when a record carries no token accounting."
+  },
+  "trajectoryUsageInput": "Input",
+  "@trajectoryUsageInput": {
+    "description": "Inspector usage row label for billed input tokens."
+  },
+  "trajectoryUsageCachedRead": "Cache read",
+  "@trajectoryUsageCachedRead": {
+    "description": "Inspector usage row label for input tokens served from a provider cache."
+  },
+  "trajectoryUsageCacheWrite": "Cache write",
+  "@trajectoryUsageCacheWrite": {
+    "description": "Inspector usage row label for input tokens written into a provider cache."
+  },
+  "trajectoryUsageOutput": "Output",
+  "@trajectoryUsageOutput": {
+    "description": "Inspector usage row label for completion tokens."
+  },
+  "trajectoryUsageReasoning": "Reasoning",
+  "@trajectoryUsageReasoning": {
+    "description": "Inspector usage row label for reasoning tokens within the output count."
+  },
+  "trajectoryInputSection": "Input",
+  "@trajectoryInputSection": {
+    "description": "Inspector section heading for a record's full input payload."
+  },
+  "trajectoryOutputSection": "Output",
+  "@trajectoryOutputSection": {
+    "description": "Inspector section heading for a record's full output payload."
+  },
+  "trajectoryTokenCount": "{value} tok",
+  "@trajectoryTokenCount": {
+    "description": "Token count shown in the inspector.",
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "trajectoryTurnUsage": "in {input} · out {output}",
+  "@trajectoryTurnUsage": {
+    "description": "Turn rule token summary: compact billed input and output counts.",
+    "placeholders": {
+      "input": {
+        "type": "String"
+      },
+      "output": {
+        "type": "String"
+      }
+    }
+  },
+  "trajectoryEntryTooltip": "Trajectory",
+  "@trajectoryEntryTooltip": {
+    "description": "Tooltip for the chat header action that opens the trajectory ledger."
+  },
+  "settingsSectionProviders": "Providers",
+  "@settingsSectionProviders": {
+    "description": "Localized screen copy."
+  },
+  "providersIntro": "Add a provider, enter its API key, and discover the models it serves.",
+  "@providersIntro": {
+    "description": "Localized screen copy."
+  },
+  "providersReadOnlyNotice": "The settings document is read-only in this deployment.",
+  "@providersReadOnlyNotice": {
+    "description": "Localized screen copy."
+  },
+  "providersLoadFailed": "Couldn''t load providers: {error}",
+  "@providersLoadFailed": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "providerCredentialUnavailable": "Credential state unavailable: {error}",
+  "@providerCredentialUnavailable": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "providerStateLive": "Live",
+  "@providerStateLive": {
+    "description": "Localized screen copy."
+  },
+  "providerStateDormant": "Dormant",
+  "@providerStateDormant": {
+    "description": "Localized screen copy."
+  },
+  "providerDeclared": "Hand-declared",
+  "@providerDeclared": {
+    "description": "Localized screen copy."
+  },
+  "providerNeedsRepair": "Needs repair: {error}",
+  "@providerNeedsRepair": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "providersEmpty": "No configurable providers on this host.",
+  "@providersEmpty": {
+    "description": "Localized screen copy."
+  },
+  "addProvider": "Add provider",
+  "@addProvider": {
+    "description": "Localized screen copy."
+  },
+  "addProviderFamilyLabel": "Settings family",
+  "@addProviderFamilyLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderRouteLabel": "Route id",
+  "@addProviderRouteLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderRouteHint": "acme-gateway",
+  "@addProviderRouteHint": {
+    "description": "Localized screen copy."
+  },
+  "addProviderRouteInvalid": "Use lower-case letters, digits, and single hyphens, starting with a letter.",
+  "@addProviderRouteInvalid": {
+    "description": "Localized screen copy."
+  },
+  "addProviderRouteTaken": "That route already exists.",
+  "@addProviderRouteTaken": {
+    "description": "Localized screen copy."
+  },
+  "addProviderDisplayNameLabel": "Display name (optional)",
+  "@addProviderDisplayNameLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderBaseUrlLabel": "Base URL (optional)",
+  "@addProviderBaseUrlLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderBaseUrlInvalid": "Enter an http:// or https:// URL.",
+  "@addProviderBaseUrlInvalid": {
+    "description": "Localized screen copy."
+  },
+  "addProviderProtocolLabel": "Protocol (optional)",
+  "@addProviderProtocolLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderModelsLabel": "Model ids, one per line (optional)",
+  "@addProviderModelsLabel": {
+    "description": "Localized screen copy."
+  },
+  "addProviderModelsHint": "A route the adapter does not already know needs at least one.",
+  "@addProviderModelsHint": {
+    "description": "Localized screen copy."
+  },
+  "providerRouteLine": "Route {route}",
+  "@providerRouteLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "providerKeyRefLine": "Key reference {ref}",
+  "@providerKeyRefLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "ref": {
+        "type": "String"
+      }
+    }
+  },
+  "providerKeyHint": "The value goes to the host credential store and is never shown again.",
+  "@providerKeyHint": {
+    "description": "Localized screen copy."
+  },
+  "providerRemoveAction": "Remove provider",
+  "@providerRemoveAction": {
+    "description": "Localized screen copy."
+  },
+  "providerRemoveConfirm": "Remove {name}?",
+  "@providerRemoveConfirm": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "providerRemoveBody": "The stored profile is removed. A stored API key is left in place.",
+  "@providerRemoveBody": {
+    "description": "Localized screen copy."
+  },
+  "discoverModels": "Discover models",
+  "@discoverModels": {
+    "description": "Localized screen copy."
+  },
+  "discoverModelsEmpty": "The endpoint advertised no models.",
+  "@discoverModelsEmpty": {
+    "description": "Localized screen copy."
+  },
+  "discoverModelsFailed": "Model discovery failed: {error}",
+  "@discoverModelsFailed": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "discoveredModelsTitle": "Advertised models",
+  "@discoveredModelsTitle": {
+    "description": "Localized screen copy."
+  },
+  "modelContextWindowLine": "Context {tokens}",
+  "@modelContextWindowLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "modelMaxTokensLine": "Max output {tokens}",
+  "@modelMaxTokensLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "providerFooter": "Provider routes and profiles live in the host settings document; keys ride the host credential plane.",
+  "@providerFooter": {
+    "description": "Localized screen copy."
+  },
+  "settingsSectionAbout": "About",
+  "@settingsSectionAbout": {
+    "description": "Localized screen copy."
+  },
+  "aboutVersionLabel": "App version",
+  "@aboutVersionLabel": {
+    "description": "Localized screen copy."
+  },
+  "aboutVersionLine": "{version} (build {build})",
+  "@aboutVersionLine": {
+    "description": "Localized screen copy.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutDocs": "Documentation",
+  "@aboutDocs": {
+    "description": "Localized screen copy."
+  },
+  "aboutFeedback": "Report a bug or send feedback",
+  "@aboutFeedback": {
+    "description": "Localized screen copy."
+  },
+  "aboutLinkFailed": "Couldn''t open that link.",
+  "@aboutLinkFailed": {
+    "description": "Localized screen copy."
+  },
+  "producedFilesLabel": "Files changed",
+  "@producedFilesLabel": {
+    "description": "Caption above the produced-file chips a finished turn closes with."
+  },
+  "producedFilesMore": "+ {count, plural, =1{1 file} other{{count} files}}",
+  "@producedFilesMore": {
+    "description": "Overflow counter after the produced-file chips shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "producedFilesOpen": "Open {name}",
+  "@producedFilesOpen": {
+    "description": "Accessible label of one produced-file chip; the name is the path.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "messageTokensPerSecond": "{tps} tok/s",
+  "@messageTokensPerSecond": {
+    "description": "Decode throughput on a finalized assistant message's action row.",
+    "placeholders": {
+      "tps": {
+        "type": "String"
+      }
+    }
+  },
+  "messageTokenUsage": "{tokens} tok",
+  "@messageTokenUsage": {
+    "description": "Reported token total on a finalized assistant message's action row.",
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsAppearanceTitle": "Appearance",
+  "@settingsAppearanceTitle": {
+    "description": "Settings row title for the light/dark/system theme choice."
+  },
+  "settingsAppearanceLight": "Light",
+  "@settingsAppearanceLight": {
+    "description": "Theme preference segment for the light color scheme."
+  },
+  "settingsAppearanceDark": "Dark",
+  "@settingsAppearanceDark": {
+    "description": "Theme preference segment for the dark color scheme."
+  },
+  "settingsAppearanceSystem": "System",
+  "@settingsAppearanceSystem": {
+    "description": "Theme preference segment following the device setting."
+  },
+  "settingsAppearanceUnavailable": "Host theme settings are unavailable.",
+  "@settingsAppearanceUnavailable": {
+    "description": "Stated when the host does not expose the ui-theme preference field."
+  },
+  "settingsAppearanceSaveFailed": "Couldn''t save the theme choice.",
+  "@settingsAppearanceSaveFailed": {
+    "description": "Stated when the host refused the appearance write."
+  },
+  "cordisApprovalHeader": "Plugin approval",
+  "@cordisApprovalHeader": {
+    "description": "Header band of the card shown while a dynamic Cordis plugin activation waits on the reader's decision."
+  },
+  "cordisPurposeLabel": "Purpose",
+  "@cordisPurposeLabel": {
+    "description": "Label above the purpose the model supplied at cordis_define time, on the Cordis approval card."
+  },
+  "cordisPluginIdLabel": "Plugin ID",
+  "@cordisPluginIdLabel": {
+    "description": "Label for the stable plugin instance id on the Cordis approval card."
+  },
+  "cordisPackageIdLabel": "Package ID",
+  "@cordisPackageIdLabel": {
+    "description": "Label for the package version id on the Cordis approval card."
+  },
+  "cordisModeRun": "Run",
+  "@cordisModeRun": {
+    "description": "Lifecycle-intent chip for a first-time Cordis plugin activation."
+  },
+  "cordisModeUpdate": "Update",
+  "@cordisModeUpdate": {
+    "description": "Lifecycle-intent chip for a Cordis plugin activation that updates an already-loaded package."
+  },
+  "cordisRejectOnlyNotice": "This phone can only reject: approving needs the browser plugin runtime that reports the activation it created, and this client doesn''t have one. Rejecting releases the blocked tool call and runs neither half.",
+  "@cordisRejectOnlyNotice": {
+    "description": "Explains why the Cordis approval card offers Reject only."
+  },
+  "cordisAnswerFailed": "The host didn''t accept the plugin decision.",
+  "@cordisAnswerFailed": {
+    "description": "Stated when dynamicCordisRunner/resolveRequestRun refused the rejection this client sent."
+  },
+  "backendTestConnection": "Test connection",
+  "@backendTestConnection": {
+    "description": "Host edit-sheet button that runs the reachability probe for the typed base URL."
+  },
+  "backendProbeRunning": "Testing connection…",
+  "@backendProbeRunning": {
+    "description": "Bounded in-progress line while the reachability probe is in flight."
+  },
+  "backendProbeReachable": "Reachable. The host answered the dsh contract.",
+  "@backendProbeReachable": {
+    "description": "Probe outcome: a well-formed answer (including a business error) came back."
+  },
+  "backendProbeUnreachable": "No dsh answered at this address. Check the base URL, that the gateway is running, and that this phone can reach it.",
+  "@backendProbeUnreachable": {
+    "description": "Probe outcome: connection refused, DNS failure, or the request deadline elapsed."
+  },
+  "backendProbeCertificateNotTrusted": "TLS handshake failed. The host''s certificate is not trusted — if you control this gateway, turn on \u201cTrust this host''s certificate\u201d above.",
+  "@backendProbeCertificateNotTrusted": {
+    "description": "Probe outcome: TLS handshake failure, pointing at the per-host certificate-trust toggle."
+  },
+  "backendProbeAuthenticationRequired": "The gateway requires pairing or credentials this client does not have (deployment authentication, or the URL token dsh web prints). This client performs no authentication.",
+  "@backendProbeAuthenticationRequired": {
+    "description": "Probe outcome: HTTP 401; the deployment authenticates (or dsh web requires its printed URL token) and this client performs none."
+  },
+  "backendProbeNotDshSurface": "Something answered, but it is not a dsh host: there is no dsh RPC route at this address.",
+  "@backendProbeNotDshSurface": {
+    "description": "Probe outcome: HTTP 404 on the probe route, distinct from a connect failure."
+  },
+  "backendProbeUnexpectedStatus": "The host answered HTTP {status}, which the dsh contract does not use.",
+  "@backendProbeUnexpectedStatus": {
+    "description": "Probe outcome: a non-2xx status other than 401 or 404.",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "backendProbeUnenvelopedResponse": "The host answered, but not with a dsh JSON-RPC response.",
+  "@backendProbeUnenvelopedResponse": {
+    "description": "Probe outcome: a 2xx body that does not decode as a JSON-RPC envelope."
+  },
+  "backendProbeUnknown": "Could not classify the connection failure.",
+  "@backendProbeUnknown": {
+    "description": "Probe outcome: a failure outside the transport's recognized vocabulary."
+  },
+  "backendProbeAmbiguousTls": "The failure was a TLS handshake error; it may be a certificate the system rejects or another TLS mismatch.",
+  "@backendProbeAmbiguousTls": {
+    "description": "Caveat shown when a TLS handshake failed without naming a certificate, so the class cannot be proven."
+  },
+  "backendProbeSaveNotBlocked": "Saving is not blocked — a host can be offline while you configure it.",
+  "@backendProbeSaveNotBlocked": {
+    "description": "Stated with a failed probe so the user knows the host still saves."
+  },
+  "workflowMemberCount": "{count, plural, =1 {1 member} other {{count} members}}",
+  "@workflowMemberCount": {
+    "description": "Member count on a workflow-run card header and on each phase header.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workflowRunEmpty": "No members started",
+  "@workflowRunEmpty": {
+    "description": "Shown inside an expanded workflow-run card whose run recorded no members."
+  },
+  "workflowPhaseUnassigned": "Unphased",
+  "@workflowPhaseUnassigned": {
+    "description": "Phase header for a workflow member whose event carried no phase field."
+  },
+  "workflowPhaseEmpty": "Empty phase name",
+  "@workflowPhaseEmpty": {
+    "description": "Phase header for a workflow member whose phase field was the empty string."
+  },
+  "workflowMemberEmpty": "Empty member name",
+  "@workflowMemberEmpty": {
+    "description": "Member row label for a workflow member whose label was the empty string."
+  },
+  "workflowMemberOpen": "Open {name}",
+  "@workflowMemberOpen": {
+    "description": "Accessibility label of a workflow member row that opens the member's child transcript.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "workflowStatusRunning": "Running",
+  "@workflowStatusRunning": {
+    "description": "Workflow run or member status."
+  },
+  "workflowStatusCompleted": "Completed",
+  "@workflowStatusCompleted": {
+    "description": "Workflow run or member status."
+  },
+  "workflowStatusFailed": "Failed",
+  "@workflowStatusFailed": {
+    "description": "Workflow run or member status."
+  },
+  "workflowStatusCancelled": "Cancelled",
+  "@workflowStatusCancelled": {
+    "description": "Workflow run or member status."
+  },
+  "workflowStatusInterrupted": "Interrupted",
+  "@workflowStatusInterrupted": {
+    "description": "Workflow run or member status for a run whose turn closed with no terminal event."
+  },
+  "workflowStatusCountRunning": "Running {count}",
+  "@workflowStatusCountRunning": {
+    "description": "Phase status roll-up fragment.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workflowStatusCountCompleted": "Completed {count}",
+  "@workflowStatusCountCompleted": {
+    "description": "Phase status roll-up fragment.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workflowStatusCountFailed": "Failed {count}",
+  "@workflowStatusCountFailed": {
+    "description": "Phase status roll-up fragment.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workflowStatusCountCancelled": "Cancelled {count}",
+  "@workflowStatusCountCancelled": {
+    "description": "Phase status roll-up fragment.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workflowStatusCountInterrupted": "Interrupted {count}",
+  "@workflowStatusCountInterrupted": {
+    "description": "Phase status roll-up fragment.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hookAuditPending": "Pending",
+  "@hookAuditPending": {
+    "description": "Hook audit row whose hook/result has not folded yet."
+  },
+  "hookAuditDecision": "{decision}",
+  "@hookAuditDecision": {
+    "description": "The durable decision a hook returned (for example deny or allow).",
+    "placeholders": {
+      "decision": {
+        "type": "String"
+      }
+    }
+  },
+  "hookAuditDurationMs": "{durationMs} ms",
+  "@hookAuditDurationMs": {
+    "description": "Hook run duration shown on the collapsed audit row.",
+    "placeholders": {
+      "durationMs": {
+        "type": "int"
+      }
+    }
+  },
+  "hookAuditPoint": "Point",
+  "@hookAuditPoint": {
+    "description": "Label for the hook point (PreToolUse, Stop, ...) in the audit detail."
+  },
+  "hookAuditDialect": "Dialect",
+  "@hookAuditDialect": {
+    "description": "Label for the hook bridge dialect in the audit detail."
+  },
+  "hookDialectClaudeCode": "Claude Code",
+  "@hookDialectClaudeCode": {
+    "description": "Hook bridge dialect name."
+  },
+  "hookDialectCodex": "Codex",
+  "@hookDialectCodex": {
+    "description": "Hook bridge dialect name."
+  },
+  "hookAuditMatcher": "Matcher",
+  "@hookAuditMatcher": {
+    "description": "Label for the matcher pattern that selected the hook, when it declared one."
+  },
+  "hookAuditDecisionLabel": "Decision",
+  "@hookAuditDecisionLabel": {
+    "description": "Label for the hook decision in the audit detail."
+  },
+  "hookAuditExitCode": "Exit code",
+  "@hookAuditExitCode": {
+    "description": "Label for the hook process exit code in the audit detail."
+  },
+  "hookAuditUnknown": "Not reported",
+  "@hookAuditUnknown": {
+    "description": "Value for a hook audit field the host did not report, such as an exit code for a hook that never ran."
+  },
+  "hookAuditStderr": "Stderr",
+  "@hookAuditStderr": {
+    "description": "Label for the trimmed stderr summary in the audit detail."
+  },
+  "hookAuditNoStderr": "None",
+  "@hookAuditNoStderr": {
+    "description": "Value when a hook wrote nothing to stderr."
+  },
+  "sandboxModeUnknownTooltip": "This session has not reported its sandbox mode. The host''s deployment default applies.",
+  "@sandboxModeUnknownTooltip": {
+    "description": "Tooltip of the composer sandbox chip while the mode fact is unreported."
+  },
+  "sandboxModeTooltip": "Sandbox: {mode}",
+  "@sandboxModeTooltip": {
+    "description": "Tooltip of the composer sandbox chip when the mode is known.",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "sandboxModeReadOnly": "Read only",
+  "@sandboxModeReadOnly": {
+    "description": "Sandbox mode name."
+  },
+  "sandboxModeWorkspaceWrite": "Workspace write",
+  "@sandboxModeWorkspaceWrite": {
+    "description": "Sandbox mode name."
+  },
+  "sandboxModeDangerFullAccess": "Full access",
+  "@sandboxModeDangerFullAccess": {
+    "description": "Sandbox mode name."
+  },
+  "scheduleStripTitle": "Reminders",
+  "@scheduleStripTitle": {
+    "description": "Title of the composer dock's active-reminder strip."
+  },
+  "scheduleReminderCount": "{count, plural, =1 {1 reminder} other {{count} reminders}}",
+  "@scheduleReminderCount": {
+    "description": "Active reminder count on the strip header.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scheduleUnknown": "Not reported by this host",
+  "@scheduleUnknown": {
+    "description": "The session's reminder set before the schedule/change stream has published anything; distinct from an empty set."
+  },
+  "scheduleEmpty": "None active",
+  "@scheduleEmpty": {
+    "description": "The session's reminder set is known and empty."
+  },
+  "scheduleNextAt": "Next {at}",
+  "@scheduleNextAt": {
+    "description": "The next reminder target on the collapsed strip header.",
+    "placeholders": {
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleOverdueCount": "{count} overdue",
+  "@scheduleOverdueCount": {
+    "description": "Count of reminders whose target has passed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scheduleMoreCount": "+{count} more",
+  "@scheduleMoreCount": {
+    "description": "Reminders past the strip's row cap.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scheduleFrequencyOnce": "Once",
+  "@scheduleFrequencyOnce": {
+    "description": "Frequency of a one-shot reminder."
+  },
+  "scheduleFrequencyEvery": "Every {value} {unit}",
+  "@scheduleFrequencyEvery": {
+    "description": "Frequency of a fixed-rate reminder.",
+    "placeholders": {
+      "value": {
+        "type": "int"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleUnitDay": "day",
+  "@scheduleUnitDay": {
+    "description": "Singular day unit for a fixed-rate reminder."
+  },
+  "scheduleUnitDays": "days",
+  "@scheduleUnitDays": {
+    "description": "Plural day unit for a fixed-rate reminder."
+  },
+  "scheduleUnitHour": "hour",
+  "@scheduleUnitHour": {
+    "description": "Singular hour unit for a fixed-rate reminder."
+  },
+  "scheduleUnitHours": "hours",
+  "@scheduleUnitHours": {
+    "description": "Plural hour unit for a fixed-rate reminder."
+  },
+  "scheduleUnitMinute": "minute",
+  "@scheduleUnitMinute": {
+    "description": "Singular minute unit for a fixed-rate reminder."
+  },
+  "scheduleUnitMinutes": "minutes",
+  "@scheduleUnitMinutes": {
+    "description": "Plural minute unit for a fixed-rate reminder."
+  },
+  "scheduleUnitSecond": "second",
+  "@scheduleUnitSecond": {
+    "description": "Singular second unit for a fixed-rate reminder."
+  },
+  "scheduleUnitSeconds": "seconds",
+  "@scheduleUnitSeconds": {
+    "description": "Plural second unit for a fixed-rate reminder."
   }
 }

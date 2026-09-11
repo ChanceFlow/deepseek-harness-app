@@ -5,17 +5,18 @@ library;
 
 /// Compile-time telemetry master switch.
 ///
-/// The app reports telemetry on debug builds always, and on release builds
-/// only when this is true. The release pipeline sets it from the version
-/// channel: prerelease versions (dev/alpha/beta/rc, classified by the
-/// `_PRERELEASE` regex in `scripts/gen_release_notes.py`) get `true`;
-/// stable versions get `false`, which lets the AOT compiler fold the
-/// release gate and tree-shake the whole telemetry chain out of the binary.
-/// Defaults to `true` so a local build that forgets the define keeps
-/// observability (the pre-release contract favours reporting over silence).
+/// Telemetry is opt-in: a build reports only when
+/// `--dart-define=DSH_TELEMETRY_ENABLED=true` is passed explicitly. The
+/// release pipeline decides per channel and sets it from the version:
+/// prerelease versions (dev/alpha/beta/rc, classified by the
+/// `_PRERELEASE` regex in `scripts/gen_release_notes.py`) opt in; stable
+/// versions pass `false`, which lets the AOT compiler fold the release
+/// gate and tree-shake the whole telemetry chain out of the binary.
+/// Defaults to `false`, so a build that omits the define — a local
+/// `flutter build apk --release`, an F-Droid recipe — stays silent.
 const bool kDebugTelemetryEnabled = bool.fromEnvironment(
   'DSH_TELEMETRY_ENABLED',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 /// Build provenance for a debug build.

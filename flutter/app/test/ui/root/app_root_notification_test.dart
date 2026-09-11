@@ -24,8 +24,9 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(
         ok: true,
@@ -49,6 +50,20 @@ class _FakeRpc implements DshRpcClient {
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
 
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake.
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/tester'},
+  },
+);
+
 class _NeverSocket implements DshEventSocket {
   final StreamController<ServerRequest> _frames =
       StreamController<ServerRequest>.broadcast();
@@ -56,6 +71,9 @@ class _NeverSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => _frames.add(_readyFrame()));
     return _frames.stream;
   }
 }
@@ -119,11 +137,13 @@ void main() {
   }
 
   /// Selects the served session so the chat controller exists for the
-  /// tap-to-navigate assertion.
+  /// tap-to-navigate assertion. The row groups under its inferred workspace
+  /// (the pinned host registers no unary workspace list), so its group header
+  /// and its row share the `proj` label; the header is found first.
   Future<void> selectSession(WidgetTester tester) async {
-    await tester.tap(find.text('Ungrouped'));
+    await tester.tap(find.text('proj').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('proj'));
+    await tester.tap(find.text('proj').last);
     await tester.pumpAndSettle();
   }
 

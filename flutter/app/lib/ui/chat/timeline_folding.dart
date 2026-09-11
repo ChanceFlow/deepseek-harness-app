@@ -132,6 +132,8 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
       case TimelineError():
       case TimelineQueue():
       case TimelineJobs():
+      case TimelineHookAudit():
+      case TimelineWorkflowRun():
         flushPhase();
         result.add(item);
     }
@@ -188,4 +190,6 @@ String _entryId(TimelineItem item) => switch (item) {
   TimelineError(:final id) => id,
   TimelineQueue() => 'queue',
   TimelineJobs() => 'jobs',
+  TimelineHookAudit(:final audit) => audit.handlerId,
+  TimelineWorkflowRun(:final runId) => runId,
 };

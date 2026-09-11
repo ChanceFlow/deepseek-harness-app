@@ -12,6 +12,7 @@ final class BackendConfig {
     required this.label,
     required this.baseUri,
     this.enabled = true,
+    this.trustHostCertificate = false,
   });
 
   /// Stable identity (device-local; the seed backend keeps `default`).
@@ -29,13 +30,25 @@ final class BackendConfig {
   /// the active backend is always enabled.
   final bool enabled;
 
-  BackendConfig copyWith({String? label, Uri? baseUri, bool? enabled}) =>
-      BackendConfig(
-        id: id,
-        label: label ?? this.label,
-        baseUri: baseUri ?? this.baseUri,
-        enabled: enabled ?? this.enabled,
-      );
+  /// Explicit user opt-in to accept this host's TLS certificate even when
+  /// system validation fails — the self-signed / internal-CA gateway case
+  /// Android's network security config cannot cover at runtime. The DI
+  /// layer applies the override to this host only, and only while this is
+  /// true; every other host keeps strict system validation.
+  final bool trustHostCertificate;
+
+  BackendConfig copyWith({
+    String? label,
+    Uri? baseUri,
+    bool? enabled,
+    bool? trustHostCertificate,
+  }) => BackendConfig(
+    id: id,
+    label: label ?? this.label,
+    baseUri: baseUri ?? this.baseUri,
+    enabled: enabled ?? this.enabled,
+    trustHostCertificate: trustHostCertificate ?? this.trustHostCertificate,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -44,10 +57,12 @@ final class BackendConfig {
           other.id == id &&
           other.label == label &&
           other.baseUri == baseUri &&
-          other.enabled == enabled);
+          other.enabled == enabled &&
+          other.trustHostCertificate == trustHostCertificate);
 
   @override
-  int get hashCode => Object.hash(id, label, baseUri, enabled);
+  int get hashCode =>
+      Object.hash(id, label, baseUri, enabled, trustHostCertificate);
 }
 
 /// The registry's published state: the configured backends, which one the

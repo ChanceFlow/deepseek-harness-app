@@ -64,6 +64,7 @@ class PermissionSelectChip extends StatelessWidget {
     required this.onAction,
     super.key,
     this.compact = false,
+    this.tooltipDetail,
   });
 
   final PermissionSelect value;
@@ -77,6 +78,12 @@ class PermissionSelectChip extends StatelessWidget {
   /// `.triggerLabel` on a narrow composer row so the row keeps fitting.
   /// The tooltip and the sheet keep the mode's full name reachable.
   final bool compact;
+
+  /// Second tooltip line carrying the session's decoded sandbox-mode fact
+  /// ("Sandbox: Workspace write", or the unreported wording). A preset names
+  /// a sandbox mode only as part of its composition; this states the
+  /// effective fact, which the host can switch underneath the preset.
+  final String? tooltipDetail;
 
   /// Command dispatch — selection rides the existing send path.
   final void Function(ChatAction) onAction;
@@ -142,10 +149,12 @@ class PermissionSelectChip extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final enabled = !locked && !_readOnly;
+    final baseTooltip =
+        value.currentOption?.description ??
+        l10n.accessModeTooltip(_label(l10n));
+    final detail = tooltipDetail;
     return Tooltip(
-      message:
-          value.currentOption?.description ??
-          l10n.accessModeTooltip(_label(l10n)),
+      message: detail == null ? baseTooltip : '$baseTooltip\n$detail',
       child: Opacity(
         // Web .trigger:disabled — the locked seat dims.
         opacity: enabled ? 1 : 0.6,
@@ -155,7 +164,8 @@ class PermissionSelectChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             onTap: enabled ? () => _open(context) : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(999),

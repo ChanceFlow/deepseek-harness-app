@@ -10,12 +10,17 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/llm_provider.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/plugin_inventory.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
@@ -36,6 +41,7 @@ import 'package:network/rpc_envelope.dart';
 import 'adapter_diagnostics.dart';
 import 'dsh_connection_manager.dart';
 import 'dsh_remote_invoker.dart';
+import 'session_event_payloads.dart';
 import 'session_stats_fold.dart';
 import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
@@ -50,6 +56,23 @@ const Duration kStreamPublishWindow = Duration(milliseconds: 16);
 
 const int _credentialsMaxRefs = 64;
 const int _historyPageMessages = 50;
+
+/// Deadline for every short/unary RPC: one the host answers in well under a
+/// second when healthy (data reads, settings/credential mutations, session
+/// and workspace verbs). A wedged host therefore surfaces a transport failure
+/// to the caller instead of leaving a spinner turning forever.
+///
+/// `DshRemoteInvoker.call` requires the deadline, so no future call site can
+/// inherit a bound it must not have, or lose the one it should.
+const Duration _shortCallTimeout = Duration(seconds: 30);
+
+/// Explicit "no deadline" for the long-running calls: the host holds these
+/// open for agent work, and a deadline would kill legitimate work. Passing it
+/// is a decision, not an omission.
+///
+/// The exempt endpoints, each marked at its call site: `session/prompt`,
+/// `session/updateQueue`, `commands/execute`, and `subagents/prompt`.
+const Duration? _noCallDeadline = null;
 
 final class _HistoryPage {
   _HistoryPage({required this.events, required this.hasMore});
@@ -68,7 +91,6 @@ class HarnessRepositoryImpl implements ChatRepository {
     _connectionManager.start();
     _collectConnection();
     _collectMuxFrames();
-    _collectHostFrames();
   }
 
   final DshRpcClient _rpcClient;
@@ -151,12 +173,35 @@ class HarnessRepositoryImpl implements ChatRepository {
     _prevRunningBySession[sessionId] = running;
     _sessions.value = _sessions.value.map((item) {
       if (item.id != sessionId) return item;
+      // Web parity: a blank session never runs; the first running:true is the
+      // cross-client flip that clears the placeholder locally.
       return _copySession(
         item,
         running: running,
         blank: item.blank && !running,
       );
     }).toList();
+  }
+
+  /// The finished-but-unviewed fold (web SessionManager
+  /// `syncCompletedNotifications`), the one home of the running edge for both
+  /// observation sources: the `api-session/status` forwarded Remote Event
+  /// (`_applySessionStatusEvent`) and the `session/list` pull fold in
+  /// `_loadSessions`. The true→false edge while the session is not the one
+  /// being viewed arms the green dot; running again clears it. The first
+  /// observation of a session seeds prev-running without arming anything.
+  void _foldSessionRunning(String sessionId, bool running) {
+    final wasRunning = _prevRunningBySession[sessionId];
+    _updateSessionRunning(sessionId, running);
+    if (running) {
+      // Running again clears the completion reminder; a first sight of a
+      // running session arms nothing.
+      if (_isCompleted(sessionId)) {
+        _setSessionCompleted(sessionId, false);
+      }
+    } else if (wasRunning == true) {
+      _setSessionCompleted(sessionId, sessionId != _openSessionId);
+    }
   }
 
   /// Last observed running bit per session, driving the true→false edge
@@ -194,6 +239,20 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// holds what the answer must echo back to the host.
   final Map<String, _RemoteEventWait> _pendingRemoteEvents =
       <String, _RemoteEventWait>{};
+
+  /// Pending dynamic-Cordis activation requests forwarded as
+  /// `cordis/request-run` emit items, keyed by request id. The host blocks
+  /// the `cordis_run` tool until a client answers one
+  /// (`dynamicCordisRunner/resolveRequestRun`); an unanswered request stalls
+  /// the turn with no affordance, which is why this mirror exists.
+  final Map<String, CordisRunRequest> _cordisRequests =
+      <String, CordisRunRequest>{};
+  final StateStream<List<CordisRunRequest>> _cordisRequestStream =
+      StateStream<List<CordisRunRequest>>(const <CordisRunRequest>[]);
+
+  /// Tick on every `commands/change` forwarded event: the live slash-command
+  /// roster a surface cached is stale and must be re-pulled.
+  final StateStream<int> _commandRosterEpoch = StateStream<int>(0);
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
@@ -255,6 +314,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionCreate,
       DshRpcEndpoints.sessionCreate,
       payload,
+      _shortCallTimeout,
     ).valueOrThrow();
     final created = wireString(value, 'sessionId');
     if (created == null) {
@@ -270,6 +330,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.agentPresetsList,
       DshRpcEndpoints.agentPresetsList,
       <String, Object?>{},
+      _shortCallTimeout,
     ).valueOrThrow();
     final decoded = AgentPresetListValueWire.fromJson(value);
     return AgentPresetRoster(
@@ -285,6 +346,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.agentPresetsSelect,
       DshRpcEndpoints.agentPresetsSelect,
       {'agentId': sessionId, 'agentPreset': agentPreset},
+      _shortCallTimeout,
     ).valueOrThrow();
     final echoed =
         wireString(value, 'value') ??
@@ -303,6 +365,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.directoryPickerList,
       DshRpcEndpoints.directoryPickerList,
       payload,
+      _shortCallTimeout,
     ).valueOrThrow();
     return _toDomainDirectoryListing(DirectoryListingValueWire.fromJson(value));
   }
@@ -313,6 +376,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.directoryPickerCreate,
       DshRpcEndpoints.directoryPickerCreate,
       {'path': parentPath, 'name': name},
+      _shortCallTimeout,
     ).valueOrThrow();
     final path = wireString(value, 'path') ?? (value['value'] as String?);
     if (path == null) {
@@ -342,6 +406,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceFilesRead,
       DshRpcEndpoints.workspaceFilesRead,
       payload,
+      _shortCallTimeout,
     ).valueOrThrow();
     final wire = WorkspaceFileTextWire.fromJson(value);
     return WorkspaceFileContent(
@@ -365,6 +430,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceFilesStat,
       DshRpcEndpoints.workspaceFilesStat,
       payload,
+      _shortCallTimeout,
     ).valueOrThrow();
     final wire = WorkspaceFileStatWire.fromJson(value);
     return WorkspaceFileStat(
@@ -384,6 +450,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceFilesList,
       DshRpcEndpoints.workspaceFilesList,
       payload,
+      _shortCallTimeout,
     ).valueOrThrow();
     final wire = WorkspaceDirectoryListingWire.fromJson(value);
     return WorkspaceDirectoryListing(
@@ -407,6 +474,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.settingsDescribe,
       DshRpcEndpoints.settingsDescribe,
       <String, Object?>{},
+      _shortCallTimeout,
     ).valueOrThrow();
     final described = SettingsDescribeValueWire.fromJson(value);
     return SettingsSnapshot(
@@ -428,6 +496,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.credentialsDescribe,
       DshRpcEndpoints.credentialsDescribe,
       {'refs': refs.take(_credentialsMaxRefs).toList()},
+      _shortCallTimeout,
     ).valueOrThrow();
     return decodeCredentialsDescribeValue(value);
   }
@@ -441,6 +510,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.credentialsSet,
       DshRpcEndpoints.credentialsSet,
       {'ref': ref, 'value': value},
+      _shortCallTimeout,
     ).valueOrThrow();
   }
 
@@ -450,6 +520,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.credentialsUnset,
       DshRpcEndpoints.credentialsUnset,
       {'ref': ref},
+      _shortCallTimeout,
     ).valueOrThrow();
   }
 
@@ -468,6 +539,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'patch': {key: _parseJsonValue(jsonValue)},
         if (expectedRevision != null) 'expectedRevision': expectedRevision,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
   }
@@ -490,6 +562,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'section': decoded,
         if (expectedRevision != null) 'expectedRevision': expectedRevision,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
   }
@@ -517,8 +590,57 @@ class HarnessRepositoryImpl implements ChatRepository {
             .toList(),
         if (expectedRevision != null) 'expectedRevision': expectedRevision,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     return _toDomainSettingsNamespace(SettingsNamespaceWire.fromJson(value));
+  }
+
+  @override
+  Future<List<LlmProvider>> listLlmProviders() async {
+    final value = await _call(
+      DshRpcEndpoints.llmListProviders,
+      DshRpcEndpoints.llmListProviders,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeLlmProviderList(value);
+  }
+
+  @override
+  Future<List<LlmConfigurableProvider>> listConfigurableProviders() async {
+    final value = await _call(
+      DshRpcEndpoints.llmListConfigurableProviders,
+      DshRpcEndpoints.llmListConfigurableProviders,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeLlmConfigurableProviderList(value);
+  }
+
+  @override
+  Future<List<LlmDiscoveredModel>> discoverModels(
+    String settingsNs,
+    LlmModelDiscoveryRequest request,
+  ) async {
+    if (settingsNs.isEmpty) {
+      throw ArgumentError('discoverModels settingsNs must be non-empty');
+    }
+    // The draft carries no credential: a named route's stored key is
+    // resolved by the host, so a secret literal never rides this request.
+    final value = await _call(
+      DshRpcEndpoints.llmDiscoverModels,
+      DshRpcEndpoints.llmDiscoverModels,
+      <String, Object?>{
+        'settingsNs': settingsNs,
+        'request': <String, Object?>{
+          if (request.provider != null) 'provider': request.provider,
+          if (request.baseURL != null) 'baseURL': request.baseURL,
+          if (request.api != null) 'api': request.api,
+        },
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeLlmDiscoveredModelList(value);
   }
 
   @override
@@ -589,8 +711,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   /// True when the session summary marks a subagent child: `origin` is the
-  /// host's coarse durable navigation origin (`sessionListFields` in
-  /// apiproxy). `parentSessionId` alone never proves it — a forked session
+  /// host's coarse durable navigation origin (`list.ts` `listFields`).
+  /// `parentSessionId` alone never proves it — a forked session
   /// inherits its source's lineage (the `session/fork` contract) while
   /// staying an ordinary session the reader chats in.
   bool _isSubagent(String sessionId) {
@@ -654,6 +776,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'mode': request.mode == PromptMode.queue ? 'queue' : 'steer',
         'content': content,
       },
+      _noCallDeadline,
     ).valueOrThrow();
     if (wireBool(value, 'accepted') || !value.containsKey('accepted')) {
       // Web parity: a successful first prompt proves the user message is in
@@ -726,6 +849,7 @@ class HarnessRepositoryImpl implements ChatRepository {
             },
         ],
       },
+      _noCallDeadline,
     );
     if (!result.ok) {
       final failure = result.error;
@@ -754,10 +878,112 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<List<CommandDescriptor>> listCommands(String sessionId) async {
+    final value = await _call(
+      DshRpcEndpoints.commandsList,
+      DshRpcEndpoints.commandsList,
+      {'agentId': sessionId},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeCommandDescriptorList(value);
+  }
+
+  @override
+  Stream<void> observeCommandRosterChanges() =>
+      // The epoch stream seeds a new listener with its current value; the
+      // seed is not a change, so it is skipped.
+      _commandRosterEpoch.stream.skip(1).map((_) {});
+
+  @override
+  Stream<SandboxModeFact?> observeSandboxMode(String sessionId) =>
+      _sessionStateFor(sessionId).sandboxMode.stream;
+
+  @override
+  Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
+      _sessionStateFor(sessionId).schedules.stream;
+
+  @override
+  Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
+      _cordisRequestStream.stream;
+
+  @override
+  Future<void> resolveCordisRunRequest(
+    String requestId,
+    CordisRunResolution resolution,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.cordisResolveRequestRun,
+      DshRpcEndpoints.cordisResolveRequestRun,
+      <String, Object?>{
+        'requestId': requestId,
+        'resolution': _cordisResolutionToWire(resolution),
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    // `accepted: false` means a late, unknown, or stale answer — another page
+    // or a cancellation already settled the request. It is a benign race, so
+    // the acknowledgment is decoded (fail loud on a malformed one) and the
+    // local pending mirror drops the request either way.
+    CordisResolveAckWire.fromJson(value);
+    if (_cordisRequests.remove(requestId) != null) _publishCordisRequests();
+  }
+
+  /// Encodes one domain resolution as the host's `DynamicCordisRunResolution`
+  /// union (`packages/extensions/cordis-host-runner/src/types.ts`).
+  static JsonMap _cordisResolutionToWire(CordisRunResolution resolution) =>
+      switch (resolution) {
+        CordisRunApproved(:final pluginRunId, :final waitingFor) => {
+          'ok': true,
+          'pluginRunId': pluginRunId,
+          if (waitingFor.isNotEmpty) 'waitingFor': waitingFor,
+        },
+        CordisRunRejected() => <String, Object?>{
+          'ok': false,
+          'reason': 'rejected',
+        },
+        CordisRunFailed(
+          :final reason,
+          :final pluginRunId,
+          :final startedHere,
+          :final message,
+          :final stack,
+        ) =>
+          <String, Object?>{
+            'ok': false,
+            'reason': switch (reason) {
+              CordisRunFailureReason.rejected => 'rejected',
+              CordisRunFailureReason.hostHalfFailed => 'host-half-failed',
+              CordisRunFailureReason.clientHalfFailed => 'client-half-failed',
+            },
+            if (pluginRunId != null) 'pluginRunId': pluginRunId,
+            if (startedHere) 'startedHere': true,
+            if (message != null) 'message': message,
+            if (stack != null) 'stack': stack,
+          },
+      };
+
+  void _publishCordisRequests() {
+    _cordisRequestStream.value = List<CordisRunRequest>.unmodifiable(
+      _cordisRequests.values,
+    );
+  }
+
+  @override
+  Future<PluginInventorySnapshot> listPluginInventory() async {
+    final value = await _call(
+      DshRpcEndpoints.pluginInventoryList,
+      DshRpcEndpoints.pluginInventoryList,
+      <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginInventorySnapshot(value);
+  }
+
+  @override
   Future<void> cancelTurn(String sessionId) async {
     await _call(DshRpcEndpoints.sessionCancel, DshRpcEndpoints.sessionCancel, {
       'sessionId': sessionId,
-    }).valueOrThrow();
+    }, _shortCallTimeout).valueOrThrow();
   }
 
   @override
@@ -769,6 +995,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionAttachment,
       DshRpcEndpoints.sessionAttachment,
       {'sessionId': sessionId, 'attachmentId': attachmentId},
+      _shortCallTimeout,
     ).valueOrThrow();
     final downloaded = SessionAttachmentValueWire.fromJson(value);
     return AttachmentData(
@@ -793,6 +1020,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.skillsList,
       DshRpcEndpoints.skillsList,
       {'sessionId': sessionId},
+      _shortCallTimeout,
     ).valueOrThrow();
     return decodeSkillListValue(value)
         .map(
@@ -907,6 +1135,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionRename,
       DshRpcEndpoints.sessionRename,
       {'sessionId': sessionId, 'title': title},
+      _shortCallTimeout,
     ).valueOrThrow();
     final renamed = wireString(result, 'title');
     if (renamed == null) {
@@ -922,6 +1151,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionFork,
       DshRpcEndpoints.sessionFork,
       {'sessionId': sessionId, if (atSeq != null) 'atSeq': atSeq},
+      _shortCallTimeout,
     ).valueOrThrow();
     final forked = wireString(result, 'sessionId');
     if (forked == null) {
@@ -956,6 +1186,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           'itemId': request.itemId,
           'action': action,
         },
+        _noCallDeadline,
       ).valueOrThrow();
     } on DshBusinessException catch (error) {
       // Web parity (input hub): a turn closing mid-steer or a row already
@@ -975,6 +1206,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.subagentsList,
       DshRpcEndpoints.subagentsList,
       {'parentSessionId': parentSessionId},
+      _shortCallTimeout,
     ).valueOrThrow();
     final wire = SubagentListValueWire.fromJson(value);
     return SubagentCatalog(
@@ -1015,10 +1247,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     };
   }
 
-  /// The `subagent.history` request carries the addressed row's own mode:
-  /// the host matches it against the durable entry (`catalogChild`,
-  /// api-proxy.ts) and answers a mismatch with `subagent-not-found`. The
-  /// prompt and interrupt verbs are pinned to `'continuable'` by the wire
+  /// The `subagent.history` request carries the addressed row's own mode: the
+  /// host validates the address against the durable descriptor
+  /// (`packages/api/session-controller/src/history.ts` `validateAddress`) and
+  /// answers a mode or ownership mismatch with `subagent/unauthorized`; an
+  /// addressed child that is not in the catalog answers `subagent/not-found`.
+  /// The prompt and interrupt verbs are pinned to `'continuable'` by the wire
   /// schema (`subagentPromptRequestSchema`, `subagentInterruptRequestSchema`);
   /// the UI surfaces those controls only for continuable rows.
   static String _subagentModeToWire(SubagentMode mode) =>
@@ -1037,6 +1271,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'childSessionId': childSessionId,
         'mode': _subagentModeToWire(SubagentMode.continuable),
       },
+      _shortCallTimeout,
     ).valueOrThrow();
   }
 
@@ -1062,6 +1297,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           'maxMessages': _historyPageMessages,
         },
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
     if (history.events.isNotEmpty) {
@@ -1070,7 +1306,10 @@ class HarnessRepositoryImpl implements ChatRepository {
     } else {
       _sessionCursors[childSessionId] = -1;
     }
-    final reducer = TimelineReducer(childSessionId);
+    final reducer = TimelineReducer(
+      childSessionId,
+      onDiagnostic: _onDiagnostic,
+    );
     reducer.reset(history.events);
     return reducer.snapshot();
   }
@@ -1090,15 +1329,15 @@ class HarnessRepositoryImpl implements ChatRepository {
         <String, Object?>{'type': 'text', 'text': text},
       ],
     };
-    JsonMap value;
-    try {
-      value = await _invoker.invoke(
-        DshRpcEndpoints.subagentsPrompt,
-        promptPayload,
-      );
-    } catch (_) {
-      value = await _invoker.invoke('subagent.prompt', promptPayload);
-    }
+    // `subagents/prompt` is the only registered name on the pinned contract
+    // (`packages/subagent/subagent/src/index.ts` `@Remote('prompt')`), so a
+    // business refusal propagates verbatim: there is no legacy-name retry to
+    // mask it, and a 404 is a real host mismatch the caller must see.
+    final value = await _invoker.invoke(
+      DshRpcEndpoints.subagentsPrompt,
+      promptPayload,
+      timeout: _noCallDeadline,
+    );
     final messageId = wireString(value, 'messageId') ?? 'accepted';
     return messageId;
   }
@@ -1147,6 +1386,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           if (maxGoalRounds != null) 'maxGoalRounds': maxGoalRounds,
         },
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final ref = decodeGoalRefValue(value);
     return GoalRef(id: ref.id, revision: ref.revision);
@@ -1174,6 +1414,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.goalsClear,
       DshRpcEndpoints.goalsClear,
       _goalPayload(sessionId, ref),
+      _shortCallTimeout,
     ).valueOrThrow();
     _goalProjections[sessionId]?.value = null;
   }
@@ -1188,6 +1429,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       endpoint,
       endpoint,
       _goalPayload(sessionId, ref, objective),
+      _shortCallTimeout,
     ).valueOrThrow();
     final decoded = decodeGoalRefValue(value);
     return GoalRef(id: decoded.id, revision: decoded.revision);
@@ -1204,19 +1446,13 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> refreshWorkspaces() async {
-    final listing = await _loadWorkspaceListing();
-    if (listing != null) {
-      _applyWorkspaceListing(listing);
-    }
-  }
-
-  Future<WorkspaceListValueWire?> _loadWorkspaceListing() async {
-    final value = await _invoker.invokeOrNullOnNotFound(
-      DshRpcEndpoints.workspaceList,
-      <String, Object?>{},
-    );
-    if (value == null) return null;
-    return WorkspaceListValueWire.fromJson(value);
+    // The pinned 0.1.5 workspace namespace registers no unary list
+    // (`reference/deepseek-harness/packages/api/workspace-controller/src/
+    // index.ts`: create, rename, delete, insertBefore,
+    // insertSessionBefore, archiveSession, and the `workspace/follow`
+    // stream). The roster is pushed by that stream, whose baseline is
+    // re-delivered for every connection generation, so there is no pull to
+    // perform; a generation that lost the socket rebuilds through `_resync`.
   }
 
   void _applyWorkspaceListing(WorkspaceListValueWire listing) {
@@ -1230,6 +1466,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceCreate,
       DshRpcEndpoints.workspaceCreate,
       {'path': path},
+      _shortCallTimeout,
     ).valueOrThrow();
     final created = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     final current = _workspaces.value;
@@ -1240,10 +1477,6 @@ class HarnessRepositoryImpl implements ChatRepository {
       _workspaces.value = List.of(current)..add(created);
     } else {
       _workspaces.value = List.of(current)..[index] = created;
-    }
-    final listing = await _loadWorkspaceListing();
-    if (listing != null) {
-      _applyWorkspaceListing(listing);
     }
     return created;
   }
@@ -1257,6 +1490,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceRename,
       DshRpcEndpoints.workspaceRename,
       {'workspaceId': workspaceId, 'title': title},
+      _shortCallTimeout,
     ).valueOrThrow();
     final renamed = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
     final current = _workspaces.value;
@@ -1265,10 +1499,6 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
     if (index >= 0) {
       _workspaces.value = List.of(current)..[index] = renamed;
-    }
-    final listing = await _loadWorkspaceListing();
-    if (listing != null) {
-      _applyWorkspaceListing(listing);
     }
     return renamed;
   }
@@ -1279,6 +1509,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceArchiveSession,
       DshRpcEndpoints.workspaceArchiveSession,
       {'sessionId': sessionId},
+      _shortCallTimeout,
     ).valueOrThrow();
     _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
   }
@@ -1289,14 +1520,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.workspaceDelete,
       DshRpcEndpoints.workspaceDelete,
       {'workspaceId': workspaceId},
+      _shortCallTimeout,
     ).valueOrThrow();
     _workspaces.value = _workspaces.value
         .where((item) => item.workspaceId != workspaceId)
         .toList();
-    final listing = await _loadWorkspaceListing();
-    if (listing != null) {
-      _applyWorkspaceListing(listing);
-    }
   }
 
   @override
@@ -1311,6 +1539,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'workspaceId': workspaceId,
         if (beforeWorkspaceId != null) 'beforeWorkspaceId': beforeWorkspaceId,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final orderedIds = _stringList(value['workspaceIds']);
     _applyWorkspaceOrder(orderedIds);
@@ -1331,6 +1560,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         'sessionId': sessionId,
         if (beforeSessionId != null) 'beforeSessionId': beforeSessionId,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final updated = _toDomainWorkspace(_workspaceFromJson(value, 'workspace'));
     _workspaces.value = _workspaces.value
@@ -1345,6 +1575,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionModelCatalog,
       DshRpcEndpoints.sessionModelCatalog,
       <String, Object?>{},
+      _shortCallTimeout,
     ).valueOrThrow();
     return _toDomainSessionModels(SessionModelsValueWire.fromJson(result));
   }
@@ -1364,6 +1595,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         if (selection.reasoningEffort != null)
           'reasoningEffort': selection.reasoningEffort,
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final selectedObj = asJsonObject(result['selected']);
     if (selectedObj == null) {
@@ -1383,6 +1615,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionSearch,
       DshRpcEndpoints.sessionSearch,
       {'query': query},
+      _shortCallTimeout,
     ).valueOrThrow();
     return (asJsonArray(result['items']) ?? const <Object?>[])
         .map(asJsonObject)
@@ -1975,107 +2208,6 @@ class HarnessRepositoryImpl implements ChatRepository {
     });
   }
 
-  void _collectHostFrames() {
-    _subs.add(
-      _connectionManager.hostFrames.listen(
-        (frame) {
-          final type = wireString(frame.payload, 'type');
-          if (type == null) return;
-          final sessionId = wireString(frame.payload, 'sessionId');
-          switch (type) {
-            case 'host/session-status':
-              if (sessionId == null) return;
-              final running =
-                  frame.payload['running'] == 'true' ||
-                  frame.payload['running'] == true;
-              // Finished-but-unviewed fold (web SessionManager
-              // `syncCompletedNotifications`): the true→false edge while the
-              // session is not the one being viewed arms the green dot;
-              // running again clears it. The first observation of a session
-              // seeds prev-running without arming anything.
-              final wasRunning = _prevRunningBySession[sessionId];
-              _prevRunningBySession[sessionId] = running;
-              if (running) {
-                // Running again clears the completion reminder; a first
-                // sight of a running session arms nothing.
-                if (_isCompleted(sessionId)) {
-                  _setSessionCompleted(sessionId, false);
-                }
-              } else if (wasRunning == true) {
-                _setSessionCompleted(sessionId, sessionId != _openSessionId);
-              }
-              _sessions.value = _sessions.value.map((item) {
-                if (item.id != sessionId) return item;
-                // Web parity: a blank session never runs; the first running:true
-                // is the cross-client flip that clears the placeholder locally.
-                return _copySession(
-                  item,
-                  running: running,
-                  blank: item.blank && !running,
-                );
-              }).toList();
-            case 'host/session-added':
-            case 'host/session-removed':
-              unawaited(
-                refreshSessions().catchError((Object e, StackTrace st) {
-                  _onDiagnostic?.call(
-                    AdapterDiagnostic(
-                      message: 'refreshSessions failed for $type: $e',
-                      level: AdapterDiagnosticLevel.warning,
-                      error: e,
-                      stackTrace: st,
-                      context: 'session.refresh',
-                    ),
-                  );
-                }),
-              );
-            case 'host/workspace-changed':
-              _applyWorkspaceChanged(frame);
-            case 'host/workspace-removed':
-              _applyWorkspaceRemoved(frame);
-            case 'host/workspace-order-changed':
-              _applyWorkspaceOrderFrame(frame);
-            case 'host/archived-sessions-changed':
-              final archived = _stringSet(frame.payload['archivedSessionIds']);
-              _archivedSessionIds.value = archived;
-            case 'host/remote-event':
-              _applyRemoteEvent(frame);
-          }
-        },
-        onError: (Object error, StackTrace stack) => _onDiagnostic?.call(
-          AdapterDiagnostic(
-            message: 'host stream error: $error',
-            level: AdapterDiagnosticLevel.error,
-            error: error,
-            stackTrace: stack,
-            context: 'host.stream',
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// One allowlisted host cordis event forwarded verbatim
-  /// (`host/remote-event`, events.ts: `event` + `args`). Only events this
-  /// client folds are read; the rest are ignored silently — the forwarded
-  /// set is open and owned by the host's allowlist.
-  void _applyRemoteEvent(ServerRequest frame) {
-    final event = wireString(frame.payload, 'event');
-    if (event != 'agent-preset/selected') return;
-    final args = asJsonArray(frame.payload['args']) ?? const <Object?>[];
-    if (args.length < 2) return;
-    final sessionId = args[0];
-    final agentPreset = args[1];
-    if (sessionId is! String || agentPreset is! String) return;
-    _sessions.value = _sessions.value
-        .map(
-          (item) => item.id == sessionId
-              ? _copySession(item, agentPreset: agentPreset)
-              : item,
-        )
-        .toList();
-  }
-
   void _handleWorkspaceFollowFrame(ServerRequest frame) {
     final type = wireString(frame.payload, 'type');
     switch (type) {
@@ -2231,7 +2363,6 @@ class HarnessRepositoryImpl implements ChatRepository {
         () async {
           try {
             await refreshSessions();
-            await refreshWorkspaces();
           } catch (e, st) {
             _onDiagnostic?.call(
               AdapterDiagnostic(
@@ -2271,8 +2402,13 @@ class HarnessRepositoryImpl implements ChatRepository {
   // Wire helpers
   // -----------------------------------------------------------------------
 
-  Future<RpcResult> _call(String endpoint, String method, JsonMap payload) {
-    return _invoker.call(endpoint, payload);
+  Future<RpcResult> _call(
+    String endpoint,
+    String method,
+    JsonMap payload,
+    Duration? timeout,
+  ) {
+    return _invoker.call(endpoint, payload, timeout: timeout);
   }
 
   Future<List<SessionSummary>> _loadSessions() async {
@@ -2280,6 +2416,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       DshRpcEndpoints.sessionList,
       DshRpcEndpoints.sessionList,
       <String, Object?>{},
+      _shortCallTimeout,
     ).valueOrThrow();
     final listing = decodeSessionListValue(value);
     _inferWorkspacesFromSessionsIfEmpty(listing);
@@ -2319,11 +2456,11 @@ class HarnessRepositoryImpl implements ChatRepository {
       _pendingInteractions.value = _projectPending();
     }
     // Web SessionManager `syncCompletedNotifications` parity: the
-    // running→idle edge folds on every observation source, not only on
-    // `host/session-status` frames. A pull arriving after the turn
+    // running→idle edge folds on every observation source, not only the
+    // `api-session/status` forwarded event. A pull arriving after the turn
     // finished (WS gap, app process death) arms the reminder, and a
     // session running at the first observation records its baseline so
-    // its later completion frame arms. The first observation seeds only.
+    // its later completion event arms. The first observation seeds only.
     final armedByPull = <String>{};
     for (final session in listing) {
       final wasRunning = _prevRunningBySession[session.sessionId];
@@ -2427,6 +2564,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           'maxMessages': _historyPageMessages,
         },
       },
+      _shortCallTimeout,
     ).valueOrThrow();
     final history = SessionHistoryValueWire.fromJson(value);
     if (beforeSeq == null) {
@@ -2567,6 +2705,8 @@ class HarnessRepositoryImpl implements ChatRepository {
         revision: wire.revision,
         hasUserLayer: wire.hasUserLayer,
         secretCount: wire.secretCount,
+        value: wire.value,
+        user: wire.user,
       );
 
   WorkspaceWire _workspaceFromJson(JsonMap value, String key) =>
@@ -2677,7 +2817,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   _SessionState _sessionStateFor(String sessionId) {
     final existing = _sessionStates[sessionId];
     if (existing != null) return existing;
-    final state = _SessionState(sessionId);
+    final state = _SessionState(sessionId, onDiagnostic: _onDiagnostic);
     _sessionStates[sessionId] = state;
     // Replay frames buffered before instantiation (web `pendingBuffers`
     // replay on `get()`). While the state is not yet loaded, `handleFrame`
@@ -2781,6 +2921,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     switch (wireString(frame.payload, 'type')) {
       case 'ready':
         _remoteEventClientId = wireString(frame.payload, 'clientId');
+        // Only pending waterfall requests are re-delivered to a new stream
+        // generation (`packages/api/gateway/src/index.ts` `pendingRemoteEvents`
+        // replay); forwarded `emit` items are not. A Cordis activation request
+        // is an emit, so a generation boundary drops the local mirror rather
+        // than leaving an unanswerable card up.
+        if (_cordisRequests.isNotEmpty) {
+          _cordisRequests.clear();
+          _publishCordisRequests();
+        }
       case 'emit':
         _applyForwardedEvent(
           wireString(frame.payload, 'event'),
@@ -2911,25 +3060,160 @@ class HarnessRepositoryImpl implements ChatRepository {
       'clientId': clientId,
       'eventId': eventId,
       'outcome': outcome,
-    });
+    }, timeout: _shortCallTimeout);
   }
 
-  /// Folds one ordinary forwarded host event. Only events this client renders
-  /// are read; the rest are ignored — the forwarded set is an open host
-  /// allowlist (`API_REMOTE_FORWARDED_EVENTS`).
+  /// Folds one ordinary forwarded host event (`{type: 'emit', event, args}`
+  /// on the `$events` Remote Event stream). Every name in the host's
+  /// allowlist (`API_REMOTE_FORWARDED_EVENTS` in the reference
+  /// `packages/api/remotes/src/remote-events.ts`) is enumerated, so a
+  /// newly-forwarded name is a deliberate gap rather than a silent drop;
+  /// names this client renders are folded, the rest are acknowledged at
+  /// debug level.
   void _applyForwardedEvent(String? event, List<Object?> args) {
-    if (event != 'agent-preset/selected') return;
+    switch (event) {
+      case 'agent-preset/selected':
+        if (args.length < 2) return;
+        final sessionId = args[0];
+        final agentPreset = args[1];
+        if (sessionId is! String || agentPreset is! String) return;
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, agentPreset: agentPreset)
+                  : item,
+            )
+            .toList();
+      case 'api-session/status':
+        _applySessionStatusEvent(args);
+      case 'api-session/added':
+        _applySessionAddedEvent(args);
+      case 'commands/change':
+        // The registry's membership moved (a plugin registered or
+        // unregistered a command): any cached roster is stale.
+        _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
+      case 'cordis/request-run':
+        _applyCordisRunRequest(args);
+      case 'cordis/request-run-resolved':
+        _applyCordisRequestResolved(args);
+      case 'approval/request':
+      case 'api-session/activity':
+      case 'api-session/error':
+      case 'api-session/removed':
+      case 'credentials/reference-updated':
+      case 'goal/activation-changed':
+      case 'cordis/dynamic-package':
+      case 'cordis/dynamic-retract':
+      case 'cordis/inspect-query':
+      case 'cordis/inspect-query-resolved':
+      case 'llm/adapters-updated':
+      case 'settings/document-updated':
+      case 'user-questions/request':
+        // Forwarded and currently without a fold here. `approval/request`
+        // and `user-questions/request` are waterfalls, handled before this
+        // point; the rest are informational notifications this client does
+        // not render yet.
+        break;
+      default:
+        _onDiagnostic?.call(
+          AdapterDiagnostic(
+            message:
+                'Unrecognised forwarded host event "$event" — no fold; wire '
+                'coverage gap',
+            level: AdapterDiagnosticLevel.debug,
+            context: 'remote.event',
+            metadata: <String, Object?>{'event': event},
+          ),
+        );
+    }
+  }
+
+  /// One `cordis/request-run` forwarded emit: the single positional arg is
+  /// the `DynamicCordisRunRequest` a blocked `cordis_run` tool is waiting on
+  /// (`packages/extensions/cordis-host-runner/src/types.ts`). A malformed
+  /// payload is reported and dropped — the request would be unanswerable
+  /// without its id anyway.
+  void _applyCordisRunRequest(List<Object?> args) {
+    if (args.isEmpty) return;
+    final payload = asJsonObject(args.first);
+    if (payload == null) return;
+    final request = _tryDecode(
+      () => decodeCordisRunRequest(payload),
+      'remote.event:cordis/request-run',
+    );
+    if (request == null) return;
+    _cordisRequests[request.requestId] = request;
+    _publishCordisRequests();
+  }
+
+  /// One `cordis/request-run-resolved` forwarded emit: the single positional
+  /// arg is a `DynamicCordisRequestResolved` (`{requestId, outcome}`).
+  /// Another page answered, the request was cancelled, or it settled
+  /// host-side, so the local affordance drops.
+  void _applyCordisRequestResolved(List<Object?> args) {
+    if (args.isEmpty) return;
+    final payload = asJsonObject(args.first);
+    if (payload == null) return;
+    final resolved = _tryDecode(
+      () => decodeCordisRequestResolved(payload),
+      'remote.event:cordis/request-run-resolved',
+    );
+    if (resolved == null) return;
+    if (_cordisRequests.remove(resolved.requestId) != null) {
+      _publishCordisRequests();
+    }
+  }
+
+  /// One `api-session/status` forwarded event. The host event's positional
+  /// args are `[sessionId, running]` (reference
+  /// `packages/api/session-controller/src/types.ts`:
+  /// `'api-session/status'(sessionId: SessionId, running: boolean)`,
+  /// allowlisted in `packages/api/remotes/src/remote-events.ts`); a malformed
+  /// arg list is ignored like every other non-rendered forwarded event.
+  void _applySessionStatusEvent(List<Object?> args) {
     if (args.length < 2) return;
     final sessionId = args[0];
-    final agentPreset = args[1];
-    if (sessionId is! String || agentPreset is! String) return;
-    _sessions.value = _sessions.value
-        .map(
-          (item) => item.id == sessionId
-              ? _copySession(item, agentPreset: agentPreset)
-              : item,
-        )
-        .toList();
+    final running = args[1];
+    if (sessionId is! String || running is! bool) return;
+    _foldSessionRunning(sessionId, running);
+  }
+
+  /// One `api-session/added` forwarded event. The host event's single
+  /// positional arg is the new Session's summary (reference
+  /// `packages/api/session-controller/src/types.ts`:
+  /// `'api-session/added'(summary: SessionSummary)`, allowlisted in
+  /// `packages/api/remotes/src/remote-events.ts`). That summary is the same
+  /// `SessionSummary` `session.list` carries, so it upserts the roster row in
+  /// place through [SessionWire] — no `session.list` round-trip. This
+  /// forwarded event is the contract's only session-added signal.
+  void _applySessionAddedEvent(List<Object?> args) {
+    if (args.isEmpty) return;
+    final summary = asJsonObject(args.first);
+    if (summary == null) return;
+    final wire = _tryDecode(
+      () => SessionWire.fromJson(summary),
+      'remote.event:api-session/added',
+    );
+    if (wire == null) return;
+    final incoming = _toDomainSession(wire);
+    if (wire.asOfSeq >= 0) _sessionCursors[wire.sessionId] = wire.asOfSeq;
+    final values = wire.projectionValues;
+    if (values != null) {
+      _applySessionProjectionValues(wire.sessionId, values, wire.asOfSeq);
+    }
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == incoming.id);
+    if (index < 0) {
+      _sessions.value = List<SessionSummary>.of(current)..add(incoming);
+      return;
+    }
+    // The wire summary carries no completion fact: preserve the folded
+    // finished-but-unviewed bit unless the session is running again.
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(
+        incoming,
+        completed: current[index].completed && !incoming.running,
+      );
   }
 
   StateStream<GoalProjection?> _goalProjectionStateFor(String sessionId) =>
@@ -3062,9 +3346,13 @@ extension on Future<RpcResult> {
 // ---------------------------------------------------------------------------
 
 final class _SessionState {
-  _SessionState(this.sessionId);
+  _SessionState(this.sessionId, {this.onDiagnostic});
 
   final String sessionId;
+
+  /// Forwarded to the timeline fold so an unrecognised wire event type is
+  /// reported; the repository is the only holder of the diagnostic sink.
+  final AdapterDiagnosticListener? onDiagnostic;
   final StateStream<List<TimelineItem>> timeline =
       StateStream<List<TimelineItem>>(<TimelineItem>[]);
   final StateStream<TimelineWindow> window = StateStream<TimelineWindow>(
@@ -3072,9 +3360,23 @@ final class _SessionState {
   );
   final StateStream<SessionWindowStats> sessionStats =
       StateStream<SessionWindowStats>(const SessionWindowStats());
+
+  /// Session-level facts folded beside the timeline: the effective
+  /// `sandbox/mode` override and the active `schedule/change` reminders.
+  /// Both publish only when the reducer's facts revision moved, so a
+  /// streaming chunk never re-emits an unchanged fact.
+  final StateStream<SandboxModeFact?> sandboxMode =
+      StateStream<SandboxModeFact?>(null);
+  final StateStream<List<ScheduleReminder>> schedules =
+      StateStream<List<ScheduleReminder>>(const <ScheduleReminder>[]);
+  int _factsRevision = 0;
+
   final SessionStatsFold _statsFold = SessionStatsFold();
   final Mutex _mutex = Mutex();
-  late final TimelineReducer _reducer = TimelineReducer(sessionId);
+  late final TimelineReducer _reducer = TimelineReducer(
+    sessionId,
+    onDiagnostic: onDiagnostic,
+  );
   bool _ready = false;
   bool _loading = false;
   bool _hasMoreOlder = false;
@@ -3307,6 +3609,11 @@ final class _SessionState {
       isLoadingOlder: _loadingOlder,
       isLoading: _loading,
     );
+    if (_factsRevision != _reducer.factsRevision) {
+      _factsRevision = _reducer.factsRevision;
+      sandboxMode.value = _reducer.sandboxMode;
+      schedules.value = List<ScheduleReminder>.unmodifiable(_reducer.schedules);
+    }
   }
 
   /// Cancel a still-pending coalesced publish (repository dispose).

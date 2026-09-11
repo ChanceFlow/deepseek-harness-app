@@ -26,17 +26,15 @@ void main() {
 
     final rpc = HttpDshRpcClient(base);
     final socket = WebSocketDshEventSocket(base);
-    final manager = DshConnectionManager(
-      rpc,
-      socket,
-      exponentialDshBackoffDelay,
-    );
+    final manager = DshConnectionManager(socket, exponentialDshBackoffDelay);
     try {
       manager.start();
       final connected = await manager.state.stream
           .firstWhere((state) => state.phase == ConnectionPhase.connected)
           .timeout(const Duration(seconds: 15));
-      expect(connected.hostDescription?.version.trim().isNotEmpty, isTrue);
+      // The `$events` ready frame's host facts are the handshake's payload;
+      // no pinned route publishes a host version.
+      expect(connected.hostDescription?.home.trim().isNotEmpty, isTrue);
 
       final repository = HarnessRepositoryImpl(rpc, manager);
       await repository.refreshSessions();

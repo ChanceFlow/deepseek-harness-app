@@ -32,23 +32,11 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(ok: true, value: <String, Object?>{'items': sessions});
-    }
-    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
-      return RpcResult(
-        ok: true,
-        value: <String, Object?>{
-          'version': 'test',
-          'cwd': '/tmp',
-          'provider': 'deepseek',
-          'model': 'test-model',
-          'attachedSessions': 0,
-          'canOpenPath': true,
-        },
-      );
     }
     return RpcResult(ok: true, value: <String, Object?>{});
   }
@@ -57,6 +45,20 @@ class _FakeRpc implements DshRpcClient {
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
 
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake.
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/tester'},
+  },
+);
+
 class _QuietSocket implements DshEventSocket {
   final StreamController<ServerRequest> _frames =
       StreamController<ServerRequest>.broadcast();
@@ -64,6 +66,9 @@ class _QuietSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => _frames.add(_readyFrame()));
     return _frames.stream;
   }
 }
@@ -408,13 +413,17 @@ void main() {
       ),
     );
     // Let the registry load and both backends' controllers pull their
-    // rosters (each real dart:io turn needs a runAsync round + pump).
+    // rosters (each real dart:io turn needs a runAsync round + pump). The
+    // rows group under each session's inferred workspace (the pinned host
+    // registers no unary workspace list to replace the cwd-derived groups).
     // Condition-bounded, not a fixed round count: under load the rosters
-    // (and with them each backend's Ungrouped header) can need more
+    // (and with them each backend's workspace header) can need more
     // rounds than a bet assumed.
     for (
       var i = 0;
-      i < 30 && find.text('Ungrouped').evaluate().length < 2;
+      i < 30 &&
+          (find.text('laptop').evaluate().isEmpty ||
+              find.text('box').evaluate().isEmpty);
       i++
     ) {
       await tester.runAsync(() async {
@@ -428,8 +437,8 @@ void main() {
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Build box'), findsOneWidget);
 
-    // Expand the standby backend's Ungrouped group and tap its session.
-    await tester.tap(find.text('Ungrouped').at(1));
+    // Expand the standby backend's workspace group and tap its session.
+    await tester.tap(find.text('box'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Beta on buildbox'));
     await tester.pumpAndSettle();

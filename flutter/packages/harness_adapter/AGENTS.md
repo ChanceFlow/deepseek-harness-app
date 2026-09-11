@@ -7,9 +7,10 @@ understands the dsh wire protocol; everything here protects that seam.
 - **Wire shapes come from the reference submodule, never memory.** Before
   encoding/decoding anything, read the owning source under
   `reference/deepseek-harness/` — the map is in
-  [reference/README.md](../../../reference/README.md): RPC schemas under
-  `packages/host/apiproxy/src/api/`, connection lifecycle in
-  `packages/client/connection/src/client/connection.ts`.
+  [reference/README.md](../../../reference/README.md): Remote method
+  registration and request/result types under `packages/api/*/src/` (the
+  subagent surface lives in `packages/subagent/subagent/src/`), connection
+  lifecycle in `packages/client/connection/src/client/connection.ts`.
 - **Decoders are hand-written and fail loud.** Required fields throw with the
   field name on absence or type mismatch; optional fields are the only ones
   with defaults ([wire_json.dart](lib/src/wire_json.dart)). No codegen, no

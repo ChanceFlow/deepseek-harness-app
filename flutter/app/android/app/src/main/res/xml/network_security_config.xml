@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is permitted only for the loopback routes the app's own
+  default backend uses: the device's own loopback (127.0.0.1, localhost) and
+  the Android emulator's route to the host loopback (10.0.2.2). Every other
+  domain must be HTTPS — a gateway reached over plain http on a LAN needs
+  either TLS at the gateway or a deliberate change to this file.
+
+  A self-signed / internal-CA gateway certificate is a separate problem this
+  file cannot solve (Android cannot import a user CA at runtime); the app's
+  per-host "trust this host's certificate" setting is the opt-in path.
+
+  debug/ and profile/ manifests still set android:usesCleartextTraffic="true"
+  for LAN development builds.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

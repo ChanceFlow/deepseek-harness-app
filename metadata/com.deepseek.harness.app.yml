@@ -29,20 +29,35 @@ RepoType: git
 Repo: https://github.com/ChanceFlow/deepseek-harness-app.git
 
 Builds:
-  - versionName: 0.1.0
-    versionCode: 5
-    commit: v0.1.0
+  - versionName: '0.1.2'
+    versionCode: 102
+    # The full commit hash of the v0.1.2 tag: fdroiddata's reference says not
+    # to use a tag or branch name here. Resolve the current one with
+    # `git rev-parse v<version>^{commit}`.
+    commit: 0d53b2c7396653cc7fe4c022d05bc43a4cc2ff74
     subdir: flutter/app
     submodules: yes
     output: flutter/app/build/app/outputs/flutter-apk/app-release.apk
-    flutter: 3.47.1
+    srclibs:
+      - flutter@3.47.1
+    # Every Android build must pass cronetHttpNoPlay=true (embedded Cronet;
+    # the play-services-cronet chain fails AGP 9's namespace check) and
+    # DSH_TELEMETRY_ENABLED — false for this stable, telemetry-free channel.
+    # --build-name/--build-number pin the built APK to this entry's
+    # versionName/versionCode, which matters for tags cut before
+    # flutter/app/pubspec.yaml gained its version: field.
     build:
       - cd ..
-      - flutter pub get
+      - $$flutter$$/bin/flutter pub get
       - cd app
-      - flutter build apk --release --no-tree-shake-icons
+      - $$flutter$$/bin/flutter build apk --release --no-tree-shake-icons --dart-define=cronetHttpNoPlay=true --dart-define=DSH_TELEMETRY_ENABLED=false --dart-define=DSH_SOURCE_COMMIT=$$COMMIT$$ --dart-define=DSH_BUILD_NUMBER=$$VERCODE$$ --build-name=$$VERSION$$ --build-number=$$VERCODE$$
 
-AutoUpdateMode: Version v%v
-UpdateCheckMode: Tags
-CurrentVersion: 0.1.0
-CurrentVersionCode: 5
+# UpdateCheckData is the documented Flutter form: versionName and versionCode
+# come from flutter/app/pubspec.yaml (version: X.Y.Z+N). AutoUpdateMode without
+# a pattern is the Tags-mode form — the checked tag supplies commit:. The
+# rolling `dev` prerelease tag is deliberately not a version tag.
+AutoUpdateMode: Version
+UpdateCheckMode: Tags v\d+\.\d+\.\d+
+UpdateCheckData: flutter/app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: '0.1.2'
+CurrentVersionCode: 102

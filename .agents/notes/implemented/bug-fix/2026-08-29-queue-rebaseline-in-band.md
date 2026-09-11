@@ -10,8 +10,9 @@ live authoritative snapshot with no durable history: at mux open the host
 pushes every session's `session/subscribed` marker, then the still-pending
 approval/question replays, then one queue snapshot per non-empty queue — and
 resends none of them again in that generation
-([api-proxy.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api-proxy.ts)
-`events.mux`). `DshConnectionManager` forwards burst frames from socket open,
+([index.ts](../../../../reference/deepseek-harness/packages/api/gateway/src/index.ts)
+registers the Remote stream mux). `DshConnectionManager` forwards burst
+frames from socket open,
 before the readiness-gated `connected` publish it drives
 (dsh_connection_manager.dart:156-158, 188-198), so the burst can land while
 the previous window is still ready. The repository hung every queue-related
@@ -21,11 +22,10 @@ re-baseline on that publish: `_resync` prep cleared `_pendingBySession` and
 baselines the burst had just delivered. An instantiated session lost its
 swallowed queue with the replay list (the rebuilt history never carries it);
 an unopened session's fresh baseline was truncated as stale, so its dock
-opened empty. The web author documents exactly this trap: "The queue mirror
-is NOT cleared here: onConnected … races the mux frames — the fresh
-generation's baseline may have landed already, and the host never resends
-it"
-([session.ts:419-426](../../../../reference/deepseek-harness/packages/client/runtime/src/client/sessions/session.ts)).
+opened empty. The web author documents exactly this trap: the history rebuild
+"invalidates any in-flight open first; queue state belongs to the
+independently reconnecting control stream and remains untouched"
+([session.ts:455-459](../../../../reference/deepseek-harness/packages/api/session-controller/src/client/sessions/session.ts)).
 
 ## Decision
 
@@ -36,14 +36,14 @@ follows that frame on the same stream.
 - **Queue mirror leaves the history-reset scope.** `TimelineReducer.reset`
   carries the `TimelineQueue` entry over a history rebuild, and
   `ingestFrame('session/subscribed')` drops it (web queueMirror parity,
-  session.ts:482-490). The per-session `_SessionState` reducer is one
+  session.ts). The per-session `_SessionState` reducer is one
   persistent instance now, so a burst-outran baseline survives whichever
   path its frames took: live ingest or `_pending` replay.
 - **`_pendingBuffers` truncation moves in-band.** `_dropGenerationMirrors`,
   called by the mux listener on every `session/subscribed`, removes that
   session's buffered queue snapshot — the host omits the baseline for an
   emptied queue, so a kept stale would replay phantom work on later
-  instantiation (web manager.ts:714-732).
+  instantiation (web manager.ts).
 - **Pending dots move in-band the same way**: the same call drops the
   session's `_pendingBySession` keys; the generation's replayed requested
   frames re-track them right after.
@@ -65,10 +65,10 @@ follows that frame on the same stream.
   no queue pull surface; the mux-open snapshot is the only baseline carrier.
 - **Clear on connected and wait for the next queue-change broadcast**:
   rejected — that is the shipped bug's "resurrect on next change" experience.
-- **A global drop on the RECONNECTING publish (web `handleDisconnected`,
-  manager.ts:880-899)**: rejected — race-free here too, but it adds a second
-  lifecycle owner; riding the same frame as the replay keeps one ordering
-  point per session.
+- **A global drop on the RECONNECTING publish (web `connection/reset` →
+  manager `handleConnected`)**: rejected — race-free here too, but it adds
+  a second lifecycle owner; riding the same frame as the replay keeps one
+  ordering point per session.
 
 ## Consequences
 

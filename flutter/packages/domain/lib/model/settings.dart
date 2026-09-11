@@ -11,6 +11,9 @@ final class SettingsNamespace {
     required this.revision,
     required this.hasUserLayer,
     required this.secretCount,
+    this.value,
+    this.user,
+    this.base,
   });
 
   final String ns;
@@ -18,6 +21,18 @@ final class SettingsNamespace {
   final int revision;
   final bool hasUserLayer;
   final int secretCount;
+
+  /// Redacted resolved value (schema defaults, then composition base, then
+  /// the user layer). Schema-declared secret slots are removed by the host's
+  /// `redactSecrets` read, so this never carries a credential literal.
+  final Object? value;
+
+  /// Redacted raw user section; a field's presence here marks it
+  /// user-overridden.
+  final Object? user;
+
+  /// Redacted composition base layer, when the registrant declared one.
+  final Object? base;
 
   @override
   bool operator ==(Object other) =>
@@ -27,11 +42,55 @@ final class SettingsNamespace {
           other.applies == applies &&
           other.revision == revision &&
           other.hasUserLayer == hasUserLayer &&
-          other.secretCount == secretCount);
+          other.secretCount == secretCount &&
+          _jsonEquals(other.value, value) &&
+          _jsonEquals(other.user, user) &&
+          _jsonEquals(other.base, base));
 
   @override
-  int get hashCode =>
-      Object.hash(ns, applies, revision, hasUserLayer, secretCount);
+  int get hashCode => Object.hash(
+    ns,
+    applies,
+    revision,
+    hasUserLayer,
+    secretCount,
+    _jsonHash(value),
+    _jsonHash(user),
+    _jsonHash(base),
+  );
+}
+
+/// Structural equality for a decoded JSON value.
+bool _jsonEquals(Object? a, Object? b) {
+  if (identical(a, b)) return true;
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final Object? key in a.keys) {
+      if (!b.containsKey(key) || !_jsonEquals(a[key], b[key])) return false;
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_jsonEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
+}
+
+int _jsonHash(Object? value) {
+  if (value is Map) {
+    return Object.hashAll(
+      value.entries.map(
+        (MapEntry<Object?, Object?> e) =>
+            Object.hash(e.key, _jsonHash(e.value)),
+      ),
+    );
+  }
+  if (value is List) return Object.hashAll(value.map(_jsonHash));
+  return value.hashCode;
 }
 
 /// When a namespace edit takes effect, as the host reports it.

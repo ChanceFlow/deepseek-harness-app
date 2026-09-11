@@ -864,6 +864,48 @@ void main() {
   });
 
   testWidgets(
+    'a child to open lands on its record once the catalog carries its row',
+    (tester) async {
+      // The workflow card's member jump: the route is pointed at one child
+      // before the parent's catalog has answered, and the catalog row is the
+      // only place the mode `subagent.history` requires is published.
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repository = _HostCatalogRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            chatRepositoryProvider('b1').overrideWith((ref) => repository),
+          ],
+          child: l10nApp(
+            home: const SubagentRecordRoute(
+              backendId: 'b1',
+              initialSessionId: 'p1',
+              initialChildId: _workerId,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The record view replaces the catalog and addresses the child under
+      // the mode its own catalog row carries.
+      expect(
+        repository.historyCalls,
+        contains((
+          parentSessionId: 'p1',
+          childSessionId: _workerId,
+          mode: SubagentMode.continuable,
+        )),
+      );
+      expect(find.text('No subagents'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'route cold-open with a pre-selected parent shows the host rows',
     (tester) async {
       // The reported defect: the screen opened for a session that had
@@ -906,12 +948,46 @@ class _HostCatalogRepository implements ChatRepository {
         SessionSummary(id: 'p1', title: 'Parent one', blank: false),
       ]);
 
+  /// Every `subagent.history` address, in order.
+  final List<
+    ({String parentSessionId, String childSessionId, SubagentMode mode})
+  >
+  historyCalls =
+      <({String parentSessionId, String childSessionId, SubagentMode mode})>[];
+
   @override
   Stream<List<SessionSummary>> observeSessions() => _sessions.stream;
 
   @override
   Future<SubagentCatalog> loadSubagents(String parentSessionId) async =>
       _catalog;
+
+  @override
+  Future<List<TimelineItem>> loadSubagentHistory(
+    String parentSessionId,
+    String childSessionId,
+    SubagentMode mode,
+  ) async {
+    historyCalls.add((
+      parentSessionId: parentSessionId,
+      childSessionId: childSessionId,
+      mode: mode,
+    ));
+    return const <TimelineItem>[
+      TimelineMessage(
+        ChatMessage(
+          id: 'child-message',
+          sessionId: _workerId,
+          role: MessageRole.assistant,
+          text: 'worker record',
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Stream<PlanState?> observePlan(String sessionId) =>
+      const Stream<PlanState?>.empty();
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>

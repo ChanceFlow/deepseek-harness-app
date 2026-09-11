@@ -14,9 +14,11 @@ import 'config.dart';
 import 'di/providers.dart' show systemNotifierProvider;
 import 'logging/error_log_collector.dart';
 import 'logging/error_log_entry.dart' show ErrorLogLevel;
+import 'notifications/notification_localizations.dart';
 import 'notifications/system_notifier.dart';
 import 'ui/root/app_root.dart';
 import 'ui/settings/locale_preference.dart';
+import 'ui/settings/theme_preference.dart';
 import 'ui/theme/theme.dart';
 
 /// Debug-build telemetry bootstrap; null in release or when unavailable.
@@ -168,6 +170,9 @@ class DshApp extends ConsumerWidget {
     // The App-settings language choice; null while the store loads (or
     // when it is unavailable), which delegates to the device locale.
     final preference = ref.watch(appLocalePreferenceProvider).value;
+    // The host-backed appearance preference for the chat-active backend;
+    // system while it loads or when the host does not expose it.
+    final themeMode = ref.watch(appThemeModeProvider).value ?? ThemeMode.system;
     return MaterialApp(
       // Brand title; resolves through l10n so the OS task-switcher
       // label follows the active locale (DSH Mobile stays the
@@ -178,12 +183,13 @@ class DshApp extends ConsumerWidget {
       locale: resolveAppLocale(preference),
       theme: DshTheme.light(),
       darkTheme: DshTheme.dark(),
+      themeMode: themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('en'), Locale('zh')],
+      supportedLocales: kAppSupportedLocales,
       home: const AppRoot(),
     );
   }

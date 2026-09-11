@@ -1,19 +1,24 @@
 package com.deepseek.harness.app
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Environment
 import android.os.StatFs
+import android.provider.MediaStore
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
@@ -50,6 +55,35 @@ class MainActivity : FlutterActivity() {
                             } catch (e: Exception) {
                                 result.error("stat_failed", e.message, null)
                             }
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Session-log archive saving: MediaStore owns the shared Downloads
+        // collection on API 29+, and the app-specific Download directory is
+        // the no-permission fallback below it. The write runs off the
+        // platform thread because a session tree's archive is large.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/session_log_export")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "saveToDownloads" -> {
+                        val filename = call.argument<String>("filename")
+                        val bytes = call.argument<ByteArray>("bytes")
+                        if (filename == null || bytes == null) {
+                            result.error("bad_args", "filename and bytes are required", null)
+                        } else {
+                            Thread {
+                                try {
+                                    val location = saveArchiveToDownloads(filename, bytes)
+                                    runOnUiThread { result.success(location) }
+                                } catch (e: Exception) {
+                                    runOnUiThread {
+                                        result.error("save_failed", e.message, null)
+                                    }
+                                }
+                            }.start()
                         }
                     }
                     else -> result.notImplemented()
@@ -173,6 +207,50 @@ class MainActivity : FlutterActivity() {
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
         }
+    }
+
+    /**
+     * Writes one archive into a location the user can reach and returns it.
+     *
+     * API 29+ inserts into the shared Downloads collection through
+     * MediaStore — no storage permission exists for that path any more.
+     * Below 29 the same insert into the public collection would require
+     * WRITE_EXTERNAL_STORAGE, which this app does not request, so the
+     * archive lands in the app-specific external Download directory
+     * instead: no permission, but only reachable through a file manager
+     * that shows app data or over USB.
+     */
+    private fun saveArchiveToDownloads(filename: String, bytes: ByteArray): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IOException("MediaStore refused the download entry")
+            try {
+                val stream = resolver.openOutputStream(uri)
+                    ?: throw IOException("MediaStore returned no output stream")
+                stream.use { it.write(bytes) }
+            } catch (e: Exception) {
+                resolver.delete(uri, null, null)
+                throw e
+            }
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return "${Environment.DIRECTORY_DOWNLOADS}/$filename"
+        }
+        val directory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IOException("could not create ${directory.absolutePath}")
+        }
+        val target = File(directory, filename)
+        target.writeBytes(bytes)
+        return target.absolutePath
     }
 
     private fun startAudioCapture(sampleRate: Int) {
