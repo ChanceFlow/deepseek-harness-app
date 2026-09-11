@@ -221,6 +221,109 @@ void main() {
     },
   );
 
+  test(
+    'a forwarded api-session/removed drops a root session from the roster',
+    () async {
+      final rpc = _FakeRpc(
+        sessions: <Object?>[_sessionRow('session-a'), _sessionRow('session-b')],
+      );
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      expect(emissions.last.map((item) => item.id), <String>[
+        'session-a',
+        'session-b',
+      ]);
+
+      socket.emit('api-session/removed', <Object?>['session-a']);
+      await pumpEventQueue();
+
+      // Gone on the event, not on the next list pull.
+      expect(emissions.last.map((item) => item.id), <String>['session-b']);
+      expect(rpc.sessionListCalls, 1);
+
+      await socket.close();
+    },
+  );
+
+  test('a forwarded api-session/removed keeps a subagent child and clears its flag', () async {
+    final rpc = _FakeRpc(
+      sessions: <Object?>[
+        <String, Object?>{
+          'sessionId': 'session-child',
+          'updatedAt': 5,
+          'running': true,
+          'blank': false,
+          'origin': 'subagent',
+          'parentSessionId': 'session-parent',
+        },
+      ],
+    );
+    final socket = _MuxSocket();
+    final repository = HarnessRepositoryImpl(
+      rpc,
+      DshConnectionManager(socket, (_) => 10000),
+    );
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+
+    final emissions = <List<SessionSummary>>[];
+    final subscription = repository.observeSessions().listen(emissions.add);
+    addTearDown(subscription.cancel);
+    await pumpEventQueue();
+    expect(emissions.last.single.running, isTrue);
+
+    socket.emit('api-session/removed', <Object?>['session-child']);
+    await pumpEventQueue();
+
+    // The catalog still navigates a subagent child's history, so the record
+    // survives with its Agent no longer running (web `handleSessionRemoved`).
+    final kept = emissions.last.single;
+    expect(kept.id, 'session-child');
+    expect(kept.origin, 'subagent');
+    expect(kept.running, isFalse);
+    expect(rpc.sessionListCalls, 1);
+
+    await socket.close();
+  });
+
+  test(
+    'a forwarded api-session/activity advances the row activity time',
+    () async {
+      final rpc = _FakeRpc(sessions: <Object?>[_sessionRow('session-a')]);
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      expect(emissions.last.single.updatedAtEpochMs, 3);
+
+      socket.emit('api-session/activity', <Object?>['session-a', 1234]);
+      await pumpEventQueue();
+
+      expect(emissions.last.single.updatedAtEpochMs, 1234);
+      expect(rpc.sessionListCalls, 1);
+
+      await socket.close();
+    },
+  );
+
   test('the repository reports an unrecognised session event type', () async {
     final diagnostics = <AdapterDiagnostic>[];
     final rpc = _FakeRpc(sessions: <Object?>[_sessionRow('session-x')]);
