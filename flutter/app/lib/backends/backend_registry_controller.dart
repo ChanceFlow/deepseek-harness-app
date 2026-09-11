@@ -13,6 +13,7 @@ library;
 import 'dart:async';
 
 import 'package:domain/model/backend.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../logging/error_log_collector.dart';
 import '../logging/error_log_entry.dart' show ErrorLogLevel;
@@ -326,31 +327,41 @@ class BackendRegistryController {
   }
 
   void _persist() {
-    unawaited(
-      _store
-          .save(
-            BackendStoreData(
-              backends: _state.backends,
-              activeId: _state.activeId,
-            ),
-          )
-          .then((_) {
-            _state = _state.withError(null);
-            _publish();
-          })
-          .catchError((Object error) {
-            final encoded = error is BackendStoreException
-                ? _encodeError(error)
-                : BackendErrorCode.writeFailed.name;
-            _state = _state.withError(encoded);
-            _publish();
-            ErrorLogCollector.instance.addBreadcrumb(
-              'Backend store write failed: $error',
-              level: 'warning',
-            );
-          }),
-    );
+    // The future is kept so a test can observe a mutation's bytes on disk by
+    // awaiting the write instead of polling a wall-clock budget, which is what
+    // made this path flake under a loaded runner.
+    _pendingPersist = _store
+        .save(
+          BackendStoreData(
+            backends: _state.backends,
+            activeId: _state.activeId,
+          ),
+        )
+        .then((_) {
+          _state = _state.withError(null);
+          _publish();
+        })
+        .catchError((Object error) {
+          final encoded = error is BackendStoreException
+              ? _encodeError(error)
+              : BackendErrorCode.writeFailed.name;
+          _state = _state.withError(encoded);
+          _publish();
+          ErrorLogCollector.instance.addBreadcrumb(
+            'Backend store write failed: $error',
+            level: 'warning',
+          );
+        });
+    unawaited(_pendingPersist!);
   }
+
+  Future<void>? _pendingPersist;
+
+  /// The in-flight persist, or null before the first write. Settles once the
+  /// document is on disk (or the write failed), so a test can await it rather
+  /// than poll.
+  @visibleForTesting
+  Future<void>? get pendingPersist => _pendingPersist;
 
   Future<void> dispose() async {
     await _states.close();

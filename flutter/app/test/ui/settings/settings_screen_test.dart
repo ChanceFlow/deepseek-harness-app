@@ -184,8 +184,33 @@ BackendStore _backendStore({String? document}) {
   return BackendStore(file, seedBaseUrl: kDshBaseUrl);
 }
 
+/// Pumps real IO forward until [finder] matches, or fails after [timeout].
+///
+/// The registry load and every persist are real file IO, which a widget test's
+/// fake-async zone does not advance on its own. A fixed delay was the old
+/// budget here and it flaked under a loaded runner; waiting on the condition
+/// returns as soon as the tree is ready and only fails when it never is.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final DateTime deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('timed out after $timeout waiting for $finder');
+}
+
 Future<void> _letRegistryLoad(WidgetTester tester) async {
-  for (int i = 0; i < 6; i++) {
+  // A bounded real-IO pump for the async load. No single finder is present in
+  // every configuration, so the interaction helpers wait on their own target
+  // (`openHostSheet` on the host label) rather than this gating on one.
+  for (int i = 0; i < 40; i++) {
     await tester.runAsync(() async {
       await Future<void>.delayed(const Duration(milliseconds: 20));
     });
@@ -757,6 +782,7 @@ void main() {
   }
 
   Future<void> openHostSheet(WidgetTester tester, String barLabel) async {
+    await _pumpUntil(tester, find.text(barLabel).hitTestable());
     await tester.tap(find.text(barLabel).hitTestable().first);
     await tester.pumpAndSettle();
   }

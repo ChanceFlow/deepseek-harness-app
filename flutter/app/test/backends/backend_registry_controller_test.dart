@@ -53,18 +53,24 @@ void main() {
     throw StateError('registry stream closed before load');
   }
 
-  /// The registry persists unawaited (exists-check → create → write →
-  /// rename is several real IO turns); a round-trip read polls the
-  /// document until the mutation's bytes are on disk.
-  Future<void> letPersistLand(File file, String untilContains) async {
-    for (var i = 0; i < 200; i++) {
-      if (file.existsSync() &&
-          file.readAsStringSync().contains(untilContains)) {
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-    fail('persist never landed: ${file.path}');
+  /// Awaits the mutation's persist, then asserts the document on disk.
+  ///
+  /// The registry persists unawaited (exists-check → create → write → rename
+  /// is several real IO turns), so the controller keeps the in-flight write
+  /// for exactly this: awaiting it is deterministic, where polling a
+  /// wall-clock budget flaked on a loaded runner.
+  Future<void> letPersistLand(
+    BackendRegistryController controller,
+    File file,
+    String untilContains,
+  ) async {
+    final pending = controller.pendingPersist;
+    expect(pending, isNotNull, reason: 'the mutation scheduled no persist');
+    await pending;
+    expect(
+      file.existsSync() ? file.readAsStringSync() : '',
+      contains(untilContains),
+    );
   }
 
   test('loads the persisted document and latches a valid active id', () async {
@@ -126,7 +132,7 @@ void main() {
     await loadedState(controller);
 
     controller.onAction(const AddBackend('Build box', 'http://10.0.2.2:3081'));
-    await letPersistLand(fileFor('add'), 'Build box');
+    await letPersistLand(controller, fileFor('add'), 'Build box');
 
     final state = controller.state;
     expect(state.backends, hasLength(2));
@@ -179,7 +185,7 @@ void main() {
     controller.onAction(
       const UpdateBackendUrl('default', 'http://10.0.2.2:3082'),
     );
-    await letPersistLand(fileFor('rename'), 'Laptop host');
+    await letPersistLand(controller, fileFor('rename'), 'Laptop host');
 
     final entry = controller.state.backends.single;
     expect(entry.label, 'Laptop host');
@@ -256,7 +262,7 @@ void main() {
     );
     expect(controller.state.activeId, 'b1');
 
-    await letPersistLand(fileFor('select'), '"activeId":"b1"');
+    await letPersistLand(controller, fileFor('select'), '"activeId":"b1"');
     final reloaded = BackendRegistryController(store);
     addTearDown(reloaded.dispose);
     expect((await loadedState(reloaded)).activeId, 'b1');
@@ -365,7 +371,11 @@ void main() {
       await loadedState(controller);
 
       controller.onAction(const SetBackendEnabled('default', false));
-      await letPersistLand(fileFor('disable-persist'), '"enabled":false');
+      await letPersistLand(
+        controller,
+        fileFor('disable-persist'),
+        '"enabled":false',
+      );
 
       final reloaded = BackendRegistryController(store);
       addTearDown(reloaded.dispose);
@@ -486,7 +496,7 @@ void main() {
         const SetBackendTrustHostCertificate('default', false),
       );
       expect(controller.state.backends.first.trustHostCertificate, isFalse);
-      await letPersistLand(file, '"trustHostCertificate":false');
+      await letPersistLand(controller, file, '"trustHostCertificate":false');
     },
   );
 }
