@@ -1420,14 +1420,25 @@ class _ChatPanelState extends State<ChatPanel> {
 
   /// The failed-action strip: localized copy, the controller's existing
   /// retry action, and a dismiss that clears the message.
-  Widget _errorBanner(ChatErrorCopy copy, {VoidCallback? onRetry}) {
+  ///
+  /// [dismissible] is false for a failure the app does not own — the
+  /// Agent-level error the host reported is cleared by the session accepting
+  /// a new prompt, so offering a close button would hide a fact that is
+  /// still true on the host.
+  Widget _errorBanner(
+    ChatErrorCopy copy, {
+    VoidCallback? onRetry,
+    bool dismissible = true,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: ChatErrorBanner(
         message: copy.message,
         detail: copy.detail,
         onRetry: onRetry,
-        onDismiss: () => widget.onAction(const DismissError()),
+        onDismiss: dismissible
+            ? () => widget.onAction(const DismissError())
+            : null,
       ),
     );
   }
@@ -1652,7 +1663,16 @@ class _ChatPanelState extends State<ChatPanel> {
             else if (uiState.cordisAnswerFailed)
               _errorBanner((message: l10n.cordisAnswerFailed, detail: null))
             else if (uiState.commandFailed)
-              _errorBanner((message: l10n.commandFailed, detail: null)),
+              _errorBanner((message: l10n.commandFailed, detail: null))
+            else if (selectedSession?.agentError case final agentError?)
+              // The host reported a failure with no turn position: no
+              // timeline item carries it, so this strip is the only place the
+              // session can say why it stopped. Not dismissible — the next
+              // prompt clears it (web `ClientSession.prompt`).
+              _errorBanner((
+                message: l10n.sessionAgentFailed,
+                detail: agentError,
+              ), dismissible: false),
             for (final rejection in uiState.imageRejections)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),

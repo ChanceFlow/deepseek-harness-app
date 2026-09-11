@@ -23,6 +23,7 @@ final class SessionSummary {
     this.parentSessionId,
     this.pendingInteraction,
     this.completed = false,
+    this.agentError,
   });
 
   final String id;
@@ -57,6 +58,16 @@ final class SessionSummary {
   /// adapter).
   final bool completed;
 
+  /// The most recent Agent-level failure with no turn position (web
+  /// `SessionSnapshot.lastAgentError`): the host's `api-session/error`
+  /// carries a message when an Agent fails outside a turn — a background
+  /// activation that could not resolve, or a run that died between turns —
+  /// and such a failure lands in no timeline item, so this is the only
+  /// surface that can show it. Cleared when the session accepts a new
+  /// prompt (the attempt supersedes the failure) and never cleared by a
+  /// resync.
+  final String? agentError;
+
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.
   String get displayTitle {
@@ -86,7 +97,8 @@ final class SessionSummary {
           other.origin == origin &&
           other.parentSessionId == parentSessionId &&
           other.pendingInteraction == pendingInteraction &&
-          other.completed == completed);
+          other.completed == completed &&
+          other.agentError == agentError);
 
   @override
   int get hashCode => Object.hash(
@@ -101,6 +113,7 @@ final class SessionSummary {
     parentSessionId,
     pendingInteraction,
     completed,
+    agentError,
   );
 }
 
