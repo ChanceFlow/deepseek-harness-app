@@ -19,6 +19,7 @@ library;
 
 import 'dart:async';
 
+import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:harness_adapter/src/adapter_diagnostics.dart';
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
@@ -107,6 +108,12 @@ class _MuxSocket implements DshEventSocket {
   }
 
   Future<void> close() => _mux.close();
+
+  /// One raw mux `item` frame: projection and pending-request traffic, which
+  /// rides the session follow stream rather than the `$events` one.
+  void frame(JsonMap payload) {
+    _mux.add(ServerRequest(rpcId: 'mux', method: 'item', payload: payload));
+  }
 }
 
 JsonMap _sessionRow(String id) => <String, Object?>{
@@ -255,6 +262,63 @@ void main() {
     },
   );
 
+  test(
+    'a removed root session takes its projection store and pending keys',
+    () async {
+      final rpc = _FakeRpc(
+        sessions: <Object?>[_sessionRow('session-a'), _sessionRow('session-b')],
+      );
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      // Two manager-level mirrors the web manager deletes with a removed
+      // session: its projection store (`projectionStores.delete`) and the
+      // pending-interaction key behind the row's amber dot.
+      socket.frame(<String, Object?>{
+        'type': 'projection',
+        'sessionId': 'session-a',
+        'key': 'plan',
+        'value': <String, Object?>{'active': true, 'pending': false},
+        'seq': 9,
+      });
+      socket.frame(<String, Object?>{
+        'type': 'approval/requested',
+        'sessionId': 'session-a',
+        'approvalId': 'ap-1',
+      });
+      await pumpEventQueue();
+
+      SessionSummary rowA() =>
+          emissions.last.firstWhere((item) => item.id == 'session-a');
+      expect(rowA().pendingInteraction, SessionPendingInteraction.approval);
+      expect((await repository.observePlan('session-a').first)?.active, isTrue);
+
+      socket.emit('api-session/removed', <Object?>['session-a']);
+      await pumpEventQueue();
+      expect(emissions.last.map((item) => item.id), <String>['session-b']);
+
+      // The id comes back with a clean store: neither mirror survives the
+      // removal, so a re-added session cannot inherit a dead session's plan
+      // or its answerable-looking approval.
+      socket.emit('api-session/added', <Object?>[_sessionRow('session-a')]);
+      await pumpEventQueue();
+      expect(rowA().pendingInteraction, isNull);
+      expect(await repository.observePlan('session-a').first, isNull);
+
+      await socket.close();
+    },
+  );
+
   test('a forwarded api-session/removed keeps a subagent child and clears its flag', () async {
     final rpc = _FakeRpc(
       sessions: <Object?>[
@@ -295,6 +359,51 @@ void main() {
 
     await socket.close();
   });
+
+  test(
+    'a forwarded api-session/error lands on the row, and a prompt clears it',
+    () async {
+      final rpc = _FakeRpc(sessions: <Object?>[_sessionRow('session-a')]);
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, isNull);
+
+      // `'api-session/error'(sessionId, message)`: an Agent-level failure with
+      // no turn position, so no timeline item carries it.
+      socket.emit('api-session/error', <Object?>[
+        'session-a',
+        'agent exploded',
+      ]);
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, 'agent exploded');
+
+      // A list pull rebuilds the row from a wire summary that carries no
+      // failure; the resident fact survives it (web `lastAgentError` outlives
+      // `refreshList` and `resync`).
+      await repository.refreshSessions();
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, 'agent exploded');
+
+      // The next prompt supersedes the failure (web ClientSession.prompt).
+      await repository.sendMessage(
+        const SendMessageRequest(sessionId: 'session-a', text: 'try again'),
+      );
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, isNull);
+
+      await socket.close();
+    },
+  );
 
   test(
     'a forwarded api-session/activity advances the row activity time',

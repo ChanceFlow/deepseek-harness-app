@@ -3463,6 +3463,12 @@ abstract class AppLocalizations {
   /// **'That action couldn\'\'t be completed.'**
   String get chatActionFailed;
 
+  /// Headline for an Agent-level failure the host reported outside a turn (api-session/error); the host message follows as the detail.
+  ///
+  /// In en, this message translates to:
+  /// **'The agent stopped with an error.'**
+  String get sessionAgentFailed;
+
   /// Full-screen error when the chat state stream fails.
   ///
   /// In en, this message translates to:

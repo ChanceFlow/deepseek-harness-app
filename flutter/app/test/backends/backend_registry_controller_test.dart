@@ -499,4 +499,47 @@ void main() {
       await letPersistLand(controller, file, '"trustHostCertificate":false');
     },
   );
+
+  test('two mutations in flight leave the last state on disk, not the slower write', () async {
+    final file = fileFor('ordered-writes');
+    // A store whose first save occupies several event-loop turns: without a
+    // write chain, the older snapshot lands after the newer one and wins the
+    // file, which is the flake this test replaced polling for.
+    final store = _StallingFirstSaveStore(file);
+    final controller = BackendRegistryController(store);
+    addTearDown(controller.dispose);
+    await loadedState(controller);
+
+    // No await between them: both persists are in flight at once.
+    controller.onAction(
+      const AddBackend('Gateway', 'https://gw.internal:8443'),
+    );
+    controller.onAction(
+      const AddBackend('Second', 'https://second.internal:8443'),
+    );
+    await controller.pendingPersist;
+
+    expect(store.saves, 2);
+    expect(file.readAsStringSync(), contains('Second'));
+  });
+}
+
+/// A store whose first [save] stalls, so two concurrently started writes would
+/// finish out of order.
+final class _StallingFirstSaveStore extends BackendStore {
+  _StallingFirstSaveStore(super.file)
+    : super(seedBaseUrl: 'http://10.0.2.2:3080');
+
+  int saves = 0;
+
+  @override
+  Future<void> save(BackendStoreData document) async {
+    saves += 1;
+    if (saves == 1) {
+      for (var turn = 0; turn < 8; turn++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+    await super.save(document);
+  }
 }

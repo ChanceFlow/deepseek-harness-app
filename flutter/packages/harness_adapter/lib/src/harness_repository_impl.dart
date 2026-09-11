@@ -757,6 +757,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
+    // Web parity: `ClientSession.prompt` clears `lastAgentError` before its
+    // first await, because the new attempt supersedes the previous failure.
+    _clearSessionAgentError(request.sessionId);
     final content = <Object?>[
       <String, Object?>{'type': 'text', 'text': request.text},
       for (final image in request.images)
@@ -1247,8 +1250,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     };
   }
 
-  /// The `subagent.history` request carries the addressed row's own mode: the
-  /// host validates the address against the durable descriptor
+  /// The child-history read (`session/page` carrying a `subagent` address)
+  /// takes the addressed row's own mode: the host validates the address
+  /// against the durable descriptor
   /// (`packages/api/session-controller/src/history.ts` `validateAddress`) and
   /// answers a mode or ownership mismatch with `subagent/unauthorized`; an
   /// addressed child that is not in the catalog answers `subagent/not-found`.
@@ -1904,6 +1908,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     parentSessionId: session.parentSessionId,
     pendingInteraction: pending ?? session.pendingInteraction,
     completed: session.completed,
+    agentError: session.agentError,
   );
 
   void _handleProjection(ServerRequest frame) {
@@ -2485,14 +2490,27 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final item in _sessions.value)
         if (item.completed) item.id: true,
     };
+    // The wire summary carries no Agent failure either: it lives on the
+    // resident Session in the web client (`lastAgentError` survives
+    // `refreshList` and `resync`), so a pull preserves what the
+    // `api-session/error` fold holds rather than erasing the only account of
+    // why a session stopped.
+    final agentErrorById = <String, String>{
+      for (final item in _sessions.value)
+        if (item.agentError case final message?) item.id: message,
+    };
     final result = listing.map((wire) {
       final session = _toDomainSession(wire);
       final armed =
           (completedById[session.id] ?? false) ||
           armedByPull.contains(session.id);
-      return armed && !session.running
+      final folded = armed && !session.running
           ? _copySession(session, completed: true)
           : session;
+      final agentError = agentErrorById[session.id];
+      return agentError == null
+          ? folded
+          : _copySession(folded, agentError: agentError);
     }).toList();
     return result;
   }
@@ -2784,6 +2802,16 @@ class HarnessRepositoryImpl implements ChatRepository {
         );
   }
 
+  /// Drops one session's last Agent-level failure: a prompt the user just
+  /// sent supersedes it (web `ClientSession.prompt`).
+  void _clearSessionAgentError(String sessionId) {
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0 || current[index].agentError == null) return;
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(current[index], clearAgentError: true);
+  }
+
   void _markSessionNoLongerBlank(String sessionId) {
     _sessions.value = _sessions.value
         .map(
@@ -2802,6 +2830,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     String? agentPreset,
     bool? completed,
     int? updatedAtEpochMs,
+    String? agentError,
+    bool clearAgentError = false,
   }) => SessionSummary(
     id: session.id,
     title: title ?? session.title,
@@ -2813,6 +2843,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     origin: session.origin,
     parentSessionId: session.parentSessionId,
     completed: completed ?? session.completed,
+    agentError: clearAgentError ? null : (agentError ?? session.agentError),
   );
 
   _SessionState _sessionStateFor(String sessionId) {
@@ -3101,8 +3132,9 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyCordisRunRequest(args);
       case 'cordis/request-run-resolved':
         _applyCordisRequestResolved(args);
-      case 'approval/request':
       case 'api-session/error':
+        _applySessionErrorEvent(args);
+      case 'approval/request':
       case 'credentials/reference-updated':
       case 'goal/activation-changed':
       case 'cordis/dynamic-package':
@@ -3115,12 +3147,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         // Forwarded and currently without a fold here. `approval/request`
         // and `user-questions/request` are waterfalls, handled before this
         // point; the rest are informational notifications this client does
-        // not render yet. `api-session/error` is the one with a user-visible
-        // gap: it carries an Agent-level failure message
-        // (`'api-session/error'(sessionId, message)`) that the web client
-        // puts on the Session handle, and `domain.SessionSummary` has no
-        // field to hold it yet — so folding it needs a model field and a
-        // roster surface, not just this switch.
+        // not render yet.
         break;
       default:
         _onDiagnostic?.call(
@@ -3194,7 +3221,10 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// `origin` is `subagent` (or that an address still references) and only
   /// removes anything else, because the subagent catalog keeps navigating the
   /// child's history after its Agent ends. Everything else leaves the roster
-  /// on the event instead of waiting for the next `session/list` pull.
+  /// on the event instead of waiting for the next `session/list` pull, and
+  /// takes its manager-level mirrors with it ([_releaseSessionMirrors]) the
+  /// way the web manager deletes the same session's projection store, queue
+  /// mirror, and job list.
   void _applySessionRemovedEvent(List<Object?> args) {
     if (args.isEmpty) return;
     final sessionId = args.first;
@@ -3207,6 +3237,39 @@ class HarnessRepositoryImpl implements ChatRepository {
       return;
     }
     _sessions.value = List<SessionSummary>.of(current)..removeAt(index);
+    _releaseSessionMirrors(sessionId);
+  }
+
+  /// Drops a removed top-level session's manager-level mirrors.
+  ///
+  /// Web `SessionManager.handleSessionRemoved`
+  /// (`packages/api/session-controller/src/client/sessions/manager.ts:729-757`)
+  /// deletes the resident projection store, the transient queue mirror, and
+  /// the per-session job list for a non-subagent removal, while keeping the
+  /// resident Session object itself — `handleRemoved` only flags it
+  /// `removed` and leaves its window in place. The equivalent here: the six
+  /// projection streams and their two seq guards, the buffered-frame list
+  /// (`pendingBuffers` stands in for the queue mirror: it holds a session's
+  /// un-instantiated frames), the session's pending-interaction keys, and its
+  /// running edge. [_sessionStates] and [_sessionCursors] stay: they are the
+  /// resident instance's window, and a re-open must reuse the reducer's queue
+  /// mirror rather than rebuild it.
+  ///
+  /// The running edge goes because a re-added id would otherwise arm a
+  /// completion reminder against a `running` bit that predates the removal —
+  /// a notification for work the user never saw start.
+  void _releaseSessionMirrors(String sessionId) {
+    _goalProjections.remove(sessionId);
+    _planProjections.remove(sessionId);
+    _todoProjections.remove(sessionId);
+    _permissionProjections.remove(sessionId);
+    _contextPressureProjections.remove(sessionId);
+    _contextBreakdownProjections.remove(sessionId);
+    _contextPressureSeqs.remove(sessionId);
+    _contextBreakdownSeqs.remove(sessionId);
+    _pendingBuffers.remove(sessionId);
+    _prevRunningBySession.remove(sessionId);
+    if (_pendingBySession.remove(sessionId) != null) _publishPending();
   }
 
   /// One `api-session/activity` forwarded event: the session's last activity
@@ -3225,6 +3288,30 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (index < 0) return;
     _sessions.value = List<SessionSummary>.of(current)
       ..[index] = _copySession(current[index], updatedAtEpochMs: updatedAt);
+  }
+
+  /// One `api-session/error` forwarded event: an Agent-level failure with no
+  /// turn position (`'api-session/error'(sessionId: SessionId, message:
+  /// string)`, allowlisted in `packages/api/remotes/src/remote-events.ts`;
+  /// emitted by `session-controller/src/index.ts` from `agent/error` and from
+  /// a background activation that failed to resolve).
+  ///
+  /// The web client keeps it on the resident Session object
+  /// (`SessionSnapshot.lastAgentError`), which is why it is a roster fact
+  /// here. Nothing else can show it: a failure with no turn position folds
+  /// into no timeline item, so the session would simply stop with no reason
+  /// on screen. A session the roster does not hold is ignored — the summary
+  /// arrives with `added`.
+  void _applySessionErrorEvent(List<Object?> args) {
+    if (args.length < 2) return;
+    final sessionId = args[0];
+    final message = args[1];
+    if (sessionId is! String || message is! String) return;
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0) return;
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(current[index], agentError: message);
   }
 
   /// One `api-session/added` forwarded event. The host event's single
@@ -3262,6 +3349,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       ..[index] = _copySession(
         incoming,
         completed: current[index].completed && !incoming.running,
+        agentError: current[index].agentError,
       );
   }
 

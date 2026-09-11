@@ -74,17 +74,18 @@ class SubagentController {
 
   /// A child this controller was asked to open before its catalog landed
   /// (the chat workflow card's member jump). The catalog row supplies the
-  /// mode `subagent.history` requires; until that row arrives the request
-  /// stays parked rather than opening the wrong mode and taking the host's
-  /// `subagent-not-found`.
+  /// mode the child-history read requires; until that row arrives the request
+  /// stays parked rather than opening under the wrong mode and taking the
+  /// host's `subagent/unauthorized`.
   String? _pendingChildId;
 
   /// Direct parent session id of the opened child (web
   /// `SubagentAddress.parentSessionId`).
   String? _selectedChildParentId;
 
-  /// The opened child's catalog mode; `subagent.history` must request the
-  /// child under its own mode (host `subagent-not-found` on mismatch).
+  /// The opened child's catalog mode; the child-history read (`session/page`
+  /// with a `subagent` address) must carry the row's own mode (host
+  /// `subagent/unauthorized` on mismatch).
   SubagentMode? _selectedChildMode;
   List<TimelineItem> _childTimeline = const <TimelineItem>[];
   StreamSubscription<void>? _planSub;

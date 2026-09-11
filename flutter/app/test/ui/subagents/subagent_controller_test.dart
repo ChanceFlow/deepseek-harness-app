@@ -4,8 +4,9 @@
 /// event-refresh tests pin its upkeep — child rows in `session.list`
 /// carry their `parentSessionId`, and a spawn or detachment under a
 /// watched parent schedules one debounced catalog re-pull per parent.
-/// History addressing pins the row's own mode on the `subagent.history`
-/// request, and the sheet visibility pins the app-wide rule that
+/// History addressing pins the row's own mode on the child-history read
+/// (`session/page` with a `subagent` address), and the sheet visibility
+/// pins the app-wide rule that
 /// subagent children never surface as selectable parents.
 library;
 
@@ -185,8 +186,8 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  // History addressing: `subagent.history` carries the row's own mode;
-  // the host answers a mismatch with `subagent-not-found`.
+  // History addressing: the child-history read carries the row's own mode;
+  // the host answers a mismatch with `subagent/unauthorized`.
   // ---------------------------------------------------------------------
 
   test(
@@ -215,7 +216,7 @@ void main() {
     () async {
       final repository = _FakeRepository(catalog: _seedCatalog)
         ..failHistoryWith = StateError(
-          'subagent-not-found: session "child-2" is not a continuable '
+          'subagent/unauthorized: session "child-2" is not a continuable '
           'direct child of "p1"',
         );
       final controller = SubagentController(repository, initialSessionId: 'p1');
@@ -226,7 +227,7 @@ void main() {
       controller.onAction(const OpenChild('child-2', SubagentMode.continuable));
       await pumpEventQueue();
 
-      expect(controller.state.errorMessage, contains('subagent-not-found'));
+      expect(controller.state.errorMessage, contains('subagent/unauthorized'));
       // The record view closes instead of holding the child open on an
       // empty transcript that reads as "no messages".
       expect(controller.state.selectedChildId, isNull);

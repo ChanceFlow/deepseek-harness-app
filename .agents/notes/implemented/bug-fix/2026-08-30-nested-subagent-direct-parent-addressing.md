@@ -21,7 +21,7 @@ as defined in
 and wired in
 [SubagentHeaderLineage.tsx](../../../../reference/deepseek-harness/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx):327).
 Passing the tree root instead of the direct parent caused history load, prompt send,
-and interrupt to target the wrong session and fail with `subagent-not-found`.
+and interrupt to target the wrong session and fail with `subagent/unauthorized`.
 
 ## Decision
 

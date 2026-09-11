@@ -24,7 +24,7 @@ warning state, not the error state. A member row whose child session id is
 known pushes `SubagentRecordRoute` — the subagent surface the catalog already
 pushes, pointed at the parent session and the member's child. The route resolves
 the child's catalog mode from the parent's `subagent.list` row, because
-`subagent.history` refuses a mode mismatch; a child the host no longer lists
+the child-history read refuses a mode mismatch; a child the host no longer lists
 stays a plain row rather than a seat that can only fail.
 
 **Hook audits render inline in the turn** (`hook_audit_row.dart`), collapsed

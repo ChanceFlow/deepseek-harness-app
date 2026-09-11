@@ -868,7 +868,7 @@ void main() {
     (tester) async {
       // The workflow card's member jump: the route is pointed at one child
       // before the parent's catalog has answered, and the catalog row is the
-      // only place the mode `subagent.history` requires is published.
+      // only place the mode the child-history read requires is published.
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -948,7 +948,7 @@ class _HostCatalogRepository implements ChatRepository {
         SessionSummary(id: 'p1', title: 'Parent one', blank: false),
       ]);
 
-  /// Every `subagent.history` address, in order.
+  /// Every child-history address, in order.
   final List<
     ({String parentSessionId, String childSessionId, SubagentMode mode})
   >

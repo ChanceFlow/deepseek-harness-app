@@ -163,6 +163,38 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets(
+    'an agent failure strip states the host message and holds no dismiss',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha',
+              blank: false,
+              agentError: 'agent exploded',
+            ),
+          ],
+          selectedSessionId: 's1',
+        ),
+        actions,
+      );
+
+      // The host reported a failure with no turn position: no timeline item
+      // carries it, so the strip is the only account of why the session
+      // stopped.
+      expect(find.text('The agent stopped with an error.'), findsOneWidget);
+      expect(find.text('agent exploded'), findsOneWidget);
+      // Not the app's fact to clear: the next prompt clears it on the host, so
+      // the strip carries no close affordance.
+      expect(find.byTooltip('Dismiss'), findsNothing);
+      expect(actions, isEmpty);
+    },
+  );
+
   testWidgets('chat surface shows no persistent connection status', (
     tester,
   ) async {

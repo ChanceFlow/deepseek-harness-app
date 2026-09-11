@@ -160,8 +160,9 @@ final class HttpDshRpcClient implements DshRpcClient {
       final clipped = responseText.length <= 300
           ? responseText
           : responseText.substring(0, 300);
-      throw DshTransportException(
+      throw DshTransportException.http(
         'HTTP ${response.statusCode} for $path: $clipped',
+        response.statusCode,
       );
     }
     return responseText;

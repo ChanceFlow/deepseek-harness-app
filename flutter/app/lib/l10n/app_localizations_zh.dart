@@ -1931,6 +1931,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatActionFailed => '该操作未能完成。';
 
   @override
+  String get sessionAgentFailed => 'Agent 因错误停止。';
+
+  @override
   String get chatLoadFailed => '无法加载此会话。';
 
   @override

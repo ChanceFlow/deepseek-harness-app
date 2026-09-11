@@ -5,7 +5,7 @@ Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
         verify_skills, verify_env_names, verify_toolchain_pin,
         verify_i18n_arb, verify_theme_native, verify_wire_pin,
-        gen_launcher_icons --check                           (seconds, no Flutter)
+        verify_release_suite, gen_launcher_icons --check     (seconds, no Flutter)
   code  flutter analyze, dart format check, flutter test,
       check_dart_imports, verify_unused_deps
   all   docs + code (default)
@@ -107,6 +107,17 @@ GATES: list[dict] = [
         "cmd": [sys.executable, "scripts/verify_wire_pin.py"],
         "cwd": REPO,
         "requires": ("reference submodule", REFERENCE_PIN / ".git"),
+    },
+    {
+        # The release workflows re-run the suite before signing, so their
+        # package list is a second copy of `flutter-test` below. This gate
+        # holds the two equal; a copy that drifts ships untested code inside
+        # an artifact nobody can recall. `flutter-test` is the source of
+        # truth, so this one reads it rather than repeating it.
+        "name": "release-suite",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_release_suite.py"],
+        "cwd": REPO,
     },
     {
         "name": "flutter-analyze",

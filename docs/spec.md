@@ -522,8 +522,8 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 - A subagent is addressed by `parentSessionId` + `childSessionId`, never by display label.
 - `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`. `mode` is the domain enum `SubagentMode` (`oneShot` / `continuable`), required on child rows: a child row with a missing or unknown wire mode fails loud at decode; diagnostic rows carry none.
 - `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent; its `parentAvailable` gates the composer for the rows of that catalog level only.
-- MVP supports `subagent.list`, `subagent.history`, `subagent.prompt`, and `subagent.interrupt`.
-- `subagent.history` carries the addressed row's own `mode` in the request; the host matches it against the durable entry and answers a mismatch as `subagent-not-found`. `subagent.prompt` and `subagent.interrupt` are pinned to `'continuable'` by the request schemas.
+- MVP supports `subagent.list`, `subagent.prompt`, and `subagent.interrupt`; a child's transcript is read through `session/page` carrying a `subagent` address (`{kind: 'subagent', parentSessionId, childSessionId, mode}`). The pre-0.1.5 `subagent/history` name stays declared in the endpoint registry as a declared-only constant with no call site.
+- That `subagent` address carries the addressed row's own `mode`; the host matches it against the durable entry and answers a mismatch as `subagent/unauthorized`, and a child the catalog no longer lists as `subagent/not-found`. `subagent.prompt` and `subagent.interrupt` are pinned to `'continuable'` by the request schemas.
 - The catalog tree is a host-reported fact: `subagent.list` reads durable
   state, so a cold host answers the parent's complete child tree.
   `SubagentController` seeds the pre-selected parent's catalog once the
