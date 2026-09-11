@@ -11,6 +11,7 @@ import 'package:asr/asr.dart';
 import 'package:flutter/material.dart';
 
 import '../../../di/providers.dart';
+import '../../theme/theme.dart';
 
 /// The voice-input mode card.
 class AsrOnlineSettingsCard extends StatelessWidget {
@@ -35,7 +36,7 @@ class AsrOnlineSettingsCard extends StatelessWidget {
       elevation: 0,
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(kShapeCard),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Padding(

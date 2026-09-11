@@ -84,12 +84,20 @@ const List<BoxShadow> kM3ShadowElevation3 = [
 /// DeepSeek's brand violet — the one seed every role derives from.
 const Color kDshBrandSeed = Color(0xFF4D6BFE);
 
-/// Corner radii, largest to smallest: sheets and dialogs, the composer
-/// dock, cards and menus, chips and rows. Four steps, no ad-hoc radius.
+/// Corner radii for the app's surfaces: sheets and dialogs, the composer
+/// dock, cards, menu sheets, chips and rows, and the stadium pill. A
+/// surface takes a step from this scale; `verify_theme_native` rejects a
+/// numeric radius at every other call site.
 const double kShapeSheet = 28;
 const double kShapeDock = 20;
 const double kShapeCard = 14;
 const double kShapeChip = 8;
+
+/// The stadium step: a full pill. Error and status badges read as pills,
+/// not as the rounded rectangles `kShapeChip` draws, and Material 3
+/// carries a pill as its own badge form. The value exceeds half the
+/// tallest badge, so every height resolves to a stadium.
+const double kShapePill = 999;
 
 /// The menu-surface bottom-sheet card (the web MenuDropdown family):
 /// picker sheets — model seat, workspaces, prompt mode, parent session —

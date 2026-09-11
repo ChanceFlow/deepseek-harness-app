@@ -14,6 +14,7 @@ import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/menu_sheet.dart';
+import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
 /// The one preset the host gates behind acknowledgement.
@@ -161,14 +162,14 @@ class PermissionSelectChip extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kShapePill),
             onTap: enabled ? () => _open(context) : null,
             child: Container(
               height: 32,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(kShapePill),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -243,7 +244,7 @@ class _PermissionSheet extends StatelessWidget {
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                     onTap: () => onPick(option.value),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(

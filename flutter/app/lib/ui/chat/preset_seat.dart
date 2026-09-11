@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
 import '../shared/menu_sheet.dart';
+import '../theme/theme.dart';
 
 /// The roster a picker may offer: every entry that can compose a
 /// session (broken ones cannot — offering one would only defer the
@@ -80,13 +81,13 @@ class AgentPresetSeat extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           onTap: () => _open(context, options),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(kShapeChip),
               border: Border.all(color: scheme.outlineVariant),
             ),
             child: Row(
@@ -170,7 +171,7 @@ class _PresetSheet extends StatelessWidget {
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                     onTap: () => onSelect(option.id),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -209,7 +210,7 @@ class _PresetSheet extends StatelessWidget {
                                         decoration: BoxDecoration(
                                           color: scheme.surfaceContainerHigh,
                                           borderRadius: BorderRadius.circular(
-                                            6,
+                                            kShapeChip,
                                           ),
                                         ),
                                         child: Text(
@@ -285,7 +286,7 @@ class AgentPresetHeaderLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       child: Text(
         presetIdLabel(roster, presetId, l10n),

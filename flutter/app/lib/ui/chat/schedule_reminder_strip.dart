@@ -80,7 +80,9 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
         padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kShapeDock),
+          ),
           border: Border(
             top: BorderSide(color: scheme.outlineVariant),
             left: BorderSide(color: scheme.outlineVariant),

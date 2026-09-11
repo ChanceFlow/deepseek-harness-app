@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../theme/theme.dart';
 import 'fish_logo.dart';
 
 class BrandWordmark extends StatelessWidget {
@@ -46,7 +47,7 @@ class BrandWordmark extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: ink,
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(kShapeChip),
           ),
           child: Text(
             'HARNESS',

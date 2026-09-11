@@ -1979,13 +1979,13 @@ class _PlanChipState extends State<PlanChip> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kShapePill),
             onTap: widget.locked ? null : widget.onExit,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: scheme.errorContainer,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(kShapePill),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -2565,7 +2565,7 @@ class _PendingImageThumbnailState extends State<PendingImageThumbnail> {
     final bytes = _bytes;
     if (bytes == null) return const SizedBox(width: 36, height: 36);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(kShapeChip),
       child: Image.memory(
         bytes,
         cacheWidth: 128,
@@ -2817,7 +2817,7 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kShapeCard),
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
@@ -3159,7 +3159,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                 margin: const EdgeInsets.only(top: 4),
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(kShapeCard),
                   border: Border.all(color: scheme.outlineVariant),
                 ),
                 child: Column(
@@ -3372,7 +3372,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                                 scheme.primaryContainer.withValues(alpha: 0.35),
                               DiffLineKind.equal => Colors.transparent,
                             },
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.circular(kShapeChip),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -3536,7 +3536,9 @@ class _GoalBarStripState extends State<GoalBarStrip> {
           padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHigh,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(kShapeDock),
+            ),
             border: Border(
               top: BorderSide(color: scheme.outlineVariant),
               left: BorderSide(color: scheme.outlineVariant),
@@ -3616,7 +3618,9 @@ class _GoalBarStripState extends State<GoalBarStrip> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kShapeDock),
+          ),
           border: Border(
             top: BorderSide(color: scheme.outlineVariant),
             left: BorderSide(color: scheme.outlineVariant),
@@ -3747,7 +3751,9 @@ class _QueueDockState extends State<QueueDock> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(kShapeDock),
+        ),
         border: Border(
           top: BorderSide(color: scheme.outlineVariant),
           left: BorderSide(color: scheme.outlineVariant),
@@ -3761,7 +3767,7 @@ class _QueueDockState extends State<QueueDock> {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () => setState(() => _collapsed = !_collapsed),
                 child: SizedBox(
                   height: 36,
@@ -3923,19 +3929,19 @@ class _QueueItemRowState extends State<_QueueItemRow> {
                             isDense: true,
                             hintText: l10n.editQueuedMessageHint,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(
                                 color: scheme.outlineVariant,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(
                                 color: scheme.outlineVariant,
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                               borderSide: BorderSide(color: scheme.primary),
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -4358,7 +4364,7 @@ class _QuestionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kShapeCard),
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
@@ -4547,7 +4553,7 @@ class _QuestionOptionTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(kShapeChip),
             ),
             child: Text(
               AppLocalizations.of(context)!.questionRecommended,
@@ -4565,7 +4571,7 @@ class _QuestionOptionTile extends StatelessWidget {
       ],
     );
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kShapeChip),
     );
     // The option rows need their own Material ancestor: the question card
     // behind them is a decorated container, and ListTile paints its
@@ -4618,7 +4624,7 @@ class _QuestionCheckbox extends StatelessWidget {
             border: Border.all(
               color: checked ? scheme.onSurface : scheme.outlineVariant,
             ),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(kShapeChip),
           ),
           child: checked
               ? Icon(Icons.check, size: 12, color: scheme.onSurface)
@@ -4643,7 +4649,7 @@ class _QuestionNumberChip extends StatelessWidget {
       height: 20,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       alignment: Alignment.center,
       child: child,
@@ -4710,7 +4716,7 @@ class _CustomAnswerRowState extends State<_CustomAnswerRow> {
         border: Border.all(
           color: active ? scheme.outlineVariant : Colors.transparent,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kShapeCard),
       ),
       child: Row(
         children: [
@@ -4824,11 +4830,11 @@ class _CustomAnswerFieldState extends State<_CustomAnswerField> {
         fillColor: scheme.surfaceContainerHigh,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
         ),
       ),
@@ -5037,7 +5043,7 @@ class _PlanReviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kShapeCard),
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
@@ -5822,7 +5828,7 @@ class SlashSkillCandidates extends StatelessWidget {
         constraints: const BoxConstraints(maxHeight: 220),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(kShapeMenuSheet),
           border: Border.all(color: scheme.outlineVariant),
         ),
         child: ListView(
@@ -5833,7 +5839,7 @@ class SlashSkillCandidates extends StatelessWidget {
               Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                   onTap: () => onPick(cmd.name),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -5880,7 +5886,7 @@ class SlashSkillCandidates extends StatelessWidget {
               Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                   onTap: () => onPick(skill.name),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -5969,7 +5975,7 @@ class PopupMenuEntryShim extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(kShapeChip),
           onTap: enabled ? () => _open(context) : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -6022,7 +6028,7 @@ class PopupMenuEntryShim extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   onModeChange(PromptMode.queue);
@@ -6066,7 +6072,7 @@ class PopupMenuEntryShim extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: running
                     ? () {
                         Navigator.of(sheetContext).pop();
@@ -6210,7 +6216,7 @@ class _CommandRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: enabled ? onTap : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -6221,7 +6227,7 @@ class _CommandRow extends StatelessWidget {
                 height: 36,
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                 ),
                 child: Icon(
                   icon,
@@ -6325,7 +6331,7 @@ class _CommandSheet extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                   ),
                   child: Text(
                     '$visibleCount',
@@ -6432,7 +6438,7 @@ class _PrimarySendButton extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   color: glyph,
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                 ),
               )
             // Send glyph: the up arrow.
