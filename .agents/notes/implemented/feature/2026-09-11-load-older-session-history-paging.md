@@ -8,20 +8,21 @@ When opening longer sessions in the Android Flutter app, the backend returns the
 
 ## Decision
 
-We align `ChatScreen` with the reference Web client (`ChatView.tsx`) by providing explicit on-demand paging for older session history:
+We implement a mobile-first, commercial-grade older session history paging system in `ChatScreen`:
 
-- **Dedicated Sentinel Row**: `_OlderHistorySlot` defines a distinct sentinel object (`_olderHistorySlot`) rendered at the top of the timeline items list when `uiState.hasMoreOlder || uiState.isLoadingOlder` is true. `_opensBlock` recognizes this sentinel so standard block spacing (16dp) is preserved above the first conversation message.
-- **`OlderHistoryRow` Component**: A centered Material 3 `OutlinedButton` (`chat-load-older-button`) with `kShapeCard` (14dp radius) styling and `scheme.outlineVariant` hairline border:
-  - When idle: shows `Icons.history_rounded` with localized copy (`chatLoadOlder`: "Load earlier" / "加载更早"). Tapping dispatches `LoadOlderHistoryAction()`.
-  - When loading: shows `CircularProgressIndicator` (stroke width 2) with localized progress copy (`chatLoadingOlder`: "Loading earlier…" / "正在加载更早记录…") and disables repeated taps.
-  - When all history has been loaded (`hasMoreOlder == false` and `isLoadingOlder == false`), the sentinel slot drops from the list.
-- **Bilingual Localization**: Added `chatLoadOlder` and `chatLoadingOlder` keys to `app_en.arb` and `app_zh.arb` with regenerated localization classes.
-- **Scroll Stability**: Loading older history retains the reader's unpinned scroll offset so the newly prepended history flows into the viewport naturally without jumping to the tail.
+- **Threshold-Based Auto-Paging**: As the user scrolls up, approaching the head within `kAutoLoadOlderThreshold` (160dp) automatically dispatches `LoadOlderHistoryAction()` in the background. A single-flight guard (`_autoLoadDispatched`) prevents duplicate dispatches during fast scroll flings, and auto-load is disabled during initial session landings and reading-position restores.
+- **Precision Viewport Anchoring**: Prepending earlier history to a top-down list normally causes the viewport to jump to the newly inserted items. Before older history is requested, the controller captures `_anchorDistanceFromBottom = maxScrollExtent - pixels`. Upon arrival of prepended items, a post-frame callback restores `newMax - _anchorDistanceFromBottom`, perfectly pinning the message currently in view with zero visual jumping while the newly loaded history expands above.
+- **Mobile-Native Paging Indicator**:
+  - When loading: `OlderHistoryRow` renders a centered Material 3 loading spinner (`CircularProgressIndicator`) with localized copy (`chatLoadingOlder`: "Loading earlier…" / "正在加载更早记录…").
+  - When idle: provides a lightweight, unobtrusive `TextButton.icon` (`chat-load-older-button`) with `Icons.history_rounded` and `chatLoadOlder` for manual tapping or network retry.
+- **Conversation Origin Boundary Badge**: When all history has been loaded (`hasMoreOlder == false` and `isLoadingOlder == false`), `_conversationStartSlot` renders a subtle `ConversationStartRow` featuring `Icons.flag_outlined` and localized badge copy (`chatBeginningOfHistory`: "Beginning of conversation" / "已到达会话起点"), giving users clear spatial closure.
+- **Bilingual Localization**: Added `chatLoadOlder`, `chatLoadingOlder`, `chatBeginningOfHistory`, and `chatLoadOlderRetry` keys across English and Chinese ARB bundles.
 
 ## Alternatives considered
 
-- **Infinite automatic scroll-up trigger (overscroll / reach offset 0)**: Automatically dispatching `LoadOlderHistoryAction` when scroll position hits top or overscrolls was rejected. During session open, the initial viewport mount starts at `pixels = 0` before the initial follow jump runs; auto-triggering on top would cause immediate unwanted fetches on cold opens. Furthermore, in long sessions with heavy tool call output, automatic continuous loading causes runaway network and rendering cascades. The explicit button matches the reference Web client and provides user-governed pagination.
-- **Floating banner or snackbar**: Placing a floating pill at the top of the viewport competes with the app bar and overlaps message bubbles. An in-flow list item at index 0 ensures the button only appears when the reader has deliberately scrolled to the top of the transcript.
+- **Desktop-only static button**: Forcing mobile users to stop scrolling and tap an outlined button to load each page breaks touch reading flow. Commercial mobile chat apps (WeChat, Telegram, Slack, ChatGPT) use seamless scroll-triggered paging. We support automatic scroll-triggered loading while retaining the button as an unobtrusive manual/retry fallback.
+- **Unguarded offset-0 triggers**: Naively triggering on `pixels <= 0` fires immediately on session open because Flutter's viewport initializes at 0 before the post-frame bottom jump completes. Adding `kAutoLoadOlderThreshold` guarded by `_restoreDecided`, `!_needsInitialJump`, and `_autoLoadDispatched` avoids spurious cold-start loads and runaway cascades.
+- **Unanchored prepends**: Leaving scroll offset at 0 after older messages arrive shifts the user's viewport to the earliest message of the new page, disorienting the reader. Invariant bottom-distance compensation (`maxScrollExtent - pixels`) ensures zero-jump reading stability.
 
 ## Consequences
 

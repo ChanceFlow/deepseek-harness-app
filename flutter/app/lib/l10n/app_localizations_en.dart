@@ -1430,6 +1430,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatLoadingOlder => 'Loading earlier…';
 
   @override
+  String get chatBeginningOfHistory => 'Beginning of conversation';
+
+  @override
+  String get chatLoadOlderRetry =>
+      'Couldn\'t load earlier messages. Tap to retry.';
+
+  @override
   String get queue => 'Queue';
 
   @override

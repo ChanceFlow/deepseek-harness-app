@@ -2347,6 +2347,18 @@ abstract class AppLocalizations {
   /// **'Loading earlier…'**
   String get chatLoadingOlder;
 
+  /// Notice shown at the very top of the transcript when all earlier history has been loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Beginning of conversation'**
+  String get chatBeginningOfHistory;
+
+  /// Retry affordance when loading older history fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t load earlier messages. Tap to retry.'**
+  String get chatLoadOlderRetry;
+
   /// No description provided for @queue.
   ///
   /// In en, this message translates to:

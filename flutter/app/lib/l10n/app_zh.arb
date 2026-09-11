@@ -363,6 +363,8 @@
   "chatGoalPhaseBlocked": "受阻",
   "chatLoadOlder": "加载更早",
   "chatLoadingOlder": "正在加载更早记录…",
+  "chatBeginningOfHistory": "已到达会话起点",
+  "chatLoadOlderRetry": "加载更早记录失败，点击重试",
   "queue": "排队发送",
   "thinkLabel": "思考",
   "thoughtDuration": "已思考 {duration}",

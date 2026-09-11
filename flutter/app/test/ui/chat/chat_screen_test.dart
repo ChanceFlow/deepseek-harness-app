@@ -3967,6 +3967,7 @@ void main() {
         );
 
         // Once hasMoreOlder is false and isLoadingOlder is false, row disappears
+        // and conversation start badge appears
         await _pump(
           tester,
           const ChatUiState(
@@ -3988,6 +3989,76 @@ void main() {
           actions,
         );
         await tester.pump();
+
+        expect(find.byType(OlderHistoryRow), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'scrolling near top automatically triggers load older and anchors reading offset',
+      (tester) async {
+        final actions = <ChatAction>[];
+        final messages = [
+          for (var i = 1; i <= 25; i++)
+            TimelineMessage(
+              ChatMessage(
+                id: 'm$i',
+                sessionId: 's1',
+                role: i % 2 == 0 ? MessageRole.assistant : MessageRole.user,
+                text:
+                    'Message $i with sufficient content to create layout height',
+              ),
+            ),
+        ];
+
+        await _pump(
+          tester,
+          ChatUiState(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Alpha', blank: false),
+            ],
+            selectedSessionId: 's1',
+            hasMoreOlder: true,
+            timeline: messages,
+          ),
+          actions,
+        );
+        await tester.pumpAndSettle();
+
+        // Drag down (scroll toward top) on the timeline to get within kAutoLoadOlderThreshold (<= 160)
+        final listFinder = find.byType(ListView).last;
+        await tester.drag(listFinder, const Offset(0, 3000));
+        await tester.pump();
+
+        // Auto-load should have dispatched LoadOlderHistoryAction
+        expect(actions, contains(const LoadOlderHistoryAction()));
+
+        // Simulate older messages loaded and prepended
+        final olderMessages = [
+          for (var i = 1; i <= 10; i++)
+            TimelineMessage(
+              ChatMessage(
+                id: 'older-$i',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'Older message $i',
+              ),
+            ),
+        ];
+
+        await _pump(
+          tester,
+          ChatUiState(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Alpha', blank: false),
+            ],
+            selectedSessionId: 's1',
+            hasMoreOlder: false,
+            timeline: [...olderMessages, ...messages],
+          ),
+          actions,
+        );
+        await tester.pumpAndSettle();
 
         expect(find.byType(OlderHistoryRow), findsNothing);
       },
