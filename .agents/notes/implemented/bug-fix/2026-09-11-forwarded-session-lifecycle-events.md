@@ -63,10 +63,9 @@ event-handling surface left parity gaps invisible on the pinned 0.1.5 host
    issued. The legacy `host/remote-event` frame and every `host/*` arm are
    deleted with the `/api/events.host` leg
    ([decision](2026-09-11-drops-routes-the-pinned-host-does-not-register.md)),
-   so the `$events` `emit` item is the one forwarded-event transport. Roster
-   removal by another client stays uncovered: `api-session/removed` is
-   allowlisted in `packages/api/remotes/src/remote-events.ts` and has no fold
-   here yet, so it lands on the next `session/list` pull.
+   so the `$events` `emit` item is the one forwarded-event transport. Removal
+   and activity are folded by
+   [their own decision](2026-09-11-forwarded-session-removal-and-activity.md).
 
 3. **Correct the wire-code prose.** The adapter comment names
    `subagent/unauthorized` for the mode mismatch and `subagent/not-found` for

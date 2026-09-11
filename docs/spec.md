@@ -173,6 +173,15 @@ forwarded set is an open host allowlist
   summary's projection hints applied and the folded finished-but-unviewed bit
   preserved — so a session created by another client appears without a
   `session.list` round-trip.
+- `api-session/removed` — `args [sessionId]`. A subagent child keeps its roster
+  row with `running: false` (the subagent catalog still navigates the child's
+  history after its Agent ends — web `handleSessionRemoved` records a status
+  mutation for an `origin: 'subagent'` summary); every other session leaves the
+  roster on the event instead of on the next `session/list` pull.
+- `api-session/activity` — `args [sessionId, updatedAt]`. Advances the row's
+  activity time, which is the roster's ordering key, so a working session
+  re-sorts live rather than on the next pull. A session the roster does not
+  hold yet is ignored; its summary arrives with `added`.
 - `commands/change` (no args) — the registry's membership moved, so any cached
   roster is stale. `ChatRepository.observeCommandRosterChanges` publishes the
   tick; a surface re-pulls `listCommands`.
@@ -188,21 +197,23 @@ forwarded set is an open host allowlist
 - `approval/request` / `user-questions/request` — waterfalls, delivered
   through the pending-request pipeline above rather than this fold.
 
-The remaining allowlisted names (`api-session/activity`, `api-session/error`,
-`api-session/removed`, `credentials/reference-updated`,
-`goal/activation-changed`, the `cordis/dynamic-*` and `cordis/inspect-*`
-family, `llm/adapters-updated`, `settings/document-updated`) are forwarded
-and currently have no fold here; each is enumerated in the adapter's switch so
-a new name is a deliberate gap rather than a silent drop.
+The remaining allowlisted names (`api-session/error`,
+`credentials/reference-updated`, `goal/activation-changed`, the
+`cordis/dynamic-*` and `cordis/inspect-*` family, `llm/adapters-updated`,
+`settings/document-updated`) are forwarded and currently have no fold here;
+each is enumerated in the adapter's switch so a new name is a deliberate gap
+rather than a silent drop. `api-session/error` is the one of those with a
+user-visible consequence — it carries an Agent-level failure message the web
+client puts on the Session handle, and `domain.SessionSummary` has no field to
+hold it yet, so folding it needs a model field and a roster surface rather than
+a switch arm.
 
 The pinned 0.1.5 tree registers no host-frame vocabulary and serves no
 `/api/events.host` route: the host dropped `host/session-status`,
 `host/session-added` and `host/session-removed` by 0.1.2-alpha.1, and the
 client neither dials the leg nor listens for those names. Session running
-state and peer session creation therefore have exactly one frame source each —
-`api-session/status` and `api-session/added` above. `api-session/removed` is
-forwarded but has no fold here yet, so a session removed by another client
-leaves the roster until the next `session/list` pull.
+state, peer creation, removal and activity therefore each have exactly one
+frame source — the `api-session/*` events above.
 
 ### 4.6 Wire coverage
 

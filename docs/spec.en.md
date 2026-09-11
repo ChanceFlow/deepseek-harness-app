@@ -16,7 +16,7 @@ legacy Gradle modules frozen until parity).
 
 ## Wire Contract
 - Unary: `POST /api/<domain>/<method>` with `client-request` carrying payload wrapped in `args`, answer with `server-response`.
-- Events: downlink-only WebSocket `/api/remote.mux` (required, the only downlink). Session running state and peer session creation are not decoded from `host/*` frames: they arrive as the forwarded Remote Events `api-session/status` and `api-session/added` on the mux `$events` stream. `/api/events.host` is not a host route (the upgrade hangs, the gateway answers 502) and is no longer dialed.
+- Events: downlink-only WebSocket `/api/remote.mux` (required, the only downlink). Session running state, peer creation, removal and activity are not decoded from `host/*` frames: they arrive as the forwarded Remote Events `api-session/status`, `api-session/added`, `api-session/removed` and `api-session/activity` on the mux `$events` stream. `/api/events.host` is not a host route (the upgrade hangs, the gateway answers 502) and is no longer dialed.
 - Interactive frames answer via `POST /api/respond`.
 
 ## Connection Lifecycle

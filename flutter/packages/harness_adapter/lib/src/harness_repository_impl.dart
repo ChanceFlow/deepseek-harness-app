@@ -2801,12 +2801,13 @@ class HarnessRepositoryImpl implements ChatRepository {
     bool? blank,
     String? agentPreset,
     bool? completed,
+    int? updatedAtEpochMs,
   }) => SessionSummary(
     id: session.id,
     title: title ?? session.title,
     running: running ?? session.running,
     blank: blank ?? session.blank,
-    updatedAtEpochMs: session.updatedAtEpochMs,
+    updatedAtEpochMs: updatedAtEpochMs ?? session.updatedAtEpochMs,
     cwd: session.cwd,
     agentPreset: agentPreset ?? session.agentPreset,
     origin: session.origin,
@@ -3088,6 +3089,10 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applySessionStatusEvent(args);
       case 'api-session/added':
         _applySessionAddedEvent(args);
+      case 'api-session/removed':
+        _applySessionRemovedEvent(args);
+      case 'api-session/activity':
+        _applySessionActivityEvent(args);
       case 'commands/change':
         // The registry's membership moved (a plugin registered or
         // unregistered a command): any cached roster is stale.
@@ -3097,9 +3102,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       case 'cordis/request-run-resolved':
         _applyCordisRequestResolved(args);
       case 'approval/request':
-      case 'api-session/activity':
       case 'api-session/error':
-      case 'api-session/removed':
       case 'credentials/reference-updated':
       case 'goal/activation-changed':
       case 'cordis/dynamic-package':
@@ -3112,7 +3115,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         // Forwarded and currently without a fold here. `approval/request`
         // and `user-questions/request` are waterfalls, handled before this
         // point; the rest are informational notifications this client does
-        // not render yet.
+        // not render yet. `api-session/error` is the one with a user-visible
+        // gap: it carries an Agent-level failure message
+        // (`'api-session/error'(sessionId, message)`) that the web client
+        // puts on the Session handle, and `domain.SessionSummary` has no
+        // field to hold it yet — so folding it needs a model field and a
+        // roster surface, not just this switch.
         break;
       default:
         _onDiagnostic?.call(
@@ -3176,6 +3184,47 @@ class HarnessRepositoryImpl implements ChatRepository {
     final running = args[1];
     if (sessionId is! String || running is! bool) return;
     _foldSessionRunning(sessionId, running);
+  }
+
+  /// One `api-session/removed` forwarded event, carrying the removed
+  /// session's id (`'api-session/removed'(sessionId: SessionId)`).
+  ///
+  /// A subagent child is NOT dropped: the web client's
+  /// `handleSessionRemoved` records a `status` mutation for a summary whose
+  /// `origin` is `subagent` (or that an address still references) and only
+  /// removes anything else, because the subagent catalog keeps navigating the
+  /// child's history after its Agent ends. Everything else leaves the roster
+  /// on the event instead of waiting for the next `session/list` pull.
+  void _applySessionRemovedEvent(List<Object?> args) {
+    if (args.isEmpty) return;
+    final sessionId = args.first;
+    if (sessionId is! String) return;
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0) return;
+    if (current[index].origin == 'subagent') {
+      _foldSessionRunning(sessionId, false);
+      return;
+    }
+    _sessions.value = List<SessionSummary>.of(current)..removeAt(index);
+  }
+
+  /// One `api-session/activity` forwarded event: the session's last activity
+  /// time (`'api-session/activity'(sessionId: SessionId, updatedAt: number)`).
+  ///
+  /// The roster orders by that timestamp, so folding it re-sorts a working
+  /// session to the top live rather than on the next pull. A session the
+  /// roster does not hold is ignored — the summary arrives with `added`.
+  void _applySessionActivityEvent(List<Object?> args) {
+    if (args.length < 2) return;
+    final sessionId = args[0];
+    final updatedAt = args[1];
+    if (sessionId is! String || updatedAt is! int) return;
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0) return;
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(current[index], updatedAtEpochMs: updatedAt);
   }
 
   /// One `api-session/added` forwarded event. The host event's single
