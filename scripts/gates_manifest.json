@@ -69,6 +69,14 @@
    "subagent/history": "0.1.5 reads child history through `session/page` with the addressed child id; the constant is declared but unused."
   }
  },
+ "release_suite": {
+  "comment": "The release workflows re-run the test suite before signing, so their package list is a second copy of the `flutter-test` gate in scripts/verify_all.py. scripts/verify_release_suite.py fails when a home skips a package that gate tests, when a home tests a package the gate does not name, and when a home runs no `flutter test` at all. Add a package in both places or neither.",
+  "source_gate": "flutter-test",
+  "homes": [
+   ".gitea/workflows/release-apk.yaml",
+   ".github/workflows/release-apk.yaml"
+  ]
+ },
  "toolchain": {
   "source": ".gitea/workflows/ci.yaml",
   "pattern": "flutter-version:\\s*['\"]?(\\d+\\.\\d+\\.\\d+)",

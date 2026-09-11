@@ -37,6 +37,15 @@ One define set governs every Android release build, and one tracked recipe at
   [.github](../../../../.github/workflows/release-apk.yaml)) pass the same
   define set plus tag-derived `--build-name`/`--build-number`; the GitHub
   mirror keeps its green-skip without signing secrets.
+- **The signed artifact is gated by the whole suite.** Both release workflows
+  run `flutter test` over the same package set the `code` CI job runs —
+  `app/test` and `packages/{domain,network,harness_adapter,dev,asr}/test` —
+  before the build step, because a signed APK cannot be withdrawn once
+  installed. The `release-suite` gate
+  (`scripts/verify_release_suite.py`) reads that set from the `flutter-test`
+  gate and fails either copy that drifts; the hand-kept list it replaces had
+  silently dropped `packages/asr` from both workflows, so releases shipped
+  asr code no release build had tested.
 - **Version source.** `flutter/app/pubspec.yaml` gains `version: 0.1.2+102`,
   and the recipe reads both fields from it with the documented Flutter form
   `UpdateCheckData: flutter/app/pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+`,
