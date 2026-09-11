@@ -5,20 +5,35 @@
 /// an event already folded by a history page is never applied twice.
 library;
 
+import 'dart:convert';
+
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/token_usage.dart';
 import 'package:network/rpc_envelope.dart';
 
+import 'adapter_diagnostics.dart';
+import 'dsh_wire_types.dart';
 import 'rpc_map.dart';
+import 'session_event_payloads.dart';
 import 'wire_json.dart';
 
 class TimelineReducer {
-  TimelineReducer(this.sessionId);
+  TimelineReducer(this.sessionId, {this.onDiagnostic});
 
   final String sessionId;
+
+  /// Reports a wire event type this fold does not know. The fold stays a
+  /// permissive project-onto-the-timeline pass — an unknown type contributes
+  /// no item rather than throwing — but it is never silent: the gap must be
+  /// visible so wire coverage can be measured. Mirrors the `mux.projection`
+  /// diagnostic's level, context and metadata posture.
+  final AdapterDiagnosticListener? onDiagnostic;
 
   final List<TimelineItem> _items = <TimelineItem>[];
   int _lastSeq = -1;
@@ -26,6 +41,46 @@ class TimelineReducer {
   int _partialIndex = -1;
   final Set<int> _seenTurns = <int>{};
   bool _hasSeenInitialSystemPrompt = false;
+
+  /// Latest entered step per turn, from `step/start`. Tool events carry their
+  /// own `step` on the wire; this map serves the code-dispatch sub-calls,
+  /// whose `tool/ptc-dispatch-start` payload carries the pairing ids and name
+  /// but no step.
+  final Map<int, int> _stepByTurn = <int, int>{};
+
+  /// Logged time of each `step/start`, keyed `turn:step`: the reference's
+  /// `stepStartTime` (`ui-chat` assistant node
+  /// `stepStartTime: context.start?.event.time`), the minuend of its TTFT
+  /// reading. Absent for a step whose start fell outside the folded window.
+  final Map<String, int> _stepStartedAtMs = <String, int>{};
+
+  /// Session-level facts folded alongside the timeline: the effective
+  /// sandbox mode (`sandbox/mode`), the active schedule reminders
+  /// (`schedule/change`), and the durable workflow runs (`tool-workflow/*`).
+  /// A fact change bumps [factsRevision] so the repository publishes only
+  /// when something moved.
+  SandboxModeFact? _sandboxMode;
+  final List<ScheduleReminder> _schedules = <ScheduleReminder>[];
+  final Map<String, _WorkflowState> _workflows = <String, _WorkflowState>{};
+  final Map<String, List<_WorkflowUpdate>> _pendingWorkflowUpdates =
+      <String, List<_WorkflowUpdate>>{};
+
+  /// Seq of the latest `turn/end`; a workflow run whose start precedes it and
+  /// which never logged a terminal event presents as interrupted.
+  int _lastTurnEndSeq = -1;
+  int _factsRevision = 0;
+
+  /// Monotonic revision of the sandbox/schedule facts; the repository
+  /// compares it to decide whether to republish.
+  int get factsRevision => _factsRevision;
+
+  /// The session's latest `sandbox/mode` override, or null when the session
+  /// logged none (the deployment default applies).
+  SandboxModeFact? get sandboxMode => _sandboxMode;
+
+  /// The session's active durable reminders, in original create order.
+  List<ScheduleReminder> get schedules =>
+      List<ScheduleReminder>.unmodifiable(_schedules);
 
   /// The streaming partial accumulates into buffers: one delta is one
   /// O(delta) append, and the [ChatMessage] string is materialized only
@@ -36,6 +91,9 @@ class TimelineReducer {
   StringBuffer? _partialReasoning;
   int? _partialReasoningStartMs;
   Duration? _partialReasoningDuration;
+
+  /// Timestamp of the open partial's first streamed token delta.
+  int? _partialFirstTokenMs;
   bool _partialDirty = false;
 
   void reset(List<JsonMap> history) {
@@ -68,7 +126,15 @@ class TimelineReducer {
     _lastSeq = -1;
     _clearPartial();
     _seenTurns.clear();
+    _stepByTurn.clear();
+    _stepStartedAtMs.clear();
     _hasSeenInitialSystemPrompt = false;
+    _sandboxMode = null;
+    _schedules.clear();
+    _workflows.clear();
+    _pendingWorkflowUpdates.clear();
+    _lastTurnEndSeq = -1;
+    _factsRevision++;
     final sorted = List<JsonMap>.of(history)
       ..sort((a, b) => wireLong(a, 'seq').compareTo(wireLong(b, 'seq')));
     for (final event in sorted) {
@@ -182,9 +248,12 @@ class TimelineReducer {
     if (seq <= _lastSeq) return;
     _lastSeq = seq;
 
-    switch (wireType(event)) {
+    final type = wireType(event);
+    switch (type) {
       case 'turn/start':
         _appendTurnStart(event);
+      case 'step/start':
+        _recordStepStart(event);
       case 'compaction/summary':
         _appendCompaction(event);
       case 'command/run':
@@ -203,8 +272,50 @@ class TimelineReducer {
         _appendToolCall(event);
       case 'tool/result':
         _appendToolResult(event);
+      case 'tool/ptc-dispatch-start':
+        _appendPtcDispatchStart(event);
+      case 'tool/ptc-dispatch':
+        _resolvePtcDispatch(event);
+      case 'hook/invoked':
+        _appendHookInvoked(event);
+      case 'hook/result':
+        _resolveHookResult(event);
+      case 'tool-workflow/run-start':
+        _startWorkflowRun(event);
+      case 'tool-workflow/agent-start':
+      case 'tool-workflow/agent-end':
+      case 'tool-workflow/run-end':
+        _updateWorkflowRun(event);
+      case 'sandbox/mode':
+        _sandboxMode = decodeSandboxModeEvent(_eventData(event));
+        _factsRevision++;
+      case 'schedule/change':
+        _applyScheduleChange(decodeScheduleChange(_eventData(event)));
+        _factsRevision++;
       case 'turn/end':
         _appendTurnEnd(event);
+      default:
+        // The dsh `SessionEventMap` is merge-extensible (the reference
+        // switches closed unions with `assertNever` and merge-extensible
+        // unions through a documented default), so an unrecognised wire type
+        // is expected input, not a client bug: the fold publishes no item for
+        // it. Reporting it is what keeps a parity gap measurable — a silent
+        // drop here is invisible. Only the type and `seq` travel; the payload
+        // can carry user text and stays out.
+        onDiagnostic?.call(
+          AdapterDiagnostic(
+            message:
+                'Unrecognised session event type "$type" at seq $seq — no '
+                'timeline fold; wire coverage gap',
+            level: AdapterDiagnosticLevel.debug,
+            context: 'timeline.event',
+            metadata: <String, Object?>{
+              'type': type,
+              'seq': seq,
+              'sessionId': sessionId,
+            },
+          ),
+        );
     }
   }
 
@@ -212,7 +323,23 @@ class TimelineReducer {
     final turn = wireLong(_eventData(event), 'turn');
     if (turn <= 0 || !_seenTurns.add(turn)) return;
     _finalizePartial();
-    _items.add(TimelineTurnBoundary(turn));
+    _items.add(TimelineTurnBoundary(turn, startedAtEpochMs: _eventTime(event)));
+  }
+
+  /// Records the turn's latest entered step (`step/start`) so later events
+  /// that omit a step — code-dispatch sub-calls — can be placed in the
+  /// ledger's step structure, and records the step's logged time so an
+  /// assistant row can carry the reference's `stepStartTime`. The marker
+  /// itself publishes no row: steps are a fact of the rows inside them, and
+  /// a row-less marker would add ledger noise without a reader action.
+  void _recordStepStart(JsonMap event) {
+    final data = _eventData(event);
+    final turn = wireLong(data, 'turn');
+    final step = wireLong(data, 'step');
+    if (turn <= 0 || step <= 0) return;
+    _stepByTurn[turn] = step;
+    final time = _eventTime(event);
+    if (time != null) _stepStartedAtMs[_turnStepKey(turn, step)] = time;
   }
 
   /// A summary shadows its range; the marker captures counts and optional summary.
@@ -482,6 +609,12 @@ class TimelineReducer {
       reasoningDuration = null;
     }
 
+    // The step's token accounting travels with its assistant message
+    // (`assistant/message.usage`); the recorded stream carries the only
+    // latency boundary the log preserves.
+    final usage = decodeTokenUsage(data['usage']);
+    final firstTokenAtEpochMs =
+        _partialFirstTokenMs ?? assistantStreamFirstTokenTime(data['stream']);
     final finalItem = TimelineMessage(
       ChatMessage(
         id: wireString(message, 'id') ?? 'assistant:$_lastSeq',
@@ -494,6 +627,10 @@ class TimelineReducer {
         images: _extractImages(message),
         seq: _lastSeq,
       ),
+      step: step,
+      usage: usage,
+      firstTokenAtEpochMs: firstTokenAtEpochMs,
+      stepStartedAtEpochMs: _stepStartedAtMs[_turnStepKey(turn, step)],
     );
 
     if (matchingPartial) {
@@ -519,7 +656,11 @@ class TimelineReducer {
 
     switch (chunkType) {
       case 'text-delta':
-        text.write(wireString(chunk, 'text') ?? '');
+        final delta = wireString(chunk, 'text') ?? '';
+        if (delta != '' && _partialFirstTokenMs == null) {
+          _partialFirstTokenMs = _streamTime(event);
+        }
+        text.write(delta);
         _partialDirty = true;
       case 'reasoning-delta':
         if (_partialReasoningStartMs == null) {
@@ -528,8 +669,11 @@ class TimelineReducer {
               ? time
               : DateTime.now().millisecondsSinceEpoch;
         }
-        reasoning = (reasoning ??= StringBuffer())
-          ..write(wireString(chunk, 'text') ?? '');
+        final delta = wireString(chunk, 'text') ?? '';
+        if (delta != '' && _partialFirstTokenMs == null) {
+          _partialFirstTokenMs = _streamTime(event);
+        }
+        reasoning = (reasoning ??= StringBuffer())..write(delta);
         _partialDirty = true;
       case 'block-start':
         final blockType = wireString(chunk, 'blockType');
@@ -586,6 +730,7 @@ class TimelineReducer {
     _partialIndex = _items.length;
     _partialReasoningStartMs = null;
     _partialReasoningDuration = null;
+    _partialFirstTokenMs = null;
     _items.add(
       TimelineMessage(
         ChatMessage(
@@ -597,6 +742,8 @@ class TimelineReducer {
           createdAtEpochMs: wireLong(event, 'time'),
           seq: _lastSeq,
         ),
+        step: step,
+        stepStartedAtEpochMs: _stepStartedAtMs[_turnStepKey(turn, step)],
       ),
     );
   }
@@ -614,7 +761,8 @@ class TimelineReducer {
   /// Build the partial's current [ChatMessage] from the buffers; the
   /// item's own fields stand in for parts no chunk has touched yet.
   TimelineMessage _partialMessage({required bool streaming}) {
-    final value = (_items[_partialIndex] as TimelineMessage).value;
+    final current = _items[_partialIndex] as TimelineMessage;
+    final value = current.value;
     return TimelineMessage(
       ChatMessage(
         id: value.id,
@@ -628,6 +776,9 @@ class TimelineReducer {
         images: value.images,
         seq: value.seq,
       ),
+      step: current.step,
+      firstTokenAtEpochMs: _partialFirstTokenMs ?? current.firstTokenAtEpochMs,
+      stepStartedAtEpochMs: current.stepStartedAtEpochMs,
     );
   }
 
@@ -649,7 +800,16 @@ class TimelineReducer {
     _partialReasoning = null;
     _partialReasoningStartMs = null;
     _partialReasoningDuration = null;
+    _partialFirstTokenMs = null;
     _partialDirty = false;
+  }
+
+  /// Stream timestamp for a latency boundary: the event's logged time, or
+  /// the wall clock when the host sent none (a live delta always has one;
+  /// the fallback keeps a replayed zero from collapsing a real interval).
+  int _streamTime(JsonMap event) {
+    final time = wireLong(event, 'time');
+    return time > 0 ? time : DateTime.now().millisecondsSinceEpoch;
   }
 
   void _appendToolCall(JsonMap event) {
@@ -661,8 +821,182 @@ class TimelineReducer {
         name: wireString(data, 'name') ?? 'unknown',
         arguments: wireString(data, 'arguments'),
         status: ToolRunStatus.running,
+        step: wireLong(data, 'step'),
+        startedAtEpochMs: _eventTime(event),
       ),
     );
+  }
+
+  /// Opens one nested code-dispatch call (`tool/ptc-dispatch-start`).
+  /// The payload carries the pairing ids and the dispatch name; the step
+  /// comes from the enclosing turn's latest `step/start`, the only place
+  /// it was logged.
+  void _appendPtcDispatchStart(JsonMap event) {
+    final data = _eventData(event);
+    final subCallId = wireString(data, 'subCallId');
+    if (subCallId == null) return;
+    final parentCallId = wireString(data, 'parentCallId');
+    final turn = wireLong(data, 'turn');
+    final step = turn > 0
+        ? (_stepByTurn[turn] ?? 0)
+        : (_stepByTurn.values.isEmpty ? 0 : _stepByTurn.values.last);
+    final call = TimelineToolCall(
+      id: subCallId,
+      name: wireString(data, 'name') ?? 'unknown',
+      arguments: _stringifyArguments(data['arguments']),
+      status: ToolRunStatus.running,
+      step: step,
+      parentCallId: parentCallId,
+      startedAtEpochMs: _eventTime(event),
+    );
+    _attachChildCall(call);
+  }
+
+  /// Settles one nested call (`tool/ptc-dispatch`): the same
+  /// `content` + `isError` vocabulary as `tool/result`, paired by
+  /// `subCallId`.
+  void _resolvePtcDispatch(JsonMap event) {
+    final data = _eventData(event);
+    final subCallId = wireString(data, 'subCallId');
+    if (subCallId == null) return;
+    final isError = wireBool(data, 'isError') || data['error'] != null;
+    final name = wireString(data, 'name');
+    final result = _extractContentText(data['content']);
+
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item is! TimelineToolCall) continue;
+      if (_findCall(item, subCallId) == null) continue;
+      _items[i] = _updateCall(item, subCallId, (call) {
+        return _withChildren(
+          call,
+          call.children,
+          name: name,
+          result: result,
+          isError: isError,
+          settle: true,
+        );
+      });
+      return;
+    }
+    // A dispatch whose start fell outside the folded window (an older page
+    // cut between the pair) still settles as its own row: the outcome is a
+    // real logged fact and dropping it would hide a finished call.
+    _items.add(
+      TimelineToolCall(
+        id: subCallId,
+        name: name ?? 'unknown',
+        arguments: _stringifyArguments(data['arguments']),
+        result: result,
+        isError: isError,
+        status: isError ? ToolRunStatus.failed : ToolRunStatus.completed,
+        parentCallId: wireString(data, 'parentCallId'),
+        startedAtEpochMs: _eventTime(event),
+      ),
+    );
+  }
+
+  /// Inserts [call] under its parent when that parent is loaded, else as a
+  /// root row. The host logs a sub-dispatch inside the parent's execution,
+  /// so the parent is normally already folded; a window cut that left the
+  /// parent out keeps the call visible at the top level.
+  void _attachChildCall(TimelineToolCall call) {
+    final parentCallId = call.parentCallId;
+    if (parentCallId == null) {
+      _items.add(call);
+      return;
+    }
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item is! TimelineToolCall) continue;
+      if (_findCall(item, parentCallId) == null) continue;
+      _items[i] = _updateCall(
+        item,
+        parentCallId,
+        (node) => _withChildren(node, [...node.children, call]),
+      );
+      return;
+    }
+    _items.add(call);
+  }
+
+  /// The call with [callId] anywhere in [root]'s subtree, or null.
+  TimelineToolCall? _findCall(TimelineToolCall root, String callId) {
+    if (root.id == callId) return root;
+    for (final child in root.children) {
+      final found = _findCall(child, callId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  /// Rebuilds [root]'s subtree with [update] applied to the [callId] node.
+  /// The caller has already proved the node exists.
+  TimelineToolCall _updateCall(
+    TimelineToolCall root,
+    String callId,
+    TimelineToolCall Function(TimelineToolCall) update,
+  ) {
+    if (root.id == callId) return update(root);
+    return _withChildren(root, [
+      for (final child in root.children) _updateCall(child, callId, update),
+    ]);
+  }
+
+  TimelineToolCall _withChildren(
+    TimelineToolCall call,
+    List<TimelineToolCall> children, {
+    String? name,
+    String? result,
+    bool isError = false,
+    bool settle = false,
+  }) => TimelineToolCall(
+    id: call.id,
+    name: name ?? call.name,
+    arguments: call.arguments,
+    result: settle ? result : call.result,
+    isError: settle ? isError : call.isError,
+    status: settle
+        ? (isError ? ToolRunStatus.failed : ToolRunStatus.completed)
+        : call.status,
+    step: call.step,
+    parentCallId: call.parentCallId,
+    children: children,
+    startedAtEpochMs: call.startedAtEpochMs,
+    presentation: call.presentation,
+  );
+
+  /// The logged event time, or null when the host sent none — a start
+  /// timestamp is a fact, and 0 would render as 1970 rather than "unknown".
+  int? _eventTime(JsonMap event) {
+    final time = wireLong(event, 'time');
+    return time > 0 ? time : null;
+  }
+
+  String? _stringifyArguments(Object? value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    return jsonEncode(value);
+  }
+
+  /// Text of a `tool/ptc-dispatch` `content` block list, the same
+  /// projection `_collectText` applies to message content.
+  String _extractContentText(Object? content) {
+    final blocks = asJsonArray(content);
+    if (blocks == null) return '';
+    final buffer = StringBuffer();
+    for (final block in blocks) {
+      final obj = asJsonObject(block);
+      if (obj == null) continue;
+      switch (wireType(obj)) {
+        case 'text':
+          final text = wireString(obj, 'text');
+          if (text != null) buffer.write(text);
+        case 'tool-result':
+          buffer.write(_collectText(obj));
+      }
+    }
+    return buffer.toString();
   }
 
   void _appendToolResult(JsonMap event) {
@@ -709,6 +1043,16 @@ class TimelineReducer {
       result: resultText,
       isError: isError,
       status: isError ? ToolRunStatus.failed : ToolRunStatus.completed,
+      step: previous?.step ?? wireLong(data, 'step'),
+      parentCallId: previous?.parentCallId,
+      children: previous?.children ?? const <TimelineToolCall>[],
+      startedAtEpochMs: previous?.startedAtEpochMs ?? _eventTime(event),
+      // The tool's persisted render intent (`output.presentationMeta`); the
+      // host's `presentCall`/`presentResult` functions themselves never
+      // cross the wire, so this `meta` member is the only structured card
+      // data on the result event. A payload with no known card yields null
+      // (the reference's generic fallback).
+      presentation: decodeToolResultPresentation(data['meta']),
     );
     if (index >= 0) {
       _items[index] = newItem;
@@ -719,6 +1063,12 @@ class TimelineReducer {
 
   void _appendTurnEnd(JsonMap event) {
     _finalizePartial();
+    // A closed turn is the reference's `locationClosed` signal: a durable
+    // workflow run still lacking its terminal event presents as interrupted
+    // from here on, without touching the workflow tool's own result row.
+    _lastTurnEndSeq = _lastSeq;
+    _refreshOpenWorkflows();
+    final turn = wireLong(_eventData(event), 'turn');
     final reason = asJsonObject(_eventData(event)['reason']);
     final kind = reason != null ? wireString(reason, 'kind') : null;
     // The item publishes the wire kind plus host-authored detail only —
@@ -746,6 +1096,366 @@ class TimelineReducer {
         ),
       );
     }
+    _foldTurnUsage(turn, _eventTime(event));
+  }
+
+  // -------------------------------------------------------------------------
+  // Hook audit (`hook/invoked` + `hook/result` — log-only)
+  // -------------------------------------------------------------------------
+
+  /// Opens one hook audit row. The pair is correlated by `handlerId`, the
+  /// same pairing the reference's `appendHookResult` uses.
+  void _appendHookInvoked(JsonMap event) {
+    _items.add(TimelineHookAudit(decodeHookInvoked(_eventData(event))));
+  }
+
+  /// Settles the audit row opened by `hook/invoked`. A result whose invoked
+  /// half fell outside the folded window is dropped: the pair's dialect is
+  /// only on `hook/invoked`, and the reference renders complete pairs.
+  void _resolveHookResult(JsonMap event) {
+    final data = _eventData(event);
+    final handlerId = wireString(data, 'handlerId');
+    if (handlerId == null) return;
+    for (var i = 0; i < _items.length; i++) {
+      final current = _items[i];
+      if (current is! TimelineHookAudit) continue;
+      if (current.audit.handlerId != handlerId) continue;
+      _items[i] = TimelineHookAudit(applyHookResult(current.audit, data));
+      return;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Durable workflow runs (`tool-workflow/*` — log-only)
+  // -------------------------------------------------------------------------
+
+  /// Opens one durable workflow run record. Updates that arrived before the
+  /// start (a history tail cut between the pair) are buffered and applied
+  /// here, so the run's members/terminal state survive the tail.
+  void _startWorkflowRun(JsonMap event) {
+    final start = decodeWorkflowRunStart(_eventData(event));
+    if (_workflows.containsKey(start.runId)) {
+      throw FormatException(
+        'tool-workflow/run-start repeats run "${start.runId}"',
+      );
+    }
+    final state = _WorkflowState(
+      runId: start.runId,
+      name: start.name,
+      startSeq: _lastSeq,
+    );
+    final buffered = _pendingWorkflowUpdates.remove(start.runId);
+    if (buffered != null) {
+      for (final update in buffered) {
+        update.apply(state);
+      }
+    }
+    _workflows[start.runId] = state;
+    _items.add(_workflowItem(state));
+  }
+
+  /// Folds one member or terminal update. An update whose run start has not
+  /// been folded stays pending until the unique `run-start` arrives.
+  void _updateWorkflowRun(JsonMap event) {
+    final data = _eventData(event);
+    final runId = wireString(data, 'runId');
+    if (runId == null) {
+      throw const FormatException(
+        'tool-workflow event missing required field "runId"',
+      );
+    }
+    final update = switch (wireType(event)) {
+      'tool-workflow/agent-start' => _WorkflowUpdate((state) {
+        final member = decodeWorkflowAgentStart(data);
+        state.members.add(
+          _WorkflowMemberState(
+            seq: member.seq,
+            label: member.label,
+            phase: member.phase,
+            childId: member.childId,
+          ),
+        );
+      }),
+      'tool-workflow/agent-end' => _WorkflowUpdate((state) {
+        final end = decodeWorkflowAgentEnd(data);
+        // The reference's `updateAgentEnd` maps over the run's members and
+        // leaves the state unchanged when no seq matches: an end whose start
+        // fell outside the folded window is not an error.
+        for (var i = 0; i < state.members.length; i++) {
+          if (state.members[i].seq == end.seq) {
+            state.members[i] = state.members[i].withOutcome(end.outcome);
+            return;
+          }
+        }
+      }),
+      'tool-workflow/run-end' => _WorkflowUpdate((state) {
+        state.stopReason = decodeWorkflowRunEnd(data).stopReason;
+      }),
+      final other => throw FormatException(
+        'unknown tool-workflow event "$other"',
+      ),
+    };
+    final state = _workflows[runId];
+    if (state == null) {
+      (_pendingWorkflowUpdates[runId] ??= <_WorkflowUpdate>[]).add(update);
+      return;
+    }
+    update.apply(state);
+    _publishWorkflowItem(runId, state);
+  }
+
+  /// Rebuilds every run item still lacking a terminal event after a turn
+  /// closed, so their interrupted status projects.
+  void _refreshOpenWorkflows() {
+    for (final entry in _workflows.entries) {
+      if (entry.value.stopReason != null) continue;
+      if (entry.value.startSeq >= _lastTurnEndSeq) continue;
+      _publishWorkflowItem(entry.key, entry.value);
+    }
+  }
+
+  void _publishWorkflowItem(String runId, _WorkflowState state) {
+    for (var i = 0; i < _items.length; i++) {
+      final current = _items[i];
+      if (current is! TimelineWorkflowRun) continue;
+      if (current.runId != runId) continue;
+      _items[i] = _workflowItem(state);
+      return;
+    }
+  }
+
+  /// Projects one run's folded state into its render item (the reference's
+  /// `projectWorkflow`): members group by phase in first-seen order, an
+  /// unsettled member is `running`, or `interrupted` when the run's turn
+  /// closed.
+  TimelineWorkflowRun _workflowItem(_WorkflowState state) {
+    final interrupted =
+        state.stopReason == null && state.startSeq < _lastTurnEndSeq;
+    final phases = <WorkflowPhase>[];
+    final phaseIndex = <String, int>{};
+    for (final member in state.members) {
+      final key = workflowPhaseKey(member.phase);
+      final status = member.outcome == null
+          ? (interrupted
+                ? WorkflowRunStatus.interrupted
+                : WorkflowRunStatus.running)
+          : _statusFromOutcome(member.outcome!);
+      final projected = WorkflowMember(
+        seq: member.seq,
+        label: member.label,
+        childId: member.childId,
+        status: status,
+      );
+      final existing = phaseIndex[key];
+      if (existing == null) {
+        phaseIndex[key] = phases.length;
+        phases.add(
+          WorkflowPhase(
+            key: key,
+            phase: member.phase,
+            members: <WorkflowMember>[projected],
+          ),
+        );
+      } else {
+        phases[existing].members.add(projected);
+      }
+    }
+    return TimelineWorkflowRun(
+      runId: state.runId,
+      name: state.name,
+      status: state.stopReason == null
+          ? (interrupted
+                ? WorkflowRunStatus.interrupted
+                : WorkflowRunStatus.running)
+          : _statusFromStopReason(state.stopReason!),
+      stopReason: state.stopReason?.name,
+      phases: phases,
+    );
+  }
+
+  static WorkflowRunStatus _statusFromOutcome(WorkflowMemberOutcome outcome) =>
+      switch (outcome) {
+        WorkflowMemberOutcome.completed => WorkflowRunStatus.completed,
+        WorkflowMemberOutcome.failed => WorkflowRunStatus.failed,
+        WorkflowMemberOutcome.cancelled => WorkflowRunStatus.cancelled,
+      };
+
+  static WorkflowRunStatus _statusFromStopReason(WorkflowStopReason reason) =>
+      switch (reason) {
+        WorkflowStopReason.completed => WorkflowRunStatus.completed,
+        WorkflowStopReason.cancelled => WorkflowRunStatus.cancelled,
+        WorkflowStopReason.error => WorkflowRunStatus.failed,
+      };
+
+  // -------------------------------------------------------------------------
+  // Schedule fold (`schedule/change` — the durable reminder stream)
+  // -------------------------------------------------------------------------
+
+  /// Applies one decoded `schedule/change` to the active set. The transition
+  /// rules mirror the reference's (`packages/schedule/schedule/src/
+  /// domain.ts` `applyScheduleChanges`), but the fold is window-tolerant:
+  /// this reducer replays a history page, not the complete log, so a delete
+  /// or dispatch naming an id created before the window neither throws nor
+  /// invents a record, and a create upserts. The rules that are independent
+  /// of the window — `version` 1, a one-shot dispatch carrying no
+  /// `acceptedAt`, a fixed-rate dispatch carrying one — still fail loud.
+  void _applyScheduleChange(ScheduleChange change) {
+    switch (change) {
+      case ScheduleCreate(:final reminder):
+        final existing = _schedules.indexWhere(
+          (item) => item.id == reminder.id,
+        );
+        if (existing >= 0) {
+          _schedules[existing] = reminder;
+        } else {
+          _schedules.add(reminder);
+        }
+      case ScheduleDelete(:final id):
+        _schedules.removeWhere((item) => item.id == id);
+      case ScheduleDispatch(:final id, :final acceptedAt):
+        final index = _schedules.indexWhere((item) => item.id == id);
+        if (index < 0) return;
+        final record = _schedules[index];
+        if (record.kind != ScheduleReminderKind.every) {
+          if (acceptedAt != null) {
+            throw const FormatException(
+              'one-shot schedule dispatch must not carry "acceptedAt"',
+            );
+          }
+          _schedules.removeAt(index);
+          return;
+        }
+        if (acceptedAt == null) {
+          throw const FormatException(
+            'fixed-rate schedule dispatch requires "acceptedAt"',
+          );
+        }
+        final next = _nextEveryTarget(record, acceptedAt);
+        if (next == null) {
+          _schedules.removeAt(index);
+        } else {
+          _schedules[index] = ScheduleReminder(
+            id: record.id,
+            kind: record.kind,
+            prompt: record.prompt,
+            scheduledAt: next,
+            everySeconds: record.everySeconds,
+          );
+        }
+    }
+  }
+
+  /// The next anchor-aligned target after [acceptedAt], or null when the
+  /// occurrence would leave the four-digit-year window
+  /// (`resolveEveryOccurrence`).
+  String? _nextEveryTarget(ScheduleReminder record, String acceptedAt) {
+    final target = DateTime.tryParse(record.scheduledAt);
+    final accepted = DateTime.tryParse(acceptedAt);
+    final intervalSeconds = record.everySeconds;
+    if (target == null || accepted == null || intervalSeconds == null) {
+      throw FormatException(
+        'schedule/change fixed-rate dispatch has an unparsable instant for '
+        '"${record.id}"',
+      );
+    }
+    final intervalMs = intervalSeconds * 1000;
+    if (intervalMs <= 0) {
+      throw FormatException(
+        'schedule/change fixed-rate interval must be positive for '
+        '"${record.id}"',
+      );
+    }
+    final targetMs = target.toUtc().millisecondsSinceEpoch;
+    final acceptedMs = accepted.toUtc().millisecondsSinceEpoch;
+    if (acceptedMs < targetMs) {
+      throw FormatException(
+        'schedule/change dispatch precedes the active scheduledAt for '
+        '"${record.id}"',
+      );
+    }
+    final steps = (acceptedMs - targetMs) ~/ intervalMs;
+    final next = targetMs + (steps + 1) * intervalMs;
+    // Date.parse('9999-12-31T23:59:59.999Z') — the reference's
+    // MAX_FOUR_DIGIT_YEAR_MS.
+    if (next > 253402300799999) return null;
+    return DateTime.fromMillisecondsSinceEpoch(
+      next,
+      isUtc: true,
+    ).toIso8601String();
+  }
+
+  /// Sums the completed turn's per-step token accounting onto its
+  /// `turn/start` boundary and stamps the `turn/end` event's own logged time,
+  /// so a surface can show the turn's wall time. The total is a convenience
+  /// over figures the host already sent with each `assistant/message`; a turn
+  /// whose steps reported nothing keeps a null usage rather than a fabricated
+  /// zero, and a missing `time` stays null.
+  void _foldTurnUsage(int turn, int? endedAtEpochMs) {
+    var boundaryIndex = -1;
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item is TimelineTurnBoundary && item.turn == turn) {
+        boundaryIndex = i;
+        break;
+      }
+    }
+    if (boundaryIndex < 0) return;
+    final boundary = _items[boundaryIndex] as TimelineTurnBoundary;
+    final usages = <TokenUsage>[];
+    for (var i = boundaryIndex + 1; i < _items.length; i++) {
+      final item = _items[i];
+      if (item is TimelineTurnBoundary) break;
+      if (item is TimelineMessage && item.usage != null) {
+        usages.add(item.usage!);
+      }
+    }
+    _items[boundaryIndex] = TimelineTurnBoundary(
+      turn,
+      usage: usages.isEmpty ? boundary.usage : _sumUsage(usages),
+      startedAtEpochMs: boundary.startedAtEpochMs,
+      endedAtEpochMs: endedAtEpochMs,
+    );
+  }
+
+  TokenUsage _sumUsage(List<TokenUsage> usages) {
+    var input = 0;
+    var output = 0;
+    var total = 0;
+    var totalKnown = false;
+    var cacheRead = 0;
+    var cacheReadKnown = false;
+    var cacheWrite = 0;
+    var cacheWriteKnown = false;
+    var reasoning = 0;
+    var reasoningKnown = false;
+    for (final usage in usages) {
+      input += usage.inputTokens;
+      output += usage.outputTokens;
+      if (usage.totalTokens case final value?) {
+        total += value;
+        totalKnown = true;
+      }
+      if (usage.cacheReadTokens case final value?) {
+        cacheRead += value;
+        cacheReadKnown = true;
+      }
+      if (usage.cacheWriteTokens case final value?) {
+        cacheWrite += value;
+        cacheWriteKnown = true;
+      }
+      if (usage.reasoningTokens case final value?) {
+        reasoning += value;
+        reasoningKnown = true;
+      }
+    }
+    return TokenUsage(
+      inputTokens: input,
+      outputTokens: output,
+      totalTokens: totalKnown ? total : null,
+      cacheReadTokens: cacheReadKnown ? cacheRead : null,
+      cacheWriteTokens: cacheWriteKnown ? cacheWrite : null,
+      reasoningTokens: reasoningKnown ? reasoning : null,
+    );
   }
 
   void _upsertByKey({required String key, required TimelineItem item}) {
@@ -937,4 +1647,54 @@ class TimelineReducer {
   }
 
   String _turnStepKey(int turn, int step) => '$turn:$step';
+}
+
+/// One workflow run's folded durable state (the reference's `WorkflowState`
+/// plus the anchor seq a history tail can be checked against).
+final class _WorkflowState {
+  _WorkflowState({
+    required this.runId,
+    required this.name,
+    required this.startSeq,
+  });
+
+  final String runId;
+  final String name;
+
+  /// Seq of the run's `tool-workflow/run-start`.
+  final int startSeq;
+
+  final List<_WorkflowMemberState> members = <_WorkflowMemberState>[];
+  WorkflowStopReason? stopReason;
+}
+
+/// One member's folded state before projection.
+final class _WorkflowMemberState {
+  _WorkflowMemberState({
+    required this.seq,
+    required this.label,
+    required this.childId,
+    this.phase,
+  });
+
+  final int seq;
+  final String label;
+  final String childId;
+  final String? phase;
+  WorkflowMemberOutcome? outcome;
+
+  _WorkflowMemberState withOutcome(WorkflowMemberOutcome next) =>
+      _WorkflowMemberState(
+        seq: seq,
+        label: label,
+        childId: childId,
+        phase: phase,
+      )..outcome = next;
+}
+
+/// One deferred workflow update (arrived before its `run-start`).
+final class _WorkflowUpdate {
+  const _WorkflowUpdate(this.apply);
+
+  final void Function(_WorkflowState state) apply;
 }

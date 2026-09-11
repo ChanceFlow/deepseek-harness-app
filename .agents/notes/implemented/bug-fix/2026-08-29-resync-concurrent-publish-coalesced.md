@@ -13,7 +13,7 @@ client:
    recovery entry) serialized all recovery inside the resync mutex: await
    `refreshSessions()`, then `refreshWorkspaces()`, then per-session
    `ensureLoaded` one at a time. The web
-   [manager.ts](../../../../reference/deepseek-harness/packages/client/runtime/src/client/sessions/manager.ts)
+   [manager.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/client/sessions/manager.ts)
    `handleConnected` fires the list pull and every `session.resync()` in
    parallel. While the chain ran, every session stayed `_ready = false`,
    arriving frames parked in `_pending`, and nothing published — the
@@ -45,8 +45,9 @@ window):
   `session/subscribed` frame — see
   [queue-rebaseline-in-band](2026-08-29-queue-rebaseline-in-band.md)) inside
   the resync mutex, then fires the
-  list/workspaces pull and every opened root session's `ensureLoaded` together
-  via `Future.wait` — the web `handleConnected` parity. Recovery is
+  list pull and every opened root session's `ensureLoaded` together
+  via `Future.wait` — the web `handleConnected` parity (the roster rides the
+  `workspace/follow` baseline). Recovery is
   first-settled-first-published: each session releases its `_pending`
   frames when its own history lands; the selected session needs no special
   scheduling. The session-states collection is snapshotted before firing.

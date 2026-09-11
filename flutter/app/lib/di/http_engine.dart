@@ -11,11 +11,12 @@
 /// surface as `DshTransportException` through the normal path.
 library;
 
-import 'dart:io' show Platform;
+import 'dart:io' show HttpClient, Platform, X509Certificate;
 
 import 'package:cronet_http/cronet_http.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart' show IOClient;
 
 import '../config.dart';
 
@@ -73,3 +74,47 @@ http.Client? dshHttp3Engine() {
     return null;
   }
 }
+
+/// A `dart:io` client that accepts a server certificate failing system
+/// validation for [host] only; a certificate offered by any other host is
+/// still rejected. The caller owns the client and must close it.
+///
+/// The opt-in path for a self-signed / internal-CA gateway: Android cannot
+/// import a user CA at runtime, and a network security config trusts by
+/// domain, not by user decision. Construct this only for a backend the user
+/// explicitly marked trusted, and only for its exact host.
+///
+/// [connectionTimeout] bounds connection establishment (the same bound the
+/// dart:io default RPC path sets); it is never a request deadline.
+HttpClient trustedCertificateHttpClient(
+  String host, {
+  Duration? connectionTimeout,
+}) {
+  final client = HttpClient();
+  if (connectionTimeout != null) {
+    client.connectionTimeout = connectionTimeout;
+  }
+  client.badCertificateCallback = (
+    X509Certificate cert,
+    String requestHost,
+    int port,
+  ) => trustedCertificateHostMatches(host, requestHost);
+  return client;
+}
+
+/// The acceptance rule behind [trustedCertificateHttpClient]: the one host
+/// the user opted in, and nothing else (no subdomains, no lookalikes).
+@visibleForTesting
+bool trustedCertificateHostMatches(String trustedHost, String requestHost) =>
+    requestHost == trustedHost;
+
+/// The `package:http` wrapper for a trusted host's RPC leg.
+///
+/// `cronet_http` 1.9.0 exposes no certificate-verification override, so a
+/// trusted backend deliberately steps off the Cronet path and loses the
+/// opportunistic HTTP/3 upgrade for that host; every untrusted backend keeps
+/// Cronet. The explicit opt-in is the only case this client is built.
+http.Client trustedHostRpcClient(String host, {Duration? connectionTimeout}) =>
+    IOClient(
+      trustedCertificateHttpClient(host, connectionTimeout: connectionTimeout),
+    );

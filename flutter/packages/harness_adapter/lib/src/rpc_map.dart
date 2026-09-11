@@ -66,7 +66,6 @@ abstract final class DshRpcEndpoints {
   static const String workspaceInsertSessionBefore =
       'workspace/insertSessionBefore';
   static const String workspaceArchiveSession = 'workspace/archiveSession';
-  static const String workspaceList = 'workspace/list';
 
   // Workspace Files (DSH 0.1.5 workspaceFiles service)
   static const String workspaceFilesStat = 'workspaceFiles/stat';
@@ -75,8 +74,8 @@ abstract final class DshRpcEndpoints {
   static const String workspaceFilesReadAll = 'workspaceFiles/readAll';
   static const String workspaceFilesList = 'workspaceFiles/list';
 
-  // Host & Settings & Commands
-  static const String hostDescribe = 'host/describe';
+  // Settings & Commands
+  static const String commandsList = 'commands/list';
   static const String commandsExecute = 'commands/execute';
   static const String settingsDescribe = 'settings/describe';
   static const String settingsUpdate = 'settings/update';
@@ -85,6 +84,25 @@ abstract final class DshRpcEndpoints {
   static const String credentialsDescribe = 'credentials/describe';
   static const String credentialsSet = 'credentials/set';
   static const String credentialsUnset = 'credentials/unset';
+
+  // LLM provider/model administration (DSH 0.1.5 `llm` service —
+  // reference/deepseek-harness/packages/llm/llm/src/index.ts `LlmRuntime`,
+  // which binds the bare service key `llm` as its Remote namespace).
+  static const String llmListProviders = 'llm/listProviders';
+  static const String llmListConfigurableProviders =
+      'llm/listConfigurableProviders';
+  static const String llmDiscoverModels = 'llm/discoverModels';
+
+  // Dynamic Cordis plugin runner (DSH 0.1.5 `dynamicCordisRunner` service —
+  // reference/deepseek-harness/packages/extensions/cordis-host-runner/src/
+  // index.ts, `@Remote('resolveRequestRun')`).
+  static const String cordisResolveRequestRun =
+      'dynamicCordisRunner/resolveRequestRun';
+
+  // Plugin inventory (DSH 0.1.5 `pluginInventory` service —
+  // reference/deepseek-harness/packages/host/plugin-inventory/src/index.ts,
+  // `@Remote('list')`).
+  static const String pluginInventoryList = 'pluginInventory/list';
 
   // Remote Events (DSH 0.1.2)
   static const String eventsResult = r'$events/result';
@@ -95,6 +113,21 @@ abstract final class DshRpcEndpoints {
 /// Kept empty since all communication is strictly locked to DSH 0.1.2.
 const Map<String, List<String>> kDshEndpointFallbacks =
     <String, List<String>>{};
+
+/// HTTP routes the client GETs directly instead of wrapping in a typert RPC
+/// envelope.
+///
+/// These are not Typert Remote methods: the host registers them on the
+/// connection carrier's own route table (`connection.fetch.register`), and
+/// they answer with a non-JSON body — the session-log route streams a ZIP.
+/// They therefore stay out of [DshRpcEndpoints], whose members the wire-pin
+/// gate compares against the pinned Typert Remote surface.
+abstract final class DshHttpRoutes {
+  /// The session-log archive download; methods `GET` and `HEAD` at 0.1.5
+  /// (`reference/deepseek-harness/packages/session-query/session-log-export/src/index.ts`
+  /// `SESSION_LOG_EXPORT_PATH`).
+  static const String sessionLogExport = '/api/session.export';
+}
 
 /// Returns [value] as a [JsonMap], or null when it is not an object.
 JsonMap? asJsonObject(Object? value) {

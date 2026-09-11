@@ -24,10 +24,15 @@ sealed class BackendAction {
 }
 
 final class AddBackend extends BackendAction {
-  const AddBackend(this.label, this.baseUrl);
+  const AddBackend(
+    this.label,
+    this.baseUrl, {
+    this.trustHostCertificate = false,
+  });
 
   final String label;
   final String baseUrl;
+  final bool trustHostCertificate;
 }
 
 final class RenameBackend extends BackendAction {
@@ -65,6 +70,16 @@ final class SetBackendEnabled extends BackendAction {
 
   final String backendId;
   final bool enabled;
+}
+
+/// Opts this host in or out of accepting a certificate that fails system
+/// validation (self-signed / internal-CA gateway). The DI layer applies the
+/// override to this host only, and only while enabled.
+final class SetBackendTrustHostCertificate extends BackendAction {
+  const SetBackendTrustHostCertificate(this.backendId, this.trust);
+
+  final String backendId;
+  final bool trust;
 }
 
 class BackendRegistryController {
@@ -138,7 +153,7 @@ class BackendRegistryController {
   void onAction(BackendAction action) {
     switch (action) {
       case AddBackend():
-        _add(action.label, action.baseUrl);
+        _add(action.label, action.baseUrl, action.trustHostCertificate);
       case RenameBackend():
         _rename(action.backendId, action.label);
       case UpdateBackendUrl():
@@ -149,6 +164,8 @@ class BackendRegistryController {
         _select(action.backendId);
       case SetBackendEnabled():
         _setEnabled(action.backendId, action.enabled);
+      case SetBackendTrustHostCertificate():
+        _setTrustHostCertificate(action.backendId, action.trust);
     }
   }
 
@@ -169,7 +186,7 @@ class BackendRegistryController {
     return id;
   }
 
-  void _add(String label, String baseUrl) {
+  void _add(String label, String baseUrl, bool trustHostCertificate) {
     final uri = _parseBaseUrl(baseUrl);
     if (uri == null) {
       _fail(BackendErrorCode.badBaseUrl, detail: baseUrl);
@@ -180,7 +197,12 @@ class BackendRegistryController {
       _fail(BackendErrorCode.emptyLabel);
       return;
     }
-    final backend = BackendConfig(id: _mintId(), label: trimmed, baseUri: uri);
+    final backend = BackendConfig(
+      id: _mintId(),
+      label: trimmed,
+      baseUri: uri,
+      trustHostCertificate: trustHostCertificate,
+    );
     _state = _state.withBackends([..._state.backends, backend]);
     _publish();
     _persist();
@@ -269,6 +291,20 @@ class BackendRegistryController {
       // list has no chat surface to preserve.
       _state = _state.withActiveId(backendId);
     }
+    _publish();
+    _persist();
+  }
+
+  void _setTrustHostCertificate(String backendId, bool trust) {
+    final index = _state.backends.indexWhere((b) => b.id == backendId);
+    if (index < 0) {
+      _fail(BackendErrorCode.unknownBackend, detail: backendId);
+      return;
+    }
+    if (_state.backends[index].trustHostCertificate == trust) return;
+    final backends = [..._state.backends];
+    backends[index] = backends[index].copyWith(trustHostCertificate: trust);
+    _state = _state.withBackends(backends);
     _publish();
     _persist();
   }

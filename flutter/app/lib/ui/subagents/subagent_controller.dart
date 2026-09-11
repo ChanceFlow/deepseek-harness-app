@@ -31,8 +31,12 @@ import '../../logging/error_log_collector.dart';
 import 'subagent_ui_state.dart';
 
 class SubagentController {
-  SubagentController(this._repository, {String? initialSessionId})
-    : _selectedParentId = initialSessionId {
+  SubagentController(
+    this._repository, {
+    String? initialSessionId,
+    String? initialChildId,
+  }) : _selectedParentId = initialSessionId,
+       _pendingChildId = initialChildId {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
         _sessions = sessions;
@@ -67,6 +71,13 @@ class SubagentController {
       <String, SubagentCatalog>{};
   final Set<String> _branchFailures = <String>{};
   String? _selectedChildId;
+
+  /// A child this controller was asked to open before its catalog landed
+  /// (the chat workflow card's member jump). The catalog row supplies the
+  /// mode `subagent.history` requires; until that row arrives the request
+  /// stays parked rather than opening the wrong mode and taking the host's
+  /// `subagent-not-found`.
+  String? _pendingChildId;
 
   /// Direct parent session id of the opened child (web
   /// `SubagentAddress.parentSessionId`).
@@ -131,6 +142,28 @@ class SubagentController {
       isLoading: _isLoading,
       errorMessage: _errorMessage,
     );
+    _resolvePendingChild();
+  }
+
+  /// Opens a child the controller was constructed with, once the selected
+  /// parent's catalog carries its row. The row is the only place the child's
+  /// catalog mode is published, so a child that never appears in the tree
+  /// (a member whose host entry was pruned, or a catalog load failure) stays
+  /// unopened instead of being addressed with a guessed mode.
+  void _resolvePendingChild() {
+    final childId = _pendingChildId;
+    if (childId == null) return;
+    if (_selectedChildId == childId) {
+      _pendingChildId = null;
+      return;
+    }
+    final entry = _catalog.entries
+        .where((entry) => entry.id == childId && entry.kind == 'child')
+        .firstOrNull;
+    final mode = entry?.mode;
+    if (mode == null) return;
+    _pendingChildId = null;
+    _openChild(childId, mode, _selectedParentId);
   }
 
   void onAction(SubagentAction action) {

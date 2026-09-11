@@ -13,9 +13,10 @@ report; a release build reports only when the release pipeline passed
 `--dart-define=DSH_TELEMETRY_ENABLED=true`, which it does for prerelease
 versions (`-alpha/-beta/-rc`). A stable release folds `kReleaseMode &&
 !kDebugTelemetryEnabled` to `return` and AOT tree-shakes the whole chain out
-of the APK. Widget tests skip the chain on `FLUTTER_TEST`. A local
-`flutter build apk --release` without the define reports — the gate errs
-toward observability.
+of the APK. Widget tests skip the chain on `FLUTTER_TEST`. Telemetry is
+opt-in: a local `flutter build apk --release` that omits the define stays
+silent, so no build reports unless the pipeline (or a developer) asked it
+to.
 
 ## Contract and boundaries
 

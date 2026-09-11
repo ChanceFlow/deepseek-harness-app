@@ -352,29 +352,30 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
-    if (endpoint == 'host/describe' || endpoint == 'host.describe') {
-      // A valid description so the settings shots' connection
-      // handshakes reach CONNECTED (green dots, versioned rows).
-      return RpcResult(
-        ok: true,
-        value: <String, Object?>{
-          'version': '0.1.1',
-          'cwd': '/home/user/Projects/deepseek-harness-app',
-          'provider': 'deepseek',
-          'model': 'glm-x',
-          'attachedSessions': 1,
-          'canOpenPath': true,
-        },
-      );
-    }
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 
   @override
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
+
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake, so
+/// the shots' connection handshakes reach CONNECTED (green dots).
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/user'},
+  },
+);
 
 class _SilentSocket implements DshEventSocket {
   final StreamController<ServerRequest> _frames =
@@ -383,6 +384,9 @@ class _SilentSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => _frames.add(_readyFrame()));
     return _frames.stream;
   }
 }

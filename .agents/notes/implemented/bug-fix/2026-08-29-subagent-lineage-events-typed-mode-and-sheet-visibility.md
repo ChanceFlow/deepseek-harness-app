@@ -11,22 +11,24 @@ and seeded by
 [subagent catalog cold seed](2026-08-29-subagent-catalog-cold-seed.md):
 
 1. **The catalog never refreshes after open.** The wire reports child
-   spawns over `host/session-added` frames
-   ([events.schema.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/events.schema.ts),
-   carrying `parentSessionId` + `origin: 'subagent'`) and `session.list`
-   rows carry `parentSessionId`
-   ([sessions.schema.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/sessions.schema.ts)
-   `sessionSummarySchema`). The adapter decoded `parentSessionId` in
+   spawns over the host's session-added broadcast
+   ([remote-events.ts](../../../../reference/deepseek-harness/packages/api/remotes/src/remote-events.ts)
+   forwards `api-session/added`, carrying `parentSessionId` + `origin:
+   'subagent'`; the retired `host/session-added` frame is deleted) and
+   `session.list` rows carry `parentSessionId`
+   ([types.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/types.ts)
+   `SessionSummary`). The adapter decoded `parentSessionId` in
    `SessionWire` but dropped it at the domain boundary, so
    `SubagentController` had no lineage to diff: a child spawned after the
    page opened never appeared, and a child whose session detached kept a
    lit status dot.
 2. **A one-shot child's transcript never opens.** The adapter hardcoded
    `'mode': 'continuable'` on `subagent.history`, and the host's
-   `catalogChild` guard answers a mode mismatch with
-   `subagent-not-found`
-   ([subagents.schema.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/subagents.schema.ts)
-   + api-proxy.ts). Every one-shot row tap died on the error banner plus a
+   subagent address validation answers a mode mismatch with
+   `subagent/unauthorized`
+   ([control-types.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts)
+   `SubagentAddress` + [history.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/history.ts)).
+   Every one-shot row tap died on the error banner plus a
    fake-empty transcript (`result ?? const []`). Companion bug: the
    read-only composer gate for a child opened inside an expanded branch
    evaluated the root catalog's `parentAvailable` instead of the branch's.
@@ -47,7 +49,7 @@ attributed children of each watched parent — the selected root plus every
 expanded branch — on each `session.list` publication: a child added or
 removed schedules one `subagent.list` re-pull per parent after a 50 ms
 window (web `scheduleCatalogRefresh` debounce in
-[manager.ts](../../../../reference/deepseek-harness/packages/client/runtime/src/client/sessions/manager.ts));
+[manager.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/client/sessions/manager.ts));
 a removal or a running-state flip first folds that row's activity in the
 loaded catalogs (web `updateCatalogActivity`) so the dot tracks the live
 session — dimming with it, relighting on a resumed child — before the pull
@@ -65,8 +67,9 @@ is that enum, and the adapter maps wire literals onto it, failing loud on
 a child row with a missing or unknown mode (the schema requires it on
 child rows). `ChatRepository.loadSubagentHistory` takes the row's own
 `SubagentMode`; the `OpenChild` action carries it from the tapped row;
-the controller keeps it for the post-prompt reload. `subagent.prompt` and
-`subagent.interrupt` keep their signatures — the request schemas pin the
+the controller keeps it for the post-prompt reload.
+`subagents/prompt` and `subagents/interruptByParent` keep their signatures —
+the request schemas pin the
 `'continuable'` literal — but the adapter now encodes that literal through
 the enum instead of a bare string. A failed history load closes the child
 view instead of leaving it open on a fake-empty transcript; the host
@@ -80,9 +83,10 @@ branch).
 ## Alternatives considered
 
 - **Read `parentSessionId`/`origin` off the host frame in the adapter and
-  merge summaries** (the web's fast path): rejected — this client already
-  repulls `session.list` on those frames; pulling lineage from the frame
-  would add a second membership source racing the pull.
+  merge summaries** (web fast path): rejected — this client repulls
+  `session.list` on those frames; pulling lineage from the frame
+  would add a second membership source racing the pull. Superseded:
+  [newer note](2026-09-11-forwarded-session-lifecycle-events.md).
 - **Poll or manual-refresh-only for catalog upkeep**: rejected — it is the
   defect itself; the cold seed deliberately answers only the open moment.
 - **Keep `mode` a string and re-parse at request time**: rejected — the
@@ -98,7 +102,7 @@ branch).
   or branch is watched, merged inside the window; none on cold open.
 - Wire evidence pins the chain:
   [harness_repository_integration_test.dart](../../../../flutter/packages/harness_adapter/test/harness_repository_integration_test.dart)
-  covers lineage decode, `host/session-added` → stream, the one-shot mode
+  covers lineage decode, `api-session/added` → stream, the one-shot mode
   on the request frame, `subagent-not-found` propagation, the
   continuable pin on prompt/interrupt, and the child-missing-mode
   negative;

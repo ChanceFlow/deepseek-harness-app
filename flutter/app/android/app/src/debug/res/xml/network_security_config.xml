@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds keep broad cleartext (the debug manifest's
+  android:usesCleartextTraffic="true"). A network security config takes
+  precedence over that flag on Android 7.0+ (API 24+), so without this
+  build-type override the main config's loopback-only policy would also
+  fence debug LAN hosts. Release builds use the main config.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

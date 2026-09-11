@@ -9,11 +9,14 @@ library;
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/timeline_window.dart';
@@ -103,12 +106,29 @@ class _SettleRepository extends Fake implements ChatRepository {
   Stream<PermissionSelect?> observePermissions(String sessionId) =>
       Stream.value(null);
 
+  // The session's sandbox-mode and schedule facts are log-only, so an
+  // absent stream means unreported: null fact, no schedule publication.
+  @override
+  Stream<SandboxModeFact?> observeSandboxMode(String sessionId) =>
+      Stream.value(null);
+
+  @override
+  Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
+      const Stream<List<ScheduleReminder>>.empty();
+
   @override
   Future<SessionModels> loadModels(String sessionId) async =>
       const SessionModels(
         current: ModelSelection(provider: 'deepseek', model: 'glm-x'),
         routable: false,
       );
+
+  @override
+  Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
+      const Stream<List<CordisRunRequest>>.empty();
+
+  @override
+  Stream<void> observeCommandRosterChanges() => const Stream<void>.empty();
 
   @override
   Future<void> sendMessage(SendMessageRequest request) async {

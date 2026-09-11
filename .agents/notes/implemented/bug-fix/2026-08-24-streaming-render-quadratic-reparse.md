@@ -26,10 +26,10 @@ tree + full text layout) saturates the UI thread; the frame backlog and
 the parse-tree allocations balloon memory until the OS kills the app.
 The web survives on layers the phone client lacked: frame-batched
 notification
-([notifier.ts](../../../../reference/deepseek-harness/packages/client/runtime/src/client/sessions/notifier.ts)
+([notifier.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/client/sessions/notifier.ts)
 `markFrameDirty`; the assistant node publishes every chunk at
 `'animation-frame'` cadence), memoized per-block rendering
-([AssistantMarkdown.tsx](../../../../reference/deepseek-harness/packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx)),
+([AssistantMarkdown.tsx](../../../../reference/deepseek-harness/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx)),
 and an incremental markdown parser that freezes every block behind the
 trailing two and re-parses only the tail
 ([incremental.ts](../../../../reference/deepseek-harness/packages/client/ui-primitives/src/markdown/incremental.ts)

@@ -26,15 +26,18 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../di/providers.dart';
 import '../chat/activity_dot.dart';
 import '../chat/chat_screen.dart' show PlanChip, TimelineRow, timelineKey;
 import '../chat/sweep_highlight.dart';
 import '../shared/state_dot.dart';
 import '../theme/theme.dart';
 import 'subagent_ui_state.dart';
+
+// `SubagentRoute` moved to `subagent_route.dart` so a surface that only
+// pushes it (the chat workflow card's member jump) does not import the whole
+// catalog tree; re-exported here for existing importers of this library.
+export 'subagent_route.dart' show SubagentRoute, SubagentRecordRoute;
 
 /// Material's minimum touch-target height; every row on this screen rides
 /// it as a [ListTile] `minTileHeight` (the same value the shared
@@ -56,31 +59,6 @@ const double _kGlyphTextGap = 10;
 /// The web `12 + 16 * level` catalog indent.
 double _catalogIndent(int level) =>
     _kCatalogIndentBase + _kCatalogIndentStep * level;
-
-class SubagentRoute extends ConsumerWidget {
-  const SubagentRoute({super.key, this.backendId});
-
-  /// The backend this surface presents; null uses the active backend.
-  final String? backendId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final resolved =
-        backendId ?? ref.watch(activeBackendIdProvider).value ?? '';
-    if (resolved.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    final controller = ref.watch(subagentControllerProvider(resolved));
-    return StreamBuilder<SubagentUiState>(
-      stream: controller.uiState,
-      initialData: controller.state,
-      builder: (context, snapshot) {
-        final uiState = snapshot.data ?? const SubagentUiState();
-        return SubagentScreen(uiState: uiState, onAction: controller.onAction);
-      },
-    );
-  }
-}
 
 class SubagentScreen extends StatefulWidget {
   const SubagentScreen({

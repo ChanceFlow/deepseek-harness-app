@@ -17,9 +17,9 @@ using `_selectedParentId` — the root parent selected in the parent picker.
 For depth≥2 rows (grandchildren and deeper descendants), the host expects the
 direct parent session id (`SubagentAddress = { parentSessionId, childSessionId }`,
 as defined in
-[subagents.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/subagents.ts):49-57
+[control-types.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts):87-95
 and wired in
-[SubagentHeaderLineage.tsx](../../../../reference/deepseek-harness/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx):324-327).
+[SubagentHeaderLineage.tsx](../../../../reference/deepseek-harness/packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx):327).
 Passing the tree root instead of the direct parent caused history load, prompt send,
 and interrupt to target the wrong session and fail with `subagent-not-found`.
 

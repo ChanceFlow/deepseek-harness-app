@@ -136,6 +136,16 @@ class BackendStore {
             message: 'backends.json: malformed entry',
           ),
         };
+        // `trustHostCertificate` is optional for the same reason: older
+        // documents decode as no opt-in; a non-bool value is malformed.
+        final trustHostCertificate = switch (obj?['trustHostCertificate']) {
+          null => false,
+          final bool flag => flag,
+          _ => throw const BackendStoreException(
+            BackendErrorCode.malformedEntry,
+            message: 'backends.json: malformed entry',
+          ),
+        };
         final uri = Uri.tryParse(baseUrl);
         if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
           throw BackendStoreException(
@@ -145,7 +155,13 @@ class BackendStore {
           );
         }
         backends.add(
-          BackendConfig(id: id, label: label, baseUri: uri, enabled: enabled),
+          BackendConfig(
+            id: id,
+            label: label,
+            baseUri: uri,
+            enabled: enabled,
+            trustHostCertificate: trustHostCertificate,
+          ),
         );
       }
       if (backends.isEmpty) {
@@ -186,6 +202,7 @@ class BackendStore {
             'label': backend.label,
             'baseUrl': backend.baseUri.toString(),
             'enabled': backend.enabled,
+            'trustHostCertificate': backend.trustHostCertificate,
           },
       ],
       'activeId': data.activeId,

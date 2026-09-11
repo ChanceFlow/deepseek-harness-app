@@ -64,6 +64,29 @@ by forwarding that loopback port to the machine running dsh:
 > The host serves its settings plane to loopback connections only,
 > so the in-app host-settings pages need the same forward.
 
+## Remote access (gateway)
+
+`adb reverse` is the on-device development path: one command reaches a
+`dsh web` on the same machine over USB. It is not the only way in. To
+reach a host across a network, put
+[dsh-go-gateway](https://github.com/ChanceFlow/dsh-go-gateway) in front of
+`dsh web`: it relays HTTP and WebSocket byte-for-byte and rewrites the
+request `Host` to loopback, so dsh's reachability fence passes with no
+change to dsh itself.
+
+Point the app at the gateway's public origin and nothing else: it is a
+plain base URL (`https://<host>:<port>`), with no path prefix and no
+credentials to enter. The client performs no authentication — whether
+the gateway requires any is the gateway's own deployment choice
+(`gateway.json`, `auth.modes`). A gateway with a self-signed or
+internal-CA certificate needs the app's per-host **Trust this host's
+certificate** opt-in (hosts → edit); leave it off for any host you do not
+control.
+
+The client only ever resolves request paths against a base URL's
+**origin**, so a deployment must expose the gateway at the root of its
+own host or port rather than under a path prefix.
+
 ## Multiple hosts
 
 One app, many dsh hosts: the settings page keeps a device-local
@@ -84,7 +107,23 @@ box, a tunneled remote dsh.
   outline with collapsible turn groups, markdown rendering (fenced code,
   headings, lists, tables, clickable links), queue rows, approvals,
   questions, plan-review cards, background jobs, image attachments, skill
-  candidates.
+  candidates, and session-log export (the open session's ZIP archive saved
+  into Downloads from the composer's `/export` or the session header).
+- **File inspection** — a file the agent wrote opens in place: tap the preview
+  action on a file tool row, or a chip in the produced-files row that closes a
+  finished turn. Text renders through the same markdown/code surface as the
+  transcript, with honest states for a binary file, an empty one, a truncated
+  window, and a failed read.
+- **Trajectory ledger** — a second view of the open session: a turn-aware
+  event ledger with step markers, selectable records, an inspector showing the
+  token usage and first-token timing the host actually reported, older-history
+  paging, and a local search over the loaded window. A figure the session log
+  never recorded reads as unavailable rather than as a guess.
+- **Dynamic-plugin approval** — a model that loads a Cordis plugin can block
+  waiting for a human. The request surfaces in the composer with the plugin's
+  name, purpose and identifiers; this client can refuse it (which releases the
+  blocked call) but cannot approve it, because an approval needs a browser
+  plugin runtime the phone does not have.
 - **Voice input & on-device ASR** — 100% client-side speech recognition
   (streaming Zipformer, offline SenseVoice and Fun-ASR-Nano) with live
   waveform dock, timer, and direct transcription stream into the
@@ -92,29 +131,44 @@ box, a tunneled remote dsh.
   Volcengine Doubao or Tencent Hunyuan real-time ASR with the user's own
   credentials.
 - **Multiple hosts** — keep several dsh hosts configured on this
-  device and switch which one drives the chat.
+  device and switch which one drives the chat. A per-host switch also accepts
+  that host's TLS certificate when it is self-signed or signed by an internal
+  CA.
 - **Workspaces** — create from a path or the in-app host directory
   browser, rename, delete, manual reordering.
 - **Models** — provider groups, current selection, reasoning-effort
-  chips, provider failures.
+  chips, provider failures, plus provider administration: add or remove a
+  configured provider, store or clear its API key through the host's credential
+  plane, and discover the models an endpoint offers.
+- **Slash commands** — the roster is read from the host, so commands a host or
+  plugin registers are discoverable and runnable, with the host's own argument
+  and attachment rules enforced before a line is sent.
 - **Subagents** — parent picker, child entries, open a child timeline,
   send a prompt, interrupt.
 - **Goals** — create/pause/resume/complete per phase, objective
   editing with CAS revision.
-- **Settings** — App settings (interface language, send-while-busy
-  behavior) plus host settings: per-namespace editing with revision
-  CAS, credentials describe/set/unset.
+- **Settings** — App settings (interface language, appearance,
+  send-while-busy behavior) plus host settings: per-namespace editing with
+  revision CAS, credentials describe/set/unset, a read-only inventory of the
+  plugins the host loaded with their fiber status, and an About section
+  carrying the build's version and the project's docs and issue tracker.
+- **Failure surfaces** — a disconnected host raises a named banner with a
+  manual reconnect, a failed load offers retry instead of a raw exception, and
+  the chat error strip is dismissible; every one of them is localized.
 
 ## Wire compatibility
 
 The upstream dsh repository is pinned as a git submodule under
 [`reference/deepseek-harness`](reference/) at one official commit —
-currently **`dsh-v0.1.1-rc.2`**
+currently **`dsh-v0.1.5-rc.2`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 40 of 48 host RPC methods —
-[docs/spec.md](docs/spec.md) has the exact list.
+version. Coverage today is 52 of 84 Remote methods registered by the pinned
+tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
+the unwired remainder, and the two reviewed declared-only names; the
+`verify_wire_pin` gate holds both documents to the two registries and fails a
+declared-only name that the wire layer actually calls.
 
 ## Module boundaries
 

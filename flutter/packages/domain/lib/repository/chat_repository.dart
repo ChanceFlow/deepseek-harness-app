@@ -11,13 +11,18 @@ import '../model/attachment.dart';
 import '../model/command.dart';
 import '../model/connection_state.dart';
 import '../model/context_pressure.dart';
+import '../model/cordis.dart';
 import '../model/session_window_stats.dart';
 import '../model/directory.dart';
 import '../model/permission_select.dart';
 import '../model/goal.dart';
+import '../model/llm_provider.dart';
 import '../model/model_catalog.dart';
 import '../model/plan.dart';
+import '../model/plugin_inventory.dart';
 import '../model/prompt.dart';
+import '../model/sandbox.dart';
+import '../model/schedule.dart';
 import '../model/session.dart';
 import '../model/settings.dart';
 import '../model/skills.dart';
@@ -103,6 +108,29 @@ abstract class ChatRepository {
   /// Clear one stored credential; loopback-trusted connections only.
   Future<void> unsetCredential(String ref) => _unsupported('unsetCredential');
 
+  /// Every provider route the harness currently serves
+  /// (`llm/listProviders`). The list is the live half of the provider
+  /// directory a configuration surface renders; a route the configurable
+  /// directory does not declare has no settings address.
+  Future<List<LlmProvider>> listLlmProviders() =>
+      _unsupported('listLlmProviders');
+
+  /// Every provider route an adapter plugin can activate through
+  /// configuration (`llm/listConfigurableProviders`), registered or dormant.
+  /// Joining this with [listLlmProviders] yields the live/dormant state a
+  /// provider list shows.
+  Future<List<LlmConfigurableProvider>> listConfigurableProviders() =>
+      _unsupported('listConfigurableProviders');
+
+  /// Interrogate one provider endpoint for the models it advertises
+  /// (`llm/discoverModels`). [settingsNs] is the namespace whose registered
+  /// model discovery serves the draft; a namespace with no registered
+  /// discovery answers `llm/model-discovery-rejected`.
+  Future<List<LlmDiscoveredModel>> discoverModels(
+    String settingsNs,
+    LlmModelDiscoveryRequest request,
+  ) => _unsupported('discoverModels');
+
   Future<void> openSession(String sessionId);
 
   Stream<List<TimelineItem>> observeTimeline(String sessionId);
@@ -145,6 +173,51 @@ abstract class ChatRepository {
     bool retryOnTransportAbort = false,
   });
 
+  /// The live slash-command roster for one agent (`commands/list`), in the
+  /// host's name-sorted order. [sessionId] is the addressed agent: the host
+  /// resolves an Agent identity to its session, and a subagent-owned child
+  /// is refused (`session/agent-busy`). Each descriptor carries the input
+  /// hint that decides bare-only versus arg-taking dispatch and the
+  /// attachment flag the composer's admission uses.
+  Future<List<CommandDescriptor>> listCommands(String sessionId) =>
+      _unsupported('listCommands');
+
+  /// A tick whenever the host's command registry changed
+  /// (`commands/change`): a surface re-pulls [listCommands] for every open
+  /// session, the web live directory's `invalidateAll`.
+  Stream<void> observeCommandRosterChanges() => const Stream<void>.empty();
+
+  /// The session's effective sandbox-mode fact, folded from its
+  /// `sandbox/mode` events (`packages/sandbox/sandbox-policy`). Null until
+  /// the session logged a switch, which means the deployment default
+  /// applies.
+  Stream<SandboxModeFact?> observeSandboxMode(String sessionId) =>
+      Stream<SandboxModeFact?>.value(null);
+
+  /// The session's active durable reminders, folded from its versioned
+  /// `schedule/change` stream (`packages/schedule/schedule`).
+  Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
+      const Stream<List<ScheduleReminder>>.empty();
+
+  /// Pending dynamic-Cordis plugin approval requests (`cordis/request-run`
+  /// forwarded events). An empty list is the settled state.
+  Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
+      const Stream<List<CordisRunRequest>>.empty();
+
+  /// Answer one pending Cordis activation request
+  /// (`dynamicCordisRunner/resolveRequestRun`). The request id is the one
+  /// [observeCordisRunRequests] published.
+  Future<void> resolveCordisRunRequest(
+    String requestId,
+    CordisRunResolution resolution,
+  ) => _unsupported('resolveCordisRunRequest');
+
+  /// Read-only plugin inventory (`pluginInventory/list`): the Cordis
+  /// Loader's current non-group entries and, when a roster is composed,
+  /// each agent preset's plugin composition.
+  Future<PluginInventorySnapshot> listPluginInventory() =>
+      _unsupported('listPluginInventory');
+
   /// Download one durable image; bytes are session-authorized.
   Future<AttachmentData> readAttachment(
     String sessionId,
@@ -172,11 +245,15 @@ abstract class ChatRepository {
 
   Stream<List<WorkspaceSummary>> observeWorkspaces();
 
-  /// Registry-global archive set mirrored from `workspace.list` and host
-  /// frames.
+  /// Registry-global archive set mirrored from the `workspace/follow`
+  /// stream's baseline and increment frames — the pinned contract's only
+  /// workspace source (there is no unary workspace list).
   Stream<Set<String>> observeArchivedSessionIds() =>
       Stream.value(const <String>{});
 
+  /// A no-op on the pinned contract: the workspace roster is push-only, so
+  /// there is nothing to pull. Kept on the interface so a caller's refresh
+  /// gesture stays a valid call instead of a compile error.
   Future<void> refreshWorkspaces();
 
   /// Archive a session without deleting its log or workspace accounting

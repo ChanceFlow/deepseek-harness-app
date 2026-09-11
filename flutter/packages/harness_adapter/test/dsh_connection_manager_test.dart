@@ -3,16 +3,31 @@ import 'dart:async';
 import 'package:domain/model/connection_state.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:network/dsh_event_socket.dart';
-import 'package:network/dsh_rpc_client.dart';
 import 'package:network/rpc_envelope.dart';
 import 'package:test/test.dart';
 
 import 'package:harness_adapter/src/adapter_diagnostics.dart';
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
 
-class ClosableTestSocket implements DshEventSocket {
-  ClosableTestSocket({this.autoOpen = true});
+/// The `$events` registration answer the gateway sends over `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame` -> `RemoteEventHostInfo`).
+ServerRequest readyFrame({String home = '/home/tester'}) => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': home},
+  },
+);
 
+/// A socket that opens the path, delivers the generation's frames, then stays
+/// open until the generation is cancelled.
+class ScriptedSocket implements DshEventSocket {
+  ScriptedSocket({this.frames = const <ServerRequest>[], this.autoOpen = true});
+
+  final List<ServerRequest> frames;
   final bool autoOpen;
   final List<String> paths = <String>[];
   final List<Completer<void>> _closures = <Completer<void>>[];
@@ -22,7 +37,12 @@ class ClosableTestSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) async* {
     paths.add(path);
-    if (autoOpen) onOpen?.call();
+    if (autoOpen) {
+      onOpen?.call();
+      for (final frame in frames) {
+        yield frame;
+      }
+    }
     final closed = Completer<void>();
     _closures.add(closed);
     await closed.future;
@@ -35,26 +55,51 @@ class ClosableTestSocket implements DshEventSocket {
   }
 }
 
-class ThrowingWritableSocket implements DshWritableEventSocket {
-  @override
-  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
-    return const Stream<ServerRequest>.empty();
-  }
+/// A socket whose nth connection delivers the nth frame list, so a test can
+/// make one generation fail and the next succeed.
+class SequencedSocket implements DshEventSocket {
+  SequencedSocket(this.framesByGeneration);
+
+  final List<List<ServerRequest>> framesByGeneration;
+  final List<String> paths = <String>[];
+  final List<Completer<void>> _closures = <Completer<void>>[];
+  int _generation = 0;
+
+  int get connectCount => paths.length;
 
   @override
-  void send(String path, String message) {
-    throw StateError('simulated socket send failure');
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) async* {
+    paths.add(path);
+    onOpen?.call();
+    final index = _generation < framesByGeneration.length
+        ? _generation
+        : framesByGeneration.length - 1;
+    _generation += 1;
+    for (final frame in framesByGeneration[index]) {
+      yield frame;
+    }
+    final closed = Completer<void>();
+    _closures.add(closed);
+    await closed.future;
+  }
+
+  void closeAllStreams() {
+    for (final closure in List<Completer<void>>.of(_closures)) {
+      if (!closure.isCompleted) closure.complete();
+    }
   }
 }
 
-class StreamErrorTestSocket implements DshEventSocket {
-  StreamErrorTestSocket({required this.errorPath, required this.error});
+class StreamErrorSocket implements DshEventSocket {
+  StreamErrorSocket({required this.errorPath, required this.error});
 
   final String errorPath;
   final Object error;
+  final List<String> paths = <String>[];
 
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    paths.add(path);
     final controller = StreamController<ServerRequest>();
     if (path == errorPath) {
       scheduleMicrotask(() {
@@ -71,69 +116,23 @@ class StreamErrorTestSocket implements DshEventSocket {
   }
 }
 
-class Fallback404TestSocket implements DshEventSocket {
-  Fallback404TestSocket({this.onConnect});
-
-  final void Function(String path)? onConnect;
-
+class ThrowingWritableSocket implements DshWritableEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
-    onConnect?.call(path);
-    final controller = StreamController<ServerRequest>();
-    if (path == '/api/remote.mux') {
-      scheduleMicrotask(() {
-        if (!controller.isClosed) {
-          controller.addError(Exception('HTTP 404 Not Found'));
-        }
-      });
-    } else {
-      scheduleMicrotask(() {
-        onOpen?.call();
-      });
-    }
-    return controller.stream;
-  }
-}
-
-class FakeDshRpcClient implements DshRpcClient {
-  FakeDshRpcClient({required this.failFirstCall});
-
-  final bool failFirstCall;
-  int callCount = 0;
-
-  @override
-  Future<RpcResult> call(
-    String endpoint,
-    String method,
-    JsonMap payload,
-  ) async {
-    callCount += 1;
-    if (failFirstCall && callCount == 1) {
-      return RpcResult(
-        ok: false,
-        error: RpcError(code: 'test-failure', message: 'first attempt fails'),
-      );
-    }
-    return RpcResult(
-      ok: true,
-      value: <String, Object?>{
-        'version': '0.0.0-test',
-        'cwd': '/tmp/dsh',
-        'attachedSessions': 2,
-      },
-    );
+    return const Stream<ServerRequest>.empty();
   }
 
   @override
-  Future<void> respond(String rpcId, RpcResult result) async {}
+  void send(String path, String message) {
+    throw StateError('simulated socket send failure');
+  }
 }
 
 void main() {
-  test('connected only after host describe and both streams open', () {
+  test('connected after the mux open and the ready frame', () {
     fakeAsync((async) {
-      final socket = ClosableTestSocket();
-      final rpc = FakeDshRpcClient(failFirstCall: false);
-      final manager = DshConnectionManager(rpc, socket, (_) => 1000);
+      final socket = ScriptedSocket(frames: <ServerRequest>[readyFrame()]);
+      final manager = DshConnectionManager(socket, (_) => 1000);
 
       manager.start();
       expect(manager.state.value.phase, ConnectionPhase.disconnected);
@@ -143,33 +142,130 @@ void main() {
       final state = manager.state.value;
       expect(state.phase, ConnectionPhase.connected);
       expect(state.generation, 1);
-      expect(state.hostDescription?.version, '0.0.0-test');
-      expect(state.hostDescription?.cwd, '/tmp/dsh');
-      expect(rpc.callCount, 1);
-      expect(socket.paths, <String>['/api/remote.mux', '/api/events.host']);
+      // The ready frame's host facts are the only host-level facts the pinned
+      // contract publishes; nothing is fabricated beside them.
+      expect(state.hostDescription?.home, '/home/tester');
+      expect(state.hostDescription?.version, isNull);
+      expect(socket.paths, <String>['/api/remote.mux']);
+      manager.stop();
+    });
+  });
+
+  test('a ready frame without host.home fails the generation loudly', () {
+    fakeAsync((async) {
+      final diagnostics = <AdapterDiagnostic>[];
+      final socket = ScriptedSocket(
+        frames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'remote-events',
+            method: 'item',
+            payload: <String, Object?>{
+              'type': 'ready',
+              'clientId': 'client-1',
+              'host': <String, Object?>{},
+            },
+          ),
+        ],
+      );
+      final manager = DshConnectionManager(
+        socket,
+        (_) => 5000,
+        onDiagnostic: diagnostics.add,
+      );
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 1));
+
+      expect(manager.state.value.phase, isNot(ConnectionPhase.connected));
+      expect(manager.hostDescription.value, isNull);
+      final failure = diagnostics.firstWhere(
+        (d) => d.message.startsWith('Generation handshake failed:'),
+      );
+      expect(failure.message, contains('home'));
+      manager.stop();
+    });
+  });
+
+  test('a ready frame with no host object fails the generation loudly', () {
+    fakeAsync((async) {
+      final diagnostics = <AdapterDiagnostic>[];
+      final socket = ScriptedSocket(
+        frames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'remote-events',
+            method: 'item',
+            payload: <String, Object?>{'type': 'ready', 'clientId': 'client-1'},
+          ),
+        ],
+      );
+      final manager = DshConnectionManager(
+        socket,
+        (_) => 5000,
+        onDiagnostic: diagnostics.add,
+      );
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 1));
+
+      expect(manager.state.value.phase, isNot(ConnectionPhase.connected));
+      final failure = diagnostics.firstWhere(
+        (d) => d.message.startsWith('Generation handshake failed:'),
+      );
+      expect(failure.message, contains('host'));
+      manager.stop();
+    });
+  });
+
+  test('a mux failure never dials a removed fallback path', () {
+    fakeAsync((async) {
+      final socket = StreamErrorSocket(
+        errorPath: '/api/remote.mux',
+        error: Exception('HTTP 404 Not Found'),
+      );
+      final manager = DshConnectionManager(socket, (_) => 5000);
+
+      manager.start();
+      async.flushMicrotasks();
+      async.elapse(const Duration(milliseconds: 3100));
+
+      expect(socket.paths, isNot(contains('/api/events.mux')));
+      expect(socket.paths, isNot(contains('/api/events.host')));
+      expect(
+        socket.paths.where((p) => p == '/api/remote.mux'),
+        hasLength(1),
+        reason: 'a failed generation must not redial mux as a fallback',
+      );
+      expect(manager.state.value.phase, isNot(ConnectionPhase.connected));
+
       manager.stop();
     });
   });
 
   test('backoff attempt resets after a generation reached connected', () {
     fakeAsync((async) {
-      final socket = ClosableTestSocket();
-      final rpc = FakeDshRpcClient(failFirstCall: true);
+      // First generation opens the socket but its stream closes before the
+      // ready frame; the retry publishes connected. The 5s loss delay is
+      // still pending when the reset is asserted.
       final backoffAttempts = <int>[];
-      final manager = DshConnectionManager(rpc, socket, (attempt) {
+      final socket = SequencedSocket(<List<ServerRequest>>[
+        const <ServerRequest>[],
+        <ServerRequest>[readyFrame()],
+      ]);
+      final manager = DshConnectionManager(socket, (attempt) {
         backoffAttempts.add(attempt);
         return backoffAttempts.length == 1 ? 0 : 5000;
       });
 
       manager.start();
       async.flushMicrotasks();
+      socket.closeAllStreams();
+      async.flushMicrotasks();
       async.elapse(const Duration(seconds: 1));
 
-      // First describe failed, retry delay 0, second describe succeeded and
-      // both streams are still open.
       expect(manager.state.value.phase, ConnectionPhase.connected);
-      expect(rpc.callCount, 2);
-      expect(socket.connectCount, greaterThanOrEqualTo(2));
+      expect(socket.connectCount, 2);
 
       // Lose the healthy generation and process only tasks due now. The 5s
       // delay must not elapse yet, so this isolates the attempt-number reset.
@@ -177,7 +273,6 @@ void main() {
       async.flushMicrotasks();
 
       expect(manager.state.value.phase, ConnectionPhase.reconnecting);
-      expect(rpc.callCount, 2);
       expect(backoffAttempts, <int>[0, 0]);
       manager.stop();
     });
@@ -185,9 +280,8 @@ void main() {
 
   test('missing socket open keeps generation from publishing connected', () {
     fakeAsync((async) {
-      final socket = ClosableTestSocket(autoOpen: false);
-      final rpc = FakeDshRpcClient(failFirstCall: false);
-      final manager = DshConnectionManager(rpc, socket, (_) => 5000);
+      final socket = ScriptedSocket(autoOpen: false);
+      final manager = DshConnectionManager(socket, (_) => 5000);
       manager.start();
       async.flushMicrotasks();
       async.elapse(const Duration(milliseconds: 3001));
@@ -195,7 +289,7 @@ void main() {
 
       // The exact transient phase depends on when the timed-out generation
       // is swept; the invariant is that CONNECTED is never published.
-      expect(rpc.callCount, greaterThanOrEqualTo(1));
+      expect(socket.connectCount, greaterThanOrEqualTo(1));
       expect(manager.hostDescription.value, isNull);
       expect(manager.state.value.phase, isNot(ConnectionPhase.connected));
       manager.stop();
@@ -228,9 +322,7 @@ void main() {
   test('sendMuxMessage error emits diagnostic', () {
     final diagnostics = <AdapterDiagnostic>[];
     final socket = ThrowingWritableSocket();
-    final rpc = FakeDshRpcClient(failFirstCall: false);
     final manager = DshConnectionManager(
-      rpc,
       socket,
       (_) => 1000,
       onDiagnostic: diagnostics.add,
@@ -250,92 +342,15 @@ void main() {
     expect(diagnostic.stackTrace, isNotNull);
   });
 
-  test('runGeneration failure emits diagnostic', () {
-    fakeAsync((async) {
-      final diagnostics = <AdapterDiagnostic>[];
-      final socket = ClosableTestSocket();
-      final rpc = FakeDshRpcClient(failFirstCall: true);
-      final manager = DshConnectionManager(
-        rpc,
-        socket,
-        (_) => 5000,
-        onDiagnostic: diagnostics.add,
-      );
-
-      manager.start();
-      async.flushMicrotasks();
-      async.elapse(const Duration(seconds: 1));
-
-      final genFailures = diagnostics
-          .where(
-            (d) =>
-                d.context == 'connection_manager' &&
-                d.message.startsWith('Generation handshake failed:'),
-          )
-          .toList();
-      expect(genFailures, hasLength(1));
-      final diag = genFailures.single;
-      expect(diag.level, AdapterDiagnosticLevel.warning);
-      expect(
-        diag.message,
-        'Generation handshake failed: DshBusinessException: test-failure: first attempt fails',
-      );
-      expect(diag.error, isNotNull);
-      expect(diag.stackTrace, isNotNull);
-
-      manager.stop();
-    });
-  });
-
   test('stream error emits diagnostic', () {
     fakeAsync((async) {
       final diagnostics = <AdapterDiagnostic>[];
-      final errorHost = Exception('optional host stream failed');
-      final socket = StreamErrorTestSocket(
-        errorPath: '/api/events.host',
-        error: errorHost,
-      );
-      final rpc = FakeDshRpcClient(failFirstCall: false);
-      final manager = DshConnectionManager(
-        rpc,
-        socket,
-        (_) => 5000,
-        onDiagnostic: diagnostics.add,
-      );
-
-      manager.start();
-      async.flushMicrotasks();
-      async.elapse(const Duration(seconds: 1));
-
-      final streamDiagnostics = diagnostics
-          .where(
-            (d) =>
-                d.context == 'connection_manager:stream:/api/events.host' &&
-                d.message.startsWith('Downlink stream error on'),
-          )
-          .toList();
-      expect(streamDiagnostics, hasLength(1));
-      final diag = streamDiagnostics.single;
-      expect(diag.level, AdapterDiagnosticLevel.debug);
-      expect(
-        diag.message,
-        'Downlink stream error on /api/events.host: Exception: optional host stream failed',
-      );
-      expect(diag.error, errorHost);
-
-      manager.stop();
-    });
-
-    fakeAsync((async) {
-      final diagnostics = <AdapterDiagnostic>[];
       final errorMux = Exception('mux network failure');
-      final socket = StreamErrorTestSocket(
+      final socket = StreamErrorSocket(
         errorPath: '/api/remote.mux',
         error: errorMux,
       );
-      final rpc = FakeDshRpcClient(failFirstCall: false);
       final manager = DshConnectionManager(
-        rpc,
         socket,
         (_) => 5000,
         onDiagnostic: diagnostics.add,
@@ -368,10 +383,8 @@ void main() {
   test('stream onDone emits diagnostic', () {
     fakeAsync((async) {
       final diagnostics = <AdapterDiagnostic>[];
-      final socket = ClosableTestSocket();
-      final rpc = FakeDshRpcClient(failFirstCall: false);
+      final socket = ScriptedSocket(frames: <ServerRequest>[readyFrame()]);
       final manager = DshConnectionManager(
-        rpc,
         socket,
         (_) => 5000,
         onDiagnostic: diagnostics.add,
@@ -400,10 +413,8 @@ void main() {
   test('reconnection backoff in connectLoop emits diagnostic', () {
     fakeAsync((async) {
       final diagnostics = <AdapterDiagnostic>[];
-      final socket = ClosableTestSocket();
-      final rpc = FakeDshRpcClient(failFirstCall: true);
+      final socket = ScriptedSocket(frames: <ServerRequest>[readyFrame()]);
       final manager = DshConnectionManager(
-        rpc,
         socket,
         (attempt) => attempt == 0 ? 300 : 1000,
         onDiagnostic: diagnostics.add,
@@ -412,6 +423,9 @@ void main() {
       manager.start();
       async.flushMicrotasks();
       async.elapse(const Duration(seconds: 1));
+
+      socket.closeAllStreams();
+      async.flushMicrotasks();
 
       final retryDiagnostics = diagnostics
           .where(

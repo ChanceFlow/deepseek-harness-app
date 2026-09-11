@@ -26,6 +26,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'notification_events.dart';
 import 'notification_key.dart';
 import 'notification_ledger.dart';
+import 'notification_localizations.dart';
 import 'working_sessions_fold.dart';
 
 /// Where a notification tap should take the user.
@@ -129,8 +130,10 @@ class SystemNotifier {
         >()
         ?.requestNotificationsPermission();
     // Resolve the launch-time device locale so notifications render in the
-    // app's language without context plumbing into the DI layer.
-    _l10n = lookupAppLocalizations(
+    // app's language without context plumbing into the DI layer. The resolver
+    // clamps an unsupported platform language to the app's supported set; a
+    // raw lookup would throw here, before runApp, and strand the splash.
+    _l10n = resolveAppLocalizations(
       WidgetsBinding.instance.platformDispatcher.locale,
     );
     // Create the working channel explicitly: its silent low importance must

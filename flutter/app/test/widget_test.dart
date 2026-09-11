@@ -25,8 +25,9 @@ class _FakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(ok: true, value: <String, Object?>{'items': _sessions});
     }
@@ -37,6 +38,20 @@ class _FakeRpc implements DshRpcClient {
   Future<void> respond(String rpcId, RpcResult result) async {}
 }
 
+/// The `$events` registration answer the gateway sends over
+/// `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`); it is the connection generation handshake.
+ServerRequest _readyFrame() => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': '/home/tester'},
+  },
+);
+
 class _NeverSocket implements DshEventSocket {
   final StreamController<ServerRequest> _frames =
       StreamController<ServerRequest>.broadcast();
@@ -44,6 +59,9 @@ class _NeverSocket implements DshEventSocket {
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
     onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(() => _frames.add(_readyFrame()));
     return _frames.stream;
   }
 }
@@ -186,6 +204,9 @@ void main() {
           'running': false,
           'blank': false,
           'cwd': '/tmp/proj',
+          'projections': <String, Object?>{
+            'values': <String, Object?>{'title': 'Draft session'},
+          },
         },
       ]),
     );
@@ -197,11 +218,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpAndSettle();
 
-    // Select the served session so the composer enables: the Ungrouped
-    // bucket only auto-expands for the selected session, so open it first.
-    await tester.tap(find.text('Ungrouped'));
-    await tester.pumpAndSettle();
+    // Select the served session so the composer enables. It groups under its
+    // inferred workspace (the pinned host registers no unary workspace list),
+    // so open that group first.
     await tester.tap(find.text('proj'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Draft session'));
     await tester.pumpAndSettle();
 
     final composerField = find.byType(TextField).first;

@@ -25,7 +25,9 @@ import '../chat/chat_ui_state.dart';
 import '../../di/providers.dart';
 import '../root/app_destination.dart';
 import '../shared/backend_connection_dot.dart';
+import '../shared/backend_error_text.dart';
 import '../shared/edge_fade.dart';
+import '../shared/error_view.dart';
 import '../shared/session_tree.dart';
 import '../theme/theme.dart';
 import 'workspace_ui_state.dart';
@@ -42,8 +44,22 @@ class WorkspaceRoute extends ConsumerWidget {
     return registry.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) =>
-          Scaffold(body: Center(child: Text(error.toString()))),
+      // A host-configuration failure reads as a localized sentence with a
+      // retry that reloads the registry, never a raw exception dump.
+      error: (error, _) => Scaffold(
+        body: Center(
+          child: LocalizedErrorView(
+            message: describeBackendFailure(
+              AppLocalizations.of(context)!,
+              error,
+            ),
+            onRetry: () {
+              ref.invalidate(backendRegistryProvider);
+              ref.invalidate(backendRegistryStateProvider);
+            },
+          ),
+        ),
+      ),
       data: (state) => _BackendAggregateScreen(
         // A disabled backend has no browsing region to aggregate:
         // switching (header tap) and starting a session are switcher

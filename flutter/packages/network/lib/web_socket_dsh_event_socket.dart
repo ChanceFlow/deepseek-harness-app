@@ -13,13 +13,30 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
   WebSocketDshEventSocket(
     this._baseUrl, {
     this.compression = CompressionOptions.compressionDefault,
-  });
+    this.customClient,
+    Map<String, String> headers = const <String, String>{},
+  }) : _headers = Map<String, String>.unmodifiable(headers);
 
   final Uri _baseUrl;
 
   /// permessage-deflate offer sent in the handshake; the server decides
   /// whether it negotiates.
   final CompressionOptions compression;
+
+  /// Optional `dart:io` client the handshake rides. The DI layer supplies a
+  /// client whose certificate policy is already scoped (for a host the user
+  /// opted to trust); null keeps the platform default. The caller owns the
+  /// client's lifecycle.
+  final HttpClient? customClient;
+
+  final Map<String, String> _headers;
+
+  /// Headers sent on every handshake. This package never reads, names, or
+  /// validates their meaning — whatever the caller hands in is passed
+  /// straight to `WebSocket.connect`, and the transport's own handshake
+  /// headers are added by `dart:io` on top.
+  Map<String, String> get headers => _headers;
+
   final Map<String, WebSocket> _sockets = <String, WebSocket>{};
 
   @override
@@ -49,6 +66,8 @@ final class WebSocketDshEventSocket implements DshWritableEventSocket {
           webSocket = await WebSocket.connect(
             _websocketUri(path).toString(),
             compression: compression,
+            customClient: customClient,
+            headers: _headers,
           );
           if (cancelled) {
             await webSocket!.close();

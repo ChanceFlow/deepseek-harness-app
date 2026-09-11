@@ -1,6 +1,7 @@
 /// Barrel export for the network package.
 library;
 
+export 'dsh_download_client.dart';
 export 'dsh_event_socket.dart';
 export 'dsh_exceptions.dart';
 export 'dsh_rpc_client.dart';

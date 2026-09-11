@@ -1,6 +1,7 @@
 /// HTTP JSON-RPC client over `package:http`.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show HttpClient;
 import 'dart:math';
@@ -13,34 +14,54 @@ import 'dsh_rpc_client.dart';
 import 'rpc_envelope.dart';
 
 /// Bound on TCP/TLS connection establishment only — never a request deadline
-/// (long-running RPCs like compaction stay unconstrained).
+/// (long-running RPCs like compaction stay unconstrained unless their caller
+/// passes a per-call `timeout`).
 const Duration kDshRpcConnectTimeout = Duration(seconds: 10);
+
+/// The content type this client always sends unless a caller overrides it;
+/// see [HttpDshRpcClient.effectiveHeaders] for the precedence rule.
+const String _jsonContentType = 'application/json; charset=utf-8';
 
 final class HttpDshRpcClient implements DshRpcClient {
   HttpDshRpcClient(
     this._baseUrl, {
     http.Client? httpClient,
     this.connectTimeout = kDshRpcConnectTimeout,
-  }) : _httpClient =
+    Map<String, String> headers = const <String, String>{},
+  }) : _callerHeaders = Map<String, String>.unmodifiable(headers),
+       _headers = Map<String, String>.unmodifiable(_mergeHeaders(headers)),
+       _httpClient =
            httpClient ??
            IOClient(HttpClient()..connectionTimeout = connectTimeout);
 
   final Uri _baseUrl;
   final http.Client _httpClient;
+  final Map<String, String> _callerHeaders;
+  final Map<String, String> _headers;
 
   /// See [kDshRpcConnectTimeout].
   final Duration connectTimeout;
 
-  static const _headers = <String, String>{
-    'Content-Type': 'application/json; charset=utf-8',
-  };
+  /// Headers the caller supplied at construction. This package never reads,
+  /// names, or validates their meaning — whatever is handed in is copied
+  /// onto every outgoing request.
+  Map<String, String> get headers => _callerHeaders;
+
+  /// The exact header map sent on every outgoing HTTP request: the caller's
+  /// [headers] plus this client's JSON content type.
+  ///
+  /// Precedence: a caller entry wins over the built-in default, matched
+  /// case-insensitively, so a caller may replace `Content-Type` but never
+  /// silently drop it.
+  Map<String, String> get effectiveHeaders => _headers;
 
   @override
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     final rpcId = _uuidV4();
     final wrappedPayload = payload.containsKey('args') && payload.length == 1
         ? payload
@@ -50,7 +71,12 @@ final class HttpDshRpcClient implements DshRpcClient {
       method: method,
       payload: wrappedPayload,
     );
-    return (await _execute('api/$endpoint', request.toJson(), rpcId)).result;
+    return (await _execute(
+      'api/$endpoint',
+      request.toJson(),
+      rpcId,
+      timeout: timeout,
+    )).result;
   }
 
   @override
@@ -77,9 +103,10 @@ final class HttpDshRpcClient implements DshRpcClient {
   Future<ServerResponse> _execute(
     String path,
     JsonMap requestJson,
-    String expectedRpcId,
-  ) async {
-    final responseText = await _executeRaw(path, requestJson);
+    String expectedRpcId, {
+    Duration? timeout,
+  }) async {
+    final responseText = await _executeRaw(path, requestJson, timeout: timeout);
     final ServerResponse decoded;
     try {
       decoded = ServerResponse.fromJson(jsonDecode(responseText));
@@ -95,7 +122,11 @@ final class HttpDshRpcClient implements DshRpcClient {
     return decoded;
   }
 
-  Future<String> _executeRaw(String path, JsonMap requestJson) async {
+  Future<String> _executeRaw(
+    String path,
+    JsonMap requestJson, {
+    Duration? timeout,
+  }) async {
     final Uri url;
     try {
       url = _baseUrl.resolve(path);
@@ -107,10 +138,19 @@ final class HttpDshRpcClient implements DshRpcClient {
     }
     final http.Response response;
     try {
-      response = await _httpClient.post(
+      // The deadline owns the whole exchange: the timeout wraps the request
+      // future, so a response body that never finishes also times out.
+      // `null` leaves the request unbounded, as before.
+      final request = _httpClient.post(
         url,
         headers: _headers,
         body: jsonEncode(requestJson),
+      );
+      response = await (timeout == null ? request : request.timeout(timeout));
+    } on TimeoutException catch (error) {
+      throw DshTransportException(
+        'request deadline ${timeout!.inMilliseconds}ms exceeded for $path',
+        error,
       );
     } catch (error) {
       throw DshTransportException('transport failure for $path', error);
@@ -126,6 +166,23 @@ final class HttpDshRpcClient implements DshRpcClient {
     }
     return responseText;
   }
+}
+
+/// Builds the outgoing header map from the caller's [headers].
+///
+/// The JSON content type is always present unless the caller overrides it
+/// with a differently-cased key, in which case the caller's entry replaces
+/// the default rather than being appended beside it (two `Content-Type`
+/// values on one request is not a valid HTTP message).
+Map<String, String> _mergeHeaders(Map<String, String> headers) {
+  final merged = <String, String>{'Content-Type': _jsonContentType};
+  for (final entry in headers.entries) {
+    if (entry.key.toLowerCase() == 'content-type') {
+      merged.remove('Content-Type');
+    }
+    merged[entry.key] = entry.value;
+  }
+  return merged;
 }
 
 String _uuidV4() {

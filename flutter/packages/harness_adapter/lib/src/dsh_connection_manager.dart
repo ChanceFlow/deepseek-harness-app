@@ -1,26 +1,34 @@
-/// Connection generation manager: owns both downlink streams plus the
-/// `host.describe` handshake, publishing CONNECTED only when all three
-/// readiness facts hold.
+/// Connection generation manager: owns the required mux downlink and the
+/// `$events` readiness handshake, publishing CONNECTED once the gateway's
+/// `ready` frame and the mux open hold.
 library;
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:domain/model/connection_state.dart';
-import 'package:network/dsh_rpc_client.dart';
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/rpc_envelope.dart';
 
 import 'adapter_diagnostics.dart';
-import 'dsh_remote_invoker.dart';
 import 'rpc_map.dart';
 import 'state_stream.dart';
 import 'wire_json.dart';
 
 const String _remoteMuxPath = '/api/remote.mux';
-const String _legacyEventsMuxPath = '/api/events.mux';
-const String _eventsHostPath = '/api/events.host';
+
+/// The logical stream id this client opens for the Gateway's forwarded Remote
+/// Events (`$events`). Its registration answer is the generation handshake.
+const String _remoteEventsStreamId = 'remote-events';
+
 const Duration _streamOpenTimeout = Duration(milliseconds: 3000);
+
+/// Deadline for the generation's `$events` registration answer. The gateway
+/// answers the `$events` open with a `ready` frame carrying the host facts;
+/// a host that accepts the socket but never registers the stream must fail
+/// the generation instead of stalling the reconnect loop's readiness gate
+/// forever. The generation already recovers through its own backoff.
+const Duration _readyFrameTimeout = Duration(seconds: 30);
 
 /// Retry-time policy seam. The product uses randomized exponential backoff;
 /// tests inject a deterministic schedule so generation transitions are
@@ -64,13 +72,11 @@ int _exponentialCap(int times, int baseMillis, int maxMillis) {
 
 class DshConnectionManager {
   DshConnectionManager(
-    this._rpcClient,
     this._eventSocket,
     this._backoffDelay, {
     this.onDiagnostic,
   });
 
-  final DshRpcClient _rpcClient;
   final DshEventSocket _eventSocket;
   final DshBackoffDelay _backoffDelay;
   final AdapterDiagnosticListener? onDiagnostic;
@@ -81,8 +87,6 @@ class DshConnectionManager {
   final StateStream<HostDescription?> _hostDescription =
       StateStream<HostDescription?>(null);
   final StreamController<ServerRequest> _muxFrames =
-      StreamController<ServerRequest>.broadcast();
-  final StreamController<ServerRequest> _hostFrames =
       StreamController<ServerRequest>.broadcast();
 
   int _generation = 0;
@@ -96,7 +100,6 @@ class DshConnectionManager {
   StateStream<ConnectionState> get state => _state;
   StateStream<HostDescription?> get hostDescription => _hostDescription;
   Stream<ServerRequest> get muxFrames => _muxFrames.stream;
-  Stream<ServerRequest> get hostFrames => _hostFrames.stream;
 
   /// Sends a raw JSON message to the mux WebSocket if connected.
   void sendMuxMessage(String message) {
@@ -143,15 +146,14 @@ class DshConnectionManager {
     }
     _activeSubs.clear();
     unawaited(_muxFrames.close());
-    unawaited(_hostFrames.close());
     unawaited(_state.close());
     unawaited(_hostDescription.close());
   }
 
-  /// The loop owns generations: each generation opens both downlinks and
-  /// requires a successful `host.describe` plus both WebSocket onOpen
-  /// events before publishing CONNECTED. Any stream loss counts as
-  /// generation loss.
+  /// The loop owns generations: each generation dials the required mux
+  /// downlink and requires the mux WebSocket onOpen plus the gateway's
+  /// `$events` `ready` frame before publishing CONNECTED. Any loss on the
+  /// required stream counts as generation loss.
   Future<void> _connectLoop() async {
     var attempt = 0;
     while (!_stopped) {
@@ -185,46 +187,26 @@ class DshConnectionManager {
     final generationId = ++_generation;
 
     final muxOpened = Completer<void>();
-    final hostOpened = Completer<void>();
+    final readyFrame = Completer<HostDescription>();
     final failure = Completer<Object?>();
     final generationSubs = <StreamSubscription<ServerRequest>>[];
 
-    _pump(_remoteMuxPath, muxOpened, failure, _muxFrames, generationSubs);
-    if (_stopped) return false;
     _pump(
-      _eventsHostPath,
-      hostOpened,
+      _remoteMuxPath,
+      muxOpened,
+      readyFrame,
       failure,
-      _hostFrames,
+      _muxFrames,
       generationSubs,
-      isOptional: true,
     );
+    if (_stopped) return false;
 
     try {
-      final invoker = DshRemoteInvoker(_rpcClient);
-      final value = await invoker.invokeOrNullOnNotFound(
-        DshRpcEndpoints.hostDescribe,
-        <String, Object?>{},
-      );
-      final description = value != null
-          ? HostDescription(
-              version: wireString(value, 'version') ?? '',
-              cwd: wireString(value, 'cwd') ?? '',
-              provider: wireString(value, 'provider'),
-              model: wireString(value, 'model'),
-              attachedSessions: wireLong(value, 'attachedSessions'),
-              canOpenPath: wireBool(value, 'canOpenPath'),
-            )
-          : const HostDescription(
-              version: '0.1.2',
-              cwd: '',
-              attachedSessions: 0,
-            );
-
-      await Future.wait(<Future<void>>[
-        muxOpened.future.timeout(_streamOpenTimeout),
-        hostOpened.future.timeout(_streamOpenTimeout),
-      ]);
+      await muxOpened.future.timeout(_streamOpenTimeout);
+      final description = await _awaitReady(
+        readyFrame.future,
+        failure.future,
+      ).timeout(_readyFrameTimeout);
 
       _hostDescription.value = description;
       _state.value = ConnectionState(
@@ -258,108 +240,140 @@ class DshConnectionManager {
     return connected;
   }
 
-  /// Subscribes one downlink stream in the background; any error or clean
-  /// close completes [failure], which the generation handshake awaits.
+  /// Readiness, or the required stream's loss, whichever settles first: a mux
+  /// downlink that closes before the `$events` registration is a failed
+  /// generation, not a 30-second stall.
+  Future<HostDescription> _awaitReady(
+    Future<HostDescription> ready,
+    Future<Object?> failure,
+  ) {
+    return Future.any(<Future<HostDescription>>[
+      ready,
+      failure.then<HostDescription>((Object? error) {
+        throw error ?? StateError('mux downlink closed before readiness');
+      }),
+    ]);
+  }
+
+  /// Subscribes the required mux downlink in the background. On open it
+  /// registers the logical streams; any error or clean close completes
+  /// [failure], which the generation handshake awaits.
   void _pump(
     String path,
     Completer<void> opened,
+    Completer<HostDescription> ready,
     Completer<Object?> failure,
     StreamController<ServerRequest> sink,
-    List<StreamSubscription<ServerRequest>> generationSubs, {
-    bool isOptional = false,
-  }) {
-    StreamSubscription<ServerRequest>? sub;
-    void connectPath(String currentPath) {
-      final stream = _eventSocket.connect(
-        currentPath,
-        onOpen: () {
-          final socket = _eventSocket;
-          if (currentPath == _remoteMuxPath &&
-              socket is DshWritableEventSocket) {
-            socket.send(
-              currentPath,
-              jsonEncode(<String, Object?>{
-                'type': 'open',
-                'streamId': 'workspace-follow',
-                'endpoint': 'workspace/follow',
-                'payload': <String, Object?>{'args': <String, Object?>{}},
-              }),
-            );
-            socket.send(
-              currentPath,
-              jsonEncode(<String, Object?>{
-                'type': 'open',
-                'streamId': 'session-control',
-                'endpoint': 'session/control',
-                'payload': <String, Object?>{'args': <String, Object?>{}},
-              }),
-            );
-            // Forwarded Remote Events (`$events`): the 0.1.2 delivery path for
-            // an interactive decision. The host pushes an Agent-scoped
-            // waterfall and the client answers with one `$events/result`
-            // call; a 0.1.2 host never sends the 0.1.1 `question/requested` /
-            // `approval/requested` mux frames, so a question nobody opens this
-            // stream for has no card at all.
-            socket.send(
-              currentPath,
-              jsonEncode(<String, Object?>{
-                'type': 'open',
-                'streamId': 'remote-events',
-                'endpoint': r'$events',
-                'payload': <String, Object?>{'args': <String, Object?>{}},
-              }),
-            );
-          }
-          if (!opened.isCompleted) opened.complete();
-        },
-      );
-      sub = stream.listen(
-        sink.add,
-        onError: (Object error, [StackTrace? st]) {
-          onDiagnostic?.call(
-            AdapterDiagnostic(
-              level: isOptional
-                  ? AdapterDiagnosticLevel.debug
-                  : AdapterDiagnosticLevel.warning,
-              context: 'connection_manager:stream:$currentPath',
-              message: 'Downlink stream error on $currentPath: $error',
-              error: error,
-              stackTrace: st,
-            ),
+    List<StreamSubscription<ServerRequest>> generationSubs,
+  ) {
+    final stream = _eventSocket.connect(
+      path,
+      onOpen: () {
+        final socket = _eventSocket;
+        if (path == _remoteMuxPath && socket is DshWritableEventSocket) {
+          socket.send(
+            path,
+            jsonEncode(<String, Object?>{
+              'type': 'open',
+              'streamId': 'workspace-follow',
+              'endpoint': 'workspace/follow',
+              'payload': <String, Object?>{'args': <String, Object?>{}},
+            }),
           );
-          if (currentPath == _remoteMuxPath &&
-              !opened.isCompleted &&
-              error.toString().contains('404')) {
-            unawaited(sub?.cancel());
-            connectPath(_legacyEventsMuxPath);
-            return;
-          }
-          if (isOptional) {
-            if (!opened.isCompleted) opened.complete();
-            return;
-          }
-          if (!failure.isCompleted) failure.complete(error);
-        },
-        onDone: () {
-          onDiagnostic?.call(
-            AdapterDiagnostic(
-              level: AdapterDiagnosticLevel.debug,
-              context: 'connection_manager:stream:$currentPath',
-              message: 'Downlink stream closed on $currentPath',
-            ),
+          socket.send(
+            path,
+            jsonEncode(<String, Object?>{
+              'type': 'open',
+              'streamId': 'session-control',
+              'endpoint': 'session/control',
+              'payload': <String, Object?>{'args': <String, Object?>{}},
+            }),
           );
-          if (isOptional) {
-            if (!opened.isCompleted) opened.complete();
-            return;
-          }
-          if (!failure.isCompleted) failure.complete(null);
-        },
-        cancelOnError: true,
-      );
-      generationSubs.add(sub!);
-      _activeSubs.add(sub!);
-    }
+          // Forwarded Remote Events (`$events`): the 0.1.2 delivery path for
+          // an interactive decision. The host pushes an Agent-scoped
+          // waterfall and the client answers with one `$events/result`
+          // call; a 0.1.2 host never sends the 0.1.1 `question/requested` /
+          // `approval/requested` mux frames, so a question nobody opens this
+          // stream for has no card at all.
+          socket.send(
+            path,
+            jsonEncode(<String, Object?>{
+              'type': 'open',
+              'streamId': _remoteEventsStreamId,
+              'endpoint': r'$events',
+              'payload': <String, Object?>{'args': <String, Object?>{}},
+            }),
+          );
+        }
+        if (!opened.isCompleted) opened.complete();
+      },
+    );
+    final sub = stream.listen(
+      (frame) {
+        _observeReadyFrame(frame, ready);
+        sink.add(frame);
+      },
+      onError: (Object error, [StackTrace? st]) {
+        onDiagnostic?.call(
+          AdapterDiagnostic(
+            level: AdapterDiagnosticLevel.warning,
+            context: 'connection_manager:stream:$path',
+            message: 'Downlink stream error on $path: $error',
+            error: error,
+            stackTrace: st,
+          ),
+        );
+        if (!failure.isCompleted) failure.complete(error);
+      },
+      onDone: () {
+        onDiagnostic?.call(
+          AdapterDiagnostic(
+            level: AdapterDiagnosticLevel.debug,
+            context: 'connection_manager:stream:$path',
+            message: 'Downlink stream closed on $path',
+          ),
+        );
+        if (!failure.isCompleted) failure.complete(null);
+      },
+      cancelOnError: true,
+    );
+    generationSubs.add(sub);
+    _activeSubs.add(sub);
+  }
 
-    connectPath(path);
+  /// Completes [ready] from the `$events` registration answer.
+  ///
+  /// The gateway answers the `$events` open with an item whose value is
+  /// `{type: 'ready', clientId, host: {home}}`
+  /// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+  /// `RemoteEventReadyFrame`), and this is the pinned contract's only
+  /// generation-readiness handshake: `host/describe` is not registered at
+  /// 0.1.5. A frame that announces itself ready without its required
+  /// `host.home` fails the generation loudly instead of substituting a
+  /// default.
+  void _observeReadyFrame(
+    ServerRequest frame,
+    Completer<HostDescription> ready,
+  ) {
+    if (ready.isCompleted) return;
+    if (frame.rpcId != _remoteEventsStreamId) return;
+    if (wireString(frame.payload, 'type') != 'ready') return;
+    final JsonMap? host = asJsonObject(frame.payload['host']);
+    if (host == null) {
+      ready.completeError(
+        const FormatException(
+          'remote-events ready frame is missing required "host"',
+        ),
+      );
+      return;
+    }
+    try {
+      ready.complete(HostDescription(home: wireRequiredString(host, 'home')));
+    } catch (error, stackTrace) {
+      // The required-field decoder throws with the field name; a stream
+      // listener must not let that escape into the zone, so it fails the
+      // generation through the readiness completer instead.
+      ready.completeError(error, stackTrace);
+    }
   }
 }

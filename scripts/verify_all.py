@@ -4,7 +4,7 @@
 Groups:
   docs  verify_md_links, verify_doc_budgets, verify_note_format,
         verify_skills, verify_env_names, verify_toolchain_pin,
-        verify_i18n_arb, verify_theme_native,
+        verify_i18n_arb, verify_theme_native, verify_wire_pin,
         gen_launcher_icons --check                           (seconds, no Flutter)
   code  flutter analyze, dart format check, flutter test,
       check_dart_imports, verify_unused_deps
@@ -93,6 +93,18 @@ GATES: list[dict] = [
         "name": "launcher-icon-drift",
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/gen_launcher_icons.py", "--check"],
+        "cwd": REPO,
+        "requires": ("reference submodule", REFERENCE_PIN / ".git"),
+    },
+    {
+        # Python-only and sub-second, but it is the process contract that a
+        # re-pin cannot silently leave the client registry behind: it derives
+        # the pinned tree's Typert Remote surface and compares it with
+        # rpc_map.dart, so it belongs in the fast `docs` joint beside the other
+        # pin gates, not in the Flutter-running `code` job.
+        "name": "wire-pin",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_wire_pin.py"],
         "cwd": REPO,
         "requires": ("reference submodule", REFERENCE_PIN / ".git"),
     },

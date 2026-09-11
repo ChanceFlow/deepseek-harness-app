@@ -15,10 +15,10 @@ import 'package:flutter/material.dart';
 /// entry is added here or argued down to an existing role.
 extension DshSchemeColors on ColorScheme {
   /// Success green. M3 carries `error` but no success counterpart; the light
-  /// value is Material green 600, the dark one green 300 for legibility on
-  /// dark surfaces.
+  /// value is a deep green for text contrast >= 4.5:1 on light surfaces,
+  /// the dark one green 300 for legibility on dark surfaces.
   Color get success => brightness == Brightness.light
-      ? const Color(0xFF43A047)
+      ? const Color(0xFF1B6D24)
       : const Color(0xFF81C784);
 
   /// Warning amber — the "waiting on the user" state, kept apart from
@@ -26,12 +26,11 @@ extension DshSchemeColors on ColorScheme {
   /// `--dsw-alias-state-warn-primary` is amber-500 in both brightnesses
   /// (design-platform.css:230/:322), worn by the warning state dot
   /// (StateDot.module.css:37-39). Like `success`, this rides the palette's
-  /// contrast steps around that anchor: light takes the darker amber-600
-  /// (design-platform.css:8, the web's own warn-label step) for text-level
-  /// contrast on a light surface; dark takes the brighter amber-400
-  /// (design-platform.css:6) for legibility on dark surfaces.
+  /// contrast steps around that anchor: light takes deep amber-brown
+  /// (#8D4F00) for text-level contrast >= 4.5:1 on a light surface; dark takes
+  /// the brighter amber-400 (design-platform.css:6) for legibility on dark surfaces.
   Color get warning => brightness == Brightness.light
-      ? const Color(0xFFDD8629)
+      ? const Color(0xFF8D4F00)
       : const Color(0xFFF7AD31);
 
   /// Text shimmer glint highlight for the turn status row (port of the web

@@ -5,6 +5,7 @@ import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/cordis.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
@@ -15,6 +16,8 @@ import 'package:domain/model/todo.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/sandbox.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/subagent.dart';
@@ -36,6 +39,10 @@ import 'package:app/ui/state_stream.dart';
 
 import '../../l10n_app.dart';
 import 'chat_local_state_fake.dart';
+
+// The trajectory ledger's widget tests import this file for the same
+// repository double, so the seam is shared instead of hand-duplicated.
+export 'chat_controller_test.dart' show FakeChatRepository;
 
 class FakeChatRepository extends ChatRepository {
   FakeChatRepository({
@@ -83,6 +90,14 @@ class FakeChatRepository extends ChatRepository {
   /// Permission projection served per session; null stream = absent key.
   Stream<PermissionSelect?>? Function(String sessionId)? permissionsSource;
 
+  /// Sandbox-mode fact served per session; an absent source is the
+  /// unreported state (no `sandbox/mode` event has folded).
+  Stream<SandboxModeFact?>? Function(String sessionId)? sandboxModeSource;
+
+  /// Active-reminder set served per session; an absent source publishes
+  /// nothing, which the UI renders as "not reported" rather than empty.
+  Stream<List<ScheduleReminder>>? Function(String sessionId)? schedulesSource;
+
   @override
   Future<AgentPresetRoster> listAgentPresets() async {
     final roster = agentPresetRoster;
@@ -103,11 +118,23 @@ class FakeChatRepository extends ChatRepository {
   }
 
   @override
+  Stream<SandboxModeFact?> observeSandboxMode(String sessionId) {
+    return sandboxModeSource?.call(sessionId) ??
+        const Stream<SandboxModeFact?>.empty();
+  }
+
+  @override
+  Stream<List<ScheduleReminder>> observeSchedules(String sessionId) {
+    return schedulesSource?.call(sessionId) ??
+        const Stream<List<ScheduleReminder>>.empty();
+  }
+
+  @override
   Stream<ConnectionState> observeConnectionState() =>
       AppStateStream<ConnectionState>(
         const ConnectionState(
           phase: ConnectionPhase.connected,
-          hostDescription: HostDescription(version: 'test', cwd: '/tmp'),
+          hostDescription: HostDescription(home: '/home/tester'),
         ),
       ).stream;
 
@@ -190,6 +217,56 @@ class FakeChatRepository extends ChatRepository {
       throw UnsupportedError('commands/execute: connection aborted');
     }
     return Future<CommandExecution?>.value(commandExecutions[line]);
+  }
+
+  /// Roster served by `listCommands`; null throws (a subagent-owned session
+  /// answers `session/agent-busy`), which also keeps the static fallback
+  /// standing in for the many tests that never set one.
+  List<CommandDescriptor>? commandRoster;
+
+  /// Session ids whose roster was pulled, in order.
+  final List<String> commandListCalls = <String>[];
+
+  /// `commands/change` ticks; a listener re-pulls the selected roster.
+  final StreamController<void> commandRosterChanges =
+      StreamController<void>.broadcast();
+
+  @override
+  Future<List<CommandDescriptor>> listCommands(String sessionId) async {
+    commandListCalls.add(sessionId);
+    final roster = commandRoster;
+    if (roster == null) throw UnsupportedError('session/agent-busy');
+    return roster;
+  }
+
+  @override
+  Stream<void> observeCommandRosterChanges() => commandRosterChanges.stream;
+
+  /// Pending Cordis activation requests the fake publishes.
+  final AppStateStream<List<CordisRunRequest>> cordisRequests =
+      AppStateStream<List<CordisRunRequest>>(const <CordisRunRequest>[]);
+
+  /// Every answer sent through `resolveCordisRunRequest`, in order.
+  final List<(String, CordisRunResolution)> cordisResolutions =
+      <(String, CordisRunResolution)>[];
+
+  /// When true the answer call refuses (transport or a host that rejects
+  /// the resolution).
+  bool refuseCordisResolution = false;
+
+  @override
+  Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
+      cordisRequests.stream;
+
+  @override
+  Future<void> resolveCordisRunRequest(
+    String requestId,
+    CordisRunResolution resolution,
+  ) async {
+    if (refuseCordisResolution) {
+      throw StateError('dynamicCordisRunner/resolveRequestRun refused');
+    }
+    cordisResolutions.add((requestId, resolution));
   }
 
   @override
@@ -1934,8 +2011,9 @@ class _WindowTestRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
     return RpcResult(ok: true, value: <String, Object?>{});
   }
 

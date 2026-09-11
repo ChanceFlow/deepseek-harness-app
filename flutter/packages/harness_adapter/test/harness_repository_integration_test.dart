@@ -1,3 +1,13 @@
+// Integration tests drive [HarnessRepositoryImpl] through
+// [HarnessFakeRpc], a fake host whose accepted RPC method set is derived
+// from the client registry ([DshRpcEndpoints] in `lib/src/rpc_map.dart`)
+// rather than a hand-maintained list: a call to any other wire name throws
+// a [StateError] naming the endpoint, so a name change in `rpc_map.dart`
+// fails here instead of silently folding.
+//
+// Wire shapes come from the pinned reference submodule; these tests assert
+// external repository state through the real entry paths
+// (`docs/testing.md`).
 import 'dart:async';
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
@@ -5,6 +15,7 @@ import 'dart:typed_data';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
+import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
@@ -47,8 +58,35 @@ JsonMap _workspaceJson(
 JsonMap _directoryEntryJson(String name, String path, bool hidden) =>
     <String, Object?>{'name': name, 'path': path, 'hidden': hidden};
 
-ServerRequest _hostFrame(String type, JsonMap payload) =>
-    ServerRequest(rpcId: 'rpc-$type', method: type, payload: payload);
+/// One `workspace/follow` baseline item. The pinned 0.1.5 workspace namespace
+/// (`reference/deepseek-harness/packages/api/workspace-controller/src/
+/// index.ts`) registers no unary list: the roster is pushed by this stream.
+ServerRequest _workspaceBaseline(List<JsonMap> workspaces) => ServerRequest(
+  rpcId: 'workspace-follow',
+  method: 'workspace/follow',
+  payload: <String, Object?>{
+    'type': 'baseline',
+    'value': <String, Object?>{
+      'items': workspaces,
+      'archivedSessionIds': <Object?>[],
+    },
+  },
+);
+
+/// One `$events` forwarded Remote Event item: the live `emit` shape
+/// `{type: 'emit', event, args}` on `/api/remote.mux`
+/// (`packages/api/gateway/src/stream-protocol.ts` `RemoteEventEmitFrame`).
+/// The retired `host/*` frame vocabulary rode `/api/events.host`, which the
+/// pinned 0.1.5 host never serves; these items are the live session
+/// lifecycle path.
+ServerRequest _remoteEmit(String event, List<Object?> args) => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{'type': 'emit', 'event': event, 'args': args},
+);
+
+ServerRequest _sessionStatusEvent(String sessionId, bool running) =>
+    _remoteEmit('api-session/status', <Object?>[sessionId, running]);
 
 ServerRequest _muxFrame(String type, String sessionId, JsonMap event) =>
     ServerRequest(
@@ -70,10 +108,13 @@ ServerRequest _pendingFrame(String type, JsonMap payload) => ServerRequest(
   payload: <String, Object?>{'type': type, ...payload},
 );
 
-// Mux-open burst frames, wire shapes from reference/deepseek-harness/
-// packages/host/apiproxy/src/api/events.schema.ts `muxFrameSchema`: the
-// `session/subscribed` baseline boundary and the `session/queue` snapshot
-// that follows it on the same stream (api-proxy.ts mux open).
+// Mux-open burst frames: the legacy `session/subscribed` baseline boundary
+// and the `session/queue` snapshot that follows it on the same stream. The
+// 0.1.5 reference replaces the `muxFrameSchema` burst with the Session
+// Controller's `SessionControlFrame` (a per-generation `baseline` plus the
+// `queue` snapshot) in packages/api/session-controller/src/types.ts; the
+// Gateway Remote stream wire messages are in packages/api/gateway/src/
+// stream-protocol.ts.
 ServerRequest _subscribedFrame(String sessionId, int lastSeq) => ServerRequest(
   rpcId: 'rpc-subscribed-$sessionId',
   method: 'session/subscribed',
@@ -131,7 +172,7 @@ Future<HarnessRepositoryImpl> harnessRepository(
   ScriptedHarnessSocket socket, {
   void Function(AdapterDiagnostic)? onDiagnostic,
 }) async {
-  final manager = DshConnectionManager(rpc, socket, (_) => 10000);
+  final manager = DshConnectionManager(socket, (_) => 10000);
   final repository = HarnessRepositoryImpl(
     rpc,
     manager,
@@ -142,123 +183,92 @@ Future<HarnessRepositoryImpl> harnessRepository(
 }
 
 class HarnessFakeRpc implements DshRpcClient {
-  HarnessFakeRpc([
-    List<Object?> initialSessions = const <Object?>[],
-    this._initialWorkspaces = const <Object?>[],
-  ]) : sessionsValue = initialSessions;
+  HarnessFakeRpc([List<Object?> initialSessions = const <Object?>[]])
+    : sessionsValue = initialSessions;
 
-  final List<Object?> _initialWorkspaces;
   final Map<String, int> _calls = <String, int>{};
   final Map<String, List<JsonMap>> _payloadsByEndpoint =
       <String, List<JsonMap>>{};
   final List<(String, RpcResult)> _receivedResponses = <(String, RpcResult)>[];
 
-  static const Map<String, String> _testLegacyToCanonicalMap = <String, String>{
-    'skill/list': DshRpcEndpoints.skillsList,
-    'skill.list': DshRpcEndpoints.skillsList,
-    'skills.list': DshRpcEndpoints.skillsList,
-    'subagent/list': DshRpcEndpoints.subagentsList,
-    'subagent.list': DshRpcEndpoints.subagentsList,
-    'subagents.list': DshRpcEndpoints.subagentsList,
-    'subagent/prompt': DshRpcEndpoints.subagentsPrompt,
-    'subagent.prompt': DshRpcEndpoints.subagentsPrompt,
-    'subagents.prompt': DshRpcEndpoints.subagentsPrompt,
-    'subagent/interrupt': DshRpcEndpoints.subagentsInterrupt,
-    'subagent.interrupt': DshRpcEndpoints.subagentsInterrupt,
-    'subagents.interrupt': DshRpcEndpoints.subagentsInterrupt,
-    'subagents.interruptByParent': DshRpcEndpoints.subagentsInterrupt,
-    'subagent/history': DshRpcEndpoints.sessionPage,
-    'subagent.history': DshRpcEndpoints.sessionPage,
-    'subagents/history': DshRpcEndpoints.sessionPage,
-    'subagents.history': DshRpcEndpoints.sessionPage,
-    'goal/create': DshRpcEndpoints.goalsCreate,
-    'goal.create': DshRpcEndpoints.goalsCreate,
-    'goals.create': DshRpcEndpoints.goalsCreate,
-    'goal/edit': DshRpcEndpoints.goalsEdit,
-    'goal.edit': DshRpcEndpoints.goalsEdit,
-    'goals.edit': DshRpcEndpoints.goalsEdit,
-    'goal/pause': DshRpcEndpoints.goalsPause,
-    'goal.pause': DshRpcEndpoints.goalsPause,
-    'goals.pause': DshRpcEndpoints.goalsPause,
-    'goal/resume': DshRpcEndpoints.goalsResume,
-    'goal.resume': DshRpcEndpoints.goalsResume,
-    'goals.resume': DshRpcEndpoints.goalsResume,
-    'goal/complete': DshRpcEndpoints.goalsComplete,
-    'goal.complete': DshRpcEndpoints.goalsComplete,
-    'goals.complete': DshRpcEndpoints.goalsComplete,
-    'goal/clear': DshRpcEndpoints.goalsClear,
-    'goal.clear': DshRpcEndpoints.goalsClear,
-    'goals.clear': DshRpcEndpoints.goalsClear,
-    'agentPreset/list': DshRpcEndpoints.agentPresetsList,
-    'agentPreset.list': DshRpcEndpoints.agentPresetsList,
-    'agentPresets.list': DshRpcEndpoints.agentPresetsList,
-    'agentPreset/select': DshRpcEndpoints.agentPresetsSelect,
-    'agentPreset.select': DshRpcEndpoints.agentPresetsSelect,
-    'agentPresets.select': DshRpcEndpoints.agentPresetsSelect,
-    'host/listDirectory': DshRpcEndpoints.directoryPickerList,
-    'host.listDirectory': DshRpcEndpoints.directoryPickerList,
-    'directoryPicker.list': DshRpcEndpoints.directoryPickerList,
-    'host/createDirectory': DshRpcEndpoints.directoryPickerCreate,
-    'host.createDirectory': DshRpcEndpoints.directoryPickerCreate,
-    'directoryPicker.createDirectory': DshRpcEndpoints.directoryPickerCreate,
-    'session/history': DshRpcEndpoints.sessionPage,
-    'session.history': DshRpcEndpoints.sessionPage,
-    'session.page': DshRpcEndpoints.sessionPage,
+  /// Every wire name the client's registry declares, built from the
+  /// [DshRpcEndpoints] constants themselves rather than a hand-maintained
+  /// copy. A `rpc_map.dart` rename moves this set with it; an endpoint the
+  /// repository invents outside the registry is rejected by [call].
+  ///
+  /// The set is closed so a call to a name not declared here fails loudly
+  /// naming the offender — the client cannot drift onto 0.1.1-era singular,
+  /// dotted, or otherwise vanished names without a red test.
+  static const Set<String> acceptedEndpoints = <String>{
+    DshRpcEndpoints.sessionList,
+    DshRpcEndpoints.sessionCreate,
+    DshRpcEndpoints.sessionPrompt,
+    DshRpcEndpoints.sessionAttachment,
+    DshRpcEndpoints.sessionCancel,
+    DshRpcEndpoints.sessionSearch,
+    DshRpcEndpoints.sessionRename,
+    DshRpcEndpoints.sessionFork,
+    DshRpcEndpoints.sessionUpdateQueue,
+    DshRpcEndpoints.sessionSelectModel,
+    DshRpcEndpoints.sessionModelCatalog,
+    DshRpcEndpoints.sessionHistory,
+    DshRpcEndpoints.sessionPage,
+    DshRpcEndpoints.skillsList,
+    DshRpcEndpoints.subagentsList,
+    DshRpcEndpoints.subagentsPrompt,
+    DshRpcEndpoints.subagentsInterrupt,
+    DshRpcEndpoints.subagentsHistory,
+    DshRpcEndpoints.goalsCreate,
+    DshRpcEndpoints.goalsEdit,
+    DshRpcEndpoints.goalsPause,
+    DshRpcEndpoints.goalsResume,
+    DshRpcEndpoints.goalsComplete,
+    DshRpcEndpoints.goalsClear,
+    DshRpcEndpoints.agentPresetsList,
+    DshRpcEndpoints.agentPresetsSelect,
+    DshRpcEndpoints.directoryPickerList,
+    DshRpcEndpoints.directoryPickerCreate,
+    DshRpcEndpoints.workspaceCreate,
+    DshRpcEndpoints.workspaceRename,
+    DshRpcEndpoints.workspaceDelete,
+    DshRpcEndpoints.workspaceInsertBefore,
+    DshRpcEndpoints.workspaceInsertSessionBefore,
+    DshRpcEndpoints.workspaceArchiveSession,
+    DshRpcEndpoints.workspaceFilesStat,
+    DshRpcEndpoints.workspaceFilesRead,
+    DshRpcEndpoints.workspaceFilesReadBytes,
+    DshRpcEndpoints.workspaceFilesReadAll,
+    DshRpcEndpoints.workspaceFilesList,
+    DshRpcEndpoints.commandsExecute,
+    DshRpcEndpoints.settingsDescribe,
+    DshRpcEndpoints.settingsUpdate,
+    DshRpcEndpoints.settingsReplace,
+    DshRpcEndpoints.settingsMutate,
+    DshRpcEndpoints.credentialsDescribe,
+    DshRpcEndpoints.credentialsSet,
+    DshRpcEndpoints.credentialsUnset,
+    DshRpcEndpoints.llmListProviders,
+    DshRpcEndpoints.llmListConfigurableProviders,
+    DshRpcEndpoints.llmDiscoverModels,
+    DshRpcEndpoints.eventsResult,
   };
 
-  int callCountFor(String endpoint) {
-    final count = _calls[endpoint];
-    if (count != null && count > 0) return count;
-    final slash = _calls[endpoint.replaceAll('.', '/')];
-    if (slash != null && slash > 0) return slash;
-    final dot = _calls[endpoint.replaceAll('/', '.')];
-    if (dot != null && dot > 0) return dot;
-    final canonical = _testLegacyToCanonicalMap[endpoint];
-    if (canonical != null) {
-      final c = _calls[canonical];
-      if (c != null && c > 0) return c;
-    }
-    for (final entry in _testLegacyToCanonicalMap.entries) {
-      if (entry.value == endpoint) {
-        final c = _calls[entry.key];
-        if (c != null && c > 0) return c;
-      }
-    }
-    return 0;
+  /// Asserts the client called a name [DshRpcEndpoints] declares. Throws a
+  /// [StateError] naming the endpoint and the registry it is missing from,
+  /// so a wire-name drift fails the test that provoked the call.
+  void _rejectUndeclared(String endpoint) {
+    if (acceptedEndpoints.contains(endpoint)) return;
+    throw StateError(
+      'fake host received undeclared RPC method "$endpoint"; the accepted '
+      'set is derived from DshRpcEndpoints and the client may only call a '
+      'name that registry declares',
+    );
   }
 
+  int callCountFor(String endpoint) => _calls[endpoint] ?? 0;
+
   List<JsonMap> payloads(String endpoint) {
-    List<JsonMap>? raw;
-    final direct = _payloadsByEndpoint[endpoint];
-    if (direct != null && direct.isNotEmpty) {
-      raw = direct;
-    } else {
-      final canonical = _testLegacyToCanonicalMap[endpoint];
-      if (canonical != null &&
-          _payloadsByEndpoint[canonical]?.isNotEmpty == true) {
-        raw = _payloadsByEndpoint[canonical];
-      } else {
-        final slash = _payloadsByEndpoint[endpoint.replaceAll('.', '/')];
-        if (slash != null && slash.isNotEmpty) {
-          raw = slash;
-        } else {
-          final dot = _payloadsByEndpoint[endpoint.replaceAll('/', '.')];
-          if (dot != null && dot.isNotEmpty) {
-            raw = dot;
-          } else {
-            for (final entry in _testLegacyToCanonicalMap.entries) {
-              if (entry.value == endpoint) {
-                final list = _payloadsByEndpoint[entry.key];
-                if (list != null && list.isNotEmpty) {
-                  raw = list;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    final raw = _payloadsByEndpoint[endpoint];
     if (raw == null || raw.isEmpty) return const <JsonMap>[];
     return raw.map((p) {
       final args = asJsonObject(p['args']) ?? p;
@@ -280,20 +290,10 @@ class HarnessFakeRpc implements DshRpcClient {
   List<(String, RpcResult)> receivedResponses() =>
       List<(String, RpcResult)>.of(_receivedResponses);
 
-  /// One-shot scripted business failure for the next call to [endpoint].
+  /// One-shot scripted business failure for the next call to [endpoint],
+  /// which must be the exact name the client sends.
   void failNextCall(String endpoint, String code) {
     _failures[endpoint] = code;
-    _failures[endpoint.replaceAll('.', '/')] = code;
-    _failures[endpoint.replaceAll('/', '.')] = code;
-    final canonical = _testLegacyToCanonicalMap[endpoint];
-    if (canonical != null) {
-      _failures[canonical] = code;
-    }
-    for (final entry in _testLegacyToCanonicalMap.entries) {
-      if (entry.value == endpoint) {
-        _failures[entry.key] = code;
-      }
-    }
   }
 
   final Map<String, String> _failures = <String, String>{};
@@ -323,8 +323,8 @@ class HarnessFakeRpc implements DshRpcClient {
   };
 
   /// Scripted subagent.list value slot: the parent's durable child tree
-  /// (`reference/deepseek-harness/packages/host/apiproxy/src/api/`
-  /// `subagents.schema.ts` `subagentListValueSchema` shape).
+  /// (`reference/deepseek-harness/packages/subagent/subagent/src/`
+  /// `control-types.ts` `SubagentCatalog` shape).
   JsonMap subagentListValue = <String, Object?>{
     'entries': <Object?>[],
     'parentAvailable': false,
@@ -337,8 +337,8 @@ class HarnessFakeRpc implements DshRpcClient {
     'hasMore': false,
   };
 
-  /// Scripted subagent.prompt value slot (`subagentPromptValueSchema`:
-  /// the settled `messageId`).
+  /// Scripted `subagents/prompt` value slot: the settled `messageId`
+  /// (`packages/subagent/subagent/src/index.ts` `SubagentPromptReceipt`).
   JsonMap subagentPromptValue = <String, Object?>{
     'messageId': 'subagent-msg-1',
   };
@@ -405,50 +405,20 @@ class HarnessFakeRpc implements DshRpcClient {
   Future<RpcResult> call(
     String endpoint,
     String method,
-    JsonMap payload,
-  ) async {
+    JsonMap payload, {
+    Duration? timeout,
+  }) async {
+    _rejectUndeclared(endpoint);
     _calls[endpoint] = (_calls[endpoint] ?? 0) + 1;
     _payloadsByEndpoint.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
     callJournal.add('$endpoint:start');
-    for (final entry in _testLegacyToCanonicalMap.entries) {
-      if (entry.value == endpoint) {
-        callJournal.add('${entry.key}:start');
-      }
-    }
-    final canonical = _testLegacyToCanonicalMap[endpoint];
-    final witnesses =
-        _callWitnesses.remove(endpoint) ??
-        _callWitnesses.remove(endpoint.replaceAll('.', '/')) ??
-        _callWitnesses.remove(endpoint.replaceAll('/', '.')) ??
-        (canonical != null ? _callWitnesses.remove(canonical) : null) ??
-        (() {
-          for (final entry in _testLegacyToCanonicalMap.entries) {
-            if (entry.value == endpoint) {
-              final w = _callWitnesses.remove(entry.key);
-              if (w != null) return w;
-            }
-          }
-          return null;
-        })();
+    final witnesses = _callWitnesses.remove(endpoint);
     if (witnesses != null) {
       for (final waiter in witnesses) {
         if (!waiter.isCompleted) waiter.complete();
       }
     }
-    final gates =
-        _responseGates[endpoint] ??
-        _responseGates[endpoint.replaceAll('.', '/')] ??
-        _responseGates[endpoint.replaceAll('/', '.')] ??
-        (canonical != null ? _responseGates[canonical] : null) ??
-        (() {
-          for (final entry in _testLegacyToCanonicalMap.entries) {
-            if (entry.value == endpoint) {
-              final g = _responseGates[entry.key];
-              if (g != null) return g;
-            }
-          }
-          return null;
-        })();
+    final gates = _responseGates[endpoint];
     if (gates != null && gates.isNotEmpty) {
       await gates.removeAt(0);
     }
@@ -456,11 +426,6 @@ class HarnessFakeRpc implements DshRpcClient {
       return await _answer(endpoint, payload);
     } finally {
       callJournal.add('$endpoint:return');
-      for (final entry in _testLegacyToCanonicalMap.entries) {
-        if (entry.value == endpoint) {
-          callJournal.add('${entry.key}:return');
-        }
-      }
     }
   }
 
@@ -473,36 +438,8 @@ class HarnessFakeRpc implements DshRpcClient {
             const SocketException('Software caused connection abort'),
       );
     }
-    var failureCode = _failures.remove(endpoint);
-    if (failureCode == null) {
-      final canonical = _testLegacyToCanonicalMap[endpoint];
-      if (canonical != null) {
-        failureCode = _failures.remove(canonical);
-      }
-    }
-    if (failureCode == null) {
-      for (final entry in _testLegacyToCanonicalMap.entries) {
-        if (entry.value == endpoint) {
-          final c = _failures.remove(entry.key);
-          if (c != null) {
-            failureCode = c;
-            break;
-          }
-        }
-      }
-    }
+    final failureCode = _failures.remove(endpoint);
     if (failureCode != null) {
-      _failures.remove(endpoint);
-      _failures.remove(endpoint.replaceAll('.', '/'));
-      _failures.remove(endpoint.replaceAll('/', '.'));
-      final canonical = _testLegacyToCanonicalMap[endpoint];
-      if (canonical != null) _failures.remove(canonical);
-      for (final entry in _testLegacyToCanonicalMap.entries) {
-        if (entry.value == endpoint || entry.key == endpoint) {
-          _failures.remove(entry.key);
-          _failures.remove(entry.value);
-        }
-      }
       if (failureCode == '404') {
         throw DshTransportException('HTTP 404 for api/$endpoint: not found');
       }
@@ -514,7 +451,7 @@ class HarnessFakeRpc implements DshRpcClient {
         ),
       );
     }
-    if (endpoint == 'commands/execute') {
+    if (endpoint == DshRpcEndpoints.commandsExecute) {
       return RpcResult(ok: true, value: commandValue);
     }
     final value = _valueFor(endpoint, payload);
@@ -526,45 +463,22 @@ class HarnessFakeRpc implements DshRpcClient {
     final request =
         asJsonObject(args['request']) ?? asJsonObject(args['_request']) ?? args;
     switch (endpoint) {
-      case 'host.describe':
-      case 'host/describe':
-        return <String, Object?>{
-          'version': 'fake-host',
-          'cwd': '/tmp/fake-host',
-          'attachedSessions': 0,
-        };
-      case 'session.list':
-      case 'session/list':
+      case DshRpcEndpoints.sessionList:
         return <String, Object?>{'items': sessionsValue};
-      case 'subagents/list':
-      case 'subagent.list':
-      case 'subagent/list':
+      case DshRpcEndpoints.subagentsList:
         return subagentListValue;
-      case 'subagent.history':
-      case 'subagent/history':
+      case DshRpcEndpoints.subagentsHistory:
         return subagentHistoryValue;
-      case 'subagents/prompt':
-      case 'subagent.prompt':
-      case 'subagent/prompt':
+      case DshRpcEndpoints.subagentsPrompt:
         return subagentPromptValue;
-      case 'subagents/interruptByParent':
-      case 'subagent/interrupt':
-      case 'subagent.interrupt':
+      case DshRpcEndpoints.subagentsInterrupt:
         return <String, Object?>{'receipt': true};
-      case 'workspace.list':
-      case 'workspace/list':
-        return <String, Object?>{
-          'items': _initialWorkspaces,
-          'archivedSessionIds': <Object?>[],
-        };
-      case 'workspace.insertBefore':
-      case 'workspace/insertBefore':
+      case DshRpcEndpoints.workspaceInsertBefore:
         return <String, Object?>{
           'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
         };
-      case 'session.history':
-      case 'session/history':
-      case 'session/page':
+      case DshRpcEndpoints.sessionHistory:
+      case DshRpcEndpoints.sessionPage:
         final address = asJsonObject(request['address']);
         if (address?['kind'] == 'subagent') {
           return subagentHistoryValue;
@@ -595,8 +509,7 @@ class HarnessFakeRpc implements DshRpcClient {
               },
             },
         };
-      case 'session.attachment':
-      case 'session/attachment':
+      case DshRpcEndpoints.sessionAttachment:
         return <String, Object?>{
           'attachment': <String, Object?>{
             'attachmentId': 'sha256:abc',
@@ -608,8 +521,7 @@ class HarnessFakeRpc implements DshRpcClient {
           },
           'data': 'aGk=',
         };
-      case 'workspace.insertSessionBefore':
-      case 'workspace/insertSessionBefore':
+      case DshRpcEndpoints.workspaceInsertSessionBefore:
         return <String, Object?>{
           'workspace': _workspaceJson('ws-a', '/a', 'A', <String>[
             's2',
@@ -617,9 +529,7 @@ class HarnessFakeRpc implements DshRpcClient {
             's1',
           ]),
         };
-      case 'skills/list':
-      case 'skill.list':
-      case 'skill/list':
+      case DshRpcEndpoints.skillsList:
         return <String, Object?>{
           'skills': <Object?>[
             <String, Object?>{
@@ -635,9 +545,7 @@ class HarnessFakeRpc implements DshRpcClient {
             },
           ],
         };
-      case 'directoryPicker/list':
-      case 'host.listDirectory':
-      case 'host/listDirectory':
+      case DshRpcEndpoints.directoryPickerList:
         return <String, Object?>{
           'path': '/tmp/chosen',
           'home': '/home/user',
@@ -649,12 +557,9 @@ class HarnessFakeRpc implements DshRpcClient {
           ],
           'truncated': false,
         };
-      case 'directoryPicker/createDirectory':
-      case 'host.createDirectory':
-      case 'host/createDirectory':
+      case DshRpcEndpoints.directoryPickerCreate:
         return <String, Object?>{'path': '/tmp/chosen/new-folder'};
-      case 'settings.describe':
-      case 'settings/describe':
+      case DshRpcEndpoints.settingsDescribe:
         return <String, Object?>{
           'writable': true,
           'hasDocument': false,
@@ -689,8 +594,7 @@ class HarnessFakeRpc implements DshRpcClient {
             },
           ],
         };
-      case 'credentials.describe':
-      case 'credentials/describe':
+      case DshRpcEndpoints.credentialsDescribe:
         return <String, Object?>{
           'credentials': <String, Object?>{
             'DEEPSEEK_API_KEY': <String, Object?>{
@@ -704,12 +608,9 @@ class HarnessFakeRpc implements DshRpcClient {
             },
           },
         };
-      case 'settings.update':
-      case 'settings/update':
-      case 'settings.replace':
-      case 'settings/replace':
-      case 'settings.mutate':
-      case 'settings/mutate':
+      case DshRpcEndpoints.settingsUpdate:
+      case DshRpcEndpoints.settingsReplace:
+      case DshRpcEndpoints.settingsMutate:
         return <String, Object?>{
           'ns': 'llm-deepseek',
           'value': <String, Object?>{},
@@ -718,18 +619,14 @@ class HarnessFakeRpc implements DshRpcClient {
           'secrets': <Object?>[],
           'revision': 3,
         };
-      case 'goals/edit':
-      case 'goal.edit':
-      case 'goal/edit':
+      case DshRpcEndpoints.goalsEdit:
         return <String, Object?>{
           'ref': <String, Object?>{'id': 'goal-1', 'revision': 2},
         };
-      case 'agentPresets/list':
-      case 'agentPreset.list':
-      case 'agentPreset/list':
+      case DshRpcEndpoints.agentPresetsList:
         // Fixture transcribed from
-        // reference/deepseek-harness/packages/host/apiproxy/src/api/
-        // agent-presets.schema.ts agentPresetListValueSchema.
+        // reference/deepseek-harness/packages/preset/agent-presets/src/
+        // types.ts AgentPresetRoster.
         return <String, Object?>{
           'presets': <Object?>[
             <String, Object?>{
@@ -754,11 +651,9 @@ class HarnessFakeRpc implements DshRpcClient {
           'authorable': true,
           'hasDocument': false,
         };
-      case 'agentPresets/select':
-      case 'agentPreset.select':
-      case 'agentPreset/select':
+      case DshRpcEndpoints.agentPresetsSelect:
         return <String, Object?>{'agentPreset': 'minimal'};
-      case 'session/modelCatalog':
+      case DshRpcEndpoints.sessionModelCatalog:
         return <String, Object?>{
           'defaultSelection': <String, Object?>{
             'provider': 'deepseek',
@@ -777,16 +672,25 @@ class HarnessFakeRpc implements DshRpcClient {
   }
 }
 
+/// The `$events` registration answer the gateway sends over `/api/remote.mux`
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame` -> `RemoteEventHostInfo`); it is the connection
+/// generation handshake.
+ServerRequest _readyFrame([String home = '/home/tester']) => ServerRequest(
+  rpcId: 'remote-events',
+  method: 'item',
+  payload: <String, Object?>{
+    'type': 'ready',
+    'clientId': 'client-1',
+    'host': <String, Object?>{'home': home},
+  },
+);
+
 class ScriptedHarnessSocket implements DshEventSocket {
-  ScriptedHarnessSocket({
-    this.muxFrames = const <ServerRequest>[],
-    this.hostFrames = const <ServerRequest>[],
-  });
+  ScriptedHarnessSocket({this.muxFrames = const <ServerRequest>[]});
 
   final List<ServerRequest> muxFrames;
-  final List<ServerRequest> hostFrames;
   final Completer<void> _muxRelease = Completer<void>();
-  final Completer<void> _hostRelease = Completer<void>();
   final List<String> _paths = <String>[];
 
   List<String> get connectedPaths => List<String>.of(_paths);
@@ -795,24 +699,15 @@ class ScriptedHarnessSocket implements DshEventSocket {
     if (!_muxRelease.isCompleted) _muxRelease.complete();
   }
 
-  void releaseHostFrames() {
-    if (!_hostRelease.isCompleted) _hostRelease.complete();
-  }
-
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) async* {
     _paths.add(path);
     onOpen?.call();
-    if (path.endsWith('events.host')) {
-      await _hostRelease.future;
-      for (final frame in hostFrames) {
-        yield frame;
-      }
-    } else {
-      await _muxRelease.future;
-      for (final frame in muxFrames) {
-        yield frame;
-      }
+    // The generation handshake settles before the scripted frames land.
+    yield _readyFrame();
+    await _muxRelease.future;
+    for (final frame in muxFrames) {
+      yield frame;
     }
     // awaitCancellation: stay open until the subscriber cancels.
     await Completer<void>().future;
@@ -821,19 +716,24 @@ class ScriptedHarnessSocket implements DshEventSocket {
 
 const String _muxPath = '/api/remote.mux';
 
-/// A socket seam that can end the current generation: closing both
-/// downlink streams drives [DshConnectionManager] into its reconnect loop,
-/// so the next generation connects and the repository resyncs exactly as
-/// on a real resume. Frames flow through the per-generation controllers.
+/// A socket seam that can end the current generation: closing the downlink
+/// stream drives [DshConnectionManager] into its reconnect loop, so the next
+/// generation connects and the repository resyncs exactly as on a real
+/// resume. Frames flow through the per-generation controller.
 class ReconnectableHarnessSocket implements DshEventSocket {
   final Map<String, StreamController<ServerRequest>> _open =
       <String, StreamController<ServerRequest>>{};
   final List<String> _paths = <String>[];
 
-  /// How many times a downlink path was opened (2 per generation).
+  /// How many times the mux downlink was opened (1 per generation).
   int get downlinksOpened => _paths.length;
 
   List<String> get connectedPaths => List<String>.of(_paths);
+
+  /// When set, each generation's `ready` frame waits on this gate before it
+  /// is delivered, so a test can pin the mux-open burst relative to the
+  /// connected publish.
+  Completer<void>? readyGate;
 
   @override
   Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
@@ -841,6 +741,16 @@ class ReconnectableHarnessSocket implements DshEventSocket {
     _paths.add(path);
     _open[path] = controller;
     onOpen?.call();
+    // Register the generation before any scripted frame arrives.
+    final gate = readyGate;
+    if (gate == null) {
+      controller.add(_readyFrame());
+    } else {
+      unawaited(() async {
+        await gate.future;
+        if (!controller.isClosed) controller.add(_readyFrame());
+      }());
+    }
     return controller.stream;
   }
 
@@ -888,7 +798,7 @@ Future<HarnessRepositoryImpl> resyncFixture(
   ReconnectableHarnessSocket socket, {
   void Function(AdapterDiagnostic)? onDiagnostic,
 }) async {
-  final manager = DshConnectionManager(rpc, socket, (_) => 0);
+  final manager = DshConnectionManager(socket, (_) => 0);
   final repository = HarnessRepositoryImpl(
     rpc,
     manager,
@@ -901,69 +811,79 @@ Future<HarnessRepositoryImpl> resyncFixture(
 }
 
 class _DiagnosticTestConnectionManager extends DshConnectionManager {
-  _DiagnosticTestConnectionManager(DshRpcClient rpc, DshEventSocket socket)
-    : super(rpc, socket, (_) => 10000);
+  _DiagnosticTestConnectionManager(DshEventSocket socket)
+    : super(socket, (_) => 10000);
 
   final StreamController<ServerRequest> testMuxFrames =
-      StreamController<ServerRequest>.broadcast();
-  final StreamController<ServerRequest> testHostFrames =
       StreamController<ServerRequest>.broadcast();
 
   @override
   Stream<ServerRequest> get muxFrames => testMuxFrames.stream;
 
-  @override
-  Stream<ServerRequest> get hostFrames => testHostFrames.stream;
-
   void dispose() {
     stop();
     unawaited(testMuxFrames.close());
-    unawaited(testHostFrames.close());
   }
 }
 
 void main() {
   test(
-    'host workspace frames fold locally without extra workspace list calls',
+    'fake host rejects an RPC method the registry does not declare',
     () async {
-      final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
-        _workspaceJson('ws-a', '/a', 'A'),
-        _workspaceJson('ws-b', '/b', 'B'),
-      ]);
-      final socket = ScriptedHarnessSocket(
-        hostFrames: <ServerRequest>[
-          _hostFrame('host/workspace-changed', <String, Object?>{
-            'type': 'host/workspace-changed',
-            'workspace': _workspaceJson('ws-a', '/a', 'A renamed', <String>[
-              's1',
-            ]),
-          }),
-          _hostFrame('host/workspace-order-changed', <String, Object?>{
-            'type': 'host/workspace-order-changed',
-            'workspaceIds': <Object?>['ws-b', 'ws-a'],
-          }),
-          _hostFrame('host/workspace-removed', <String, Object?>{
-            'type': 'host/workspace-removed',
-            'workspaceId': 'ws-b',
-          }),
-        ],
+      // Guarding the guard: the accepted set is closed, so a future client
+      // drift onto a vanished 0.1.1-era name (singular namespace, dotted
+      // separator) fails the test that provoked the call instead of quietly
+      // resolving to a canonical endpoint.
+      final rpc = HarnessFakeRpc();
+      await expectLater(
+        rpc.call('skill/list', 'skill/list', <String, Object?>{}),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('skill/list'), contains('DshRpcEndpoints')),
+          ),
+        ),
       );
-      final repository = await harnessRepository(rpc, socket);
-      await pumpEventQueue();
-
-      socket.releaseHostFrames();
-      await pumpEventQueue();
-
-      final workspaces = await repository.observeWorkspaces().first;
-      expect(workspaces.map((workspace) => workspace.title), <String>[
-        'A renamed',
-      ]);
-      expect(workspaces.map((workspace) => workspace.workspaceId), <String>[
-        'ws-a',
-      ]);
-      expect(rpc.callCountFor('workspace/list'), 1);
+      await expectLater(
+        rpc.call('subagent.prompt', 'subagent.prompt', <String, Object?>{}),
+        throwsA(isA<StateError>()),
+      );
+      // A declared name still answers its scripted value.
+      final result = await rpc.call(
+        DshRpcEndpoints.sessionList,
+        DshRpcEndpoints.sessionList,
+        <String, Object?>{},
+      );
+      expect(result.ok, isTrue);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 1);
     },
   );
+
+  test('the connection path reaches CONNECTED without an RPC outside the '
+      'registry', () async {
+    // The generation handshake is the mux `$events` ready frame, not a
+    // unary probe: [HarnessFakeRpc] rejects every wire name
+    // [DshRpcEndpoints] does not declare, so a client still reaching for
+    // `host/describe` — or any other vanished name — would throw here
+    // instead of connecting. The resync that follows exercises the guard
+    // through declared names only.
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final manager = DshConnectionManager(socket, (_) => 10000);
+    final repository = HarnessRepositoryImpl(rpc, manager);
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+
+    expect(manager.state.value.phase, ConnectionPhase.connected);
+    expect(manager.hostDescription.value?.home, '/home/tester');
+    expect(manager.hostDescription.value?.version, isNull);
+    await pumpEventQueue();
+    expect(
+      rpc.callCountFor(DshRpcEndpoints.sessionList),
+      greaterThanOrEqualTo(1),
+    );
+  });
 
   test('primary endpoint 404 fails loud without legacy fallbacks', () async {
     final rpc = HarnessFakeRpc();
@@ -1121,7 +1041,7 @@ void main() {
     );
     final repository = HarnessRepositoryImpl(
       rpc,
-      DshConnectionManager(rpc, socket, (_) => 10000),
+      DshConnectionManager(socket, (_) => 10000),
     );
     addTearDown(repository.dispose);
     await pumpEventQueue();
@@ -1290,7 +1210,7 @@ void main() {
       final diagnostics = <AdapterDiagnostic>[];
       final repository = HarnessRepositoryImpl(
         rpc,
-        DshConnectionManager(rpc, ScriptedHarnessSocket(), (_) => 10000),
+        DshConnectionManager(ScriptedHarnessSocket(), (_) => 10000),
         onDiagnostic: diagnostics.add,
       );
       addTearDown(repository.dispose);
@@ -1483,7 +1403,7 @@ void main() {
       );
       HarnessRepositoryImpl(
         rpc,
-        DshConnectionManager(rpc, socket, exponentialDshBackoffDelay),
+        DshConnectionManager(socket, exponentialDshBackoffDelay),
         onDiagnostic: diagnostics.add,
       );
       await pumpEventQueue();
@@ -1503,7 +1423,7 @@ void main() {
     final diagnostics = <AdapterDiagnostic>[];
     final rpc = HarnessFakeRpc();
     final socket = ScriptedHarnessSocket();
-    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final manager = _DiagnosticTestConnectionManager(socket);
     final repository = HarnessRepositoryImpl(
       rpc,
       manager,
@@ -1525,39 +1445,13 @@ void main() {
     expect(diag.stackTrace, isNotNull);
   });
 
-  test('_collectHostFrames stream error emits diagnostic', () async {
-    final diagnostics = <AdapterDiagnostic>[];
-    final rpc = HarnessFakeRpc();
-    final socket = ScriptedHarnessSocket();
-    final manager = _DiagnosticTestConnectionManager(rpc, socket);
-    final repository = HarnessRepositoryImpl(
-      rpc,
-      manager,
-      onDiagnostic: diagnostics.add,
-    );
-    addTearDown(repository.dispose);
-    addTearDown(manager.dispose);
-    await pumpEventQueue();
-
-    final testError = Exception('simulated host stream failure');
-    manager.testHostFrames.addError(testError);
-    await pumpEventQueue();
-
-    expect(diagnostics, isNotEmpty);
-    final diag = diagnostics.firstWhere((d) => d.context == 'host.stream');
-    expect(diag.level, AdapterDiagnosticLevel.error);
-    expect(diag.message, 'host stream error: $testError');
-    expect(diag.error, equals(testError));
-    expect(diag.stackTrace, isNotNull);
-  });
-
   test('handleFrame error emits diagnostic', () async {
     final diagnostics = <AdapterDiagnostic>[];
     final rpc = HarnessFakeRpc(<Object?>[
       resyncSessionRow('session-test-frame'),
     ]);
     final socket = ScriptedHarnessSocket();
-    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final manager = _DiagnosticTestConnectionManager(socket);
     final repository = HarnessRepositoryImpl(
       rpc,
       manager,
@@ -1599,7 +1493,7 @@ void main() {
       resyncSessionRow('session-refresh-test'),
     ]);
     final socket = ScriptedHarnessSocket();
-    final manager = _DiagnosticTestConnectionManager(rpc, socket);
+    final manager = _DiagnosticTestConnectionManager(socket);
     final repository = HarnessRepositoryImpl(
       rpc,
       manager,
@@ -1609,33 +1503,7 @@ void main() {
     addTearDown(manager.dispose);
     await pumpEventQueue();
 
-    // 1. host/session-added triggers refreshSessions
-    rpc.failNextCall(DshRpcEndpoints.sessionList, 'session-added-fail');
-    manager.testHostFrames.add(
-      ServerRequest(
-        rpcId: 'rpc-added',
-        method: 'host/session-added',
-        payload: <String, Object?>{
-          'type': 'host/session-added',
-          'sessionId': 'session-2',
-        },
-      ),
-    );
-    await pumpEventQueue();
-
-    expect(
-      diagnostics.any(
-        (d) =>
-            d.context == 'session.refresh' &&
-            d.level == AdapterDiagnosticLevel.warning &&
-            d.message.contains(
-              'refreshSessions failed for host/session-added:',
-            ),
-      ),
-      isTrue,
-    );
-
-    // 2. turn/end triggers refreshSessions
+    // 1. turn/end triggers refreshSessions
     rpc.failNextCall(DshRpcEndpoints.sessionList, 'turn-end-fail');
     manager.testMuxFrames.add(
       ServerRequest(
@@ -1690,7 +1558,7 @@ void main() {
       resyncSessionRow('session-resync-diag'),
     ]);
     final socket = ReconnectableHarnessSocket();
-    final manager = DshConnectionManager(rpc, socket, (_) => 0);
+    final manager = DshConnectionManager(socket, (_) => 0);
     final repository = HarnessRepositoryImpl(
       rpc,
       manager,
@@ -1748,7 +1616,7 @@ void main() {
     final socket = ScriptedHarnessSocket();
     final repository = HarnessRepositoryImpl(
       rpc,
-      DshConnectionManager(rpc, socket, (_) => 10000),
+      DshConnectionManager(socket, (_) => 10000),
       onDiagnostic: diagnostics.add,
     );
     addTearDown(repository.dispose);
@@ -1773,15 +1641,41 @@ void main() {
   });
 
   test(
-    'workspace/list 404 is tolerated gracefully without surfacing an error',
+    'the workspace roster arrives on workspace/follow with no unary pull',
     () async {
       final rpc = HarnessFakeRpc();
-      rpc.failNextCall('workspace/list', '404');
-      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'workspace-follow',
+            method: 'workspace/follow',
+            payload: <String, Object?>{
+              'type': 'baseline',
+              'value': <String, Object?>{
+                'items': <Object?>[_workspaceJson('ws-a', '/a', 'A')],
+                'archivedSessionIds': <Object?>['s-archived'],
+              },
+            },
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
       await pumpEventQueue();
 
+      expect(
+        (await repository.observeWorkspaces().first)
+            .map((workspace) => workspace.workspaceId)
+            .toList(),
+        <String>['ws-a'],
+      );
+      expect(await repository.observeArchivedSessionIds().first, <String>{
+        's-archived',
+      });
+      // The pinned 0.1.5 workspace namespace registers no unary list; a
+      // refresh has no pull to perform and must not invent one.
       await expectLater(repository.refreshWorkspaces(), completes);
-      expect(await repository.observeWorkspaces().first, isEmpty);
     },
   );
 
@@ -2097,7 +1991,7 @@ void main() {
         'blank': false,
       },
     ]);
-    rpc.failNextCall('session/history', 'bad-response');
+    rpc.failNextCall(DshRpcEndpoints.sessionHistory, 'bad-response');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -2133,7 +2027,7 @@ void main() {
       ),
     );
 
-    final payload = rpc.payloads('session/updateQueue').single;
+    final payload = rpc.payloads(DshRpcEndpoints.sessionUpdateQueue).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     final action = asJsonObject(payloadArgs['action']);
     expect(action, isNotNull, reason: 'missing action');
@@ -2153,7 +2047,7 @@ void main() {
 
       // Web parity: steer-unavailable / queue-item-not-found are benign races
       // (the queue projection refreshes the dock) — no exception escapes.
-      rpc.failNextCall('session/updateQueue', 'steer-unavailable');
+      rpc.failNextCall(DshRpcEndpoints.sessionUpdateQueue, 'steer-unavailable');
       await repository.updateQueue(
         const QueueUpdateRequest(
           sessionId: 'session-1',
@@ -2161,7 +2055,10 @@ void main() {
           kind: QueueUpdateKind.steer,
         ),
       );
-      rpc.failNextCall('session/updateQueue', 'queue-item-not-found');
+      rpc.failNextCall(
+        DshRpcEndpoints.sessionUpdateQueue,
+        'queue-item-not-found',
+      );
       await repository.updateQueue(
         const QueueUpdateRequest(
           sessionId: 'session-1',
@@ -2170,7 +2067,7 @@ void main() {
         ),
       );
 
-      rpc.failNextCall('session/updateQueue', 'agent-busy');
+      rpc.failNextCall(DshRpcEndpoints.sessionUpdateQueue, 'agent-busy');
       await expectLater(
         repository.updateQueue(
           const QueueUpdateRequest(
@@ -2240,7 +2137,7 @@ void main() {
 
     expect(edited.id, 'goal-1');
     expect(edited.revision, 2);
-    final payload = rpc.payloads('goal/edit').single;
+    final payload = rpc.payloads(DshRpcEndpoints.goalsEdit).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['sessionId'], 'session-1');
     expect(payloadArgs['objective'], 'ship it v2');
@@ -2270,7 +2167,7 @@ void main() {
     expect(execution.text, 'Plan mode on. Use /plan off to leave.');
     // The typert remote envelope: the args carry the addressed agent
     // (session id), the complete line, and the images slot.
-    final payload = rpc.payloads('commands/execute').single;
+    final payload = rpc.payloads(DshRpcEndpoints.commandsExecute).single;
     final args = asJsonObject(payload['args']);
     expect(args, isNotNull, reason: 'missing args envelope');
     expect(args!['agentId'], 'session-1');
@@ -2296,7 +2193,7 @@ void main() {
       PendingImage(id: 'img-2', mediaType: 'image/jpeg', base64Data: 'dw=='),
     ]);
 
-    final payload = rpc.payloads('commands/execute').single;
+    final payload = rpc.payloads(DshRpcEndpoints.commandsExecute).single;
     final args = asJsonObject(payload['args'])!;
     final images = args['images'];
     expect(images, isA<List<Object?>>());
@@ -2392,7 +2289,7 @@ void main() {
     expect(execution, isNotNull);
     expect(execution!.commandId, 'cmd-e487ba23-1');
     // The dropped first attempt plus the fresh-connection retry.
-    expect(rpc.callCountFor('commands/execute'), 2);
+    expect(rpc.callCountFor(DshRpcEndpoints.commandsExecute), 2);
   });
 
   test('executeCommand does not retry without the opt-in flag', () async {
@@ -2414,11 +2311,12 @@ void main() {
         ),
       ),
     );
-    expect(rpc.callCountFor('commands/execute'), 1);
+    expect(rpc.callCountFor(DshRpcEndpoints.commandsExecute), 1);
   });
 
   test('executeCommand does not retry a business failure', () async {
-    final rpc = HarnessFakeRpc()..failNextCall('commands/execute', 'admission');
+    final rpc = HarnessFakeRpc()
+      ..failNextCall(DshRpcEndpoints.commandsExecute, 'admission');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -2431,7 +2329,7 @@ void main() {
       ),
       throwsA(isA<DshBusinessException>()),
     );
-    expect(rpc.callCountFor('commands/execute'), 1);
+    expect(rpc.callCountFor(DshRpcEndpoints.commandsExecute), 1);
   });
 
   test('executeCommand does not retry a non-socket transport error', () async {
@@ -2452,7 +2350,7 @@ void main() {
       ),
       throwsA(isA<DshTransportException>()),
     );
-    expect(rpc.callCountFor('commands/execute'), 1);
+    expect(rpc.callCountFor(DshRpcEndpoints.commandsExecute), 1);
   });
 
   test('executeCommand rethrows after exhausting the retry budget', () async {
@@ -2470,7 +2368,7 @@ void main() {
       throwsA(isA<DshTransportException>()),
     );
     // Both attempts dropped: the original plus its single retry.
-    expect(rpc.callCountFor('commands/execute'), 2);
+    expect(rpc.callCountFor(DshRpcEndpoints.commandsExecute), 2);
   });
 
   test('directory listing maps host wire shape', () async {
@@ -2484,7 +2382,7 @@ void main() {
     expect(listing.home, '/home/user');
     expect(listing.entries.single.name, 'src');
     expect(listing.entries.single.hidden, isFalse);
-    final payload = rpc.payloads('host/listDirectory').single;
+    final payload = rpc.payloads(DshRpcEndpoints.directoryPickerList).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['path'], '/tmp/chosen');
   });
@@ -2500,7 +2398,7 @@ void main() {
     );
 
     expect(created, '/tmp/chosen/new-folder');
-    final payload = rpc.payloads('host/createDirectory').single;
+    final payload = rpc.payloads(DshRpcEndpoints.directoryPickerCreate).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['path'], '/tmp/chosen');
     expect(payloadArgs['name'], 'new-folder');
@@ -2528,7 +2426,9 @@ void main() {
     expect(shell.applies, SettingsApplies.restart);
     expect(shell.hasUserLayer, isFalse);
     expect(snapshot.credentialRefs, <String>['DEEPSEEK_API_KEY']);
-    final settingsPayload = rpc.payloads('settings/describe').single;
+    final settingsPayload = rpc
+        .payloads(DshRpcEndpoints.settingsDescribe)
+        .single;
     final settingsArgs =
         asJsonObject(settingsPayload['args']) ?? settingsPayload;
     expect(settingsArgs.length, 0);
@@ -2560,7 +2460,9 @@ void main() {
     expect(missing.configured, isFalse);
     expect(missing.source, isNull);
     expect(missing.writable, isFalse);
-    final credPayload = rpc.payloads('credentials/describe').single;
+    final credPayload = rpc
+        .payloads(DshRpcEndpoints.credentialsDescribe)
+        .single;
     final credArgs = asJsonObject(credPayload['args']) ?? credPayload;
     final refs = asJsonArray(credArgs['refs']);
     expect(refs?.cast<String>(), <String>[
@@ -2575,7 +2477,7 @@ void main() {
     await pumpEventQueue();
 
     expect(await repository.describeCredentials(<String>[]), isEmpty);
-    expect(rpc.payloads('credentials/describe'), isEmpty);
+    expect(rpc.payloads(DshRpcEndpoints.credentialsDescribe), isEmpty);
   });
 
   test('history projections seed plan state', () async {
@@ -2941,7 +2843,7 @@ void main() {
 
     final catalog = await repository.listSkills('session-1');
 
-    final skillPayload = rpc.payloads('skill/list').single;
+    final skillPayload = rpc.payloads(DshRpcEndpoints.skillsList).single;
     final skillArgs = asJsonObject(skillPayload['args']) ?? skillPayload;
     expect(skillArgs['sessionId'], 'session-1');
     expect(catalog, hasLength(2));
@@ -2954,19 +2856,25 @@ void main() {
   });
 
   test('move workspace sends anchor and applies response order', () async {
-    final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
-      _workspaceJson('ws-a', '/a', 'A'),
-      _workspaceJson('ws-b', '/b', 'B'),
-      _workspaceJson('ws-c', '/c', 'C'),
-    ]);
-    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _workspaceBaseline(<JsonMap>[
+          _workspaceJson('ws-a', '/a', 'A'),
+          _workspaceJson('ws-b', '/b', 'B'),
+          _workspaceJson('ws-c', '/c', 'C'),
+        ]),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
     await pumpEventQueue();
-    await repository.refreshWorkspaces();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
 
     final orderedIds = await repository.moveWorkspace('ws-a', 'ws-c');
 
     expect(orderedIds, <String>['ws-b', 'ws-a', 'ws-c']);
-    final payload = rpc.payloads('workspace/insertBefore').single;
+    final payload = rpc.payloads(DshRpcEndpoints.workspaceInsertBefore).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['workspaceId'], 'ws-a');
     expect(payloadArgs['beforeWorkspaceId'], 'ws-c');
@@ -2985,7 +2893,7 @@ void main() {
 
     await repository.moveWorkspace('ws-a', null);
 
-    final payload = rpc.payloads('workspace/insertBefore').single;
+    final payload = rpc.payloads(DshRpcEndpoints.workspaceInsertBefore).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['workspaceId'], 'ws-a');
     expect(payloadArgs.containsKey('beforeWorkspaceId'), isFalse);
@@ -2998,7 +2906,7 @@ void main() {
 
     await repository.setCredential('DEEPSEEK_API_KEY', 'sk-typed');
 
-    final payload = rpc.payloads('credentials/set').single;
+    final payload = rpc.payloads(DshRpcEndpoints.credentialsSet).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['ref'], 'DEEPSEEK_API_KEY');
     expect(payloadArgs['value'], 'sk-typed');
@@ -3011,7 +2919,7 @@ void main() {
 
     await repository.unsetCredential('DEEPSEEK_API_KEY');
 
-    final payload = rpc.payloads('credentials/unset').single;
+    final payload = rpc.payloads(DshRpcEndpoints.credentialsUnset).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['ref'], 'DEEPSEEK_API_KEY');
     expect(payloadArgs.length, 1);
@@ -3029,7 +2937,7 @@ void main() {
       expectedRevision: 3,
     );
 
-    final payload = rpc.payloads('settings/update').single;
+    final payload = rpc.payloads(DshRpcEndpoints.settingsUpdate).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['ns'], 'llm-deepseek');
     expect(payloadArgs['expectedRevision'], 3);
@@ -3053,7 +2961,7 @@ void main() {
       expectedRevision: 2,
     );
 
-    final payload = rpc.payloads('settings/replace').single;
+    final payload = rpc.payloads(DshRpcEndpoints.settingsReplace).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['ns'], 'shell');
     expect(payloadArgs['expectedRevision'], 2);
@@ -3076,7 +2984,7 @@ void main() {
       SettingPathOp(op: 'unset', path: <String>['retry']),
     ]);
 
-    final payload = rpc.payloads('settings/mutate').single;
+    final payload = rpc.payloads(DshRpcEndpoints.settingsMutate).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['ns'], 'llm-deepseek');
     expect(payloadArgs.containsKey('expectedRevision'), isFalse);
@@ -3095,16 +3003,24 @@ void main() {
   test(
     'move session sends anchors and applies the updated workspace',
     () async {
-      final rpc = HarnessFakeRpc(<Object?>[], <Object?>[
-        _workspaceJson('ws-a', '/a', 'A', <String>['s1', 's2', 's3']),
-      ]);
-      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          _workspaceBaseline(<JsonMap>[
+            _workspaceJson('ws-a', '/a', 'A', <String>['s1', 's2', 's3']),
+          ]),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
-      await repository.refreshWorkspaces();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
 
       final updated = await repository.moveSession('ws-a', 's1', 's3');
 
-      final payload = rpc.payloads('workspace/insertSessionBefore').single;
+      final payload = rpc
+          .payloads(DshRpcEndpoints.workspaceInsertSessionBefore)
+          .single;
       final payloadArgs = asJsonObject(payload['args']) ?? payload;
       expect(payloadArgs['workspaceId'], 'ws-a');
       expect(payloadArgs['sessionId'], 's1');
@@ -3139,7 +3055,7 @@ void main() {
       ),
     );
 
-    final payload = rpc.payloads('session/prompt').single;
+    final payload = rpc.payloads(DshRpcEndpoints.sessionPrompt).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     final content = asJsonArray(payloadArgs['content']) ?? const <Object?>[];
     expect(content, hasLength(2));
@@ -3163,7 +3079,7 @@ void main() {
       'sha256:abc',
     );
 
-    final payload = rpc.payloads('session/attachment').single;
+    final payload = rpc.payloads(DshRpcEndpoints.sessionAttachment).single;
     final payloadArgs = asJsonObject(payload['args']) ?? payload;
     expect(payloadArgs['sessionId'], 'session-1');
     expect(payloadArgs['attachmentId'], 'sha256:abc');
@@ -3205,8 +3121,8 @@ void main() {
 
   test('session list maps subagent origin and root absence', () async {
     // Wire: SessionSummary.origin is the optional coarse origin
-    // (`origin?: 'subagent'`) — reference/deepseek-harness/
-    // packages/host/apiproxy/src/api/sessions.ts.
+    // (`origin?: 'subagent'`) — reference/deepseek-harness/packages/
+    // api/session-controller/src/types.ts (built by list.ts `listFields`).
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
         'sessionId': 'session-child',
@@ -3237,10 +3153,10 @@ void main() {
   });
 
   test('session list carries the subagent lineage into the domain', () async {
-    // Wire: `sessionSummarySchema.parentSessionId` is the optional
+    // Wire: `SessionSummary.parentSessionId` is the optional
     // spawning-parent key on a subagent child row —
-    // reference/deepseek-harness/packages/host/apiproxy/src/api/
-    // sessions.schema.ts. The Subagents screen diffs this key on the
+    // reference/deepseek-harness/packages/api/session-controller/src/
+    // types.ts. The Subagents screen diffs this key on the
     // sessions stream to spot child spawns and detachments.
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
@@ -3272,12 +3188,14 @@ void main() {
   });
 
   test(
-    'host/session-added repulls the list so a spawn reaches the stream',
+    'api-session/added upserts the roster so a spawn reaches the stream',
     () async {
-      // Wire: `host/session-added` (events.schema.ts hostFrameSchema)
-      // carries sessionId + blank + parentSessionId + origin for a
-      // subagent spawn. The adapter repulls session.list on the frame;
-      // the pulled row is the lineage carrier into the domain.
+      // Wire: the forwarded Remote Event `api-session/added`
+      // (packages/api/session-controller/src/types.ts
+      // `'api-session/added'(summary: SessionSummary)`) carries sessionId +
+      // blank + parentSessionId + origin for a subagent spawn. The adapter
+      // upserts the summary in place; the summary is the lineage carrier
+      // into the domain, with no session.list repull.
       final rows = <Object?>[
         <String, Object?>{
           'sessionId': 'session-root',
@@ -3288,38 +3206,33 @@ void main() {
       ];
       final rpc = HarnessFakeRpc(rows);
       final socket = ScriptedHarnessSocket(
-        hostFrames: <ServerRequest>[
-          _hostFrame('host/session-added', <String, Object?>{
-            'type': 'host/session-added',
-            'sessionId': 'session-child',
-            'blank': false,
-            'parentSessionId': 'session-root',
-            'origin': 'subagent',
-          }),
+        muxFrames: <ServerRequest>[
+          _remoteEmit('api-session/added', <Object?>[
+            <String, Object?>{
+              'sessionId': 'session-child',
+              'updatedAt': 5,
+              'running': true,
+              'blank': false,
+              'parentSessionId': 'session-root',
+              'origin': 'subagent',
+            },
+          ]),
         ],
       );
       final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
-      final before = rpc.callCountFor('session/list');
+      final before = rpc.callCountFor(DshRpcEndpoints.sessionList);
 
       final sessions = <List<SessionSummary>>[];
       final sub = repository.observeSessions().listen(sessions.add);
       addTearDown(() => sub.cancel());
 
-      // The spawn frame lands; by the time the adapter's repull reads
-      // `session/list`, the host's durable list answers the new child.
-      rows.add(<String, Object?>{
-        'sessionId': 'session-child',
-        'updatedAt': 5,
-        'running': true,
-        'blank': false,
-        'parentSessionId': 'session-root',
-        'origin': 'subagent',
-      });
-      socket.releaseHostFrames();
+      // The spawn event lands; the summary upserts the roster row in place,
+      // so the child reaches the stream without a session.list round-trip.
+      socket.releaseMuxFrames();
       await pumpEventQueue();
 
-      expect(rpc.callCountFor('session/list'), greaterThan(before));
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), before);
       final last = sessions.last;
       final child = last.firstWhere((session) => session.id == 'session-child');
       expect(child.parentSessionId, 'session-root');
@@ -3332,8 +3245,8 @@ void main() {
   // child tree — the fact the Subagents screen cold-seeds from.
   test('subagent.list decodes the host-reported child tree', () async {
     // Fixture transcribed from
-    // reference/deepseek-harness/packages/host/apiproxy/src/api/
-    // subagents.schema.ts subagentListValueSchema: continuable and
+    // reference/deepseek-harness/packages/subagent/subagent/src/
+    // control-types.ts SubagentCatalog: continuable and
     // one-shot child rows (label required/optional per mode) plus a
     // diagnostic row.
     final rpc = HarnessFakeRpc()
@@ -3367,7 +3280,7 @@ void main() {
 
     final catalog = await repository.loadSubagents('session-root');
 
-    final subagentPayload = rpc.payloads('subagent/list').first;
+    final subagentPayload = rpc.payloads(DshRpcEndpoints.subagentsList).first;
     final subagentArgs =
         asJsonObject(subagentPayload['args']) ?? subagentPayload;
     expect(subagentArgs, <String, Object?>{'parentSessionId': 'session-root'});
@@ -3483,11 +3396,12 @@ void main() {
   test(
     'subagent.history addresses each row with its own catalog mode',
     () async {
-      // Wire: `subagentHistoryRequestSchema` carries mode
-      // ('one-shot' | 'continuable'), and the host's catalogChild guard
-      // answers subagent-not-found on a mismatch —
-      // reference/deepseek-harness/packages/host/apiproxy/src/api/
-      // subagents.schema.ts + api-proxy.ts. A one-shot row must go out
+      // Wire: the subagent address carries mode
+      // ('one-shot' | 'continuable'), and the host rejects a mismatch
+      // (surfaced as `subagent-not-found`) —
+      // reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts
+      // `SubagentAddress` + packages/api/session-controller/src/history.ts.
+      // A one-shot row must go out
       // as one-shot; the transcript folds through the reducer.
       final rpc = HarnessFakeRpc()
         ..subagentHistoryValue = <String, Object?>{
@@ -3505,7 +3419,9 @@ void main() {
         SubagentMode.oneShot,
       );
 
-      final subHistoryPayload = rpc.payloads('subagent/history').single;
+      final subHistoryPayload = rpc
+          .payloads(DshRpcEndpoints.sessionPage)
+          .single;
       final subHistoryArgs =
           asJsonObject(subHistoryPayload['args']) ?? subHistoryPayload;
       expect(subHistoryArgs['address'], <String, Object?>{
@@ -3521,7 +3437,7 @@ void main() {
         'child-1',
         SubagentMode.continuable,
       );
-      final lastSubHistory = rpc.payloads('subagent/history').last;
+      final lastSubHistory = rpc.payloads(DshRpcEndpoints.sessionPage).last;
       final lastSubHistoryArgs =
           asJsonObject(lastSubHistory['args']) ?? lastSubHistory;
       expect(
@@ -3537,7 +3453,7 @@ void main() {
     // exception reaches the caller, which surfaces it on the error
     // banner.
     final rpc = HarnessFakeRpc()
-      ..failNextCall('subagent/history', 'subagent-not-found');
+      ..failNextCall(DshRpcEndpoints.sessionPage, 'subagent-not-found');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -3574,7 +3490,9 @@ void main() {
         'keep going',
       );
 
-      final interruptPayload = rpc.payloads('subagent/interrupt').single;
+      final interruptPayload = rpc
+          .payloads(DshRpcEndpoints.subagentsInterrupt)
+          .single;
       final interruptArgs =
           asJsonObject(interruptPayload['args']) ?? interruptPayload;
       expect(interruptArgs, <String, Object?>{
@@ -3582,7 +3500,7 @@ void main() {
         'childSessionId': 'child-1',
         'mode': 'continuable',
       });
-      final prompt = rpc.payloads('subagent/prompt').single;
+      final prompt = rpc.payloads(DshRpcEndpoints.subagentsPrompt).single;
       final promptArgs = asJsonObject(prompt['args']) ?? prompt;
       expect(promptArgs['mode'], 'continuable');
       expect(promptArgs['childSessionId'], 'child-1');
@@ -3593,7 +3511,8 @@ void main() {
   // Pending-interaction fold: the sidebar's amber dot comes from
   // approval/question frames tracked for every session, opened or not
   // (web SessionManager list-level parity). Wire shapes:
-  // reference/deepseek-harness/packages/host/apiproxy/src/api/events.ts.
+  // reference/deepseek-harness/packages/api/remotes/src/remote-events.ts
+  // (`approval/request`, `user-questions/request`).
   test('approval requested lights pending and resolved clears it', () async {
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
@@ -3907,17 +3826,9 @@ void main() {
         },
       ]);
       final socket = ScriptedHarnessSocket(
-        hostFrames: <ServerRequest>[
-          _hostFrame('host/session-status', <String, Object?>{
-            'type': 'host/session-status',
-            'sessionId': 'session-a',
-            'running': true,
-          }),
-          _hostFrame('host/session-status', <String, Object?>{
-            'type': 'host/session-status',
-            'sessionId': 'session-a',
-            'running': false,
-          }),
+        muxFrames: <ServerRequest>[
+          _sessionStatusEvent('session-a', true),
+          _sessionStatusEvent('session-a', false),
         ],
       );
       final repository = await harnessRepository(rpc, socket);
@@ -3925,7 +3836,7 @@ void main() {
       // Not viewing session-a; it then stops running → completed arms.
       await repository.openSession('session-b');
       await pumpEventQueue();
-      socket.releaseHostFrames();
+      socket.releaseMuxFrames();
       await pumpEventQueue();
 
       var sessions = await repository.observeSessions().first;
@@ -3948,7 +3859,7 @@ void main() {
       );
 
       // Running again also clears it.
-      socket.releaseHostFrames();
+      socket.releaseMuxFrames();
       await repository.refreshSessions();
       await pumpEventQueue();
     },
@@ -3964,17 +3875,9 @@ void main() {
       },
     ]);
     final socket = ScriptedHarnessSocket(
-      hostFrames: <ServerRequest>[
-        _hostFrame('host/session-status', <String, Object?>{
-          'type': 'host/session-status',
-          'sessionId': 'session-a',
-          'running': true,
-        }),
-        _hostFrame('host/session-status', <String, Object?>{
-          'type': 'host/session-status',
-          'sessionId': 'session-a',
-          'running': false,
-        }),
+      muxFrames: <ServerRequest>[
+        _sessionStatusEvent('session-a', true),
+        _sessionStatusEvent('session-a', false),
       ],
     );
     final repository = await harnessRepository(rpc, socket);
@@ -3982,7 +3885,7 @@ void main() {
     // View session-a before it finishes: no reminder arms.
     await repository.openSession('session-a');
     await pumpEventQueue();
-    socket.releaseHostFrames();
+    socket.releaseMuxFrames();
     await pumpEventQueue();
 
     final sessions = await repository.observeSessions().first;
@@ -3995,8 +3898,8 @@ void main() {
   // Web SessionManager parity (runtime/tests/manager.client.spec.ts
   // "a list refresh carrying the running→idle transition arms the
   // reminder"): the edge fold runs on every observation source, not only
-  // on host/session-status frames — a pull that arrives after the turn
-  // finished (WS gap, app process death) must arm the reminder too.
+  // on api-session/status forwarded events — a pull that arrives after the
+  // turn finished (WS gap, app process death) must arm the reminder too.
   test(
     'a list pull carrying the running→idle transition arms the reminder',
     () async {
@@ -4035,11 +3938,11 @@ void main() {
 
   // Web SessionManager parity ("arms a completion that happened during an
   // in-flight first pull"): a session already running at the client's
-  // first observation must arm when its completion frame arrives — the
-  // pull records the running baseline even though no running:true frame
+  // first observation must arm when its completion event arrives — the
+  // pull records the running baseline even though no running:true event
   // was ever seen.
   test(
-    'a completion frame after a running first pull arms the reminder',
+    'a completion event after a running first pull arms the reminder',
     () async {
       JsonMap sessionRow(String id, int updatedAt, bool running) =>
           <String, Object?>{
@@ -4053,19 +3956,13 @@ void main() {
         sessionRow('session-b', 3, false),
       ]);
       final socket = ScriptedHarnessSocket(
-        hostFrames: <ServerRequest>[
-          _hostFrame('host/session-status', <String, Object?>{
-            'type': 'host/session-status',
-            'sessionId': 'session-a',
-            'running': false,
-          }),
-        ],
+        muxFrames: <ServerRequest>[_sessionStatusEvent('session-a', false)],
       );
       final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
       await repository.openSession('session-b');
       await pumpEventQueue();
-      socket.releaseHostFrames();
+      socket.releaseMuxFrames();
       await pumpEventQueue();
 
       final sessions = await repository.observeSessions().first;
@@ -4077,8 +3974,8 @@ void main() {
   );
 
   // Wire shape: agentPreset.list roster
-  // (reference/deepseek-harness/packages/host/apiproxy/src/api/
-  // agent-presets.schema.ts).
+  // (reference/deepseek-harness/packages/preset/agent-presets/src/
+  // types.ts).
   test('agentPreset.list decodes the roster and deployment facts', () async {
     final rpc = HarnessFakeRpc();
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
@@ -4086,7 +3983,7 @@ void main() {
 
     final roster = await repository.listAgentPresets();
 
-    final presetPayload = rpc.payloads('agentPreset/list').single;
+    final presetPayload = rpc.payloads(DshRpcEndpoints.agentPresetsList).single;
     final presetArgs = asJsonObject(presetPayload['args']) ?? presetPayload;
     expect(presetArgs, isEmpty);
     expect(roster.authorable, isTrue);
@@ -4114,7 +4011,9 @@ void main() {
     final echoed = await repository.selectAgentPreset('session-1', 'minimal');
 
     expect(echoed, 'minimal');
-    final selectPayload = rpc.payloads('agentPreset/select').single;
+    final selectPayload = rpc
+        .payloads(DshRpcEndpoints.agentPresetsSelect)
+        .single;
     final selectArgs = asJsonObject(selectPayload['args']) ?? selectPayload;
     expect(selectArgs['agentPreset'], 'minimal');
     expect(selectArgs['agentId'] ?? selectArgs['sessionId'], 'session-1');
@@ -4122,7 +4021,7 @@ void main() {
 
   test('agentPreset.select surfaces the host refusal', () async {
     final rpc = HarnessFakeRpc();
-    rpc.failNextCall('agentPreset/select', 'agent-preset-locked');
+    rpc.failNextCall(DshRpcEndpoints.agentPresetsSelect, 'agent-preset-locked');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -4307,9 +4206,10 @@ void main() {
     expect(await repository.observePermissions('session-1').first, isNull);
   });
 
-  // Wire shape: `agent-preset/selected` arrives as a forwarded
-  // host/remote-event frame with args [sessionId, agentPreset]
-  // (events.ts HostFrame; allowlist in dsh-api-remotes remote-events.ts).
+  // Wire shape: `agent-preset/selected` arrives as a forwarded Remote Event
+  // `{type: 'emit', event, args}` with args [sessionId, agentPreset] on the
+  // mux `$events` stream (allowlist in
+  // packages/api/remotes/src/remote-events.ts).
   test(
     'agent-preset/selected remote event folds the session summary',
     () async {
@@ -4322,19 +4222,18 @@ void main() {
         },
       ]);
       final socket = ScriptedHarnessSocket(
-        hostFrames: <ServerRequest>[
-          _hostFrame('host/remote-event', <String, Object?>{
-            'type': 'host/remote-event',
-            'event': 'agent-preset/selected',
-            'args': <Object?>['session-1', 'minimal'],
-          }),
+        muxFrames: <ServerRequest>[
+          _remoteEmit('agent-preset/selected', <Object?>[
+            'session-1',
+            'minimal',
+          ]),
         ],
       );
       final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
       await repository.refreshSessions();
 
-      socket.releaseHostFrames();
+      socket.releaseMuxFrames();
       await pumpEventQueue();
 
       final sessions = await repository.observeSessions().first;
@@ -4366,14 +4265,20 @@ void main() {
       ];
       await repository.openSession('b');
       await pumpEventQueue();
-      expect(rpc.callCountFor('session/list'), 1);
-      expect(rpc.callCountFor('session/history'), 2);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 1);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 2);
 
       rpc.historyEvents['a'] = <Object?>[
         resyncAssistantTextEvent(7, 'after resync'),
       ];
-      rpc.gateResponsesUntilCalled('session/list', 'session/history');
-      rpc.gateResponsesUntilCalled('session/history', 'session/list');
+      rpc.gateResponsesUntilCalled(
+        DshRpcEndpoints.sessionList,
+        DshRpcEndpoints.sessionPage,
+      );
+      rpc.gateResponsesUntilCalled(
+        DshRpcEndpoints.sessionPage,
+        DshRpcEndpoints.sessionList,
+      );
       final mark = rpc.callJournal.length;
 
       socket.terminate();
@@ -4386,15 +4291,15 @@ void main() {
       expect(rpc.gateTimeouts, isEmpty);
       final journal = rpc.callJournal.sublist(mark);
       expect(
-        journal.indexOf('session/list:start'),
-        lessThan(journal.indexOf('session/history:start')),
+        journal.indexOf('${DshRpcEndpoints.sessionList}:start'),
+        lessThan(journal.indexOf('${DshRpcEndpoints.sessionPage}:start')),
       );
       expect(
-        journal.indexOf('session/history:start'),
-        lessThan(journal.indexOf('session/list:return')),
+        journal.indexOf('${DshRpcEndpoints.sessionPage}:start'),
+        lessThan(journal.indexOf('${DshRpcEndpoints.sessionList}:return')),
       );
-      expect(rpc.callCountFor('session/list'), 2);
-      expect(rpc.callCountFor('session/history'), 4);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 2);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 4);
 
       final timeline = await repository.observeTimeline('a').first;
       final message = timeline.whereType<TimelineMessage>().single;
@@ -4419,7 +4324,7 @@ void main() {
         resyncAssistantTextEvent(7, 'baseline v1'),
       ];
       final holdList = Completer<void>();
-      rpc.gateResponses('session/list', holdList.future);
+      rpc.gateResponses(DshRpcEndpoints.sessionList, holdList.future);
       socket.terminate();
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -4427,8 +4332,8 @@ void main() {
 
       // Generation 2's window rebuild settled while its list pull is still
       // in flight.
-      expect(rpc.callCountFor('session/list'), 2);
-      expect(rpc.callCountFor('session/history'), 2);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 2);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 2);
       final first = await repository.observeTimeline('a').first;
       expect(
         first.whereType<TimelineMessage>().single.value.text,
@@ -4445,14 +4350,14 @@ void main() {
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await pumpEventQueue();
-      expect(rpc.callCountFor('session/list'), 2);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 2);
 
       holdList.complete();
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 80));
       await pumpEventQueue();
-      expect(rpc.callCountFor('session/list'), 3);
-      expect(rpc.callCountFor('session/history'), 3);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionList), 3);
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 3);
       final second = await repository.observeTimeline('a').first;
       expect(
         second.whereType<TimelineMessage>().single.value.text,
@@ -4520,11 +4425,11 @@ void main() {
   // the mux-open burst pushes each session's `session/subscribed` and the
   // queue baseline that follows it, and the host never resends the baseline
   // in that generation. `DshConnectionManager` forwards burst frames from
-  // stream open — before it publishes CONNECTED — so every re-baseline rides
-  // the stream, never the connected publish (reference session.ts:419-426
-  // author comment; web queueMirror design). Each test holds the generation's
-  // `host.describe` (or `session.history`) response to pin the burst relative
-  // to the resync prep.
+  // stream open — before the `$events` ready frame publishes CONNECTED — so
+  // every re-baseline rides the stream, never the connected publish
+  // (reference session.ts:419-426 author comment; web queueMirror design).
+  // Each test holds the generation's readiness frame (or the
+  // `session.history` response) to pin the burst relative to the resync prep.
 
   test('a queue baseline whose burst outruns the connected publish survives '
       'the window rebuild', () async {
@@ -4553,11 +4458,11 @@ void main() {
       'stale steer',
     );
 
-    // Generation 2: hold the readiness handshake so the mux-open burst
+    // Generation 2: hold the readiness frame so the mux-open burst
     // flows while the previous window is still ready — the race the old
     // connected-time truncation lost to.
-    final describeHeld = Completer<void>();
-    rpc.gateResponses('host/describe', describeHeld.future);
+    final readyHeld = Completer<void>();
+    socket.readyGate = readyHeld;
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -4576,7 +4481,8 @@ void main() {
       }),
     );
     await pumpEventQueue();
-    describeHeld.complete();
+    socket.readyGate = null;
+    readyHeld.complete();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 80));
     await pumpEventQueue();
@@ -4620,7 +4526,7 @@ void main() {
     // reload is held — the burst now arrives against a not-ready window
     // and parks for the after-reset replay.
     final historyHeld = Completer<void>();
-    rpc.gateResponses('session/history', historyHeld.future);
+    rpc.gateResponses(DshRpcEndpoints.sessionPage, historyHeld.future);
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -4670,8 +4576,8 @@ void main() {
     // Generation 2: the burst (subscribed → replayed request → queue
     // baseline) arrives before the connected publish drives the prep; the
     // old connected-time truncation wiped exactly these fresh buffers.
-    final describeHeld = Completer<void>();
-    rpc.gateResponses('host/describe', describeHeld.future);
+    final readyHeld = Completer<void>();
+    socket.readyGate = readyHeld;
     socket.terminate();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -4692,7 +4598,8 @@ void main() {
     // 'c''s generation: subscribed only — an emptied queue resends nothing.
     socket.emitMuxFrame(_subscribedFrame('c', 1));
     await pumpEventQueue();
-    describeHeld.complete();
+    socket.readyGate = null;
+    readyHeld.complete();
     await pumpEventQueue();
     await Future<void>.delayed(const Duration(milliseconds: 80));
     await pumpEventQueue();
@@ -4792,8 +4699,8 @@ void main() {
     // Verify that session/history (or session/page) was reloaded for root-1 only,
     // never for subagent-1 or unopened-root.
     final historyPayloads = rpc
-        .payloads('session/history')
-        .followedBy(rpc.payloads('session/page'));
+        .payloads(DshRpcEndpoints.sessionPage)
+        .followedBy(rpc.payloads(DshRpcEndpoints.sessionPage));
     for (final payload in historyPayloads) {
       final args = asJsonObject(payload['args']) ?? payload;
       final request = asJsonObject(args['request']) ?? args;
@@ -4835,8 +4742,8 @@ void main() {
 
     // No history/page calls made for subagent-child with address.kind: 'session'
     final historyPayloads = rpc
-        .payloads('session/history')
-        .followedBy(rpc.payloads('session/page'));
+        .payloads(DshRpcEndpoints.sessionPage)
+        .followedBy(rpc.payloads(DshRpcEndpoints.sessionPage));
     for (final payload in historyPayloads) {
       final args = asJsonObject(payload['args']) ?? payload;
       final request = asJsonObject(args['request']) ?? args;

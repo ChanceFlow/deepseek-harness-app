@@ -68,8 +68,8 @@ class DebugToolBootstrap {
   String get _sessionId => sessionIdProvider?.call() ?? '';
 
   /// Idempotent. Returns false in release mode when telemetry is disabled
-  /// at compile time ([kDebugTelemetryEnabled] false — stable releases);
-  /// prerelease release builds and debug builds install.
+  /// at compile time ([kDebugTelemetryEnabled] false — not opted in);
+  /// debug builds and release builds that opt in install.
   bool start({bool trackFrames = true}) {
     if ((kReleaseMode && !kDebugTelemetryEnabled) || _installed) return false;
     _reportPendingCrash();
@@ -183,8 +183,8 @@ Future<DebugToolBootstrap?> initDebugTelemetry({
   String Function()? sessionIdProvider,
 }) async {
   // Release mode stays silent when telemetry is compiled out
-  // ([kDebugTelemetryEnabled] false — stable releases); debug builds and
-  // prerelease release builds report.
+  // ([kDebugTelemetryEnabled] false — not opted in); debug builds and
+  // release builds that opt in report.
   if (kReleaseMode && !kDebugTelemetryEnabled) return null;
   if (!settings.enabled) return null;
 

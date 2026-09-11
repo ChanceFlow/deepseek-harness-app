@@ -12,7 +12,7 @@ classes:
    durable parent address` for six sessions whose ids are bare UUIDs — the
    shape [continuation.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/continuation.ts)
    mints for an in-process continuable child
-   (`SessionId(randomUUID())`), never the `session-<n>` a root gets.
+   (`brandString<SessionId>(randomUUID())`), never the `session-<n>` a root gets.
    `_resync` fired `ensureLoaded` for every instantiated `_SessionState`, not
    only the opened ones, and
    [harness_repository_impl.dart](../../../../flutter/packages/harness_adapter/lib/src/harness_repository_impl.dart)
@@ -30,7 +30,7 @@ neither: `Session.resync()` returns early on `openState === 'cold'` ("never
 opened: no window to rebuild"), and a child window carries its catalog
 address, so its history reads route through `subagents.history({...address})`
 (see
-[session.ts](../../../../reference/deepseek-harness/packages/client/runtime/src/client/sessions/session.ts)).
+[session.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/client/sessions/session.ts)).
 
 ## Decision
 
@@ -39,8 +39,8 @@ Three gates, mirroring the web:
 1. `_resync` rebuilds only states that are opened (`_SessionState.isOpened`,
    set by `openSession` before its first load) **and** whose `session/list`
    row is a root — no `parentSessionId` and `origin != 'subagent'`
-   ([sessions.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/sessions.ts)
-   row fields).
+   ([list.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/list.ts)
+   `listFields` row fields).
 2. `_loadHistory` throws instead of paging a subagent id with the ordinary
    address, so no future caller can reintroduce the rejection.
 3. `openSession` refuses a subagent id with a `session.open` warning naming

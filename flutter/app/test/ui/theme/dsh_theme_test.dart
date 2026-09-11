@@ -63,6 +63,17 @@ void main() {
     );
   });
 
+  test('warning is a scheme role and tracks brightness', () {
+    final light = DshTheme.light().colorScheme;
+    final dark = DshTheme.dark().colorScheme;
+    expect(light.warning, isNot(equals(dark.warning)));
+    // The dark value is the brighter amber: legible on a dark surface.
+    expect(
+      dark.warning.computeLuminance(),
+      greaterThan(light.warning.computeLuminance()),
+    );
+  });
+
   test('no deepsuite theme extension is attached', () {
     expect(DshTheme.light().extensions, isEmpty);
     expect(DshTheme.dark().extensions, isEmpty);

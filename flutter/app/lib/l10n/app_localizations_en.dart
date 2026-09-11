@@ -28,6 +28,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
+  String get reconnect => 'Reconnect';
+
+  @override
+  String connectionHostUnreachable(String host) {
+    return 'Can\'t reach $host';
+  }
+
+  @override
   String get back => 'Back';
 
   @override
@@ -730,6 +738,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendErrorUnknown => 'Unknown host.';
 
   @override
+  String get backendErrorLoadFailed => 'Couldn\'t load host configuration.';
+
+  @override
   String get backendErrorDisabled => 'Enable the host before activating it.';
 
   @override
@@ -840,6 +851,99 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noPluginSettings => 'This deployment exposes no plugin settings.';
 
   @override
+  String get settingsSectionPluginInventory => 'Plugin inventory';
+
+  @override
+  String get pluginInventoryIntro =>
+      'The plugins this host loads and the composition each agent preset builds.';
+
+  @override
+  String get pluginInventoryReadOnlyNotice =>
+      'Read-only. Enable, disable, and configure plugins on the host.';
+
+  @override
+  String get pluginInventorySearchHint => 'Search module name or entry ID';
+
+  @override
+  String get pluginInventoryLoading => 'Reading plugins…';
+
+  @override
+  String get pluginInventoryEmpty => 'This host exposes no plugins.';
+
+  @override
+  String get pluginInventoryNoMatch => 'No plugins match this search.';
+
+  @override
+  String get pluginInventoryLoadFailed =>
+      'Plugins are temporarily unavailable.';
+
+  @override
+  String get pluginInventoryEnabledTag => 'Enabled';
+
+  @override
+  String get pluginInventoryDisabledTag => 'Disabled';
+
+  @override
+  String get pluginInventoryConditionalTag => 'Conditional';
+
+  @override
+  String get pluginInventoryFailedTag => 'Failed';
+
+  @override
+  String get pluginInventoryPresetGroupTitle => 'Session plugins';
+
+  @override
+  String get pluginInventoryPresetGroupIntro =>
+      'Composed per session by agent presets.';
+
+  @override
+  String get pluginInventoryGlobalGroupTitle => 'Global plugins';
+
+  @override
+  String get pluginInventoryGlobalGroupIntro =>
+      'Shared by the system and every session.';
+
+  @override
+  String pluginInventoryPluginCount(int count) {
+    return '$count plugins';
+  }
+
+  @override
+  String pluginInventoryFailedCount(int count) {
+    return '$count failed';
+  }
+
+  @override
+  String get pluginInventoryDefaultBadge => 'Default';
+
+  @override
+  String get pluginInventoryPresetBrokenLabel => 'Composition unavailable';
+
+  @override
+  String get pluginInventoryModuleLabel => 'Module';
+
+  @override
+  String get pluginInventoryStatusLabel => 'Status';
+
+  @override
+  String get pluginInventoryConditionLabel => 'Disabled when';
+
+  @override
+  String get pluginInventoryPhasePending => 'Waiting for dependencies';
+
+  @override
+  String get pluginInventoryPhaseLoading => 'Loading';
+
+  @override
+  String get pluginInventoryPhaseActive => 'Running';
+
+  @override
+  String get pluginInventoryPhaseFailed => 'Failed to start';
+
+  @override
+  String get pluginInventoryPhaseUnloading => 'Unloading';
+
+  @override
   String get modelsIntro =>
       'Enter your API keys to use models from the following providers.';
 
@@ -849,7 +953,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsFooter =>
-      'Custom providers are managed on the host: this client covers the DeepSeek API key only.';
+      'Provider credentials live on the host; the Providers section below adds, keys, and removes them from this device.';
 
   @override
   String get apiKeyConfigured => 'API key configured';
@@ -930,6 +1034,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get baseUrlValidHint =>
       'http or https with a host, e.g. http://127.0.0.1:3080';
+
+  @override
+  String get backendTrustCertificateTitle => 'Trust this host\'s certificate';
+
+  @override
+  String get backendTrustCertificateDescription =>
+      'Accept this host\'s TLS certificate even when Android cannot verify it — for a self-signed or internal-CA gateway. Only this host is affected, and anyone who can intercept the connection could impersonate it. Leave off unless you control the gateway.';
 
   @override
   String get remove => 'Remove';
@@ -1460,6 +1571,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commandFeedbackDescription => 'record feedback about this session';
 
   @override
+  String get commandExportDescription =>
+      'Download this session log as a ZIP archive';
+
+  @override
+  String get sessionLogExportTooltip => 'Download session log';
+
+  @override
+  String sessionLogExportSaved(String location) {
+    return 'Session log saved to $location';
+  }
+
+  @override
+  String get sessionLogExportFailed => 'Couldn\'t export the session log';
+
+  @override
   String commandImagesUnsupported(String command) {
     return '/$command does not accept image attachments; remove them first';
   }
@@ -1908,6 +2034,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filePreviewFailed => 'Failed to load file preview';
 
   @override
+  String get filePreviewBinary =>
+      'This file isn\'t text, so it can\'t be previewed.';
+
+  @override
+  String get filePreviewEmpty => 'This file is empty.';
+
+  @override
   String filePreviewTruncated(int count) {
     return 'Previewing first $count lines';
   }
@@ -1917,5 +2050,652 @@ class AppLocalizationsEn extends AppLocalizations {
       'This session is currently locked by another process or CLI.';
 
   @override
+  String get chatActionFailed => 'That action couldn\'t be completed.';
+
+  @override
+  String get chatLoadFailed => 'Couldn\'t load this conversation.';
+
+  @override
   String get systemPromptUpdated => 'System prompt updated';
+
+  @override
+  String get trajectoryTitle => 'Trajectory';
+
+  @override
+  String get trajectorySearchHint => 'Search ledger';
+
+  @override
+  String get trajectorySearchClear => 'Clear search';
+
+  @override
+  String trajectorySearchMatches(int matches, int total) {
+    return '$matches of $total';
+  }
+
+  @override
+  String get trajectoryLoadOlder => 'Load older history';
+
+  @override
+  String get trajectoryLoadingOlder => 'Loading older history…';
+
+  @override
+  String get trajectoryLoadOlderFailed =>
+      'Couldn\'t load older history. Try again.';
+
+  @override
+  String get trajectoryNoMatches =>
+      'No records match this search in the loaded window.';
+
+  @override
+  String get trajectoryEmpty => 'This session has no trajectory records yet.';
+
+  @override
+  String get trajectoryBeforeFirstTurn => 'Before the first turn';
+
+  @override
+  String trajectoryTurnLabel(int turn) {
+    return 'Turn $turn';
+  }
+
+  @override
+  String trajectoryTurnSummary(int records, int tools) {
+    String _temp0 = intl.Intl.pluralLogic(
+      records,
+      locale: localeName,
+      other: '$records records',
+      one: '1 record',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      tools,
+      locale: localeName,
+      other: '$tools tools',
+      one: '1 tool',
+    );
+    return '$_temp0 · $_temp1';
+  }
+
+  @override
+  String trajectoryStepLabel(int step) {
+    return 'Step $step';
+  }
+
+  @override
+  String trajectoryStepRecordCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count records',
+      one: '1 record',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get trajectoryKindUser => 'User';
+
+  @override
+  String get trajectoryKindContext => 'Context';
+
+  @override
+  String get trajectoryKindAssistant => 'Assistant';
+
+  @override
+  String get trajectoryKindTool => 'Tool';
+
+  @override
+  String get trajectoryKindCompaction => 'Compacted';
+
+  @override
+  String get trajectoryKindCommand => 'Command';
+
+  @override
+  String get trajectoryKindError => 'Error';
+
+  @override
+  String get trajectoryStatusStreaming => 'Streaming';
+
+  @override
+  String get trajectoryFactTurn => 'Turn';
+
+  @override
+  String get trajectoryFactStep => 'Step';
+
+  @override
+  String get trajectoryFactKind => 'Kind';
+
+  @override
+  String get trajectoryFactStatus => 'Status';
+
+  @override
+  String get trajectoryFactStarted => 'Started';
+
+  @override
+  String get trajectoryFactFirstToken => 'First token';
+
+  @override
+  String get trajectoryFactDuration => 'Duration';
+
+  @override
+  String get trajectoryFactParentCall => 'Parent call';
+
+  @override
+  String get trajectoryFactOutsideStep => 'Outside a step';
+
+  @override
+  String get trajectoryFactUnavailable => 'Unavailable';
+
+  @override
+  String get trajectoryTimingNotRecorded => 'Not recorded';
+
+  @override
+  String get trajectoryDurationNotRecorded =>
+      'The session log carries no settle timestamp for this record.';
+
+  @override
+  String get trajectoryUsageSection => 'Token usage';
+
+  @override
+  String get trajectoryUsageNotReported =>
+      'The host reported no usage for this record.';
+
+  @override
+  String get trajectoryUsageInput => 'Input';
+
+  @override
+  String get trajectoryUsageCachedRead => 'Cache read';
+
+  @override
+  String get trajectoryUsageCacheWrite => 'Cache write';
+
+  @override
+  String get trajectoryUsageOutput => 'Output';
+
+  @override
+  String get trajectoryUsageReasoning => 'Reasoning';
+
+  @override
+  String get trajectoryInputSection => 'Input';
+
+  @override
+  String get trajectoryOutputSection => 'Output';
+
+  @override
+  String trajectoryTokenCount(int value) {
+    return '$value tok';
+  }
+
+  @override
+  String trajectoryTurnUsage(String input, String output) {
+    return 'in $input · out $output';
+  }
+
+  @override
+  String get trajectoryEntryTooltip => 'Trajectory';
+
+  @override
+  String get settingsSectionProviders => 'Providers';
+
+  @override
+  String get providersIntro =>
+      'Add a provider, enter its API key, and discover the models it serves.';
+
+  @override
+  String get providersReadOnlyNotice =>
+      'The settings document is read-only in this deployment.';
+
+  @override
+  String providersLoadFailed(String error) {
+    return 'Couldn\'t load providers: $error';
+  }
+
+  @override
+  String providerCredentialUnavailable(String error) {
+    return 'Credential state unavailable: $error';
+  }
+
+  @override
+  String get providerStateLive => 'Live';
+
+  @override
+  String get providerStateDormant => 'Dormant';
+
+  @override
+  String get providerDeclared => 'Hand-declared';
+
+  @override
+  String providerNeedsRepair(String error) {
+    return 'Needs repair: $error';
+  }
+
+  @override
+  String get providersEmpty => 'No configurable providers on this host.';
+
+  @override
+  String get addProvider => 'Add provider';
+
+  @override
+  String get addProviderFamilyLabel => 'Settings family';
+
+  @override
+  String get addProviderRouteLabel => 'Route id';
+
+  @override
+  String get addProviderRouteHint => 'acme-gateway';
+
+  @override
+  String get addProviderRouteInvalid =>
+      'Use lower-case letters, digits, and single hyphens, starting with a letter.';
+
+  @override
+  String get addProviderRouteTaken => 'That route already exists.';
+
+  @override
+  String get addProviderDisplayNameLabel => 'Display name (optional)';
+
+  @override
+  String get addProviderBaseUrlLabel => 'Base URL (optional)';
+
+  @override
+  String get addProviderBaseUrlInvalid => 'Enter an http:// or https:// URL.';
+
+  @override
+  String get addProviderProtocolLabel => 'Protocol (optional)';
+
+  @override
+  String get addProviderModelsLabel => 'Model ids, one per line (optional)';
+
+  @override
+  String get addProviderModelsHint =>
+      'A route the adapter does not already know needs at least one.';
+
+  @override
+  String providerRouteLine(String route) {
+    return 'Route $route';
+  }
+
+  @override
+  String providerKeyRefLine(String ref) {
+    return 'Key reference $ref';
+  }
+
+  @override
+  String get providerKeyHint =>
+      'The value goes to the host credential store and is never shown again.';
+
+  @override
+  String get providerRemoveAction => 'Remove provider';
+
+  @override
+  String providerRemoveConfirm(String name) {
+    return 'Remove $name?';
+  }
+
+  @override
+  String get providerRemoveBody =>
+      'The stored profile is removed. A stored API key is left in place.';
+
+  @override
+  String get discoverModels => 'Discover models';
+
+  @override
+  String get discoverModelsEmpty => 'The endpoint advertised no models.';
+
+  @override
+  String discoverModelsFailed(String error) {
+    return 'Model discovery failed: $error';
+  }
+
+  @override
+  String get discoveredModelsTitle => 'Advertised models';
+
+  @override
+  String modelContextWindowLine(int tokens) {
+    return 'Context $tokens';
+  }
+
+  @override
+  String modelMaxTokensLine(int tokens) {
+    return 'Max output $tokens';
+  }
+
+  @override
+  String get providerFooter =>
+      'Provider routes and profiles live in the host settings document; keys ride the host credential plane.';
+
+  @override
+  String get settingsSectionAbout => 'About';
+
+  @override
+  String get aboutVersionLabel => 'App version';
+
+  @override
+  String aboutVersionLine(String version, String build) {
+    return '$version (build $build)';
+  }
+
+  @override
+  String get aboutDocs => 'Documentation';
+
+  @override
+  String get aboutFeedback => 'Report a bug or send feedback';
+
+  @override
+  String get aboutLinkFailed => 'Couldn\'t open that link.';
+
+  @override
+  String get producedFilesLabel => 'Files changed';
+
+  @override
+  String producedFilesMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+    );
+    return '+ $_temp0';
+  }
+
+  @override
+  String producedFilesOpen(String name) {
+    return 'Open $name';
+  }
+
+  @override
+  String messageTokensPerSecond(String tps) {
+    return '$tps tok/s';
+  }
+
+  @override
+  String messageTokenUsage(String tokens) {
+    return '$tokens tok';
+  }
+
+  @override
+  String get settingsAppearanceTitle => 'Appearance';
+
+  @override
+  String get settingsAppearanceLight => 'Light';
+
+  @override
+  String get settingsAppearanceDark => 'Dark';
+
+  @override
+  String get settingsAppearanceSystem => 'System';
+
+  @override
+  String get settingsAppearanceUnavailable =>
+      'Host theme settings are unavailable.';
+
+  @override
+  String get settingsAppearanceSaveFailed => 'Couldn\'t save the theme choice.';
+
+  @override
+  String get cordisApprovalHeader => 'Plugin approval';
+
+  @override
+  String get cordisPurposeLabel => 'Purpose';
+
+  @override
+  String get cordisPluginIdLabel => 'Plugin ID';
+
+  @override
+  String get cordisPackageIdLabel => 'Package ID';
+
+  @override
+  String get cordisModeRun => 'Run';
+
+  @override
+  String get cordisModeUpdate => 'Update';
+
+  @override
+  String get cordisRejectOnlyNotice =>
+      'This phone can only reject: approving needs the browser plugin runtime that reports the activation it created, and this client doesn\'t have one. Rejecting releases the blocked tool call and runs neither half.';
+
+  @override
+  String get cordisAnswerFailed =>
+      'The host didn\'t accept the plugin decision.';
+
+  @override
+  String get backendTestConnection => 'Test connection';
+
+  @override
+  String get backendProbeRunning => 'Testing connection…';
+
+  @override
+  String get backendProbeReachable =>
+      'Reachable. The host answered the dsh contract.';
+
+  @override
+  String get backendProbeUnreachable =>
+      'No dsh answered at this address. Check the base URL, that the gateway is running, and that this phone can reach it.';
+
+  @override
+  String get backendProbeCertificateNotTrusted =>
+      'TLS handshake failed. The host\'s certificate is not trusted — if you control this gateway, turn on “Trust this host\'s certificate” above.';
+
+  @override
+  String get backendProbeAuthenticationRequired =>
+      'The gateway requires pairing or credentials this client does not have (deployment authentication, or the URL token dsh web prints). This client performs no authentication.';
+
+  @override
+  String get backendProbeNotDshSurface =>
+      'Something answered, but it is not a dsh host: there is no dsh RPC route at this address.';
+
+  @override
+  String backendProbeUnexpectedStatus(int status) {
+    return 'The host answered HTTP $status, which the dsh contract does not use.';
+  }
+
+  @override
+  String get backendProbeUnenvelopedResponse =>
+      'The host answered, but not with a dsh JSON-RPC response.';
+
+  @override
+  String get backendProbeUnknown =>
+      'Could not classify the connection failure.';
+
+  @override
+  String get backendProbeAmbiguousTls =>
+      'The failure was a TLS handshake error; it may be a certificate the system rejects or another TLS mismatch.';
+
+  @override
+  String get backendProbeSaveNotBlocked =>
+      'Saving is not blocked — a host can be offline while you configure it.';
+
+  @override
+  String workflowMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '1 member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get workflowRunEmpty => 'No members started';
+
+  @override
+  String get workflowPhaseUnassigned => 'Unphased';
+
+  @override
+  String get workflowPhaseEmpty => 'Empty phase name';
+
+  @override
+  String get workflowMemberEmpty => 'Empty member name';
+
+  @override
+  String workflowMemberOpen(String name) {
+    return 'Open $name';
+  }
+
+  @override
+  String get workflowStatusRunning => 'Running';
+
+  @override
+  String get workflowStatusCompleted => 'Completed';
+
+  @override
+  String get workflowStatusFailed => 'Failed';
+
+  @override
+  String get workflowStatusCancelled => 'Cancelled';
+
+  @override
+  String get workflowStatusInterrupted => 'Interrupted';
+
+  @override
+  String workflowStatusCountRunning(int count) {
+    return 'Running $count';
+  }
+
+  @override
+  String workflowStatusCountCompleted(int count) {
+    return 'Completed $count';
+  }
+
+  @override
+  String workflowStatusCountFailed(int count) {
+    return 'Failed $count';
+  }
+
+  @override
+  String workflowStatusCountCancelled(int count) {
+    return 'Cancelled $count';
+  }
+
+  @override
+  String workflowStatusCountInterrupted(int count) {
+    return 'Interrupted $count';
+  }
+
+  @override
+  String get hookAuditPending => 'Pending';
+
+  @override
+  String hookAuditDecision(String decision) {
+    return '$decision';
+  }
+
+  @override
+  String hookAuditDurationMs(int durationMs) {
+    return '$durationMs ms';
+  }
+
+  @override
+  String get hookAuditPoint => 'Point';
+
+  @override
+  String get hookAuditDialect => 'Dialect';
+
+  @override
+  String get hookDialectClaudeCode => 'Claude Code';
+
+  @override
+  String get hookDialectCodex => 'Codex';
+
+  @override
+  String get hookAuditMatcher => 'Matcher';
+
+  @override
+  String get hookAuditDecisionLabel => 'Decision';
+
+  @override
+  String get hookAuditExitCode => 'Exit code';
+
+  @override
+  String get hookAuditUnknown => 'Not reported';
+
+  @override
+  String get hookAuditStderr => 'Stderr';
+
+  @override
+  String get hookAuditNoStderr => 'None';
+
+  @override
+  String get sandboxModeUnknownTooltip =>
+      'This session has not reported its sandbox mode. The host\'s deployment default applies.';
+
+  @override
+  String sandboxModeTooltip(String mode) {
+    return 'Sandbox: $mode';
+  }
+
+  @override
+  String get sandboxModeReadOnly => 'Read only';
+
+  @override
+  String get sandboxModeWorkspaceWrite => 'Workspace write';
+
+  @override
+  String get sandboxModeDangerFullAccess => 'Full access';
+
+  @override
+  String get scheduleStripTitle => 'Reminders';
+
+  @override
+  String scheduleReminderCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count reminders',
+      one: '1 reminder',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get scheduleUnknown => 'Not reported by this host';
+
+  @override
+  String get scheduleEmpty => 'None active';
+
+  @override
+  String scheduleNextAt(String at) {
+    return 'Next $at';
+  }
+
+  @override
+  String scheduleOverdueCount(int count) {
+    return '$count overdue';
+  }
+
+  @override
+  String scheduleMoreCount(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String get scheduleFrequencyOnce => 'Once';
+
+  @override
+  String scheduleFrequencyEvery(int value, String unit) {
+    return 'Every $value $unit';
+  }
+
+  @override
+  String get scheduleUnitDay => 'day';
+
+  @override
+  String get scheduleUnitDays => 'days';
+
+  @override
+  String get scheduleUnitHour => 'hour';
+
+  @override
+  String get scheduleUnitHours => 'hours';
+
+  @override
+  String get scheduleUnitMinute => 'minute';
+
+  @override
+  String get scheduleUnitMinutes => 'minutes';
+
+  @override
+  String get scheduleUnitSecond => 'second';
+
+  @override
+  String get scheduleUnitSeconds => 'seconds';
 }

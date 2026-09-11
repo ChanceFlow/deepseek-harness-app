@@ -36,8 +36,8 @@ class FrameTracker {
   bool get isStarted => _started;
 
   /// Register the timings callback and start the per-second fps gauge
-  /// timer. No-op in release mode when telemetry is compiled out (stable
-  /// releases); debug and prerelease release builds still track.
+  /// timer. No-op in release mode when telemetry is compiled out (not
+  /// opted in); debug and opted-in release builds still track.
   void start() {
     if (_started || (kReleaseMode && !kDebugTelemetryEnabled)) return;
     _started = true;

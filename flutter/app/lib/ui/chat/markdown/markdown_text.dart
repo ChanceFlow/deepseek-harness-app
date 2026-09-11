@@ -365,12 +365,9 @@ class _MarkdownTextState extends State<MarkdownText> {
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 28,
-                  height: 28,
-                ),
+                iconSize: 18,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 tooltip: l10n.copyTooltip,
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);

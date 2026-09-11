@@ -58,7 +58,15 @@
   ],
   "exceptions": {
    "DSH_E2U": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design",
-   "DSH_E2_URL": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design"
+   "DSH_E2_URL": "quoted in the corpus-revision notes as a misspelling of DSH_E2E_URL; declared nowhere by design",
+   "DSH_GW_AUTH": "owned and declared by the separate dsh-go-gateway project; this client repo documents the deployment-layer switch without implementing it"
+  }
+ },
+ "wire_pin": {
+  "comment": "Reviewed declared-only endpoint constants: names DshRpcEndpoints declares that the pinned 0.1.5 Typert Remote surface does not register. scripts/verify_wire_pin.py fails if a listed name is not declared by DshRpcEndpoints (stale entry), fails if the pin registers one (drift re-opened, delete the entry then), and fails if flutter/packages/harness_adapter/lib/src invokes one (a call to a route the pin does not serve is a defect to remove, not an exception to keep).",
+  "declared_only_allowlist": {
+   "session/history": "0.1.5 replaced the history read with `session/page`; the constant is declared for the pre-0.1.5 surface and has no call site.",
+   "subagent/history": "0.1.5 reads child history through `session/page` with the addressed child id; the constant is declared but unused."
   }
  },
  "toolchain": {

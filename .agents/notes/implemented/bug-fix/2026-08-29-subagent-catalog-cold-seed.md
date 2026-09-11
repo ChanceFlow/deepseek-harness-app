@@ -17,14 +17,14 @@ The originating diagnosis claimed the fix was to decode a per-session
 live-event projection from it. Re-verification rejects both premises
 against this repo's pinned contract
 (`dsh-v0.1.1-rc.2`): the method is `session.list`, its row schema
-([sessions.schema.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/sessions.schema.ts)
-`sessionSummarySchema`) carries no `subagentSummary`, no `AgentRef` type
+([types.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/types.ts)
+`SessionSummary`) carries no `subagentSummary`, no `AgentRef` type
 exists, no `agent/list` RPC exists, and a whole-disk search finds zero
 hosts on this machine publishing the field. `subagent_store.dart` and
 `subagent_projection.dart` are deleted legacy-Kotlin files; the Dart
 rewrite already replaced that event projection with the `subagent.list`
-RPC catalog ([subagents.schema.ts](../../../../reference/deepseek-harness/packages/host/apiproxy/src/api/subagents.schema.ts)
-`subagentListValueSchema`), which reads durable state and answers the
+RPC catalog ([control-types.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts)
+`SubagentCatalog`), which reads durable state and answers the
 parent's complete child tree — settled children included — from a cold
 host. Decoding the claimed field would have meant inventing a fixture
 payload, which [docs/testing.md](../../../../docs/testing.md) rule 3

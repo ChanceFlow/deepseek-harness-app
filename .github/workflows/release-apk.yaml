@@ -135,6 +135,19 @@ jobs:
         working-directory: flutter
         run: flutter analyze
 
+      - name: Test (the signed artifact must be green)
+        if: steps.gate.outputs.build == 'true'
+        working-directory: flutter
+        run: |
+          flutter test app/test packages/domain/test packages/network/test \
+            packages/harness_adapter/test packages/dev/test
+
+      # Android build define contract — the same set in the internal forge
+      # pipeline and in metadata/com.deepseek.harness.app.yml:
+      # cronetHttpNoPlay=true is mandatory, DSH_BASE_URL is addressing,
+      # DSH_APP_VERSION is provenance, and DSH_TELEMETRY_ENABLED rides the
+      # channel (prerelease true, stable false). See .agents/notes/implemented/
+      # process/2026-09-11-android-release-build-contract.md.
       - name: Build signed release APK
         if: steps.gate.outputs.build == 'true'
         working-directory: flutter/app
@@ -150,6 +163,9 @@ jobs:
             --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
             --dart-define=DSH_TELEMETRY_ENABLED="${{ steps.ver.outputs.telemetry }}" \
+            --dart-define=DSH_SOURCE_COMMIT="$GITHUB_SHA" \
+            --dart-define=DSH_SOURCE_REPO="$GITHUB_REPOSITORY" \
+            --dart-define=DSH_BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
             --build-name="${{ steps.ver.outputs.version }}" \
             --build-number="$GITHUB_RUN_NUMBER"
           rm -f "$DSH_KEYSTORE_FILE"

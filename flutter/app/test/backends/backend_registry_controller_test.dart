@@ -442,4 +442,51 @@ void main() {
       expect(first.backends.single.id, 'default');
     },
   );
+
+  test(
+    'trusting a host certificate toggles one backend and persists',
+    () async {
+      final file = fileFor('trust-host');
+      final controller = BackendRegistryController(
+        BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080'),
+      );
+      addTearDown(controller.dispose);
+      await loadedState(controller);
+
+      controller.onAction(
+        const AddBackend(
+          'Gateway',
+          'https://gw.internal:8443',
+          trustHostCertificate: true,
+        ),
+      );
+      expect(controller.state.backends.last.trustHostCertificate, isTrue);
+
+      controller.onAction(
+        const SetBackendTrustHostCertificate('default', true),
+      );
+      expect(controller.state.errorMessage, isNull);
+      expect(controller.state.backends.first.trustHostCertificate, isTrue);
+
+      // Toggling to the current value is a silent no-op, and an unknown id
+      // fails loud like every other mutation.
+      controller.onAction(
+        const SetBackendTrustHostCertificate('default', true),
+      );
+      expect(controller.state.errorMessage, isNull);
+      controller.onAction(
+        const SetBackendTrustHostCertificate('unknown', true),
+      );
+      expect(
+        controller.state.errorMessage,
+        equals('${BackendErrorCode.unknownBackend.name}:unknown'),
+      );
+
+      controller.onAction(
+        const SetBackendTrustHostCertificate('default', false),
+      );
+      expect(controller.state.backends.first.trustHostCertificate, isFalse);
+      await letPersistLand(file, '"trustHostCertificate":false');
+    },
+  );
 }

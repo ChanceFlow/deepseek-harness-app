@@ -211,4 +211,64 @@ void main() {
       emitsError(isA<DshTransportException>()),
     );
   });
+
+  test('caller headers reach the handshake and stay opaque', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final headersSeen = Completer<HttpHeaders>();
+    server.listen((request) async {
+      if (!headersSeen.isCompleted) headersSeen.complete(request.headers);
+      if (WebSocketTransformer.isUpgradeRequest(request)) {
+        await WebSocketTransformer.upgrade(request);
+      } else {
+        request.response.statusCode = HttpStatus.badRequest;
+        await request.response.close();
+      }
+    });
+    final socket = WebSocketDshEventSocket(
+      Uri.parse('http://127.0.0.1:${server.port}'),
+      headers: {'X-Caller-Header': 'caller-value'},
+    );
+    final opened = Completer<void>();
+    final subscription = socket
+        .connect('/api/remote.mux', onOpen: opened.complete)
+        .listen((_) {});
+    addTearDown(() => subscription.cancel());
+    addTearDown(() => server.close(force: true));
+
+    await opened.future;
+    final headers = await headersSeen.future;
+    // Test data only: the package forwards the header without interpreting it.
+    expect(headers.value('X-Caller-Header'), 'caller-value');
+    // The handshake's own headers survive the pass-through.
+    expect(headers.value('Sec-WebSocket-Version'), '13');
+    expect(socket.headers, {'X-Caller-Header': 'caller-value'});
+  });
+
+  test('default construction sends no caller headers', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final headersSeen = Completer<HttpHeaders>();
+    server.listen((request) async {
+      if (!headersSeen.isCompleted) headersSeen.complete(request.headers);
+      if (WebSocketTransformer.isUpgradeRequest(request)) {
+        await WebSocketTransformer.upgrade(request);
+      } else {
+        request.response.statusCode = HttpStatus.badRequest;
+        await request.response.close();
+      }
+    });
+    final socket = WebSocketDshEventSocket(
+      Uri.parse('http://127.0.0.1:${server.port}'),
+    );
+    final opened = Completer<void>();
+    final subscription = socket
+        .connect('/api/remote.mux', onOpen: opened.complete)
+        .listen((_) {});
+    addTearDown(() => subscription.cancel());
+    addTearDown(() => server.close(force: true));
+
+    await opened.future;
+    final headers = await headersSeen.future;
+    expect(socket.headers, isEmpty);
+    expect(headers.value('X-Caller-Header'), isNull);
+  });
 }

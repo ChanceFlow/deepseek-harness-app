@@ -87,8 +87,8 @@ void main() {
     expect(data.backends[1].label, 'Build box');
     expect(data.activeId, 'b1');
 
-    // The document is the documented JSON shape; `enabled` is always
-    // written.
+    // The document is the documented JSON shape; `enabled` and
+    // `trustHostCertificate` are always written.
     final decoded =
         jsonDecode(await file.readAsString()) as Map<String, Object?>;
     expect(decoded['activeId'], 'b1');
@@ -97,7 +97,53 @@ void main() {
       'label': 'Laptop',
       'baseUrl': 'http://10.0.2.2:3080',
       'enabled': true,
+      'trustHostCertificate': false,
     });
+  });
+
+  test('a trusted host round-trips its certificate opt-in', () async {
+    final file = fileFor('trust');
+    final store = BackendStore(file, seedBaseUrl: 'http://10.0.2.2:3080');
+    await store.save(
+      BackendStoreData(
+        backends: [
+          BackendConfig(
+            id: 'default',
+            label: 'Laptop',
+            baseUri: Uri.parse('http://10.0.2.2:3080'),
+          ),
+          BackendConfig(
+            id: 'b1',
+            label: 'Gateway',
+            baseUri: Uri.parse('https://gw.internal:8443'),
+            trustHostCertificate: true,
+          ),
+        ],
+        activeId: 'b1',
+      ),
+    );
+
+    final data = await BackendStore(
+      file,
+      seedBaseUrl: 'http://10.0.2.2:3080',
+    ).load();
+    expect(data.backends.first.trustHostCertificate, isFalse);
+    expect(data.backends.last.trustHostCertificate, isTrue);
+  });
+
+  test('a document without trustHostCertificate decodes as untrusted '
+      '(pre-trust format)', () async {
+    final file = fileFor('legacy-trust');
+    await file.writeAsString(
+      '{"backends": ['
+      '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"}'
+      '], "activeId": "default"}',
+    );
+    final data = await BackendStore(
+      file,
+      seedBaseUrl: 'http://10.0.2.2:3080',
+    ).load();
+    expect(data.backends.single.trustHostCertificate, isFalse);
   });
 
   test('a disabled backend round-trips its enabled flag', () async {
@@ -178,6 +224,13 @@ void main() {
       '{"backends": [{"id": "default", "label": "L",'
           ' "baseUrl": "http://10.0.2.2:3080", "enabled": "yes"}],'
           ' "activeId": null}',
+      BackendErrorCode.malformedEntry,
+    ),
+    (
+      'non-bool trustHostCertificate',
+      '{"backends": [{"id": "default", "label": "L",'
+          ' "baseUrl": "https://gw.internal:8443",'
+          ' "trustHostCertificate": "yes"}], "activeId": null}',
       BackendErrorCode.malformedEntry,
     ),
     (

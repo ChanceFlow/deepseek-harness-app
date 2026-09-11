@@ -64,23 +64,9 @@ void main() {
     });
 
     test('ConnectionState and HostDescription equality', () {
-      const host = HostDescription(
-        version: '1.0.0',
-        cwd: '/work',
-        provider: 'openai',
-        model: 'gpt-4o',
-        attachedSessions: 2,
-        canOpenPath: true,
-      );
-      const hostCopy = HostDescription(
-        version: '1.0.0',
-        cwd: '/work',
-        provider: 'openai',
-        model: 'gpt-4o',
-        attachedSessions: 2,
-        canOpenPath: true,
-      );
-      const hostDiff = HostDescription(version: '1.0.1', cwd: '/work');
+      const host = HostDescription(home: '/home/tester');
+      const hostCopy = HostDescription(home: '/home/tester');
+      const hostDiff = HostDescription(home: '/home/other');
 
       expect(host, equals(hostCopy));
       expect(host.hashCode, equals(hostCopy.hashCode));
@@ -105,6 +91,22 @@ void main() {
       expect(connConnected.isConnected, isTrue);
       expect(connDisconnected.isConnected, isFalse);
       expect(connConnected, isNot(equals(connDisconnected)));
+    });
+
+    test('a host fact with no source is absent, never defaulted', () {
+      // The 0.1.1 `host/describe` facts are gone at 0.1.5: cwd/provider/model
+      // are per-session, and attachedSessions/canOpenPath are published
+      // nowhere. The type carries only the ready frame's home plus a version
+      // no pinned route supplies — which stays null rather than fabricating a
+      // default.
+      const host = HostDescription(home: '/home/tester');
+
+      expect(host.version, isNull);
+      expect(host, equals(const HostDescription(home: '/home/tester')));
+      expect(
+        host,
+        isNot(equals(const HostDescription(home: '/home/tester', version: ''))),
+      );
     });
 
     test('BackendConfig equality and copyWith', () {

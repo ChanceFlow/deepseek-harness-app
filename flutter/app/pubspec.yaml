@@ -1,6 +1,10 @@
 name: app
 description: Flutter UI for the DeepSeek Harness client.
 publish_to: none
+# versionName+versionCode. The release workflows override both with
+# --build-name/--build-number; F-Droid's UpdateCheckData reads this line.
+# versionCode = major*10000 + minor*100 + patch (bump it with each stable tag).
+version: 0.1.2+102
 
 environment:
   sdk: ^3.13.0
