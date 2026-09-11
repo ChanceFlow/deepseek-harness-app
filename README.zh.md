@@ -30,10 +30,18 @@
 - **`dev`** — 滚动预发布版，每次合入 `master` 都会刷新，是尝鲜最新功能最快的途径。
 
 ```sh
-adb install dsh-android-<version>.apk
+adb install dsh-android-<version>-arm64-v8a.apk
 ```
 
-每个发布都附带一个 `.sha256` 校验文件。
+每个发布按 ABI 各出一个包——native 库就是全部体积，而一台手机只会用其中一个：
+
+| APK | 装在哪 |
+|---|---|
+| `-arm64-v8a` | 2017 年之后的所有手机（拿这个） |
+| `-armeabi-v7a` | 更早的 32 位手机 |
+| `-x86_64` | 模拟器与 Chromebook |
+
+每个 APK 都有自己的 `.sha256` 校验文件。
 
 ### 2. 在电脑上启动主机
 
@@ -157,10 +165,10 @@ DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/loc
 发布 APK 由内部 forge 流水线
 （[`.gitea/workflows/release-apk.yaml`](.gitea/workflows/release-apk.yaml)）构建，
 并镜像到 [发布页](../../releases)：每次 `master` 推送都会刷新滚动 `dev`
-预发布版，`v<semver>` 标签切出稳定版，两者都附带签名 APK（发布密钥库，
-非调试密钥）和 `.sha256` 校验文件。命名遵循 SemVer 2.0；内部发布正文带
-自动生成的 `## What's Changed` 变更日志，镜像到 GitHub 的发布则携带产物
-与版本元数据。GitHub 侧的同名工作流
+预发布版，`v<semver>` 标签切出稳定版，两者都附带按 ABI 拆分的签名 APK
+（发布密钥库，非调试密钥），每个 APK 各有自己的 `.sha256` 校验文件。命名
+遵循 SemVer 2.0；内部发布正文带自动生成的 `## What's Changed` 变更日志，
+镜像到 GitHub 的发布则携带产物与版本元数据。GitHub 侧的同名工作流
 （[`.github/workflows/release-apk.yaml`](.github/workflows/release-apk.yaml)）
 在没有签名 secrets 时会跳过构建——本仓库是镜像，不是第二个构建渠道。
 

@@ -15,7 +15,8 @@
 #                                            workflow_dispatch, where <next>
 #                                            is the latest STABLE v* tag with
 #                                            its patch bumped (v0.0.2 -> 0.0.3)
-#   - artifacts:       dsh-android-<versionName>.apk (+ .sha256 sidecar)
+#   - artifacts:       dsh-android-<versionName>-<abi>.apk (+ .sha256 sidecar),
+#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64)
 #   - release titles:  DSH Android <versionName>
 #   - dev channel:     rolling prerelease on the tag `dev` (no `v`
 #     prefix — deliberately outside the `v*` tag trigger, so the
@@ -214,7 +215,10 @@ jobs:
           DSH_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
-          flutter build apk --release \
+          # Per-ABI APKs: a universal release carries all three ABI copies of
+          # the native libraries and measured 161 MB, of which 2 MB is
+          # everything that is not `lib/`. A phone installs exactly one ABI.
+          flutter build apk --release --split-per-abi \
             --dart-define=cronetHttpNoPlay=true \
             --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
@@ -240,14 +244,37 @@ jobs:
           echo "--- generated changelog ---"
           cat /tmp/changelog.md
 
-      - name: Stage artifact
+      - name: Stage artifacts
         id: stage
         run: |
-          APK="dsh-android-${{ steps.ver.outputs.version }}.apk"
-          cp flutter/app/build/app/outputs/flutter-apk/app-release.apk "$APK"
-          sha256sum "$APK" > "$APK.sha256"
+          # Flutter names a split APK `app-<abi>-release.apk`
+          # (flutter_tools `android/gradle.dart` `_apkFilesFor`); a missing one
+          # is a hard error rather than a release with an ABI hole.
+          set -eu
+          OUT=flutter/app/build/app/outputs/flutter-apk
+          VERSION="${{ steps.ver.outputs.version }}"
+          STAGE=/tmp/dsh-apks
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          : > "$STAGE/hashes.md"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            SRC="$OUT/app-$abi-release.apk"
+            if [[ ! -f "$SRC" ]]; then
+              echo "::error::missing split artifact $SRC"
+              exit 1
+            fi
+            NAME="dsh-android-$VERSION-$abi.apk"
+            cp "$SRC" "$STAGE/$NAME"
+            (cd "$STAGE" && sha256sum "$NAME" > "$NAME.sha256")
+            printf -- '- `%s` sha256: `%s`\n' "$NAME" \
+              "$(cut -d' ' -f1 "$STAGE/$NAME.sha256")" >> "$STAGE/hashes.md"
+          done
+          # arm64 is the ABI essentially every phone installs, so it is the
+          # release body's headline hash and the name a single-artifact step
+          # would use; every publish step uploads the whole directory.
+          APK="dsh-android-$VERSION-arm64-v8a.apk"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
-          echo "sha256=$(cut -d' ' -f1 "$APK.sha256")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(cut -d' ' -f1 "$STAGE/$APK.sha256")" >> "$GITHUB_OUTPUT"
+          ls -1 "$STAGE"
 
       - name: Publish Gitea Release
         env:
@@ -285,13 +312,20 @@ jobs:
           import json, os, sys
           tag, name, prerelease, ver, run, apk, sha, base_url, commit, channel = sys.argv[1:11]
           pre = prerelease == "true"
+          hashes = ""
+          if os.path.exists("/tmp/dsh-apks/hashes.md"):
+              with open("/tmp/dsh-apks/hashes.md") as fh:
+                  hashes = fh.read().strip()
           meta = (
               f"- versionName: `{ver}`\n"
               f"- versionCode: `{run}`\n"
-              f"- sha256: `{sha}`\n"
               f"- DSH_BASE_URL: `{base_url}`\n"
               f"- commit: `{commit[:12]}`\n"
           )
+          if hashes:
+              meta += f"\n### Artifacts\n\n{hashes}\n"
+          else:
+              meta += f"- sha256: `{sha}`\n"
           changelog = ""
           if os.path.exists("/tmp/changelog.md"):
               with open("/tmp/changelog.md") as fh:
@@ -317,21 +351,26 @@ jobs:
           REL_ID=$(curl -sf -X POST "$API/releases" -H "$AUTH" \
             -H 'Content-Type: application/json' -d @/tmp/release.json \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-          for f in "$APK" "$APK.sha256"; do
-            curl -sf -X POST "$API/releases/$REL_ID/assets?name=$f" -H "$AUTH" \
+          # The staging directory also holds hashes.md (the body's artifact
+          # list); the glob names the upload set explicitly.
+          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.sha256; do
+            name=$(basename "$f")
+            curl -sf -X POST "$API/releases/$REL_ID/assets?name=$name" -H "$AUTH" \
               -F "attachment=@$f" >/dev/null
           done
-          echo "release $TAG created (id $REL_ID) with $APK"
+          echo "release $TAG created (id $REL_ID) with the per-ABI APKs"
 
       - name: Publish GitHub shadow Release (mirror)
         env:
           GH_PUB_TOKEN: ${{ secrets.GH_PUBLISH_TOKEN }}
-          # The LAN egress proxy resets large request bodies (~16 MB in on a
-          # 139 MB APK upload) while small JSON API calls sail through — that
-          # mid-stream reset is the empty-shadow-release failure this step's
-          # hard-fail exists to catch. GitHub is reachable directly from the
-          # runner network, so this step runs proxy-less; clearing every proxy
-          # variable beats fighting the NO_PROXY list the job sets above.
+          # The LAN egress proxy resets large request bodies (measured at
+          # ~16 MB in on the old 139 MB universal-APK upload; the split
+          # artifacts are well under that) while small JSON API calls sail
+          # through — a mid-stream reset is the empty-shadow-release failure
+          # this step's hard-fail exists to catch. GitHub is reachable
+          # directly from the runner network, so this step runs proxy-less;
+          # clearing every proxy variable beats fighting the NO_PROXY list the
+          # job sets above.
           HTTP_PROXY: ""
           HTTPS_PROXY: ""
           http_proxy: ""
@@ -371,13 +410,20 @@ jobs:
           # Sanitized body (see header comment): version metadata + hash only.
           python3 - "$TAG" "deepseek-harness-app $VERSION" "$PRE" "$VERSION" "$GITHUB_RUN_NUMBER" \
             "$APK" "${{ steps.stage.outputs.sha256 }}" > /tmp/gh-release.json <<'PY'
-          import json, sys
+          import json, os, sys
           tag, name, pre, ver, run, apk, sha = sys.argv[1:8]
+          hashes = ""
+          if os.path.exists("/tmp/dsh-apks/hashes.md"):
+              with open("/tmp/dsh-apks/hashes.md") as fh:
+                  hashes = fh.read().strip()
           meta = (
               f"- versionName: `{ver}`\n"
               f"- versionCode: `{run}`\n"
-              f"- sha256: `{sha}`\n"
           )
+          if hashes:
+              meta += f"\n### Artifacts\n\n{hashes}\n"
+          else:
+              meta += f"- sha256: `{sha}`\n"
           intro = (
               "Rolling dev channel - always the latest `master` build; "
               "this artifact supersedes any earlier dev build.\n"
@@ -394,8 +440,8 @@ jobs:
               echo "::warning::GitHub shadow release creation failed - Gitea release is already published"
               exit 0
             }
-          for f in "$APK" "$APK.sha256"; do
-            NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$f")
+          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.sha256; do
+            NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$(basename "$f")")
             # Hard fail on an upload miss: the whole point of the shadow
             # release is the artifact, and a soft warning is exactly how the
             # endpoint bug shipped empty releases for days unnoticed.
