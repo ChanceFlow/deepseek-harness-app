@@ -135,6 +135,7 @@ void main() {
           .download('/api/session.export?sessionId=gone'),
       throwsA(
         isA<DshTransportException>()
+            .having((error) => error.httpStatus, 'httpStatus', 404)
             .having((error) => error.message, 'message', contains('HTTP 404'))
             .having(
               (error) => error.message,

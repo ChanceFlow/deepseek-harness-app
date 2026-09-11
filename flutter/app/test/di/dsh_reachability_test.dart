@@ -148,8 +148,9 @@ void main() {
 
     test('HTTP 401 is authenticationRequired, not unreachable', () {
       final DshProbeResult result = classifyDshProbeFailure(
-        DshTransportException(
+        DshTransportException.http(
           'HTTP 401 for api/settings/describe: Unauthorized',
+          401,
         ),
       );
       expect(result.outcome, DshProbeOutcome.authenticationRequired);
@@ -158,7 +159,10 @@ void main() {
 
     test('HTTP 404 is its own class, separate from a connect failure', () {
       final DshProbeResult result = classifyDshProbeFailure(
-        DshTransportException('HTTP 404 for api/settings/describe: not found'),
+        DshTransportException.http(
+          'HTTP 404 for api/settings/describe: not found',
+          404,
+        ),
       );
       expect(result.outcome, DshProbeOutcome.notDshSurface);
       expect(result.httpStatus, 404);
@@ -166,12 +170,26 @@ void main() {
 
     test('any other non-2xx status is unexpectedResponse with its status', () {
       final DshProbeResult result = classifyDshProbeFailure(
-        DshTransportException(
+        DshTransportException.http(
           'HTTP 502 for api/settings/describe: bad gateway',
+          502,
         ),
       );
       expect(result.outcome, DshProbeOutcome.unexpectedResponse);
       expect(result.httpStatus, 502);
+    });
+
+    test('a status stamped in the message alone is not a status', () {
+      // The classifier reads the typed field: a message that merely reads
+      // like an HTTP failure must not fabricate one, or the class would come
+      // from prose instead of from the exchange.
+      final DshProbeResult result = classifyDshProbeFailure(
+        DshTransportException(
+          'HTTP 401 for api/settings/describe: Unauthorized',
+        ),
+      );
+      expect(result.outcome, DshProbeOutcome.unknown);
+      expect(result.httpStatus, isNull);
     });
 
     test('a 2xx body that is not an envelope is unexpectedResponse', () {

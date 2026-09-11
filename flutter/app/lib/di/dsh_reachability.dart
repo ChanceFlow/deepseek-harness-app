@@ -273,12 +273,10 @@ DshProbeResult classifyDshProbeResult(RpcResult result) {
 
 /// Classifies a thrown failure.
 ///
-/// The transport seam (`network`'s `HttpDshRpcClient`) reports every
-/// failure as [DshTransportException] and does not expose a typed status
-/// code, so an HTTP status is read from the message it stamps
-/// (`HTTP <status> for <path>`). The `network` package is out of this
-/// change's scope; a typed status is the cleaner seam and is reported as
-/// such in the decision note.
+/// The transport seam (`network`'s `HttpDshRpcClient`) reports every failure
+/// as [DshTransportException]; a non-2xx response carries its status in
+/// [DshTransportException.httpStatus], so this reads a field rather than
+/// re-parsing the message.
 DshProbeResult classifyDshProbeFailure(Object error) {
   if (error is! DshTransportException) {
     return const DshProbeResult(
@@ -286,7 +284,7 @@ DshProbeResult classifyDshProbeFailure(Object error) {
       ambiguity: DshProbeAmbiguity.unrecognizedFailure,
     );
   }
-  final int? status = _httpStatusOf(error.message);
+  final int? status = error.httpStatus;
   if (status != null) {
     return switch (status) {
       401 => const DshProbeResult(
@@ -324,14 +322,6 @@ DshProbeResult classifyDshProbeFailure(Object error) {
     outcome: DshProbeOutcome.unknown,
     ambiguity: DshProbeAmbiguity.unrecognizedFailure,
   );
-}
-
-final RegExp _httpStatusPattern = RegExp(r'^HTTP (\d{3}) ');
-
-int? _httpStatusOf(String message) {
-  final RegExpMatch? match = _httpStatusPattern.firstMatch(message);
-  if (match == null) return null;
-  return int.tryParse(match.group(1)!);
 }
 
 /// A 2xx body the transport could not decode as a JSON-RPC envelope, or an

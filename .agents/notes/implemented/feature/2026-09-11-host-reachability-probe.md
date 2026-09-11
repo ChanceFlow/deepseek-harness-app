@@ -67,16 +67,17 @@ classification; the UI owns only the sentence.
 - **Declaring the result in `packages/domain`:** the purist home, but this
   change's scope excludes `flutter/packages/**`. The model in `lib/di/`
   carries no wire vocabulary, so the UI stays inside the import gate.
-- **A typed HTTP status on the transport seam:** deferred — adding
-  `statusCode` to `DshTransportException` is a `network` change outside
-  this scope. The classifier reads the status the seam stamps into the
-  exception message.
+- **A typed HTTP status on the transport seam:** deferred with this change
+  (it is a `network` edit) and landed as a follow-up —
+  `DshTransportException.http` carries the status, and the classifier reads
+  `httpStatus` instead of the status the seam stamps into the message.
 
 ## Consequences
 
-- The classifier couples to `HttpDshRpcClient`'s message format
-  (`HTTP <status> for <path>`); a typed status field is the cleaner seam
-  and the follow-up if that format moves.
+- The classifier reads `DshTransportException.httpStatus`: the status is a
+  field on the exception, not a substring of its message. A failure whose
+  message reads like an HTTP error but carries no status classifies as
+  `unknown` — the class comes from the exchange, never from prose.
 - `providers.dart` re-exports `package:network/dsh_exceptions.dart` so
   tests build transport failures without importing `network` directly.
 - Unit tests stub `DshRpcClient` for every class; widget tests drive the

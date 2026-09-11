@@ -115,8 +115,9 @@ final class HttpDshDownloadClient implements DshDownloadClient {
     final response = await _httpClient.send(request);
     final bytes = await response.stream.toBytes();
     if (response.statusCode ~/ 100 != 2) {
-      throw DshTransportException(
+      throw DshTransportException.http(
         'HTTP ${response.statusCode} for ${url.path}: ${_clipped(bytes)}',
+        response.statusCode,
       );
     }
     return DshDownload(
