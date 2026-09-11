@@ -19,6 +19,7 @@ library;
 
 import 'dart:async';
 
+import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:harness_adapter/src/adapter_diagnostics.dart';
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
@@ -295,6 +296,51 @@ void main() {
 
     await socket.close();
   });
+
+  test(
+    'a forwarded api-session/error lands on the row, and a prompt clears it',
+    () async {
+      final rpc = _FakeRpc(sessions: <Object?>[_sessionRow('session-a')]);
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, isNull);
+
+      // `'api-session/error'(sessionId, message)`: an Agent-level failure with
+      // no turn position, so no timeline item carries it.
+      socket.emit('api-session/error', <Object?>[
+        'session-a',
+        'agent exploded',
+      ]);
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, 'agent exploded');
+
+      // A list pull rebuilds the row from a wire summary that carries no
+      // failure; the resident fact survives it (web `lastAgentError` outlives
+      // `refreshList` and `resync`).
+      await repository.refreshSessions();
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, 'agent exploded');
+
+      // The next prompt supersedes the failure (web ClientSession.prompt).
+      await repository.sendMessage(
+        const SendMessageRequest(sessionId: 'session-a', text: 'try again'),
+      );
+      await pumpEventQueue();
+      expect(emissions.last.single.agentError, isNull);
+
+      await socket.close();
+    },
+  );
 
   test(
     'a forwarded api-session/activity advances the row activity time',

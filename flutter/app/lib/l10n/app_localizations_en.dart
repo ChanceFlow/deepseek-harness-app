@@ -2053,6 +2053,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatActionFailed => 'That action couldn\'t be completed.';
 
   @override
+  String get sessionAgentFailed => 'The agent stopped with an error.';
+
+  @override
   String get chatLoadFailed => 'Couldn\'t load this conversation.';
 
   @override

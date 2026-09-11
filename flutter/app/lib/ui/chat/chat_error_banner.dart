@@ -34,10 +34,10 @@ ChatErrorCopy describeChatError(AppLocalizations l10n, String error) {
 class ChatErrorBanner extends StatelessWidget {
   const ChatErrorBanner({
     required this.message,
-    required this.onDismiss,
     super.key,
     this.detail,
     this.onRetry,
+    this.onDismiss,
   });
 
   /// Localized headline sentence.
@@ -49,8 +49,10 @@ class ChatErrorBanner extends StatelessWidget {
   /// Retry affordance; null where retrying the action is not meaningful.
   final VoidCallback? onRetry;
 
-  /// Dispatches the controller's dismiss action.
-  final VoidCallback onDismiss;
+  /// Dispatches the controller's dismiss action; null where the failure is
+  /// not the app's to clear — an Agent-level failure clears when the session
+  /// accepts a new prompt, so the strip carries no close affordance.
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -102,12 +104,13 @@ class ChatErrorBanner extends StatelessWidget {
               ),
               child: Text(l10n.retry),
             ),
-          IconButton(
-            tooltip: l10n.dismiss,
-            visualDensity: VisualDensity.compact,
-            onPressed: onDismiss,
-            icon: Icon(Icons.close, size: 18, color: scheme.onErrorContainer),
-          ),
+          if (onDismiss case final dismiss?)
+            IconButton(
+              tooltip: l10n.dismiss,
+              visualDensity: VisualDensity.compact,
+              onPressed: dismiss,
+              icon: Icon(Icons.close, size: 18, color: scheme.onErrorContainer),
+            ),
         ],
       ),
     );

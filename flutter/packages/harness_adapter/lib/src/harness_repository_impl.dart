@@ -757,6 +757,9 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
+    // Web parity: `ClientSession.prompt` clears `lastAgentError` before its
+    // first await, because the new attempt supersedes the previous failure.
+    _clearSessionAgentError(request.sessionId);
     final content = <Object?>[
       <String, Object?>{'type': 'text', 'text': request.text},
       for (final image in request.images)
@@ -1904,6 +1907,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     parentSessionId: session.parentSessionId,
     pendingInteraction: pending ?? session.pendingInteraction,
     completed: session.completed,
+    agentError: session.agentError,
   );
 
   void _handleProjection(ServerRequest frame) {
@@ -2485,14 +2489,27 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final item in _sessions.value)
         if (item.completed) item.id: true,
     };
+    // The wire summary carries no Agent failure either: it lives on the
+    // resident Session in the web client (`lastAgentError` survives
+    // `refreshList` and `resync`), so a pull preserves what the
+    // `api-session/error` fold holds rather than erasing the only account of
+    // why a session stopped.
+    final agentErrorById = <String, String>{
+      for (final item in _sessions.value)
+        if (item.agentError case final message?) item.id: message,
+    };
     final result = listing.map((wire) {
       final session = _toDomainSession(wire);
       final armed =
           (completedById[session.id] ?? false) ||
           armedByPull.contains(session.id);
-      return armed && !session.running
+      final folded = armed && !session.running
           ? _copySession(session, completed: true)
           : session;
+      final agentError = agentErrorById[session.id];
+      return agentError == null
+          ? folded
+          : _copySession(folded, agentError: agentError);
     }).toList();
     return result;
   }
@@ -2784,6 +2801,16 @@ class HarnessRepositoryImpl implements ChatRepository {
         );
   }
 
+  /// Drops one session's last Agent-level failure: a prompt the user just
+  /// sent supersedes it (web `ClientSession.prompt`).
+  void _clearSessionAgentError(String sessionId) {
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0 || current[index].agentError == null) return;
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(current[index], clearAgentError: true);
+  }
+
   void _markSessionNoLongerBlank(String sessionId) {
     _sessions.value = _sessions.value
         .map(
@@ -2802,6 +2829,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     String? agentPreset,
     bool? completed,
     int? updatedAtEpochMs,
+    String? agentError,
+    bool clearAgentError = false,
   }) => SessionSummary(
     id: session.id,
     title: title ?? session.title,
@@ -2813,6 +2842,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     origin: session.origin,
     parentSessionId: session.parentSessionId,
     completed: completed ?? session.completed,
+    agentError: clearAgentError ? null : (agentError ?? session.agentError),
   );
 
   _SessionState _sessionStateFor(String sessionId) {
@@ -3101,8 +3131,9 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyCordisRunRequest(args);
       case 'cordis/request-run-resolved':
         _applyCordisRequestResolved(args);
-      case 'approval/request':
       case 'api-session/error':
+        _applySessionErrorEvent(args);
+      case 'approval/request':
       case 'credentials/reference-updated':
       case 'goal/activation-changed':
       case 'cordis/dynamic-package':
@@ -3115,12 +3146,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         // Forwarded and currently without a fold here. `approval/request`
         // and `user-questions/request` are waterfalls, handled before this
         // point; the rest are informational notifications this client does
-        // not render yet. `api-session/error` is the one with a user-visible
-        // gap: it carries an Agent-level failure message
-        // (`'api-session/error'(sessionId, message)`) that the web client
-        // puts on the Session handle, and `domain.SessionSummary` has no
-        // field to hold it yet — so folding it needs a model field and a
-        // roster surface, not just this switch.
+        // not render yet.
         break;
       default:
         _onDiagnostic?.call(
@@ -3227,6 +3253,30 @@ class HarnessRepositoryImpl implements ChatRepository {
       ..[index] = _copySession(current[index], updatedAtEpochMs: updatedAt);
   }
 
+  /// One `api-session/error` forwarded event: an Agent-level failure with no
+  /// turn position (`'api-session/error'(sessionId: SessionId, message:
+  /// string)`, allowlisted in `packages/api/remotes/src/remote-events.ts`;
+  /// emitted by `session-controller/src/index.ts` from `agent/error` and from
+  /// a background activation that failed to resolve).
+  ///
+  /// The web client keeps it on the resident Session object
+  /// (`SessionSnapshot.lastAgentError`), which is why it is a roster fact
+  /// here. Nothing else can show it: a failure with no turn position folds
+  /// into no timeline item, so the session would simply stop with no reason
+  /// on screen. A session the roster does not hold is ignored — the summary
+  /// arrives with `added`.
+  void _applySessionErrorEvent(List<Object?> args) {
+    if (args.length < 2) return;
+    final sessionId = args[0];
+    final message = args[1];
+    if (sessionId is! String || message is! String) return;
+    final current = _sessions.value;
+    final index = current.indexWhere((item) => item.id == sessionId);
+    if (index < 0) return;
+    _sessions.value = List<SessionSummary>.of(current)
+      ..[index] = _copySession(current[index], agentError: message);
+  }
+
   /// One `api-session/added` forwarded event. The host event's single
   /// positional arg is the new Session's summary (reference
   /// `packages/api/session-controller/src/types.ts`:
@@ -3262,6 +3312,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       ..[index] = _copySession(
         incoming,
         completed: current[index].completed && !incoming.running,
+        agentError: current[index].agentError,
       );
   }
 

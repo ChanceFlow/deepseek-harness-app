@@ -1744,6 +1744,10 @@
   "@chatActionFailed": {
     "description": "Headline for a chat action that failed; the host detail follows."
   },
+  "sessionAgentFailed": "The agent stopped with an error.",
+  "@sessionAgentFailed": {
+    "description": "Headline for an Agent-level failure the host reported outside a turn (api-session/error); the host message follows as the detail."
+  },
   "chatLoadFailed": "Couldn''t load this conversation.",
   "@chatLoadFailed": {
     "description": "Full-screen error when the chat state stream fails."
