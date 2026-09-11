@@ -883,8 +883,8 @@ class _ChatPanelState extends State<ChatPanel> {
 
   /// One workflow member's child transcript, on the same subagent surface
   /// the catalog pushes: the route opens the parent's tree and lands on the
-  /// member's record once its catalog row supplies the mode
-  /// `subagent.history` requires. Without a backend (a bare pump) there is
+  /// member's record once its catalog row supplies the mode the
+  /// child-history read requires. Without a backend (a bare pump) there is
   /// no repository to address, so the card stays read-only.
   void _openWorkflowMember(WorkflowMember member) {
     final backendId = widget.backendId;

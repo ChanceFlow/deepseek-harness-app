@@ -70,8 +70,10 @@ event-handling surface left parity gaps invisible on the pinned 0.1.5 host
 3. **Correct the wire-code prose.** The adapter comment names
    `subagent/unauthorized` for the mode mismatch and `subagent/not-found` for
    an unavailable child, and this note's sibling is amended the same way.
-   Three `flutter/app` comments still name `subagent-not-found` for the
-   mismatch; that tree is outside this change.
+   The three `flutter/app` comments that still named `subagent-not-found`
+   for the mismatch were outside that change and are swept by
+   [the child-history prose fix](2026-09-11-child-history-route-and-error-codes-in-prose.md),
+   which also replaces the retired `subagent.history` route name.
 
 ## Alternatives considered
 

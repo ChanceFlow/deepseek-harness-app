@@ -523,11 +523,12 @@ class _CatalogBranch extends StatelessWidget {
               expanded: expanded.contains(entry.id),
               reserveDisclosure: reserveDisclosure,
               onOpen: () {
-                // A child opens under its own catalog mode:
-                // `subagent.history` is host-guarded against a mode
-                // mismatch (`subagent-not-found`). The adapter decodes
-                // child rows with a required mode, so only a row lacking
-                // one — impossible past fail-loud decode — stays closed.
+                // A child opens under its own catalog mode: the
+                // child-history read (`session/page` with a `subagent`
+                // address) is host-guarded against a mode mismatch
+                // (`subagent/unauthorized`). The adapter decodes child rows
+                // with a required mode, so only a row lacking one —
+                // impossible past fail-loud decode — stays closed.
                 final mode = entry.mode;
                 if (mode != null) {
                   onAction(

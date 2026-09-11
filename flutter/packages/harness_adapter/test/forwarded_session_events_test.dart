@@ -107,6 +107,12 @@ class _MuxSocket implements DshEventSocket {
   }
 
   Future<void> close() => _mux.close();
+
+  /// One raw mux `item` frame: projection and pending-request traffic, which
+  /// rides the session follow stream rather than the `$events` one.
+  void frame(JsonMap payload) {
+    _mux.add(ServerRequest(rpcId: 'mux', method: 'item', payload: payload));
+  }
 }
 
 JsonMap _sessionRow(String id) => <String, Object?>{
@@ -250,6 +256,63 @@ void main() {
       // Gone on the event, not on the next list pull.
       expect(emissions.last.map((item) => item.id), <String>['session-b']);
       expect(rpc.sessionListCalls, 1);
+
+      await socket.close();
+    },
+  );
+
+  test(
+    'a removed root session takes its projection store and pending keys',
+    () async {
+      final rpc = _FakeRpc(
+        sessions: <Object?>[_sessionRow('session-a'), _sessionRow('session-b')],
+      );
+      final socket = _MuxSocket();
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, (_) => 10000),
+      );
+      addTearDown(repository.dispose);
+      await pumpEventQueue();
+
+      final emissions = <List<SessionSummary>>[];
+      final subscription = repository.observeSessions().listen(emissions.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      // Two manager-level mirrors the web manager deletes with a removed
+      // session: its projection store (`projectionStores.delete`) and the
+      // pending-interaction key behind the row's amber dot.
+      socket.frame(<String, Object?>{
+        'type': 'projection',
+        'sessionId': 'session-a',
+        'key': 'plan',
+        'value': <String, Object?>{'active': true, 'pending': false},
+        'seq': 9,
+      });
+      socket.frame(<String, Object?>{
+        'type': 'approval/requested',
+        'sessionId': 'session-a',
+        'approvalId': 'ap-1',
+      });
+      await pumpEventQueue();
+
+      SessionSummary rowA() =>
+          emissions.last.firstWhere((item) => item.id == 'session-a');
+      expect(rowA().pendingInteraction, SessionPendingInteraction.approval);
+      expect((await repository.observePlan('session-a').first)?.active, isTrue);
+
+      socket.emit('api-session/removed', <Object?>['session-a']);
+      await pumpEventQueue();
+      expect(emissions.last.map((item) => item.id), <String>['session-b']);
+
+      // The id comes back with a clean store: neither mirror survives the
+      // removal, so a re-added session cannot inherit a dead session's plan
+      // or its answerable-looking approval.
+      socket.emit('api-session/added', <Object?>[_sessionRow('session-a')]);
+      await pumpEventQueue();
+      expect(rowA().pendingInteraction, isNull);
+      expect(await repository.observePlan('session-a').first, isNull);
 
       await socket.close();
     },

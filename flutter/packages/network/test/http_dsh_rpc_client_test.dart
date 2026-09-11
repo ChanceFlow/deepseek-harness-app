@@ -48,9 +48,39 @@ void main() {
       httpClient: MockClient((request) async => http.Response('boom', 500)),
     );
 
+    // The status travels as a field, so a classifier never parses it back out
+    // of the message.
     await expectLater(
       client.call('session/list', 'session/list', {}),
-      throwsA(isA<DshTransportException>()),
+      throwsA(
+        isA<DshTransportException>().having(
+          (error) => error.httpStatus,
+          'httpStatus',
+          500,
+        ),
+      ),
+    );
+  });
+
+  test('a transport failure with no response carries no status', () async {
+    final client = HttpDshRpcClient(
+      Uri.parse('http://127.0.0.1:3080'),
+      httpClient: MockClient(
+        (request) async => throw http.ClientException('connection refused'),
+      ),
+    );
+
+    await expectLater(
+      client.call('session/list', 'session/list', {}),
+      throwsA(
+        isA<DshTransportException>()
+            .having((error) => error.httpStatus, 'httpStatus', isNull)
+            .having(
+              (error) => error.message,
+              'message',
+              startsWith('transport failure'),
+            ),
+      ),
     );
   });
 

@@ -305,15 +305,16 @@ abstract class ChatRepository {
 
   /// Stop one running continuable child (`subagent.interrupt`). The verb
   /// exists only for [SubagentMode.continuable] rows — the host pins the
-  /// request to that mode and answers a misaddressed row with
-  /// `subagent-not-found`.
+  /// request to that mode and rejects an address that does not own the live
+  /// target as `subagent/unauthorized`.
   Future<void> interruptSubagent(String parentSessionId, String childSessionId);
 
-  /// Read one child's transcript (`subagent.history`). [mode] is the
-  /// addressed row's own catalog mode: the host matches the request mode
+  /// Read one child's transcript (`session/page` with a `subagent` address).
+  /// [mode] is the addressed row's own catalog mode: the host matches it
   /// against the durable entry and rejects a mismatch as
-  /// `subagent-not-found`, so a one-shot row never opens under the
-  /// continuable mode (and vice versa).
+  /// `subagent/unauthorized`, so a one-shot row never opens under the
+  /// continuable mode (and vice versa); a child the catalog no longer lists
+  /// answers `subagent/not-found`.
   Future<List<TimelineItem>> loadSubagentHistory(
     String parentSessionId,
     String childSessionId,
@@ -322,8 +323,8 @@ abstract class ChatRepository {
 
   /// Follow up with one continuable child (`subagent.prompt`). The verb
   /// exists only for [SubagentMode.continuable] rows — the host pins the
-  /// request to that mode and answers a misaddressed row with
-  /// `subagent-not-found`.
+  /// request to that mode and rejects a misaddressed row as
+  /// `subagent/unauthorized`.
   Future<String> sendSubagentPrompt(
     String parentSessionId,
     String childSessionId,

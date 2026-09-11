@@ -153,9 +153,10 @@ final class OpenChild extends SubagentAction {
 
   final String childSessionId;
 
-  /// The addressed row's catalog mode. `subagent.history` must request a
-  /// child under its own mode — the host matches the request mode against
-  /// the durable entry and answers a mismatch with `subagent-not-found`.
+  /// The addressed row's catalog mode. The child-history read
+  /// (`session/page` with a `subagent` address) must carry the row's own
+  /// mode — the host matches it against the durable entry and answers a
+  /// mismatch with `subagent/unauthorized`.
   final SubagentMode mode;
 
   /// Direct parent session id that produced the catalog entry
