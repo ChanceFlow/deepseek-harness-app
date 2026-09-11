@@ -1,14 +1,22 @@
 /// Appearance preference — the Settings → Appearance control and the
 /// `ThemeMode` the app resolves from it.
 ///
-/// The choice lives in the host user-settings document's `ui-theme`
-/// namespace under `preference` (`light`/`dark`/`system`), exactly as the
-/// reference web client persists it
+/// The three host preferences live in the host user-settings document's
+/// `ui-theme` namespace under `preference` (`light`/`dark`/`system`),
+/// exactly as the reference web client persists it
 /// (`reference/.../client/ui-theme/src/theme-settings.ts:9-21`,
 /// `.../client/index.ts:231-239`). Reads and writes ride the existing
 /// settings plane (`settings.describe` / `settings.mutate`) and the writes
 /// are revision-checked against the revision the last describe reported, the
 /// same CAS guard the agent-preset default uses.
+///
+/// The OLED appearance is device-local instead: the host union is closed at
+/// `light`/`dark`/`system` (`THEME_PREFERENCES`, reference `ui-theme`
+/// plugin), and whether a panel lights a black pixel is a fact about this
+/// phone, not about the host's shared user document. It persists in the
+/// shared `LocalStateStore` under [kOledAppearanceKey], overrides the host
+/// preference while it is on, and is off by default — so an untouched device
+/// and every already-stored host value keep the meaning they had.
 ///
 /// The namespace is loopback-gated on the host, so a directly-connected
 /// phone can neither read nor write it; the row then states that the host
@@ -25,7 +33,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
+import '../../local_state/local_state_providers.dart';
+import '../../local_state/local_state_store.dart';
 import '../state_stream.dart';
+import '../theme/theme.dart';
 
 /// The settings namespace the host theme preference lives in.
 const String kThemeSettingsNamespace = 'ui-theme';
@@ -33,27 +44,49 @@ const String kThemeSettingsNamespace = 'ui-theme';
 /// The field carrying the selected built-in theme preference.
 const String kThemePreferenceField = 'preference';
 
-/// The three built-in theme preferences, matching the host union's members.
+/// Device-local KV key for the OLED appearance flag. Absent (or false) is
+/// the default; a false selection deletes the key.
+const String kOledAppearanceKey = 'app.oledAppearance';
+
+/// The built-in appearance choices: the host union's three members plus the
+/// device-local OLED appearance.
 enum ThemePreference {
   light,
   dark,
+
+  /// The dark scheme on a pure-black page, for an OLED panel. Device-local:
+  /// it never rides the host `ui-theme.preference` field.
+  oled,
+
   system;
 
   /// The stored form (the wire value).
   String get wireName => name;
 
-  /// The Flutter theme mode this preference resolves to.
+  /// The Flutter theme mode this preference resolves to. OLED wears the
+  /// dark scheme; what differs is the surface family
+  /// ([DshTheme.oled]), not the mode.
   ThemeMode get themeMode => switch (this) {
     ThemePreference.light => ThemeMode.light,
     ThemePreference.dark => ThemeMode.dark,
+    ThemePreference.oled => ThemeMode.dark,
     ThemePreference.system => ThemeMode.system,
   };
 
-  /// Resolve a stored value; null when it names no built-in preference, so
-  /// an unknown value leaves the system default standing.
+  /// Whether the host's `ui-theme.preference` union accepts this value.
+  /// OLED does not: the reference plugin's `THEME_PREFERENCES` is closed at
+  /// `light`/`dark`/`system`, so OLED is written to the device-local store
+  /// instead.
+  bool get hostStored => this != ThemePreference.oled;
+
+  /// Resolve a stored host value; null when it names no host preference, so
+  /// an unknown value leaves the system default standing. The device-local
+  /// OLED flag is read separately, never through this.
   static ThemePreference? fromStored(Object? stored) {
     for (final preference in ThemePreference.values) {
-      if (preference.wireName == stored) return preference;
+      if (preference.hostStored && preference.wireName == stored) {
+        return preference;
+      }
     }
     return null;
   }
@@ -71,7 +104,9 @@ final class ThemePreferenceState {
     this.failed = false,
   });
 
-  /// The persisted preference; `system` while unread or unknown.
+  /// The persisted host preference (`light`/`dark`/`system`); `system` while
+  /// unread or unknown. The device-local OLED flag is not this value — the
+  /// row and the app resolution layer combine the two.
   final ThemePreference preference;
 
   /// The `ui-theme` revision the last describe reported (the write's CAS
@@ -198,10 +233,64 @@ final themePreferenceControllerProvider = Provider.family
       return controller;
     });
 
-/// The app-wide theme mode, resolved from the chat-active backend's
-/// `ui-theme.preference`; `system` while the store loads, the host is
-/// unreachable, or the namespace is absent.
-final appThemeModeProvider = StreamProvider<ThemeMode>((ref) async* {
+/// UDF controller over the shared store: reads the stored flag on
+/// construction, publishes every change, and persists writes before
+/// confirming them. An absent key means off, so a device that never picked
+/// OLED keeps the pre-OLED behaviour.
+class OledAppearanceController {
+  OledAppearanceController(this._store) {
+    _state.value = _store.read(kOledAppearanceKey) == true;
+  }
+
+  final LocalStateStore _store;
+  final AppStateStream<bool> _state = AppStateStream<bool>(false);
+
+  bool get state => _state.value;
+  Stream<bool> get uiState => _state.stream;
+
+  void dispose() {
+    unawaited(_state.close());
+  }
+
+  /// Persist one selection. The row updates optimistically and snaps back
+  /// when the store refuses the write. Turning OLED off deletes the key,
+  /// leaving the default standing rather than storing a `false`.
+  Future<void> select(bool enabled) async {
+    final before = _state.value;
+    if (enabled == before) return;
+    _state.value = enabled;
+    try {
+      _store.write(kOledAppearanceKey, enabled ? true : null);
+      await _store.flush();
+    } catch (error) {
+      _state.value = before;
+      ErrorLogCollector.instance.addBreadcrumb(
+        'OLED appearance write failed: $error',
+        level: 'warning',
+      );
+    }
+  }
+}
+
+/// One controller per store; storage is device-local.
+final oledAppearanceControllerProvider =
+    FutureProvider<OledAppearanceController>((ref) async {
+      final store = await ref.watch(localStateStoreProvider.future);
+      final controller = OledAppearanceController(store);
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
+
+/// The device-local OLED appearance: false while the store loads, when it is
+/// unavailable, or when it was never chosen.
+final appOledAppearanceProvider = StreamProvider<bool>((ref) async* {
+  final controller = await ref.watch(oledAppearanceControllerProvider.future);
+  yield* controller.uiState;
+});
+
+/// The host `ui-theme.preference` as a [ThemeMode]; `system` while the store
+/// loads, the host is unreachable, or the namespace is absent.
+final hostThemeModeProvider = StreamProvider<ThemeMode>((ref) async* {
   final backendId = await ref.watch(activeBackendIdProvider.future);
   if (backendId.isEmpty) {
     yield ThemeMode.system;
@@ -211,10 +300,28 @@ final appThemeModeProvider = StreamProvider<ThemeMode>((ref) async* {
   yield* controller.uiState.map((state) => state.preference.themeMode);
 });
 
-/// The Appearance settings row: a three-seat choice over the persisted
-/// preference, with the host's describe/write state stated rather than
-/// hidden. The selection follows the persisted value, never the resolved
-/// active theme (reference `AppearanceRow.tsx:42-61`).
+/// The [ThemeMode] the app wears: the OLED appearance pins dark (its theme is
+/// the pure-black one, so a light system appearance must not win), otherwise
+/// the host preference.
+final appThemeModeProvider = Provider<ThemeMode>((ref) {
+  final oled = ref.watch(appOledAppearanceProvider).value ?? false;
+  if (oled) return ThemeMode.dark;
+  return ref.watch(hostThemeModeProvider).value ?? ThemeMode.system;
+});
+
+/// The dark [ThemeData] the app wears: [DshTheme.oled] while the OLED
+/// appearance is on, [DshTheme.dark] otherwise.
+final appDarkThemeProvider = Provider<ThemeData>((ref) {
+  final oled = ref.watch(appOledAppearanceProvider).value ?? false;
+  return oled ? DshTheme.oled() : DshTheme.dark();
+});
+
+/// The Appearance settings row: a four-seat choice — light, dark, OLED, and
+/// follow-system — over the persisted preference, with the host's
+/// describe/write state stated rather than hidden. The selection follows the
+/// persisted value, never the resolved active theme (reference
+/// `AppearanceRow.tsx:42-61`); OLED is the device-local override, so it wins
+/// the seat while it is on.
 class ThemePreferenceRow extends ConsumerWidget {
   const ThemePreferenceRow({super.key});
 
@@ -226,11 +333,16 @@ class ThemePreferenceRow extends ConsumerWidget {
     final String backendId = ref.watch(activeBackendIdProvider).value ?? '';
     if (backendId.isEmpty) return const SizedBox.shrink();
     final controller = ref.watch(themePreferenceControllerProvider(backendId));
+    final OledAppearanceController? oled = ref
+        .watch(oledAppearanceControllerProvider)
+        .value;
+    final bool oledOn = ref.watch(appOledAppearanceProvider).value ?? false;
     return StreamBuilder<ThemePreferenceState>(
       stream: controller.uiState,
       initialData: controller.state,
       builder: (context, snapshot) {
         final state = snapshot.data ?? controller.state;
+        final selected = oledOn ? ThemePreference.oled : state.preference;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -281,16 +393,26 @@ class ThemePreferenceRow extends ConsumerWidget {
                     tooltip: l10n.settingsAppearanceDark,
                   ),
                   ButtonSegment<ThemePreference>(
+                    value: ThemePreference.oled,
+                    // The seat needs the device-local store; the host seats
+                    // do not, so an unavailable store disables only this one.
+                    enabled: oled != null,
+                    icon: const Icon(Icons.contrast_outlined, size: 16),
+                    label: Text(l10n.settingsAppearanceOled),
+                    tooltip: l10n.settingsAppearanceOled,
+                  ),
+                  ButtonSegment<ThemePreference>(
                     value: ThemePreference.system,
                     icon: const Icon(Icons.brightness_auto_outlined, size: 16),
                     label: Text(l10n.settingsAppearanceSystem),
                     tooltip: l10n.settingsAppearanceSystem,
                   ),
                 ],
-                selected: <ThemePreference>{state.preference},
+                selected: <ThemePreference>{selected},
                 onSelectionChanged: !state.writable || state.saving
                     ? null
-                    : (selection) => controller.select(selection.first),
+                    : (selection) =>
+                          _apply(controller, oled, oledOn, selection.first),
               ),
               if (state.failed)
                 Text(
@@ -304,5 +426,25 @@ class ThemePreferenceRow extends ConsumerWidget {
         );
       },
     );
+  }
+
+  /// Apply one seat: OLED flips the device-local flag and leaves the host
+  /// document alone; every other seat clears the flag and writes the host
+  /// preference. Both writes are optimistic, so the theme flips with the tap.
+  /// A null [oled] controller (the device-local store is unavailable) leaves
+  /// the host write path untouched — the segment is disabled instead.
+  void _apply(
+    ThemePreferenceController controller,
+    OledAppearanceController? oled,
+    bool oledOn,
+    ThemePreference choice,
+  ) {
+    if (choice == ThemePreference.oled) {
+      if (oled == null) return;
+      unawaited(oled.select(true));
+      return;
+    }
+    if (oledOn && oled != null) unawaited(oled.select(false));
+    unawaited(controller.select(choice));
   }
 }

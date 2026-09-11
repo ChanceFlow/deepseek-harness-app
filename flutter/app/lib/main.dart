@@ -171,8 +171,11 @@ class DshApp extends ConsumerWidget {
     // when it is unavailable), which delegates to the device locale.
     final preference = ref.watch(appLocalePreferenceProvider).value;
     // The host-backed appearance preference for the chat-active backend;
-    // system while it loads or when the host does not expose it.
-    final themeMode = ref.watch(appThemeModeProvider).value ?? ThemeMode.system;
+    // system while it loads or when the host does not expose it. The
+    // device-local OLED appearance, while it is on, pins dark and swaps the
+    // dark theme for the pure-black one.
+    final themeMode = ref.watch(appThemeModeProvider);
+    final darkTheme = ref.watch(appDarkThemeProvider);
     return MaterialApp(
       // Brand title; resolves through l10n so the OS task-switcher
       // label follows the active locale (DSH Mobile stays the
@@ -182,7 +185,7 @@ class DshApp extends ConsumerWidget {
       // an unresolved store) leaves the resolution to the device.
       locale: resolveAppLocale(preference),
       theme: DshTheme.light(),
-      darkTheme: DshTheme.dark(),
+      darkTheme: darkTheme,
       themeMode: themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,

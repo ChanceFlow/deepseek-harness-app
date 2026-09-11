@@ -2430,6 +2430,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAppearanceDark => 'Dark';
 
   @override
+  String get settingsAppearanceOled => 'OLED';
+
+  @override
   String get settingsAppearanceSystem => 'System';
 
   @override
