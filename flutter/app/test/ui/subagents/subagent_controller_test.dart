@@ -211,6 +211,49 @@ void main() {
     },
   );
 
+  test('the opened child carries the Agent failure its row holds', () async {
+    final repository = _FakeRepository(catalog: _seedCatalog);
+    final controller = SubagentController(repository, initialSessionId: 'p1');
+    addTearDown(controller.dispose);
+
+    repository.sessions.value = const <SessionSummary>[_parent];
+    await pumpEventQueue();
+    controller.onAction(const OpenChild('child-2', SubagentMode.oneShot));
+    await pumpEventQueue();
+    expect(controller.state.childAgentError, isNull);
+
+    // `api-session/error` for the child: the row holds it, and the record
+    // view is the surface that states it.
+    repository.sessions.value = const <SessionSummary>[
+      _parent,
+      SessionSummary(
+        id: 'child-2',
+        title: 'Child two',
+        blank: false,
+        origin: 'subagent',
+        parentSessionId: 'p1',
+        agentError: 'child agent exploded',
+      ),
+    ];
+    await pumpEventQueue();
+    expect(controller.state.childAgentError, 'child agent exploded');
+
+    // A roster republish without the failure (the session accepted a new
+    // prompt, or the host stopped reporting it) clears the strip.
+    repository.sessions.value = const <SessionSummary>[
+      _parent,
+      SessionSummary(
+        id: 'child-2',
+        title: 'Child two',
+        blank: false,
+        origin: 'subagent',
+        parentSessionId: 'p1',
+      ),
+    ];
+    await pumpEventQueue();
+    expect(controller.state.childAgentError, isNull);
+  });
+
   test(
     'a failed child history surfaces, never a fake-empty transcript',
     () async {

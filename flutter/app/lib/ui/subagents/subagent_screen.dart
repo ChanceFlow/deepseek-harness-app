@@ -30,6 +30,7 @@ import 'package:flutter/material.dart';
 import '../chat/activity_dot.dart';
 import '../chat/chat_screen.dart' show PlanChip, TimelineRow, timelineKey;
 import '../chat/sweep_highlight.dart';
+import '../shared/error_banner.dart';
 import '../shared/state_dot.dart';
 import '../theme/theme.dart';
 import 'subagent_ui_state.dart';
@@ -149,6 +150,9 @@ class _SubagentScreenState extends State<SubagentScreen> {
     final l10n = AppLocalizations.of(context)!;
     final uiState = widget.uiState;
     final childId = uiState.selectedChildId;
+    // Only the record view states a child's failure: the catalog lists rows,
+    // and a failure belongs to the session being read.
+    final childAgentError = childId == null ? null : uiState.childAgentError;
     final childEntry = uiState.selectedChildEntry;
     return PopScope(
       // Android back closes the child record first; the catalog stays.
@@ -206,6 +210,18 @@ class _SubagentScreenState extends State<SubagentScreen> {
                   message: message,
                   onDismiss: () =>
                       widget.onAction(const DismissSubagentError()),
+                ),
+              // A child the host failed outside a turn: no timeline item
+              // carries it, so the record view states it. The strip offers no
+              // action — the failure is the host's, and that session's next
+              // prompt clears it.
+              if (childAgentError case final agentError?)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ErrorBanner(
+                    message: l10n.sessionAgentFailed,
+                    detail: agentError,
+                  ),
                 ),
               Expanded(
                 child: childId == null
