@@ -13,26 +13,26 @@
 #           unresolved platform reference. Decision:
 #           .agents/notes/implemented/process/2026-09-03-kotlin-compile-gate.md
 #
-# Runner contract — the `flutter-android` label as this forge registers it is
-# HOST execution: steps run on the runner machine itself, with the toolchain
-# in `runner.envs.PATH` (~/tools/flutter-3.47.1, ~/android-sdk,
-# ~/tools/jdk-17.0.13+11) and the host's own ~/.pub-cache and ~/.gradle as the
-# dependency caches. No dependency is downloaded per job — only the checkout's
-# reference submodule crosses the network — and no cache is restored here,
-# because both directories persist between jobs. `runner.capacity: 2` caps
-# concurrency, so the three jobs below time-share two slots. Decision:
-# .agents/notes/implemented/process/2026-09-11-ci-runner-host-mode.md
+# Runner contract — `runs-on: flutter-android-ctr` is a CONTAINER label: the
+# job's steps run inside the prebaked image built from
+# docker/flutter-android.Dockerfile, and the runner machine contributes the
+# podman socket and CPU only. The image carries the JDK, Flutter, the Android
+# SDK and a Gradle build-cache snapshot taken when it was built, so a job
+# downloads no toolchain and starts with every task whose inputs did not change
+# already cached. Nothing here reads the runner machine's `~/tools`, `~/.gradle`
+# or `~/.pub-cache`.
 #
-# A container-schema label (`flutter-android:docker://flutter-3.47-android`)
-# is the alternative the release channel was designed around: it isolates each
-# job but makes every cache ephemeral, which is what `actions/cache` and the
-# local image recipe (`docker/`, gitignored) exist to offset. Only the label
-# decides this — a job runs in a container exactly when its label carries
-# `docker://`.
+# This label has its own runner process because the host runner's
+# `runner.envs.PATH` names the runner machine's toolchain: injected into a
+# container it cost the job its own `node` and failed every `uses:` step
+# (run 1410). Host-mode labels still exist for the mirror jobs, which need
+# nothing but git, python3 and curl. Only the label decides the execution mode —
+# `docker://` runs in the image it names, `host` runs on the machine.
+# Decision: .agents/notes/implemented/process/2026-09-11-container-ci-runner.md
 name: CI
 
-# A superseded push is waste on a pool of two slots shared with the release
-# channel: the newest push to a ref cancels the older run. Branch builds share
+# A superseded push is waste on a runner the release channel also needs: the
+# newest push to a ref cancels the older run. Branch builds share
 # one group per ref, so a push never cancels another branch's verdict. A
 # cancelled `master` run is not a lost verdict — the run for the next merge
 # covers its tree, and the release channel re-runs the whole suite itself
@@ -53,9 +53,10 @@ jobs:
     # github.com — which needs the LAN egress proxy too (a proxy-less job
     # stalls on `git submodule update` exactly like pub did). Every job on
     # this label reaches the proxy through the runner's own environment, so
-    # `docs` needs no toolchain step and finishes in seconds; it still holds
-    # one of the two slots while it runs, which the timeout below bounds.
-    runs-on: flutter-android
+    # `docs` needs no toolchain step and finishes in seconds; it still holds the
+    # container runner's single slot while it runs, which the timeout below
+    # bounds.
+    runs-on: flutter-android-ctr
     # A wedged job must not own the single runner for hours: the release-APK
     # job once hung on pub's dependency resolution for 1h49m and queued every
     # PR behind it.
@@ -70,18 +71,18 @@ jobs:
         run: python3 scripts/verify_all.py docs
 
   code:
-    # Host execution (see the header): Flutter, the Android SDK and the JDK
-    # come from the runner's PATH, and the host's ~/.pub-cache and ~/.gradle
-    # are the caches every run reuses. The proxy env is declared from
-    # `vars.EGRESS_PROXY` below: the variable is the single source of truth
-    # for the egress address (it lives in the repo's Actions settings, never
-    # in git), so a job is only ever proxy-less if the runner's own
-    # environment and the variable both fail it.
+    # The container image owns this job's toolchain (see the header): Flutter,
+    # the Android SDK and the JDK are on the image's PATH, and the image's
+    # ~/.pub-cache holds the resolved dependency set, so the run needs no
+    # download. The proxy env is declared from `vars.EGRESS_PROXY` below: the
+    # variable is the single source of truth for the egress address (it lives
+    # in the repo's Actions settings, never in git), so a job is only ever
+    # proxy-less if the runner's own environment and the variable both fail it.
     # Toolchain pin (verify_toolchain_pin.py reads this file as source):
-    # flutter-version: 3.47.1 — the runner's PATH points at
-    # ~/tools/flutter-3.47.1, and the first step below fails the job when the
-    # live binary disagrees with this line.
-    runs-on: flutter-android
+    # flutter-version: 3.47.1 — the image is built from that upstream release,
+    # and the first step below fails the job when the image's binary disagrees
+    # with this line, so a stale image cannot quietly change the verdict.
+    runs-on: flutter-android-ctr
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -89,8 +90,8 @@ jobs:
       https_proxy: ${{ vars.EGRESS_PROXY }}
       NO_PROXY: gitea,localhost,127.0.0.1
       no_proxy: gitea,localhost,127.0.0.1
-      # This runner shares the host's core count; uncapped, `flutter test`
-      # spawns one tester per CPU and the suite gets OOM-killed (exit 137).
+      # Four testers ≈ 2–3 GB, well inside the container's --memory=9g budget:
+      # the suite stays in its own cgroup instead of pushing the host into swap.
       DSH_TEST_CONCURRENCY: '4'
     # Bound the job the same way: a hung pub resolve inside any step must end
     # in a failed run, not a two-hour runner occupation.
@@ -140,10 +141,10 @@ jobs:
     # The compiler is the only check that sees an unresolved platform
     # symbol — how #153 shipped AudioManager constants no API has and left
     # the red to the release channel. compileDebugKotlin is that check
-    # alone: no Dart AOT, asset merge, R8 or packaging. Host execution like
-    # `code`, and the same host ~/.gradle: the plugin and AGP artifacts this
-    # task resolves survive between jobs, so a warm start is the common case.
-    runs-on: flutter-android
+    # alone: no Dart AOT, asset merge, R8 or packaging. A container job like
+    # `code`, off the same image: the Gradle build cache that image baked
+    # answers for every task whose inputs have not changed since it was built.
+    runs-on: flutter-android-ctr
     timeout-minutes: 20
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -151,13 +152,12 @@ jobs:
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
       # The gradle JVM ignores HTTP_PROXY env and rides the system properties
-      # in the runner machine's own ~/.gradle/gradle.properties, which persists
-      # between runs — an address left there from an earlier route times out
-      # every egress download and disables the Google repository with no
-      # compile error anywhere (run 983). The compile step below rebuilds those
-      # properties from the egress above at runtime, so no internal address is
-      # ever committed; the JVM's default nonProxyHosts keeps localhost traffic
-      # direct.
+      # in the image's ~/.gradle/gradle.properties — an address left there from
+      # an earlier route times out every egress download and disables the Google
+      # repository with no compile error anywhere (run 983). The compile step
+      # below rebuilds those properties from the egress above at runtime, so no
+      # internal address is ever committed; the JVM's default nonProxyHosts
+      # keeps localhost traffic direct.
       NO_PROXY: gitea,localhost,127.0.0.1
       no_proxy: gitea,localhost,127.0.0.1
     steps:

@@ -28,19 +28,29 @@ ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-
 ARG ANDROID_PLATFORM=android-36
 ARG ANDROID_BUILD_TOOLS=36.0.0
 
-# ── stage: JDK 17, relocated to a fixed path so the final stage can copy it ──
+# ── stage: JDK 17 ──────────────────────────────────────────────────────────
+# The base image lists a Microsoft apt repository this egress cannot reach;
+# left in place, `apt-get update` exits non-zero over that one index and takes
+# the whole stage with it. Dropping the list is narrower than tolerating a
+# failed update, which would let a genuinely broken index through.
+#
+# /opt/jdk is a real copy, not a move: the Android stage derives from this one
+# and Google's sdkmanager is itself a Java program, so the distribution's java
+# has to stay on PATH here. The final stage takes the copy.
 FROM ${BASE} AS jdk
-RUN apt-get update \
+RUN rm -f /etc/apt/sources.list.d/microsoft-prod.list \
+ && apt-get update \
  && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
  && rm -rf /var/lib/apt/lists/* \
- && mv "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/jdk \
+ && cp -a "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/jdk \
  && /opt/jdk/bin/java -version
 
 # ── stage: Android SDK, installed by Google's command-line tools ───────────
-# Licenses are accepted here so a later Gradle run may fetch any platform or
-# build-tools revision this project's Flutter pin asks for, instead of failing
-# on a missing license inside a job.
-FROM ${BASE} AS android-sdk
+# Derived from the JDK stage because sdkmanager runs on Java. Licenses are
+# accepted here so a later Gradle run may fetch any platform or build-tools
+# revision this project's Flutter pin asks for, instead of failing on a missing
+# license inside a job.
+FROM jdk AS android-sdk
 ARG CMDLINE_TOOLS_URL
 ARG ANDROID_PLATFORM
 ARG ANDROID_BUILD_TOOLS

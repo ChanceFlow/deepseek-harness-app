@@ -32,15 +32,12 @@
 #     and linked to their pull requests — followed by the artifact
 #     metadata block.
 #
-# Runs on the `flutter-android` label, which this forge registers as HOST
-# execution: Flutter 3.47.1, the Android SDK and JDK 17 come from the runner's
-# own PATH and the host's ~/.gradle and ~/.pub-cache are the caches every run
-# reuses, so no dependency is downloaded per run and no cache is restored
-# here. The local image recipe (`docker/`, gitignored) and actions/cache
-# belong to the container-schema label
-# (`flutter-android:docker://flutter-3.47-android`), which is not registered
-# today — see
-# .agents/notes/implemented/process/2026-09-11-ci-runner-host-mode.md.
+# Runs on `flutter-android-ctr`, a CONTAINER label: the build happens inside the
+# image built from docker/flutter-android.Dockerfile, which carries Flutter
+# 3.47.1, the Android SDK, JDK 17 and the Gradle build cache its own warmup
+# build produced. The runner machine supplies CPU and the podman socket; it
+# needs no JDK, Flutter, Android SDK, ~/.gradle or ~/.pub-cache. Decision:
+# .agents/notes/implemented/process/2026-09-11-container-ci-runner.md
 # Tooling contract lives in the process note
 # .agents/notes/implemented/process/2026-08-20-apk-release-ci.md.
 name: Release APK
@@ -73,12 +70,12 @@ permissions:
 
 defaults:
   run:
-    # act's default `sh` has no [[ ]]; the runner machine ships bash.
+    # act's default `sh` has no [[ ]]; the image ships bash.
     shell: bash
 
 jobs:
   build:
-    runs-on: flutter-android
+    runs-on: flutter-android-ctr
     timeout-minutes: 90
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -97,13 +94,12 @@ jobs:
           # next alpha version; a shallow clone has none.
           fetch-depth: 0
 
-      # No cache step: host execution makes ~/.gradle and ~/.pub-cache the
-      # runner machine's own persistent directories, so a restore costs the
-      # run and buys nothing (measured 2026-09-11: a 2.6 GB restore takes
-      # 100 s and reports "not saving cache" on a hit, while overwriting the
-      # live caches with an older snapshot). actions/cache belongs to the
-      # container label, whose job container starts from the image and loses
-      # every task output at teardown.
+      # No cache step: the image carries the Gradle build cache its own warmup
+      # build produced, and a job container gets a fresh layer of task outputs
+      # on top of it. A restore step here would move the same bytes the image
+      # already holds — measured on the host path as 2.6 GB and 100 s for
+      # nothing. A cache step belongs here only if the image stops being
+      # rebuilt on master merges, which is what keeps that snapshot fresh.
 
       - name: Resolve version
         id: ver
@@ -165,12 +161,13 @@ jobs:
 
       # Gradle's JVM reads its proxy route from gradle.properties systemProp
       # lines and ignores the HTTP_PROXY env above it — unlike curl and pub, it
-      # has no env-proxy fallback. That file is the runner machine's own
-      # user-level ~/.gradle/gradle.properties and persists between runs, so an
-      # address left there from a route that has since moved takes every egress
-      # download with it (warm-cache runs never notice). Rewrite host and port
-      # from the repo's EGRESS_PROXY var so the value Gradle uses is always the
-      # live one; drop the proxy lines entirely when the var is absent.
+      # has no env-proxy fallback. That file in the image was written by the
+      # image build with whatever egress that build had, so it is rewritten here
+      # from the live variable: an address left behind by a route that has since
+      # moved takes every egress download with it and disables the Google
+      # repository with no compile error anywhere. Rewrite host and port from the
+      # repo's EGRESS_PROXY var so the value Gradle uses is always the live one;
+      # drop the proxy lines entirely when the var is absent.
       - name: Align Gradle proxy with EGRESS_PROXY
         env:
           EGRESS: ${{ vars.EGRESS_PROXY }}
