@@ -128,6 +128,16 @@ class SubagentController {
     final visible = _sessions
         .where((session) => sessionVisible(session, _selectedParentId))
         .toList();
+    // The opened child's Agent failure lives on its roster row (the wire
+    // `api-session/error` has no turn position, so no timeline item carries
+    // it); the record view reads it from here.
+    final childId = _selectedChildId;
+    final childAgentError = childId == null
+        ? null
+        : _sessions
+              .where((session) => session.id == childId)
+              .firstOrNull
+              ?.agentError;
     _state.value = SubagentUiState(
       sessions: visible,
       selectedParentId: _selectedParentId,
@@ -142,6 +152,7 @@ class SubagentController {
       isSendingChild: _isSendingChild,
       isLoading: _isLoading,
       errorMessage: _errorMessage,
+      childAgentError: childAgentError,
     );
     _resolvePendingChild();
   }

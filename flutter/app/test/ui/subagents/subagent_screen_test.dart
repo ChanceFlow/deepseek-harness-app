@@ -321,6 +321,28 @@ void main() {
       }
     });
 
+    testWidgets('an Agent failure on the opened child states itself and '
+        'cannot be dismissed', (tester) async {
+      await _pump(
+        tester,
+        const SubagentUiState(
+          sessions: _sessions,
+          selectedParentId: 'p1',
+          catalog: _catalog,
+          selectedChildId: 'one-shot-1',
+          childAgentError: 'child agent exploded',
+        ),
+        [],
+      );
+
+      // The host reported a failure with no turn position: no timeline item
+      // carries it, so the record view states it above the transcript.
+      expect(find.text('The agent stopped with an error.'), findsOneWidget);
+      expect(find.text('child agent exploded'), findsOneWidget);
+      // Not the app's fact to clear: the child's next prompt clears it.
+      expect(find.byTooltip('Dismiss'), findsNothing);
+    });
+
     testWidgets('the read-only notice is a borderless card on the shape '
         'scale', (tester) async {
       await _pump(

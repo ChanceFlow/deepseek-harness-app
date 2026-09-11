@@ -38,6 +38,7 @@ final class SubagentUiState {
     this.isSendingChild = false,
     this.isLoading = false,
     this.errorMessage,
+    this.childAgentError,
   });
 
   final List<SessionSummary> sessions;
@@ -67,6 +68,13 @@ final class SubagentUiState {
   final bool isSendingChild;
   final bool isLoading;
   final String? errorMessage;
+
+  /// The opened child's Agent-level failure, when the host reported one with
+  /// no turn position (`api-session/error`; the roster row holds it — see
+  /// `SessionSummary.agentError`). Such a failure folds into no timeline
+  /// item, so the record view states it above the transcript the way the chat
+  /// surface states it above its own.
+  final String? childAgentError;
 
   /// The catalog that owns the opened child's row: the root tree or the
   /// expanded branch the row was loaded from. Availability and addressing

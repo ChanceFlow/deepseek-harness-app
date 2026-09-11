@@ -33,6 +33,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
+import '../shared/error_banner.dart';
 import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
@@ -1472,7 +1473,7 @@ class _ChatPanelState extends State<ChatPanel> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: ChatErrorBanner(
+      child: ErrorBanner(
         message: copy.message,
         detail: copy.detail,
         onRetry: onRetry,

@@ -34,11 +34,13 @@ forwarded event onto the matching roster row.
   `agentError` before the call, mirroring `ClientSession.prompt`, which clears
   `lastAgentError` (with `promptError`) before its first await: the attempt
   supersedes the failure.
-- **The session surface renders it.** The chat screen shows it as the same
-  error strip as a failed action, with the host message as the detail. That
-  strip takes no dismiss action: the failure is the host's fact and clears on
-  the next prompt, so a close button would hide something still true. Reusing
-  the strip required making `ChatErrorBanner.onDismiss` optional.
+- **Both session surfaces render it.** The strip is
+  `ui/shared/error_banner.dart` `ErrorBanner` — headline, host message as a
+  monospace detail, and only the actions the owning surface has. The chat
+  screen shows it for the session being read; the subagents screen shows it
+  above an opened child's transcript. It carries no dismiss action on either:
+  the failure is the host's fact and clears on that session's next prompt, so
+  a close button would hide something still true.
 
 ## Alternatives considered
 
@@ -57,12 +59,15 @@ forwarded event onto the matching roster row.
 
 ## Consequences
 
-- An Agent-level failure is visible on the session the user is looking at; a
-  failure on a session that is not selected is still held in the roster and
-  appears when it is opened. A subagent child's failure is held the same way
-  and shows when that child is opened in the chat surface; the subagent
-  screen's transcript view does not render it, which stays a known gap.
+- An Agent-level failure is visible on the session the user is looking at and
+  on an opened subagent child's record; a failure on a session that is not
+  selected is still held in the roster and appears when it is opened.
+- `chat_error_banner.dart` keeps only the chat copy mapping
+  (`describeChatError`); the strip it used to own is the shared `ErrorBanner`,
+  so a second surface states the same fact the same way.
 - `forwarded_session_events_test.dart` drives the real repository through the
   `$events` `emit` path: the fold lands, a `session/list` pull keeps it, and a
-  prompt clears it. `chat_screen_test.dart` pins the strip's copy and the
-  absent dismiss affordance.
+  prompt clears it. `chat_screen_test.dart` and `subagent_screen_test.dart`
+  pin the strip's copy and its absent dismiss affordance, and
+  `subagent_controller_test.dart` pins that the opened child's failure comes
+  from its roster row and clears when the row stops holding it.
