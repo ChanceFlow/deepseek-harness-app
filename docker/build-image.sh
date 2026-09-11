@@ -22,6 +22,12 @@
 #   IMAGE_TAG  PROXY  FLUTTER_VERSION  CMDLINE_TOOLS_URL
 #   ANDROID_PLATFORM  ANDROID_BUILD_TOOLS
 #
+# The build runs its RUN steps in a container whose /dev/shm defaults to 64 MB,
+# which is where the JVM's shared-memory files live: too small and the Gradle
+# daemon dies with "Gradle build daemon disappeared unexpectedly" after minutes
+# of work. The 1 GB below is the same allowance the job containers get, so a
+# warmup that fits here also fits a job.
+#
 # PROXY is the egress the build uses (base-image pull, apt, Google's SDK
 # downloads, the pinned Flutter tarball, pub.dev, Gradle). It has no default on
 # purpose: an address baked into an image is how a moved egress becomes a
@@ -75,7 +81,15 @@ echo "proxy   : ${PROXY:-none — the build reaches the network directly}"
 echo "tag     : $IMAGE_TAG"
 echo "builder : $(podman --version)  rootless=$(podman info --format '{{.Host.Security.Rootless}}')"
 
+# The build runs its RUN steps in a container whose /dev/shm defaults to 64 MB
+# and whose file-descriptor limit defaults to 1024. Both are too small for a
+# Gradle build: the JVM's shared-memory files die without room, and javac hits
+# "Too many open files" opening classpath jars, which surfaces as a bogus
+# "cannot find symbol" cascade. The allowances below match what the job
+# containers get, so a warmup that fits here also fits a job.
 podman build \
+  --shm-size=1g \
+  --ulimit nofile=65536:65536 \
   --build-context repo="$WARMUP" \
   --build-arg "FLUTTER_VERSION=$FLUTTER_VERSION" \
   --build-arg "CMDLINE_TOOLS_URL=$CMDLINE_TOOLS_URL" \

@@ -99,7 +99,7 @@ jobs:
       # on top of it. A restore step here would move the same bytes the image
       # already holds — measured on the host path as 2.6 GB and 100 s for
       # nothing. A cache step belongs here only if the image stops being
-      # rebuilt on master merges, which is what keeps that snapshot fresh.
+      # rebuilt, which is what keeps that snapshot close to the code.
 
       - name: Resolve version
         id: ver

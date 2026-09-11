@@ -45,9 +45,11 @@ while `flutter` and `java` were absent.
   layer, the sources land after them, and the warmup build's Gradle build-cache
   snapshot rides the image. No `actions/cache`, no cache server, no `~/.gradle`
   or `~/.pub-cache` to provision.
-- **The job container is bounded** (`--memory=9g --memory-swap=11g`): the
-  runner's cgroup does not cover a sibling container it creates over the podman
-  API, and this project asks Gradle for `-Xmx8G` plus a Kotlin daemon.
+- **The job container is bounded** (`--memory=9g --memory-swap=11g`,
+  `--shm-size=1g`) and `gradle.properties` asks Gradle and its Kotlin daemon for
+  3 GB each instead of 8: the runner's cgroup does not cover the sibling
+  container it creates, a 64 MB `/dev/shm` kills the Gradle daemon outright, and
+  two 8 GB daemons are what took the host down.
 - **The pin is asserted, not assumed** — the `code` job reads `flutter-version:`
   out of this workflow and fails when the image's `flutter --version` disagrees.
 - **Superseded runs are cancelled** (`concurrency: ci-${{ github.ref }}`), which
@@ -72,10 +74,9 @@ github.com and pub.dev green.
   image carries that snapshot, a container-side restore needs the cache server
   pinned and reachable from the container network, and a rebuild refreshes it.
 - **Pointing the submodule at the local reference mirror.** Deferred: the mirror
-  had frozen on a local clone's commit, so the timer that now refreshes it from
-  upstream has to prove itself first.
+  had frozen on a local clone's commit.
 - **Tolerating the unreachable Microsoft apt index.** Rejected: `|| true` would
-  mask a genuinely broken index; the stage drops that one source list.
+  mask a real breakage; the stage drops that source list.
 
 ## Consequences
 
@@ -84,6 +85,6 @@ sessions have to reach Flutter through the image too, or they re-install what
 this change removes. `~/tools/flutter-3.47.1`, `~/tools/jdk-*`, `~/android-sdk`,
 `~/.gradle`, `~/.pub-cache` and the `~/.cache/actcache` store become deletable
 once the container label is the only path. A stale image silently ages its
-build-cache snapshot, so the image is rebuilt on master merges. The host runner's
+build-cache snapshot, so the image is rebuilt by hand. The host runner's
 `runner.envs` still names the machine's toolchain until its labels have no
 consumer.

@@ -12,7 +12,7 @@
 #
 #   stage jdk / android-sdk / flutter   toolchain, keyed on its own ARG
 #   layer 1   pubspec.yaml + pubspec.lock   `flutter pub get`
-#   layer 2   the committed source tree     `flutter build apk --debug`
+#   layer 2   the committed source tree     `:app:compileDebugKotlin`
 #
 # Layer 2 is also where this image's Gradle build cache comes from: the warmup
 # build bakes task outputs under ~/.gradle/caches/build-cache-1 and transformed
@@ -34,15 +34,17 @@ ARG ANDROID_BUILD_TOOLS=36.0.0
 # the whole stage with it. Dropping the list is narrower than tolerating a
 # failed update, which would let a genuinely broken index through.
 #
-# /opt/jdk is a real copy, not a move: the Android stage derives from this one
-# and Google's sdkmanager is itself a Java program, so the distribution's java
-# has to stay on PATH here. The final stage takes the copy.
+# /opt/jdk is a symlink to the distribution's JDK, not a copy: Ubuntu's openjdk
+# reads configuration from /etc/java-17-openjdk, so a copied tree alone breaks
+# Java's own logging initialisation (seen as an AccessControlException out of
+# LogManager during the image build). The final stage inherits this stage, which
+# keeps both the configuration and the symlink in place.
 FROM ${BASE} AS jdk
 RUN rm -f /etc/apt/sources.list.d/microsoft-prod.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
  && rm -rf /var/lib/apt/lists/* \
- && cp -a "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/jdk \
+ && ln -s "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/jdk \
  && /opt/jdk/bin/java -version
 
 # ── stage: Android SDK, installed by Google's command-line tools ───────────
@@ -63,7 +65,8 @@ RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
  && rm /tmp/cmdline-tools.zip \
  && yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
  && "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-      "platform-tools" "platforms;$ANDROID_PLATFORM" "build-tools;$ANDROID_BUILD_TOOLS" \
+      "platform-tools" "platforms;$ANDROID_PLATFORM" "platforms;android-35" \
+      "platforms;android-34" "build-tools;$ANDROID_BUILD_TOOLS" \
  && rm -rf "$ANDROID_HOME/.temp" "$ANDROID_HOME/.downloadIntermediates"
 
 # ── stage: Flutter, the pinned upstream release ────────────────────────────
@@ -79,13 +82,14 @@ RUN curl -fsSL \
  && /opt/flutter/bin/flutter --version
 
 # ── the image jobs run in ──────────────────────────────────────────────────
-FROM ${BASE}
+# Derived from the JDK stage so the distribution's Java configuration travels
+# with the /opt/jdk symlink; only the SDK and Flutter are copied in.
+FROM jdk
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     JAVA_HOME=/opt/jdk \
     FLUTTER_ROOT=/opt/flutter \
     PUB_CACHE=/root/.pub-cache
-COPY --from=jdk /opt/jdk /opt/jdk
 COPY --from=android-sdk /opt/android-sdk /opt/android-sdk
 COPY --from=flutter /opt/flutter /opt/flutter
 ENV PATH=/opt/jdk/bin:/opt/flutter/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH
@@ -126,12 +130,26 @@ RUN set -eu; \
 # ── layer 2: the committed source, and the warmup build ────────────────────
 # COPY merges into the directory, so layer 1's .dart_tool/ and generated plugin
 # metadata survive; only the sources and the lockfile are replaced.
+#
+# The warmup runs `:app:compileDebugKotlin` — exactly what the merge gate's
+# android job runs — rather than a full `flutter build apk`. It resolves the
+# same Gradle graph and populates the same build cache for every task the gate
+# needs, at a fraction of the memory an assembleDebug wants, and memory is the
+# binding constraint on a host that also runs this repository's other work.
+# The release channel's dex and packaging run in its own job, over the cache
+# this leaves behind.
 COPY --from=repo /flutter /tmp/warmup/flutter
 RUN set -eu; \
     if [ -n "$proxy_host" ]; then \
       export GRADLE_OPTS="-Dhttp.proxyHost=$proxy_host -Dhttp.proxyPort=$proxy_port -Dhttps.proxyHost=$proxy_host -Dhttps.proxyPort=$proxy_port"; \
     fi; \
-    cd /tmp/warmup/flutter/app && flutter build apk --debug; \
+    cd /tmp/warmup/flutter && flutter pub get; \
+    cd /tmp/warmup/flutter/app/android; \
+    WRAPPER=/opt/flutter/bin/cache/artifacts/gradle_wrapper; \
+    cp -n "$WRAPPER/gradlew" gradlew; \
+    cp -n "$WRAPPER/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar; \
+    chmod +x gradlew; \
+    ./gradlew :app:compileDebugKotlin; \
     cd / && rm -rf /tmp/warmup
 
 WORKDIR /workspace
