@@ -14,6 +14,7 @@ import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/menu_sheet.dart';
+import '../shared/tappable_feedback.dart';
 import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
@@ -159,49 +160,49 @@ class PermissionSelectChip extends StatelessWidget {
       child: Opacity(
         // Web .trigger:disabled — the locked seat dims.
         opacity: enabled ? 1 : 0.6,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(kShapePill),
-            onTap: enabled ? () => _open(context) : null,
-            child: Container(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(kShapePill),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    permissionGlyph(_currentValue),
-                    size: 14,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                  if (!compact) ...[
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        _label(l10n),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: scheme.onSurfaceVariant,
-                        ),
+        // A hand-built chip, so the wrapper owns the tap and its feedback:
+        // no ink sits under the scale to animate the press twice.
+        child: DshTappable(
+          enabled: enabled,
+          enableHaptic: true,
+          onTap: enabled ? () => _open(context) : null,
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(kShapePill),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  permissionGlyph(_currentValue),
+                  size: 14,
+                  color: scheme.onSurfaceVariant,
+                ),
+                if (!compact) ...[
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      _label(l10n),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                  ],
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.keyboard_arrow_down,
-                    size: 12,
-                    color: scheme.outline,
                   ),
                 ],
-              ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 12,
+                  color: scheme.outline,
+                ),
+              ],
             ),
           ),
         ),

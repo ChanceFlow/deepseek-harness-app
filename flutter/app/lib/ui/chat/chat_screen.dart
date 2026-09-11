@@ -1653,17 +1653,21 @@ class _ChatPanelState extends State<ChatPanel> {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: AppLocalizations.of(context)!.jumpToBottomTooltip,
-      child: DshTappable(
-        child: FloatingActionButton.small(
+      child: _tactileFab(
+        context,
+        enabled: true,
+        FloatingActionButton.small(
           heroTag: null,
           shape: const CircleBorder(),
           backgroundColor: scheme.surfaceContainerLow,
           foregroundColor: scheme.onSurfaceVariant,
           elevation: 2,
-          highlightElevation: 3,
+          highlightElevation: 2,
           hoverElevation: 3,
           focusElevation: 3,
           disabledElevation: 0,
+          splashColor: Colors.transparent,
+          enableFeedback: false,
           onPressed: _jumpToBottom,
           child: const Icon(Icons.arrow_downward, size: 22),
         ),
@@ -4943,7 +4947,9 @@ class _QuestionCardFooter extends StatelessWidget {
 }
 
 /// One 24×24 round icon button (web `.iconButton`): tertiary glyph on the
-/// interactive hover fill; 36px+ touch target through padding.
+/// interactive hover fill; 36px+ touch target through padding. `DshTappable`
+/// owns the tap and the press feedback — the hover fill is the whole visual
+/// state, so the seat carries no ink.
 class _RoundIconButton extends StatefulWidget {
   const _RoundIconButton({
     required this.tooltip,
@@ -4981,7 +4987,9 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
               : Colors.transparent,
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
-          child: InkWell(
+          child: DshTappable(
+            enabled: widget.enabled,
+            enableHaptic: true,
             onTap: widget.enabled ? widget.onPressed : null,
             child: SizedBox(
               width: 36,
@@ -6152,17 +6160,26 @@ class _PlusButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return IconButton(
-      tooltip: l10n.commandsTooltip,
-      onPressed: enabled ? () => _open(context) : null,
-      icon: const Icon(Icons.add, size: 22),
-      // Native tool control: a standard 40px M3 icon button drawn straight
-      // on the dock surface, with the interactive fill kept for hover.
-      style: IconButton.styleFrom(
-        foregroundColor: scheme.onSurfaceVariant,
-        disabledForegroundColor: scheme.outline,
-        hoverColor: scheme.surfaceContainerHigh,
-        shape: const CircleBorder(),
+    return DshTappable(
+      enabled: enabled,
+      enableHaptic: true,
+      child: IconButton(
+        tooltip: l10n.commandsTooltip,
+        onPressed: enabled ? () => _open(context) : null,
+        icon: const Icon(Icons.add, size: 22),
+        // Native tool control: a standard 40px M3 icon button drawn straight
+        // on the dock surface, with the interactive fill kept for hover and
+        // the splash suppressed — the seat's press feedback is DshTappable's
+        // scale and its one haptic, not a second ripple.
+        style: IconButton.styleFrom(
+          foregroundColor: scheme.onSurfaceVariant,
+          disabledForegroundColor: scheme.outline,
+          hoverColor: scheme.surfaceContainerHigh,
+          highlightColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          enableFeedback: false,
+          shape: const CircleBorder(),
+        ),
       ),
     );
   }
@@ -6377,6 +6394,23 @@ class _CommandSheet extends StatelessWidget {
   }
 }
 
+/// A tactile FAB: `DshTappable` supplies the seat's only press feedback, so
+/// the FAB's pressed overlay (the theme's `highlightColor`) is switched off
+/// around it. The FAB's own splash and pressed lift are off at the call site
+/// (`splashColor: Colors.transparent`, `highlightElevation == elevation`),
+/// and [enabled] mirrors the FAB's `onPressed`, so a disabled seat does not
+/// scale or click.
+Widget _tactileFab(BuildContext context, Widget fab, {required bool enabled}) {
+  return DshTappable(
+    enabled: enabled,
+    enableHaptic: true,
+    child: Theme(
+      data: Theme.of(context).copyWith(highlightColor: Colors.transparent),
+      child: fab,
+    ),
+  );
+}
+
 /// Primary control, commercial-app form: a 34px circle that stays NEUTRAL
 /// (selector fill, tertiary glyph) while the draft is empty — no idle
 /// blue — and takes the primaryContainer fill with its onPrimaryContainer
@@ -6420,29 +6454,37 @@ class _PrimarySendButton extends StatelessWidget {
       // "no idle blue" rule carried into the component. heroTag is
       // disabled so sibling send/stop FABs do not fight over the shared
       // hero.
-      child: FloatingActionButton.small(
-        heroTag: null,
-        shape: const CircleBorder(),
-        backgroundColor: fill,
-        foregroundColor: glyph,
-        elevation: 2,
-        highlightElevation: 3,
-        hoverElevation: 3,
-        focusElevation: 3,
-        disabledElevation: 0,
-        onPressed: active ? (running ? onStop : onSend) : null,
-        child: running
-            // Stop glyph: 10x10 rounded-3 square.
-            ? Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: glyph,
-                  borderRadius: BorderRadius.circular(kShapeChip),
-                ),
-              )
-            // Send glyph: the up arrow.
-            : const Icon(Icons.arrow_upward, size: 22),
+      child: _tactileFab(
+        context,
+        enabled: active,
+        FloatingActionButton.small(
+          heroTag: null,
+          shape: const CircleBorder(),
+          backgroundColor: fill,
+          foregroundColor: glyph,
+          elevation: 2,
+          // The press is the wrapper's scale; a lift on top of it would be
+          // a second animation on the same gesture.
+          highlightElevation: 2,
+          hoverElevation: 3,
+          focusElevation: 3,
+          disabledElevation: 0,
+          splashColor: Colors.transparent,
+          enableFeedback: false,
+          onPressed: active ? (running ? onStop : onSend) : null,
+          child: running
+              // Stop glyph: 10x10 rounded-3 square.
+              ? Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: glyph,
+                    borderRadius: BorderRadius.circular(kShapeChip),
+                  ),
+                )
+              // Send glyph: the up arrow.
+              : const Icon(Icons.arrow_upward, size: 22),
+        ),
       ),
     );
   }
