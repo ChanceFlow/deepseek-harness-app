@@ -2899,6 +2899,78 @@ abstract class AppLocalizations {
   /// **'Download models over mobile data (may incur carrier data fees)'**
   String get asrAllowCellularDesc;
 
+  /// No description provided for @asrRuntimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device engine'**
+  String get asrRuntimeTitle;
+
+  /// No description provided for @asrRuntimeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition runs locally with sherpa-onnx. The engine is downloaded during setup instead of shipping inside the APK, which keeps the download small.'**
+  String get asrRuntimeDesc;
+
+  /// No description provided for @asrRuntimeReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get asrRuntimeReady;
+
+  /// Runtime download progress: bytes and percent.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · {percent}%'**
+  String asrRuntimeProgress(String size, int percent);
+
+  /// No description provided for @asrRuntimeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Install failed'**
+  String get asrRuntimeFailed;
+
+  /// Runtime identity and one-time download size.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} · {size} to download'**
+  String asrRuntimeSize(String version, String size);
+
+  /// No description provided for @asrRuntimeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available for this device'**
+  String get asrRuntimeUnavailable;
+
+  /// No description provided for @asrRuntimeInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install engine'**
+  String get asrRuntimeInstall;
+
+  /// No description provided for @asrRuntimeDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete engine'**
+  String get asrRuntimeDelete;
+
+  /// No description provided for @voiceInputNoRuntimeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech Engine Required'**
+  String get voiceInputNoRuntimeTitle;
+
+  /// No description provided for @voiceInputNoRuntimeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Install the on-device speech engine in Settings → Voice input to use offline voice input.'**
+  String get voiceInputNoRuntimeBody;
+
+  /// No description provided for @voiceInputRuntimeNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'The on-device speech engine isn\'\'t installed. Install it in Settings → Voice input.'**
+  String get voiceInputRuntimeNotInstalled;
+
   /// No description provided for @asrModelStatusIdle.
   ///
   /// In en, this message translates to:

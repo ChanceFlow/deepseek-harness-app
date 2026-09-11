@@ -55,6 +55,52 @@ void main() {
     });
 
     test(
+      'a model with no installed runtime refuses before the mic opens',
+      () async {
+        // Mark the model downloaded, then hand the controller a runtime manager
+        // whose ABI has no published artifact: the engine is an install of its
+        // own, so offline capture reports it instead of starting and dying in
+        // initialize.
+        final Directory modelDir = Directory(
+          '${tempDir.path}/sensevoice-small',
+        );
+        await modelDir.create(recursive: true);
+        await registry.updateEntry(
+          ModelRegistryEntry(
+            modelId: 'sensevoice-small',
+            source: ModelSource.hfMirror,
+            localDir: modelDir.path,
+            status: AsrModelStatus.downloaded,
+          ),
+        );
+        final AsrRuntimeManager runtime = AsrRuntimeManager(
+          baseDir: tempDir,
+          baseUrl: 'https://example.test/releases/download',
+          tag: 'dev',
+          abi: 'mips',
+        );
+        addTearDown(runtime.dispose);
+
+        final controller = VoiceInputController(
+          manager: manager,
+          runtimeManager: runtime,
+          audioRecorder: MockAudioInputSource(),
+          engine: MockAsrEngine(),
+        );
+        await pumpEventQueue();
+
+        expect(controller.state.hasInstalledModels, isTrue);
+        expect(controller.state.runtimeInstalled, isFalse);
+
+        await controller.startRecording();
+        expect(controller.state.phase, equals(VoiceInputPhase.error));
+        expect(controller.state.errorMessage, equals('RUNTIME_NOT_INSTALLED'));
+
+        controller.dispose();
+      },
+    );
+
+    test(
       'drives recording session, streams audio to engine, and emits final text',
       () async {
         // Mark model as downloaded

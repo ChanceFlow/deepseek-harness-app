@@ -6,6 +6,8 @@ export 'src/manifest/model_manifest.dart';
 export 'src/registry/models_registry.dart';
 export 'src/source/model_source_client.dart';
 export 'src/downloader/asr_downloader.dart';
+export 'src/runtime/asr_runtime_manifest.dart';
+export 'src/runtime/asr_runtime_manager.dart';
 export 'src/manager/asr_model_manager.dart';
 export 'src/audio/audio_input_source.dart';
 export 'src/audio/mock_audio_input_source.dart';

@@ -45,7 +45,12 @@ whole download and a phone installs exactly one of them:
 | `-armeabi-v7a` | older 32-bit phones |
 | `-x86_64` | emulators and Chromebooks |
 
-Every APK carries its own `.sha256` sidecar.
+Every APK carries its own `.sha256` sidecar. Each release also publishes the
+downloadable ASR runtime per ABI
+(`asr-runtime-<sherpaVersion>-<abi>-libonnxruntime.so` and
+`…-libsherpa-onnx-c-api.so`): the app fetches the pair matching its own ABI
+when you install offline voice input, and verifies the pins in
+`packages/asr/lib/src/runtime/asr_runtime_manifest.dart`.
 
 ### 2. Run the host on your machine
 
@@ -138,7 +143,9 @@ box, a tunneled remote dsh.
   waveform dock, timer, and direct transcription stream into the
   composer; an opt-in online mode can stream the same mic audio to
   Volcengine Doubao or Tencent Hunyuan real-time ASR with the user's own
-  credentials.
+  credentials. Both the model and the sherpa-onnx engine are downloaded
+  when you set it up — neither ships in the APK (the engine alone was
+  26 MB per install), so the download stays small until you turn this on.
 - **Multiple hosts** — keep several dsh hosts configured on this
   device and switch which one drives the chat. A per-host switch also accepts
   that host's TLS certificate when it is self-signed or signed by an internal

@@ -16,7 +16,9 @@
 #                                            is the latest STABLE v* tag with
 #                                            its patch bumped (v0.0.2 -> 0.0.3)
 #   - artifacts:       dsh-android-<versionName>-<abi>.apk (+ .sha256 sidecar),
-#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64)
+#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64), plus the
+#                      downloadable ASR runtime per ABI
+#                      (asr-runtime-<sherpaVersion>-<abi>-<lib>.so)
 #   - release titles:  DSH Android <versionName>
 #   - dev channel:     rolling prerelease on the tag `dev` (no `v`
 #     prefix — deliberately outside the `v*` tag trigger, so the
@@ -274,6 +276,30 @@ jobs:
           APK="dsh-android-$VERSION-arm64-v8a.apk"
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "$STAGE/$APK.sha256")" >> "$GITHUB_OUTPUT"
+
+          # The on-device ASR runtime is downloaded, not bundled: the APK
+          # excludes these libraries and the app fetches the pair matching its
+          # own ABI from this release (`packages/asr` AsrRuntimeManager, whose
+          # manifest pins the sizes and hashes regenerated from the same
+          # packages this step copies). Served raw, so the bytes the app
+          # verifies are the bytes it maps.
+          PUB="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          SHERPA="$(basename "$(ls -d "$PUB"/sherpa_onnx-* | head -1)")"
+          SHERPA="${SHERPA#sherpa_onnx-}"
+          for pair in \
+            "arm64-v8a:sherpa_onnx_android_arm64" \
+            "armeabi-v7a:sherpa_onnx_android_armeabi" \
+            "x86_64:sherpa_onnx_android_x86_64"; do
+            abi="${pair%%:*}"
+            pkg="${pair##*:}"
+            jni="$(ls -d "$PUB/$pkg"-*/android/src/main/jniLibs/"$abi" | head -1)"
+            for lib in libonnxruntime.so libsherpa-onnx-c-api.so; do
+              NAME="asr-runtime-$SHERPA-$abi-$lib"
+              cp "$jni/$lib" "$STAGE/$NAME"
+              printf -- '- `%s` sha256: `%s`\n' "$NAME" \
+                "$(sha256sum "$STAGE/$NAME" | cut -d' ' -f1)" >> "$STAGE/hashes.md"
+            done
+          done
           ls -1 "$STAGE"
 
       - name: Publish Gitea Release
@@ -353,7 +379,7 @@ jobs:
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
           # The staging directory also holds hashes.md (the body's artifact
           # list); the glob names the upload set explicitly.
-          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.sha256; do
+          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.so /tmp/dsh-apks/*.sha256; do
             name=$(basename "$f")
             curl -sf -X POST "$API/releases/$REL_ID/assets?name=$name" -H "$AUTH" \
               -F "attachment=@$f" >/dev/null
@@ -440,7 +466,7 @@ jobs:
               echo "::warning::GitHub shadow release creation failed - Gitea release is already published"
               exit 0
             }
-          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.sha256; do
+          for f in /tmp/dsh-apks/*.apk /tmp/dsh-apks/*.so /tmp/dsh-apks/*.sha256; do
             NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$(basename "$f")")
             # Hard fail on an upload miss: the whole point of the shadow
             # release is the artifact, and a soft warning is exactly how the

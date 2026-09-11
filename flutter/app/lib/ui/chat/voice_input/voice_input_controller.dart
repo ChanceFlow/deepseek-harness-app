@@ -29,6 +29,7 @@ typedef OnlineAsrEngineFactory = AsrEngine Function(OnlineAsrSettings settings);
 class VoiceInputController {
   VoiceInputController({
     required this.manager,
+    AsrRuntimeManager? runtimeManager,
     AudioInputSource? audioRecorder,
     this.engine,
     this.onTranscriptionUpdate,
@@ -36,12 +37,20 @@ class VoiceInputController {
     this._cloudSettings,
     OnlineAsrEngineFactory? cloudEngineFactory,
   }) : _recorder = audioRecorder ?? PlatformAudioRecorder(),
-       _engineFactory = engineFactory ?? _defaultEngineFactory,
+       _runtimeManager = runtimeManager,
+       _engineFactory =
+           engineFactory ??
+           ((AsrModelInfo? model) =>
+               _defaultEngineFactory(model, runtimeManager)),
        _cloudEngineFactory = cloudEngineFactory ?? _defaultCloudEngineFactory {
     _init();
   }
 
   final AsrModelManager manager;
+
+  /// Owns the downloadable on-device runtime; null on a surface that maps the
+  /// sherpa libraries itself, in which case the runtime gate stays open.
+  final AsrRuntimeManager? _runtimeManager;
   final AudioInputSource _recorder;
   final AsrEngine? engine;
   final AsrEngineFactory _engineFactory;
@@ -62,6 +71,7 @@ class VoiceInputController {
   StreamSubscription<Float32List>? _audioSub;
   StreamSubscription<double>? _amplitudeSub;
   StreamSubscription<Object>? _errorSub;
+  StreamSubscription<AsrRuntimeState>? _runtimeSub;
   StreamSubscription<AsrTranscriptionChunk>? _transcriptionSub;
   StreamSubscription<Map<String, ModelRegistryEntry>>? _registrySub;
   StreamSubscription<OnlineAsrSettings>? _cloudSettingsSub;
@@ -89,6 +99,10 @@ class VoiceInputController {
     _cloudSettingsSub = _cloudSettings?.updates.listen((_) {
       _refreshModelStatus();
     });
+    if (_runtimeManager case final AsrRuntimeManager runtime) {
+      _runtimeSub = runtime.states.listen((_) => _refreshModelStatus());
+      unawaited(runtime.refresh());
+    }
   }
 
   void _refreshModelStatus() {
@@ -99,6 +113,8 @@ class VoiceInputController {
       _state.copyWith(
         activeModel: active,
         hasInstalledModels: hasInstalled,
+        runtimeInstalled:
+            _runtimeManager?.state.isReady ?? _state.runtimeInstalled,
         inputMode: cloud?.mode ?? VoiceInputMode.offline,
         onlineReady: cloud?.isOnlineReady ?? false,
       ),
@@ -127,6 +143,18 @@ class VoiceInputController {
         _state.copyWith(
           phase: VoiceInputPhase.error,
           errorMessage: 'NO_MODEL_INSTALLED',
+        ),
+      );
+      return;
+    }
+    if (mode == VoiceInputMode.offline && !_state.runtimeInstalled) {
+      // The engine itself is an install (`AsrRuntimeManager`): refuse before
+      // opening the microphone so the reader gets the setup dialog instead of
+      // a capture that dies at initialize.
+      _emit(
+        _state.copyWith(
+          phase: VoiceInputPhase.error,
+          errorMessage: 'RUNTIME_NOT_INSTALLED',
         ),
       );
       return;
@@ -282,6 +310,7 @@ class VoiceInputController {
       // sessions loudly; map each to a stable, localizable code instead of
       // leaking the raw exception message.
       final String message = switch (e) {
+        AsrRuntimeMissingException() => 'RUNTIME_NOT_INSTALLED',
         UnsupportedError() => 'MODEL_UNSUPPORTED',
         OnlineAsrException() => 'ONLINE_ASR_FAILED',
         _ when mode == VoiceInputMode.online => 'ONLINE_CONNECT_FAILED',
@@ -427,13 +456,16 @@ class VoiceInputController {
   static List<double> _scaleToLevel(Float32List shape, double level) =>
       <double>[for (final ratio in shape) ratio * level];
 
-  static AsrEngine _defaultEngineFactory(AsrModelInfo? model) {
+  static AsrEngine _defaultEngineFactory(
+    AsrModelInfo? model,
+    AsrRuntimeManager? runtimeManager,
+  ) {
     if (model == null) return MockAsrEngine();
     // SherpaOfflineAsrEngine supports streaming Paraformer and transducer
     // Zipformer models as well as offline SenseVoice, Fun-ASR-Nano CTC, and
     // (discontinued, installed-only) Whisper models, and throws
     // UnsupportedError for unknown models.
-    return SherpaOfflineAsrEngine();
+    return SherpaOfflineAsrEngine(runtimeManager: runtimeManager);
   }
 
   /// Builds the online-session engine for the selected provider. Both
@@ -455,6 +487,7 @@ class VoiceInputController {
     unawaited(_audioSub?.cancel());
     unawaited(_amplitudeSub?.cancel());
     unawaited(_errorSub?.cancel());
+    unawaited(_runtimeSub?.cancel());
     unawaited(_transcriptionSub?.cancel());
     unawaited(_registrySub?.cancel());
     unawaited(_cloudSettingsSub?.cancel());

@@ -34,6 +34,7 @@ class VoiceInputUiState {
     this.errorMessage,
     this.activeModel,
     this.hasInstalledModels = false,
+    this.runtimeInstalled = true,
     this.inputMode = VoiceInputMode.offline,
     this.onlineReady = false,
     this.debugStats,
@@ -53,6 +54,12 @@ class VoiceInputUiState {
   final String? errorMessage;
   final AsrModelInfo? activeModel;
   final bool hasInstalledModels;
+
+  /// Whether the downloadable on-device runtime is installed. Defaults to
+  /// true for surfaces that own no runtime manager (tests, desktop); a
+  /// surface that does own one reports the real answer, and offline capture
+  /// waits for it the same way it waits for a model.
+  final bool runtimeInstalled;
 
   /// Where voice input sends audio: on-device or an online service.
   final VoiceInputMode inputMode;
@@ -89,6 +96,7 @@ class VoiceInputUiState {
     bool clearError = false,
     AsrModelInfo? activeModel,
     bool? hasInstalledModels,
+    bool? runtimeInstalled,
     VoiceInputMode? inputMode,
     bool? onlineReady,
     AudioDebugStats? debugStats,
@@ -102,6 +110,7 @@ class VoiceInputUiState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       activeModel: activeModel ?? this.activeModel,
       hasInstalledModels: hasInstalledModels ?? this.hasInstalledModels,
+      runtimeInstalled: runtimeInstalled ?? this.runtimeInstalled,
       inputMode: inputMode ?? this.inputMode,
       onlineReady: onlineReady ?? this.onlineReady,
       debugStats: debugStats ?? this.debugStats,

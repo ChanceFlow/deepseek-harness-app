@@ -456,6 +456,31 @@ void main() {
       expect(sounds, isEmpty, reason: 'a blocked press is not a boundary');
     });
 
+    testWidgets('a model without the downloaded engine asks for the engine', (
+      WidgetTester tester,
+    ) async {
+      var started = 0;
+      await tester.pumpWidget(
+        _seat(
+          const VoiceInputUiState(
+            hasInstalledModels: true,
+            runtimeInstalled: false,
+          ),
+          onStart: () => started++,
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byType(IconButton));
+      await tester.pumpAndSettle();
+
+      // The engine is a separate install from the model, so the gate names
+      // it rather than the model the reader already has.
+      expect(started, 0);
+      expect(find.text('Speech Engine Required'), findsOneWidget);
+      expect(find.text('Speech Model Required'), findsNothing);
+    });
+
     testWidgets('reduce-motion still shows the bubble and settles', (
       WidgetTester tester,
     ) async {

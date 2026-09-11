@@ -1745,6 +1745,49 @@ class AppLocalizationsEn extends AppLocalizations {
       'Download models over mobile data (may incur carrier data fees)';
 
   @override
+  String get asrRuntimeTitle => 'On-device engine';
+
+  @override
+  String get asrRuntimeDesc =>
+      'Speech recognition runs locally with sherpa-onnx. The engine is downloaded during setup instead of shipping inside the APK, which keeps the download small.';
+
+  @override
+  String get asrRuntimeReady => 'Installed';
+
+  @override
+  String asrRuntimeProgress(String size, int percent) {
+    return '$size · $percent%';
+  }
+
+  @override
+  String get asrRuntimeFailed => 'Install failed';
+
+  @override
+  String asrRuntimeSize(String version, String size) {
+    return '$version · $size to download';
+  }
+
+  @override
+  String get asrRuntimeUnavailable => 'Not available for this device';
+
+  @override
+  String get asrRuntimeInstall => 'Install engine';
+
+  @override
+  String get asrRuntimeDelete => 'Delete engine';
+
+  @override
+  String get voiceInputNoRuntimeTitle => 'Speech Engine Required';
+
+  @override
+  String get voiceInputNoRuntimeBody =>
+      'Install the on-device speech engine in Settings → Voice input to use offline voice input.';
+
+  @override
+  String get voiceInputRuntimeNotInstalled =>
+      'The on-device speech engine isn\'t installed. Install it in Settings → Voice input.';
+
+  @override
   String get asrModelStatusIdle => 'Not downloaded';
 
   @override

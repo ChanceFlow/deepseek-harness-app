@@ -60,6 +60,25 @@ android {
             }
         }
     }
+
+    packaging {
+        jniLibs {
+            // The sherpa-onnx runtime is downloaded, not bundled
+            // (`packages/asr` AsrRuntimeManager installs it and the engine
+            // points initBindings at the installed directory): onnxruntime is
+            // 21.7 MB on arm64 and the c-api library 4.5 MB, carried by every
+            // install whether or not offline voice input is ever used.
+            // `libsherpa-onnx-cxx-api.so` is a dependency of neither the
+            // c-api library nor the Dart bindings, so it is dropped outright.
+            // Keep the ABI enumeration in `kAsrRuntimeArtifacts` in step with
+            // the release assets that serve these files.
+            excludes += setOf(
+                "**/libonnxruntime.so",
+                "**/libsherpa-onnx-c-api.so",
+                "**/libsherpa-onnx-cxx-api.so",
+            )
+        }
+    }
 }
 
 kotlin {

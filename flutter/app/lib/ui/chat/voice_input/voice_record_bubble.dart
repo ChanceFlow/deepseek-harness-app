@@ -133,9 +133,11 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
   bool get _live => _uiState.isRecording;
 
   /// Which readiness gate a press crosses: on-device capture needs an installed
-  /// model, online capture needs configured credentials.
+  /// model and the downloaded runtime, online capture needs configured
+  /// credentials.
   bool get _ready => switch (_uiState.inputMode) {
-    VoiceInputMode.offline => _uiState.hasInstalledModels,
+    VoiceInputMode.offline =>
+      _uiState.hasInstalledModels && _uiState.runtimeInstalled,
     VoiceInputMode.online => _uiState.onlineReady,
   };
 
@@ -190,13 +192,20 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     if (_ready) return true;
     final l10n = AppLocalizations.of(context)!;
     final online = _uiState.inputMode == VoiceInputMode.online;
-    _showSetupDialog(
-      context,
-      title: online
-          ? l10n.voiceInputCloudSetupTitle
-          : l10n.voiceInputNoModelTitle,
-      body: online ? l10n.voiceInputCloudSetupBody : l10n.voiceInputNoModelBody,
-    );
+    // Three gates, three dialogs: online credentials, a missing model, or the
+    // runtime the engine maps (which is downloaded separately from the model).
+    final (String title, String body) = switch (_uiState) {
+      _ when online => (
+        l10n.voiceInputCloudSetupTitle,
+        l10n.voiceInputCloudSetupBody,
+      ),
+      VoiceInputUiState(hasInstalledModels: false) => (
+        l10n.voiceInputNoModelTitle,
+        l10n.voiceInputNoModelBody,
+      ),
+      _ => (l10n.voiceInputNoRuntimeTitle, l10n.voiceInputNoRuntimeBody),
+    };
+    _showSetupDialog(context, title: title, body: body);
     return false;
   }
 

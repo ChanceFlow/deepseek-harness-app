@@ -1634,6 +1634,47 @@ class AppLocalizationsZh extends AppLocalizations {
   String get asrAllowCellularDesc => '允许使用移动流量下载模型（大文件可能消耗较多流量）';
 
   @override
+  String get asrRuntimeTitle => '离线识别引擎';
+
+  @override
+  String get asrRuntimeDesc =>
+      '语音识别在本地通过 sherpa-onnx 运行。引擎改为安装时下载，不再打进 APK，因此下载体积更小。';
+
+  @override
+  String get asrRuntimeReady => '已安装';
+
+  @override
+  String asrRuntimeProgress(String size, int percent) {
+    return '$size · $percent%';
+  }
+
+  @override
+  String get asrRuntimeFailed => '安装失败';
+
+  @override
+  String asrRuntimeSize(String version, String size) {
+    return '$version · 需下载 $size';
+  }
+
+  @override
+  String get asrRuntimeUnavailable => '此设备不可用';
+
+  @override
+  String get asrRuntimeInstall => '安装引擎';
+
+  @override
+  String get asrRuntimeDelete => '删除引擎';
+
+  @override
+  String get voiceInputNoRuntimeTitle => '需要语音引擎';
+
+  @override
+  String get voiceInputNoRuntimeBody => '请先在「设置 → 语音输入」中安装离线识别引擎，才能使用离线语音输入。';
+
+  @override
+  String get voiceInputRuntimeNotInstalled => '离线识别引擎尚未安装，请在「设置 → 语音输入」中安装。';
+
+  @override
   String get asrModelStatusIdle => '未下载';
 
   @override

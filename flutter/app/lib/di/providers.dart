@@ -19,6 +19,8 @@ import 'package:flutter/widgets.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:app/config.dart';
+import 'package:app/platform/device_abi.dart';
 import 'package:app/platform/disk_space.dart';
 
 import 'dsh_reachability.dart';
@@ -49,7 +51,6 @@ export 'package:network/rpc_envelope.dart';
 export '../backends/backend_registry_controller.dart';
 import '../backends/backend_registry_controller.dart';
 import '../backends/backend_store.dart';
-import '../config.dart';
 import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
@@ -979,6 +980,35 @@ final asrModelsRegistryProvider = FutureProvider<ModelsRegistry>((ref) async {
   return registry;
 });
 
+/// The downloaded on-device ASR runtime (sherpa-onnx + onnxruntime).
+///
+/// The libraries are not in the APK (the release build excludes them; see
+/// `android/app/build.gradle.kts`), so this manager owns the install the
+/// offline engine needs: it picks the ABI this build was installed for and
+/// fetches the matching release assets.
+final asrRuntimeManagerProvider = FutureProvider<AsrRuntimeManager>((
+  ref,
+) async {
+  final Directory modelsDir = await ref.watch(
+    asrModelsDirectoryProvider.future,
+  );
+  final List<String> abis = await deviceAbis();
+  // The first ABI this build publishes a runtime for; empty when the platform
+  // side is absent, which leaves the runtime unavailable rather than fetching
+  // libraries the device cannot map.
+  final String abi =
+      abis
+          .where((candidate) => asrRuntimeArtifactFor(candidate) != null)
+          .firstOrNull ??
+      '';
+  return AsrRuntimeManager(
+    baseDir: modelsDir,
+    baseUrl: kDshAsrRuntimeBaseUrl,
+    tag: dshReleaseTag,
+    abi: abi,
+  );
+});
+
 /// ASR model manager provider.
 final asrModelManagerProvider = FutureProvider<AsrModelManager>((ref) async {
   final modelsDir = await ref.watch(asrModelsDirectoryProvider.future);
@@ -996,8 +1026,10 @@ final asrModelsControllerProvider = Provider.autoDispose<AsrModelsController>((
 ) {
   final managerAsync = ref.watch(asrModelManagerProvider);
   final settingsAsync = ref.watch(onlineAsrSettingsStoreProvider);
+  final runtimeAsync = ref.watch(asrRuntimeManagerProvider);
   final controller = AsrModelsController(
     manager: managerAsync.value,
+    runtimeManager: runtimeAsync.value,
     cloudSettings: settingsAsync.value,
   );
   ref.onDispose(controller.dispose);
@@ -1028,6 +1060,7 @@ final voiceInputControllerProvider = Provider.autoDispose<VoiceInputController>(
         );
     final controller = VoiceInputController(
       manager: manager,
+      runtimeManager: ref.watch(asrRuntimeManagerProvider).value,
       cloudSettings: ref.watch(onlineAsrSettingsStoreProvider).value,
     );
     ref.onDispose(controller.dispose);
