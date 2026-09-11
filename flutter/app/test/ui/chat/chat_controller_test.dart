@@ -37,7 +37,7 @@ import 'package:app/ui/state_stream.dart';
 import '../../l10n_app.dart';
 import 'chat_local_state_fake.dart';
 
-class FakeChatRepository implements ChatRepository {
+class FakeChatRepository extends ChatRepository {
   FakeChatRepository({
     List<TimelineItem> initialTimeline = const <TimelineItem>[],
     List<SessionSummary> initialSessions = const <SessionSummary>[

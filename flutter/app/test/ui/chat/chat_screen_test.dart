@@ -3895,5 +3895,102 @@ void main() {
       );
       expect(find.text('Workspace write'), findsOneWidget);
     });
+
+    testWidgets(
+      'older history row renders at head and dispatches LoadOlderHistoryAction',
+      (tester) async {
+        final actions = <ChatAction>[];
+        await _pump(
+          tester,
+          const ChatUiState(
+            sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+            selectedSessionId: 's1',
+            hasMoreOlder: true,
+            timeline: [
+              TimelineMessage(
+                ChatMessage(
+                  id: 'm1',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'Hello world',
+                ),
+              ),
+            ],
+          ),
+          actions,
+        );
+        await tester.pump();
+
+        // OlderHistoryRow renders button with "Load earlier"
+        expect(find.byType(OlderHistoryRow), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('chat-load-older-button')),
+          findsOneWidget,
+        );
+        expect(find.text('Load earlier'), findsOneWidget);
+
+        // Tap button dispatches LoadOlderHistoryAction
+        await tester.tap(find.byKey(const ValueKey('chat-load-older-button')));
+        expect(actions, contains(const LoadOlderHistoryAction()));
+
+        // While loading, shows loading indicator and disabled state
+        await _pump(
+          tester,
+          const ChatUiState(
+            sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+            selectedSessionId: 's1',
+            hasMoreOlder: true,
+            isLoadingOlder: true,
+            timeline: [
+              TimelineMessage(
+                ChatMessage(
+                  id: 'm1',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'Hello world',
+                ),
+              ),
+            ],
+          ),
+          actions,
+        );
+        await tester.pump();
+
+        expect(find.byType(OlderHistoryRow), findsOneWidget);
+        expect(find.text('Loading earlier…'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(OlderHistoryRow),
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsOneWidget,
+        );
+
+        // Once hasMoreOlder is false and isLoadingOlder is false, row disappears
+        await _pump(
+          tester,
+          const ChatUiState(
+            sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
+            selectedSessionId: 's1',
+            hasMoreOlder: false,
+            isLoadingOlder: false,
+            timeline: [
+              TimelineMessage(
+                ChatMessage(
+                  id: 'm1',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'Hello world',
+                ),
+              ),
+            ],
+          ),
+          actions,
+        );
+        await tester.pump();
+
+        expect(find.byType(OlderHistoryRow), findsNothing);
+      },
+    );
   });
 }

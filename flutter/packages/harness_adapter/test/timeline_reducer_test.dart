@@ -1176,4 +1176,121 @@ void main() {
       );
     }
   });
+
+  test('Session V3 Node 0 system/message is suppressed from conversation transcript', () {
+    final history = <JsonMap>[
+      <String, Object?>{
+        'type': 'system/message',
+        'seq': 0,
+        'time': 1,
+        'surfaceOp': 'append',
+        'data': <String, Object?>{
+          'turn': 0,
+          'step': 0,
+          'message': <String, Object?>{
+            'role': 'system',
+            'content': <Object?>[textBlock('You are an AI assistant.')],
+            'source': <String, Object?>{
+              'kind': 'plugin',
+              'plugin': '@deepseek-ai/dsh-system-prompt',
+            },
+          },
+        },
+      },
+      event(1, 'user/message', <String, Object?>{
+        'id': 'u1',
+        'content': <Object?>[textBlock('Hello')],
+        'source': <String, Object?>{'kind': 'user'},
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final snapshot = reducer.snapshot();
+    expect(snapshot.length, 1);
+    final msg = snapshot.single as TimelineMessage;
+    expect(msg.value.text, 'Hello');
+  });
+
+  test(
+    'Session V3 in-history system/message update renders as context injection',
+    () {
+      final history = <JsonMap>[
+        <String, Object?>{
+          'type': 'system/message',
+          'seq': 0,
+          'time': 1,
+          'surfaceOp': 'append',
+          'data': <String, Object?>{
+            'turn': 0,
+            'step': 0,
+            'message': <String, Object?>{
+              'role': 'system',
+              'content': <Object?>[textBlock('Base system prompt')],
+            },
+          },
+        },
+        event(1, 'user/message', <String, Object?>{
+          'id': 'u1',
+          'content': <Object?>[textBlock('Enable plan mode')],
+          'source': <String, Object?>{'kind': 'user'},
+        }),
+        <String, Object?>{
+          'type': 'system/message',
+          'seq': 2,
+          'time': 3,
+          'surfaceOp': 'append',
+          'data': <String, Object?>{
+            'turn': 1,
+            'step': 1,
+            'message': <String, Object?>{
+              'role': 'system',
+              'content': <Object?>[textBlock('Updated plan mode guidance')],
+              'source': <String, Object?>{
+                'kind': 'plugin',
+                'plugin': '@deepseek-ai/dsh-system-prompt',
+              },
+            },
+          },
+        },
+      ];
+
+      final reducer = TimelineReducer('s1');
+      reducer.reset(history);
+
+      final snapshot = reducer.snapshot();
+      expect(snapshot.length, 2);
+      expect(snapshot[0], isA<TimelineMessage>());
+      final injection = snapshot[1] as TimelineContextInjection;
+      expect(injection.id, 'system-prompt:2');
+      expect(injection.producerLabel, 'system-prompt');
+      expect(injection.text, 'Updated plan mode guidance');
+      expect(injection.summary, 'System prompt updated');
+    },
+  );
+
+  test('unknown experimental team events pass safely through reducer', () {
+    final history = <JsonMap>[
+      event(1, 'team/member', <String, Object?>{
+        'name': 'worker-1',
+        'status': 'active',
+      }),
+      event(2, 'team/task', <String, Object?>{
+        'taskId': 1,
+        'status': 'in_progress',
+      }),
+      event(3, 'user/message', <String, Object?>{
+        'id': 'u1',
+        'content': <Object?>[textBlock('Hi team')],
+        'source': <String, Object?>{'kind': 'user'},
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    expect(() => reducer.reset(history), returnsNormally);
+    final snapshot = reducer.snapshot();
+    expect(snapshot.length, 1);
+    expect(snapshot.single, isA<TimelineMessage>());
+  });
 }

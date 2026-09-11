@@ -733,7 +733,7 @@ class ChatController {
           retryOnTransportAbort: detached,
         );
       } catch (error, stackTrace) {
-        _errorMessage = error.toString();
+        _errorMessage = _formatUiError(error);
         ErrorLogCollector.instance.captureError(
           error,
           stackTrace: stackTrace,
@@ -1439,7 +1439,7 @@ class ChatController {
       _publish();
       return await block();
     } catch (error, stackTrace) {
-      _errorMessage = error.toString();
+      _errorMessage = _formatUiError(error);
       _publish();
       ErrorLogCollector.instance.captureError(
         error,
@@ -1456,6 +1456,15 @@ class ChatController {
       );
       return null;
     }
+  }
+
+  static String _formatUiError(Object error) {
+    final str = error.toString();
+    if (str.contains('session-persistence/already-owned') ||
+        str.contains('SessionAlreadyOwned')) {
+      return 'SESSION_ALREADY_OWNED';
+    }
+    return str;
   }
 }
 

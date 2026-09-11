@@ -25,6 +25,7 @@ import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
+import 'package:domain/model/workspace_file.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/repository/chat_repository.dart'
     show ChatRepository, QuestionEvidence;
@@ -320,6 +321,84 @@ class HarnessRepositoryImpl implements ChatRepository {
       );
     }
     return path;
+  }
+
+  @override
+  Future<WorkspaceFileContent> readWorkspaceFile(
+    String sessionId,
+    String path, {
+    int offset = 1,
+    int? limit,
+  }) async {
+    final payload = <String, Object?>{
+      'sessionId': sessionId,
+      'path': path,
+      'range': <String, Object?>{
+        'offset': offset,
+        if (limit != null) 'limit': limit,
+      },
+    };
+    final value = await _call(
+      DshRpcEndpoints.workspaceFilesRead,
+      DshRpcEndpoints.workspaceFilesRead,
+      payload,
+    ).valueOrThrow();
+    final wire = WorkspaceFileTextWire.fromJson(value);
+    return WorkspaceFileContent(
+      absolutePath: wire.absolutePath,
+      version: wire.version,
+      bytes: wire.bytes,
+      offset: wire.offset,
+      text: wire.text,
+      lines: wire.lines,
+      eof: wire.eof,
+    );
+  }
+
+  @override
+  Future<WorkspaceFileStat> statWorkspaceFile(
+    String sessionId,
+    String path,
+  ) async {
+    final payload = <String, Object?>{'sessionId': sessionId, 'path': path};
+    final value = await _call(
+      DshRpcEndpoints.workspaceFilesStat,
+      DshRpcEndpoints.workspaceFilesStat,
+      payload,
+    ).valueOrThrow();
+    final wire = WorkspaceFileStatWire.fromJson(value);
+    return WorkspaceFileStat(
+      absolutePath: wire.absolutePath,
+      version: wire.version,
+      bytes: wire.bytes,
+    );
+  }
+
+  @override
+  Future<WorkspaceDirectoryListing> listWorkspaceDirectory(
+    String sessionId,
+    String path,
+  ) async {
+    final payload = <String, Object?>{'sessionId': sessionId, 'path': path};
+    final value = await _call(
+      DshRpcEndpoints.workspaceFilesList,
+      DshRpcEndpoints.workspaceFilesList,
+      payload,
+    ).valueOrThrow();
+    final wire = WorkspaceDirectoryListingWire.fromJson(value);
+    return WorkspaceDirectoryListing(
+      path: wire.path,
+      truncated: wire.truncated,
+      entries: wire.entries
+          .map(
+            (e) => WorkspaceDirectoryEntry(
+              name: e.name,
+              type: e.type,
+              size: e.size,
+            ),
+          )
+          .toList(),
+    );
   }
 
   @override

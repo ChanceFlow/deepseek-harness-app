@@ -1329,6 +1329,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatGoalPhaseBlocked => '受阻';
 
   @override
+  String get chatLoadOlder => '加载更早';
+
+  @override
+  String get chatLoadingOlder => '正在加载更早记录…';
+
+  @override
   String get queue => '排队发送';
 
   @override
@@ -1756,4 +1762,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorLogsNoSearchResults => '未找到匹配的错误日志。';
+
+  @override
+  String get previewFile => '预览';
+
+  @override
+  String get copyPath => '复制路径';
+
+  @override
+  String get copyContent => '复制内容';
+
+  @override
+  String get copiedFeedback => '已复制到剪贴板';
+
+  @override
+  String get filePreviewFailed => '加载文件预览失败';
+
+  @override
+  String filePreviewTruncated(int count) {
+    return '仅预览前 $count 行';
+  }
+
+  @override
+  String get sessionAlreadyOwnedError => '当前会话正被宿主其他进程或命令行独占写入。';
+
+  @override
+  String get systemPromptUpdated => '系统提示词已更新';
 }

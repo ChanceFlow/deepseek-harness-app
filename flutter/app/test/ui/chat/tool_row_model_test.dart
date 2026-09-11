@@ -145,4 +145,45 @@ void main() {
     expect(find.textContaining('keep going'), findsOneWidget);
     expect(find.textContaining('queued as the next turn'), findsOneWidget);
   });
+
+  testWidgets(
+    'file tool row renders preview button and triggers onPreviewFile',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1280);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      String? previewedPath;
+
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: ToolCallRow(
+              call: const TimelineToolCall(
+                id: 'c7',
+                name: 'write',
+                arguments: '{"path":"lib/main.dart","content":"print(1);"}',
+                result: 'Wrote 10 bytes',
+                status: ToolRunStatus.completed,
+              ),
+              onPreviewFile: (String path) => previewedPath = path,
+            ),
+          ),
+        ),
+      );
+
+      // Expand the tile
+      await tester.tap(find.text('Write'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Preview'), findsOneWidget);
+      expect(find.text('Copy path'), findsOneWidget);
+
+      await tester.tap(find.text('Preview'));
+      await tester.pumpAndSettle();
+
+      expect(previewedPath, 'lib/main.dart');
+    },
+  );
 }

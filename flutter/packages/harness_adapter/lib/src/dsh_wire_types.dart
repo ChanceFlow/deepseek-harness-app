@@ -784,6 +784,66 @@ final class CommandResultWire {
 }
 
 // ---------------------------------------------------------------------------
+// Workspace Files (DSH 0.1.5 workspaceFiles service)
+// ---------------------------------------------------------------------------
+
+final class WorkspaceFileStatWire {
+  WorkspaceFileStatWire.fromJson(JsonMap json)
+    : absolutePath = _reqString(json, 'absolutePath'),
+      version = _reqString(json, 'version'),
+      bytes = wireLongOrNull(json, 'bytes');
+
+  final String absolutePath;
+  final String version;
+  final int? bytes;
+}
+
+final class WorkspaceFileTextWire {
+  WorkspaceFileTextWire.fromJson(JsonMap json)
+    : absolutePath = _reqString(json, 'absolutePath'),
+      version = _reqString(json, 'version'),
+      bytes = wireLongOrNull(json, 'bytes'),
+      offset = _reqLong(json, 'offset'),
+      text = _reqString(json, 'text'),
+      lines = _reqLong(json, 'lines'),
+      eof = _reqBool(json, 'eof');
+
+  final String absolutePath;
+  final String version;
+  final int? bytes;
+  final int offset;
+  final String text;
+  final int lines;
+  final bool eof;
+}
+
+final class WorkspaceDirectoryEntryWire {
+  WorkspaceDirectoryEntryWire.fromJson(JsonMap json)
+    : name = _reqString(json, 'name'),
+      type = _reqString(json, 'type'),
+      size = wireLongOrNull(json, 'size');
+
+  final String name;
+  final String type;
+  final int? size;
+}
+
+final class WorkspaceDirectoryListingWire {
+  WorkspaceDirectoryListingWire.fromJson(JsonMap json)
+    : path = _reqString(json, 'path'),
+      entries = (asJsonArray(json['entries']) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(WorkspaceDirectoryEntryWire.fromJson)
+          .toList(),
+      truncated = _reqBool(json, 'truncated');
+
+  final String path;
+  final List<WorkspaceDirectoryEntryWire> entries;
+  final bool truncated;
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 

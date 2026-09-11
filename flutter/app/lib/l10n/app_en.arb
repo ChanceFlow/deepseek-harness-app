@@ -680,6 +680,14 @@
   "chatGoalPhaseActive": "Active",
   "chatGoalPhasePaused": "Paused",
   "chatGoalPhaseBlocked": "Blocked",
+  "chatLoadOlder": "Load earlier",
+  "@chatLoadOlder": {
+    "description": "Button to load earlier conversation history at the top of the transcript."
+  },
+  "chatLoadingOlder": "Loading earlier…",
+  "@chatLoadingOlder": {
+    "description": "Progress state while earlier conversation history is being loaded."
+  },
   "queue": "Queue",
   "thinkLabel": "Think",
   "commandPlanDescription": "Enter or leave plan mode",
@@ -1525,5 +1533,42 @@
       }
     }
   },
-  "errorLogsNoSearchResults": "No errors match your filter."
+  "errorLogsNoSearchResults": "No errors match your filter.",
+  "previewFile": "Preview",
+  "@previewFile": {
+    "description": "Button label to preview a generated or edited file."
+  },
+  "copyPath": "Copy path",
+  "@copyPath": {
+    "description": "Button label to copy file path."
+  },
+  "copyContent": "Copy content",
+  "@copyContent": {
+    "description": "Button label to copy file content in preview."
+  },
+  "copiedFeedback": "Copied to clipboard",
+  "@copiedFeedback": {
+    "description": "Feedback message when content is copied."
+  },
+  "filePreviewFailed": "Failed to load file preview",
+  "@filePreviewFailed": {
+    "description": "Error message when file preview cannot be loaded."
+  },
+  "filePreviewTruncated": "Previewing first {count} lines",
+  "@filePreviewTruncated": {
+    "description": "Notice banner when file preview is truncated.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sessionAlreadyOwnedError": "This session is currently locked by another process or CLI.",
+  "@sessionAlreadyOwnedError": {
+    "description": "Error message when a session write lease is held by another process."
+  },
+  "systemPromptUpdated": "System prompt updated",
+  "@systemPromptUpdated": {
+    "description": "Notice when system prompt is replaced or appended mid-conversation."
+  }
 }

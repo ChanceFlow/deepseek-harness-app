@@ -26,6 +26,7 @@ import '../model/timeline_item.dart';
 import '../model/timeline_window.dart';
 import '../model/todo.dart';
 import '../model/workspace.dart';
+import '../model/workspace_file.dart';
 
 Never _unsupported(String operation) => throw UnsupportedError(
   '$operation is not supported by this repository double',
@@ -303,6 +304,26 @@ abstract class ChatRepository {
   Future<GoalRef> completeGoal(String sessionId, GoalRef ref);
 
   Future<void> clearGoal(String sessionId, GoalRef ref);
+
+  /// Read a window of text from a regular file in the session's workspace
+  /// (`workspaceFiles/read`).
+  Future<WorkspaceFileContent> readWorkspaceFile(
+    String sessionId,
+    String path, {
+    int offset = 1,
+    int? limit,
+  }) => _unsupported('readWorkspaceFile');
+
+  /// Inspect a regular file's metadata (`workspaceFiles/stat`).
+  Future<WorkspaceFileStat> statWorkspaceFile(String sessionId, String path) =>
+      _unsupported('statWorkspaceFile');
+
+  /// List entries in a directory inside the session's workspace
+  /// (`workspaceFiles/list`).
+  Future<WorkspaceDirectoryListing> listWorkspaceDirectory(
+    String sessionId,
+    String path,
+  ) => _unsupported('listWorkspaceDirectory');
 }
 
 final class QuestionEvidence {

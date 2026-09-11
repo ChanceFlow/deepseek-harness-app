@@ -68,6 +68,13 @@ abstract final class DshRpcEndpoints {
   static const String workspaceArchiveSession = 'workspace/archiveSession';
   static const String workspaceList = 'workspace/list';
 
+  // Workspace Files (DSH 0.1.5 workspaceFiles service)
+  static const String workspaceFilesStat = 'workspaceFiles/stat';
+  static const String workspaceFilesRead = 'workspaceFiles/read';
+  static const String workspaceFilesReadBytes = 'workspaceFiles/readBytes';
+  static const String workspaceFilesReadAll = 'workspaceFiles/readAll';
+  static const String workspaceFilesList = 'workspaceFiles/list';
+
   // Host & Settings & Commands
   static const String hostDescribe = 'host/describe';
   static const String commandsExecute = 'commands/execute';

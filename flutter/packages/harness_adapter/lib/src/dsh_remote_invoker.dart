@@ -52,6 +52,28 @@ final class DshRemoteInvoker {
         'agentPreset': payload['agentPreset'],
       };
     }
+    if (endpoint == DshRpcEndpoints.workspaceFilesRead) {
+      return <String, Object?>{
+        'sessionId': payload['sessionId'],
+        'path': payload['path'],
+        'range': payload['range'] ?? const <String, Object?>{},
+      };
+    }
+    if (endpoint == DshRpcEndpoints.workspaceFilesReadBytes) {
+      return <String, Object?>{
+        'sessionId': payload['sessionId'],
+        'path': payload['path'],
+        'range': payload['range'] ?? const <String, Object?>{},
+      };
+    }
+    if (endpoint == DshRpcEndpoints.workspaceFilesReadAll ||
+        endpoint == DshRpcEndpoints.workspaceFilesStat ||
+        endpoint == DshRpcEndpoints.workspaceFilesList) {
+      return <String, Object?>{
+        'sessionId': payload['sessionId'],
+        'path': payload['path'],
+      };
+    }
     if (endpoint == DshRpcEndpoints.goalsCreate) {
       final req = asJsonObject(payload['request']) ?? payload;
       return <String, Object?>{
