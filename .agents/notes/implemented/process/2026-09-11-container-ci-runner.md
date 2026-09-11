@@ -16,9 +16,9 @@ live caches and reported `not saving cache`; and a toolchain pin whose source is
 a comment in [ci.yaml](../../../../.gitea/workflows/ci.yaml) while the binary
 came from the machine's PATH.
 
-Verdicts inherited the machine's load too. The same `code` job measured 261 s
-idle and 887 s under load, and two runs failed on two different single tests — a
-debounce test asserting one catalog re-pull against two — both re-running green.
+Verdicts inherited the machine's load too: the same `code` job measured 261 s
+idle and 887 s under load, and two runs failed on two different single tests,
+both re-running green.
 
 Attaching a container label to that runner exposed the hazard directly:
 `runner.envs.PATH` names the runner machine's toolchain, so the job container got
@@ -32,7 +32,8 @@ while `flutter` and `java` were absent.
   `docker://localhost/flutter-3.47-android:latest`, so the label itself puts the
   job in the image. The `localhost/` prefix is load-bearing: a bare tag resolves
   to docker.io and the runner tries to pull it.
-- **That label has its own runner process** (capacity 1) so it inherits none of
+- **That label has its own runner process** (capacity 2, so the gate's `code` and
+  `android` jobs overlap; each container is capped at 9 GB) and inherits none of
   the host runner's `runner.envs`. Host labels stay for the mirror jobs, which
   need only git, python3 and curl.
 - **The image is built from upstream releases, not from the machine**
@@ -60,7 +61,8 @@ while `flutter` and `java` were absent.
 Evidence: run 1411 on the disposable `container-smoke` label reports the job
 container's PATH as the image's own (no `/home/`, Node found), the runner
 machine's toolchain invisible inside, and checkout from the forge plus egress to
-github.com and pub.dev green.
+github.com and pub.dev green; run 1426 is the first `ci.yaml` run on the
+container label, with `docs`, `code` and `android` green.
 
 ## Alternatives considered
 
@@ -74,15 +76,14 @@ github.com and pub.dev green.
   image carries that snapshot, a container-side restore needs the cache server
   pinned and reachable from the container network, and a rebuild refreshes it.
 - **Pointing the submodule at the local reference mirror.** Deferred: the mirror
-  had frozen on a local clone's commit.
+  had frozen on a local clone.
 - **Tolerating the unreachable Microsoft apt index.** Rejected: `|| true` would
-  mask a real breakage; the stage drops that source list.
+  mask a real breakage; the stage drops that list.
 
 ## Consequences
 
 The runner machine needs podman, the repo and a socket — and its interactive
-sessions have to reach Flutter through the image too, or they re-install what
-this change removes. `~/tools/flutter-3.47.1`, `~/tools/jdk-*`, `~/android-sdk`,
+sessions have to reach Flutter through the image too. `~/tools/flutter-3.47.1`, `~/tools/jdk-*`, `~/android-sdk`,
 `~/.gradle`, `~/.pub-cache` and the `~/.cache/actcache` store become deletable
 once the container label is the only path. A stale image silently ages its
 build-cache snapshot, so the image is rebuilt by hand. The host runner's
