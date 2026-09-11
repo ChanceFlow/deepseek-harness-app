@@ -24,11 +24,10 @@ public mirror:
   AOT, asset merge, R8, packaging and signing of
   `assembleDebug`/`assembleRelease` are all skipped. Warm, the task is
   seconds; the job stays bounded for a cold gradle.
-- The forge job runs on the `flutter-android` label, which this forge
-  registers as host execution: Flutter, the Android SDK and the JDK come from
-  the runner's `PATH`, and the host's own `~/.gradle` holds the artifacts the
-  task resolves — no cache step is involved
-  ([2026-09-11-ci-runner-host-mode.md](2026-09-11-ci-runner-host-mode.md)).
+- The forge job runs on the `flutter-android-ctr` label, which puts it in the
+  prebaked image: Flutter, the Android SDK, the JDK and the Gradle build cache
+  that image baked all come from the image, and no cache step is involved
+  ([2026-09-11-container-ci-runner.md](2026-09-11-container-ci-runner.md)).
   Egress downloads still flake, so the
   compile is bounded and retried like the pub resolve above. The Flutter
   embedding resolves through gradle from `download.flutter.io` — no
