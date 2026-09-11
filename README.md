@@ -33,10 +33,19 @@ Grab the latest APK from the [Releases page](../../releases):
   `master`; the fastest way to try what just landed.
 
 ```sh
-adb install dsh-android-<version>.apk
+adb install dsh-android-<version>-arm64-v8a.apk
 ```
 
-Every release carries a `.sha256` sidecar next to the APK.
+Each release carries one APK per ABI, because the native libraries are the
+whole download and a phone installs exactly one of them:
+
+| APK | Take it on |
+|---|---|
+| `-arm64-v8a` | every phone made since ~2017 (the one to grab) |
+| `-armeabi-v7a` | older 32-bit phones |
+| `-x86_64` | emulators and Chromebooks |
+
+Every APK carries its own `.sha256` sidecar.
 
 ### 2. Run the host on your machine
 
@@ -228,8 +237,8 @@ Release APKs are built by the internal forge pipeline
 ([`.gitea/workflows/release-apk.yaml`](.gitea/workflows/release-apk.yaml))
 and mirrored to the [Releases page](../../releases): every `master`
 push refreshes the rolling `dev` prerelease, a `v<semver>` tag cuts
-the stable Release, and both attach a signed APK (release keystore,
-not the debug key) plus a `.sha256` sidecar. Naming follows SemVer
+the stable Release, and both attach signed per-ABI APKs (release keystore,
+not the debug key) each with its own `.sha256` sidecar. Naming follows SemVer
 2.0; the internal release body carries a generated `## What's
 Changed` changelog, and the mirrored GitHub release carries the
 artifact with version metadata. The GitHub-side copy of the workflow

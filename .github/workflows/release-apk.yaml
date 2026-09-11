@@ -20,7 +20,8 @@
 #                                            workflow_dispatch, where <next>
 #                                            is the latest STABLE v* tag with
 #                                            its patch bumped (v0.0.2 -> 0.0.3)
-#   - artifacts:       dsh-android-<versionName>.apk (+ .sha256 sidecar)
+#   - artifacts:       dsh-android-<versionName>-<abi>.apk (+ .sha256 sidecar),
+#                      one per ABI (arm64-v8a, armeabi-v7a, x86_64)
 #   - release titles:  DSH Android <versionName>
 #   - dev channel:     rolling prerelease on the tag `dev` (no `v` prefix —
 #     deliberately outside the `v*` tag trigger); every dev build replaces
@@ -159,7 +160,9 @@ jobs:
           DSH_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           printf '%s' "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$DSH_KEYSTORE_FILE"
-          flutter build apk --release \
+          # Per-ABI APKs: the universal release carried all three ABI copies
+          # of the native libraries (161 MB, of which 2 MB is not `lib/`).
+          flutter build apk --release --split-per-abi \
             --dart-define=cronetHttpNoPlay=true \
             --dart-define=DSH_BASE_URL="${{ inputs.dsh_base_url || 'http://127.0.0.1:3080' }}" \
             --dart-define=DSH_APP_VERSION="${{ steps.ver.outputs.version }}" \
@@ -186,15 +189,29 @@ jobs:
           echo "--- generated changelog ---"
           cat "$RUNNER_TEMP/changelog.md"
 
-      - name: Stage artifact
+      - name: Stage artifacts
         if: steps.gate.outputs.build == 'true'
         run: |
-          APK=flutter/app/build/app/outputs/flutter-apk/app-release.apk
-          NAME="dsh-android-${{ steps.ver.outputs.version }}.apk"
+          # Flutter names a split APK `app-<abi>-release.apk`
+          # (flutter_tools `android/gradle.dart` `_apkFilesFor`); a missing one
+          # is a hard error rather than a release with an ABI hole. The publish
+          # step uploads the whole directory.
+          set -eu
+          OUT=flutter/app/build/app/outputs/flutter-apk
+          VERSION="${{ steps.ver.outputs.version }}"
           mkdir -p "$RUNNER_TEMP/artifacts"
-          cp "$APK" "$RUNNER_TEMP/artifacts/$NAME"
-          (cd "$RUNNER_TEMP/artifacts" && sha256sum "$NAME" > "$NAME.sha256")
-          echo "artifact=$RUNNER_TEMP/artifacts/$NAME" >> "$GITHUB_OUTPUT"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            SRC="$OUT/app-$abi-release.apk"
+            if [[ ! -f "$SRC" ]]; then
+              echo "::error::missing split artifact $SRC"
+              exit 1
+            fi
+            NAME="dsh-android-$VERSION-$abi.apk"
+            cp "$SRC" "$RUNNER_TEMP/artifacts/$NAME"
+            (cd "$RUNNER_TEMP/artifacts" && sha256sum "$NAME" > "$NAME.sha256")
+          done
+          ls -1 "$RUNNER_TEMP/artifacts"
+          echo "artifact=$RUNNER_TEMP/artifacts" >> "$GITHUB_OUTPUT"
 
       - name: Publish Release
         if: steps.gate.outputs.build == 'true'
