@@ -330,8 +330,9 @@ class HarnessFakeRpc implements DshRpcClient {
     'parentAvailable': false,
   };
 
-  /// Scripted subagent.history value slot (`subagentHistoryValueSchema`:
-  /// the session history block shape, events plus hasMore).
+  /// Scripted child-history value slot for `session/page`
+  /// (`subagentHistoryValueSchema`: the session history block shape, events
+  /// plus hasMore).
   JsonMap subagentHistoryValue = <String, Object?>{
     'events': <Object?>[],
     'hasMore': false,
@@ -3394,11 +3395,11 @@ void main() {
   );
 
   test(
-    'subagent.history addresses each row with its own catalog mode',
+    'session/page addresses each subagent row with its own catalog mode',
     () async {
       // Wire: the subagent address carries mode
       // ('one-shot' | 'continuable'), and the host rejects a mismatch
-      // (surfaced as `subagent-not-found`) —
+      // (surfaced as `subagent/unauthorized`) —
       // reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts
       // `SubagentAddress` + packages/api/session-controller/src/history.ts.
       // A one-shot row must go out
@@ -3447,13 +3448,13 @@ void main() {
     },
   );
 
-  test('subagent.history host failure surfaces to the caller', () async {
-    // Fail-loud: a `subagent-not-found` answer (the host's mode-guard
+  test('a child-history host failure surfaces to the caller', () async {
+    // Fail-loud: a `subagent/unauthorized` answer (the host's mode-guard
     // rejection) never decays into an empty transcript — the
     // exception reaches the caller, which surfaces it on the error
     // banner.
     final rpc = HarnessFakeRpc()
-      ..failNextCall(DshRpcEndpoints.sessionPage, 'subagent-not-found');
+      ..failNextCall(DshRpcEndpoints.sessionPage, 'subagent/unauthorized');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
@@ -3467,7 +3468,7 @@ void main() {
         isA<DshBusinessException>().having(
           (error) => error.code,
           'code',
-          'subagent-not-found',
+          'subagent/unauthorized',
         ),
       ),
     );

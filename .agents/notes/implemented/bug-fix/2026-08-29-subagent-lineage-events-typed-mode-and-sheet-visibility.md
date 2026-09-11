@@ -23,8 +23,8 @@ and seeded by
    page opened never appeared, and a child whose session detached kept a
    lit status dot.
 2. **A one-shot child's transcript never opens.** The adapter hardcoded
-   `'mode': 'continuable'` on `subagent.history`, and the host's
-   subagent address validation answers a mode mismatch with
+   `'mode': 'continuable'` on the child-history read; the host's
+   address validation answers a mode mismatch with
    `subagent/unauthorized`
    ([control-types.ts](../../../../reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts)
    `SubagentAddress` + [history.ts](../../../../reference/deepseek-harness/packages/api/session-controller/src/history.ts)).
@@ -103,7 +103,7 @@ branch).
 - Wire evidence pins the chain:
   [harness_repository_integration_test.dart](../../../../flutter/packages/harness_adapter/test/harness_repository_integration_test.dart)
   covers lineage decode, `api-session/added` → stream, the one-shot mode
-  on the request frame, `subagent-not-found` propagation, the
+  on the request frame, `subagent/unauthorized` propagation, the
   continuable pin on prompt/interrupt, and the child-missing-mode
   negative;
   [subagent_controller_test.dart](../../../../flutter/app/test/ui/subagents/subagent_controller_test.dart)

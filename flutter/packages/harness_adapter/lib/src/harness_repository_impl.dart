@@ -1247,8 +1247,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     };
   }
 
-  /// The `subagent.history` request carries the addressed row's own mode: the
-  /// host validates the address against the durable descriptor
+  /// The child-history read (`session/page` carrying a `subagent` address)
+  /// takes the addressed row's own mode: the host validates the address
+  /// against the durable descriptor
   /// (`packages/api/session-controller/src/history.ts` `validateAddress`) and
   /// answers a mode or ownership mismatch with `subagent/unauthorized`; an
   /// addressed child that is not in the catalog answers `subagent/not-found`.

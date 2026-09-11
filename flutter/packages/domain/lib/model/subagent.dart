@@ -5,9 +5,9 @@ library;
 /// (`subagent.list` `mode`): a `oneShot` run settles with its answer and
 /// never accepts follow-ups, while a `continuable` child keeps its prompt
 /// and interrupt verbs alive while the parent is available. The adapter
-/// maps the wire literals; every `subagent.history` request must carry the
-/// addressed row's own mode or the host rejects it as
-/// `subagent-not-found`.
+/// maps the wire literals; every child-history read (`session/page` with a
+/// `subagent` address) must carry the addressed row's own mode or the host
+/// rejects it as `subagent/unauthorized`.
 enum SubagentMode { oneShot, continuable }
 
 final class SubagentEntry {

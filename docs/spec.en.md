@@ -38,7 +38,12 @@ The MVP now includes workspaces (create/rename/delete/reorder via workspace.inse
 
 ## Subagent Ownership
 Address by parentSessionId + childSessionId. Never derive identity from labels.
-MVP supports subagent.list, subagent.history, subagent.prompt, subagent.interrupt.
+MVP supports subagent.list, subagent.prompt, subagent.interrupt.
+A child's transcript is read through session/page with a subagent address
+({kind: 'subagent', parentSessionId, childSessionId, mode}): the address mode
+must match the durable entry or the host answers subagent/unauthorized, and a
+child the catalog no longer lists answers subagent/not-found. The pre-0.1.5
+subagent/history name stays declared in the endpoint registry with no call site.
 
 
 ## Session Titles
