@@ -327,16 +327,22 @@ class BackendRegistryController {
   }
 
   void _persist() {
+    // Writes are serialized, not merely tracked. Every mutation starts its
+    // own `save`, and an unsynchronized pair lets a slower earlier write land
+    // after a newer one (temp+rename in the store), so the document on disk
+    // could hold the state the user already moved past — and the next launch
+    // would show it. Chaining on the previous write makes the last mutation's
+    // bytes the last bytes written.
+    //
     // The future is kept so a test can observe a mutation's bytes on disk by
     // awaiting the write instead of polling a wall-clock budget, which is what
     // made this path flake under a loaded runner.
-    _pendingPersist = _store
-        .save(
-          BackendStoreData(
-            backends: _state.backends,
-            activeId: _state.activeId,
-          ),
-        )
+    final BackendStoreData snapshot = BackendStoreData(
+      backends: _state.backends,
+      activeId: _state.activeId,
+    );
+    _pendingPersist = (_pendingPersist ?? Future<void>.value())
+        .then((_) => _store.save(snapshot))
         .then((_) {
           _state = _state.withError(null);
           _publish();
@@ -357,9 +363,9 @@ class BackendRegistryController {
 
   Future<void>? _pendingPersist;
 
-  /// The in-flight persist, or null before the first write. Settles once the
-  /// document is on disk (or the write failed), so a test can await it rather
-  /// than poll.
+  /// The tail of the persist chain, or null before the first write. Settles
+  /// once that write and every write queued before it is on disk (or failed),
+  /// so a test can await it rather than poll.
   @visibleForTesting
   Future<void>? get pendingPersist => _pendingPersist;
 
