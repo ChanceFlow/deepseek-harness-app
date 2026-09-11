@@ -33,7 +33,12 @@ flutter/app/test/design/shots/
 tasks/
 PLAN.md
 ROADMAP.md
-docker/
+# docker/ is versioned on purpose: the image recipe IS the container CI
+# contract, and a recipe that lives only on one machine drifts from the
+# workflows that name its label. Everything else dropped in there stays local.
+docker/*
+!docker/build-image.sh
+!docker/flutter-android.Dockerfile
 .cursor/
 docs/mockups/
 docs/notes/
