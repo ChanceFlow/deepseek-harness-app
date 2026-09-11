@@ -14,6 +14,7 @@ import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
@@ -679,20 +680,35 @@ class ChatHeaderActions extends StatelessWidget {
         .where((session) => session.id == sessionId)
         .firstOrNull;
     final archivable = selectedSession?.blank != true;
+    final hasActiveJobs = uiState.jobs.any(
+      (j) => j.status == JobStatus.running,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        JobListAction(jobs: uiState.jobs),
-        SessionLogExportAction(uiState: uiState, onAction: onAction),
-        if (uiState.selectedSessionId case final sessionId?)
-          if (backendId case final host?)
-            TrajectoryEntryButton(backendId: host, sessionId: sessionId),
+        if (hasActiveJobs || !compact) JobListAction(jobs: uiState.jobs),
+        if (!compact) ...[
+          SessionLogExportAction(uiState: uiState, onAction: onAction),
+          if (uiState.selectedSessionId case final sessionId?)
+            if (backendId case final host?)
+              TrajectoryEntryButton(backendId: host, sessionId: sessionId),
+        ],
         if (compact)
           PopupMenuButton<_SessionVerb>(
             tooltip: l10n.sessionMenuTooltip,
             icon: const Icon(Icons.more_vert),
             onSelected: (verb) {
               switch (verb) {
+                case _SessionVerb.trajectory:
+                  if (backendId != null) {
+                    openTrajectoryLedger(
+                      context,
+                      backendId: backendId!,
+                      sessionId: sessionId,
+                    );
+                  }
+                case _SessionVerb.export:
+                  onAction(ExportSessionLog(sessionId));
                 case _SessionVerb.subagents:
                   onOpenSubagents?.call();
                 case _SessionVerb.rename:
@@ -704,6 +720,24 @@ class ChatHeaderActions extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
+              if (backendId != null)
+                PopupMenuItem(
+                  value: _SessionVerb.trajectory,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.route_outlined),
+                    title: Text(l10n.trajectoryEntryTooltip),
+                  ),
+                ),
+              if (uiState.canExportSessionLog)
+                PopupMenuItem(
+                  value: _SessionVerb.export,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.file_download_outlined),
+                    title: Text(l10n.sessionLogExportTooltip),
+                  ),
+                ),
               if (onOpenSubagents != null)
                 PopupMenuItem(
                   value: _SessionVerb.subagents,
@@ -770,7 +804,7 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { subagents, rename, fork, archive }
+enum _SessionVerb { trajectory, export, subagents, rename, fork, archive }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.
@@ -1436,7 +1470,7 @@ class _ChatPanelState extends State<ChatPanel> {
   /// through the repository seam and handles loading, failure, binary, and
   /// truncation itself; the panel only resolves the session the row belongs
   /// to.
-  void _openFilePreview(String path) {
+  void _openFilePreview(String path, {EditDiffModel? diff}) {
     final sessionId = widget.uiState.selectedSessionId;
     if (sessionId == null) return;
     unawaited(
@@ -1445,6 +1479,7 @@ class _ChatPanelState extends State<ChatPanel> {
         sessionId: sessionId,
         path: path,
         readFile: widget.readWorkspaceFile,
+        initialDiff: diff,
       ),
     );
   }
@@ -2052,7 +2087,7 @@ class TimelineRow extends StatelessWidget {
   final AttachmentLoader loadAttachment;
 
   /// File-preview action for a tool row's generated/edited path.
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   /// Tool-row expansion persistence of the selected session; null keeps
   /// expansion in memory only.
@@ -2079,7 +2114,9 @@ class TimelineRow extends StatelessWidget {
         usage: (item as TimelineMessage).usage,
         firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
         producedPaths: producedPaths,
-        onPreviewFile: onPreviewFile,
+        onPreviewFile: onPreviewFile == null
+            ? null
+            : (path) => onPreviewFile!(path),
       ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction() => CompactionRow(
@@ -2636,7 +2673,7 @@ class ActivityGroupRow extends StatefulWidget {
   final AttachmentLoader loadAttachment;
 
   /// File-preview action for a grouped tool row's generated/edited path.
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   final ToolExpansionPersistence? expansion;
 
@@ -2659,15 +2696,27 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
       widget.group.calls.any((call) => call.status == ToolRunStatus.running) ||
       (widget.group.thought?.value.streaming ?? false);
 
+  bool get _hasFailure =>
+      widget.group.calls.any((call) => call.status == ToolRunStatus.failed);
+
   @override
   void initState() {
     super.initState();
+    if (_hasFailure && !_isRunning) _expanded = true;
     if (_isRunning) _sweep.repeat();
   }
 
   @override
   void didUpdateWidget(covariant ActivityGroupRow oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final wasRunning =
+        oldWidget.group.calls.any(
+          (call) => call.status == ToolRunStatus.running,
+        ) ||
+        (oldWidget.group.thought?.value.streaming ?? false);
+    if (wasRunning && !_isRunning && _hasFailure && !_expanded) {
+      setState(() => _expanded = true);
+    }
     if (_isRunning && !_sweep.isAnimating) {
       _sweep.repeat();
     } else if (!_isRunning && _sweep.isAnimating) {
@@ -2915,7 +2964,7 @@ class ToolCallRow extends StatefulWidget {
   /// Expansion persistence keyed by this row's [timelineKey] value;
   /// null keeps expansion in memory only.
   final ToolExpansionPersistence? expansion;
-  final void Function(String path)? onPreviewFile;
+  final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
 
   @override
   State<ToolCallRow> createState() => _ToolCallRowState();
@@ -2946,6 +2995,10 @@ class _ToolCallRowState extends State<ToolCallRow>
         }),
       );
     }
+    if (widget.call.status == ToolRunStatus.failed &&
+        !_tileController.isExpanded) {
+      _tileController.expand();
+    }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
   }
 
@@ -2958,6 +3011,10 @@ class _ToolCallRowState extends State<ToolCallRow>
     }
     if (!running && oldWidget.call.status == ToolRunStatus.running) {
       _sweep.stop(canceled: true);
+      if (widget.call.status == ToolRunStatus.failed &&
+          !_tileController.isExpanded) {
+        _tileController.expand();
+      }
     }
   }
 
@@ -3093,9 +3150,12 @@ class _ToolCallRowState extends State<ToolCallRow>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (model.body case final body?)
+                    if (model.diff case final diff?)
+                      _diffSection(context, diff)
+                    else if (model.body case final body?)
                       _ioSection(context, l10n.inputLabel, body, failed: false),
-                    if (model.body != null && model.output != null)
+                    if ((model.diff != null || model.body != null) &&
+                        model.output != null)
                       Container(
                         height: 1,
                         color: scheme.outlineVariant,
@@ -3109,7 +3169,7 @@ class _ToolCallRowState extends State<ToolCallRow>
                         failed: failed,
                       ),
                     if (model.filePath case final filePath?)
-                      _fileActionBar(context, filePath),
+                      _fileActionBar(context, filePath, diff: model.diff),
                   ],
                 ),
               ),
@@ -3119,7 +3179,11 @@ class _ToolCallRowState extends State<ToolCallRow>
     );
   }
 
-  Widget _fileActionBar(BuildContext context, String path) {
+  Widget _fileActionBar(
+    BuildContext context,
+    String path, {
+    EditDiffModel? diff,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -3131,7 +3195,7 @@ class _ToolCallRowState extends State<ToolCallRow>
         children: [
           if (widget.onPreviewFile != null)
             OutlinedButton.icon(
-              onPressed: () => widget.onPreviewFile!(path),
+              onPressed: () => widget.onPreviewFile!(path, diff: diff),
               icon: const Icon(Icons.visibility_outlined, size: 14),
               label: Text(
                 l10n.previewFile,
@@ -3229,6 +3293,121 @@ class _ToolCallRowState extends State<ToolCallRow>
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               await Clipboard.setData(ClipboardData(text: payload));
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(l10n.copiedTooltip),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(milliseconds: 1400),
+                ),
+              );
+            },
+            icon: Icon(Icons.copy_outlined, color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _diffSection(BuildContext context, EditDiffModel diff) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final fullDiffText = [
+      for (final line in diff.lines)
+        '${line.kind == DiffLineKind.delete
+            ? '-'
+            : line.kind == DiffLineKind.insert
+            ? '+'
+            : ' '} ${line.text}',
+    ].join('\n');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.diffLabel,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.outline,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final line in diff.lines)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: switch (line.kind) {
+                              DiffLineKind.delete =>
+                                scheme.errorContainer.withValues(alpha: 0.35),
+                              DiffLineKind.insert =>
+                                scheme.primaryContainer.withValues(alpha: 0.35),
+                              DiffLineKind.equal => Colors.transparent,
+                            },
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                child: Text(
+                                  switch (line.kind) {
+                                    DiffLineKind.delete => '-',
+                                    DiffLineKind.insert => '+',
+                                    DiffLineKind.equal => ' ',
+                                  },
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: switch (line.kind) {
+                                      DiffLineKind.delete => scheme.error,
+                                      DiffLineKind.insert => scheme.primary,
+                                      DiffLineKind.equal =>
+                                        scheme.onSurfaceVariant,
+                                    },
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                line.text,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'monospace',
+                                  color: scheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            tooltip: l10n.copyTooltip,
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await Clipboard.setData(ClipboardData(text: fullDiffText));
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(l10n.copiedTooltip),

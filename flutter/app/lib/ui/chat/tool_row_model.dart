@@ -148,6 +148,59 @@ String? _deriveBody(ToolRowVariant variant, String argsRaw) {
   }
 }
 
+/// Kind of line in a unified diff: delete (-), insert (+), or unchanged.
+enum DiffLineKind { delete, insert, equal }
+
+/// A single line inside an [EditDiffModel].
+final class ToolDiffLine {
+  const ToolDiffLine({required this.kind, required this.text});
+
+  final DiffLineKind kind;
+  final String text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ToolDiffLine && other.kind == kind && other.text == text;
+
+  @override
+  int get hashCode => Object.hash(kind, text);
+}
+
+/// Structured diff representation for an edit / replacement tool call.
+final class EditDiffModel {
+  const EditDiffModel({
+    required this.filePath,
+    required this.oldString,
+    required this.newString,
+    required this.lines,
+  });
+
+  final String filePath;
+  final String oldString;
+  final String newString;
+  final List<ToolDiffLine> lines;
+
+  @override
+  bool operator ==(Object other) =>
+      other is EditDiffModel &&
+      other.filePath == filePath &&
+      other.oldString == oldString &&
+      other.newString == newString &&
+      _listEquals(other.lines, lines);
+
+  @override
+  int get hashCode =>
+      Object.hash(filePath, oldString, newString, Object.hashAll(lines));
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
 /// Everything the row renders, derived once per call (web
 /// `ToolRowModel`).
 final class ToolRowModel {
@@ -158,6 +211,7 @@ final class ToolRowModel {
     required this.state,
     this.filePath,
     this.body,
+    this.diff,
     this.output,
     this.errorSummary,
     this.leading,
@@ -176,6 +230,9 @@ final class ToolRowModel {
 
   /// Expanded-body input text (pretty args); null = no input section.
   final String? body;
+
+  /// Line-by-line diff for edit tool calls; null = non-diff tool.
+  final EditDiffModel? diff;
 
   /// Flattened result text; null while running or when the result carries
   /// no text.
@@ -272,10 +329,41 @@ ToolRowModel deriveToolRowModel(TimelineToolCall call, AppLocalizations l10n) {
     summary: summary,
     filePath: _deriveFilePath(variant, argsRaw),
     body: _deriveBody(variant, argsRaw),
+    diff: _deriveDiff(variant, argsRaw),
     output: output,
     errorSummary: errorSummary,
     leading: leading,
     summarySuffix: summarySuffix,
     state: state,
+  );
+}
+
+EditDiffModel? _deriveDiff(ToolRowVariant variant, String argsRaw) {
+  if (variant != ToolRowVariant.edit || argsRaw.isEmpty) return null;
+  final parsed = _parseArgs(argsRaw);
+  if (parsed is! Map<String, Object?>) return null;
+  final args = parsed.cast<String, Object?>();
+  final oldString = args['old_string'] ?? args['old_str'];
+  final newString = args['new_string'] ?? args['new_str'];
+  final filePath = _deriveFilePath(variant, argsRaw) ?? '';
+  if (oldString is! String || newString is! String) return null;
+  if (oldString.isEmpty && newString.isEmpty) return null;
+
+  final lines = <ToolDiffLine>[];
+  if (oldString.isNotEmpty) {
+    for (final line in oldString.split('\n')) {
+      lines.add(ToolDiffLine(kind: DiffLineKind.delete, text: line));
+    }
+  }
+  if (newString.isNotEmpty) {
+    for (final line in newString.split('\n')) {
+      lines.add(ToolDiffLine(kind: DiffLineKind.insert, text: line));
+    }
+  }
+  return EditDiffModel(
+    filePath: filePath,
+    oldString: oldString,
+    newString: newString,
+    lines: lines,
   );
 }

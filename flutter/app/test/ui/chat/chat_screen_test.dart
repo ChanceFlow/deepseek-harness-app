@@ -3551,6 +3551,44 @@ void main() {
     );
 
     testWidgets(
+      'a settled group carrying a failure opens itself to the error',
+      (tester) async {
+        await _pump(
+          tester,
+          _state(
+            sessions: const [
+              SessionSummary(id: 's1', title: 'Session 1', blank: false),
+            ],
+            selectedSessionId: 's1',
+            timeline: const [
+              TimelineToolCall(
+                id: 'f1',
+                name: 'bash',
+                arguments: '{"command":"flutter test"}',
+                result: 'All tests passed',
+                status: ToolRunStatus.completed,
+              ),
+              TimelineToolCall(
+                id: 'f2',
+                name: 'bash',
+                arguments: '{"command":"flutter build"}',
+                result: 'Target file "lib/nope.dart" not found',
+                status: ToolRunStatus.failed,
+              ),
+            ],
+          ),
+          <ChatAction>[],
+        );
+        await tester.pumpAndSettle();
+
+        // The supervising reader must not drill three levels to learn why a
+        // step broke: a settled group carrying a failure is already open, so
+        // the failure's own output is on screen without a tap.
+        expect(find.textContaining('not found'), findsWidgets);
+      },
+    );
+
+    testWidgets(
       'in-flight tool calls update on the collapsed single-line summary in real time',
       (tester) async {
         await _pump(

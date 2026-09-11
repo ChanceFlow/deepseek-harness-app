@@ -1326,6 +1326,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inputLabel => 'Input';
 
   @override
+  String get diffLabel => 'Diff';
+
+  @override
+  String get viewDiff => 'Diff';
+
+  @override
+  String get viewFullFile => 'Full file';
+
+  @override
   String get outputLabel => 'Output';
 
   @override

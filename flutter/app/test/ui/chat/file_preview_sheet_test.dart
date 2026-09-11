@@ -18,6 +18,8 @@ import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
+import 'package:app/ui/chat/tool_row_model.dart'
+    show DiffLineKind, EditDiffModel, ToolDiffLine;
 
 import '../../l10n_app.dart';
 
@@ -188,4 +190,55 @@ void main() {
     );
     expect(find.byTooltip('Copy content'), findsNothing);
   });
+
+  testWidgets(
+    'renders diff and full file segmented tabs when initialDiff is provided',
+    (tester) async {
+      const diff = EditDiffModel(
+        filePath: 'lib/diff_file.dart',
+        oldString: 'old = 1;',
+        newString: 'new = 2;',
+        lines: [
+          ToolDiffLine(kind: DiffLineKind.delete, text: 'old = 1;'),
+          ToolDiffLine(kind: DiffLineKind.insert, text: 'new = 2;'),
+        ],
+      );
+
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: FilePreviewSheet(
+              sessionId: 's1',
+              path: 'lib/diff_file.dart',
+              initialDiff: diff,
+              readFile: (sessionId, path) async => const WorkspaceFileContent(
+                absolutePath: '/workspace/lib/diff_file.dart',
+                version: 'v1',
+                text: 'final fullFile = true;',
+                offset: 1,
+                lines: 1,
+                eof: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Renders the segmented buttons
+      expect(find.text('Diff'), findsOneWidget);
+      expect(find.text('Full file'), findsOneWidget);
+
+      // Initial tab is Diff
+      expect(find.text('old = 1;'), findsOneWidget);
+      expect(find.text('new = 2;'), findsOneWidget);
+      expect(find.text('final fullFile = true;'), findsNothing);
+
+      // Tap 'Full file' tab
+      await tester.tap(find.text('Full file'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('final fullFile = true;'), findsOneWidget);
+    },
+  );
 }

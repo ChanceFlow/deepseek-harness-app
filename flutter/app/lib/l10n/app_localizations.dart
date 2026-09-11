@@ -2197,6 +2197,24 @@ abstract class AppLocalizations {
   /// **'Input'**
   String get inputLabel;
 
+  /// No description provided for @diffLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Diff'**
+  String get diffLabel;
+
+  /// No description provided for @viewDiff.
+  ///
+  /// In en, this message translates to:
+  /// **'Diff'**
+  String get viewDiff;
+
+  /// No description provided for @viewFullFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Full file'**
+  String get viewFullFile;
+
   /// No description provided for @outputLabel.
   ///
   /// In en, this message translates to:
