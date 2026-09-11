@@ -159,7 +159,8 @@ jobs:
         working-directory: flutter
         run: |
           flutter test app/test packages/domain/test packages/network/test \
-            packages/harness_adapter/test packages/dev/test
+            packages/harness_adapter/test packages/dev/test \
+            packages/asr/test
 
       # The build image carries /root/.gradle/gradle.properties with
       # systemProp.http(s).proxyHost baked from a build arg, and Gradle's
