@@ -13,13 +13,33 @@
 #           unresolved platform reference. Decision:
 #           .agents/notes/implemented/process/2026-09-03-kotlin-compile-gate.md
 #
-# Requirements for the runner:
-#   - network access (fetches Flutter 3.47.1 via subosito/flutter-action and
-#     the reference submodule from this forge instance)
-#   - a runner image with Docker/act compatibility for `uses:` actions.
-# Air-gapped runners: replace the flutter step with a prebaked image that
-# has Flutter 3.47.1 stable and python3, then keep the verify step.
+# Runner contract — the `flutter-android` label as this forge registers it is
+# HOST execution: steps run on the runner machine itself, with the toolchain
+# in `runner.envs.PATH` (~/tools/flutter-3.47.1, ~/android-sdk,
+# ~/tools/jdk-17.0.13+11) and the host's own ~/.pub-cache and ~/.gradle as the
+# dependency caches. No dependency is downloaded per job — only the checkout's
+# reference submodule crosses the network — and no cache is restored here,
+# because both directories persist between jobs. `runner.capacity: 2` caps
+# concurrency, so the three jobs below time-share two slots. Decision:
+# .agents/notes/implemented/process/2026-09-11-ci-runner-host-mode.md
+#
+# A container-schema label (`flutter-android:docker://flutter-3.47-android`)
+# is the alternative the release channel was designed around: it isolates each
+# job but makes every cache ephemeral, which is what `actions/cache` and the
+# local image recipe (`docker/`, gitignored) exist to offset. Only the label
+# decides this — a job runs in a container exactly when its label carries
+# `docker://`.
 name: CI
+
+# A superseded push is waste on a pool of two slots shared with the release
+# channel: the newest push to a ref cancels the older run. Branch builds share
+# one group per ref, so a push never cancels another branch's verdict. A
+# cancelled `master` run is not a lost verdict — the run for the next merge
+# covers its tree, and the release channel re-runs the whole suite itself
+# before it signs an APK.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -30,9 +50,11 @@ on:
 jobs:
   docs:
     # python-only, but the checkout clones the reference submodule from
-    # github.com — which needs the LAN proxy too (a proxy-less ubuntu-latest
-    # job stalls on `git submodule update` exactly like pub did). The
-    # prebaked image has the proxy baked in, so run docs there as well.
+    # github.com — which needs the LAN egress proxy too (a proxy-less job
+    # stalls on `git submodule update` exactly like pub did). Every job on
+    # this label reaches the proxy through the runner's own environment, so
+    # `docs` needs no toolchain step and finishes in seconds; it still holds
+    # one of the two slots while it runs, which the timeout below bounds.
     runs-on: flutter-android
     # A wedged job must not own the single runner for hours: the release-APK
     # job once hung on pub's dependency resolution for 1h49m and queued every
@@ -48,15 +70,17 @@ jobs:
         run: python3 scripts/verify_all.py docs
 
   code:
-    # Runs on the prebaked builder image, not ubuntu-latest: the image
-    # carries Flutter 3.47.1 on PATH and has the LAN egress proxy baked in
-    # as an env default — exactly how release-apk reaches pub.dev. The
-    # proxy env is additionally declared from `vars.EGRESS_PROXY` below:
-    # the variable is the single source of truth for the egress address
-    # (it lives in the repo's Actions settings, never in git), so a job is
-    # only ever proxy-less if the image env and the variable both fail it.
+    # Host execution (see the header): Flutter, the Android SDK and the JDK
+    # come from the runner's PATH, and the host's ~/.pub-cache and ~/.gradle
+    # are the caches every run reuses. The proxy env is declared from
+    # `vars.EGRESS_PROXY` below: the variable is the single source of truth
+    # for the egress address (it lives in the repo's Actions settings, never
+    # in git), so a job is only ever proxy-less if the runner's own
+    # environment and the variable both fail it.
     # Toolchain pin (verify_toolchain_pin.py reads this file as source):
-    # flutter-version: 3.47.1 — baked into the flutter-android image.
+    # flutter-version: 3.47.1 — the runner's PATH points at
+    # ~/tools/flutter-3.47.1, and the first step below fails the job when the
+    # live binary disagrees with this line.
     runs-on: flutter-android
     env:
       HTTP_PROXY: ${{ vars.EGRESS_PROXY }}
@@ -76,6 +100,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      # The pin's source is this file — verify_toolchain_pin.py reads
+      # `flutter-version:` above and holds every other home to it — but in
+      # host execution the binary comes from the runner's PATH, which no
+      # repo-side gate can see. A host `flutter upgrade` would move CI off the
+      # pin while every home still agreed, so the live version is asserted
+      # against the line above before any gate trusts it.
+      - name: Assert the runner's Flutter matches the pin
+        run: |
+          PIN=$(grep -oE 'flutter-version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' .gitea/workflows/ci.yaml \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          flutter --version
+          flutter --version | grep -qE "^Flutter ${PIN} " \
+            || { echo "the runner's Flutter is not the ${PIN} this file pins"; exit 1; }
 
       # Resolution happens exactly here, once, at a named step, and bounded:
       # pub's network resolve has hung inside this runner — the release build
@@ -102,9 +140,9 @@ jobs:
     # The compiler is the only check that sees an unresolved platform
     # symbol — how #153 shipped AudioManager constants no API has and left
     # the red to the release channel. compileDebugKotlin is that check
-    # alone: no Dart AOT, asset merge, R8 or packaging. Same prebaked image
-    # as `code`; the gradle cache key is the release build's, so a warmed
-    # cache is the common case.
+    # alone: no Dart AOT, asset merge, R8 or packaging. Host execution like
+    # `code`, and the same host ~/.gradle: the plugin and AGP artifacts this
+    # task resolves survive between jobs, so a warm start is the common case.
     runs-on: flutter-android
     timeout-minutes: 20
     env:
@@ -112,13 +150,14 @@ jobs:
       HTTPS_PROXY: ${{ vars.EGRESS_PROXY }}
       http_proxy: ${{ vars.EGRESS_PROXY }}
       https_proxy: ${{ vars.EGRESS_PROXY }}
-      # The gradle JVM ignores HTTP_PROXY env and rides system properties —
-      # which the image bakes stale: with the baked address no longer
-      # answering, run 983 timed out every egress download and disabled the
-      # Google repository with no compile error anywhere. The compile step
-      # below rebuilds those properties from the egress above at runtime,
-      # so no internal address is ever committed; the JVM's default
-      # nonProxyHosts keeps localhost traffic direct.
+      # The gradle JVM ignores HTTP_PROXY env and rides the system properties
+      # in the runner machine's own ~/.gradle/gradle.properties, which persists
+      # between runs — an address left there from an earlier route times out
+      # every egress download and disables the Google repository with no
+      # compile error anywhere (run 983). The compile step below rebuilds those
+      # properties from the egress above at runtime, so no internal address is
+      # ever committed; the JVM's default nonProxyHosts keeps localhost traffic
+      # direct.
       NO_PROXY: gitea,localhost,127.0.0.1
       no_proxy: gitea,localhost,127.0.0.1
     steps:
@@ -140,15 +179,6 @@ jobs:
           done
           exit 1
 
-      - name: Restore Gradle & pub caches
-        uses: actions/cache@v4
-        with:
-          path: |
-            /root/.gradle/caches
-            /root/.pub-cache
-          key: gradle-v1-${{ hashFiles('flutter/pubspec.lock') }}
-          restore-keys: gradle-v1-
-
       - name: Inject gradle wrapper
         working-directory: flutter/app/android
         run: |
@@ -165,13 +195,13 @@ jobs:
 
       - name: Kotlin type check (compileDebugKotlin)
         working-directory: flutter/app/android
-        # Gradle's downloads and the runner's cache service both flake
-        # through the LAN egress (the release channel's history is the same
-        # story), so the check is bounded and retried like the pub resolve
-        # above: a real compile error fails three fast attempts, a flake
-        # self-heals on the next one. The proxy rides the system properties
-        # gradle's JVM actually reads, derived from the egress env above at
-        # runtime — an internal address never enters a committed file.
+        # Gradle's downloads flake through the LAN egress (the release
+        # channel's history is the same story), so the check is bounded and
+        # retried like the pub resolve above: a real compile error fails three
+        # fast attempts, a flake self-heals on the next one. The proxy rides
+        # the system properties gradle's JVM actually reads, derived from the
+        # egress env above at runtime — an internal address never enters a
+        # committed file.
         run: |
           EGRESS_HOST="${HTTPS_PROXY#http://}"
           EGRESS_HOST="${EGRESS_HOST%%:*}"
@@ -180,12 +210,13 @@ jobs:
             echo "EGRESS proxy missing: HTTPS_PROXY is not set for this job"
             exit 1
           fi
-          # The image baked the egress into /root/.gradle/gradle.properties
-          # at build time, and gradle.properties systemProp outranks every
-          # env layer (run 989: fresh GRADLE_OPTS/JAVA_TOOL_OPTIONS still
-          # rode the baked, since-dead address). Rewrite it from the live
-          # egress env — the same injection the Dockerfile performs at
-          # build time, with the address the variable carries now.
+          # Gradle's JVM reads its proxy route from gradle.properties
+          # systemProp lines and ignores the HTTP_PROXY env, so the user-level
+          # file is rewritten from the live egress env before every compile: a
+          # value left from an earlier address eats every egress download
+          # silently (run 989: fresh GRADLE_OPTS/JAVA_TOOL_OPTIONS still rode a
+          # dead address and the Google repository was disabled with no
+          # compile error anywhere).
           GRADLE_DIR="${GRADLE_USER_HOME:-$HOME/.gradle}"
           mkdir -p "$GRADLE_DIR"
           printf 'systemProp.http.proxyHost=%s\nsystemProp.http.proxyPort=%s\nsystemProp.https.proxyHost=%s\nsystemProp.https.proxyPort=%s\n' \
