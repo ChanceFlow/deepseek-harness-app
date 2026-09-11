@@ -3194,7 +3194,10 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// `origin` is `subagent` (or that an address still references) and only
   /// removes anything else, because the subagent catalog keeps navigating the
   /// child's history after its Agent ends. Everything else leaves the roster
-  /// on the event instead of waiting for the next `session/list` pull.
+  /// on the event instead of waiting for the next `session/list` pull, and
+  /// takes its manager-level mirrors with it ([_releaseSessionMirrors]) the
+  /// way the web manager deletes the same session's projection store, queue
+  /// mirror, and job list.
   void _applySessionRemovedEvent(List<Object?> args) {
     if (args.isEmpty) return;
     final sessionId = args.first;
@@ -3207,6 +3210,39 @@ class HarnessRepositoryImpl implements ChatRepository {
       return;
     }
     _sessions.value = List<SessionSummary>.of(current)..removeAt(index);
+    _releaseSessionMirrors(sessionId);
+  }
+
+  /// Drops a removed top-level session's manager-level mirrors.
+  ///
+  /// Web `SessionManager.handleSessionRemoved`
+  /// (`packages/api/session-controller/src/client/sessions/manager.ts:729-757`)
+  /// deletes the resident projection store, the transient queue mirror, and
+  /// the per-session job list for a non-subagent removal, while keeping the
+  /// resident Session object itself — `handleRemoved` only flags it
+  /// `removed` and leaves its window in place. The equivalent here: the six
+  /// projection streams and their two seq guards, the buffered-frame list
+  /// (`pendingBuffers` stands in for the queue mirror: it holds a session's
+  /// un-instantiated frames), the session's pending-interaction keys, and its
+  /// running edge. [_sessionStates] and [_sessionCursors] stay: they are the
+  /// resident instance's window, and a re-open must reuse the reducer's queue
+  /// mirror rather than rebuild it.
+  ///
+  /// The running edge goes because a re-added id would otherwise arm a
+  /// completion reminder against a `running` bit that predates the removal —
+  /// a notification for work the user never saw start.
+  void _releaseSessionMirrors(String sessionId) {
+    _goalProjections.remove(sessionId);
+    _planProjections.remove(sessionId);
+    _todoProjections.remove(sessionId);
+    _permissionProjections.remove(sessionId);
+    _contextPressureProjections.remove(sessionId);
+    _contextBreakdownProjections.remove(sessionId);
+    _contextPressureSeqs.remove(sessionId);
+    _contextBreakdownSeqs.remove(sessionId);
+    _pendingBuffers.remove(sessionId);
+    _prevRunningBySession.remove(sessionId);
+    if (_pendingBySession.remove(sessionId) != null) _publishPending();
   }
 
   /// One `api-session/activity` forwarded event: the session's last activity

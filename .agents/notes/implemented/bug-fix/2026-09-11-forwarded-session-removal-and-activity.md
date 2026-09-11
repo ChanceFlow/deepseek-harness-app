@@ -61,10 +61,22 @@ rather than a switch arm.
 
 - A peer's deletion leaves the roster on the event, and a working session
   re-sorts on its activity tick, rather than both waiting for a pull.
-- Per-session fold state (history cursors, projection streams) for a removed
-  root session is not disposed here; a connection that removes many sessions
-  retains those maps until it reconnects.
+- A removed root session's manager-level mirrors go with it
+  (`_releaseSessionMirrors`): the six projection streams and their two seq
+  guards, the buffered-frame list, the pending-interaction keys, and the
+  running edge. Web `handleSessionRemoved`
+  (`packages/api/session-controller/src/client/sessions/manager.ts:729-757`)
+  deletes the same session's projection store, queue mirror and per-session
+  job list. Keeping them here would let a re-used id inherit a dead session's
+  plan or its answerable-looking approval, and the retained running edge would
+  arm a completion reminder for work the user never saw start. `_sessionStates`
+  and `_sessionCursors` stay, matching the resident Session object the web
+  manager keeps and only flags `removed`; a re-open reuses the reducer's queue
+  mirror instead of rebuilding it. A subagent child returns before the release,
+  so it keeps both its row and its mirrors.
 - `forwarded_session_events_test.dart` pins both folds through the real
   repository, the real `SessionWire` decoder and the `$events` `emit` path: a
   root session leaves the roster, a subagent child survives with `running`
-  cleared, and an activity tick advances the row's time without a pull.
+  cleared, and an activity tick advances the row's time without a pull. It also
+  drives a `plan` projection frame and an `approval/requested` frame for a
+  session it then removes and re-adds, and reads both mirrors back clean.
