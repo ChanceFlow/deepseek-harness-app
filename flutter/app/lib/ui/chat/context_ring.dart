@@ -21,7 +21,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart' show kShapeMenuSheet;
+import '../theme/theme.dart' show kShapeDock, kShapeMenuSheet;
 import 'stats_line.dart' show formatTokens;
 
 /// Breakdown bar height: 4px, matching web ContextMeter.module.css .bar.
@@ -111,7 +111,7 @@ class _ContextRingState extends State<ContextRing> {
         label: available ? l10n.contextUsedPercent(percent) : l10n.contextLabel,
         button: available,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(kShapeDock),
           // The web trigger toggles the panel on tap; outside taps and
           // Escape close through MenuAnchor natively.
           onTap: available

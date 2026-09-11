@@ -206,7 +206,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
                           ),
                           decoration: BoxDecoration(
                             color: scheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(kShapePill),
                           ),
                           child: Text(
                             l10n.backendStatusActive,
@@ -697,7 +697,7 @@ class _HeaderIconButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(kShapeDock),
             hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
             child: Center(
@@ -739,7 +739,7 @@ class _SearchCapsule extends StatelessWidget {
       child: Container(
         height: 36,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           border: Border.all(color: scheme.outlineVariant),
         ),
         child: Row(
@@ -776,7 +776,7 @@ class _SearchCapsule extends StatelessWidget {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(kShapeDock),
                   hoverColor: scheme.surfaceContainerHigh,
                   onTap: onCollapse,
                   child: Center(
@@ -828,7 +828,7 @@ class _ErrorBanner extends StatelessWidget {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(kShapeDock),
                 hoverColor: scheme.surfaceContainerHigh,
                 onTap: onDismiss,
                 child: Center(
@@ -1082,14 +1082,14 @@ class _UngroupedHeaderRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         hoverColor: scheme.surfaceContainerHigh,
         onTap: onToggle,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(kShapeChip),
             color: expanded ? scheme.surfaceContainerHigh : null,
           ),
           child: Row(
@@ -1143,14 +1143,14 @@ class _WorkspaceRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         hoverColor: scheme.surfaceContainerHigh,
         onTap: () => onToggle(workspace.workspaceId),
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(kShapeChip),
             color: expanded ? scheme.surfaceContainerHigh : null,
           ),
           child: Row(
@@ -1214,7 +1214,7 @@ class _RowIconButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(kShapeDock),
             hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
             child: Center(
@@ -1257,7 +1257,7 @@ class _WorkspaceActionSheet extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(kShapeMenuSheet),
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: kM3ShadowElevation3,
         ),
@@ -1336,7 +1336,7 @@ class _MenuRow extends StatelessWidget {
     final row = Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kShapeChip),
         hoverColor: isDanger
             ? error.withValues(alpha: 0.05)
             : scheme.surfaceContainerHigh,
@@ -1413,7 +1413,7 @@ class _DsModalCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(kShapeSheet),
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: kM3ShadowElevation3,
         ),
@@ -1448,7 +1448,7 @@ ButtonStyle _dsCapsuleButton(ThemeData theme) => ButtonStyle(
     EdgeInsets.symmetric(horizontal: 14),
   ),
   shape: WidgetStatePropertyAll<RoundedRectangleBorder>(
-    RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    RoundedRectangleBorder(borderRadius: BorderRadius.circular(kShapeDock)),
   ),
 );
 
@@ -1474,11 +1474,11 @@ class _DsTextInput extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(kShapeDock),
       borderSide: BorderSide(color: scheme.outlineVariant),
     );
     final focusedBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(kShapeDock),
       borderSide: BorderSide(color: scheme.primary),
     );
     return TextField(
@@ -1890,7 +1890,9 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
       decoration: BoxDecoration(
         // Web Modal card family: layer-2 fill, r24, lv3 shadow.
         color: scheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(kShapeSheet),
+        ),
         border: Border.all(color: scheme.outlineVariant),
         boxShadow: kM3ShadowElevation3,
       ),
@@ -2070,7 +2072,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
               const Spacer(),
               // Web `.showHiddenToggle`: fixed label, trailing check.
               InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeChip),
                 onTap: () => setState(() => _showHidden = !_showHidden),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -2151,7 +2153,7 @@ class _CrumbSeat extends StatelessWidget {
         if (leadingDivider)
           Icon(Icons.chevron_right, size: 12, color: scheme.onSurfaceVariant),
         InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(kShapeChip),
           onTap: () => onNavigate(crumb.path),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
@@ -2193,7 +2195,7 @@ class _PathEditorRow extends StatelessWidget {
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(kShapeChip),
       borderSide: BorderSide(color: scheme.outlineVariant),
     );
     return TextField(
@@ -2230,7 +2232,7 @@ class _PathEditorRow extends StatelessWidget {
         border: border,
         enabledBorder: border,
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(kShapeChip),
           borderSide: BorderSide(color: scheme.primary),
         ),
       ),
@@ -2254,7 +2256,7 @@ class _DirectoryEntryRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         hoverColor: scheme.surfaceContainerHigh,
         onTap: onTap,
         child: Container(
@@ -2318,7 +2320,7 @@ class _SheetIconButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(kShapeDock),
             hoverColor: scheme.surfaceContainerHigh,
             onTap: onTap,
             child: Center(

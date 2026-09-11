@@ -54,7 +54,7 @@ class ApprovalPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(kShapeDock),
         border: Border.all(color: scheme.errorContainer),
         boxShadow: kM3ShadowElevation1,
       ),

@@ -263,7 +263,7 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
                       ),
                       DiffLineKind.equal => Colors.transparent,
                     },
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,

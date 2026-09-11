@@ -99,7 +99,7 @@ class AsrModelsScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(kShapeCard),
                 ),
                 child: Row(
                   children: <Widget>[
@@ -129,7 +129,7 @@ class AsrModelsScreen extends StatelessWidget {
               elevation: 0,
               color: scheme.surfaceContainerLow,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(kShapeCard),
                 side: BorderSide(
                   color: scheme.outlineVariant.withValues(alpha: 0.5),
                 ),
@@ -308,7 +308,7 @@ class _ModelCard extends StatelessWidget {
       elevation: 0,
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(kShapeCard),
         side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Padding(
@@ -369,7 +369,7 @@ class _ModelCard extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kShapeCard),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,7 +431,7 @@ class _ModelCard extends StatelessWidget {
               LinearProgressIndicator(
                 value: cardState.progress,
                 minHeight: 6,
-                borderRadius: BorderRadius.circular(3),
+                borderRadius: BorderRadius.circular(kShapeChip),
               ),
               const SizedBox(height: 6),
               Row(
@@ -586,7 +586,7 @@ class _Chip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -660,7 +660,7 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -704,13 +704,13 @@ class _ActiveModelSelector extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: () => _open(context),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(kShapeChip),
             border: Border.all(color: scheme.outlineVariant),
           ),
           child: Row(
@@ -720,7 +720,7 @@ class _ActiveModelSelector extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(kShapeChip),
                 ),
                 child: Icon(
                   Icons.record_voice_over_outlined,
@@ -777,7 +777,7 @@ class _ActiveModelSelector extends StatelessWidget {
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: scheme.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kShapeMenuSheet),
               border: Border.all(color: scheme.outlineVariant),
               boxShadow: kM3ShadowElevation3,
             ),
@@ -802,7 +802,7 @@ class _ActiveModelSelector extends StatelessWidget {
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(kShapeChip),
                           onTap: () {
                             Navigator.of(sheetContext).pop();
                             onSelect(item.info.id);
@@ -821,7 +821,9 @@ class _ActiveModelSelector extends StatelessWidget {
                                     color: isSelected
                                         ? scheme.primaryContainer
                                         : scheme.surfaceContainerHigh,
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(
+                                      kShapeChip,
+                                    ),
                                   ),
                                   child: Icon(
                                     Icons.record_voice_over_outlined,

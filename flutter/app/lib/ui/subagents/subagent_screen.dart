@@ -925,10 +925,10 @@ class _ChildDetailView extends StatelessWidget {
 }
 
 /// Read-only queue dock for the child record — the app QueueDock's
-/// container language (tip fill, r12 top corners, l1 border) with plain
-/// preview rows only: on a child view `queueMutable` is false, so no
-/// edit/steer/remove controls exist. The corner value mirrors the chat
-/// `QueueDock` verbatim (a deliberate port of
+/// container language (tip fill, `kShapeDock` top corners, l1 border)
+/// with plain preview rows only: on a child view `queueMutable` is false,
+/// so no edit/steer/remove controls exist. The corner value mirrors the
+/// chat `QueueDock` verbatim (a deliberate port of
 /// [the queue-dock note](../../../../../.agents/notes/implemented/feature/2026-08-19-queue-dock-tab-persistent-draft.md)
 /// — divergence here would read as a broken seam above the composer);
 /// sharing the widget itself would reach into `chat/` and is recorded as
@@ -937,10 +937,6 @@ class _ReadOnlyQueueDock extends StatelessWidget {
   const _ReadOnlyQueueDock({required this.items});
 
   final List<SessionQueueItem> items;
-
-  /// The chat QueueDock's top corner, mirrored so the read-only dock
-  /// seams exactly under where the composer card would sit.
-  static const double _kTopRadius = 12;
 
   @override
   Widget build(BuildContext context) {
@@ -952,7 +948,7 @@ class _ReadOnlyQueueDock extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
         borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(_kTopRadius),
+          top: Radius.circular(kShapeDock),
         ),
         border: Border(
           top: BorderSide(color: scheme.outlineVariant),

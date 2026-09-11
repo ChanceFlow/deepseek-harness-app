@@ -10,6 +10,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/menu_sheet.dart';
+import '../theme/theme.dart';
 
 import 'chat_local_state.dart';
 
@@ -285,7 +286,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: canBack ? () => setState(() => _pane = _Pane.root) : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -317,7 +318,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -370,7 +371,7 @@ class _ModelSelectSheetState extends State<_ModelSelectSheet> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -458,7 +459,7 @@ class _RowTile extends StatelessWidget {
       height: 36,
       decoration: BoxDecoration(
         color: selected ? scheme.primaryContainer : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       child: Icon(
         icon,

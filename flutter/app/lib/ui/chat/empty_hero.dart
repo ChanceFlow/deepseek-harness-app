@@ -8,6 +8,7 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/menu_sheet.dart';
+import '../theme/theme.dart';
 
 import 'fish_logo.dart';
 import 'preset_seat.dart';
@@ -98,7 +99,7 @@ class EmptyHero extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: scheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(kShapeChip),
                       ),
                       child: Text(
                         l10n.heroPreview,
@@ -162,13 +163,13 @@ class WorkspaceChip extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(kShapeChip),
           onTap: () => _open(context),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(kShapeChip),
               border: Border.all(color: scheme.outlineVariant),
             ),
             child: Row(
@@ -269,7 +270,7 @@ class _WorkspaceSheet extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                   ),
                   child: Text(
                     '${workspaces.length}',
@@ -323,7 +324,7 @@ class _WorkspaceSheet extends StatelessWidget {
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(kShapeChip),
                     onTap: () => onPickWorkspace(workspace.workspaceId),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -339,7 +340,7 @@ class _WorkspaceSheet extends StatelessWidget {
                               color: isSelected
                                   ? scheme.primaryContainer
                                   : scheme.surfaceContainerHigh,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(kShapeChip),
                             ),
                             child: Icon(
                               isSelected
@@ -393,7 +394,7 @@ class _WorkspaceSheet extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: scheme.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(kShapeChip),
                               ),
                               child: Text(
                                 '${workspace.sessionIds.length}',

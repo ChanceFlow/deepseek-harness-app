@@ -48,9 +48,9 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
   `Border()` for both shapes. A row is as tall as its line: shrink the
   ambient icon size rather than wear the 24px chevron; one-line rows take
   `height: 1.2`.
-- **Shape comes from the four-step scale** in `theme.dart`: `kShapeSheet` 28,
-  `kShapeDock` 20, `kShapeCard` 14, `kShapeChip` 8. A fifth radius needs a
-  reason, not a number typed at a call site.
+- **Shape comes from the named scale** in `theme.dart`: `kShapeSheet` 28,
+  `kShapeDock` 20, `kShapeCard` 14, `kShapeMenuSheet` 12, `kShapeChip` 8,
+  `kShapePill` 999. A further radius needs a reason, not a call-site number.
 - **Motion follows `DshMotion` tokens in `theme.dart`.** Durations
   (`durationMicro/Short/Medium/Long`) and curves (`curveEmphasized/Enter/Exit/Standard`).
   Controls provide tactile feedback (`DshTappable`); pages ride

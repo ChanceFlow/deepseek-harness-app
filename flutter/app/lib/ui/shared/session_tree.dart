@@ -345,7 +345,9 @@ class SessionTreeRow extends StatelessWidget {
       // matching the timeline-native adoption).
       selectedTileColor: scheme.secondaryContainer,
       hoverColor: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kShapeChip),
+      ),
       leading: SizedBox(width: 16, child: SessionStatusDot(session: session)),
       title: Text(
         title,
@@ -494,7 +496,9 @@ class _VerbRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kShapeChip),
+        ),
         onTap: () {
           Navigator.of(context).pop();
           onTap();
@@ -592,7 +596,7 @@ class SessionOverflowRow extends StatelessWidget {
             textStyle: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(fontSize: 12),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(kShapeChip),
             ),
           ),
           child: Text(
@@ -643,7 +647,9 @@ class SessionSearchResultRow extends StatelessWidget {
       tileColor: Colors.transparent,
       selectedTileColor: scheme.secondaryContainer,
       hoverColor: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kShapeChip),
+      ),
       leading: SizedBox(
         width: 16,
         // Web `SearchResultItem` runs the same `sessionStatuses` state

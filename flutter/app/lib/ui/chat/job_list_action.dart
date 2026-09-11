@@ -10,6 +10,8 @@ import 'package:app/ui/shared/state_dot.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/theme.dart';
+
 /// A job the registry still holds open (its duration ticks).
 bool _isLive(JobView job) =>
     job.status == JobStatus.running || job.status == JobStatus.stopping;
@@ -65,7 +67,7 @@ class JobListAction extends StatelessWidget {
         : l10n.jobCount(count);
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(kShapeDock),
       onTap: () => _open(context),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 220),
