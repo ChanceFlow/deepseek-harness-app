@@ -629,4 +629,69 @@ void main() {
       },
     );
   });
+
+  group('work in flight', () {
+    test(
+      'rises on the first running session and falls when it settles',
+      () async {
+        final changes = <bool>[];
+        center.workInFlightChanges.listen(changes.add);
+        expect(center.hasWorkInFlight, isFalse);
+
+        repository.sessions.value = [
+          _session('s1', title: 'Work', running: true),
+        ];
+        await pumpEventQueue();
+        expect(center.hasWorkInFlight, isTrue);
+        expect(changes, [true]);
+
+        repository.sessions.value = [_session('s1', title: 'Work')];
+        await pumpEventQueue();
+        expect(center.hasWorkInFlight, isFalse);
+        expect(changes, [true, false]);
+      },
+    );
+
+    test('waiting on the user keeps work in flight', () async {
+      repository.sessions.value = [
+        _session(
+          's1',
+          title: 'Perm',
+          pending: SessionPendingInteraction.approval,
+        ),
+      ];
+      await pumpEventQueue();
+
+      expect(center.hasWorkInFlight, isTrue);
+    });
+
+    test(
+      'a working child session does not keep the connection alive',
+      () async {
+        repository.sessions.value = [
+          _session('s2', title: 'Root'),
+          _session('c1', title: 'Child', running: true, parent: 's2'),
+        ];
+        await pumpEventQueue();
+
+        expect(center.hasWorkInFlight, isFalse);
+      },
+    );
+
+    test('an unchanged fact emits no second value', () async {
+      final changes = <bool>[];
+      center.workInFlightChanges.listen(changes.add);
+
+      repository.sessions.value = [
+        _session('s1', title: 'Work', running: true),
+      ];
+      await pumpEventQueue();
+      repository.sessions.value = [
+        _session('s1', title: 'Work', running: true),
+      ];
+      await pumpEventQueue();
+
+      expect(changes, [true]);
+    });
+  });
 }

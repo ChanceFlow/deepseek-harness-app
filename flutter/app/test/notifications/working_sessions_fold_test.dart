@@ -232,4 +232,52 @@ void main() {
       ]);
     });
   });
+
+  group('sessionHasWorkInFlight', () {
+    test('running counts', () {
+      expect(sessionHasWorkInFlight(_session('s1', running: true)), isTrue);
+    });
+
+    test('waiting on the user counts', () {
+      expect(
+        sessionHasWorkInFlight(
+          _session('s1', pending: SessionPendingInteraction.approval),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a running-but-pending session still counts once', () {
+      expect(
+        sessionHasWorkInFlight(
+          _session(
+            's1',
+            running: true,
+            pending: SessionPendingInteraction.planReview,
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('idle, done, and blank rows do not count', () {
+      expect(sessionHasWorkInFlight(_session('s1')), isFalse);
+      expect(sessionHasWorkInFlight(_session('s1', completed: true)), isFalse);
+      expect(
+        sessionHasWorkInFlight(_session('s1', running: true, blank: true)),
+        isFalse,
+      );
+    });
+
+    test('the foreground suppression of the fold does not hide the fact', () {
+      // The keep-alive trigger reads this predicate, not the fold's
+      // decisions: a watched session's decision is `gone` while foregrounded
+      // even though the host is still working.
+      final session = _session('s1', title: 'Work', running: true);
+      expect(_fold([session], selected: 's1', foreground: true), [
+        _decision('s1', 'Work', WorkingSessionState.gone),
+      ]);
+      expect(sessionHasWorkInFlight(session), isTrue);
+    });
+  });
 }

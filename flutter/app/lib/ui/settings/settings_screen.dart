@@ -27,6 +27,7 @@ import '../shared/backend_connection_dot.dart';
 import '../theme/theme.dart';
 import 'about_section.dart';
 import 'backend_reachability.dart';
+import 'battery_optimization_section.dart';
 import 'busy_enter_preference.dart';
 import 'llm_providers.dart';
 import 'locale_preference.dart';
@@ -403,6 +404,13 @@ class _HostSection extends ConsumerWidget {
             ],
           ),
         ],
+        // The battery-optimization exemption is device-local and independent
+        // of host settings, so it keeps its own card and stays visible even
+        // while the host describe is loading or unavailable.
+        const SizedBox(height: 12),
+        const _SectionCard(
+          children: <Widget>[SettingsBatteryOptimizationRow()],
+        ),
       ],
     );
   }

@@ -2713,4 +2713,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleUnitSeconds => 'seconds';
+
+  @override
+  String get keepAliveChannelName => 'Background connection';
+
+  @override
+  String get keepAliveChannelDescription =>
+      'Keeps the connection to your host open while agent work is in flight.';
+
+  @override
+  String get keepAliveNotificationTitle => 'Keeping your session connected';
+
+  @override
+  String get keepAliveNotificationBody =>
+      'Agent work continues in the background; you will be notified when it finishes.';
+
+  @override
+  String get batteryOptimizationTitle => 'Background connection';
+
+  @override
+  String get batteryOptimizationNotExemptBody =>
+      'Android can suspend this app\'s network and close the connection while the screen is off. Allow background running so agent work keeps its connection.';
+
+  @override
+  String get batteryOptimizationExemptBody =>
+      'Background running is allowed, so the system will not suspend the connection while agent work is in flight.';
+
+  @override
+  String get batteryOptimizationAllowAction => 'Allow';
+
+  @override
+  String get batteryOptimizationRequestFailed =>
+      'Could not open the battery optimization dialog on this device.';
 }

@@ -2555,4 +2555,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scheduleUnitSeconds => '秒';
+
+  @override
+  String get keepAliveChannelName => '后台连接';
+
+  @override
+  String get keepAliveChannelDescription => '在 agent 任务运行期间保持与主机的连接。';
+
+  @override
+  String get keepAliveNotificationTitle => '正在保持会话连接';
+
+  @override
+  String get keepAliveNotificationBody => '后台任务继续执行，完成后会通知你。';
+
+  @override
+  String get batteryOptimizationTitle => '后台连接';
+
+  @override
+  String get batteryOptimizationNotExemptBody =>
+      '熄屏后 Android 可能暂停本应用的网络并断开连接。允许后台运行可让 agent 任务保持连接。';
+
+  @override
+  String get batteryOptimizationExemptBody => '已允许后台运行，系统不会在 agent 任务进行时暂停连接。';
+
+  @override
+  String get batteryOptimizationAllowAction => '允许';
+
+  @override
+  String get batteryOptimizationRequestFailed => '无法在此设备上打开电池优化对话框。';
 }

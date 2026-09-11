@@ -333,6 +333,19 @@ its pending-interaction keys, its queue projection, and its buffered queue
 snapshot in-band, and the generation's replayed frames rebuild them after it
 on the same stream.
 
+### 5.1 后台保活
+
+Android 在应用离开前台（含锁屏）后会把进程当 cached process 冻结：Dart
+isolate 停转，mux 上再无活动，这一代连接静默死亡——上面那套退避重连要等
+回前台才有机会跑。因此只要还有在飞的活（running 或等待用户的根会话），
+客户端就启动前台服务：`MainActivity` 的 `dsh/keep_alive` 通道驱动
+`DshKeepAliveService`（API 34+ 用 `specialUse` 类型，29–33 回退
+`dataSync`；持有 `PARTIAL_WAKE_LOCK` 与一条低优先级常驻通知），进程不再
+进入 cached 状态，熄屏下 socket 存活到回合结束。最后一个会话落定后 30 秒
+停止服务；空闲时的后台断连仍按上面的退避重连，Doze 期间的网络挂起是已知
+边界。范围与取舍见
+[后台保活前台服务](../.agents/notes/implemented/feature/2026-09-11-background-keep-alive-foreground-service.md)。
+
 ## 6. Timeline Folding
 
 Raw dsh session events are folded by `TimelineReducer` into neutral items.

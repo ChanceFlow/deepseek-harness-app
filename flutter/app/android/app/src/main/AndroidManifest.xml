@@ -10,6 +10,24 @@
          turn-complete/approval/plan notifications never appear. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Network-availability changes drive an immediate reconnect after the
+         device's network returns (screen unlock, Wi-Fi/cellular switch). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- The battery-optimization exemption dialog is only exported to callers
+         holding this permission; it is the user-facing escape hatch from Doze
+         and OEM kill-lists, which a foreground service cannot survive. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Keep-alive foreground service: it holds the mux WebSocket open while
+         the app is not visible. specialUse is the type the service actually
+         starts with on API 34+ (a persistent user-session connection, so no
+         Android 15 dataSync budget applies); dataSync is declared as well
+         because specialUse does not exist on the API 29-33 devices that
+         still enforce a declared type. The partial wake lock keeps the CPU
+         running with the screen off. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="DSH Mobile"
         android:name="${applicationName}"
@@ -37,6 +55,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Keep-alive service, driven from Dart through the dsh/keep_alive
+             channel (see DshKeepAliveService.kt). stopWithTask keeps it (and
+             its notification) from outliving the task the user dismissed. -->
+        <service
+            android:name=".DshKeepAliveService"
+            android:exported="false"
+            android:stopWithTask="true"
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains the persistent connection to the user's own DeepSeek Harness host while agent work is in flight." />
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -89,6 +89,18 @@ List<WorkingSessionDecision> foldWorkingSessions({
   ];
 }
 
+/// Whether one session row represents work a live connection must be kept
+/// for: the agent is running, or it is blocked waiting on the user.
+///
+/// Deliberately not `foldWorkingSessions(...).state != gone`: that fold
+/// suppresses the watched session while the app is foregrounded, which says
+/// nothing about whether the host still has work to finish. The keep-alive
+/// decision needs the host's fact, not the display projection.
+bool sessionHasWorkInFlight(SessionSummary session) {
+  if (session.blank) return false;
+  return session.running || session.pendingInteraction != null;
+}
+
 /// The desired decision for one session row.
 WorkingSessionDecision _decisionFor(
   SessionSummary session, {

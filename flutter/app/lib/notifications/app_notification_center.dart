@@ -75,6 +75,21 @@ class AppNotificationCenter {
   final StreamController<AppNotificationEvent> _foreground =
       StreamController<AppNotificationEvent>.broadcast();
 
+  /// Fires with the new value whenever any root session starts or stops
+  /// having work in flight (running or waiting on the user). The keep-alive
+  /// coordinator merges this across backends; only changes are emitted, and
+  /// [hasWorkInFlight] carries the current value for a late subscriber.
+  final StreamController<bool> _workInFlight =
+      StreamController<bool>.broadcast();
+
+  bool _hasWorkInFlight = false;
+
+  /// Whether any root session of this backend has work in flight right now.
+  bool get hasWorkInFlight => _hasWorkInFlight;
+
+  /// Change stream for [hasWorkInFlight]; no value is replayed on listen.
+  Stream<bool> get workInFlightChanges => _workInFlight.stream;
+
   StreamSubscription<List<SessionSummary>>? _subscription;
   StreamSubscription<void>? _selectionSub;
   StreamSubscription<void>? _foregroundSub;
@@ -95,6 +110,7 @@ class AppNotificationCenter {
     unawaited(_selectionSub?.cancel());
     unawaited(_foregroundSub?.cancel());
     unawaited(_foreground.close());
+    unawaited(_workInFlight.close());
   }
 
   void _onSessions(List<SessionSummary> sessions) {
@@ -109,6 +125,14 @@ class AppNotificationCenter {
       for (final session in sessions)
         if (session.parentSessionId == null) session,
     ];
+    // The connection fact, emitted on its own edges: the keep-alive service
+    // is a process-lifetime decision, so it must not re-run on every
+    // snapshot the way the declarative notification reconcile does.
+    final inFlight = _lastSessions.any(sessionHasWorkInFlight);
+    if (inFlight != _hasWorkInFlight) {
+      _hasWorkInFlight = inFlight;
+      if (!_workInFlight.isClosed) _workInFlight.add(inFlight);
+    }
     final events = _detector.fold(
       sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),

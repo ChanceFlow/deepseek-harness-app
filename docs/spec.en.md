@@ -23,6 +23,7 @@ legacy Gradle modules frozen until parity).
 Connected means the required `/api/remote.mux` socket opened and the gateway delivered its `$events` registration answer — the `ready` frame carrying `host.home` (the reference client's connection-generation handshake). A `ready` frame without `host.home`, a stream that closes first, or one that misses its 30 s deadline fails the generation; `host/describe` is not registered at 0.1.5 and `HostDescription` carries only the ready frame's `home` plus a version no route publishes (never defaulted).
 Backoff on loss: 500 ms base, factor 2, cap 10 s.
 Reconnect refetches session list and open histories, then replays buffered frames.
+While work is in flight (a running or user-waiting root session) the client runs a keep-alive foreground service (`dsh/keep_alive`, `specialUse` on API 34+, `dataSync` below) with a partial wake lock, so Android's cached-process freeze after screen lock cannot kill the mux; it stops 30 s after the last session settles.
 
 ## Timeline Folding
 Raw dsh events fold into `TimelineItem.Message`, `TimelineItem.ToolCall`,

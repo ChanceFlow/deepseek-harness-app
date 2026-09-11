@@ -35,6 +35,13 @@ const Duration _readyFrameTimeout = Duration(seconds: 30);
 /// exact-time assertions.
 typedef DshBackoffDelay = int Function(int attempt);
 
+/// Internal signal: [DshConnectionManager.reconnectNow] tore the live
+/// generation down, so the loop re-dials at once and the deliberate teardown
+/// is not reported as a handshake failure.
+class _GenerationAborted implements Exception {
+  const _GenerationAborted();
+}
+
 /// Randomized exponential backoff: base 500 ms doubling to a 10 s cap,
 /// jittered in the upper half like the Kotlin implementation.
 int exponentialDshBackoffDelay(
@@ -95,6 +102,22 @@ class DshConnectionManager {
   final List<StreamSubscription<void>> _activeSubs =
       <StreamSubscription<void>>[];
 
+  /// Consecutive generation failures; drives [_backoffDelay]. [reconnectNow]
+  /// restarts it at 0, and only a backoff wait that runs to completion
+  /// advances it.
+  int _attempt = 0;
+
+  /// The generation currently dialing or holding the required mux downlink.
+  /// [reconnectNow] completes it to tear the generation down; null while the
+  /// loop is between generations.
+  Completer<void>? _generationAbort;
+
+  /// Completes when [reconnectNow] asks for an immediate generation. A
+  /// completed signal is consumed by the next backoff wait, so a request that
+  /// arrives while a generation is live still skips the wait that follows the
+  /// teardown instead of waiting out the loss backoff.
+  Completer<void> _reconnectSignal = Completer<void>();
+
   /// Current connection state; `.value` for synchronous reads (tests) and
   /// `.stream` for collectors, mirroring Kotlin's StateFlow surface.
   StateStream<ConnectionState> get state => _state;
@@ -150,12 +173,40 @@ class DshConnectionManager {
     unawaited(_hostDescription.close());
   }
 
+  /// Reconnects immediately instead of waiting out the retry policy.
+  ///
+  /// The device's default network becoming available again (screen unlock, a
+  /// Wi-Fi/cellular switch, Doze exit) invalidates whatever the backoff
+  /// assumed about reachability, so the caller signals it here: a live
+  /// generation is torn down, a pending backoff wait is cut short, and the
+  /// attempt sequence restarts at 0. The connect loop still owns every
+  /// generation — this only asks it for a fresh one, which dials on the next
+  /// loop turn.
+  ///
+  /// Safe to call before [start] and after [stop]: both are no-ops that leave
+  /// the manager's state untouched.
+  void reconnectNow() {
+    if (!_started || _stopped) return;
+    _attempt = 0;
+    if (!_reconnectSignal.isCompleted) _reconnectSignal.complete();
+    final abort = _generationAbort;
+    if (abort != null && !abort.isCompleted) abort.complete();
+    onDiagnostic?.call(
+      AdapterDiagnostic(
+        level: AdapterDiagnosticLevel.debug,
+        context: 'connection_manager',
+        message: abort == null
+            ? 'Immediate reconnect requested; interrupting the backoff wait'
+            : 'Immediate reconnect requested; tearing down the live generation',
+      ),
+    );
+  }
+
   /// The loop owns generations: each generation dials the required mux
   /// downlink and requires the mux WebSocket onOpen plus the gateway's
   /// `$events` `ready` frame before publishing CONNECTED. Any loss on the
   /// required stream counts as generation loss.
   Future<void> _connectLoop() async {
-    var attempt = 0;
     while (!_stopped) {
       final connected = await _runGeneration();
       if (_stopped) break;
@@ -167,24 +218,46 @@ class DshConnectionManager {
       );
       // A generation that reached CONNECTED was healthy until stream loss;
       // its loss starts a fresh backoff sequence.
-      if (connected) attempt = 0;
-      final delay = _backoffDelay(attempt);
+      if (connected) _attempt = 0;
+      // A completed reconnect signal means [reconnectNow] already asked for
+      // the next generation, so the retry policy is not consulted and the
+      // diagnostic records the zero delay that applies.
+      final delay = _reconnectSignal.isCompleted ? 0 : _backoffDelay(_attempt);
       onDiagnostic?.call(
         AdapterDiagnostic(
           level: AdapterDiagnosticLevel.warning,
           context: 'connection_manager',
           message:
-              'Generation lost, reconnecting (attempt: $attempt, delay: ${delay}ms)',
+              'Generation lost, reconnecting (attempt: $_attempt, delay: ${delay}ms)',
         ),
       );
-      await Future<void>.delayed(Duration(milliseconds: delay));
-      attempt += 1;
+      // Only a wait that ran to completion advances the attempt sequence;
+      // an interrupted one restarts it.
+      if (await _awaitBackoff(delay)) _attempt += 1;
     }
+  }
+
+  /// Waits out one backoff delay, or returns early when [reconnectNow] asks
+  /// for an immediate generation. Returns whether the full delay elapsed.
+  Future<bool> _awaitBackoff(int delayMillis) async {
+    final signal = _reconnectSignal;
+    if (!signal.isCompleted) {
+      await Future.any<void>(<Future<void>>[
+        Future<void>.delayed(Duration(milliseconds: delayMillis)),
+        signal.future,
+      ]);
+    }
+    if (!signal.isCompleted) return true;
+    // Consume the request so the next wait needs a new one.
+    _reconnectSignal = Completer<void>();
+    return false;
   }
 
   Future<bool> _runGeneration() async {
     var connected = false;
     final generationId = ++_generation;
+    final abort = Completer<void>();
+    _generationAbort = abort;
 
     final muxOpened = Completer<void>();
     final readyFrame = Completer<HostDescription>();
@@ -199,14 +272,20 @@ class DshConnectionManager {
       _muxFrames,
       generationSubs,
     );
-    if (_stopped) return false;
+    if (_stopped) {
+      if (identical(_generationAbort, abort)) _generationAbort = null;
+      return false;
+    }
 
     try {
-      await muxOpened.future.timeout(_streamOpenTimeout);
-      final description = await _awaitReady(
-        readyFrame.future,
-        failure.future,
-      ).timeout(_readyFrameTimeout);
+      await _untilAbort(muxOpened.future.timeout(_streamOpenTimeout), abort);
+      final description = await _untilAbort(
+        _awaitReady(
+          readyFrame.future,
+          failure.future,
+        ).timeout(_readyFrameTimeout),
+        abort,
+      );
 
       _hostDescription.value = description;
       _state.value = ConnectionState(
@@ -216,7 +295,12 @@ class DshConnectionManager {
       );
       connected = true;
 
-      if (!failure.isCompleted) await failure.future;
+      if (!failure.isCompleted) {
+        await _untilAbort(failure.future, abort);
+      }
+    } on _GenerationAborted {
+      // [reconnectNow] tore this generation down: the loop re-dials at once,
+      // and a deliberate teardown is not a handshake failure to report.
     } catch (e, st) {
       onDiagnostic?.call(
         AdapterDiagnostic(
@@ -230,6 +314,7 @@ class DshConnectionManager {
       if (_stopped) return connected;
       // Generation failed before readiness; the retry loop owns it.
     } finally {
+      if (identical(_generationAbort, abort)) _generationAbort = null;
       // Cancels this generation's downlinks (Kotlin: generationJob.cancel()
       // in the finally block). Idempotent with the failure-driven cancel.
       for (final sub in generationSubs) {
@@ -238,6 +323,18 @@ class DshConnectionManager {
       _activeSubs.removeWhere(generationSubs.contains);
     }
     return connected;
+  }
+
+  /// [operation], or [_GenerationAborted] once [abort] completes — whichever
+  /// settles first. The losing future's result is discarded by [Future.any].
+  Future<T> _untilAbort<T>(Future<T> operation, Completer<void> abort) {
+    if (abort.isCompleted) {
+      return Future<T>.error(const _GenerationAborted());
+    }
+    return Future.any<T>(<Future<T>>[
+      operation,
+      abort.future.then<T>((void _) => throw const _GenerationAborted()),
+    ]);
   }
 
   /// Readiness, or the required stream's loss, whichever settles first: a mux
