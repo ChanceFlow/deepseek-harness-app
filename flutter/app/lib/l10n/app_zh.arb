@@ -361,6 +361,8 @@
   "chatGoalPhaseActive": "进行中",
   "chatGoalPhasePaused": "已暂停",
   "chatGoalPhaseBlocked": "受阻",
+  "chatLoadOlder": "加载更早",
+  "chatLoadingOlder": "正在加载更早记录…",
   "queue": "排队发送",
   "thinkLabel": "思考",
   "thoughtDuration": "已思考 {duration}",
@@ -514,5 +516,13 @@
   "errorLogsCopySystemInfo": "复制系统信息",
   "errorLogsSystemInfoCopied": "已复制系统信息到剪贴板",
   "errorLogsCountBadge": "{count} 条错误",
-  "errorLogsNoSearchResults": "未找到匹配的错误日志。"
+  "errorLogsNoSearchResults": "未找到匹配的错误日志。",
+  "previewFile": "预览",
+  "copyPath": "复制路径",
+  "copyContent": "复制内容",
+  "copiedFeedback": "已复制到剪贴板",
+  "filePreviewFailed": "加载文件预览失败",
+  "filePreviewTruncated": "仅预览前 {count} 行",
+  "sessionAlreadyOwnedError": "当前会话正被宿主其他进程或命令行独占写入。",
+  "systemPromptUpdated": "系统提示词已更新"
 }

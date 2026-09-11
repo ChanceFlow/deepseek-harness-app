@@ -25,6 +25,7 @@ class TimelineReducer {
   String? _partialKey;
   int _partialIndex = -1;
   final Set<int> _seenTurns = <int>{};
+  bool _hasSeenInitialSystemPrompt = false;
 
   /// The streaming partial accumulates into buffers: one delta is one
   /// O(delta) append, and the [ChatMessage] string is materialized only
@@ -67,6 +68,7 @@ class TimelineReducer {
     _lastSeq = -1;
     _clearPartial();
     _seenTurns.clear();
+    _hasSeenInitialSystemPrompt = false;
     final sorted = List<JsonMap>.of(history)
       ..sort((a, b) => wireLong(a, 'seq').compareTo(wireLong(b, 'seq')));
     for (final event in sorted) {
@@ -189,6 +191,8 @@ class TimelineReducer {
         _appendCommandRun(event);
       case 'command/done':
         _resolveCommandDone(event);
+      case 'system/message':
+        _appendSystemMessage(event);
       case 'user/message':
         _appendUserMessage(event);
       case 'assistant/message':
@@ -336,6 +340,33 @@ class TimelineReducer {
       if (item is TimelineCommand && item.commandId == commandId) return item;
     }
     return null;
+  }
+
+  void _appendSystemMessage(JsonMap event) {
+    _finalizePartial();
+    final seq = wireLong(event, 'seq');
+    final data = _eventData(event);
+    final message = asJsonObject(data['message']);
+    final promptText = message != null ? _extractText(message) : '';
+
+    // Node 0 is the initial system prompt in Session V3; it is model configuration,
+    // not user-visible conversation transcript.
+    if (seq == 0 || (!_hasSeenInitialSystemPrompt && _items.isEmpty)) {
+      _hasSeenInitialSystemPrompt = true;
+      return;
+    }
+    _hasSeenInitialSystemPrompt = true;
+
+    // An in-history system prompt update (appended mid-conversation) is presented
+    // as an inspectable context injection notice.
+    _items.add(
+      TimelineContextInjection(
+        id: 'system-prompt:$seq',
+        text: promptText,
+        producerLabel: 'system-prompt',
+        summary: 'System prompt updated',
+      ),
+    );
   }
 
   void _appendUserMessage(JsonMap event) {

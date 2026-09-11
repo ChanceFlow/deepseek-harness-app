@@ -28,7 +28,7 @@ import 'package:app/ui/chat/chat_controller.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/state_stream.dart';
 
-class SearchTestFakeRepository implements ChatRepository {
+class SearchTestFakeRepository extends ChatRepository {
   SearchTestFakeRepository({
     List<SessionSummary> initialSessions = const <SessionSummary>[],
     List<WorkspaceSummary> initialWorkspaces = const <WorkspaceSummary>[],

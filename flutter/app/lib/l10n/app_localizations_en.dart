@@ -1424,6 +1424,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatGoalPhaseBlocked => 'Blocked';
 
   @override
+  String get chatLoadOlder => 'Load earlier';
+
+  @override
+  String get chatLoadingOlder => 'Loading earlier…';
+
+  @override
   String get queue => 'Queue';
 
   @override
@@ -1878,4 +1884,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorLogsNoSearchResults => 'No errors match your filter.';
+
+  @override
+  String get previewFile => 'Preview';
+
+  @override
+  String get copyPath => 'Copy path';
+
+  @override
+  String get copyContent => 'Copy content';
+
+  @override
+  String get copiedFeedback => 'Copied to clipboard';
+
+  @override
+  String get filePreviewFailed => 'Failed to load file preview';
+
+  @override
+  String filePreviewTruncated(int count) {
+    return 'Previewing first $count lines';
+  }
+
+  @override
+  String get sessionAlreadyOwnedError =>
+      'This session is currently locked by another process or CLI.';
+
+  @override
+  String get systemPromptUpdated => 'System prompt updated';
 }

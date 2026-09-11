@@ -24,4 +24,5 @@ export 'model/timeline_item.dart';
 export 'model/timeline_window.dart';
 export 'model/todo.dart';
 export 'model/workspace.dart';
+export 'model/workspace_file.dart';
 export 'repository/chat_repository.dart';

@@ -686,6 +686,14 @@ enum _SessionVerb { subagents, rename, fork, archive }
 /// timeline item, only a row the gap math and the builder dispatch on.
 const Object _turnStatusSlot = Object();
 
+class _OlderHistorySlot {
+  const _OlderHistorySlot();
+}
+
+/// Sentinel for the older-history row at the head of the transcript: not a
+/// timeline item, only a row the gap math and the builder dispatch on.
+const Object _olderHistorySlot = _OlderHistorySlot();
+
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
     required this.uiState,
@@ -1242,10 +1250,12 @@ class _ChatPanelState extends State<ChatPanel> {
     // visible to be a tail after (a queue-only window), it renders nothing
     // — the queue dock and the composer seat already carry the run.
     final showTurnStatus = _turnStatusVisible(uiState) && items.isNotEmpty;
+    final showOlder = uiState.hasMoreOlder || uiState.isLoadingOlder;
     // The web's tail order: flow rows, the turn-status line, then the
     // pending steering bubbles (ChatView.tsx:446-460). Steering rides both
     // render modes the same way.
     final rows = <Object>[
+      if (showOlder) _olderHistorySlot,
       ...groupedItems,
       if (showTurnStatus) _turnStatusSlot,
       ...steering,
@@ -1262,6 +1272,12 @@ class _ChatPanelState extends State<ChatPanel> {
       ),
       itemBuilder: (context, index) {
         final row = rows[index];
+        if (identical(row, _olderHistorySlot)) {
+          return OlderHistoryRow(
+            isLoading: uiState.isLoadingOlder,
+            onLoadOlder: () => widget.onAction(const LoadOlderHistoryAction()),
+          );
+        }
         if (row is TimelineActivityGroup) {
           return ActivityGroupRow(
             key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
@@ -1313,7 +1329,9 @@ class _ChatPanelState extends State<ChatPanel> {
     if (row is TimelineMessage) {
       return row.value.text.trim().isNotEmpty;
     }
-    return row is SessionQueueItem || identical(row, _turnStatusSlot);
+    return row is SessionQueueItem ||
+        identical(row, _turnStatusSlot) ||
+        identical(row, _olderHistorySlot);
   }
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
@@ -1642,6 +1660,72 @@ class _PlanChipState extends State<PlanChip> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paging button / loading state at the head of the transcript when older
+/// session history is available or being fetched.
+class OlderHistoryRow extends StatelessWidget {
+  const OlderHistoryRow({
+    required this.isLoading,
+    required this.onLoadOlder,
+    super.key,
+  });
+
+  final bool isLoading;
+  final VoidCallback onLoadOlder;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: OutlinedButton(
+          key: const ValueKey('chat-load-older-button'),
+          onPressed: isLoading ? null : onLoadOlder,
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(kShapeCard),
+            ),
+            side: BorderSide(color: scheme.outlineVariant),
+            foregroundColor: scheme.onSurfaceVariant,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+          child: isLoading
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(l10n.chatLoadingOlder),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.history_rounded,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(l10n.chatLoadOlder),
+                  ],
+                ),
         ),
       ),
     );
@@ -2428,13 +2512,19 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
 /// monospace stack; the expanded details render as the web IN/OUT card
 /// (bordered code surface with gutter labels and a hairline divider).
 class ToolCallRow extends StatefulWidget {
-  const ToolCallRow({required this.call, super.key, this.expansion});
+  const ToolCallRow({
+    required this.call,
+    super.key,
+    this.expansion,
+    this.onPreviewFile,
+  });
 
   final TimelineToolCall call;
 
   /// Expansion persistence keyed by this row's [timelineKey] value;
   /// null keeps expansion in memory only.
   final ToolExpansionPersistence? expansion;
+  final void Function(String path)? onPreviewFile;
 
   @override
   State<ToolCallRow> createState() => _ToolCallRowState();
@@ -2627,11 +2717,74 @@ class _ToolCallRowState extends State<ToolCallRow>
                         output,
                         failed: failed,
                       ),
+                    if (model.filePath case final filePath?)
+                      _fileActionBar(context, filePath),
                   ],
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _fileActionBar(BuildContext context, String path) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          if (widget.onPreviewFile != null)
+            OutlinedButton.icon(
+              onPressed: () => widget.onPreviewFile!(path),
+              icon: const Icon(Icons.visibility_outlined, size: 14),
+              label: Text(
+                l10n.previewFile,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: scheme.primary,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                side: BorderSide(color: scheme.outlineVariant),
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: () {
+              unawaited(Clipboard.setData(ClipboardData(text: path)));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(l10n.copiedFeedback),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: Icon(
+              Icons.copy_outlined,
+              size: 14,
+              color: scheme.onSurfaceVariant,
+            ),
+            label: Text(
+              l10n.copyPath,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
+        ],
       ),
     );
   }

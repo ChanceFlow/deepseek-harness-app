@@ -2335,6 +2335,18 @@ abstract class AppLocalizations {
   /// **'Blocked'**
   String get chatGoalPhaseBlocked;
 
+  /// Button to load earlier conversation history at the top of the transcript.
+  ///
+  /// In en, this message translates to:
+  /// **'Load earlier'**
+  String get chatLoadOlder;
+
+  /// Progress state while earlier conversation history is being loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading earlier…'**
+  String get chatLoadingOlder;
+
   /// No description provided for @queue.
   ///
   /// In en, this message translates to:
@@ -3138,6 +3150,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No errors match your filter.'**
   String get errorLogsNoSearchResults;
+
+  /// Button label to preview a generated or edited file.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get previewFile;
+
+  /// Button label to copy file path.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path'**
+  String get copyPath;
+
+  /// Button label to copy file content in preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy content'**
+  String get copyContent;
+
+  /// Feedback message when content is copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get copiedFeedback;
+
+  /// Error message when file preview cannot be loaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load file preview'**
+  String get filePreviewFailed;
+
+  /// Notice banner when file preview is truncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Previewing first {count} lines'**
+  String filePreviewTruncated(int count);
+
+  /// Error message when a session write lease is held by another process.
+  ///
+  /// In en, this message translates to:
+  /// **'This session is currently locked by another process or CLI.'**
+  String get sessionAlreadyOwnedError;
+
+  /// Notice when system prompt is replaced or appended mid-conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'System prompt updated'**
+  String get systemPromptUpdated;
 }
 
 class _AppLocalizationsDelegate
