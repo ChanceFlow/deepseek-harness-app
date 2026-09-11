@@ -39,6 +39,17 @@ jobs:
           echo "opt dirs  : $(ls -d /opt/* 2>/dev/null | tr '\n' ' ')"
           echo "flutter   : $(command -v flutter || echo 'ABSENT')"
           echo "java      : $(command -v java || echo 'ABSENT')"
+          echo "node      : $(command -v node || echo 'ABSENT — actions cannot run without it')"
+          # Run 1410: the runner's `runner.envs.PATH` pointed at the runner
+          # machine's toolchain, so the container lost its own PATH and `node`
+          # with it — every `uses:` step then died with exit 127. A container
+          # job must never see that PATH again.
+          case "$PATH" in
+            *"/home/"*) echo "FAIL: the runner injected its own PATH into this container"; exit 1 ;;
+          esac
+          case "${JAVA_HOME:-}" in
+            /home/*) echo "FAIL: JAVA_HOME points at the runner machine"; exit 1 ;;
+          esac
           echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}  JAVA_HOME=${JAVA_HOME:-<unset>}"
           echo "pub cache : $(du -sh "${PUB_CACHE:-$HOME/.pub-cache}" 2>/dev/null | cut -f1)"
           echo "gradle    : $(du -sh "$HOME/.gradle" 2>/dev/null | cut -f1)"
