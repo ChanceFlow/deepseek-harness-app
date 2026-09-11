@@ -6,6 +6,11 @@ Checks relative file targets exist and #anchors match a GitHub-style slug of
 a heading in the target file. Skips fenced code blocks and external
 (http/https/mailto) targets — no network in gates.
 
+A target that exists on disk but is gitignored is a violation: the link
+resolves in the developer's checkout and breaks in every clone, which is how
+`.agents/skills/README.md` came to cite skills that never ship. Name such a
+path in backticks instead of linking it.
+
 Exit code 0 = all links resolve, 1 = violations found.
 """
 
@@ -14,6 +19,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -77,8 +83,35 @@ def file_anchors(path: Path) -> list[str]:
     return anchors
 
 
+def ignored_targets(paths: set[str]) -> set[str]:
+    """The subset of repo-relative [paths] that git ignores.
+
+    One `git check-ignore --stdin` call for the whole scan: an ignored target
+    is present locally but absent from a clone, so a link to it is broken for
+    everyone except the machine that wrote it.
+    """
+    if not paths:
+        return set()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(REPO), "check-ignore", "--stdin"],
+            input="\n".join(sorted(paths)),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return set()  # no git: fall back to the existence check alone
+    if result.returncode not in (0, 1):
+        return set()
+    return {line for line in result.stdout.splitlines() if line}
+
+
 def check() -> int:
     violations: list[str] = []
+    # repo-relative target path -> the places that link it, for the batch
+    # ignore check after the scan.
+    linked: dict[str, list[str]] = {}
     for doc in load_scope():
         rel = doc.relative_to(REPO)
         in_fence = False
@@ -99,16 +132,22 @@ def check() -> int:
                 if file_part:
                     resolved = (doc.parent / file_part).resolve()
                     try:
-                        resolved.relative_to(REPO)
+                        inside = resolved.relative_to(REPO)
                     except ValueError:
                         continue  # escapes the repo tree (e.g. reference submodule links)
                     if not resolved.exists():
                         violations.append(f"{rel}:{number}: link target does not exist: {target}")
                         continue
+                    linked.setdefault(inside.as_posix(), []).append(
+                        f"{rel}:{number}: link target is gitignored, so it does not exist "
+                        f"in a clone: {target}"
+                    )
                     if anchor and resolved.suffix == ".md" and anchor not in file_anchors(resolved):
                         violations.append(f"{rel}:{number}: anchor '#{anchor}' not found in {file_part}")
                 elif anchor and doc.suffix == ".md" and anchor not in file_anchors(doc):
                     violations.append(f"{rel}:{number}: anchor '#{anchor}' not found in {rel}")
+    for path in ignored_targets(set(linked)):
+        violations.extend(linked[path])
     if violations:
         print("MD-LINKS GATE: violations found:")
         for violation in violations:

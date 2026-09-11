@@ -9,9 +9,12 @@ inside this repo.
 | Skill | Purpose |
 |---|---|
 | [`flutter-dart`](flutter-dart/SKILL.md) | Consolidated single entrypoint for all Dart language and Flutter framework workflows, routing to 22 modular topic guides under `references/` |
-| [`dsh-close-out`](dsh-close-out/SKILL.md) | Close out coding tasks: select narrowest gate evidence, update notes, tick ledger, commit |
-| [`dsh-design-review`](dsh-design-review/SKILL.md) | Render phone client screens to PNGs and publish visual review artifacts |
-| [`dsh-wire-parity`](dsh-wire-parity/SKILL.md) | dsh RPC and event coverage checks against reference submodule wire contracts |
+
+The `dsh-close-out`, `dsh-design-review` and `dsh-wire-parity` skills are
+**local-only**: `.gitignore` excludes their directories, so they exist in a
+developer's checkout and never in a clone. They are named in backticks rather
+than linked for that reason — a link to an ignored path resolves here and
+breaks everywhere else.
 
 ## Source of Flutter / Dart Capabilities
 
