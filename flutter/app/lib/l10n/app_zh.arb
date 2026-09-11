@@ -678,6 +678,7 @@
   "settingsAppearanceTitle": "外观",
   "settingsAppearanceLight": "浅色",
   "settingsAppearanceDark": "深色",
+  "settingsAppearanceOled": "纯黑",
   "settingsAppearanceSystem": "跟随系统",
   "settingsAppearanceUnavailable": "主机主题设置不可用。",
   "settingsAppearanceSaveFailed": "无法保存主题选择。",

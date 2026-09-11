@@ -2279,6 +2279,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAppearanceDark => '深色';
 
   @override
+  String get settingsAppearanceOled => '纯黑';
+
+  @override
   String get settingsAppearanceSystem => '跟随系统';
 
   @override
