@@ -452,7 +452,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final onAction = widget.onAction;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useTwoPanes = constraints.maxWidth >= 720;
+        // A phone in landscape clears the width breakpoint (780x390) while
+        // standing only 390dp tall: the pane split would spend 320dp of that
+        // on a sidebar and leave the transcript a ~100dp slit, so the split
+        // waits for a surface that has the height to carry it.
+        final useTwoPanes =
+            constraints.maxWidth >= kTwoPaneMinWidth &&
+            constraints.maxHeight >= kTwoPaneMinHeight;
         if (useTwoPanes) {
           return Scaffold(
             appBar: _chatAppBar(context, uiState, onAction, compact: false),
@@ -1545,61 +1551,70 @@ class _ChatPanelState extends State<ChatPanel> {
       if (showTurnStatus) _turnStatusSlot,
       ...steering,
     ];
-    return ListView.separated(
-      controller: _timelineScroll,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      itemCount: rows.length,
-      separatorBuilder: (_, index) => SizedBox(
-        height: _gapAfter(
-          rows[index],
-          index + 1 < rows.length ? rows[index + 1] : null,
+    // A transcript on a tablet would otherwise run the full pane width and
+    // hand the reader 200-character lines: the reading column is capped and
+    // centred, so a wide surface gains margins instead of longer paragraphs.
+    // The cap binds only above it, which is why a phone is untouched.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kReadingMeasure),
+        child: ListView.separated(
+          controller: _timelineScroll,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          itemCount: rows.length,
+          separatorBuilder: (_, index) => SizedBox(
+            height: _gapAfter(
+              rows[index],
+              index + 1 < rows.length ? rows[index + 1] : null,
+            ),
+          ),
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            if (identical(row, _olderHistorySlot)) {
+              return OlderHistoryRow(
+                isLoading: uiState.isLoadingOlder,
+                onLoadOlder: () {
+                  _recordScrollAnchor();
+                  _autoLoadDispatched = true;
+                  widget.onAction(const LoadOlderHistoryAction());
+                },
+              );
+            }
+            if (row is TimelineActivityGroup) {
+              return ActivityGroupRow(
+                key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
+                group: row,
+                onAction: widget.onAction,
+                loadAttachment: widget.loadAttachment,
+                onPreviewFile: _openFilePreview,
+                expansion: _sessionState,
+                onOpenChild: _openWorkflowMember,
+              );
+            }
+            if (row is TimelineItem) {
+              return TimelineRow(
+                key: ValueKey(timelineKey(row)),
+                item: row,
+                onAction: widget.onAction,
+                loadAttachment: widget.loadAttachment,
+                onPreviewFile: _openFilePreview,
+                expansion: _sessionState,
+                onOpenChild: _openWorkflowMember,
+                producedPaths: row is TimelineMessage
+                    ? producedByMessage[row.value.id]
+                    : null,
+              );
+            }
+            if (row is SessionQueueItem) {
+              return PendingSteeringRow(
+                key: ValueKey('steering:${row.itemId}'),
+                text: row.text,
+              );
+            }
+            return const TurnStatusRow(key: ValueKey('turn-status'));
+          },
         ),
       ),
-      itemBuilder: (context, index) {
-        final row = rows[index];
-        if (identical(row, _olderHistorySlot)) {
-          return OlderHistoryRow(
-            isLoading: uiState.isLoadingOlder,
-            onLoadOlder: () {
-              _recordScrollAnchor();
-              _autoLoadDispatched = true;
-              widget.onAction(const LoadOlderHistoryAction());
-            },
-          );
-        }
-        if (row is TimelineActivityGroup) {
-          return ActivityGroupRow(
-            key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
-            group: row,
-            onAction: widget.onAction,
-            loadAttachment: widget.loadAttachment,
-            onPreviewFile: _openFilePreview,
-            expansion: _sessionState,
-            onOpenChild: _openWorkflowMember,
-          );
-        }
-        if (row is TimelineItem) {
-          return TimelineRow(
-            key: ValueKey(timelineKey(row)),
-            item: row,
-            onAction: widget.onAction,
-            loadAttachment: widget.loadAttachment,
-            onPreviewFile: _openFilePreview,
-            expansion: _sessionState,
-            onOpenChild: _openWorkflowMember,
-            producedPaths: row is TimelineMessage
-                ? producedByMessage[row.value.id]
-                : null,
-          );
-        }
-        if (row is SessionQueueItem) {
-          return PendingSteeringRow(
-            key: ValueKey('steering:${row.itemId}'),
-            text: row.text,
-          );
-        }
-        return const TurnStatusRow(key: ValueKey('turn-status'));
-      },
     );
   }
 
@@ -5130,6 +5145,24 @@ final class QuestionDraft {
 /// `@container (max-width: 460px)`: "the 460px cut is the point where the row
 /// (attach + modes + model + send) starts squeezing labels").
 const double _kComposerLabelCut = 460;
+
+/// Width at which the session sidebar may split off the chat pane, and the
+/// height it must also clear.
+///
+/// 720dp is the width a phone in landscape reaches, and a phone in landscape
+/// is ~390dp tall: splitting there spends 320dp of the width on a sidebar and
+/// leaves the transcript a ~100dp slit. Both axes have to clear, so the split
+/// arrives on a tablet and never on a rotated phone.
+const double kTwoPaneMinWidth = 720;
+const double kTwoPaneMinHeight = 500;
+
+/// Reading measure the transcript column is capped at on a wide surface.
+///
+/// 760dp holds roughly 70-90 characters of the body face, the range a
+/// paragraph stays readable in; a tablet pane wider than this gets margins
+/// instead of longer lines. Below it the cap does nothing, so a phone lays
+/// out exactly as it did.
+const double kReadingMeasure = 760;
 
 /// Dock widths under which the action row splits into two lines instead of
 /// squeezing. One line has to cover the attach seat, the mic and the compact

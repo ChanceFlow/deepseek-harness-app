@@ -129,12 +129,13 @@ Future<void> _pump(
   ChatUiState uiState,
   List<ChatAction> actions, {
   double width = 800,
+  double height = 1280,
   ChatLocalState? localState,
   ThemeData? theme,
   Key? screenKey,
 }) {
   // Phone-scale logical surface so both panes and rows lay out naturally.
-  tester.view.physicalSize = Size(width, 1280);
+  tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -3298,6 +3299,69 @@ void main() {
       // A wide bar has room for every verb; nothing hides in an overflow.
       expect(find.byTooltip('Rename session'), findsOneWidget);
       expect(find.byTooltip('Session menu'), findsNothing);
+    });
+
+    testWidgets('a rotated phone keeps the drawer instead of splitting', (
+      tester,
+    ) async {
+      // 780x390 clears the width breakpoint on its own. Splitting here would
+      // spend 320dp of the width on the sidebar and leave the transcript a
+      // slit, so the height has to clear too.
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+        ),
+        <ChatAction>[],
+        width: 780,
+        height: 390,
+      );
+
+      expect(find.byTooltip('Open navigation menu'), findsOneWidget);
+      expect(find.byTooltip('Search sessions'), findsNothing);
+    });
+
+    testWidgets('a tablet transcript keeps a reading measure', (tester) async {
+      // Past the cap the column centres instead of stretching: the same
+      // block of text must not grow into 200-character lines.
+      const body = 'one two three four five six seven eight nine ten';
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineMessage(
+              ChatMessage(
+                id: 'm1',
+                sessionId: 's1',
+                role: MessageRole.assistant,
+                text: body,
+              ),
+            ),
+          ],
+        ),
+        <ChatAction>[],
+        width: 1600,
+      );
+
+      expect(
+        tester.getSize(find.byType(SessionPanel)).width,
+        kSidebarWidth,
+        reason: 'the sidebar still splits off above the breakpoint',
+      );
+      final paragraphs = find.text(body);
+      expect(paragraphs, findsOneWidget);
+      expect(
+        tester.getSize(paragraphs).width,
+        lessThanOrEqualTo(kReadingMeasure),
+        reason: 'the transcript column stays inside the reading measure',
+      );
     });
   });
 
