@@ -128,7 +128,14 @@ GATES: list[dict] = [
     {
         "name": "flutter-analyze",
         "groups": ["code"],
-        "cmd": ["flutter", "analyze"],
+        # `--no-pub` because a gate may not reach the network on its own: bare
+        # `flutter analyze` resolves the workspace itself when the package
+        # config is missing or stale, which is how a job once sat on
+        # "Resolving dependencies..." for 1h49m and another burned this whole
+        # ceiling on it. Resolving is a named, bounded, retried step in every
+        # workflow (and `scripts/flutter.sh pub get` locally); this gate runs
+        # what that step produced, and fails fast when there is nothing to run.
+        "cmd": ["flutter", "analyze", "--no-pub"],
         "cwd": FLUTTER_ROOT,
         # Same scale as flutter-test: in CI the analyzer starts cold (fresh
         # container, fresh analysis server, full pub-workspace resolution) on a
@@ -163,9 +170,13 @@ GATES: list[dict] = [
     {
         "name": "flutter-test",
         "groups": ["code"],
+        # `--no-pub` for the same reason as flutter-analyze above: a gate runs
+        # what the workflow's named resolve step produced, and fails fast when
+        # there is nothing to run instead of resolving over the network itself.
         "cmd": [
             "flutter",
             "test",
+            "--no-pub",
             "app/test",
             "packages/domain/test",
             "packages/network/test",
