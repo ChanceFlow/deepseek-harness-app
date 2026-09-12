@@ -25,13 +25,24 @@
 # commit reuses every task whose inputs did not change. That snapshot is as
 # fresh as the image — rebuild the image on master merges to keep it close.
 #
-# The final stage stays on the runners' own Ubuntu base because act executes
-# `uses:` actions with the node it ships; the toolchains are grafted onto it.
-ARG BASE=docker.gitea.com/runner-images:ubuntu-24.04
+# The base is the runners' own slim variant: act executes `uses:` actions with
+# the node it ships, and nothing else this image needs comes from the base —
+# the toolchains are grafted on. Measured at 205 MB against the full image's
+# 1.66 GB. The packages slim drops that jobs do use (git, curl, python3, unzip,
+# xz, zip, ca-certificates) are installed in the JDK stage below, which the
+# final stage inherits, for about 150 MB: a 1.3 GB saving for no change in what
+# a job can do. The name says Ubuntu; it is Debian 12 underneath, and the JDK
+# is the distribution's either way.
+ARG BASE=docker.gitea.com/runner-images:ubuntu-24.04-slim
 ARG FLUTTER_VERSION=3.47.1
 ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
 ARG ANDROID_PLATFORM=android-36
 ARG ANDROID_BUILD_TOOLS=36.0.0
+# The NDK the Flutter Gradle plugin declares (`flutter.ndkVersion`). Installed
+# here, with the rest of the toolchain, rather than left to the warmup's Gradle
+# run: measured 2.2 GB, and a download that otherwise repeats on every rebuild
+# that changes so much as one Dart file.
+ARG ANDROID_NDK=28.2.13676358
 
 # ── stage: JDK 17 ──────────────────────────────────────────────────────────
 # The base image lists a Microsoft apt repository this egress cannot reach;
@@ -44,23 +55,32 @@ ARG ANDROID_BUILD_TOOLS=36.0.0
 # Java's own logging initialisation (seen as an AccessControlException out of
 # LogManager during the image build). The final stage inherits this stage, which
 # keeps both the configuration and the symlink in place.
+# The install list is what the slim base omits and the jobs use: git and curl
+# for `actions/checkout` and every download, python3 for the doc and code gates,
+# and unzip/xz/zip for the archives those steps handle. `--no-install-recommends`
+# keeps the rest of Debian's dependency closure out; measured ~100 MB on top of
+# the JDK this stage installed anyway, against the 1.45 GB the full base adds.
 FROM ${BASE} AS jdk
 RUN rm -f /etc/apt/sources.list.d/microsoft-prod.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
+ && apt-get install -y --no-install-recommends \
+      openjdk-17-jdk-headless \
+      ca-certificates curl git python3 unzip xz-utils zip \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s "$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")" /opt/jdk \
  && /opt/jdk/bin/java -version
 
 # ── stage: Android SDK, installed by Google's command-line tools ───────────
-# Derived from the JDK stage because sdkmanager runs on Java. Licenses are
-# accepted here so a later Gradle run may fetch any platform or build-tools
-# revision this project's Flutter pin asks for, instead of failing on a missing
-# license inside a job.
+# Derived from the JDK stage because sdkmanager runs on Java. Only the platform
+# this project compiles against is named here; the licenses accepted below let
+# Gradle install whatever else it decides it needs. Measured: it fetches 34 and
+# 35 during the warmup regardless, so this is a statement of what is required
+# rather than a guess at what a future build might ask for.
 FROM jdk AS android-sdk
 ARG CMDLINE_TOOLS_URL
 ARG ANDROID_PLATFORM
 ARG ANDROID_BUILD_TOOLS
+ARG ANDROID_NDK
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk
 RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
@@ -69,15 +89,26 @@ RUN mkdir -p "$ANDROID_HOME/cmdline-tools" \
  && mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest" \
  && rm /tmp/cmdline-tools.zip \
  && yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
- && "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
-      "platform-tools" "platforms;$ANDROID_PLATFORM" "platforms;android-35" \
-      "platforms;android-34" "build-tools;$ANDROID_BUILD_TOOLS" \
+ && SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"; \
+    for attempt in 1 2 3; do \
+      if "$SDKM" --install "platform-tools" "platforms;$ANDROID_PLATFORM" \
+           "build-tools;$ANDROID_BUILD_TOOLS" "ndk;$ANDROID_NDK"; then break; fi; \
+      echo "sdkmanager attempt $attempt failed — a truncated download, most likely; retrying"; \
+      rm -rf "$ANDROID_HOME/.temp" "$ANDROID_HOME/.downloadIntermediates"; \
+      [ "$attempt" != 3 ] || exit 1; \
+    done \
  && rm -rf "$ANDROID_HOME/.temp" "$ANDROID_HOME/.downloadIntermediates"
 
 # ── stage: Flutter, the pinned upstream release ────────────────────────────
 FROM ${BASE} AS flutter
 ARG FLUTTER_VERSION
-RUN curl -fsSL \
+# The slim base ships neither curl, xz nor git, and this stage downloads a
+# .tar.xz and marks it a safe git directory. The layer dies with the stage; only
+# /opt/flutter is copied out of it.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl git xz-utils \
+ && rm -rf /var/lib/apt/lists/* \
+ && curl -fsSL \
       "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
       -o /tmp/flutter.tar.xz \
  && tar -xJf /tmp/flutter.tar.xz -C /opt \
@@ -143,6 +174,13 @@ RUN set -eu; \
 # binding constraint on a host that also runs this repository's other work.
 # The release channel's dex and packaging run in its own job, over the cache
 # this leaves behind.
+#
+# The wrapper leaves both the unpacked distribution and the archive it came
+# from — 768 MB measured, of which the archive is 235 MB that nothing reads
+# once the distribution is unpacked — so the warmup drops the archive on its
+# way out. The repository's wrapper properties ask for the `-bin` distribution
+# rather than `-all` for the same reason: no step here reads Gradle's sources
+# or documentation, and the difference is 235 MB against 783 MB unpacked.
 COPY --from=repo /flutter /tmp/warmup/flutter
 RUN set -eu; \
     if [ -n "$proxy_host" ]; then \
@@ -155,6 +193,7 @@ RUN set -eu; \
     cp -n "$WRAPPER/gradle/wrapper/gradle-wrapper.jar" gradle/wrapper/gradle-wrapper.jar; \
     chmod +x gradlew; \
     ./gradlew :app:compileDebugKotlin; \
+    rm -f /root/.gradle/wrapper/dists/*/*/*.zip; \
     cd / && rm -rf /tmp/warmup
 
 # ── this image's identity ──────────────────────────────────────────────────

@@ -22,7 +22,8 @@
 # root to the invoking user.
 #
 # Egress: export HTTP_PROXY / HTTPS_PROXY / NO_PROXY before calling when this
-# host needs a proxy. They are passed through, never stored here.
+# host needs a proxy. They are passed through, except that a proxy on the host's
+# own loopback is rewritten — see the block below.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -74,6 +75,26 @@ case "$PWD" in
   "$REPO"*) WORKDIR="$PWD" ;;
   *)        WORKDIR="$REPO" ;;
 esac
+
+# A proxy on the host's own loopback means nothing inside the container:
+# 127.0.0.1 there is the container itself, so a run that inherits one fails with
+# "Connection refused" while the host's proxy is perfectly healthy. Measured —
+# it is why a `pub get` through this script could not resolve while the same
+# proxy worked from the shell. podman publishes the host as
+# `host.containers.internal`, so point those variables at it instead.
+for _var in HTTP_PROXY HTTPS_PROXY http_proxy https_proxy; do
+  _val="${!_var:-}"
+  case "$_val" in
+    *//127.0.0.1:*|*//localhost:*|*//\[::1\]:*)
+      _new="${_val/\/\/127.0.0.1:/\/\/host.containers.internal:}"
+      _new="${_new/\/\/localhost:/\/\/host.containers.internal:}"
+      _new="${_new/\/\/\[::1\]:/\/\/host.containers.internal:}"
+      printf -v "$_var" '%s' "$_new"
+      echo "container.sh: $_var pointed at the host's loopback; using host.containers.internal" >&2
+      ;;
+  esac
+done
+unset _var _val _new
 
 # Same allowances CI gives the job container; without them the JVM's shared
 # memory and javac's file descriptors are too small to build this project.
