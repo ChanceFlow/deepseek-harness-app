@@ -66,14 +66,14 @@ container label's *name*; it cannot see what that name resolves to.
 
 ## Consequences
 
-The first job after a rebuild pulls the changed layers; later jobs use the local
-copy. A rebuild must bump `ci.image_tag` — the assertion fails loudly if it does
-not, and that is the intended cost. A new tag per publish is not only tidiness:
-the registry keeps the blobs of a manifest that a later push under the same tag
-replaced (measured at 2.6 GB after three pushes under one tag), and a distinct
-package version is the only handle the API offers for retiring an image. The
-published copy measured 8 GB for an 11.4 GB image, because a registry stores
-layers compressed and holds each digest once: publishing is a second copy on the
-same disk, not a backup. Gitea does not support podman as a runner engine
-("Podman is not a supported configuration"), so this arrangement is measured
-here rather than guaranteed upstream.
+Deleting the local image frees 6 GB — the build cache pins the rest — and the
+next CI run pulls it back unprompted in about two minutes, green from nothing:
+the local copy is a cache to drop in a disk emergency, not space that stays
+free. The registry's own floor is 8 GB for an 11.4 GB image, because layers are
+stored compressed and each digest once: a second copy on the same disk, not a
+backup. A rebuild must bump `ci.image_tag` (the assertion fails loudly if it
+does not) and publish under a new tag, since reusing a tag keeps the replaced
+manifest's blobs — one superseded layer measured 2.5 GB — and only a distinct
+package version is deletable through the API. Gitea does not support podman as a
+runner engine ("Podman is not a supported configuration"), so this arrangement
+is measured here rather than guaranteed upstream.
