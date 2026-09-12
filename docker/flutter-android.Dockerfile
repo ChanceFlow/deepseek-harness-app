@@ -1,5 +1,10 @@
 # Prebaked Flutter + Android SDK builder image for the container-schema runner
-# label (`flutter-android:docker://localhost/flutter-3.47-android:latest`).
+# label `flutter-android-ctr`. The label's image reference — a tag pinned by
+# digest, published to the forge's own container registry — lives in the
+# runner's configuration, outside this repository, like the schema itself. What
+# this file owns is the other end: the image states which build it is, and CI
+# fails when that is not the build the repository pins.
+# Decision: .agents/notes/implemented/process/2026-09-12-ci-image-registry.md
 #
 # EVERY TOOLCHAIN COMES FROM A STAGE OR AN UPSTREAM RELEASE. Nothing is copied
 # from the machine that runs the build: the JDK is installed into a stage, the
@@ -151,5 +156,40 @@ RUN set -eu; \
     chmod +x gradlew; \
     ./gradlew :app:compileDebugKotlin; \
     cd / && rm -rf /tmp/warmup
+
+# ── this image's identity ──────────────────────────────────────────────────
+# Declared after every expensive layer on purpose: the identity is a few bytes,
+# so a rebuild that changes only it reuses every toolchain layer above and
+# re-pushing moves that one layer and the image config, not the toolchain.
+#
+# A job cannot read the runner's label configuration, so it cannot see the
+# reference it was created from. What it can see is this: the image states its
+# own build, the repository states the build it pins (`gates_manifest.json`
+# `ci.image_tag`), and the workflow compares the two before any gate runs. A
+# label repointed at some other image then fails on the first step instead of
+# quietly running the gates against a different toolchain.
+#
+# The revision and source are metadata for whoever inspects the image later.
+# The source is empty unless a publisher supplies one: an internal address baked
+# into an image travels with that image to every registry it is later pushed to.
+ARG IMAGE_VERSION=unknown
+ARG IMAGE_REVISION=unknown
+ARG IMAGE_SOURCE=
+
+# The identity is written by a RUN, and not only by the ENV an image would
+# normally use: a metadata instruction that interpolates an ARG is served from
+# the build cache even when that ARG has changed — two builds differing only in
+# IMAGE_VERSION produced one image with the first one's version baked in.
+# Consuming the ARG here is what makes this layer, the labels below and the
+# job's reading of this file agree with the build the publisher asked for.
+RUN printf 'DSH_CI_IMAGE_VERSION=%s\nDSH_CI_IMAGE_REVISION=%s\n' \
+      "$IMAGE_VERSION" "$IMAGE_REVISION" > /etc/dsh-ci-image \
+ && cat /etc/dsh-ci-image
+
+LABEL org.opencontainers.image.title="flutter-android" \
+      org.opencontainers.image.description="Flutter, Android SDK and JDK 17 for this repository's CI jobs" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.source="${IMAGE_SOURCE}"
 
 WORKDIR /workspace

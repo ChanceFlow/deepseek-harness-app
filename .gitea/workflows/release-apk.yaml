@@ -101,6 +101,20 @@ jobs:
       # nothing. A cache step belongs here only if the image stops being
       # rebuilt, which is what keeps that snapshot close to the code.
 
+      # The signed artifact is the one nobody can re-check by hand, and it is
+      # built by whatever image the label resolves to. The image states its own
+      # build, the manifest pins it, and this fails before the build when they
+      # disagree; the argument is in full in the merge gate's `docs` job.
+      - name: Assert the job runs the pinned image build
+        run: |
+          EXPECTED=$(python3 -c "import json; print(json.load(open('scripts/gates_manifest.json'))['ci']['image_tag'])")
+          # The image writes this in a RUN step, so it cannot be a stale copy
+          # served from that build's cache, and a missing file fails here.
+          . /etc/dsh-ci-image
+          [ "$DSH_CI_IMAGE_VERSION" = "$EXPECTED" ] \
+            || { echo "running image build '$DSH_CI_IMAGE_VERSION', the repository pins '$EXPECTED'"; exit 1; }
+          echo "toolchain image build: $DSH_CI_IMAGE_VERSION (revision ${DSH_CI_IMAGE_REVISION:-unknown})"
+
       - name: Resolve version
         id: ver
         run: |
