@@ -7,7 +7,7 @@ submodule.
 ## Repository layout
 
 ```text
-flutter/                           pub workspace root — run flutter analyze/test here
+flutter/                           pub workspace root — scripts/flutter.sh runs here
 flutter/app/                       UI: screens, controllers, markdown renderer, l10n, lib/di wiring
 flutter/packages/domain/           Neutral models (ChatMessage, Session, TimelineItem) — pure Dart
 flutter/packages/harness_adapter/  The ONLY code that knows the dsh wire protocol
@@ -24,18 +24,19 @@ docs/                              spec.md (wire contract + coverage), design-st
 
 ## Commands
 
-All commands from repo root unless noted. Flutter 3.47.1 stable is expected
-on PATH ([ci.yaml](.github/workflows/ci.yaml) is the pin's source).
+All commands from repo root unless noted. No toolchain is installed on this
+machine: `scripts/flutter.sh` runs Flutter inside the CI image, which carries
+Flutter 3.47.1 ([ci.yaml](.github/workflows/ci.yaml) is the pin's source).
 
 Reach for the narrowest tool that would fail for your change:
 
 ```sh
-cd flutter && flutter test app/test/ui/chat/chat_screen_test.dart   # one behavior
-cd flutter && flutter analyze app/lib/ui/chat                       # one directory
-cd flutter && dart format --output=none --set-exit-if-changed .      # format hygiene
-python3 scripts/verify_all.py docs                                  # every doc gate, ~2s
+scripts/flutter.sh test app/test/ui/chat/chat_screen_test.dart       # one behavior
+scripts/flutter.sh analyze app/lib/ui/chat                           # one directory
+cd flutter && ../scripts/container.sh dart format --output=none --set-exit-if-changed .
+python3 scripts/verify_all.py docs                                  # every doc gate
 python3 scripts/check_dart_imports.py                               # the import boundary
-cd flutter/app && flutter build apk --debug --dart-define=cronetHttpNoPlay=true --dart-define=DSH_BASE_URL=http://127.0.0.1:3080
+cd flutter/app && ../../scripts/container.sh flutter build apk --debug --dart-define=cronetHttpNoPlay=true --dart-define=DSH_BASE_URL=http://127.0.0.1:3080
 ```
 
 CI owns the exhaustive run — [.github/workflows/ci.yaml](.github/workflows/ci.yaml)

@@ -77,6 +77,14 @@
    ".github/workflows/release-apk.yaml"
   ]
  },
+ "ci": {
+  "comment": "The label a toolchain job must use. A Gitea runner's label schema (host or docker://<image>) lives in the runner's own configuration, outside this repository, so a workflow naming a host label is indistinguishable from one naming a container label — which is how the toolchain moved onto a developer machine with no error anywhere. scripts/verify_ci_container_jobs.py holds every listed workflow to this label; see .agents/notes/implemented/process/2026-09-11-container-ci-runner.md.",
+  "container_label": "flutter-android-ctr",
+  "workflows": [
+   ".gitea/workflows/ci.yaml",
+   ".gitea/workflows/release-apk.yaml"
+  ]
+ },
  "toolchain": {
   "source": ".gitea/workflows/ci.yaml",
   "pattern": "flutter-version:\\s*['\"]?(\\d+\\.\\d+\\.\\d+)",

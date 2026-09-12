@@ -7,6 +7,13 @@ description: Complete engineering guide and workflow reference for Dart and Flut
 
 Comprehensive guide and single entrypoint for Dart language and Flutter framework workflows. For deep-dive task instructions, checklists, and code templates, consult the corresponding topic guides in `references/`.
 
+In this repository the `flutter` and `dart` commands below run inside the CI
+image, because no toolchain is installed on the machine:
+`scripts/flutter.sh test …` for anything rooted at the pub workspace, and
+`scripts/container.sh <command>` for the rest
+([AGENTS.md §Commands](../../../AGENTS.md#commands)). The command syntax is
+unchanged — only the shell it runs in.
+
 ---
 
 ## Capability & Reference Index
