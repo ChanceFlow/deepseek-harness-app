@@ -509,12 +509,12 @@ ChatUiState questionState() {
 }
 
 /// ── Settings shots ────────────────────────────────────────────────────────
-/// The Settings tab's two-category surface (App / Host) on a two-host
-/// registry: the shots exercise the real screen against the real
-/// registry chain, the only fakes being the transport seams.
-
-/// Two-host registry document: the scope bar and the Hosts page render
-/// their multi-host chrome.
+/// The Settings index and the pages and sheets its rows open, on a two-host
+/// registry: the shots exercise the real screen against the real registry
+/// chain, the only fakes being the transport seams.
+///
+/// Two-host registry document: the host sheet lists both hosts and the
+/// root's host tile names the scoped one.
 const String kSettingsRegistryDoc =
     '{"backends": ['
     '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'

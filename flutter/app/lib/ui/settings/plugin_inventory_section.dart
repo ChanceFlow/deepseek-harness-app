@@ -28,6 +28,7 @@ import '../shared/state_dot.dart';
 import '../state_stream.dart';
 import '../theme/theme.dart';
 import 'settings_backend_scope.dart';
+import 'settings_chrome.dart';
 
 /// Page state for the inventory section.
 ///
@@ -144,7 +145,10 @@ final pluginInventoryControllerProvider = Provider.family
 /// Self-contained: it watches its own controller for the scoped backend, so
 /// a host mounts it as one child of the Settings list.
 class SettingsPluginInventorySection extends ConsumerWidget {
-  const SettingsPluginInventorySection({super.key});
+  const SettingsPluginInventorySection({this.showTitle = true, super.key});
+
+  /// False on the Plugin inventory page, whose app bar already names it.
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -159,7 +163,11 @@ class SettingsPluginInventorySection extends ConsumerWidget {
       builder:
           (BuildContext context, AsyncSnapshot<PluginInventoryUiState> snap) {
             final PluginInventoryUiState state = snap.data ?? controller.state;
-            return _PluginInventoryCard(state: state, controller: controller);
+            return _PluginInventoryCard(
+              state: state,
+              controller: controller,
+              showTitle: showTitle,
+            );
           },
     );
   }
@@ -283,10 +291,15 @@ String _enablementLabel(AppLocalizations l10n, _Enablement enablement) =>
 /// The section card: heading, the read-only notice, the search field, then
 /// loading / failure / empty / no-match / catalog.
 class _PluginInventoryCard extends StatelessWidget {
-  const _PluginInventoryCard({required this.state, required this.controller});
+  const _PluginInventoryCard({
+    required this.state,
+    required this.controller,
+    required this.showTitle,
+  });
 
   final PluginInventoryUiState state;
   final PluginInventoryController controller;
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -294,18 +307,19 @@ class _PluginInventoryCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
+        SettingsSectionHeading(
           title: l10n.settingsSectionPluginInventory,
           intro: l10n.pluginInventoryIntro,
+          showTitle: showTitle,
         ),
-        _SectionCard(
+        SettingsSectionCard(
           children: <Widget>[
             // The one fact the surface owes every reader: it cannot write.
             _CardNotice(l10n.pluginInventoryReadOnlyNotice),
-            const _CardDivider(),
+            const SettingsCardDivider(),
             if (state.snapshot != null) ...<Widget>[
               _SearchField(controller: controller, l10n: l10n),
-              const _CardDivider(),
+              const SettingsCardDivider(),
             ],
             ..._body(l10n),
           ],
@@ -814,78 +828,6 @@ class _FailureNotice extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.title, this.intro});
-
-  final String title;
-  final String? intro;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (intro != null) ...<Widget>[
-            const SizedBox(height: 2),
-            Text(
-              intro!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    // A Material (not a decorated Container) so the rows' ink splashes paint
-    // on it: a colored box between a row and its Material hides them.
-    return Material(
-      color: scheme.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kShapeCard),
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-}
-
-class _CardDivider extends StatelessWidget {
-  const _CardDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Divider(height: 1, thickness: 1, color: scheme.outlineVariant);
   }
 }
 

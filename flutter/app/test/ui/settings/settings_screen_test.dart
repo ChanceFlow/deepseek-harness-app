@@ -76,6 +76,11 @@ const AgentPresetRoster _roster = AgentPresetRoster(
   ],
 );
 
+/// A finder scoped to the open modal sheet: a row behind it keeps the same
+/// text, so an unscoped finder would match twice.
+Finder _inSheet(Finder finder) =>
+    find.descendant(of: find.byType(BottomSheet), matching: finder);
+
 File _storeFile() {
   final Directory directory = Directory.systemTemp.createTempSync(
     'settings_test',
@@ -331,7 +336,7 @@ class _RecordingSettingsRepository implements ChatRepository {
 
 void main() {
   testWidgets(
-    'renders grouped sections with host, app preferences, chat, models, and plugins',
+    'renders the index: one section per subject and one row per surface',
     (WidgetTester tester) async {
       await _pump(
         tester,
@@ -343,43 +348,39 @@ void main() {
         <SettingsAction>[],
       );
 
-      // Section titles are visible on the unified page
+      // The section headings name each group of the index.
       expect(find.text('Host & connection'), findsOneWidget);
       expect(find.text('App preferences'), findsOneWidget);
       expect(find.text('Chat & agent'), findsOneWidget);
       expect(find.text('Models & credentials'), findsOneWidget);
       expect(find.text('Plugins & advanced'), findsOneWidget);
 
-      // Host & connection section
-      expect(find.text('Host writes'), findsOneWidget);
-      expect(find.text('Settings document'), findsOneWidget);
-
-      // App preferences section
+      // Every row names its subject, and the single-choice rows state the
+      // value in force.
       expect(find.text('Language'), findsOneWidget);
       expect(find.text('Follow system'), findsOneWidget);
-      expect(find.text('中文'), findsOneWidget);
-      expect(find.text('English'), findsOneWidget);
-
-      // Chat & agent section
+      expect(find.text('Appearance'), findsOneWidget);
+      expect(find.text('ASR Models'), findsOneWidget);
+      expect(find.text('Error Logs'), findsOneWidget);
       expect(find.text('Enter behavior while busy'), findsOneWidget);
       expect(find.text('Queue'), findsOneWidget);
-      expect(find.text('Steer'), findsOneWidget);
       expect(find.text('Agent preset'), findsOneWidget);
-      expect(find.text('Standard mode'), findsWidgets);
-      expect(find.text('In use'), findsOneWidget);
-      expect(find.text('Built-in'), findsOneWidget);
-      expect(find.text('Custom'), findsNWidgets(2));
+      expect(find.text('Standard mode'), findsOneWidget);
+      expect(find.text('Credentials'), findsOneWidget);
+      expect(find.text('Providers'), findsOneWidget);
+      expect(find.text('Plugin settings'), findsOneWidget);
+      expect(find.text('Plugin inventory'), findsOneWidget);
+      expect(find.text('About'), findsOneWidget);
 
-      // Models & credentials section
-      expect(find.text('DeepSeek'), findsOneWidget);
-      expect(find.text('API key configured'), findsOneWidget);
-
-      // Plugins section
-      expect(find.text('llm-deepseek'), findsOneWidget);
-      expect(
-        find.text('applies: live · revision: 3 · user layer · 1 secret set'),
-        findsOneWidget,
-      );
+      // The long-form surfaces stayed off the index: the roster, the
+      // namespace editors, the credential records, and the language
+      // options all live behind their rows.
+      expect(find.text('Built-in'), findsNothing);
+      expect(find.text('In use'), findsNothing);
+      expect(find.text('DeepSeek'), findsNothing);
+      expect(find.text('llm-deepseek'), findsNothing);
+      expect(find.text('中文'), findsNothing);
+      expect(find.text('Steer'), findsNothing);
     },
   );
 
@@ -394,8 +395,13 @@ void main() {
 
     expect(store.read(kBusyEnterBehaviorKey), isNull);
 
-    await tester.tap(find.text('Steer'));
-    await tester.pump();
+    await tester.tap(find.text('Enter behavior while busy'));
+    await tester.pumpAndSettle();
+    expect(_inSheet(find.text('Queue')), findsOneWidget);
+    expect(_inSheet(find.text('Steer')), findsOneWidget);
+
+    await tester.tap(_inSheet(find.text('Steer')));
+    await tester.pumpAndSettle();
 
     expect(store.read(kBusyEnterBehaviorKey), 'steer');
     expect(BusyEnterPreferenceController(store).state, BusyEnterBehavior.steer);
@@ -412,14 +418,20 @@ void main() {
       <SettingsAction>[],
     );
 
+    // The row states the language in force; the options ride its sheet.
     expect(find.text('Follow system'), findsOneWidget);
-    expect(find.text('中文'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
+    expect(find.text('中文'), findsNothing);
 
     expect(store.read(kAppLocalePreferenceKey), isNull);
 
-    await tester.tap(find.text('中文'));
-    await tester.pump();
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+    expect(_inSheet(find.text('Follow system')), findsOneWidget);
+    expect(_inSheet(find.text('中文')), findsOneWidget);
+    expect(_inSheet(find.text('English')), findsOneWidget);
+
+    await tester.tap(_inSheet(find.text('中文')));
+    await tester.pumpAndSettle();
 
     expect(store.read(kAppLocalePreferenceKey), 'zh');
 
@@ -459,29 +471,22 @@ void main() {
       addTearDown(controller.dispose);
       await _pumpController(tester, controller);
 
+      // The row states the default in force; the roster page selects it.
       expect(find.text('Agent preset'), findsOneWidget);
+      expect(find.text('Standard mode'), findsOneWidget);
 
       await tester.tap(find.text('Agent preset'));
       await tester.pumpAndSettle();
 
-      final Finder sheet = find.byType(BottomSheet);
-      expect(sheet, findsOneWidget);
-      expect(
-        find.descendant(of: sheet, matching: find.text('Code mode')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: sheet, matching: find.text('Minimal mode')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: sheet, matching: find.text('My Agent')),
-        findsNothing,
-      );
+      expect(find.text('Agent presets'), findsOneWidget);
+      expect(find.text('Code mode'), findsOneWidget);
+      expect(find.text('Minimal mode'), findsOneWidget);
+      // A broken preset stays listed (its directory owns the id) but is
+      // never selectable.
+      expect(find.text('My Agent'), findsOneWidget);
+      expect(find.text('Failed to load'), findsOneWidget);
 
-      await tester.tap(
-        find.descendant(of: sheet, matching: find.text('Code mode')),
-      );
+      await tester.tap(find.text('Code mode'));
       await tester.pumpAndSettle();
 
       expect(repository.updateCalls, <(String, String, String, int?)>[
@@ -499,6 +504,11 @@ void main() {
         const SettingsUiState(snapshot: _snapshot, roster: _roster),
         actions,
       );
+
+      expect(find.text('Built-in'), findsNothing);
+
+      await tester.tap(find.text('Agent preset'));
+      await tester.pumpAndSettle();
 
       expect(find.text('Built-in'), findsOneWidget);
       expect(find.text('Custom'), findsNWidgets(2));
@@ -526,7 +536,13 @@ void main() {
       <SettingsAction>[],
     );
 
-    expect(find.text('Agent preset'), findsNothing);
+    // The row stays: an empty roster is a page that says so, not a
+    // disappeared subject.
+    expect(find.text('Agent preset'), findsOneWidget);
+    expect(find.textContaining('authored on the host'), findsNothing);
+
+    await tester.tap(find.text('Agent preset'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('authored on the host'), findsOneWidget);
     expect(find.text('Built-in'), findsNothing);
   });
@@ -541,13 +557,16 @@ void main() {
         actions,
       );
 
+      expect(find.text('Credentials'), findsOneWidget);
+      expect(find.text('DeepSeek'), findsNothing);
+
+      await tester.tap(find.text('Credentials'));
+      await tester.pumpAndSettle();
+
       expect(find.text('DeepSeek'), findsOneWidget);
       expect(find.text('API key configured'), findsOneWidget);
       expect(find.text('Configured'), findsOneWidget);
-      expect(
-        find.textContaining('the Providers section below'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Providers page'), findsOneWidget);
 
       await tester.tap(find.text('DeepSeek'));
       await tester.pumpAndSettle();
@@ -578,6 +597,8 @@ void main() {
     final List<SettingsAction> actions = <SettingsAction>[];
     await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
+    await tester.tap(find.text('Plugin settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
 
@@ -618,6 +639,8 @@ void main() {
     final List<SettingsAction> actions = <SettingsAction>[];
     await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
+    await tester.tap(find.text('Plugin settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Replace section'));
@@ -655,6 +678,8 @@ void main() {
       actions,
     );
 
+    await tester.tap(find.text('Credentials'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('DeepSeek'));
     await tester.pumpAndSettle();
     expect(find.text('Store DEEPSEEK_API_KEY'), findsOneWidget);
@@ -674,14 +699,15 @@ void main() {
     actions.clear();
     await tester.tap(find.text('DeepSeek'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Unset'));
+    await tester.tap(_inSheet(find.text('Unset')));
     await tester.pump();
     expect(actions, contains(const UnsetCredentialAction('DEEPSEEK_API_KEY')));
   });
 
-  testWidgets('read-only snapshot hides edit affordances', (
+  testWidgets('read-only snapshot states it and hides the write affordances', (
     WidgetTester tester,
   ) async {
+    final List<SettingsAction> actions = <SettingsAction>[];
     await _pump(
       tester,
       const SettingsUiState(
@@ -701,16 +727,23 @@ void main() {
         ),
         roster: _roster,
       ),
-      <SettingsAction>[],
+      actions,
     );
 
-    expect(find.text('Read-only'), findsOneWidget);
-    expect(find.text('None'), findsOneWidget);
-
-    await tester.tap(find.text('Agent preset'));
+    // The credentials page states the read-only document and the empty set.
+    await tester.tap(find.text('Credentials'));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(
+      find.text('The settings document is read-only in this deployment.'),
+      findsOneWidget,
+    );
+    expect(find.text('No credentials referenced.'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
+    // The plugins page states the namespace is inert instead of an editor.
+    await tester.tap(find.text('Plugin settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('shell'));
     await tester.pumpAndSettle();
     expect(find.text('Patch key'), findsNothing);
@@ -720,13 +753,15 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
-    expect(
-      find.text('The settings document is read-only in this deployment.'),
-      findsOneWidget,
-    );
-
-    expect(find.text('No credentials referenced.'), findsOneWidget);
+    // The preset page still lists the roster, but selects nothing.
+    await tester.tap(find.text('Agent preset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Minimal mode'));
+    await tester.pumpAndSettle();
+    expect(actions, isEmpty);
   });
 
   const String twoBackendsDoc =
@@ -966,22 +1001,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Laptop'), findsOneWidget);
-    expect(find.text('Writable'), findsOneWidget);
 
+    // The scoped host's own settings plane is a fact of the host sheet.
     await tester.tap(find.text('Laptop'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Build box').hitTestable());
+    expect(_inSheet(find.text('Writable')), findsOneWidget);
+
+    await tester.tap(_inSheet(find.text('Build box').hitTestable()));
     await tester.pumpAndSettle();
     expect(find.text('Build box'), findsOneWidget);
-    expect(find.text('Read-only'), findsOneWidget);
-    expect(find.text('Writable'), findsNothing);
 
     await tester.tap(find.text('Build box'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Follow the active host'));
+    expect(_inSheet(find.text('Read-only')), findsOneWidget);
+    expect(_inSheet(find.text('Writable')), findsNothing);
+
+    await tester.tap(_inSheet(find.text('Follow the active host')));
     await tester.pumpAndSettle();
     expect(find.text('Laptop'), findsOneWidget);
-    expect(find.text('Writable'), findsOneWidget);
+
+    await tester.tap(find.text('Laptop'));
+    await tester.pumpAndSettle();
+    expect(_inSheet(find.text('Writable')), findsOneWidget);
   });
 
   testWidgets('add host flow appends through the registry', (
@@ -1194,12 +1235,7 @@ void main() {
     await pumpHostSettings(tester);
 
     expect(find.text('ASR Models'), findsOneWidget);
-    expect(
-      find.textContaining(
-        'Download and manage on-device speech recognition models',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('0/4 installed'), findsOneWidget);
   });
 
   testWidgets('host switch disables the active host and relocates Active', (
@@ -1397,7 +1433,9 @@ void main() {
     await tester.tapAt(const Offset(400, 10));
     await tester.pumpAndSettle();
     expect(find.text('Laptop'), findsOneWidget);
-    expect(find.text('Writable'), findsOneWidget);
+    await tester.tap(find.text('Laptop'));
+    await tester.pumpAndSettle();
+    expect(_inSheet(find.text('Writable')), findsOneWidget);
   });
 
   testWidgets(

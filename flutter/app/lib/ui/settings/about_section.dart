@@ -19,8 +19,12 @@ import '../theme/theme.dart';
 String get kAboutRepositoryUrl => 'https://github.com/$kDshSourceRepo';
 
 /// `Settings` → About: version, documentation, and bug reports.
+///
+/// [showTitle] is false on the About page, whose app bar already names it.
 class SettingsAboutSection extends StatelessWidget {
-  const SettingsAboutSection({super.key});
+  const SettingsAboutSection({this.showTitle = true, super.key});
+
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -30,16 +34,17 @@ class SettingsAboutSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            l10n.settingsSectionAbout,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w600,
+        if (showTitle)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              l10n.settingsSectionAbout,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ),
         Material(
           color: scheme.surfaceContainer,
           shape: RoundedRectangleBorder(

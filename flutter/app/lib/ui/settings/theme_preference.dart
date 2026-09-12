@@ -37,6 +37,7 @@ import '../../local_state/local_state_providers.dart';
 import '../../local_state/local_state_store.dart';
 import '../state_stream.dart';
 import '../theme/theme.dart';
+import 'settings_chrome.dart';
 
 /// The settings namespace the host theme preference lives in.
 const String kThemeSettingsNamespace = 'ui-theme';
@@ -316,7 +317,67 @@ final appDarkThemeProvider = Provider<ThemeData>((ref) {
   return oled ? DshTheme.oled() : DshTheme.dark();
 });
 
-/// The Appearance settings row: a four-seat choice — light, dark, OLED, and
+/// The Appearance row of the Settings index: the current choice in words,
+/// opening the sheet that changes it. The host preference is unreachable
+/// without a host, so the row states that instead of inventing a value.
+class SettingsAppearanceEntryRow extends ConsumerWidget {
+  const SettingsAppearanceEntryRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final String backendId = ref.watch(activeBackendIdProvider).value ?? '';
+    final bool oledOn = ref.watch(appOledAppearanceProvider).value ?? false;
+    if (backendId.isEmpty) {
+      return SettingsNavRow(
+        title: l10n.settingsAppearanceTitle,
+        leading: const Icon(Icons.brightness_6_outlined),
+        value: l10n.settingsValueUnavailable,
+        enabled: false,
+        onTap: () {},
+      );
+    }
+    final ThemePreferenceController controller = ref.watch(
+      themePreferenceControllerProvider(backendId),
+    );
+    return StreamBuilder<ThemePreferenceState>(
+      stream: controller.uiState,
+      initialData: controller.state,
+      builder:
+          (BuildContext context, AsyncSnapshot<ThemePreferenceState> snapshot) {
+            final ThemePreferenceState state =
+                snapshot.data ?? controller.state;
+            return SettingsNavRow(
+              title: l10n.settingsAppearanceTitle,
+              leading: const Icon(Icons.brightness_6_outlined),
+              value: state.exposed
+                  ? themePreferenceLabel(
+                      l10n,
+                      oledOn ? ThemePreference.oled : state.preference,
+                    )
+                  : l10n.settingsValueUnavailable,
+              onTap: () => showSettingsSheet<void>(
+                context,
+                builder: (BuildContext sheetContext) =>
+                    const ThemePreferenceRow(),
+              ),
+            );
+          },
+    );
+  }
+}
+
+/// One appearance choice's display name. OLED is a device-local appearance
+/// rather than a host value, so it is named here beside the host's three.
+String themePreferenceLabel(AppLocalizations l10n, ThemePreference option) =>
+    switch (option) {
+      ThemePreference.light => l10n.settingsAppearanceLight,
+      ThemePreference.dark => l10n.settingsAppearanceDark,
+      ThemePreference.oled => l10n.settingsAppearanceOled,
+      ThemePreference.system => l10n.settingsAppearanceSystem,
+    };
+
+/// The Appearance sheet body: a four-seat choice — light, dark, OLED, and
 /// follow-system — over the persisted preference, with the host's
 /// describe/write state stated rather than hidden. The selection follows the
 /// persisted value, never the resolved active theme (reference
@@ -344,21 +405,20 @@ class ThemePreferenceRow extends ConsumerWidget {
         final state = snapshot.data ?? controller.state;
         final selected = oledOn ? ThemePreference.oled : state.preference;
         return Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
               l10n.settingsAppearanceTitle,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 2),
             if (state.loading && !state.exposed)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.symmetric(vertical: 12),
                 child: LinearProgressIndicator(minHeight: 2),
               )
             else if (!state.exposed) ...<Widget>[
+              const SizedBox(height: 4),
               Text(
                 l10n.settingsAppearanceUnavailable,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -376,43 +436,35 @@ class ThemePreferenceRow extends ConsumerWidget {
                   child: Text(l10n.retry),
                 ),
             ] else ...<Widget>[
-              const SizedBox(height: 6),
-              SegmentedButton<ThemePreference>(
-                showSelectedIcon: false,
-                segments: <ButtonSegment<ThemePreference>>[
-                  ButtonSegment<ThemePreference>(
-                    value: ThemePreference.light,
-                    icon: const Icon(Icons.light_mode_outlined, size: 16),
-                    label: Text(l10n.settingsAppearanceLight),
-                    tooltip: l10n.settingsAppearanceLight,
-                  ),
-                  ButtonSegment<ThemePreference>(
-                    value: ThemePreference.dark,
-                    icon: const Icon(Icons.dark_mode_outlined, size: 16),
-                    label: Text(l10n.settingsAppearanceDark),
-                    tooltip: l10n.settingsAppearanceDark,
-                  ),
-                  ButtonSegment<ThemePreference>(
-                    value: ThemePreference.oled,
-                    // The seat needs the device-local store; the host seats
-                    // do not, so an unavailable store disables only this one.
-                    enabled: oled != null,
-                    icon: const Icon(Icons.contrast_outlined, size: 16),
-                    label: Text(l10n.settingsAppearanceOled),
-                    tooltip: l10n.settingsAppearanceOled,
-                  ),
-                  ButtonSegment<ThemePreference>(
-                    value: ThemePreference.system,
-                    icon: const Icon(Icons.brightness_auto_outlined, size: 16),
-                    label: Text(l10n.settingsAppearanceSystem),
-                    tooltip: l10n.settingsAppearanceSystem,
-                  ),
-                ],
-                selected: <ThemePreference>{selected},
-                onSelectionChanged: !state.writable || state.saving
-                    ? null
-                    : (selection) =>
-                          _apply(controller, oled, oledOn, selection.first),
+              const SizedBox(height: 4),
+              // The group owns the value and the change routing; the tiles
+              // carry only their own option.
+              RadioGroup<ThemePreference>(
+                groupValue: selected,
+                onChanged: (ThemePreference? choice) {
+                  if (choice == null) return;
+                  _apply(controller, oled, oledOn, choice);
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    for (final ThemePreference option in ThemePreference.values)
+                      RadioListTile<ThemePreference>(
+                        contentPadding: EdgeInsets.zero,
+                        value: option,
+                        // The OLED seat needs the device-local store; the host
+                        // seats do not, so an unavailable store disables only
+                        // this one. Every seat is inert while the host
+                        // refuses writes or a save is in flight.
+                        enabled:
+                            state.writable &&
+                            !state.saving &&
+                            (option != ThemePreference.oled || oled != null),
+                        secondary: Icon(_themePreferenceIcon(option), size: 20),
+                        title: Text(themePreferenceLabel(l10n, option)),
+                      ),
+                  ],
+                ),
               ),
               if (state.failed)
                 Text(
@@ -448,3 +500,10 @@ class ThemePreferenceRow extends ConsumerWidget {
     unawaited(controller.select(choice));
   }
 }
+
+IconData _themePreferenceIcon(ThemePreference option) => switch (option) {
+  ThemePreference.light => Icons.light_mode_outlined,
+  ThemePreference.dark => Icons.dark_mode_outlined,
+  ThemePreference.oled => Icons.contrast_outlined,
+  ThemePreference.system => Icons.brightness_auto_outlined,
+};

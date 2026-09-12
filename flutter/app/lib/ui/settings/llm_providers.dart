@@ -25,6 +25,7 @@ import '../../di/providers.dart';
 import '../state_stream.dart';
 import '../theme/theme.dart';
 import 'settings_backend_scope.dart';
+import 'settings_chrome.dart';
 
 /// The route-id grammar a hand-added provider must satisfy (the reference
 /// Models page's `ROUTE_PATTERN`, lower-case kebab-case). A leading letter
@@ -609,7 +610,10 @@ class LlmProvidersController {
 /// Self-contained: it watches its own controller for the scoped backend, so
 /// a host mounts it as one child of the Settings list.
 class SettingsLlmProvidersSection extends ConsumerWidget {
-  const SettingsLlmProvidersSection({super.key});
+  const SettingsLlmProvidersSection({this.showTitle = true, super.key});
+
+  /// False on the Providers page, whose app bar already names it.
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -624,17 +628,26 @@ class SettingsLlmProvidersSection extends ConsumerWidget {
       builder:
           (BuildContext context, AsyncSnapshot<LlmProvidersUiState> snapshot) {
             final LlmProvidersUiState state = snapshot.data ?? controller.state;
-            return _ProvidersCard(state: state, controller: controller);
+            return _ProvidersCard(
+              state: state,
+              controller: controller,
+              showTitle: showTitle,
+            );
           },
     );
   }
 }
 
 class _ProvidersCard extends StatelessWidget {
-  const _ProvidersCard({required this.state, required this.controller});
+  const _ProvidersCard({
+    required this.state,
+    required this.controller,
+    required this.showTitle,
+  });
 
   final LlmProvidersUiState state;
   final LlmProvidersController controller;
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -644,17 +657,18 @@ class _ProvidersCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _SectionHeading(
+        SettingsSectionHeading(
           title: l10n.settingsSectionProviders,
           intro: l10n.providersIntro,
+          showTitle: showTitle,
         ),
-        _SectionCard(
+        SettingsSectionCard(
           children: <Widget>[
             if (!state.writable && !state.isLoading)
               _CardNotice(l10n.providersReadOnlyNotice),
             if (state.errorMessage case final String error) ...<Widget>[
               _CardNotice(l10n.providersLoadFailed(error), color: scheme.error),
-              const _CardDivider(),
+              const SettingsCardDivider(),
             ],
             if (state.isLoading && state.rows.isEmpty)
               const Padding(
@@ -667,7 +681,7 @@ class _ProvidersCard extends StatelessWidget {
             if (!state.isLoading && state.rows.isEmpty)
               _CardNotice(l10n.providersEmpty),
             for (int i = 0; i < state.rows.length; i++) ...<Widget>[
-              if (i > 0) const _CardDivider(),
+              if (i > 0) const SettingsCardDivider(),
               _ProviderTile(
                 row: state.rows[i],
                 onTap: () => _openProviderSheet(
@@ -678,10 +692,10 @@ class _ProvidersCard extends StatelessWidget {
               ),
             ],
             if (state.credentialError case final String error) ...<Widget>[
-              const _CardDivider(),
+              const SettingsCardDivider(),
               _CardNotice(l10n.providerCredentialUnavailable(error)),
             ],
-            const _CardDivider(),
+            const SettingsCardDivider(),
             ListTile(
               leading: Icon(Icons.add, color: scheme.primary),
               title: Text(l10n.addProvider),
@@ -690,7 +704,7 @@ class _ProvidersCard extends StatelessWidget {
                   ? () => _openAddProviderSheet(context, controller)
                   : null,
             ),
-            const _CardDivider(),
+            const SettingsCardDivider(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
               child: Text(
@@ -1365,78 +1379,6 @@ String? _stringMember(Object? json, String key) {
   if (json is! Map) return null;
   final Object? value = json[key];
   return value is String && value.isNotEmpty ? value : null;
-}
-
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({required this.title, this.intro});
-
-  final String title;
-  final String? intro;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (intro != null) ...<Widget>[
-            const SizedBox(height: 2),
-            Text(
-              intro!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    // A Material (not a decorated Container) so the rows' ink splashes paint
-    // on it: a colored box between a row and its Material hides them.
-    return Material(
-      color: scheme.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kShapeCard),
-        side: BorderSide(color: scheme.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-}
-
-class _CardDivider extends StatelessWidget {
-  const _CardDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Divider(height: 1, thickness: 1, color: scheme.outlineVariant);
-  }
 }
 
 class _CardNotice extends StatelessWidget {
