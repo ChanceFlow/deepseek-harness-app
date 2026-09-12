@@ -78,6 +78,12 @@ GATES: list[dict] = [
         "cwd": REPO,
     },
     {
+        "name": "ci-container-jobs",
+        "groups": ["docs"],
+        "cmd": [sys.executable, "scripts/verify_ci_container_jobs.py"],
+        "cwd": REPO,
+    },
+    {
         "name": "i18n-arb",
         "groups": ["docs"],
         "cmd": [sys.executable, "scripts/verify_i18n_arb.py"],

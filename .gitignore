@@ -64,6 +64,7 @@ docs/flutter-migration-analysis.md
 !.agents/notes/implemented/process/2026-09-11-wire-pin-gate.md
 !.agents/notes/implemented/process/2026-09-11-per-abi-release-apks.md
 !.agents/notes/implemented/process/2026-09-11-container-ci-runner.md
+!.agents/notes/implemented/process/2026-09-12-no-host-toolchain.md
 .agents/skills/dsh-close-out/
 .agents/skills/dsh-design-review/
 .agents/skills/dsh-wire-parity/

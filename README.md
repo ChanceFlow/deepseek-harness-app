@@ -227,8 +227,8 @@ pair fails AGP 9's namespace check. The engine self-identifies as
 straight off the gateway's Caddy access log per UA group.
 
 The canonical command list and the aggregate verification gates live in
-[AGENTS.md §Commands](AGENTS.md#commands); Flutter 3.47.1 stable is
-expected on PATH. Real-host e2e is opt-in — see
+[AGENTS.md §Commands](AGENTS.md#commands); Flutter 3.47.1 lives in the CI
+image, reached through `scripts/flutter.sh`. Real-host e2e is opt-in — see
 [§Opt-in real-host e2e](#opt-in-real-host-e2e) below.
 
 ### Opt-in real-host e2e

@@ -39,17 +39,20 @@ the environment contradicts them. These tiers are that environment.
 
 ## Select evidence by surface
 
-Run the narrowest tool that would fail for your regression. The exhaustive
-matrix is CI's job — [ci.yaml](../.gitea/workflows/ci.yaml) runs it as the
-`docs` and `code` jobs on every push and pull request:
+Run the narrowest tool that would fail for your regression. No toolchain is
+installed on this machine: `scripts/flutter.sh` runs Flutter in the CI image, so
+the tool below and the gate that judges the change are the same build
+([AGENTS.md §Commands](../AGENTS.md#commands)). The exhaustive matrix is CI's
+job — [ci.yaml](../.gitea/workflows/ci.yaml) runs it as the `docs` and `code`
+jobs on every push and pull request:
 
 | Surface | Local tool |
 |---|---|
-| Behavior of one module | `flutter test <path>` from `flutter/` |
+| Behavior of one module | `scripts/flutter.sh test <path>` |
 | What a user sees | the screen's widget test, asserting the role the theme resolves ([flutter/app/AGENTS.md](../flutter/app/AGENTS.md)) |
-| Types after an edit | `flutter analyze <dir>` from `flutter/` |
+| Types after an edit | `scripts/flutter.sh analyze <dir>` |
 | Wire coverage, package boundaries | the adapter test file, then `python3 scripts/check_dart_imports.py` |
-| Docs, decision notes, skills | `python3 scripts/verify_all.py docs` — five gates, ~2s |
+| Docs, decision notes, skills | `python3 scripts/verify_all.py docs` — python only, seconds |
 
 A local `verify_all.py` with no group is for the rare structural change that
 touches every surface at once; everywhere else CI is the proof.

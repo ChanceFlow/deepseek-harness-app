@@ -83,9 +83,8 @@ container label, with `docs`, `code` and `android` green.
 ## Consequences
 
 The runner machine needs podman, the repo and a socket — and its interactive
-sessions have to reach Flutter through the image too. `~/tools/flutter-3.47.1`, `~/tools/jdk-*`, `~/android-sdk`,
-`~/.gradle`, `~/.pub-cache` and the `~/.cache/actcache` store become deletable
-once the container label is the only path. A stale image silently ages its
-build-cache snapshot, so the image is rebuilt by hand. The host runner's
-`runner.envs` still names the machine's toolchain until its labels have no
-consumer.
+sessions reach Flutter through the image too
+([the machine keeps no toolchain](2026-09-12-no-host-toolchain.md)). A stale
+image silently ages its build-cache snapshot, so the image is rebuilt by hand.
+The host runner's `runner.envs` still names the machine's toolchain until its
+labels have no consumer.

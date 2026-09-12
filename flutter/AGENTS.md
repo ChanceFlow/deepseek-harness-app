@@ -3,12 +3,13 @@
 Supplements the [root conventions](../AGENTS.md#conventions); only workspace
 mechanics live here.
 
-- **Workspace root owns the toolchain.** Run `flutter analyze` from
-  `flutter/`; the workspace root has no `test/` of its own, so the full
-  suite is `flutter test app/test packages/domain/test packages/network/test
-  packages/harness_adapter/test packages/dev/test` from `flutter/` (bare
-  `flutter test <pkg>` covers one member). Pub workspace resolution and the
-  shared `analysis_options.yaml` apply at this level
+- **Workspace root owns the toolchain.** Flutter commands run from
+  `flutter/`, inside the CI image: `scripts/flutter.sh test <pkg>` is the
+  shortcut, and the workspace root has no `test/` of its own, so the full
+  suite is `scripts/flutter.sh test app/test packages/domain/test
+  packages/network/test packages/harness_adapter/test packages/dev/test`
+  (bare `scripts/flutter.sh test <pkg>` covers one member). Pub workspace
+  resolution and the shared `analysis_options.yaml` apply at this level
   ([analysis_options.yaml](analysis_options.yaml)).
 - **Each member's rules live in its own delta file.** UI and aesthetic:
   [app/AGENTS.md](app/AGENTS.md); wire seam:
