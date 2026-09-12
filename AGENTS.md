@@ -14,6 +14,7 @@ flutter/packages/harness_adapter/  The ONLY code that knows the dsh wire protoco
 flutter/packages/network/          Transport: RPC envelopes, HTTP/WebSocket seams
 flutter/packages/dev/              Debug-build tooling: telemetry, frame stats, crash capture
 scripts/                           Gates (verify_*.py) and generators; gates_manifest.json holds every ceiling
+docker/                            The CI toolchain image: the Dockerfile every job runs in, and its build/publish script
 .github/workflows/                 ci.yaml — the merge gate; release-apk.yaml — the distribution channel
 .gitea/workflows/                  Same CI + release + GitHub/GitLab-mirror pipelines for the internal forge
 reference/deepseek-harness/        Pinned submodule — the dsh wire source of truth (read-only)
@@ -65,6 +66,12 @@ command.
   `master` push refreshes the rolling `dev` prerelease, a `v<semver>` tag
   cuts the stable Release, and both attach a signed APK to the Releases
   page ([README §APK releases](README.md#apk-releases)).
+- Every toolchain job runs in one container image, built and published by
+  [docker/build-image.sh](docker/build-image.sh). A republished image is a new
+  build: bump `ci.image_tag` in
+  [gates_manifest.json](scripts/gates_manifest.json) in the same change, or the
+  jobs fail on their first step
+  ([why](.agents/notes/implemented/process/2026-09-12-ci-image-registry.md)).
 
 ## Conventions
 

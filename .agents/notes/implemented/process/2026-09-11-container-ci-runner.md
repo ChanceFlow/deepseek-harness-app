@@ -28,10 +28,9 @@ while `flutter` and `java` were absent.
 ## Decision
 
 - **Container execution owns the merge gate and the release channel.**
-  `runs-on: flutter-android-ctr` is registered as
-  `docker://localhost/flutter-3.47-android:latest`, so the label itself puts the
-  job in the image. The `localhost/` prefix is load-bearing: a bare tag resolves
-  to docker.io and the runner tries to pull it.
+  `runs-on: flutter-android-ctr` is registered as a digest-pinned image published
+  to the forge's own registry, so the label itself puts the job in the image and
+  cannot move silently ([where it is published](2026-09-12-ci-image-registry.md)).
 - **That label has its own runner process** (capacity 2, so the gate's `code` and
   `android` jobs overlap; each container is capped at 9 GB) and inherits none of
   the host runner's `runner.envs`. Host labels stay for the mirror jobs, which
@@ -85,6 +84,7 @@ container label, with `docs`, `code` and `android` green.
 The runner machine needs podman, the repo and a socket — and its interactive
 sessions reach Flutter through the image too
 ([the machine keeps no toolchain](2026-09-12-no-host-toolchain.md)). A stale
-image silently ages its build-cache snapshot, so the image is rebuilt by hand.
+image silently ages its build-cache snapshot, so the image is rebuilt and
+republished by hand.
 The host runner's `runner.envs` still names the machine's toolchain until its
 labels have no consumer.

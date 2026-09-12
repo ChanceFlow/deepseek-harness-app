@@ -67,6 +67,22 @@ jobs:
         with:
           submodules: recursive
 
+      # A job cannot read the runner's label configuration, so it cannot see
+      # which image it was created from. This asserts the other direction: the
+      # image declares its own build, and the job fails before any gate when
+      # that is not the build this repository pins. The digest the label names
+      # is the operator's half of the same pin; neither end can be checked from
+      # the other's side.
+      - name: Assert the job runs the pinned image build
+        run: |
+          EXPECTED=$(python3 -c "import json; print(json.load(open('scripts/gates_manifest.json'))['ci']['image_tag'])")
+          # The image writes this in a RUN step, so it cannot be a stale copy
+          # served from that build's cache, and a missing file fails here.
+          . /etc/dsh-ci-image
+          [ "$DSH_CI_IMAGE_VERSION" = "$EXPECTED" ] \
+            || { echo "running image build '$DSH_CI_IMAGE_VERSION', the repository pins '$EXPECTED'"; exit 1; }
+          echo "toolchain image build: $DSH_CI_IMAGE_VERSION (revision ${DSH_CI_IMAGE_REVISION:-unknown})"
+
       - name: Doc gates (links, budgets, notes, skills, launcher icons)
         run: python3 scripts/verify_all.py docs
 
@@ -102,19 +118,35 @@ jobs:
         with:
           submodules: recursive
 
+      # A job cannot read the runner's label configuration, so it cannot see
+      # which image it was created from. This asserts the other direction: the
+      # image declares its own build, and the job fails before any gate when
+      # that is not the build this repository pins. The digest the label names
+      # is the operator's half of the same pin; neither end can be checked from
+      # the other's side.
+      - name: Assert the job runs the pinned image build
+        run: |
+          EXPECTED=$(python3 -c "import json; print(json.load(open('scripts/gates_manifest.json'))['ci']['image_tag'])")
+          # The image writes this in a RUN step, so it cannot be a stale copy
+          # served from that build's cache, and a missing file fails here.
+          . /etc/dsh-ci-image
+          [ "$DSH_CI_IMAGE_VERSION" = "$EXPECTED" ] \
+            || { echo "running image build '$DSH_CI_IMAGE_VERSION', the repository pins '$EXPECTED'"; exit 1; }
+          echo "toolchain image build: $DSH_CI_IMAGE_VERSION (revision ${DSH_CI_IMAGE_REVISION:-unknown})"
+
       # The pin's source is this file — verify_toolchain_pin.py reads
-      # `flutter-version:` above and holds every other home to it — but in
-      # host execution the binary comes from the runner's PATH, which no
-      # repo-side gate can see. A host `flutter upgrade` would move CI off the
-      # pin while every home still agreed, so the live version is asserted
-      # against the line above before any gate trusts it.
-      - name: Assert the runner's Flutter matches the pin
+      # `flutter-version:` above and holds every other home to it. The image's
+      # own Flutter is the one home nothing committed can be read against: an
+      # image rebuilt from another release would move CI off the pin while every
+      # committed home still agreed, so the live version is asserted against the
+      # line above before any gate trusts it.
+      - name: Assert the image's Flutter matches the pin
         run: |
           PIN=$(grep -oE 'flutter-version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+' .gitea/workflows/ci.yaml \
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           flutter --version
           flutter --version | grep -qE "^Flutter ${PIN} " \
-            || { echo "the runner's Flutter is not the ${PIN} this file pins"; exit 1; }
+            || { echo "the image's Flutter is not the ${PIN} this file pins"; exit 1; }
 
       # Resolution happens exactly here, once, at a named step, and bounded:
       # pub's network resolve has hung inside this runner — the release build
@@ -165,6 +197,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      # The same image-identity assertion the `docs` job carries in full: the
+      # image states its own build, the manifest pins it, and this fails before
+      # the compile when they disagree.
+      - name: Assert the job runs the pinned image build
+        run: |
+          EXPECTED=$(python3 -c "import json; print(json.load(open('scripts/gates_manifest.json'))['ci']['image_tag'])")
+          # The image writes this in a RUN step, so it cannot be a stale copy
+          # served from that build's cache, and a missing file fails here.
+          . /etc/dsh-ci-image
+          [ "$DSH_CI_IMAGE_VERSION" = "$EXPECTED" ] \
+            || { echo "running image build '$DSH_CI_IMAGE_VERSION', the repository pins '$EXPECTED'"; exit 1; }
+          echo "toolchain image build: $DSH_CI_IMAGE_VERSION (revision ${DSH_CI_IMAGE_REVISION:-unknown})"
 
       # pub get's outputs are compile inputs: android/local.properties (the
       # plugin's flutter.sdk) and .flutter-plugins-dependencies (the plugin

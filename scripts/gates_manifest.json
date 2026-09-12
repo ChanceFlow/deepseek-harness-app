@@ -80,6 +80,8 @@
  "ci": {
   "comment": "The label a toolchain job must use. A Gitea runner's label schema (host or docker://<image>) lives in the runner's own configuration, outside this repository, so a workflow naming a host label is indistinguishable from one naming a container label — which is how the toolchain moved onto a developer machine with no error anywhere. scripts/verify_ci_container_jobs.py holds every listed workflow to this label; see .agents/notes/implemented/process/2026-09-11-container-ci-runner.md.",
   "container_label": "flutter-android-ctr",
+  "image_tag": "3.47.1-jdk17-android36",
+  "image_tag_comment": "The image build the container label must resolve to. docker/flutter-android.Dockerfile bakes this string into the image as DSH_CI_IMAGE_VERSION, and every toolchain job compares the two before any gate runs — a label repointed at another image then fails on its first step instead of quietly running the gates against a different toolchain. The registry and the digest the label pins by are deliberately absent: the leak rules reject internal addresses, and both live in the runner's configuration with the rest of the label. Rebuilding the image means changing this string; see .agents/notes/implemented/process/2026-09-12-ci-image-registry.md.",
   "workflows": [
    ".gitea/workflows/ci.yaml",
    ".gitea/workflows/release-apk.yaml"
