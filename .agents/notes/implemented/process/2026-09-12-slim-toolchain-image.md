@@ -24,22 +24,26 @@ save the wrong thing: about 200 MB against the slim base, on a 12 GB image.
 - **The base is `ubuntu-24.04-slim`, 205 MB measured.** The packages it drops
   that jobs use — git, curl, python3, unzip, xz-utils, zip, ca-certificates —
   are installed in the JDK stage, which the final stage already inherits, for
-  about 100 MB on top of the JDK that stage installed anyway. Net 1.3 GB, with
-  no change in what a job can do. The name says Ubuntu; it is Debian 12
-  underneath, and the JDK is the distribution's either way.
-- **Only the Android platform this project compiles against is installed** (36,
-  not 34 and 35). Licenses are still accepted, so a Gradle run asking for
-  another revision fetches it instead of failing. 285 MB.
+  about 100 MB on top of the JDK that stage installed anyway: `/usr` went from
+  1.5 GB to 602 MB. The name says Ubuntu; it is Debian 12 underneath, and the
+  JDK is the distribution's either way.
 - **Gradle's `-bin` distribution, and the wrapper archive deleted after
   extraction.** The wrapper left both the unpacked distribution and the archive
-  it came from (768 MB measured, 235 MB of it the archive nothing reads), and
-  no step reads Gradle's sources or documentation. About 615 MB together.
+  it came from, and no step here reads Gradle's sources or documentation. The
+  tree went from 768 MB to 146 MB — 235 MB of that the archive alone.
+- **The NDK moves into the SDK stage**, with the rest of the toolchain, instead
+  of being left to the warmup's Gradle run. It is 2.2 GB, and every rebuild that
+  changed a single Dart file used to fetch it again.
 - **A loopback proxy is rewritten to `host.containers.internal`** in
   [scripts/container.sh](../../../../scripts/container.sh) and the workstation
   shim. A host proxy at `127.0.0.1` addresses the container itself, so anything
   that inherited one failed with "Connection refused" while the host's proxy was
   healthy — that is what stopped a `pub get` here from resolving. Measured: the
   same proxy returns 200 through `host.containers.internal`.
+- **The Android platform list names only what this project compiles against**
+  (36). That is honesty rather than a saving: measured, the warmup's Gradle run
+  installs 34 and 35 by itself, so the image carries all three either way
+  (426 MB) and the licenses accepted here are what let it.
 
 ## Alternatives considered
 
@@ -59,8 +63,10 @@ save the wrong thing: about 200 MB against the slim base, on a 12 GB image.
 
 ## Consequences
 
-The image is 9.7 GB instead of 12 GB, and a republish under a new tag is what
-carries that to the runner — which is why `gates_manifest.json` pins the build
-name. A job that asks for an Android platform or build-tools revision this image
-does not carry downloads it; the accepted licenses are what make that work, and
-it is the same egress the job already uses for pub.
+The image is 9.53 GB instead of 11.44 GB — measured, 1.9 GB lighter, and still
+carrying all three toolchains: Flutter 2.5 GB, the Android SDK 2.9 GB (the NDK
+2.2 GB of it), the warm Gradle and pub caches 3.3 GB. A republish under a new
+tag is what carries that to the runner, which is why `gates_manifest.json` pins
+the build name. A job that asks for an Android platform or build-tools revision
+this image does not carry downloads it; the accepted licenses are what make that
+work, and it is the same egress the job already uses for pub.
