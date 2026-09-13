@@ -490,27 +490,28 @@ void main() {
       expect(find.text('Check the build'), findsOneWidget);
     });
 
-    testWidgets('an unknown set is not shown as an empty one', (tester) async {
+    testWidgets('an unreported set renders nothing at all', (tester) async {
       final repository = _repository();
       // No source: the schedule/change stream never published for this
-      // session, which is what the pinned deployment does.
+      // session, which is what the pinned deployment does. A standing line
+      // that only says so would spend a row of every session's dock on a fact
+      // with nothing behind it.
       final harness = _Harness(repository, tester);
       await harness.pump(tester);
 
-      expect(find.byType(ScheduleReminderStrip), findsOneWidget);
-      expect(find.text('Not reported by this host'), findsOneWidget);
-      expect(find.text('None active'), findsNothing);
+      expect(find.byType(ScheduleReminderStrip), findsNothing);
+      expect(find.text('Not reported by this host'), findsNothing);
     });
 
-    testWidgets('a known empty set says none active', (tester) async {
+    testWidgets('a known empty set renders nothing too', (tester) async {
       final repository = _repository();
       repository.schedulesSource = (_) =>
           Stream<List<ScheduleReminder>>.value(const <ScheduleReminder>[]);
       final harness = _Harness(repository, tester);
       await harness.pump(tester);
 
-      expect(find.text('None active'), findsOneWidget);
-      expect(find.text('Not reported by this host'), findsNothing);
+      expect(find.byType(ScheduleReminderStrip), findsNothing);
+      expect(find.text('None active'), findsNothing);
     });
   });
 }

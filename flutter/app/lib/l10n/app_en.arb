@@ -1669,14 +1669,26 @@
     }
   },
   "voiceInputTooltip": "Voice input",
+  "@voiceInputTooltip": {
+    "description": "Tooltip on the composer's mode seat while the draft field is showing; pressing it switches the dock to hold-to-talk."
+  },
   "voiceInputNoModelTitle": "Speech Model Required",
   "voiceInputNoModelBody": "Download an on-device speech recognition model in Settings to enable offline voice input.",
   "voiceInputGoToSettings": "Go to Settings",
-  "voiceInputCancel": "Cancel",
-  "voiceInputDone": "Done",
+  "voiceModeKeyboard": "Keyboard input",
+  "@voiceModeKeyboard": {
+    "description": "Tooltip on the composer's mode seat while voice input is the active mode; pressing it returns to the draft field."
+  },
+  "voiceHoldToTalk": "Hold to talk",
+  "@voiceHoldToTalk": {
+    "description": "The resting label of the composer's hold-to-talk bar, and its accessible name."
+  },
+  "voiceInputReleaseToSend": "Release to send",
+  "@voiceInputReleaseToSend": {
+    "description": "The hold-to-talk bar's label while a finger is down and the capture will be sent on release."
+  },
   "voiceInputSlideToSend": "Release to send · slide up to cancel",
   "voiceInputReleaseToCancel": "Release to cancel",
-  "voiceInputTapToFinish": "Tap the mic to finish",
   "voiceInputInitializing": "Getting ready…",
   "voiceInputFinalizing": "Transcribing…",
   "voiceInputPermissionDenied": "Microphone permission is required for voice input.",
@@ -2596,14 +2608,6 @@
         "type": "int"
       }
     }
-  },
-  "scheduleUnknown": "Not reported by this host",
-  "@scheduleUnknown": {
-    "description": "The session's reminder set before the schedule/change stream has published anything; distinct from an empty set."
-  },
-  "scheduleEmpty": "None active",
-  "@scheduleEmpty": {
-    "description": "The session's reminder set is known and empty."
   },
   "scheduleNextAt": "Next {at}",
   "@scheduleNextAt": {

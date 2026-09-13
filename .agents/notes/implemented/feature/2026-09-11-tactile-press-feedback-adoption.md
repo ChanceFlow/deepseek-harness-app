@@ -44,9 +44,12 @@ disabled rendering and hit box stand. Reduced motion drops the scale
 transition, and a muted `TickerMode` mutes the wrapper's ticker so the scale
 stays at rest; both leave the seat tappable.
 
-Adopted: `_PrimarySendButton`, `_PlusButton`, `VoiceMicButton`,
+Adopted: `_PrimarySendButton`, `_PlusButton`, the composer's voice mode seat,
 `PermissionSelectChip`, `ModelSelect`, `_RoundIconButton`, and the
-jump-to-bottom FAB, which now follows the same no-ink rule.
+jump-to-bottom FAB, which now follows the same no-ink rule. The voice control
+itself became `VoiceHoldBar` in
+[the hold-to-talk pass](2026-09-13-hold-to-talk-composer.md): it carries the
+wrapper with `enableHaptic` false, because its own phase impacts are the click.
 
 ## Alternatives considered
 

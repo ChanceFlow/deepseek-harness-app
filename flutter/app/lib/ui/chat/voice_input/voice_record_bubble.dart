@@ -1,23 +1,19 @@
-/// Material 3 microphone seat and its anchored recording bubble.
+/// The recording bubble anchored to the composer's hold bar.
 ///
-/// The session surface is a bubble pinned to the seat that opened it — not a
-/// bar inserted into the composer, which shoved the input row aside and covered
-/// the draft the reader is watching. The bubble carries the elapsed clock and a
-/// live input meter, pops out of the seat, and answers the two gestures that
-/// end a capture: release to send, slide up to discard.
+/// The session surface is a bubble pinned to the control that opened it — not
+/// a bar inserted into the composer, which shoved the input row aside and
+/// covered the draft the reader is watching. It carries the elapsed clock, a
+/// live input meter, the hint naming the gesture in progress, and the words the
+/// engine is hearing as they land. It reports; the gesture that ends a capture
+/// belongs to the bar (see `voice_hold_bar.dart`).
 library;
-
-import 'dart:async';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/platform/audio_recorder.dart';
-import 'package:asr/asr.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 
-import '../../shared/tappable_feedback.dart';
 import '../../theme/theme.dart';
 import 'voice_input_ui_state.dart';
 
@@ -52,13 +48,10 @@ const double kVoiceBubbleGap = 10;
 const double kVoiceBubbleMargin = 16;
 const double kVoiceBubbleRadius = kShapeMenuSheet;
 
-/// How far above the seat a held finger travels before the bubble switches to
-/// its discard face. Shorter than this, the hold still means "send".
+/// How far above the hold bar a held finger travels before the surface
+/// switches to its discard face. Shorter than this, the hold still means
+/// "send".
 const double kVoiceCancelSlide = 56;
-
-/// The seat's box: the hold is recognised across all of it, and it is the
-/// 40px the rest of the tools row already gives an `IconButton`.
-const double kVoiceSeatBox = 40;
 
 /// A meter bar: the level captured at one moment of the session, and that
 /// moment in milliseconds since the session clock started.
@@ -77,349 +70,84 @@ String formatVoiceDuration(Duration duration) {
 bool voiceMotionAllowed(BuildContext context) =>
     !DshMotion.isReducedMotion(context) && TickerMode.valuesOf(context).enabled;
 
-/// Microphone seat for the Composer tools row, and the owner of the recording
-/// bubble its session puts on screen.
+/// The recording surface the composer's hold bar anchors: one bubble that pops
+/// out of the control holding the capture and reports it — elapsed clock, live
+/// meter, the gesture the reader is in the middle of, and the words the engine
+/// is hearing as they land.
 ///
-/// Two gestures cross a capture. A tap opens one and the next tap sends it —
-/// the path that stays usable for anyone who cannot hold. A press that keeps
-/// holding records only while the finger is down: releasing sends, sliding past
-/// [kVoiceCancelSlide] first discards. Every boundary carries a haptic and an
-/// earcon, so the reader learns the outcome without looking at the screen.
-class VoiceMicButton extends StatefulWidget {
-  const VoiceMicButton({
-    required this.enabled,
+/// It reports the session; it never controls one. Both endings belong to the
+/// bar the bubble points at — release sends, and sliding past
+/// [kVoiceCancelSlide] first discards — so the bubble takes no pointer at all,
+/// which is also why it can never be the seat that fails to answer a tap.
+class VoiceRecordBubble extends StatelessWidget {
+  const VoiceRecordBubble({
+    required this.live,
+    required this.link,
+    required this.shift,
+    required this.armed,
+    required this.holding,
     required this.uiState,
-    required this.onStart,
-    required this.onFinish,
-    required this.onCancel,
-    required this.onOpenSettings,
     super.key,
   });
 
-  /// Whether the seat answers at all: a session whose turn the engine holds
-  /// declines, as does a composer that cannot send.
-  final bool enabled;
-  final VoiceInputUiState uiState;
-  final VoidCallback onStart;
-  final VoidCallback onFinish;
-  final VoidCallback onCancel;
-  final VoidCallback onOpenSettings;
-
-  @override
-  State<VoiceMicButton> createState() => _VoiceMicButtonState();
-}
-
-class _VoiceMicButtonState extends State<VoiceMicButton> {
-  /// Publishes the seat's box to the follower, so the bubble rides the seat
-  /// through a keyboard opening or a scroll instead of being placed once.
-  final LayerLink _link = LayerLink();
-
-  /// The portal stays shown for the seat's whole life; what comes and goes is
-  /// the bubble the builder returns. Showing it from a frame callback rather
-  /// than from [build] is what keeps the controller attached.
-  final OverlayPortalController _portal = OverlayPortalController();
-
-  /// Horizontal correction that keeps the bubble inside the viewport, derived
-  /// from the seat's own rect after layout (see [_measure]).
-  double _shift = 0;
-
-  /// Whether a finger is holding the seat now, and whether that hold has
-  /// travelled far enough up to mean "discard".
-  bool _holding = false;
-  bool _armed = false;
-
-  VoiceInputUiState get _uiState => widget.uiState;
-
-  bool get _live => _uiState.isRecording;
-
-  /// Which readiness gate a press crosses: on-device capture needs an installed
-  /// model and the downloaded runtime, online capture needs configured
-  /// credentials.
-  bool get _ready => switch (_uiState.inputMode) {
-    VoiceInputMode.offline =>
-      _uiState.hasInstalledModels && _uiState.runtimeInstalled,
-    VoiceInputMode.online => _uiState.onlineReady,
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_portal.isShowing) _portal.show();
-      _measure();
-    });
-  }
-
-  @override
-  void didUpdateWidget(VoiceMicButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // The seat's own box moves when the keyboard opens or the tool row wraps,
-    // and the bubble has to follow in the frame it moves.
-    if (_live) _scheduleMeasure();
-  }
-
-  void _scheduleMeasure() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _measure();
-    });
-  }
-
-  /// A follower cannot read its leader's box during build, so the correction is
-  /// computed after layout and applied on the next frame.
-  void _measure() {
-    if (!_live) {
-      if (_shift != 0) setState(() => _shift = 0);
-      return;
-    }
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
-    final seat = box.localToGlobal(Offset.zero);
-    final ideal = seat.dx + box.size.width / 2 - kVoiceBubbleWidth / 2;
-    final maxLeft =
-        MediaQuery.sizeOf(context).width -
-        kVoiceBubbleMargin -
-        kVoiceBubbleWidth;
-    final left = maxLeft <= kVoiceBubbleMargin
-        ? kVoiceBubbleMargin
-        : ideal.clamp(kVoiceBubbleMargin, maxLeft);
-    final shift = left - ideal;
-    if (shift != _shift) setState(() => _shift = shift);
-  }
-
-  /// Returns false when a press stopped at a setup dialog instead of opening a
-  /// capture.
-  bool _gateReady() {
-    if (_ready) return true;
-    final l10n = AppLocalizations.of(context)!;
-    final online = _uiState.inputMode == VoiceInputMode.online;
-    // Three gates, three dialogs: online credentials, a missing model, or the
-    // runtime the engine maps (which is downloaded separately from the model).
-    final (String title, String body) = switch (_uiState) {
-      _ when online => (
-        l10n.voiceInputCloudSetupTitle,
-        l10n.voiceInputCloudSetupBody,
-      ),
-      VoiceInputUiState(hasInstalledModels: false) => (
-        l10n.voiceInputNoModelTitle,
-        l10n.voiceInputNoModelBody,
-      ),
-      _ => (l10n.voiceInputNoRuntimeTitle, l10n.voiceInputNoRuntimeBody),
-    };
-    _showSetupDialog(context, title: title, body: body);
-    return false;
-  }
-
-  void _handleTap() {
-    if (!_gateReady()) return;
-    if (_live) {
-      _finish();
-    } else {
-      _start();
-    }
-  }
-
-  void _start() {
-    primaryFocus?.unfocus();
-    unawaited(HapticFeedback.mediumImpact());
-    unawaited(playVoiceSound(VoiceSound.start));
-    widget.onStart();
-  }
-
-  void _finish() {
-    unawaited(HapticFeedback.mediumImpact());
-    unawaited(playVoiceSound(VoiceSound.send));
-    widget.onFinish();
-  }
-
-  void _discard() {
-    unawaited(HapticFeedback.lightImpact());
-    unawaited(playVoiceSound(VoiceSound.cancel));
-    widget.onCancel();
-  }
-
-  void _handleHoldStart(LongPressStartDetails _) {
-    if (!widget.enabled || !_gateReady()) return;
-    setState(() {
-      _holding = true;
-      _armed = false;
-    });
-    if (!_live) _start();
-  }
-
-  void _handleHoldMove(LongPressMoveUpdateDetails details) {
-    if (!_holding) return;
-    final armed = details.localOffsetFromOrigin.dy <= -kVoiceCancelSlide;
-    if (armed != _armed) {
-      unawaited(HapticFeedback.selectionClick());
-      setState(() => _armed = armed);
-    }
-  }
-
-  void _handleHoldUp() {
-    if (!_holding) return;
-    final discard = _armed;
-    setState(() {
-      _holding = false;
-      _armed = false;
-    });
-    // The release carries the reader's intent whether or not the state has
-    // caught up: lifting a finger whose session is still arriving must send,
-    // not leave a capture running with nobody holding it.
-    if (discard) {
-      _discard();
-    } else {
-      _finish();
-    }
-  }
-
-  void _showSetupDialog(
-    BuildContext context, {
-    required String title,
-    required String body,
-  }) {
-    final l10n = AppLocalizations.of(context)!;
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(title),
-          content: Text(body),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                widget.onOpenSettings();
-              },
-              child: Text(l10n.voiceInputGoToSettings),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    final live = _live && voiceMotionAllowed(context);
-
-    return CompositedTransformTarget(
-      link: _link,
-      child: OverlayPortal(
-        controller: _portal,
-        overlayChildBuilder: (context) => _BubbleSwitcher(
-          live: _live,
-          child: _VoiceRecordBubble(
-            link: _link,
-            shift: _shift,
-            armed: _armed,
-            holding: _holding,
-            uiState: _uiState,
-            onCancel: _discard,
-            onFinish: _finish,
-          ),
-        ),
-        child: DshTappable(
-          // The seat's own start/finish/discard impacts are the click this
-          // gesture produces, so the wrapper supplies only the scale.
-          enabled: widget.enabled,
-          enableHaptic: false,
-          child: IconButton(
-            // While a session runs the seat is the send control that the
-            // release gesture is, so it says so.
-            tooltip: _live ? l10n.voiceInputDone : l10n.voiceInputTooltip,
-            onPressed: widget.enabled ? _handleTap : null,
-            // The hold's hit box is the icon slot, so the slot is the whole
-            // seat: no dead ring where a thumb would hit the tooltip instead.
-            iconSize: kVoiceSeatBox,
-            style: IconButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: const Size.square(kVoiceSeatBox),
-              foregroundColor: _live
-                  ? scheme.onErrorContainer
-                  : scheme.onSurfaceVariant,
-              disabledForegroundColor: scheme.outline,
-              backgroundColor: _live ? scheme.errorContainer : null,
-              // Press feedback is the wrapper's scale plus the seat's own
-              // phase impacts; a ripple under it would be a second animation.
-              highlightColor: Colors.transparent,
-              splashFactory: NoSplash.splashFactory,
-              enableFeedback: false,
-              shape: const CircleBorder(),
-            ),
-            // The hold is recognised inside the button rather than around it,
-            // because a Material `Tooltip` shows itself on long press: a
-            // detector outside the seat loses that arena and the press only ever
-            // reveals the tooltip. As the deepest competitor here it wins a hold
-            // while a tap still falls through to the button, which is what keeps
-            // both gestures on one seat.
-            icon: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onLongPressStart: _handleHoldStart,
-              onLongPressMoveUpdate: _handleHoldMove,
-              onLongPressUp: _handleHoldUp,
-              child: SizedBox(
-                width: kVoiceSeatBox,
-                height: kVoiceSeatBox,
-                child: Center(
-                  child: AnimatedScale(
-                    duration: Durations.short2,
-                    curve: Easing.standard,
-                    scale: live
-                        ? 1 + 0.16 * _uiState.amplitude.clamp(0.0, 1.0)
-                        : 1.0,
-                    child: Icon(
-                      _live ? Icons.mic : Icons.mic_outlined,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The bubble's coming and going, in both directions: a surface that only
-/// arrives would leave the way it went unstated.
-///
-/// The switcher is the framework's, keyed on presence, and the empty state is a
-/// zero box rather than nothing at all so the outgoing bubble has something to
-/// cross-fade against instead of being cut.
-class _BubbleSwitcher extends StatelessWidget {
-  const _BubbleSwitcher({required this.live, required this.child});
-
+  /// Whether a capture is on screen. False keeps a zero box on stage, so the
+  /// outgoing bubble has something to cross-fade against instead of being cut.
   final bool live;
-  final Widget child;
+
+  /// The hold bar's box, which the bubble follows through a keyboard opening
+  /// or a dock re-layout.
+  final LayerLink link;
+
+  /// Horizontal correction that keeps the bubble inside the viewport. The bar
+  /// computes it from its own rect after layout, because a follower cannot
+  /// read its leader's box during build.
+  final double shift;
+
+  /// Whether the hold has travelled far enough up to mean "discard".
+  final bool armed;
+
+  /// Whether a finger is on the bar right now.
+  final bool holding;
+
+  final VoiceInputUiState uiState;
 
   @override
   Widget build(BuildContext context) {
     final motion = voiceMotionAllowed(context);
-    return AnimatedSwitcher(
-      duration: motion ? Durations.medium1 : Duration.zero,
-      switchInCurve: Easing.emphasizedDecelerate,
-      switchOutCurve: Easing.standardAccelerate,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          // Scaled about the tail: the bubble grows out of the seat it points
-          // at, which is what makes it read as coming from that control.
-          scale: Tween<double>(begin: 0.86, end: 1).animate(animation),
-          alignment: Alignment.bottomCenter,
-          child: child,
+    return IgnorePointer(
+      child: AnimatedSwitcher(
+        duration: motion ? Durations.medium1 : Duration.zero,
+        switchInCurve: Easing.emphasizedDecelerate,
+        switchOutCurve: Easing.standardAccelerate,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            // Scaled about the tail: the bubble grows out of the bar it points
+            // at, which is what makes it read as coming from that control.
+            scale: Tween<double>(begin: 0.86, end: 1).animate(animation),
+            alignment: Alignment.bottomCenter,
+            child: child,
+          ),
         ),
+        child: live
+            ? CompositedTransformFollower(
+                key: const ValueKey<String>('bubble'),
+                link: link,
+                showWhenUnlinked: false,
+                targetAnchor: Alignment.topCenter,
+                // The tail tip, not the card's edge, seats itself above the
+                // bar: the pointer is what ties surface to control.
+                followerAnchor: Alignment.bottomCenter,
+                offset: Offset(shift, -kVoiceBubbleGap),
+                child: _Bubble(
+                  shift: shift,
+                  armed: armed,
+                  holding: holding,
+                  uiState: uiState,
+                ),
+              )
+            : const SizedBox.shrink(key: ValueKey<String>('no-bubble')),
       ),
-      child: live
-          ? KeyedSubtree(key: const ValueKey<String>('bubble'), child: child)
-          : const SizedBox.shrink(key: ValueKey<String>('no-bubble')),
     );
   }
 }
@@ -432,24 +160,18 @@ class _BubbleSwitcher extends StatelessWidget {
 /// shadow falls from both — which a rounded [Card] with a separate triangle
 /// cannot do without a seam where the two meet. Recorded in
 /// [the voice bubble note](../../../../../../.agents/notes/implemented/feature/2026-09-02-voice-record-bubble.md).
-class _VoiceRecordBubble extends StatelessWidget {
-  const _VoiceRecordBubble({
-    required this.link,
+class _Bubble extends StatelessWidget {
+  const _Bubble({
     required this.shift,
     required this.armed,
     required this.holding,
     required this.uiState,
-    this.onCancel,
-    this.onFinish,
   });
 
-  final LayerLink link;
   final double shift;
   final bool armed;
   final bool holding;
   final VoiceInputUiState uiState;
-  final VoidCallback? onCancel;
-  final VoidCallback? onFinish;
 
   @override
   Widget build(BuildContext context) {
@@ -460,13 +182,23 @@ class _VoiceRecordBubble extends StatelessWidget {
     final waiting = uiState.isWaitingOnEngine;
     final motion = voiceMotionAllowed(context) && uiState.isRecording;
 
-    final hint = switch ((holding, armed, uiState.phase)) {
-      (true, true, _) => l10n.voiceInputReleaseToCancel,
-      (true, false, _) => l10n.voiceInputSlideToSend,
-      (_, _, VoiceInputPhase.initializing) => l10n.voiceInputInitializing,
-      (_, _, VoiceInputPhase.finalizing) => l10n.voiceInputFinalizing,
-      (_, _, _) => l10n.voiceInputTapToFinish,
-    };
+    // The engine's own phases outrank the finger: while the model loads or the
+    // tail decodes there is nothing the reader's gesture can change, so the
+    // surface names that wait instead of inviting a release it cannot honour.
+    final String hint;
+    if (uiState.phase == VoiceInputPhase.initializing) {
+      hint = l10n.voiceInputInitializing;
+    } else if (uiState.phase == VoiceInputPhase.finalizing) {
+      hint = l10n.voiceInputFinalizing;
+    } else if (holding) {
+      hint = armed
+          ? l10n.voiceInputReleaseToCancel
+          : l10n.voiceInputSlideToSend;
+    } else {
+      // A session with no finger on it is the frame between the release and
+      // the finalize; the gesture that ended it was the one just made.
+      hint = l10n.voiceInputSlideToSend;
+    }
 
     final bubble = SizedBox(
       width: kVoiceBubbleWidth,
@@ -553,50 +285,6 @@ class _VoiceRecordBubble extends StatelessWidget {
                       : scheme.onSurfaceVariant,
                 ),
               ),
-              if (!holding &&
-                  uiState.isRecording &&
-                  onCancel != null &&
-                  onFinish != null) ...[
-                const SizedBox(height: 8),
-                // Both seats share the bubble's 212dp content width: the
-                // card is a fixed 236dp so its tail keeps pointing at the
-                // seat, and two intrinsic-width buttons overflow it.
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onCancel,
-                        icon: const Icon(Icons.close, size: 14),
-                        label: Text(
-                          l10n.cancel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onFinish,
-                        icon: const Icon(Icons.check, size: 14),
-                        label: Text(
-                          l10n.send,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        style: FilledButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
               // Debug-only strip: native capture telemetry, so the data flow
               // is visible on-screen without adb/logcat.
               if (kDebugMode && uiState.debugStats != null)
@@ -618,16 +306,7 @@ class _VoiceRecordBubble extends StatelessWidget {
       ),
     );
 
-    return CompositedTransformFollower(
-      link: link,
-      showWhenUnlinked: false,
-      targetAnchor: Alignment.topCenter,
-      // The tail tip, not the card's edge, seats itself above the mic: the
-      // pointer is what ties the bubble to the control that opened it.
-      followerAnchor: Alignment.bottomCenter,
-      offset: Offset(shift, -kVoiceBubbleGap),
-      child: holding ? IgnorePointer(child: bubble) : bubble,
-    );
+    return bubble;
   }
 }
 

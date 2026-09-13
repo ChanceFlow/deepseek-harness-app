@@ -7,7 +7,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/model_select.dart';
 import 'package:app/ui/chat/permission_select.dart';
-import 'package:app/ui/chat/voice_input/voice_record_bubble.dart';
+import 'package:app/ui/chat/voice_input/voice_hold_bar.dart';
 import 'package:app/ui/shared/tappable_feedback.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
@@ -116,7 +116,7 @@ void main() {
     // The filled primary seat keeps its FloatingActionButton identity and
     // gains the wrapper outside it.
     expect(_wrappedBy(_sendFab()), findsOneWidget);
-    // The +, mic, model and permission seats build the wrapper themselves.
+    // The +, mode, model and permission seats build the wrapper themselves.
     expect(
       find.ancestor(
         of: find.byIcon(Icons.add),
@@ -124,24 +124,46 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(_wraps(find.byType(VoiceMicButton)), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byIcon(Icons.mic_none),
+        matching: find.byType(DshTappable),
+      ),
+      findsOneWidget,
+    );
     expect(_wraps(find.byType(ModelSelect)), findsOneWidget);
     expect(_wraps(find.byType(PermissionSelectChip)), findsOneWidget);
   });
 
-  testWidgets('one press costs one haptic: the mic keeps its own impacts', (
+  testWidgets('one press costs one haptic: the hold bar keeps its impacts', (
     tester,
   ) async {
     await _pump(tester, <ChatAction>[]);
 
     DshTappable wrapOf(Finder seat) => tester.widget<DshTappable>(_wraps(seat));
-    expect(wrapOf(find.byType(VoiceMicButton)).enableHaptic, isFalse);
+    // The mode seat is a plain switch, so it clicks like its neighbours; the
+    // hold bar produces its own phase impacts, so the wrapper stays silent.
+    expect(
+      tester
+          .widget<DshTappable>(
+            find.ancestor(
+              of: find.byIcon(Icons.mic_none),
+              matching: find.byType(DshTappable),
+            ),
+          )
+          .enableHaptic,
+      isTrue,
+    );
     expect(wrapOf(find.byType(ModelSelect)).enableHaptic, isTrue);
     expect(wrapOf(find.byType(PermissionSelectChip)).enableHaptic, isTrue);
     expect(
       tester.widget<DshTappable>(_wrappedBy(_sendFab())).enableHaptic,
       isTrue,
     );
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    await tester.pump();
+    expect(wrapOf(find.byType(VoiceHoldBar)).enableHaptic, isFalse);
   });
 
   testWidgets('one tap on the send seat dispatches exactly one prompt', (

@@ -270,6 +270,12 @@ final List<DesignShot> shots = <DesignShot>[
     dark: false,
   ),
   DesignShot(
+    name: 'voice-cancel-armed',
+    state: busyState(),
+    host: (theme, locale) => _voiceRecordingHost(theme, locale, false),
+    act: _settleVoiceArmedShot,
+  ),
+  DesignShot(
     name: 'voice-transcribing',
     state: busyState(),
     host: (theme, locale) => _voiceRecordingHost(
@@ -606,8 +612,12 @@ const List<List<double>> _kVoicePhraseBands = <List<double>>[
   [0.31, 0.64, 0.80, 0.42],
 ];
 
-/// Voice controller that hands the dock one capture chunk per 100ms of pumped
-/// time, so a shot renders a session with history instead of a mounted frame.
+/// Voice controller that hands the composer one capture chunk per 100ms of
+/// pumped time, so a shot renders a session with history instead of a mounted
+/// frame.
+///
+/// The phrase opens on an idle frame: the dock reaches voice mode through its
+/// mode seat, and that seat declines a press while a capture owns the session.
 class _ScriptedVoiceInputController extends VoiceInputController {
   _ScriptedVoiceInputController({
     required super.manager,
@@ -659,11 +669,25 @@ class _ScriptedVoiceInputController extends VoiceInputController {
 /// pumping loop to speak through.
 _ScriptedVoiceInputController? _voiceSession;
 
-/// Settles the chrome, then plays the phrase one capture chunk per pumped
-/// frame: the meter's trail is made of the chunks it actually saw, so the
-/// still reviews a spoken sentence rather than a couple of coalesced frames.
+/// The finger the voice shots leave on the bar: the capture surface, its meter
+/// and its hint only exist while a hold does, so a released shot would review
+/// an idle composer.
+TestGesture? _voiceHold;
+
+/// Settles the chrome, switches the dock into voice mode the way the reader
+/// does, then plays the phrase one capture chunk per pumped frame with a finger
+/// down: the meter's trail is made of the chunks it actually saw, so the still
+/// reviews a spoken sentence rather than a couple of coalesced frames.
 Future<void> _settleVoiceShot(WidgetTester tester) async {
   await settle(tester);
+  // The band becomes the hold bar only through the mode seat.
+  await tester.tap(find.byIcon(Icons.mic_none));
+  await tester.pump();
+  final hold = await tester.startGesture(
+    tester.getCenter(find.byType(VoiceHoldBar)),
+  );
+  _voiceHold = hold;
+  await tester.pump();
   final session = _voiceSession;
   if (session != null) {
     for (var i = 0; i < session.frameCount; i++) {
@@ -671,6 +695,17 @@ Future<void> _settleVoiceShot(WidgetTester tester) async {
       await tester.pump(const Duration(milliseconds: 100));
     }
   }
+  await tester.pump();
+}
+
+/// The same hold, slid up past the discard threshold: the bar and the bubble
+/// both turn to the armed face, which is the state a reader has to recognise
+/// before they lift their finger.
+Future<void> _settleVoiceArmedShot(WidgetTester tester) async {
+  await _settleVoiceShot(tester);
+  final hold = _voiceHold;
+  if (hold == null) return;
+  await hold.moveBy(const Offset(0, -kVoiceCancelSlide - 12));
   await tester.pump();
 }
 
@@ -721,6 +756,10 @@ Widget _voiceRecordingHost(
   ];
   final last = spoken.last;
   final frames = <VoiceInputUiState>[
+    // The dock reaches voice mode through its mode seat, and that seat
+    // declines a press while a capture owns the session: the phrase waits for
+    // the shot's act on an idle frame.
+    const VoiceInputUiState(hasInstalledModels: true),
     ...spoken,
     // The tail carries the same envelope object, so the meter learns no new
     // audio arrived and lets its trail run out.

@@ -501,7 +501,202 @@ void main() {
       controller.dispose();
       await store.dispose();
     });
+
+    test('a cancel while the engine is still loading is final', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      final gate = Completer<void>();
+      final engine = _SlowInitializeEngine(gate: gate);
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        engine: engine,
+      );
+
+      final phases = <VoiceInputPhase>[];
+      final sub = controller.uiState.listen((state) => phases.add(state.phase));
+      addTearDown(sub.cancel);
+
+      // The press is parked in the model load.
+      final start = controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.initializing));
+
+      // The reader takes it back before a single sample is captured. The load
+      // finishing later is what used to put `recording` back on screen and
+      // leave the dock answering nothing.
+      await controller.cancelRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.idle));
+
+      gate.complete();
+      await start;
+      await pumpEventQueue();
+
+      expect(controller.state.phase, equals(VoiceInputPhase.idle));
+      expect(
+        phases,
+        isNot(contains(VoiceInputPhase.recording)),
+        reason: 'a session the reader cancelled may never publish itself',
+      );
+
+      controller.dispose();
+    });
+
+    test(
+      'a release during the load ends the session, it does not finalize',
+      () async {
+        final modelDir = Directory('${tempDir.path}/sensevoice-small');
+        await modelDir.create(recursive: true);
+        await registry.updateEntry(
+          ModelRegistryEntry(
+            modelId: 'sensevoice-small',
+            source: ModelSource.hfMirror,
+            localDir: modelDir.path,
+            status: AsrModelStatus.downloaded,
+          ),
+        );
+
+        final gate = Completer<void>();
+        final controller = VoiceInputController(
+          manager: manager,
+          audioRecorder: MockAudioInputSource(),
+          engine: _SlowInitializeEngine(gate: gate),
+        );
+
+        final start = controller.startRecording();
+        // The finger comes up before the model finished loading: there is no
+        // complete capture to send, so this ends instead of emitting an empty
+        // final transcript over the draft.
+        final result = await controller.stopRecording();
+        expect(result, isEmpty);
+        expect(controller.state.phase, equals(VoiceInputPhase.idle));
+
+        gate.complete();
+        await start;
+        await pumpEventQueue();
+        expect(controller.state.phase, equals(VoiceInputPhase.idle));
+
+        controller.dispose();
+      },
+    );
+
+    test('a repeated ending joins the finish in flight', () async {
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+
+      final engine = _TrackingEngine();
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        engine: engine,
+      );
+
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.recording));
+
+      // A release plus a repeated callback: one session decodes once, so the
+      // draft never takes a second, empty final transcript.
+      final first = controller.stopRecording();
+      final second = controller.stopRecording();
+      expect(await second, equals(await first));
+      await pumpEventQueue();
+
+      expect(engine.finishCalls, equals(1));
+      expect(controller.state.phase, equals(VoiceInputPhase.idle));
+
+      controller.dispose();
+    });
+
+    test('a session that ended in an error does not close the control', () async {
+      final controller = VoiceInputController(
+        manager: manager,
+        audioRecorder: MockAudioInputSource(),
+        engine: MockAsrEngine(),
+      );
+
+      // No model yet: the press reports why instead of opening a capture.
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.error));
+      expect(controller.state.errorMessage, equals('NO_MODEL_INSTALLED'));
+
+      // The reader installs one, exactly as Settings would, and presses again.
+      // A stale error is not a session: refusing the press on it left the
+      // control dead with nothing on screen to clear it.
+      final modelDir = Directory('${tempDir.path}/sensevoice-small');
+      await modelDir.create(recursive: true);
+      await registry.updateEntry(
+        ModelRegistryEntry(
+          modelId: 'sensevoice-small',
+          source: ModelSource.hfMirror,
+          localDir: modelDir.path,
+          status: AsrModelStatus.downloaded,
+        ),
+      );
+      await pumpEventQueue();
+
+      await controller.startRecording();
+      expect(controller.state.phase, equals(VoiceInputPhase.recording));
+
+      controller.dispose();
+    });
   });
+}
+
+/// [AsrEngine] whose [initialize] returns only when the test's gate completes,
+/// so an ending can land while the model is still loading.
+class _SlowInitializeEngine implements AsrEngine {
+  _SlowInitializeEngine({required this.gate});
+
+  final Completer<void> gate;
+
+  final StreamController<AsrTranscriptionChunk> _chunks =
+      StreamController<AsrTranscriptionChunk>.broadcast(sync: true);
+
+  AsrEngineState _state = AsrEngineState.uninitialized;
+
+  @override
+  AsrEngineState get state => _state;
+
+  @override
+  Stream<AsrTranscriptionChunk> get transcriptionStream => _chunks.stream;
+
+  @override
+  Future<void> initialize(AsrModelInfo? model, Directory? modelDir) async {
+    await gate.future;
+    _state = AsrEngineState.ready;
+  }
+
+  @override
+  void acceptAudio(Float32List samples) {}
+
+  @override
+  Future<String> finish() async => '';
+
+  @override
+  void reset() {
+    _state = AsrEngineState.ready;
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _chunks.close();
+  }
 }
 
 /// [AsrEngine] standing in for an online-session engine: records how it

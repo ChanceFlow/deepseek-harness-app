@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/voice_input/voice_hold_bar.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,6 +115,42 @@ void main() {
       expect(fab.backgroundColor, scheme.primaryContainer);
       expect(fab.foregroundColor, scheme.onPrimaryContainer);
     }
+  });
+
+  testWidgets('the mode seat swaps the draft field for the hold bar', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      const ChatUiState(sessions: [_session], selectedSessionId: 's1'),
+      actions,
+    );
+    await tester.enterText(find.byType(TextField), 'half a thought');
+    await tester.pump();
+
+    // Text mode: the draft band is the field, and the seat offers voice.
+    expect(find.byType(VoiceHoldBar), findsNothing);
+    expect(find.byTooltip('Voice input'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.mic_none));
+    await tester.pump();
+
+    // Voice mode: the same band is the hold bar, and the seat offers the
+    // keyboard back. The draft is kept, not spent, on the way through.
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(VoiceHoldBar), findsOneWidget);
+    expect(find.text('Hold to talk'), findsOneWidget);
+    expect(find.byTooltip('Keyboard input'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.keyboard_alt_outlined));
+    await tester.pump();
+
+    expect(find.byType(VoiceHoldBar), findsNothing);
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+      'half a thought',
+    );
   });
 
   testWidgets('send dispatches unsettled, then clears only on acceptance', (
