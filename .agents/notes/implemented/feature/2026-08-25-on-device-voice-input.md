@@ -30,7 +30,10 @@ In `flutter/app`:
 ### Stock Material 3 composer integration
 
 In `flutter/app/lib/ui/chat/`:
-- Added `VoiceMicButton` (28px circular button matching the `_PlusButton` style) in the composer tools row.
+- Added the composer's voice control in the tools row: since
+  [the hold-to-talk pass](2026-09-13-hold-to-talk-composer.md) a 40px mode seat
+  that swaps the draft band for the full-width `VoiceHoldBar`; originally a
+  28px `VoiceMicButton` matching the `_PlusButton` style.
 - Implemented `VoiceRecordingDock` (M3 `surfaceContainerLow` banner with pulsing red record indicator, mm:ss timer, 8 dynamic soundwave bars, and Cancel / Done controls).
 - Streamed transcription chunks directly into `_draftController` with pre-recording draft preservation on cancel.
 - Added "Active speech model" selector in Settings ASR preferences when downloaded models are present.

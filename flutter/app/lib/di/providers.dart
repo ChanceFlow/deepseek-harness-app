@@ -92,6 +92,7 @@ export '../ui/settings/asr/asr_models_controller.dart';
 export '../ui/settings/asr/asr_models_screen.dart';
 export '../ui/chat/voice_input/voice_input_controller.dart';
 export '../ui/chat/voice_input/voice_input_ui_state.dart';
+export '../ui/chat/voice_input/voice_hold_bar.dart';
 export '../ui/chat/voice_input/voice_record_bubble.dart';
 export '../ui/settings/error_logs/error_logs_controller.dart';
 export '../ui/settings/error_logs/error_logs_screen.dart';

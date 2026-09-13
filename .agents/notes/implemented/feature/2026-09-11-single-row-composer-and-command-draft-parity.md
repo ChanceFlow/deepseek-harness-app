@@ -11,7 +11,7 @@ Status: implemented
 ## Decision
 
 1. **Single-row composer layout**: Restructure `ComposerBar` into a clean horizontal `Row`:
-   - Left cluster: `_PlusButton`, `VoiceMicButton`, `ModelSelect` (when available), and flexible `PermissionSelectChip`.
+   - Left cluster: `_PlusButton`, the voice mode seat, `ModelSelect` (when available), and flexible `PermissionSelectChip`. The mode seat was `VoiceMicButton` here until [the hold-to-talk pass](2026-09-13-hold-to-talk-composer.md) moved the microphone onto the band above the row.
    - Center: `Expanded(TextField)` with borderless input, 1 to 4 lines dynamic expansion.
    - Right cluster: `ContextRing` and primary action (`_PrimarySendButton` for Send/Stop).
    - Ephemeral states (`PlanChip` when plan mode is active, pending image thumbnails, and `SlashSkillCandidates` autocomplete) move to dynamic accessory trays above the single row that take zero height when idle.

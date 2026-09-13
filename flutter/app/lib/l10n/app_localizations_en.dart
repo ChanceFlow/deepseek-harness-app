@@ -1884,19 +1884,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceInputGoToSettings => 'Go to Settings';
 
   @override
-  String get voiceInputCancel => 'Cancel';
+  String get voiceModeKeyboard => 'Keyboard input';
 
   @override
-  String get voiceInputDone => 'Done';
+  String get voiceHoldToTalk => 'Hold to talk';
+
+  @override
+  String get voiceInputReleaseToSend => 'Release to send';
 
   @override
   String get voiceInputSlideToSend => 'Release to send · slide up to cancel';
 
   @override
   String get voiceInputReleaseToCancel => 'Release to cancel';
-
-  @override
-  String get voiceInputTapToFinish => 'Tap the mic to finish';
 
   @override
   String get voiceInputInitializing => 'Getting ready…';
@@ -2725,12 +2725,6 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
-
-  @override
-  String get scheduleUnknown => 'Not reported by this host';
-
-  @override
-  String get scheduleEmpty => 'None active';
 
   @override
   String scheduleNextAt(String at) {

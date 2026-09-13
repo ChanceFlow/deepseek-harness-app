@@ -3115,7 +3115,7 @@ abstract class AppLocalizations {
   /// **'{speed}/s'**
   String asrSpeedLabel(String speed);
 
-  /// No description provided for @voiceInputTooltip.
+  /// Tooltip on the composer's mode seat while the draft field is showing; pressing it switches the dock to hold-to-talk.
   ///
   /// In en, this message translates to:
   /// **'Voice input'**
@@ -3139,17 +3139,23 @@ abstract class AppLocalizations {
   /// **'Go to Settings'**
   String get voiceInputGoToSettings;
 
-  /// No description provided for @voiceInputCancel.
+  /// Tooltip on the composer's mode seat while voice input is the active mode; pressing it returns to the draft field.
   ///
   /// In en, this message translates to:
-  /// **'Cancel'**
-  String get voiceInputCancel;
+  /// **'Keyboard input'**
+  String get voiceModeKeyboard;
 
-  /// No description provided for @voiceInputDone.
+  /// The resting label of the composer's hold-to-talk bar, and its accessible name.
   ///
   /// In en, this message translates to:
-  /// **'Done'**
-  String get voiceInputDone;
+  /// **'Hold to talk'**
+  String get voiceHoldToTalk;
+
+  /// The hold-to-talk bar's label while a finger is down and the capture will be sent on release.
+  ///
+  /// In en, this message translates to:
+  /// **'Release to send'**
+  String get voiceInputReleaseToSend;
 
   /// No description provided for @voiceInputSlideToSend.
   ///
@@ -3162,12 +3168,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Release to cancel'**
   String get voiceInputReleaseToCancel;
-
-  /// No description provided for @voiceInputTapToFinish.
-  ///
-  /// In en, this message translates to:
-  /// **'Tap the mic to finish'**
-  String get voiceInputTapToFinish;
 
   /// No description provided for @voiceInputInitializing.
   ///
@@ -4524,18 +4524,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1 {1 reminder} other {{count} reminders}}'**
   String scheduleReminderCount(int count);
-
-  /// The session's reminder set before the schedule/change stream has published anything; distinct from an empty set.
-  ///
-  /// In en, this message translates to:
-  /// **'Not reported by this host'**
-  String get scheduleUnknown;
-
-  /// The session's reminder set is known and empty.
-  ///
-  /// In en, this message translates to:
-  /// **'None active'**
-  String get scheduleEmpty;
 
   /// The next reminder target on the collapsed strip header.
   ///

@@ -1816,9 +1816,12 @@ class _ChatPanelState extends State<ChatPanel> {
                   // The session's durable reminders: nothing else on this
                   // surface shows them (the pinned deployment composes no
                   // `schedule` projection), and the dock is where the rest
-                  // of the session's standing state already lives. An
-                  // unreported set states itself rather than disappearing.
-                  if (selectedSessionId != null)
+                  // of the session's standing state already lives. Nothing to
+                  // show leaves no strip at all: an unreported or empty set
+                  // would spend a row of every session's dock on a fact the
+                  // reader cannot act on.
+                  if (selectedSessionId != null &&
+                      (uiState.schedules?.isNotEmpty ?? false))
                     ScheduleReminderStrip(reminders: uiState.schedules),
                 ],
                 // The queue dock is a display strip, not a filled seat:
@@ -5314,6 +5317,12 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   final FocusNode _focusNode = FocusNode();
   String _preRecordingDraft = '';
 
+  /// Whether the dock's first band is the hold-to-talk bar rather than the
+  /// draft field. Local to the composer — a way of using this control, not a
+  /// session fact — and it survives a session switch the way the reader's
+  /// keyboard preference does.
+  bool _voiceMode = false;
+
   /// Counts reader keystrokes on the field (the [TextField] onChanged
   /// path; programmatic writes never touch it), so an in-flight draft
   /// read can tell "untouched" from "the reader is already typing here"
@@ -5406,6 +5415,22 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
 
   void _persistDraft() {
     unawaited(widget.sessionState?.writeDraft(_draftController.text));
+  }
+
+  /// Swaps the draft field for the hold-to-talk bar, and back.
+  ///
+  /// Leaving text mode drops the keyboard, which would otherwise stand over a
+  /// bar it cannot type into; returning opens the field, because a mode the
+  /// reader asked for should be ready to use.
+  void _toggleVoiceMode() {
+    setState(() => _voiceMode = !_voiceMode);
+    if (_voiceMode) {
+      _focusNode.unfocus();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
   }
 
   Future<void> _pickImages() async {
@@ -5596,33 +5621,63 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             enabled: widget.enabled,
             onPick: _applyCommandToDraft,
           ),
-          // Band 1 — the draft, edge to edge.
+          // Band 1 — the draft, edge to edge, or the hold-to-talk bar that
+          // stands in for it while the dock is in voice mode. Which one it is
+          // is the mode seat's state, never a surprise: the band does not
+          // change unless the reader changed it.
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
-            child: TextField(
-              controller: _draftController,
-              focusNode: _focusNode,
-              enabled: widget.enabled,
-              minLines: 1,
-              maxLines: 4,
-              textInputAction: TextInputAction.newline,
-              onChanged: (_) {
-                _draftEdits++;
-                _persistDraft();
-                setState(() {});
-              },
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 8,
-                ),
-                hintText: _planTarget
-                    ? l10n.planPlaceholder
-                    : l10n.messagePlaceholder,
-              ),
-            ),
+            child: _voiceMode
+                ? VoiceHoldBar(
+                    enabled: widget.enabled,
+                    busy: voiceInputState.isWaitingOnEngine,
+                    uiState: voiceInputState,
+                    onStart: () {
+                      _preRecordingDraft = _draftController.text;
+                      unawaited(voiceController.startRecording());
+                    },
+                    onFinish: () => unawaited(voiceController.stopRecording()),
+                    onCancel: () {
+                      unawaited(voiceController.cancelRecording());
+                      _draftController.text = _preRecordingDraft;
+                      _draftController.selection = TextSelection.collapsed(
+                        offset: _draftController.text.length,
+                      );
+                      _persistDraft();
+                      setState(() {});
+                    },
+                    onOpenSettings: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (ctx) => const AsrModelsRoute(),
+                        ),
+                      );
+                    },
+                  )
+                : TextField(
+                    controller: _draftController,
+                    focusNode: _focusNode,
+                    enabled: widget.enabled,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.newline,
+                    onChanged: (_) {
+                      _draftEdits++;
+                      _persistDraft();
+                      setState(() {});
+                    },
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      hintText: _planTarget
+                          ? l10n.planPlaceholder
+                          : l10n.messagePlaceholder,
+                    ),
+                  ),
           ),
           // Band 2 — the action row (web `.row`): attaches and the access
           // mode on the left, the model seat, context meter and the primary
@@ -5650,39 +5705,23 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 final tools = Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // The mode seat leads the row, where the field it swaps
+                    // sits above it: the reader changes the mode on the control
+                    // that names it, and the bar or field appears in place.
+                    // Changing it mid-capture would unmount the very control
+                    // holding the microphone, so a live session locks it.
+                    _VoiceModeToggle(
+                      enabled:
+                          widget.enabled && !voiceInputState.isSessionActive,
+                      voiceMode: _voiceMode,
+                      onToggle: _toggleVoiceMode,
+                    ),
                     _PlusButton(
                       enabled: widget.enabled,
                       onPickImages: attachAllowed ? _pickImages : null,
                       skills: widget.skills,
                       commands: displayCommands,
                       onPickCommand: _handlePlusCommand,
-                    ),
-                    VoiceMicButton(
-                      enabled:
-                          widget.enabled && !voiceInputState.isWaitingOnEngine,
-                      uiState: voiceInputState,
-                      onStart: () {
-                        _preRecordingDraft = _draftController.text;
-                        unawaited(voiceController.startRecording());
-                      },
-                      onFinish: () =>
-                          unawaited(voiceController.stopRecording()),
-                      onCancel: () {
-                        unawaited(voiceController.cancelRecording());
-                        _draftController.text = _preRecordingDraft;
-                        _draftController.selection = TextSelection.collapsed(
-                          offset: _draftController.text.length,
-                        );
-                        _persistDraft();
-                        setState(() {});
-                      },
-                      onOpenSettings: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (ctx) => const AsrModelsRoute(),
-                          ),
-                        );
-                      },
                     ),
                     if (widget.permissions case final permissions?)
                       ConstrainedBox(
@@ -6168,6 +6207,54 @@ class PopupMenuEntryShim extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The composer's mode seat: the draft field on one side, hold-to-talk on the
+/// other. It is the only place the mode changes, so the band above it is never
+/// a surprise, and it carries the active mode in its own tone rather than in
+/// chrome the reader has to hunt for.
+class _VoiceModeToggle extends StatelessWidget {
+  const _VoiceModeToggle({
+    required this.enabled,
+    required this.voiceMode,
+    required this.onToggle,
+  });
+
+  final bool enabled;
+  final bool voiceMode;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
+    return DshTappable(
+      enabled: enabled,
+      enableHaptic: true,
+      child: IconButton(
+        tooltip: voiceMode ? l10n.voiceModeKeyboard : l10n.voiceInputTooltip,
+        onPressed: enabled ? onToggle : null,
+        icon: Icon(
+          voiceMode ? Icons.keyboard_alt_outlined : Icons.mic_none,
+          size: 22,
+        ),
+        // The seat is the 40px the tools row gives the attach button beside it,
+        // so swapping the mic for the mode switch moves no other seat and the
+        // row's measured width holds.
+        style: IconButton.styleFrom(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size.square(kVoiceSeatBox),
+          foregroundColor: voiceMode ? scheme.primary : scheme.onSurfaceVariant,
+          disabledForegroundColor: scheme.outline,
+          hoverColor: scheme.surfaceContainerHigh,
+          highlightColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          enableFeedback: false,
+          shape: const CircleBorder(),
+        ),
+      ),
     );
   }
 }

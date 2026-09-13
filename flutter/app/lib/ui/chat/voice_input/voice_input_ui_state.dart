@@ -78,6 +78,14 @@ class VoiceInputUiState {
 
   bool get isBusy => phase != VoiceInputPhase.idle;
 
+  /// Whether a capture owns the session right now: the engine is preparing, the
+  /// microphone is live, or the tail is decoding. A stale error is not a
+  /// session — the reader may try again from it, and the mode seat may move.
+  bool get isSessionActive =>
+      phase == VoiceInputPhase.initializing ||
+      phase == VoiceInputPhase.recording ||
+      phase == VoiceInputPhase.finalizing;
+
   /// Whether the engine, not the reader, holds the turn: loading a model or
   /// decoding audio. Every control that would interrupt that work declines
   /// while this is true — including the microphone seat, which stays live

@@ -86,6 +86,34 @@ class VoiceInputController {
   /// recorder a fresh, empty engine and silently lost every sample.
   AsrEngine? _activeEngine;
 
+  /// Session generation: bumped by every start and every ending. Each await
+  /// boundary in [startRecording] re-reads it before it touches state, so the
+  /// tail of a session the reader already ended — a permission prompt, a model
+  /// load, the native recorder's own `start` — can never publish `recording`
+  /// over the ending that followed it. Without this a cancel or a release
+  /// landing while the engine was still preparing read as a dead control: the
+  /// in-flight start put the capture back on screen a moment later.
+  int _epoch = 0;
+
+  /// The finish in flight. One session finishes once, however many times the
+  /// ending arrives (a release, a repeated callback): a second
+  /// [AsrEngine.finish] over the same audio decodes nothing and reports a
+  /// duplicate final transcript over the draft.
+  Future<String>? _finishInFlight;
+
+  /// Whether [epoch]'s session was ended or replaced while it was awaiting.
+  bool _stale(int epoch) => epoch != _epoch;
+
+  /// Releases an engine this controller owns. An injected engine belongs to
+  /// its caller, which gets it back reset rather than disposed.
+  void _release(AsrEngine target) {
+    if (engine == null) {
+      unawaited(target.dispose());
+    } else {
+      target.reset();
+    }
+  }
+
   /// The sub-peak shape of the chunk currently in flight, waiting for the
   /// level event the recorder emits for that same chunk right after its
   /// samples. Pairing them here keeps the meter's bands in the same
@@ -131,7 +159,10 @@ class VoiceInputController {
   /// Starts voice recording session using the configured input mode: the
   /// active on-device model, or the selected online provider's credentials.
   Future<void> startRecording() async {
-    if (_state.isBusy) return;
+    // A capture already in flight owns the session; a session that ended in an
+    // error does not. Refusing the press on every non-idle phase left the
+    // control dead after the first failure, with nothing on screen to clear it.
+    if (_state.isSessionActive) return;
 
     final VoiceInputMode mode =
         _cloudSettings?.settings.mode ?? VoiceInputMode.offline;
@@ -170,6 +201,11 @@ class VoiceInputController {
       return;
     }
 
+    // This session's generation, claimed before the first await: everything
+    // below that the reader cancels or releases past is void, and the checks
+    // after each await are what stop this start from publishing over it.
+    final int epoch = ++_epoch;
+
     _emit(
       _state.copyWith(
         phase: VoiceInputPhase.initializing,
@@ -186,8 +222,10 @@ class VoiceInputController {
     final recorder = _recorder;
     if (recorder is PlatformAudioRecorder) {
       final hasPerm = await recorder.checkPermission();
+      if (_stale(epoch)) return;
       if (!hasPerm) {
         final granted = await recorder.requestPermission();
+        if (_stale(epoch)) return;
         if (!granted) {
           _emit(
             _state.copyWith(
@@ -200,6 +238,7 @@ class VoiceInputController {
       }
     }
 
+    AsrEngine? constructing;
     try {
       // Prepare engine. The instance is kept in _activeEngine so finish()
       // later receives the very audio accumulated here. Online sessions
@@ -216,10 +255,21 @@ class VoiceInputController {
         modelDir = manager.getModelDir(modelForEngine.id);
         activeEngine = engine ?? _createEngineForModel(modelForEngine);
       }
-      _activeEngine = activeEngine;
+      // The engine is published only once its native initialize has returned:
+      // an ending that lands during the load therefore has nothing to dispose
+      // underneath it, and an abandoned engine is released by the start that
+      // created it.
+      constructing = activeEngine;
       await activeEngine.initialize(modelForEngine, modelDir);
+      if (_stale(epoch)) {
+        _release(activeEngine);
+        return;
+      }
+      _activeEngine = activeEngine;
+      constructing = null;
 
       await _transcriptionSub?.cancel();
+      if (_stale(epoch)) return;
       _transcriptionSub = activeEngine.transcriptionStream.listen((chunk) {
         _emit(_state.copyWith(liveTranscription: chunk.text));
         onTranscriptionUpdate?.call(chunk.text, chunk.isFinal);
@@ -231,6 +281,7 @@ class VoiceInputController {
       final recorder = _recorder;
       if (recorder is PlatformAudioRecorder) {
         await _errorSub?.cancel();
+        if (_stale(epoch)) return;
         _errorSub = recorder.errors.listen((Object error) {
           unawaited(_failInput(error));
         });
@@ -241,12 +292,14 @@ class VoiceInputController {
       // start() and subscription would otherwise be dropped, losing the
       // first ~100ms of input.
       await _audioSub?.cancel();
+      if (_stale(epoch)) return;
       _audioSub = _recorder.audioStream.listen((samples) {
         _pendingShape = _subPeakShape(samples);
         activeEngine.acceptAudio(samples);
       });
 
       await _amplitudeSub?.cancel();
+      if (_stale(epoch)) return;
       _amplitudeSub = _recorder.amplitudeStream.listen((amp) {
         // The recorder emits a chunk's samples and then its level from the
         // same frame, so the shape in flight belongs to this level.
@@ -268,13 +321,22 @@ class VoiceInputController {
         // Native AudioRecord failed to start (e.g. device/emulator input
         // unavailable). Surface a stable, localizable error instead of a
         // phantom recording dock whose waveform never moves.
-        await cancelRecording();
+        if (_stale(epoch)) return;
+        await _teardown();
+        if (_stale(epoch)) return;
         _emit(
           _state.copyWith(
             phase: VoiceInputPhase.error,
             errorMessage: 'RECORD_START_FAILED',
           ),
         );
+        return;
+      }
+      if (_stale(epoch)) {
+        // The ending stopped a recorder that was not running yet; the start
+        // that just returned is this session's to undo, or the microphone
+        // stays hot under a session nobody owns.
+        await _recorder.stop();
         return;
       }
 
@@ -305,7 +367,14 @@ class VoiceInputController {
 
       _emit(_state.copyWith(phase: VoiceInputPhase.recording));
     } catch (e) {
-      await cancelRecording();
+      // An engine that never reached the session is this start's to release;
+      // a published one belongs to [_teardown].
+      if (constructing case final abandoned?) _release(abandoned);
+      // A session the reader already ended reports no failure: the ending,
+      // not the load it interrupted, is what they asked for.
+      if (_stale(epoch)) return;
+      await _teardown();
+      if (_stale(epoch)) return;
       // Engines reject unsupported models and unconfigured/failed online
       // sessions loudly; map each to a stable, localizable code instead of
       // leaking the raw exception message.
@@ -323,11 +392,39 @@ class VoiceInputController {
   }
 
   /// Completes the recording, finalizes speech-to-text, and returns final text.
-  Future<String> stopRecording() async {
-    if (!_state.isRecording) return '';
+  ///
+  /// Idempotent for the life of one session: the first call owns the finish and
+  /// every later one joins it, so a release plus a repeated callback run one
+  /// [AsrEngine.finish] rather than two over the same audio.
+  Future<String> stopRecording() {
+    final Future<String>? inFlight = _finishInFlight;
+    if (inFlight != null) return inFlight;
+    if (!_state.isRecording) return Future<String>.value('');
+
+    final Future<String> finish = _finishSession();
+    _finishInFlight = finish;
+    return finish.whenComplete(() {
+      if (identical(_finishInFlight, finish)) _finishInFlight = null;
+    });
+  }
+
+  Future<String> _finishSession() async {
+    // Claim the session before anything else: a start still in flight may not
+    // publish `recording` over a capture the reader has already ended.
+    final int epoch = ++_epoch;
+
+    if (_state.phase != VoiceInputPhase.recording) {
+      // The release landed while the engine still held the session — the
+      // model was loading, or the tail is already decoding. There is no
+      // complete capture to send, so this ends as a cancel instead of a
+      // finalize that would emit an empty transcript over the draft.
+      await _teardown();
+      if (_stale(epoch)) return '';
+      _emit(_resting(VoiceInputPhase.idle));
+      return '';
+    }
 
     _emit(_state.copyWith(phase: VoiceInputPhase.finalizing));
-
     _durationTimer?.cancel();
     _durationTimer = null;
     _debugTickTimer?.cancel();
@@ -338,17 +435,19 @@ class VoiceInputController {
     _amplitudeSub = null;
 
     String finalResult = '';
+    final AsrEngine? activeEngine = _activeEngine;
     try {
       await _recorder.stop();
-      final activeEngine = _activeEngine;
       if (activeEngine == null) {
         // Session never initialized an engine (e.g. cancelled mid-start);
         // nothing to transcribe.
         return '';
       }
       finalResult = await activeEngine.finish();
+      if (_stale(epoch)) return '';
       onTranscriptionUpdate?.call(finalResult, true);
     } catch (e) {
+      if (_stale(epoch)) return '';
       // Online session failures surface here (the service's final verdict
       // arrives at finish); map to a stable, localizable code.
       final String message = e is OnlineAsrException
@@ -358,23 +457,44 @@ class VoiceInputController {
         _state.copyWith(phase: VoiceInputPhase.error, errorMessage: message),
       );
     } finally {
-      unawaited(_activeEngine?.dispose());
-      _activeEngine = null;
-      if (_state.phase != VoiceInputPhase.error) {
-        _emit(
-          _state.copyWith(
-            phase: VoiceInputPhase.idle,
-            duration: Duration.zero,
-            amplitude: 0.0,
-          ),
-        );
+      // Only the engine this finish still owns is released here; a teardown
+      // that landed mid-finish already released its own.
+      if (activeEngine != null && identical(_activeEngine, activeEngine)) {
+        _activeEngine = null;
+        _release(activeEngine);
+      }
+      if (!_stale(epoch) && _state.phase != VoiceInputPhase.error) {
+        _emit(_resting(VoiceInputPhase.idle));
       }
     }
     return finalResult;
   }
 
   /// Cancels recording and discards audio buffers.
+  ///
+  /// Cancelling a session the engine is still preparing is a real cancel: the
+  /// bumped generation voids the start still in flight, which is what stops a
+  /// capture from appearing after the reader already dismissed it.
   Future<void> cancelRecording() async {
+    _epoch++;
+    await _teardown();
+    _emit(_resting(VoiceInputPhase.idle));
+  }
+
+  /// The state every ending rests in: no elapsed clock, no level, and no
+  /// half-transcribed text left over from the session that just closed.
+  VoiceInputUiState _resting(VoiceInputPhase phase) => _state.copyWith(
+    phase: phase,
+    duration: Duration.zero,
+    amplitude: 0.0,
+    envelope: const <double>[],
+    liveTranscription: '',
+  );
+
+  /// Ends the running capture without touching [state]: the caller states the
+  /// outcome, which is what separates "the reader cancelled" from "the capture
+  /// failed". Idempotent, so an ending that arrives twice costs one teardown.
+  Future<void> _teardown() async {
     _durationTimer?.cancel();
     _durationTimer = null;
     _debugTickTimer?.cancel();
@@ -389,27 +509,16 @@ class VoiceInputController {
     _errorSub = null;
     await _recorder.stop();
 
-    if (engine case final injected?) {
-      injected.reset();
-    } else {
-      unawaited(_activeEngine?.dispose());
-      _activeEngine = null;
-    }
-
-    _emit(
-      _state.copyWith(
-        phase: VoiceInputPhase.idle,
-        duration: Duration.zero,
-        amplitude: 0.0,
-        liveTranscription: '',
-      ),
-    );
+    final AsrEngine? active = _activeEngine;
+    _activeEngine = null;
+    if (active != null) _release(active);
   }
 
   /// Mid-recording capture failure: end the session with a real error
   /// state instead of leaving a phantom dock on screen.
   Future<void> _failInput(Object error) async {
-    await cancelRecording();
+    _epoch++;
+    await _teardown();
     _emit(
       _state.copyWith(
         phase: VoiceInputPhase.error,

@@ -41,13 +41,13 @@ differ from the preset's own name and needs its own line. The line states the
 mode when `sandbox/mode` has folded and otherwise says the fact is unreported:
 never a default, never blank.
 
-**Reminders render in the input dock** (`schedule_reminder_strip.dart`): one
-collapsed header line with the count, the next target and an overdue count,
-expanding to at most four rows of prompt plus local target and frequency. The
+**Reminders render in the input dock** (`schedule_reminder_strip.dart`) while
+there is a reminder behind them: one collapsed header line with the count, the
+next target and an overdue count, expanding to at most four rows. The
 reference puts the catalog behind a session-header action; a 360dp bar has no
 room for that popup, and the dock already owns the standing strips (todo, goal,
-queue). An absent `schedules` publication states that the host reported
-nothing; only a published empty list says "None active".
+queue). Nothing to show renders no strip; [the silent reminder strip
+note](../simplification/2026-09-13-silent-reminder-strip.md) owns that.
 
 `ChatController` binds both session streams in `_bindSelected` and republishes
 them on `ChatUiState`; the rebind reset keeps the leaving session's facts from

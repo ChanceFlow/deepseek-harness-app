@@ -15,9 +15,12 @@
 /// beside the goal it schedules against, rather than as an app-bar popup a
 /// 360dp bar has no room for.
 ///
-/// Honesty rule: [reminders] is null while nothing has been published for
-/// the session, which is not the same as "no reminders" — the strip states
-/// the set is unreported rather than showing a reassuring zero.
+/// Nothing to show renders nothing. A set the host never reported and a set it
+/// reported empty are both facts with no action behind them, and a standing
+/// line that only restates one of them spends a row of every session's dock
+/// forever — the same rule the plan strip already follows for an empty list.
+/// The strip is on screen exactly while there is a reminder behind it, which
+/// is also the only time it has an answer for "what, and when".
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -36,7 +39,8 @@ class ScheduleReminderStrip extends StatefulWidget {
   const ScheduleReminderStrip({required this.reminders, super.key, this.now});
 
   /// Active reminders, or null when the stream has published nothing for
-  /// this session.
+  /// this session; either way there is nothing to show and the strip renders
+  /// nothing.
   final List<ScheduleReminder>? reminders;
 
   /// Test seam for the relative-time wording; null reads the wall clock.
@@ -51,29 +55,23 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
 
   @override
   Widget build(BuildContext context) {
+    final reminders = widget.reminders;
+    if (reminders == null || reminders.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final reminders = widget.reminders;
     final now = widget.now ?? DateTime.now();
-    final rows = reminders == null
-        ? const <ScheduleReminder>[]
-        : orderScheduleReminders(reminders, now);
+    final rows = orderScheduleReminders(reminders, now);
     final overdueCount = rows
         .where((reminder) => scheduleReminderOverdue(reminder, now))
         .length;
     // The collapsed line answers "is anything pending, and when": the count
     // and the next target. Everything else is one tap away.
-    final String summary;
-    if (reminders == null) {
-      summary = l10n.scheduleUnknown;
-    } else if (reminders.isEmpty) {
-      summary = l10n.scheduleEmpty;
-    } else {
-      summary = l10n.scheduleNextAt(
-        formatScheduleLocalTime(rows.first.scheduledAt),
-      );
-    }
+    final summary = l10n.scheduleNextAt(
+      formatScheduleLocalTime(rows.first.scheduledAt),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Container(
@@ -93,9 +91,7 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             InkWell(
-              onTap: reminders == null || reminders.isEmpty
-                  ? null
-                  : () => setState(() => _expanded = !_expanded),
+              onTap: () => setState(() => _expanded = !_expanded),
               child: Row(
                 children: [
                   Icon(
@@ -114,10 +110,8 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      reminders == null || reminders.isEmpty
-                          ? summary
-                          : '${l10n.scheduleReminderCount(reminders.length)}'
-                                ' · $summary',
+                      '${l10n.scheduleReminderCount(reminders.length)}'
+                      ' · $summary',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -138,12 +132,11 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
                     ),
                     const SizedBox(width: 4),
                   ],
-                  if (reminders != null && reminders.isNotEmpty)
-                    Icon(
-                      _expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                  Icon(
+                    _expanded ? Icons.expand_more : Icons.chevron_right,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ],
               ),
             ),

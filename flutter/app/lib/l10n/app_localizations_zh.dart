@@ -1770,19 +1770,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get voiceInputGoToSettings => '前往设置';
 
   @override
-  String get voiceInputCancel => '取消';
+  String get voiceModeKeyboard => '键盘输入';
 
   @override
-  String get voiceInputDone => '完成';
+  String get voiceHoldToTalk => '按住 说话';
+
+  @override
+  String get voiceInputReleaseToSend => '松开发送';
 
   @override
   String get voiceInputSlideToSend => '松开发送 · 上滑取消';
 
   @override
   String get voiceInputReleaseToCancel => '松开取消';
-
-  @override
-  String get voiceInputTapToFinish => '点按麦克风结束';
 
   @override
   String get voiceInputInitializing => '正在准备…';
@@ -2565,12 +2565,6 @@ class AppLocalizationsZh extends AppLocalizations {
     );
     return '$_temp0';
   }
-
-  @override
-  String get scheduleUnknown => '该主机未上报';
-
-  @override
-  String get scheduleEmpty => '当前没有';
 
   @override
   String scheduleNextAt(String at) {
