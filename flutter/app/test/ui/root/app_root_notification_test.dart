@@ -96,13 +96,16 @@ const _event = AppNotificationEvent(
 
 void main() {
   late StreamController<AppNotificationEvent> foreground;
+  late StreamController<NotificationTarget> targets;
 
   setUp(() {
     foreground = StreamController<AppNotificationEvent>.broadcast();
+    targets = StreamController<NotificationTarget>.broadcast();
   });
 
   tearDown(() async {
     await foreground.close();
+    await targets.close();
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
@@ -118,7 +121,7 @@ void main() {
             (ref) => foreground.stream,
           ),
           systemNotificationTargetsProvider.overrideWith(
-            (ref) => const Stream<NotificationTarget>.empty(),
+            (ref) => targets.stream,
           ),
           systemNotifierProvider.overrideWithValue(SystemNotifier()),
         ],
@@ -158,13 +161,13 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('New turn in another session'), findsOneWidget);
+    expect(find.text('New reply in another session'), findsOneWidget);
     expect(find.text('proj'), findsWidgets);
 
     // The toast auto-dismisses after its hold window.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
-    expect(find.text('New turn in another session'), findsNothing);
+    expect(find.text('New reply in another session'), findsNothing);
   });
 
   testWidgets('tapping the toast navigates back to the chat destination', (
@@ -184,9 +187,9 @@ void main() {
     foreground.add(_event);
     await tester.pump();
     await tester.pumpAndSettle();
-    expect(find.text('New turn in another session'), findsOneWidget);
+    expect(find.text('New reply in another session'), findsOneWidget);
 
-    await tester.tap(find.text('New turn in another session'));
+    await tester.tap(find.text('New reply in another session'));
     await tester.pumpAndSettle();
 
     // Back on chat, with the notification's session selected.
@@ -218,10 +221,89 @@ void main() {
     await tester.tap(find.byTooltip('Dismiss notification'));
     await tester.pumpAndSettle();
 
-    expect(find.text('New turn in another session'), findsNothing);
+    expect(find.text('New reply in another session'), findsNothing);
     expect(
       tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
       AppDestination.workspaces.index,
     );
+  });
+
+  testWidgets('a repeated notification re-enters the banner', (tester) async {
+    // Two completions of the same session produce equal events; the banner
+    // is keyed on arrival, not on the event, so the second one visibly
+    // arrives instead of updating the first in place.
+    await pumpApp(tester);
+    await selectSession(tester);
+
+    Key? toastKey() {
+      for (final switcher in tester.widgetList<AnimatedSwitcher>(
+        find.byType(AnimatedSwitcher),
+      )) {
+        final child = switcher.child;
+        if (child is Align && child.alignment == Alignment.topCenter) {
+          return child.key;
+        }
+      }
+      return null;
+    }
+
+    foreground.add(_event);
+    await tester.pump();
+    await tester.pumpAndSettle();
+    final first = toastKey();
+    expect(first, isNotNull);
+
+    foreground.add(_event);
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(toastKey(), isNotNull);
+    expect(toastKey(), isNot(first));
+  });
+
+  testWidgets('a system-notification tap navigates to the producing session', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await selectSession(tester);
+
+    await tester.tap(find.text('Workspaces').last);
+    await tester.pumpAndSettle();
+
+    targets.add(
+      const NotificationTarget(backendId: 'default', sessionId: 's1'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      AppDestination.chat.index,
+    );
+  });
+
+  testWidgets('two identical notification taps both navigate', (tester) async {
+    // The ongoing row and the completion notice for one session carry the
+    // same payload; a tap is an event, so the second one must land too.
+    await pumpApp(tester);
+    await selectSession(tester);
+    const target = NotificationTarget(backendId: 'default', sessionId: 's1');
+
+    for (var tap = 0; tap < 2; tap++) {
+      await tester.tap(find.text('Workspaces').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        AppDestination.workspaces.index,
+        reason: 'left the chat destination before tap $tap',
+      );
+
+      targets.add(target);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+        AppDestination.chat.index,
+        reason: 'tap $tap navigated back to chat',
+      );
+    }
   });
 }

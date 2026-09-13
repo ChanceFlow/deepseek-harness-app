@@ -955,8 +955,16 @@ class _ChatPanelState extends State<ChatPanel> {
   void didUpdateWidget(covariant ChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Compose remembered these with selectedSessionId as the key.
-    if (oldWidget.uiState.selectedSessionId !=
-        widget.uiState.selectedSessionId) {
+    final selectionChanged =
+        oldWidget.uiState.selectedSessionId != widget.uiState.selectedSessionId;
+    // The notification entry can ask for the session that is already on
+    // screen; the id is unchanged there, so the request counter is what
+    // makes the tap observable (and lets it land on the newest content).
+    final latestRequested =
+        widget.uiState.selectionLandsAtLatest &&
+        oldWidget.uiState.selectionRequestSeq !=
+            widget.uiState.selectionRequestSeq;
+    if (selectionChanged || latestRequested) {
       _flushReadOffset();
       _readOffsetSave?.cancel();
       _readOffsetSave = null;
@@ -966,7 +974,7 @@ class _ChatPanelState extends State<ChatPanel> {
       _lastTrailingUserKey = null;
       _anchorDistanceFromBottom = null;
       _autoLoadDispatched = false;
-      _bindSession();
+      _bindSession(landAtLatest: widget.uiState.selectionLandsAtLatest);
       _scheduleFollow();
       return;
     }
@@ -1155,7 +1163,12 @@ class _ChatPanelState extends State<ChatPanel> {
   /// outline turns, and arm the reading-position restore (the initial
   /// jump waits for that read; an actively running or streaming session
   /// lands at the bottom and follows instead).
-  void _bindSession() {
+  ///
+  /// [landAtLatest] skips the reading-position read entirely, so the armed
+  /// initial jump falls through to the tail: the notification entry asks
+  /// for the newest content, and resuming a stale position there would
+  /// hide exactly the message the notice was about.
+  void _bindSession({bool landAtLatest = false}) {
     _needsInitialJump = true;
     _restoredOffset = null;
     _restoreDecided = true;
@@ -1171,6 +1184,7 @@ class _ChatPanelState extends State<ChatPanel> {
         setState(() => _busyEnterSteer = behavior == kBusyEnterSteer);
       }),
     );
+    if (landAtLatest) return;
     if (_sessionActivelyRunning()) return;
     _restoreDecided = false;
     unawaited(

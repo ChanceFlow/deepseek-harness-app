@@ -15,25 +15,31 @@ import '../ui/theme/theme.dart';
 import 'notification_events.dart';
 
 /// Resolves one event to its localized title/body pair.
+///
+/// One convention across channels and row states: the title names what
+/// happened, the body names which session it happened to (plus its
+/// workspace when that adds information). The body itself composes through
+/// [notificationBodyLine], the single home of that rule, so the toast and
+/// the system notification can never drift apart.
 ({String title, String body}) notificationCopy(
   AppNotificationEvent event,
   AppLocalizations l10n,
 ) => switch (event.kind) {
   AppNotificationKind.selectedTurnComplete => (
     title: l10n.turnCompleteTitle,
-    body: event.sessionTitle,
+    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
   ),
   AppNotificationKind.otherTurnComplete => (
     title: l10n.otherTurnCompleteTitle,
-    body: event.sessionTitle,
+    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
   ),
   AppNotificationKind.approvalRequested => (
     title: l10n.approvalRequestedTitle,
-    body: event.sessionTitle,
+    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
   ),
   AppNotificationKind.planReviewRequested => (
     title: l10n.planReviewRequestedTitle,
-    body: event.sessionTitle,
+    body: notificationBodyLine(event.sessionTitle, event.sessionContext),
   ),
 };
 

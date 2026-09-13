@@ -15,6 +15,7 @@ SessionSummary _session(
   bool blank = false,
   SessionPendingInteraction? pending,
   bool completed = false,
+  String? cwd,
 }) => SessionSummary(
   id: id,
   title: title,
@@ -22,6 +23,7 @@ SessionSummary _session(
   blank: blank,
   pendingInteraction: pending,
   completed: completed,
+  cwd: cwd,
 );
 
 WorkingSessionDecision _decision(
@@ -29,11 +31,13 @@ WorkingSessionDecision _decision(
   String title,
   WorkingSessionState state, {
   SessionPendingInteraction? pending,
+  String? context,
 }) => WorkingSessionDecision(
   sessionId: id,
   sessionTitle: title,
   state: state,
   pending: pending,
+  sessionContext: context,
 );
 
 List<WorkingSessionDecision> _fold(
@@ -278,6 +282,46 @@ void main() {
         _decision('s1', 'Work', WorkingSessionState.gone),
       ]);
       expect(sessionHasWorkInFlight(session), isTrue);
+    });
+  });
+
+  group('workspace context', () {
+    test('a decision carries the workspace when it tells sessions apart', () {
+      expect(
+        _fold([
+          _session('s1', title: 'Work', running: true, cwd: '/home/me/proj-a'),
+        ]),
+        [
+          _decision(
+            's1',
+            'Work',
+            WorkingSessionState.working,
+            context: 'proj-a',
+          ),
+        ],
+      );
+    });
+
+    test('the done notice carries the workspace too', () {
+      // Its body pairs the title with the workspace exactly like the
+      // transient turn-complete post does.
+      expect(
+        _fold([
+          _session(
+            's1',
+            title: 'Work',
+            completed: true,
+            cwd: '/home/me/proj-a',
+          ),
+        ]),
+        [_decision('s1', 'Work', WorkingSessionState.done, context: 'proj-a')],
+      );
+    });
+
+    test('no context when the workspace basename is already the title', () {
+      expect(_fold([_session('s1', running: true, cwd: '/home/me/proj-a')]), [
+        _decision('s1', 'proj-a', WorkingSessionState.working),
+      ]);
     });
   });
 }

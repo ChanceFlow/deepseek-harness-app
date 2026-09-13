@@ -524,6 +524,132 @@ void main() {
     expect(position.pixels, position.maxScrollExtent);
   });
 
+  testWidgets(
+    'a notification entry re-selected on the open session lands on the newest '
+    'message',
+    (tester) async {
+      // The two defects this pins: a notification for the session already on
+      // screen used to produce no visible reaction at all (the id did not
+      // change, so nothing re-bound), and the entry used to resume the
+      // reader's saved position instead of the message the notice announced.
+      final actions = <ChatAction>[];
+      final localState = FakeChatLocalState();
+      await localState.forSession('s1').writeReadOffset(0);
+      final timeline = <TimelineItem>[
+        for (var i = 0; i < 30; i++)
+          TimelineMessage(
+            ChatMessage(
+              id: 'm$i',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'message number $i ' * 12,
+            ),
+          ),
+      ];
+
+      await _pump(
+        tester,
+        ChatUiState(
+          sessions: const [_session],
+          selectedSessionId: 's1',
+          timeline: timeline,
+        ),
+        actions,
+        localState: localState,
+      );
+      await tester.pumpAndSettle();
+
+      final timelineScrollable = find
+          .ancestor(
+            of: find.textContaining(RegExp(r'message number')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final position = tester
+          .state<ScrollableState>(timelineScrollable)
+          .position;
+      // The reader is parked at the saved position: same session, same id.
+      expect(position.pixels, 0);
+      expect(position.maxScrollExtent, greaterThan(0));
+
+      await _pump(
+        tester,
+        ChatUiState(
+          sessions: const [_session],
+          selectedSessionId: 's1',
+          selectionRequestSeq: 1,
+          selectionLandsAtLatest: true,
+          timeline: timeline,
+        ),
+        actions,
+        localState: localState,
+      );
+      await tester.pumpAndSettle();
+
+      expect(position.maxScrollExtent, greaterThan(0));
+      expect(position.pixels, position.maxScrollExtent);
+    },
+  );
+
+  testWidgets('an ordinary list tap still restores the reading position', (
+    tester,
+  ) async {
+    // The notification entry asks for the newest content; every other entry
+    // keeps the reader's saved position, and that must not regress.
+    final actions = <ChatAction>[];
+    final localState = FakeChatLocalState();
+    await localState.forSession('s1').writeReadOffset(0);
+    final timeline = <TimelineItem>[
+      for (var i = 0; i < 30; i++)
+        TimelineMessage(
+          ChatMessage(
+            id: 'm$i',
+            sessionId: 's1',
+            role: MessageRole.user,
+            text: 'message number $i ' * 12,
+          ),
+        ),
+    ];
+
+    await _pump(
+      tester,
+      ChatUiState(
+        sessions: const [_session],
+        selectedSessionId: 's1',
+        timeline: timeline,
+      ),
+      actions,
+      localState: localState,
+    );
+    await tester.pumpAndSettle();
+
+    final timelineScrollable = find
+        .ancestor(
+          of: find.textContaining(RegExp(r'message number')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    final position = tester.state<ScrollableState>(timelineScrollable).position;
+    expect(position.pixels, 0);
+
+    // Re-selecting the same session through the list carries a new request
+    // counter but no landing intent.
+    await _pump(
+      tester,
+      ChatUiState(
+        sessions: const [_session],
+        selectedSessionId: 's1',
+        selectionRequestSeq: 1,
+        timeline: timeline,
+      ),
+      actions,
+      localState: localState,
+    );
+    await tester.pumpAndSettle();
+
+    expect(position.pixels, 0);
+  });
+
   testWidgets('primary send FAB ink rides the M3 contrast pair', (
     tester,
   ) async {

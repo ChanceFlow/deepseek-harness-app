@@ -2,9 +2,9 @@
 ///
 /// When an ongoing or promoted work notification is shown, its (backendId,
 /// sessionId) pair is recorded in the ledger; when cancelled, it is evicted.
-/// At startup, the ledger is swept against the enabled backend set: any row
-/// belonging to a disabled or removed host is cancelled so orphaned rows do
-/// not survive a process restart.
+/// At startup the ledger is cleared wholesale — it is the record of what the
+/// *previous* process posted, and none of it is confirmed by the new one — so
+/// an orphaned row can never outlive the process that posted it.
 library;
 
 import '../local_state/local_state_store.dart';

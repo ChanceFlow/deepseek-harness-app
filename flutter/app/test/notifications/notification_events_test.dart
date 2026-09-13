@@ -15,12 +15,14 @@ SessionSummary session(
   String? title,
   bool running = false,
   SessionPendingInteraction? pending,
+  String? cwd,
 }) => SessionSummary(
   id: id,
   title: title,
   running: running,
   blank: false,
   pendingInteraction: pending,
+  cwd: cwd,
 );
 
 void main() {
@@ -260,6 +262,66 @@ void main() {
         AppNotificationKind.otherTurnComplete,
         AppNotificationKind.approvalRequested,
       ]);
+    });
+
+    test('the event carries the workspace when it tells sessions apart', () {
+      final detector = NotificationDetector();
+      detector.fold(
+        sessions: [
+          session('s1', title: 'Work', running: true, cwd: '/home/me/proj-a'),
+        ],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      final events = detector.fold(
+        sessions: [session('s1', title: 'Work', cwd: '/home/me/proj-a')],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      expect(events.single.sessionContext, 'proj-a');
+    });
+
+    test('no context when the workspace basename is already the title', () {
+      // A titleless session displays its workspace path, so repeating it in
+      // the body would crowd the notification with the same word twice.
+      final detector = NotificationDetector();
+      detector.fold(
+        sessions: [session('s1', running: true, cwd: '/home/me/proj-a')],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      final events = detector.fold(
+        sessions: [session('s1', cwd: '/home/me/proj-a')],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      expect(events.single.sessionTitle, 'proj-a');
+      expect(events.single.sessionContext, isNull);
+    });
+
+    test('no context when the session has no workspace path', () {
+      final detector = NotificationDetector();
+      detector.fold(
+        sessions: [session('s1', title: 'Work', running: true)],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      final events = detector.fold(
+        sessions: [session('s1', title: 'Work')],
+        selectedSessionId: 's1',
+        backendId: 'b1',
+      );
+      expect(events.single.sessionContext, isNull);
+    });
+  });
+
+  group('notificationBodyLine', () {
+    test('joins the session title to its workspace', () {
+      expect(notificationBodyLine('Work', 'proj-a'), 'Work · proj-a');
+    });
+
+    test('is the title alone when there is no workspace', () {
+      expect(notificationBodyLine('Work', null), 'Work');
     });
   });
 

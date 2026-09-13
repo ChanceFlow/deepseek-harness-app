@@ -106,6 +106,14 @@ class ChatController {
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
   ImageLimits _imageLimits = const ImageLimits();
   String? _selectedSessionId;
+
+  /// Counts every handled [SelectSession] request and records the last
+  /// one's landing intent (see [ChatUiState.selectionRequestSeq]). The
+  /// id alone cannot carry "a request happened" because re-selecting the
+  /// session already on screen leaves it unchanged.
+  int _selectionRequestSeq = 0;
+  bool _selectionLandsAtLatest = false;
+
   TimelineWindow _timelineWindow = const TimelineWindow();
   bool _isSending = false;
   String? _errorMessage;
@@ -267,6 +275,8 @@ class ChatController {
       sessions: visibleSessions,
       workspaces: _workspaces,
       selectedSessionId: _selectedSessionId,
+      selectionRequestSeq: _selectionRequestSeq,
+      selectionLandsAtLatest: _selectionLandsAtLatest,
       timeline: _timelineWindow.items,
       hasMoreOlder: _timelineWindow.hasMoreOlder,
       isLoadingOlder: _timelineWindow.isLoadingOlder,
@@ -376,7 +386,7 @@ class ChatController {
   void onAction(ChatAction action) {
     switch (action) {
       case SelectSession():
-        _selectSession(action.sessionId);
+        _selectSession(action.sessionId, landAtLatest: action.landAtLatest);
       case SendPrompt():
         _sendPrompt(action);
       case CancelTurnAction():
@@ -507,8 +517,10 @@ class ChatController {
     }
   }
 
-  void _selectSession(String sessionId) {
+  void _selectSession(String sessionId, {bool landAtLatest = false}) {
     _selectedSessionId = sessionId;
+    _selectionRequestSeq++;
+    _selectionLandsAtLatest = landAtLatest;
     _rememberSelectedSession(sessionId);
     _timelineWindow = const TimelineWindow();
     _bindSelected(sessionId);

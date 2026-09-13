@@ -68,19 +68,35 @@ final class SessionSummary {
   /// resync.
   final String? agentError;
 
+  /// The workspace's display label: the last non-empty path segment of
+  /// [cwd], or null when the session carries no workspace path. Notification
+  /// copy pairs it with [displayTitle] to tell apart sessions that share a
+  /// title, so it stays a separate fact from the title it may compose.
+  String? get workspaceLabel {
+    final path = cwd;
+    if (path == null) return null;
+    final segments = path.split(RegExp(r'[/\\]'));
+    for (final segment in segments.reversed) {
+      if (segment.trim().isNotEmpty) return segment;
+    }
+    return null;
+  }
+
   /// Same label rule as the Web client: durable title first, then the
   /// canonical workspace path basename, then the raw session id.
   String get displayTitle {
     final durable = title;
     if (durable != null && durable.trim().isNotEmpty) return durable;
-    final path = cwd;
-    if (path != null) {
-      final segments = path.split(RegExp(r'[/\\]'));
-      for (final segment in segments.reversed) {
-        if (segment.trim().isNotEmpty) return segment;
-      }
-    }
-    return id;
+    return workspaceLabel ?? id;
+  }
+
+  /// [workspaceLabel] when it tells this session apart from another one
+  /// carrying the same title: null when there is no workspace path, or when
+  /// the path's basename IS the title ([displayTitle] already falls back to
+  /// it, so repeating it would crowd the notification with one word twice).
+  String? get workspaceContext {
+    final label = workspaceLabel;
+    return label == displayTitle ? null : label;
   }
 
   @override

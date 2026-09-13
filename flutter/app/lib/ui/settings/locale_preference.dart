@@ -10,7 +10,7 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
@@ -50,6 +50,16 @@ Locale? resolveAppLocale(AppLocalePreference? preference) =>
       AppLocalePreference.en => const Locale('en'),
       AppLocalePreference.system || null => null,
     };
+
+/// The locale out-of-tree copy resolves from: the app's own language choice
+/// when one is pinned, else the device locale.
+///
+/// System notifications are composed outside the widget tree, so they cannot
+/// read `MaterialApp.locale` the way in-app surfaces do; this is the rule
+/// they resolve instead.
+Locale effectiveContentLocale(AppLocalePreference? preference) =>
+    resolveAppLocale(preference) ??
+    WidgetsBinding.instance.platformDispatcher.locale;
 
 /// UDF controller over the shared store: reads the stored value on
 /// construction (the provider hands over an already-loaded store —

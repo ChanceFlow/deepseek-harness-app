@@ -29,6 +29,8 @@ final class ChatUiState {
     this.sessions = const <SessionSummary>[],
     this.workspaces = const <WorkspaceSummary>[],
     this.selectedSessionId,
+    this.selectionRequestSeq = 0,
+    this.selectionLandsAtLatest = false,
     this.timeline = const <TimelineItem>[],
     this.hasMoreOlder = false,
     this.isLoadingOlder = false,
@@ -64,6 +66,19 @@ final class ChatUiState {
   final List<SessionSummary> sessions;
   final List<WorkspaceSummary> workspaces;
   final String? selectedSessionId;
+
+  /// Monotonic count of user selection requests handled by the controller.
+  /// A re-selection of the session already on screen publishes the same
+  /// [selectedSessionId]; this counter is how the view still sees that a
+  /// request happened (the notification deep link depends on it).
+  final int selectionRequestSeq;
+
+  /// Whether the request that produced the current selection asked the
+  /// transcript to land on the newest content instead of the reader's
+  /// persisted reading position. Only the notification entry sets it;
+  /// ordinary list taps keep restoring where the reader left off.
+  final bool selectionLandsAtLatest;
+
   final List<TimelineItem> timeline;
   final bool hasMoreOlder;
   final bool isLoadingOlder;
@@ -238,16 +253,25 @@ final class ExportSessionLog extends ChatAction {
 }
 
 final class SelectSession extends ChatAction {
-  const SelectSession(this.sessionId);
+  const SelectSession(this.sessionId, {this.landAtLatest = false});
 
   final String sessionId;
 
-  @override
-  bool operator ==(Object other) =>
-      other is SelectSession && other.sessionId == sessionId;
+  /// Selects the session and asks the transcript to land on its newest
+  /// content rather than the reader's persisted reading position. The
+  /// notification entry (toast tap, system-notification tap, cold-start
+  /// deep link) sets it; a list tap leaves it false so the reader
+  /// resumes where they left off.
+  final bool landAtLatest;
 
   @override
-  int get hashCode => sessionId.hashCode;
+  bool operator ==(Object other) =>
+      other is SelectSession &&
+      other.sessionId == sessionId &&
+      other.landAtLatest == landAtLatest;
+
+  @override
+  int get hashCode => Object.hash(sessionId, landAtLatest);
 }
 
 final class SendPrompt extends ChatAction {

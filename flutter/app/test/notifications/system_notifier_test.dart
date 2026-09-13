@@ -7,13 +7,15 @@
 library;
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/logging/error_log_collector.dart';
+import 'package:app/notifications/notification_events.dart';
 import 'package:app/notifications/notification_key.dart';
 import 'package:app/notifications/notification_ledger.dart';
 import 'package:app/notifications/system_notifier.dart'
     show NotificationTarget, SystemNotifier;
 import 'package:app/notifications/working_sessions_fold.dart';
 import 'package:domain/model/session.dart';
-import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -32,6 +34,22 @@ class _RecordingPlugin implements FlutterLocalNotificationsPlugin {
       >[];
   final cancelled = <({int id, String? tag})>[];
 
+  /// Host answer for the notification-permission ask; null models a host that
+  /// does not answer. [permissionRequests] counts the asks so a test can pin
+  /// "asked at most once".
+  bool? permissionGranted;
+  int permissionRequests = 0;
+
+  /// When true, [show] throws: the seam every notification post swallows.
+  bool failShow = false;
+
+  @override
+  T? resolvePlatformSpecificImplementation<
+    T extends FlutterLocalNotificationsPlatform
+  >() => _android as T?;
+
+  late final _FakeAndroid _android = _FakeAndroid(this);
+
   @override
   Future<void> show(
     int id,
@@ -40,6 +58,7 @@ class _RecordingPlugin implements FlutterLocalNotificationsPlugin {
     NotificationDetails? notificationDetails, {
     String? payload,
   }) async {
+    if (failShow) throw StateError('notification host refused the post');
     posted.add((
       id: id,
       title: title,
@@ -55,11 +74,6 @@ class _RecordingPlugin implements FlutterLocalNotificationsPlugin {
   }
 
   @override
-  T? resolvePlatformSpecificImplementation<
-    T extends FlutterLocalNotificationsPlatform
-  >() => null;
-
-  @override
   Future<bool?> initialize(
     InitializationSettings initializationSettings, {
     DidReceiveNotificationResponseCallback? onDidReceiveNotificationResponse,
@@ -73,6 +87,25 @@ class _RecordingPlugin implements FlutterLocalNotificationsPlugin {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// The Android side of the plugin double: enough for the permission ask and
+/// the channel bootstrap, and nothing else.
+class _FakeAndroid extends AndroidFlutterLocalNotificationsPlugin {
+  _FakeAndroid(this._owner);
+
+  final _RecordingPlugin _owner;
+
+  @override
+  Future<bool?> requestNotificationsPermission() async {
+    _owner.permissionRequests++;
+    return _owner.permissionGranted;
+  }
+
+  @override
+  Future<void> createNotificationChannel(
+    AndroidNotificationChannel notificationChannel,
+  ) async {}
 }
 
 WorkingSessionDecision _work(
@@ -170,10 +203,56 @@ void main() {
         expect(android.ongoing, isFalse);
         expect(android.autoCancel, isTrue);
         expect(android.tag, 'b1/s1');
-        expect(post.title, 'Work');
-        expect(post.body, l10n.turnCompleteTitle);
+        // The done notice is the session's turn-completion news, so it wears
+        // the same convention the transient turn-complete post does: the
+        // title names what happened, the body names the session.
+        expect(post.title, l10n.turnCompleteTitle);
+        expect(post.body, 'Work');
       },
     );
+
+    test('a turn-complete post replaces the session\'s ongoing row', () async {
+      // One finished turn must produce one row: the transient post rides the
+      // same (id, tag) the ongoing fold owns, so Android replaces in place
+      // instead of stacking a second notification for the same fact.
+      await notifier.show(
+        const AppNotificationEvent(
+          kind: AppNotificationKind.otherTurnComplete,
+          backendId: 'b1',
+          sessionId: 's1',
+          sessionTitle: 'Work',
+        ),
+      );
+      final post = plugin.posted.single;
+      expect(post.id, workingNotificationId('b1', 's1'));
+      final android = post.details!.android!;
+      expect(android.tag, 'b1/s1');
+      expect(android.channelId, 'turns');
+      expect(android.ongoing, isFalse);
+      expect(android.autoCancel, isTrue);
+      expect(android.onlyAlertOnce, isTrue);
+      expect(post.title, l10n.otherTurnCompleteTitle);
+      expect(post.body, 'Work');
+    });
+
+    test('the transient body carries the workspace when it adds one', () async {
+      await notifier.show(
+        const AppNotificationEvent(
+          kind: AppNotificationKind.approvalRequested,
+          backendId: 'b1',
+          sessionId: 's1',
+          sessionTitle: 'Work',
+          sessionContext: 'my-project',
+        ),
+      );
+      final post = plugin.posted.single;
+      expect(post.title, l10n.approvalRequestedTitle);
+      expect(post.body, 'Work · my-project');
+      // Approvals are their own fact, not the session's row: they keep a
+      // counter id and no tag.
+      expect(post.id, isNot(workingNotificationId('b1', 's1')));
+      expect(post.details!.android!.tag, isNull);
+    });
 
     test('cancelWork cancels by (id, tag)', () async {
       await notifier.cancelWork(backendId: 'b1', sessionId: 's2');
@@ -275,26 +354,101 @@ void main() {
       expect(ledger.entries, isEmpty);
     });
 
-    test('sweepStaleRows cancels rows for disabled and removed backends, preserving enabled', () async {
-      // Seed the ledger with rows from an enabled, a disabled, and a removed backend.
-      ledger.entries.addAll([
-        const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
-        const NotificationRowEntry(backendId: 'b_disabled', sessionId: 's2'),
-        const NotificationRowEntry(backendId: 'b_removed', sessionId: 's3'),
-      ]);
+    test(
+      'clearUnconfirmedRows cancels every row a previous process left',
+      () async {
+        // The ledger is the previous process's record: this one cannot confirm
+        // any of it (the host may even be unreachable), and an ongoing row
+        // cannot be swiped away, so a leftover would be permanent.
+        ledger.entries.addAll([
+          const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
+          const NotificationRowEntry(backendId: 'b_disabled', sessionId: 's2'),
+          const NotificationRowEntry(backendId: 'b_removed', sessionId: 's3'),
+        ]);
 
-      await notifier.sweepStaleRows(enabledBackendIds: {'b_enabled'});
+        await notifier.clearUnconfirmedRows();
 
-      // Only disabled and removed backends are cancelled at startup.
-      expect(plugin.cancelled, [
-        (id: workingNotificationId('b_disabled', 's2'), tag: 'b_disabled/s2'),
-        (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
-      ]);
+        expect(plugin.cancelled, [
+          (id: workingNotificationId('b_enabled', 's1'), tag: 'b_enabled/s1'),
+          (id: workingNotificationId('b_disabled', 's2'), tag: 'b_disabled/s2'),
+          (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
+        ]);
+        // The first real snapshot re-arms whatever is still running; a row this
+        // process has not posted must not be recorded as posted.
+        expect(ledger.entries, isEmpty);
+      },
+    );
 
-      // Only the enabled backend's row remains in the ledger.
-      expect(ledger.entries, [
-        const NotificationRowEntry(backendId: 'b_enabled', sessionId: 's1'),
-      ]);
+    test('clearUnconfirmedRows is a no-op on an empty ledger', () async {
+      await notifier.clearUnconfirmedRows();
+      expect(plugin.cancelled, isEmpty);
+    });
+  });
+
+  group('notification permission', () {
+    test('asks the host at most once and reports its answer', () async {
+      plugin.permissionGranted = false;
+      expect(notifier.permissionGranted, isTrue, reason: 'unknown pre-ask');
+
+      expect(await notifier.ensurePermissionRequested(), isFalse);
+      expect(plugin.permissionRequests, 1);
+      expect(notifier.permissionGranted, isFalse);
+
+      // Android stops showing its dialog after a couple of declines, so the
+      // ask is not repeated even when the answer could change.
+      plugin.permissionGranted = true;
+      expect(await notifier.ensurePermissionRequested(), isFalse);
+      expect(plugin.permissionRequests, 1);
+    });
+
+    test('a granted ask reports granted', () async {
+      plugin.permissionGranted = true;
+      expect(await notifier.ensurePermissionRequested(), isTrue);
+      expect(notifier.permissionGranted, isTrue);
+    });
+
+    test('a host that does not answer counts as granted', () async {
+      plugin.permissionGranted = null;
+      expect(await notifier.ensurePermissionRequested(), isTrue);
+    });
+  });
+
+  group('copy locale and failure reporting', () {
+    test('applyLocale re-resolves copy without a process restart', () async {
+      // The app's own language choice, not the device locale: a user who
+      // switches to Chinese must stop receiving English notifications.
+      notifier.applyLocale(const Locale('zh'));
+      await notifier.showWork(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.working),
+      );
+      expect(plugin.posted.single.body, '正在执行…');
+
+      notifier.applyLocale(const Locale('en'));
+      plugin.posted.clear();
+      await notifier.showWork(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.working),
+      );
+      expect(plugin.posted.single.body, 'Working…');
+    });
+
+    test('a refused post is recorded instead of vanishing', () async {
+      ErrorLogCollector.instance.clear();
+      plugin.failShow = true;
+      await notifier.showWork(
+        backendId: 'b1',
+        work: _work('s1', state: WorkingSessionState.working),
+      );
+      // The chat surface must never see the failure...
+      expect(plugin.posted, isEmpty);
+      // ...but the error log is the only in-product trace of it.
+      expect(
+        ErrorLogCollector.instance.entries.any(
+          (entry) => entry.context?['component'] == 'systemNotifier',
+        ),
+        isTrue,
+      );
     });
   });
 }

@@ -36,12 +36,18 @@ final class WorkingSessionDecision {
     required this.sessionId,
     required this.sessionTitle,
     required this.state,
+    this.sessionContext,
     this.pending,
   });
 
   final String sessionId;
   final String sessionTitle;
   final WorkingSessionState state;
+
+  /// The session's workspace label, when it adds information the title does
+  /// not carry; the done notice's body pairs it with the title the same way
+  /// the transient turn-complete post does.
+  final String? sessionContext;
 
   /// The interaction being waited on; set exactly when [state] is
   /// [WorkingSessionState.waiting].
@@ -53,10 +59,12 @@ final class WorkingSessionDecision {
       other.sessionId == sessionId &&
       other.sessionTitle == sessionTitle &&
       other.state == state &&
+      other.sessionContext == sessionContext &&
       other.pending == pending;
 
   @override
-  int get hashCode => Object.hash(sessionId, sessionTitle, state, pending);
+  int get hashCode =>
+      Object.hash(sessionId, sessionTitle, state, sessionContext, pending);
 }
 
 /// Folds one snapshot into the desired per-session notification state.
@@ -106,10 +114,12 @@ WorkingSessionDecision _decisionFor(
   SessionSummary session, {
   required bool suppressed,
 }) {
+  final context = session.workspaceContext;
   final gone = WorkingSessionDecision(
     sessionId: session.id,
     sessionTitle: session.displayTitle,
     state: WorkingSessionState.gone,
+    sessionContext: context,
   );
   if (session.blank) return gone;
   final pending = session.pendingInteraction;
@@ -120,6 +130,7 @@ WorkingSessionDecision _decisionFor(
             sessionId: session.id,
             sessionTitle: session.displayTitle,
             state: WorkingSessionState.waiting,
+            sessionContext: context,
             pending: pending,
           );
   }
@@ -130,6 +141,7 @@ WorkingSessionDecision _decisionFor(
             sessionId: session.id,
             sessionTitle: session.displayTitle,
             state: WorkingSessionState.working,
+            sessionContext: context,
           );
   }
   if (session.completed) {
@@ -137,6 +149,7 @@ WorkingSessionDecision _decisionFor(
       sessionId: session.id,
       sessionTitle: session.displayTitle,
       state: WorkingSessionState.done,
+      sessionContext: context,
     );
   }
   return gone;
