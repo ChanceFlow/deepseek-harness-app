@@ -23,6 +23,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Locale, WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../logging/error_log_collector.dart';
+import '../logging/error_log_entry.dart';
 import 'notification_events.dart';
 import 'notification_key.dart';
 import 'notification_ledger.dart';
@@ -113,26 +115,87 @@ class SystemNotifier {
   NotificationTarget? takeLaunchTarget() => _launchTarget;
   NotificationTarget? _launchTarget;
 
-  /// Initializes the plugin, resolves the launch-time locale, requests the
-  /// Android 13+ notification permission, and captures a cold-start launch
-  /// target if this app run began from a notification tap.
+  /// Whether the Android notification permission has been granted. Starts
+  /// true (nothing known to be denied); [ensurePermissionRequested] settles
+  /// it against the host's answer.
+  bool _permissionGranted = true;
+
+  /// Whether this process already spent its one system permission ask.
+  bool _permissionAsked = false;
+
+  /// Whether the host has granted the notification permission.
+  bool get permissionGranted => _permissionGranted;
+
+  /// Re-resolves notification copy for [locale]: the app's own language
+  /// choice, or the device locale when none is pinned.
+  ///
+  /// Notifications are composed outside the widget tree, so they cannot read
+  /// `MaterialApp.locale` the way in-app surfaces do — without this call an
+  /// in-app language switch would leave notification copy in the old
+  /// language until the process restarted ([initialize] resolves nothing
+  /// after its first read).
+  void applyLocale(Locale? locale) {
+    _l10n = resolveAppLocalizations(
+      locale ?? WidgetsBinding.instance.platformDispatcher.locale,
+    );
+  }
+
+  /// Asks the host for the notification permission, at most once per process,
+  /// and reports whether it is granted.
+  ///
+  /// Never called from startup: the ask belongs where the user can see why
+  /// (see [NotificationPermissionGate]). A denial is recorded — the ask
+  /// itself is not repeated, because Android stops showing its dialog after
+  /// a couple of declines.
+  Future<bool> ensurePermissionRequested() async {
+    if (_permissionAsked) return _permissionGranted;
+    _permissionAsked = true;
+    try {
+      _permissionGranted =
+          await _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >()
+              ?.requestNotificationsPermission() ??
+          true;
+    } catch (error) {
+      _permissionGranted = false;
+      _reportFailure('requestPermission', error);
+      return false;
+    }
+    if (!_permissionGranted) {
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Notification permission denied; system notifications stay silent.',
+        level: 'warning',
+      );
+    }
+    return _permissionGranted;
+  }
+
+  /// Initializes the plugin, resolves the launch-time locale, creates the
+  /// silent working channel, and captures a cold-start launch target if this
+  /// app run began from a notification tap.
+  ///
+  /// Deliberately does not ask for the notification permission; that ask is
+  /// spent later, where the user can see why (see
+  /// [ensurePermissionRequested]).
   /// @returns the cold-start target, if the app was launched by a tap.
   Future<NotificationTarget?> initialize() async {
     if (_initialized) return _launchTarget;
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // A monochrome silhouette, not the launcher icon: Android draws a
+    // notification small icon from its alpha channel and tints the rest, so
+    // a full-colour launcher asset renders as a white blob. The same glyph
+    // the keep-alive foreground service notification uses.
+    const android = AndroidInitializationSettings('@drawable/ic_stat_dsh');
     await _plugin.initialize(
       const InitializationSettings(android: android),
       onDidReceiveNotificationResponse: _onResponse,
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
-    // Resolve the launch-time device locale so notifications render in the
-    // app's language without context plumbing into the DI layer. The resolver
+    // Resolve the launch-time locale so notifications render in the app's
+    // language without context plumbing into the DI layer. The resolver
     // clamps an unsupported platform language to the app's supported set; a
     // raw lookup would throw here, before runApp, and strand the splash.
+    // [applyLocale] re-resolves this when the in-app language choice changes.
     _l10n = resolveAppLocalizations(
       WidgetsBinding.instance.platformDispatcher.locale,
     );
@@ -160,8 +223,11 @@ class SystemNotifier {
           _launchTarget = NotificationTarget.decode(payload);
         }
       }
-    } catch (_) {
-      // Launch-detail queries must never block startup.
+    } catch (error) {
+      // Launch-detail queries must never block startup; the failure is
+      // recorded rather than swallowed so a lost cold-start deep link is
+      // diagnosable.
+      _reportFailure('launchDetails', error);
     }
     _initialized = true;
     return _launchTarget;
@@ -169,17 +235,26 @@ class SystemNotifier {
 
   /// Posts the system notification for [event]. Failures are swallowed —
   /// a notification never breaks the chat surface that raised it.
+  ///
+  /// Turn completions address the session's deterministic (id, tag) — the
+  /// same row the ongoing fold owns — so one finished turn produces one
+  /// notification instead of a working row plus a separate completion row.
+  /// Approvals and reviews keep counter ids: they are distinct facts that
+  /// coexist with the session's ongoing row.
   Future<void> show(AppNotificationEvent event) async {
     if (kDebugMode && !_initialized) {
       // Tests and headless hosts never initialize the plugin.
       return;
     }
     final copy = _copyFor(event.kind);
+    final sessionScoped = _isTurnComplete(event.kind);
     try {
       await _plugin.show(
-        _nextId++,
-        copy.title,
-        copy.body(event.sessionTitle),
+        sessionScoped
+            ? workingNotificationId(event.backendId, event.sessionId)
+            : _nextId++,
+        copy,
+        notificationBodyLine(event.sessionTitle, event.sessionContext),
         NotificationDetails(
           android: AndroidNotificationDetails(
             _channelFor(event.kind),
@@ -187,6 +262,12 @@ class SystemNotifier {
             channelDescription: _channelDescriptionFor(event.kind),
             importance: _importanceFor(event.kind),
             priority: _priorityFor(event.kind),
+            ongoing: false,
+            autoCancel: true,
+            onlyAlertOnce: sessionScoped,
+            tag: sessionScoped
+                ? workingNotificationTag(event.backendId, event.sessionId)
+                : null,
           ),
         ),
         payload: NotificationTarget(
@@ -194,10 +275,19 @@ class SystemNotifier {
           sessionId: event.sessionId,
         ).encode(),
       );
-    } catch (_) {
-      // Notification failures never surface in the chat UI.
+    } catch (error) {
+      _reportFailure('show', error);
     }
   }
+
+  /// Whether [kind]'s row is owned by the session's ongoing lifecycle: the
+  /// completion notice replaces that session's working row in place.
+  static bool _isTurnComplete(AppNotificationKind kind) => switch (kind) {
+    AppNotificationKind.selectedTurnComplete ||
+    AppNotificationKind.otherTurnComplete => true,
+    AppNotificationKind.approvalRequested ||
+    AppNotificationKind.planReviewRequested => false,
+  };
 
   void _onResponse(NotificationResponse response) {
     final payload = response.payload;
@@ -272,26 +362,27 @@ class SystemNotifier {
         workingNotificationId(backendId, sessionId),
         tag: workingNotificationTag(backendId, sessionId),
       );
-    } catch (_) {
-      // Notification failures never surface in the chat UI.
+    } catch (error) {
+      _reportFailure('cancelWork', error);
     }
   }
 
-  /// Sweeps the posted-rows ledger at startup: cancels any ongoing/done
-  /// notification belonging to a backend that is NOT in [enabledBackendIds]
-  /// (disabled or removed backends) so orphaned rows do not survive process
-  /// restarts.
-  Future<void> sweepStaleRows({required Set<String> enabledBackendIds}) async {
+  /// Clears every row a previous process posted.
+  ///
+  /// An ongoing row is not swipeable, so a leftover one is a permanent scar
+  /// in the shade, and nothing in this process can confirm it: the session
+  /// may have finished, or the host may be unreachable so no snapshot will
+  /// ever say either way. The ledger therefore records what the *last*
+  /// process posted, and this treats all of it as unconfirmed — the first
+  /// real snapshot re-arms whatever is genuinely still running. The cost is
+  /// one disappear/reappear of a row that was genuinely live.
+  Future<void> clearUnconfirmedRows() async {
     final ledger = _ledger;
     if (ledger == null) return;
     final entries = ledger.readEntries();
+    if (entries.isEmpty) return;
     for (final entry in entries) {
-      if (!enabledBackendIds.contains(entry.backendId)) {
-        await cancelWork(
-          backendId: entry.backendId,
-          sessionId: entry.sessionId,
-        );
-      }
+      await cancelWork(backendId: entry.backendId, sessionId: entry.sessionId);
     }
   }
 
@@ -322,20 +413,41 @@ class SystemNotifier {
     required WorkingSessionDecision work,
     required AndroidNotificationDetails details,
   }) async {
+    // The done notice is the session's turn-completion news, so it wears the
+    // same title/body convention the transient turn-complete post does: one
+    // fact, one wording, whichever of the two lands first.
+    final done = work.state == WorkingSessionState.done;
+    final title = done ? _l10n.turnCompleteTitle : work.sessionTitle;
+    final body = done
+        ? notificationBodyLine(work.sessionTitle, work.sessionContext)
+        : _workingBody(work);
     try {
       await _plugin.show(
         workingNotificationId(backendId, work.sessionId),
-        work.sessionTitle,
-        _workingBody(work),
+        title,
+        body,
         NotificationDetails(android: details),
         payload: NotificationTarget(
           backendId: backendId,
           sessionId: work.sessionId,
         ).encode(),
       );
-    } catch (_) {
-      // Notification failures never surface in the chat UI.
+    } catch (error) {
+      _reportFailure('showWork', error);
     }
+  }
+
+  /// Records a swallowed notification failure. Chat surfaces must never see
+  /// a notification error, but it must not disappear either: a revoked
+  /// permission or a disabled channel is otherwise undiagnosable in the
+  /// field (the error log is the app's only in-product trace).
+  void _reportFailure(String call, Object error) {
+    ErrorLogCollector.instance.captureError(
+      error,
+      stackTrace: StackTrace.current,
+      level: ErrorLogLevel.warning,
+      context: <String, Object?>{'component': 'systemNotifier', 'call': call},
+    );
   }
 
   /// The localized body for one ongoing/done decision: the waiting substate
@@ -355,25 +467,14 @@ class SystemNotifier {
     return _l10n.workingNotificationBody;
   }
 
-  ({String title, String Function(String sessionTitle) body}) _copyFor(
-    AppNotificationKind kind,
-  ) => switch (kind) {
-    AppNotificationKind.selectedTurnComplete => (
-      title: _l10n.turnCompleteTitle,
-      body: (sessionTitle) => sessionTitle,
-    ),
-    AppNotificationKind.otherTurnComplete => (
-      title: _l10n.otherTurnCompleteTitle,
-      body: (sessionTitle) => sessionTitle,
-    ),
-    AppNotificationKind.approvalRequested => (
-      title: _l10n.approvalRequestedTitle,
-      body: (sessionTitle) => sessionTitle,
-    ),
-    AppNotificationKind.planReviewRequested => (
-      title: _l10n.planReviewRequestedTitle,
-      body: (sessionTitle) => sessionTitle,
-    ),
+  /// The localized title for one transient event; the body always composes
+  /// through [notificationBodyLine], so only the "what happened" half is
+  /// kind-specific.
+  String _copyFor(AppNotificationKind kind) => switch (kind) {
+    AppNotificationKind.selectedTurnComplete => _l10n.turnCompleteTitle,
+    AppNotificationKind.otherTurnComplete => _l10n.otherTurnCompleteTitle,
+    AppNotificationKind.approvalRequested => _l10n.approvalRequestedTitle,
+    AppNotificationKind.planReviewRequested => _l10n.planReviewRequestedTitle,
   };
 
   String _channelFor(AppNotificationKind kind) => switch (kind) {

@@ -381,17 +381,15 @@ void main() {
     );
   });
 
-  test('startup boot sweep cancels leftover rows for disabled and removed backends', () async {
+  test('startup boot sweep clears every row the previous process posted', () async {
     final file = File('${tempDir.path}/backends_sweep.json');
     file.writeAsStringSync(_disabledBackendDoc);
     final stateFile = File('${tempDir.path}/local_state_sweep.json');
     final localStore = LocalStateStore(stateFile);
     await localStore.load();
 
-    // Seed the ledger in localStore with entries for:
-    // 1. 'default' (enabled in backends_sweep.json)
-    // 2. 'b1' (disabled in backends_sweep.json)
-    // 3. 'b_removed' (not in backends_sweep.json)
+    // Seed the ledger the way a previous process would have left it: rows for
+    // an enabled, a disabled, and a removed backend.
     final ledger = StoreNotificationLedger(localStore);
     ledger.record(backendId: 'default', sessionId: 's1');
     ledger.record(backendId: 'b1', sessionId: 's2');
@@ -419,15 +417,15 @@ void main() {
     // Await the startup boot sweep.
     await container.read(postedRowsSweepProvider.future);
 
-    // Cancel must be issued for b1 and b_removed, but NOT for default.
+    // None of those rows is confirmed by this process — the host may not even
+    // be reachable — and an ongoing row cannot be swiped away, so every one is
+    // cancelled. The first real snapshot re-arms what is still running.
     expect(plugin.cancelled, [
+      (id: workingNotificationId('default', 's1'), tag: 'default/s1'),
       (id: workingNotificationId('b1', 's2'), tag: 'b1/s2'),
       (id: workingNotificationId('b_removed', 's3'), tag: 'b_removed/s3'),
     ]);
 
-    // In the ledger, only the enabled backend's row remains.
-    expect(ledger.readEntries(), [
-      const NotificationRowEntry(backendId: 'default', sessionId: 's1'),
-    ]);
+    expect(ledger.readEntries(), isEmpty);
   });
 }

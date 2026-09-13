@@ -1560,7 +1560,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get turnMaxTokens => '已达到输出 token 上限';
 
   @override
-  String get turnCompleteTitle => '回合完成';
+  String get turnCompleteTitle => '回复已完成';
 
   @override
   String get turnCompletionChannel => '回合完成通知';
@@ -1569,13 +1569,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get turnCompletionChannelDescription => '在对话回合运行完成时通知。';
 
   @override
-  String get otherTurnCompleteTitle => '其他会话有新回合';
+  String get otherTurnCompleteTitle => '其他会话有新回复';
 
   @override
-  String get approvalRequestedTitle => '有待审批的请求';
+  String get approvalRequestedTitle => '需要你批准';
 
   @override
-  String get planReviewRequestedTitle => '有待审阅的 plan';
+  String get planReviewRequestedTitle => '有 plan 待你审阅';
 
   @override
   String get approvalChannel => '审批请求';
@@ -1591,6 +1591,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => '关闭通知';
+
+  @override
+  String get notificationPermissionTitle => '开启通知？';
+
+  @override
+  String get notificationPermissionBody =>
+      '会话完成或等待你审批时，需要系统通知权限才能提醒你。无论是否开启，agent 任务都会照常执行。';
+
+  @override
+  String get notificationPermissionAllow => '允许';
+
+  @override
+  String get notificationPermissionLater => '以后再说';
 
   @override
   String get workingChannel => '工作中的会话';
@@ -2613,10 +2626,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keepAliveChannelDescription => '在 agent 任务运行期间保持与主机的连接。';
 
   @override
-  String get keepAliveNotificationTitle => '正在保持会话连接';
+  String get keepAliveNotificationTitle => '会话连接保持中';
 
   @override
-  String get keepAliveNotificationBody => '后台任务继续执行，完成后会通知你。';
+  String get keepAliveNotificationBody => '后台任务仍在执行，完成后会通知你。';
 
   @override
   String get batteryOptimizationTitle => '后台连接';

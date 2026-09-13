@@ -627,6 +627,52 @@ void main() {
     expect(controller.state.timeline, hasLength(1));
   });
 
+  test(
+    'a selection request stays observable when the id is unchanged',
+    () async {
+      // The notification deep link can target the session already on screen,
+      // so the id alone cannot carry "a request happened"; the controller
+      // publishes a request counter plus that request's landing intent.
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
+      final id = FakeChatRepository.initialSession.id;
+
+      expect(controller.state.selectionRequestSeq, 0);
+      expect(controller.state.selectionLandsAtLatest, isFalse);
+
+      controller.onAction(SelectSession(id));
+      await settlePublish();
+      final listTapSeq = controller.state.selectionRequestSeq;
+      expect(listTapSeq, greaterThan(0));
+      expect(controller.state.selectionLandsAtLatest, isFalse);
+
+      // Same id, new request: only the counter moves.
+      controller.onAction(SelectSession(id, landAtLatest: true));
+      await settlePublish();
+      expect(controller.state.selectionRequestSeq, listTapSeq + 1);
+      expect(controller.state.selectionLandsAtLatest, isTrue);
+
+      // A later list tap clears the intent again.
+      controller.onAction(SelectSession(id));
+      await settlePublish();
+      expect(controller.state.selectionLandsAtLatest, isFalse);
+    },
+  );
+
+  test('SelectSession equality carries the landing intent', () {
+    expect(
+      const SelectSession('s1', landAtLatest: true),
+      isNot(const SelectSession('s1')),
+    );
+    expect(
+      const SelectSession('s1', landAtLatest: true),
+      const SelectSession('s1', landAtLatest: true),
+    );
+  });
+
   test('selecting a session persists it for the next cold start', () async {
     final repository = FakeChatRepository(
       initialSessions: <SessionSummary>[FakeChatRepository.initialSession],

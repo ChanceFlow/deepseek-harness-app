@@ -2758,7 +2758,7 @@ abstract class AppLocalizations {
   /// No description provided for @turnCompleteTitle.
   ///
   /// In en, this message translates to:
-  /// **'Turn complete'**
+  /// **'Reply ready'**
   String get turnCompleteTitle;
 
   /// No description provided for @turnCompletionChannel.
@@ -2776,19 +2776,19 @@ abstract class AppLocalizations {
   /// No description provided for @otherTurnCompleteTitle.
   ///
   /// In en, this message translates to:
-  /// **'New turn in another session'**
+  /// **'New reply in another session'**
   String get otherTurnCompleteTitle;
 
   /// No description provided for @approvalRequestedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Approval requested'**
+  /// **'Approval needed'**
   String get approvalRequestedTitle;
 
   /// No description provided for @planReviewRequestedTitle.
   ///
   /// In en, this message translates to:
-  /// **'Plan review requested'**
+  /// **'Plan ready for review'**
   String get planReviewRequestedTitle;
 
   /// No description provided for @approvalChannel.
@@ -2820,6 +2820,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss notification'**
   String get notificationDismissTooltip;
+
+  /// No description provided for @notificationPermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on notifications?'**
+  String get notificationPermissionTitle;
+
+  /// No description provided for @notificationPermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Android needs your permission before the app can tell you when a session finishes or waits on your approval. Agent work keeps running either way.'**
+  String get notificationPermissionBody;
+
+  /// No description provided for @notificationPermissionAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get notificationPermissionAllow;
+
+  /// No description provided for @notificationPermissionLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notificationPermissionLater;
 
   /// No description provided for @workingChannel.
   ///

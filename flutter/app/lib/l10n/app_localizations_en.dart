@@ -1665,7 +1665,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get turnMaxTokens => 'Output token limit reached';
 
   @override
-  String get turnCompleteTitle => 'Turn complete';
+  String get turnCompleteTitle => 'Reply ready';
 
   @override
   String get turnCompletionChannel => 'Turn completion';
@@ -1675,13 +1675,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Notifies when a running conversation turn finishes.';
 
   @override
-  String get otherTurnCompleteTitle => 'New turn in another session';
+  String get otherTurnCompleteTitle => 'New reply in another session';
 
   @override
-  String get approvalRequestedTitle => 'Approval requested';
+  String get approvalRequestedTitle => 'Approval needed';
 
   @override
-  String get planReviewRequestedTitle => 'Plan review requested';
+  String get planReviewRequestedTitle => 'Plan ready for review';
 
   @override
   String get approvalChannel => 'Approvals';
@@ -1699,6 +1699,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationDismissTooltip => 'Dismiss notification';
+
+  @override
+  String get notificationPermissionTitle => 'Turn on notifications?';
+
+  @override
+  String get notificationPermissionBody =>
+      'Android needs your permission before the app can tell you when a session finishes or waits on your approval. Agent work keeps running either way.';
+
+  @override
+  String get notificationPermissionAllow => 'Allow';
+
+  @override
+  String get notificationPermissionLater => 'Not now';
 
   @override
   String get workingChannel => 'Working sessions';

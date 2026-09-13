@@ -38,6 +38,7 @@ final class AppNotificationEvent {
     required this.backendId,
     required this.sessionId,
     required this.sessionTitle,
+    this.sessionContext,
   });
 
   final AppNotificationKind kind;
@@ -45,17 +46,36 @@ final class AppNotificationEvent {
   final String sessionId;
   final String sessionTitle;
 
+  /// The workspace the session belongs to, when it adds information the
+  /// title does not already carry (two sessions titled the same are only
+  /// told apart by it). Null when the session has no workspace path or the
+  /// path's basename IS the title — repeating it would just crowd the
+  /// notification body.
+  final String? sessionContext;
+
   @override
   bool operator ==(Object other) =>
       other is AppNotificationEvent &&
       other.kind == kind &&
       other.backendId == backendId &&
       other.sessionId == sessionId &&
-      other.sessionTitle == sessionTitle;
+      other.sessionTitle == sessionTitle &&
+      other.sessionContext == sessionContext;
 
   @override
-  int get hashCode => Object.hash(kind, backendId, sessionId, sessionTitle);
+  int get hashCode =>
+      Object.hash(kind, backendId, sessionId, sessionTitle, sessionContext);
 }
+
+/// The session line every notification body carries: the session title,
+/// with its workspace appended only when [sessionContext] says it adds
+/// information (`'title · workspace'`).
+///
+/// Not localized: it is data the host supplied, not copy. It lives here,
+/// next to the facts it formats, so the foreground toast and the system
+/// notifier compose the identical line.
+String notificationBodyLine(String sessionTitle, String? sessionContext) =>
+    sessionContext == null ? sessionTitle : '$sessionTitle · $sessionContext';
 
 /// Pure fold that turns successive [SessionSummary] snapshots into
 /// [AppNotificationEvent]s. The first snapshot seeds the baseline and emits
@@ -104,6 +124,7 @@ class NotificationDetector {
             backendId: backendId,
             sessionId: session.id,
             sessionTitle: session.displayTitle,
+            sessionContext: session.workspaceContext,
           ),
         );
       }
@@ -118,6 +139,7 @@ class NotificationDetector {
                 backendId: backendId,
                 sessionId: session.id,
                 sessionTitle: session.displayTitle,
+                sessionContext: session.workspaceContext,
               ),
             );
           case SessionPendingInteraction.planReview:
@@ -127,6 +149,7 @@ class NotificationDetector {
                 backendId: backendId,
                 sessionId: session.id,
                 sessionTitle: session.displayTitle,
+                sessionContext: session.workspaceContext,
               ),
             );
           case SessionPendingInteraction.question:

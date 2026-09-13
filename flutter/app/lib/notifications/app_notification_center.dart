@@ -133,6 +133,14 @@ class AppNotificationCenter {
       _hasWorkInFlight = inFlight;
       if (!_workInFlight.isClosed) _workInFlight.add(inFlight);
     }
+    // Reconcile the ongoing rows BEFORE routing this snapshot's transient
+    // events. A turn-complete post rides the session's own (id, tag), so the
+    // order decides the outcome: reconciling first lets the fold promote the
+    // done row (or cancel a row the session no longer wants), and the
+    // transient post then lands on the settled state. Routing first would
+    // let a `gone` decision cancel the very notice just delivered — which is
+    // what happens to the open session, whose `completed` bit never arms.
+    _reconcileWorking();
     final events = _detector.fold(
       sessions: _lastSessions,
       selectedSessionId: _selectedSessionIdOf(),
@@ -141,7 +149,6 @@ class AppNotificationCenter {
     for (final event in events) {
       _route(event);
     }
-    _reconcileWorking();
   }
 
   void _route(AppNotificationEvent event) {

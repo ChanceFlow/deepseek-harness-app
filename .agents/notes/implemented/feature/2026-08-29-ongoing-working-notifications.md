@@ -34,6 +34,24 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   `"turns"` channel，non-ongoing + autoCancel，onlyAlertOnce 避免与瞬时
   事件二次响铃）、`cancelWork`（按 (id, tag)）。initialize 显式创建
   `"working"` channel（低优先级/静音，不依赖首条 show 的参数）。
+- **完成行与瞬时完成通知是同一行**（2026-09-12 补）：`show()` 对两类
+  turn-complete 也走会话的确定性 `(id, tag)`，`promoteWorkToDone` 的
+  title/body 改为与瞬时完成行一致（title = `turnCompleteTitle`，body =
+  会话名 + 工作区）。此前同一件事会留下两行、且 title/body 恰好互换
+  （working 行 title = 会话名，瞬时行 title = 事件名），用户看到的是
+  "两条互不相关却内容对调"的通知。审批/审阅保留计数 id：它们与常驻行
+  并存，是不同的事实。
+- **先 reconcile 再 route**（2026-09-12 补）：`_onSessions` 把
+  `_reconcileWorking()` 提到瞬时事件路由之前。完成通知与常驻行共用坐标，
+  顺序决定结果：先 reconcile，fold 先把 done 提升到位（或撤掉会话不再要
+  的行），瞬时投递落在已稳定的状态上；反过来路由，"用户开着的会话在后台
+  完成"会被 fold 判 `gone` 并立刻 `cancelWork` 掉刚投递的通知。
+- **启动即未确认全清**（2026-09-12 补）：`sweepStaleRows(enabledBackendIds)`
+  改为 `clearUnconfirmedRows()` —— 取消 ledger 里的**全部**行，而不是只清
+  禁用/删除 backend 的行。ledger 记录的是"上一个进程发了什么"，本进程对
+  它一无所知（会话可能已完成，主机也可能不可达而永远拿不到快照），而
+  ongoing 行不可滑动删除，留下就是永久疤痕。代价：主机可达时会有一瞬
+  "消失→重现"。第一份真实快照按 fold 重新挂。
 - **AppNotificationCenter**：订阅会话流 + 选中变化流 +
   `appLifecycleChangesProvider`（providers.dart 的 WidgetsBindingObserver
   失效信号），每次全量跑 fold 与"上次已应用态"做 diff，只在变化处发
@@ -75,20 +93,29 @@ WORKING→WAITING→DONE→已读消失的完整生命周期。
   常驻进入通知体系（静默展示），瞬时事件管线保持不动；对
   [通知中心](2026-08-20-notification-center.md) 中"question 不触发"构成
   部分覆盖，两处并存。
+- **保留两份 doc 行的措辞差异、只修重复投递**：不采纳，两者耦合 —— 只改
+  措辞会让同一件事留下两条一模一样的通知，比原来更难理解。
+- **按 `updatedAtEpochMs` 判超时清理孤儿常驻行**：被否，长工具调用期间
+  该值可能长时间不推进，会误杀正在跑的会话；且超时阈值本身是无依据的
+  猜测。启动即未确认全清用已有 ledger 实现同一目标，语义更诚实（"本进程
+  无法确认任何上一进程的行"）。
 
 ## Consequences
 
 - 自动证据：fold 全边沿/三 pending 子态/selected 抑制纯单测
   （`test/notifications/working_sessions_fold_test.dart`）；id 哈希钉值
   （`notification_key_test.dart`）；notifier seam 断言 ongoing/onlyAlertOnce/
-  同 id promote/cancel 带 tag（`system_notifier_test.dart`）；center 路由
-  与 reconcile diff（`app_notification_center_test.dart`）。
+  同 id promote/cancel 带 tag、完成行改用会话坐标、`clearUnconfirmedRows`
+  清空全部 ledger 行（`system_notifier_test.dart`）；center 路由与 reconcile
+  diff（`app_notification_center_test.dart`）。
 - 真机手动证据（不伪造测试）：常驻行滑不掉、WAITING 原地改体不响、
-  done 可滑且点后 autoCancel、多会话系统分组、杀进程后重启旧行被原地
-  替换或取消（孤儿清理）、Android 13+ 权限授予前后行为。
+  done 可滑且点后 autoCancel、多会话系统分组、杀进程后重启旧行被清除
+  （孤儿清理）、Android 13+ 权限授予前后行为、状态栏小图标为单色剪影。
 - 系统设置新增 `"working"` channel（可关，命名走 l10n）；done 与回合
-  完成共用 `"turns"` channel。
+  完成共用 `"turns"` channel，且共用同一行。
 - center 现在 watch chatControllerProvider：每 backend 的控制器与其中心
   同生命周期常驻（多 backend 时 timeline/会话订阅不再随切换销毁，与连接
   keep-alive 的既有要求同向）。
 - 前后台切换全量 reconcile：回前台清掉正在看的会话的常驻，其余保持。
+- 已知取舍：启动全清会让"主机可达且会话确实在跑"的情形出现一次
+  消失→重现；这是换取"孤儿行在结构上不可能存在"的代价。

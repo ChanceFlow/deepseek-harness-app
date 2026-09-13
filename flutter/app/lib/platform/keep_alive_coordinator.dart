@@ -65,11 +65,33 @@ class KeepAliveCoordinator {
   /// Whether the service is currently asked to run.
   bool get isRunning => _running;
 
+  /// Whether agent work is in flight right now, with no linger applied: the
+  /// raw merged fact, emitted on transitions only.
+  ///
+  /// [isRunning] is the service's state (it outlives the work by
+  /// [kKeepAliveLinger]); this is the work's own state, which is what a
+  /// surface asking "is a turn running?" wants — the notification-permission
+  /// ask waits for the first `true` so its prompt has a visible reason.
+  bool get hasWorkInFlight => _hasWorkInFlight;
+  bool _hasWorkInFlight = false;
+
+  final StreamController<bool> _workInFlightChanges =
+      StreamController<bool>.broadcast();
+
+  /// Change stream for [hasWorkInFlight]; no value is replayed on listen.
+  Stream<bool> get workInFlightChanges => _workInFlightChanges.stream;
+
   /// Feeds the merged work-in-flight fact. Idempotent: a value equal to the
   /// current desire changes nothing. A failed start clears the desire, so
   /// this same call is the retry point once the fact is recomputed.
   void update({required bool workInFlight}) {
     if (_disposed) return;
+    if (workInFlight != _hasWorkInFlight) {
+      _hasWorkInFlight = workInFlight;
+      if (!_workInFlightChanges.isClosed) {
+        _workInFlightChanges.add(workInFlight);
+      }
+    }
     if (workInFlight) {
       if (_unsupported) return;
       _lingerTimer?.cancel();
@@ -97,6 +119,7 @@ class KeepAliveCoordinator {
     _lingerTimer = null;
     _wanted = false;
     await _stop();
+    await _workInFlightChanges.close();
   }
 
   Future<void> _apply() async {

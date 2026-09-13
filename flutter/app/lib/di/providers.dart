@@ -69,6 +69,7 @@ import '../ui/chat/session_panel.dart' show BackendSessionSlice;
 import '../ui/goal/goal_controller.dart';
 import '../ui/models/models_controller.dart';
 import '../ui/root/app_destination.dart';
+import '../ui/settings/locale_preference.dart';
 import '../ui/settings/llm_providers.dart';
 import '../ui/settings/settings_controller.dart';
 import '../ui/settings/asr/asr_models_controller.dart';
@@ -118,17 +119,17 @@ final backendRegistryProvider = FutureProvider<BackendRegistryController>((
 });
 
 /// Startup boot sweep for posted notification rows: once the local state
-/// store and backend registry are loaded, attaches the ledger to the
-/// [SystemNotifier] and cancels any leftover ongoing rows for disabled or
-/// removed backends.
+/// store is loaded, attaches the ledger to the [SystemNotifier] and cancels
+/// every row the previous process left behind. None of those rows is
+/// confirmed by this process — the session may have finished, or the host
+/// may be unreachable — and an ongoing row cannot be swiped away, so leaving
+/// one is a permanent scar. The first real snapshot re-arms what is still
+/// running.
 final postedRowsSweepProvider = FutureProvider<void>((ref) async {
   final localStore = await ref.watch(localStateStoreProvider.future);
   final notifier = ref.watch(systemNotifierProvider);
   notifier.attachLedger(StoreNotificationLedger(localStore));
-  final controller = await ref.watch(backendRegistryProvider.future);
-  await controller.loaded;
-  final enabledIds = controller.state.enabledBackends.map((b) => b.id).toSet();
-  await notifier.sweepStaleRows(enabledBackendIds: enabledIds);
+  await notifier.clearUnconfirmedRows();
 });
 
 /// The registry's state stream, mapped for widgets.
@@ -594,15 +595,18 @@ final keepAliveServiceProvider = Provider<KeepAliveService>(
 );
 
 /// The keep-alive notification's copy, resolved at request time from the
-/// platform locale — the same launch-locale rule [SystemNotifier] follows
-/// for every other notification.
+/// app's own language choice (else the device locale) — the same rule
+/// [SystemNotifier] applies to every other notification.
+///
+/// The preference is read, not watched: the coordinator that consumes this
+/// resolver must not gain a dependency on a value that changes, because a
+/// rebuild would dispose and restart the foreground service mid-work.
 final keepAliveNotificationCopyProvider = Provider<KeepAliveCopyResolver>((
   ref,
 ) {
   return () {
-    final l10n = resolveAppLocalizations(
-      WidgetsBinding.instance.platformDispatcher.locale,
-    );
+    final preference = ref.read(appLocalePreferenceProvider).value;
+    final l10n = resolveAppLocalizations(effectiveContentLocale(preference));
     return KeepAliveNotificationCopy(
       title: l10n.keepAliveNotificationTitle,
       text: l10n.keepAliveNotificationBody,
@@ -611,6 +615,25 @@ final keepAliveNotificationCopyProvider = Provider<KeepAliveCopyResolver>((
     );
   };
 });
+
+/// Keeps [SystemNotifier]'s copy in step with the app's language choice.
+///
+/// The notifier composes notification copy outside the widget tree, so an
+/// in-app language switch has to be pushed to it — `MaterialApp.locale` does
+/// not reach it, and without this the app would show one language while its
+/// notifications kept another until the process restarted.
+final notificationLocaleSyncProvider = Provider<void>((ref) {
+  final notifier = ref.watch(systemNotifierProvider);
+  final preference = ref.watch(appLocalePreferenceProvider).value;
+  notifier.applyLocale(effectiveContentLocale(preference));
+});
+
+/// Whether any enabled backend currently has agent work in flight, emitted
+/// on transitions only. The notification-permission ask waits for the first
+/// `true` so its prompt arrives with a reason the user can see.
+final workInFlightChangesProvider = Provider<Stream<bool>>(
+  (ref) => ref.watch(keepAliveCoordinatorProvider).workInFlightChanges,
+);
 
 /// The Android foreground service that holds the mux open while agent work
 /// is in flight.
@@ -715,11 +738,14 @@ final keepAliveCoordinatorProvider = Provider<KeepAliveCoordinator>((ref) {
 });
 
 /// Merged foreground channel across every enabled backend: the app-root
-/// toast host listens here and watches the family, which keeps every
-/// connected backend's center (and its session fold) alive for the
-/// app's lifetime.
+/// toast host watches the family here, which keeps every connected backend's
+/// center (and its session fold) alive for the app's lifetime.
+///
+/// A plain stream rather than a [StreamProvider]: two completions of the
+/// same session are equal events, and a state provider would compare the
+/// second one against the first and drop it — the user would never see it.
 final foregroundNotificationEventsProvider =
-    StreamProvider<AppNotificationEvent>((ref) {
+    Provider<Stream<AppNotificationEvent>>((ref) {
       // Trigger the startup boot sweep for posted notification rows.
       ref.watch(postedRowsSweepProvider);
       final controller = StreamController<AppNotificationEvent>.broadcast();
@@ -782,8 +808,11 @@ final foregroundNotificationEventsProvider =
     });
 
 /// System-notification tap destinations (running-app taps plus cold-start
-/// launches), merged so the app root can navigate on either.
-final systemNotificationTargetsProvider = StreamProvider<NotificationTarget>(
+/// launches). Exposed as a plain stream rather than a [StreamProvider]: a
+/// tap is an event, and two taps on the same session — its ongoing row
+/// and its completion notice carry the same payload — must both navigate,
+/// while a state provider would compare equal and swallow the second.
+final systemNotificationTargetsProvider = Provider<Stream<NotificationTarget>>(
   (ref) => ref.watch(systemNotifierProvider).targets,
 );
 
