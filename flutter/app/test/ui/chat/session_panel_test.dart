@@ -662,4 +662,87 @@ void main() {
       handle.dispose();
     });
   });
+
+  testWidgets(
+    'long-pressing a project header creates a session in that workspace',
+    (tester) async {
+      String? createdWorkspaceId;
+      final container = ProviderContainer(
+        overrides: [
+          localStateStoreProvider.overrideWith((ref) async => _store()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: l10nApp(
+            home: Scaffold(
+              body: SessionPanel(
+                sessions: _sessions,
+                workspaces: _workspaces,
+                searchResults: const <SessionSearchResult>[],
+                selectedSessionId: 's1',
+                onSelectSession: (_) {},
+                onCreateSession: (wsId) => createdWorkspaceId = wsId,
+                onSearchSessions: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('proj'), findsOneWidget);
+      await tester.longPress(find.text('proj'));
+      await tester.pumpAndSettle();
+
+      expect(createdWorkspaceId, 'w1');
+    },
+  );
+
+  testWidgets(
+    'long-pressing a project header with backend wiring routes to onCreateSessionInWorkspace',
+    (tester) async {
+      String? dispatchedBackendId;
+      String? dispatchedWorkspaceId;
+      final container = ProviderContainer(
+        overrides: [
+          localStateStoreProvider.overrideWith((ref) async => _store()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: l10nApp(
+            home: Scaffold(
+              body: SessionPanel(
+                backendId: 'b1',
+                sessions: _sessions,
+                workspaces: _workspaces,
+                searchResults: const <SessionSearchResult>[],
+                selectedSessionId: 's1',
+                onSelectSession: (_) {},
+                onCreateSession: (_) {},
+                onCreateSessionInWorkspace: (backendId, wsId) {
+                  dispatchedBackendId = backendId;
+                  dispatchedWorkspaceId = wsId;
+                },
+                onSearchSessions: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('proj'), findsOneWidget);
+      await tester.longPress(find.text('proj'));
+      await tester.pumpAndSettle();
+
+      expect(dispatchedBackendId, 'b1');
+      expect(dispatchedWorkspaceId, 'w1');
+    },
+  );
 }

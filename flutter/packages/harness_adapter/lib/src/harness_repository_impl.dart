@@ -253,6 +253,66 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// Tick on every `commands/change` forwarded event: the live slash-command
   /// roster a surface cached is stale and must be re-pulled.
   final StateStream<int> _commandRosterEpoch = StateStream<int>(0);
+  SessionModelsValueWire? _cachedModelCatalog;
+  final Map<String, StateStream<ModelSelection?>> _modelSelectionProjections =
+      <String, StateStream<ModelSelection?>>{};
+  final Map<String, StateStream<SessionModels?>> _sessionModelsStreams =
+      <String, StateStream<SessionModels?>>{};
+
+  StateStream<ModelSelection?> _modelSelectionStateFor(String sessionId) =>
+      _modelSelectionProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<ModelSelection?>(null),
+      );
+
+  Future<SessionModelsValueWire> _loadModelCatalog({bool force = false}) async {
+    if (!force && _cachedModelCatalog != null) {
+      return _cachedModelCatalog!;
+    }
+    final result = await _call(
+      DshRpcEndpoints.sessionModelCatalog,
+      DshRpcEndpoints.sessionModelCatalog,
+      <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final wire = SessionModelsValueWire.fromJson(result);
+    _cachedModelCatalog = wire;
+    return wire;
+  }
+
+  void _notifySessionModels(String sessionId) {
+    final catalog = _cachedModelCatalog;
+    if (catalog != null) {
+      final selection = _modelSelectionStateFor(sessionId).value;
+      _sessionModelsStreams[sessionId]?.value = _toDomainSessionModels(
+        catalog,
+        selection: selection,
+      );
+    } else {
+      unawaited(_resolveSessionModels(sessionId));
+    }
+  }
+
+  void _notifyModelCatalogChanged() {
+    for (final sessionId in _sessionModelsStreams.keys) {
+      unawaited(_resolveSessionModels(sessionId));
+    }
+  }
+
+  Future<void> _resolveSessionModels(String sessionId) async {
+    try {
+      final catalog = await _loadModelCatalog();
+      final selection = _modelSelectionStateFor(sessionId).value;
+      final effective = _toDomainSessionModels(catalog, selection: selection);
+      final stream = _sessionModelsStreams[sessionId];
+      if (stream != null) {
+        stream.value = effective;
+      }
+    } catch (_) {
+      // Keep existing models if reload fails.
+    }
+  }
+
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
@@ -1574,14 +1634,24 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Stream<SessionModels?> observeSessionModels(String sessionId) {
+    final stream = _sessionModelsStreams.putIfAbsent(
+      sessionId,
+      () => StateStream<SessionModels?>(null),
+    );
+    if (stream.value == null) {
+      unawaited(_resolveSessionModels(sessionId));
+    }
+    return stream.stream;
+  }
+
+  @override
   Future<SessionModels> loadModels(String sessionId) async {
-    final result = await _call(
-      DshRpcEndpoints.sessionModelCatalog,
-      DshRpcEndpoints.sessionModelCatalog,
-      <String, Object?>{},
-      _shortCallTimeout,
-    ).valueOrThrow();
-    return _toDomainSessionModels(SessionModelsValueWire.fromJson(result));
+    final catalog = await _loadModelCatalog();
+    final selection = _modelSelectionStateFor(sessionId).value;
+    final effective = _toDomainSessionModels(catalog, selection: selection);
+    _sessionModelsStreams[sessionId]?.value = effective;
+    return effective;
   }
 
   @override
@@ -1606,11 +1676,14 @@ class HarnessRepositoryImpl implements ChatRepository {
       throw const FormatException('session/selectModel missing selected');
     }
     final selected = ModelSelectionWire.fromJson(selectedObj);
-    return ModelSelection(
+    final domainSelection = ModelSelection(
       provider: selected.provider,
       model: selected.model,
       reasoningEffort: selected.reasoningEffort,
     );
+    _modelSelectionStateFor(sessionId).value = domainSelection;
+    _notifySessionModels(sessionId);
+    return domainSelection;
   }
 
   @override
@@ -2003,6 +2076,12 @@ class HarnessRepositoryImpl implements ChatRepository {
                   : item,
             )
             .toList();
+      case 'modelSelection':
+        final selection = _parseModelSelectionProjection(
+          frame.payload['value'],
+        );
+        _modelSelectionStateFor(sessionId).value = selection;
+        _notifySessionModels(sessionId);
       default:
         _onDiagnostic?.call(
           AdapterDiagnostic(
@@ -2146,6 +2225,48 @@ class HarnessRepositoryImpl implements ChatRepository {
           )
           .toList();
     }
+    if (values.containsKey('modelSelection')) {
+      final selection = _parseModelSelectionProjection(
+        values['modelSelection'],
+      );
+      _modelSelectionStateFor(sessionId).value = selection;
+      _notifySessionModels(sessionId);
+    }
+  }
+
+  /// Wire `modelSelection` projection payload: `{ lastUsed, next }`.
+  /// Following reference `ModelDirectory.syncInputs`: `next ?? lastUsed`.
+  ModelSelection? _parseModelSelectionProjection(Object? value) {
+    if (value == null || value == 'null') return null;
+    return _tryDecode<ModelSelection?>(() {
+      final obj = asJsonObject(value);
+      if (obj == null) return null;
+      final nextObj = asJsonObject(obj['next']);
+      if (nextObj != null) {
+        final provider = wireString(nextObj, 'provider');
+        final model = wireString(nextObj, 'model');
+        if (provider != null && model != null) {
+          return ModelSelection(
+            provider: provider,
+            model: model,
+            reasoningEffort: wireString(nextObj, 'reasoningEffort'),
+          );
+        }
+      }
+      final lastUsedObj = asJsonObject(obj['lastUsed']);
+      if (lastUsedObj != null) {
+        final provider = wireString(lastUsedObj, 'provider');
+        final model = wireString(lastUsedObj, 'model');
+        if (provider != null && model != null) {
+          return ModelSelection(
+            provider: provider,
+            model: model,
+            reasoningEffort: wireString(lastUsedObj, 'reasoningEffort'),
+          );
+        }
+      }
+      return null;
+    });
   }
 
   /// Wire `permissions` projection payload
@@ -2341,6 +2462,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     await _resyncMutex.synchronized(() async {
       _contextPressureSeqs.clear();
       _contextBreakdownSeqs.clear();
+      _cachedModelCatalog = null;
+      _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
+      _notifyModelCatalogChanged();
       // The only out-of-band prep left is the per-session window re-arm.
       // Every live mirror (pending statuses, the queue projection and the
       // queue entries in the frame buffer) re-baselines in-band on the
@@ -2741,55 +2865,61 @@ class HarnessRepositoryImpl implements ChatRepository {
     updatedAt: wire.updatedAt,
   );
 
-  SessionModels _toDomainSessionModels(SessionModelsValueWire wire) =>
-      SessionModels(
-        current: ModelSelection(
+  SessionModels _toDomainSessionModels(
+    SessionModelsValueWire wire, {
+    ModelSelection? selection,
+  }) => SessionModels(
+    current:
+        selection ??
+        ModelSelection(
           provider: wire.current.provider,
           model: wire.current.model,
           reasoningEffort: wire.current.reasoningEffort,
         ),
-        routable: wire.routable,
-        groups: wire.groups
-            .map(
-              (group) => ModelProviderGroup(
-                id: group.id,
-                name: group.name,
-                models: group.models
-                    .map(
-                      (model) => ModelCatalogModel(
-                        id: model.id,
-                        name: model.name,
-                        description: model.description,
-                        reasoning: model.reasoning == null
-                            ? null
-                            : ModelReasoning(
-                                efforts: model.reasoning!.efforts
-                                    .map(
-                                      (effort) => ModelReasoningEffort(
-                                        id: effort.id,
-                                        name: effort.name,
-                                        description: effort.description,
-                                      ),
-                                    )
-                                    .toList(),
-                                defaultEffort: model.reasoning!.defaultEffort,
-                              ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
-        failures: wire.failures
-            .map(
-              (failure) => ModelCatalogFailure(
-                id: failure.id,
-                name: failure.name,
-                message: failure.message,
-              ),
-            )
-            .toList(),
-      );
+    routable: selection != null && wire.routableProviders.isNotEmpty
+        ? wire.routableProviders.contains(selection.provider)
+        : wire.routable,
+    groups: wire.groups
+        .map(
+          (group) => ModelProviderGroup(
+            id: group.id,
+            name: group.name,
+            models: group.models
+                .map(
+                  (model) => ModelCatalogModel(
+                    id: model.id,
+                    name: model.name,
+                    description: model.description,
+                    reasoning: model.reasoning == null
+                        ? null
+                        : ModelReasoning(
+                            efforts: model.reasoning!.efforts
+                                .map(
+                                  (effort) => ModelReasoningEffort(
+                                    id: effort.id,
+                                    name: effort.name,
+                                    description: effort.description,
+                                  ),
+                                )
+                                .toList(),
+                            defaultEffort: model.reasoning!.defaultEffort,
+                          ),
+                  ),
+                )
+                .toList(),
+          ),
+        )
+        .toList(),
+    failures: wire.failures
+        .map(
+          (failure) => ModelCatalogFailure(
+            id: failure.id,
+            name: failure.name,
+            message: failure.message,
+          ),
+        )
+        .toList(),
+  );
 
   String? _frameSessionId(ServerRequest frame) {
     if (frame.rpcId.startsWith('session-follow-')) {
@@ -3134,15 +3264,18 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyCordisRequestResolved(args);
       case 'api-session/error':
         _applySessionErrorEvent(args);
-      case 'approval/request':
       case 'credentials/reference-updated':
+      case 'llm/adapters-updated':
+      case 'settings/document-updated':
+        _cachedModelCatalog = null;
+        _notifyModelCatalogChanged();
+        break;
+      case 'approval/request':
       case 'goal/activation-changed':
       case 'cordis/dynamic-package':
       case 'cordis/dynamic-retract':
       case 'cordis/inspect-query':
       case 'cordis/inspect-query-resolved':
-      case 'llm/adapters-updated':
-      case 'settings/document-updated':
       case 'user-questions/request':
         // Forwarded and currently without a fold here. `approval/request`
         // and `user-questions/request` are waterfalls, handled before this

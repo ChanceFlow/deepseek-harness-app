@@ -60,7 +60,7 @@ class WorkspaceRoute extends ConsumerWidget {
           ),
         ),
       ),
-      data: (state) => _BackendAggregateScreen(
+      data: (state) => WorkspaceAggregateScreen(
         // A disabled backend has no browsing region to aggregate:
         // switching (header tap) and starting a session are switcher
         // entries, and switchers list enabled backends only.
@@ -78,11 +78,15 @@ class WorkspaceRoute extends ConsumerWidget {
 /// region, grouped under a backend header (label + live connection dot +
 /// active marker). Tapping a header makes that backend active; starting
 /// a session in a workspace switches there too.
-class _BackendAggregateScreen extends ConsumerWidget {
-  const _BackendAggregateScreen({
+///
+/// It is also the page that owns the directory-browser modal: the sheet
+/// belongs to the screen, not to whichever section opened it.
+class WorkspaceAggregateScreen extends ConsumerWidget {
+  const WorkspaceAggregateScreen({
     required this.backends,
     required this.activeId,
     required this.onAction,
+    super.key,
   });
 
   final List<BackendConfig> backends;
@@ -94,20 +98,58 @@ class _BackendAggregateScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLow,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            for (final backend in backends)
-              _BackendWorkspaceSection(
-                key: ValueKey(backend.id),
-                backend: backend,
-                active: backend.id == activeId,
-                onAction: onAction,
-              ),
-          ],
-        ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                for (final backend in backends)
+                  _BackendWorkspaceSection(
+                    key: ValueKey(backend.id),
+                    backend: backend,
+                    active: backend.id == activeId,
+                    onAction: onAction,
+                  ),
+              ],
+            ),
+          ),
+          // The directory browser is page-modal, not section-modal: it
+          // docks at the screen's bottom edge over one whole-page scrim.
+          // A section's own Stack sizes to its browsing region, where the
+          // sheet would be clipped against that edge and the scrim would
+          // cover one section instead of the page.
+          for (final backend in backends)
+            _BackendDirectoryBrowser(backendId: backend.id),
+        ],
       ),
+    );
+  }
+}
+
+/// One backend's directory-browser modal, mounted at the page level:
+/// renders nothing until that backend's controller opens the browser.
+/// The page owns it because the sheet has to dock at the screen's bottom
+/// edge — see [_DirectoryBrowserOverlay].
+class _BackendDirectoryBrowser extends ConsumerWidget {
+  const _BackendDirectoryBrowser({required this.backendId});
+
+  final String backendId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(workspaceControllerProvider(backendId));
+    return StreamBuilder<WorkspaceUiState>(
+      stream: controller.uiState,
+      initialData: controller.state,
+      builder: (context, snapshot) {
+        final uiState = snapshot.data ?? const WorkspaceUiState();
+        if (!uiState.directoryBrowserOpen) return const SizedBox.shrink();
+        return _DirectoryBrowserOverlay(
+          uiState: uiState,
+          onAction: controller.onAction,
+        );
+      },
     );
   }
 }
@@ -462,54 +504,21 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final uiState = widget.uiState;
     final scheme = Theme.of(context).colorScheme;
     final query = _searchController.text.trim();
+    // The embedded form is one region of a host's scrolling page: its own
+    // Stack would size to that region, so the host hoists the directory
+    // browser to the page (see [_BackendDirectoryBrowser]) instead of
+    // letting a bottom-docked sheet be clipped here. The standalone form
+    // owns the whole surface, so it docks the browser at its own bottom.
+    if (widget.embedded) return _browsingRegion(context, uiState, query);
     return Stack(
       children: [
-        if (widget.embedded)
-          _browsingRegion(context, uiState, query)
-        else
-          Scaffold(
-            // Web: the browser region lives on the sidebar fill.
-            backgroundColor: scheme.surfaceContainerLow,
-            body: SafeArea(child: _browsingRegionBody(context, uiState, query)),
-          ),
-        if (uiState.directoryBrowserOpen) ...[
-          // Modal scrim: the ColorScheme `scrim` role at the platform
-          // barrier alpha (the stock Colors.black54), theme-aware in both
-          // modes; tapping it closes the browser.
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => widget.onAction(const CloseDirectoryBrowser()),
-              child: ColoredBox(color: scheme.scrim.withValues(alpha: 0.54)),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(
-              child: DirectoryBrowserDialog(
-                listing: uiState.directoryListing,
-                loading: uiState.directoryLoading,
-                onNavigate: (destination) =>
-                    widget.onAction(NavigateDirectory(destination)),
-                onCreateDirectory: (name) {
-                  final parent = uiState.directoryListing?.path;
-                  if (parent != null) {
-                    widget.onAction(CreateDirectoryAction(parent, name));
-                  }
-                },
-                // Web adoption: picking a folder creates the workspace
-                // (the flow's one action — no intermediate form).
-                onSelect: (selected) {
-                  widget.onAction(CreateWorkspaceAction(selected));
-                  widget.onAction(const CloseDirectoryBrowser());
-                },
-                onClose: () => widget.onAction(const CloseDirectoryBrowser()),
-              ),
-            ),
-          ),
-        ],
+        Scaffold(
+          // Web: the browser region lives on the sidebar fill.
+          backgroundColor: scheme.surfaceContainerLow,
+          body: SafeArea(child: _browsingRegionBody(context, uiState, query)),
+        ),
+        if (uiState.directoryBrowserOpen)
+          _DirectoryBrowserOverlay(uiState: uiState, onAction: widget.onAction),
       ],
     );
   }
@@ -1417,23 +1426,25 @@ class _DsModalCard extends StatelessWidget {
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: kM3ShadowElevation3,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            child,
-            const SizedBox(height: 20),
-            // Capsule actions wrap to a second line on narrow cards (the
-            // web dialog column does the same at small widths).
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: actions,
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              child,
+              const SizedBox(height: 20),
+              // Capsule actions wrap to a second line on narrow cards (the
+              // web dialog column does the same at small widths).
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: actions,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1789,6 +1800,68 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
   }
 }
 
+/// The directory browser as an app-modal pair for a screen-sized
+/// [Stack]: the full-bleed scrim and the bottom-docked sheet. Both parts
+/// position themselves against the host stack, so the host must span the
+/// screen — the sheet is the flow's whole surface and must never be
+/// clipped by, or float inside, the region that opened it.
+class _DirectoryBrowserOverlay extends StatelessWidget {
+  const _DirectoryBrowserOverlay({
+    required this.uiState,
+    required this.onAction,
+  });
+
+  final WorkspaceUiState uiState;
+  final void Function(WorkspaceAction action) onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Modal scrim: the ColorScheme `scrim` role at the platform
+          // barrier alpha (the stock Colors.black54), theme-aware in both
+          // modes; tapping it closes the browser.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onAction(const CloseDirectoryBrowser()),
+              child: ColoredBox(color: scheme.scrim.withValues(alpha: 0.54)),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              child: DirectoryBrowserDialog(
+                listing: uiState.directoryListing,
+                loading: uiState.directoryLoading,
+                onNavigate: (destination) =>
+                    onAction(NavigateDirectory(destination)),
+                onCreateDirectory: (name) {
+                  final parent = uiState.directoryListing?.path;
+                  if (parent != null) {
+                    onAction(CreateDirectoryAction(parent, name));
+                  }
+                },
+                // Web adoption: picking a folder creates the workspace
+                // (the flow's one action — no intermediate form).
+                onSelect: (selected) {
+                  onAction(CreateWorkspaceAction(selected));
+                  onAction(const CloseDirectoryBrowser());
+                },
+                onClose: () => onAction(const CloseDirectoryBrowser()),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Host-directory browser backing the add-workspace flow — the mobile
 /// bottom-docked form of the web DirectoryBrowser dialog: title and
 /// crumb path bar (with the click-to-edit path zone), the folder list,
@@ -2059,7 +2132,11 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               OutlinedButton.icon(
                 style: _dsCapsuleButton(theme),
@@ -2069,7 +2146,6 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                 icon: const Icon(Icons.add, size: 14),
                 label: Text(l10n.newFolder),
               ),
-              const Spacer(),
               // Web `.showHiddenToggle`: fixed label, trailing check.
               InkWell(
                 borderRadius: BorderRadius.circular(kShapeChip),
@@ -2080,6 +2156,7 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
                     vertical: 12,
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         l10n.showHiddenFiles,

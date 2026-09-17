@@ -435,6 +435,37 @@ final networkReconnectProvider = Provider<NetworkReconnectBinder>((ref) {
   return binder;
 });
 
+/// Re-syncs every enabled backend when the app returns to the foreground.
+///
+/// Mobile sockets can stall or drop silently in the background without TCP
+/// RST (OS network suspension, sleep, or cellular/Wi-Fi handover). Re-entering
+/// foreground re-checks connection health (reconnecting if dead) and re-polls
+/// the session and workspace rosters so changes made from Web or other clients
+/// while the phone was backgrounded immediately converge.
+final appResumeSyncProvider = Provider<void>((ref) {
+  final lifecycleSub = ref.watch(appLifecycleChangesProvider).listen((_) {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    final connections = ref.read(allBackendConnectionsProvider);
+    final registry = ref.read(backendRegistryStateProvider).value;
+    if (registry == null) return;
+    for (final backend in registry.enabledBackends) {
+      final manager = connections[backend.id];
+      if (manager == null) continue;
+      final phase = manager.state.value.phase;
+      if (phase == ConnectionPhase.disconnected ||
+          phase == ConnectionPhase.reconnecting) {
+        manager.reconnectNow();
+      } else if (phase == ConnectionPhase.connected) {
+        final repo = ref.read(chatRepositoryProvider(backend.id));
+        unawaited(repo.refreshSessions());
+      }
+    }
+  });
+  ref.onDispose(() => unawaited(lifecycleSub.cancel()));
+});
+
 /// The domain-facing repository per backend.
 final chatRepositoryProvider = Provider.family.autoDispose<ChatRepository, String>((
   ref,

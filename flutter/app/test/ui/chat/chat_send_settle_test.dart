@@ -106,6 +106,10 @@ class _SettleRepository extends Fake implements ChatRepository {
   Stream<PermissionSelect?> observePermissions(String sessionId) =>
       Stream.value(null);
 
+  @override
+  Stream<SessionModels?> observeSessionModels(String sessionId) =>
+      Stream.value(null);
+
   // The session's sandbox-mode and schedule facts are log-only, so an
   // absent stream means unreported: null fact, no schedule publication.
   @override

@@ -28,6 +28,7 @@ import 'package:domain/model/goal.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/model_catalog.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
 import 'package:network/dsh_rpc_client.dart';
@@ -925,6 +926,95 @@ void main() {
       final payloads = rpc.payloads(DshRpcEndpoints.sessionModelCatalog);
       expect(payloads, isNotEmpty);
       expect(payloads.first['args'], isEmpty);
+    },
+  );
+
+  test(
+    'loadModels and observeSessionModels reflect modelSelection projection',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await pumpEventQueue();
+
+      // Initially loads host default
+      final initial = await repository.loadModels('session-1');
+      expect(initial.current.model, 'glm-x');
+
+      // Observe session models
+      final observed = <SessionModels>[];
+      final sub = repository.observeSessionModels('session-1').listen((m) {
+        if (m != null) observed.add(m);
+      });
+      await pumpEventQueue();
+
+      // Push a modelSelection projection frame over session-control
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-1',
+            'key': 'modelSelection',
+            'value': <String, Object?>{
+              'lastUsed': null,
+              'next': <String, Object?>{
+                'provider': 'anthropic',
+                'model': 'claude-3-7-sonnet',
+              },
+            },
+            'seq': 5,
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(observed, isNotEmpty);
+      expect(observed.last.current.provider, 'anthropic');
+      expect(observed.last.current.model, 'claude-3-7-sonnet');
+
+      // A subsequent loadModels returns the session selection, not host default
+      final refreshed = await repository.loadModels('session-1');
+      expect(refreshed.current.provider, 'anthropic');
+      expect(refreshed.current.model, 'claude-3-7-sonnet');
+
+      await sub.cancel();
+    },
+  );
+
+  test(
+    'forwarded llm/adapters-updated invalidates model catalog cache',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ReconnectableHarnessSocket();
+      final repository = await resyncFixture(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.loadModels('session-1');
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 1);
+
+      // Subsequent call reuses cached catalog
+      await repository.loadModels('session-1');
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 1);
+
+      // Remote event arrives on $events
+      socket.emitMuxFrame(
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'emit',
+            'event': 'llm/adapters-updated',
+            'args': <Object?>[],
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      // Cache is invalidated; next load fetches fresh catalog from backend
+      await repository.loadModels('session-1');
+      expect(rpc.callCountFor(DshRpcEndpoints.sessionModelCatalog), 2);
     },
   );
 

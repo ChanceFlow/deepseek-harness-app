@@ -231,6 +231,10 @@ final class SessionModelsValueWire {
                   asJsonObject(json['default'])?['provider'] ??
                       asJsonObject(json['current'])?['provider'],
                 ),
+      routableProviders =
+          (asJsonArray(json['routableProviders']) ?? const <Object?>[])
+              .whereType<String>()
+              .toList(),
       groups =
           (asJsonArray(json['groups'] ?? json['entries']) ?? const <Object?>[])
               .map(asJsonObject)
@@ -255,6 +259,7 @@ final class SessionModelsValueWire {
 
   final ModelSelectionWire current;
   final bool routable;
+  final List<String> routableProviders;
   final List<ModelProviderGroupWire> groups;
   final List<ModelCatalogFailureWire> failures;
 }

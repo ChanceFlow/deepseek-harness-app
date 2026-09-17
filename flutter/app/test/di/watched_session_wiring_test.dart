@@ -125,6 +125,10 @@ class _Repository extends Fake implements ChatRepository {
   Stream<PermissionSelect?> observePermissions(String sessionId) =>
       const Stream<PermissionSelect?>.empty();
 
+  @override
+  Stream<SessionModels?> observeSessionModels(String sessionId) =>
+      const Stream<SessionModels?>.empty();
+
   // The sandbox-mode and schedule facts are log-only session streams; an
   // empty answer is the unreported state the controller renders as unknown.
   @override
