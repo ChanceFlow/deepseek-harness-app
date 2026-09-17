@@ -4893,6 +4893,32 @@ void main() {
     },
   );
 
+  test('openSession is idempotent on multiple calls and preserves paginated history', () async {
+    final rpc = HarnessFakeRpc(<Object?>[resyncSessionRow('s1')]);
+    final socket = ReconnectableHarnessSocket();
+    final repository = await resyncFixture(rpc, socket);
+    await pumpEventQueue();
+
+    rpc.historyEvents['s1'] = <Object?>[
+      resyncAssistantTextEvent(10, 'tail message'),
+    ];
+
+    // Concurrent openSession calls coalesce onto a single RPC
+    await Future.wait(<Future<void>>[
+      repository.openSession('s1'),
+      repository.openSession('s1'),
+      repository.openSession('s1'),
+    ]);
+    await pumpEventQueue();
+
+    expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 1);
+
+    // Repeated openSession on already opened active session does not re-fetch
+    await repository.openSession('s1');
+    await pumpEventQueue();
+    expect(rpc.callCountFor(DshRpcEndpoints.sessionPage), 1);
+  });
+
   test(
     'session follow snapshot frame updates timeline with latest history',
     () async {

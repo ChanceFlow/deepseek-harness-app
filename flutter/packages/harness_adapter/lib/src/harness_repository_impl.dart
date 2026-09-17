@@ -137,19 +137,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// session stops running while it is NOT this one (web SessionManager
   /// `completedNotifications`).
   String? _openSessionId;
-  String? _followedSessionId;
+  final Set<String> _followedSessionIds = <String>{};
 
   void _followSession(String sessionId) {
-    if (_followedSessionId == sessionId) return;
-    if (_followedSessionId != null) {
-      _connectionManager.sendMuxMessage(
-        jsonEncode(<String, Object?>{
-          'type': 'cancel',
-          'streamId': 'session-follow-$_followedSessionId',
-        }),
-      );
-    }
-    _followedSessionId = sessionId;
+    if (_followedSessionIds.contains(sessionId)) return;
+    _followedSessionIds.add(sessionId);
     _connectionManager.sendMuxMessage(
       jsonEncode(<String, Object?>{
         'type': 'open',
@@ -336,6 +328,15 @@ class HarnessRepositoryImpl implements ChatRepository {
       await sub.cancel();
     }
     _subs.clear();
+    for (final id in _followedSessionIds) {
+      _connectionManager.sendMuxMessage(
+        jsonEncode(<String, Object?>{
+          'type': 'cancel',
+          'streamId': 'session-follow-$id',
+        }),
+      );
+    }
+    _followedSessionIds.clear();
     for (final state in _sessionStates.values) {
       state.discard();
     }
@@ -717,6 +718,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       return;
     }
     final state = _sessionStateFor(sessionId);
+    final wasCurrentAndReady = _openSessionId == sessionId && state.isReady;
     final wasOpened = state.isOpened;
     state.markOpened();
     // Looking at the session consumes its completion reminder (dot clears)
@@ -726,6 +728,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (_prevRunningBySession[sessionId] == false ||
         _prevRunningBySession[sessionId] == null) {
       _setSessionCompleted(sessionId, false);
+    }
+    // Reference parity: openSession is strictly idempotent. Repeated calls
+    // on the already-opened current session return immediately without
+    // duplicate network RPCs or timeline resets.
+    if (wasCurrentAndReady) {
+      return Future<void>.value();
     }
     try {
       if (wasOpened) {
@@ -1716,9 +1724,11 @@ class HarnessRepositoryImpl implements ChatRepository {
         if (connection.phase == ConnectionPhase.connected &&
             connection.generation != _connectionGeneration.value) {
           _connectionGeneration.value = connection.generation;
-          if (_openSessionId != null) {
-            _followedSessionId = null;
-            _followSession(_openSessionId!);
+          final toFollow = Set<String>.of(_followedSessionIds);
+          if (_openSessionId != null) toFollow.add(_openSessionId!);
+          _followedSessionIds.clear();
+          for (final id in toFollow) {
+            _followSession(id);
           }
           unawaited(_resync(connection));
         }
@@ -3652,11 +3662,13 @@ final class _SessionState {
   bool _hasMoreOlder = false;
   bool _loadingOlder = false;
   bool _isOpened = false;
+  Future<void>? _openFuture;
   List<JsonMap> _history = <JsonMap>[];
   List<ServerRequest> _pending = <ServerRequest>[];
   List<ServerRequest> _framesAfterOpen = <ServerRequest>[];
 
   bool get isOpened => _isOpened;
+  bool get isReady => _ready;
 
   void markOpened() {
     _isOpened = true;
@@ -3666,11 +3678,17 @@ final class _SessionState {
   /// publish goes out immediately.
   Timer? _coalescedPublish;
 
+  /// Reference parity: session open is idempotent. Coalesces concurrent calls
+  /// onto one in-flight Future. Initial open pulls tail page; subsequent opens
+  /// return immediately when ready.
   Future<void> ensureLoaded(
     Future<_HistoryPage> Function(int? beforeSeq) loader,
   ) {
-    return _mutex.synchronized(() async {
-      if (_ready) return;
+    if (_ready && _isOpened) return Future<void>.value();
+    if (_openFuture != null) return _openFuture!;
+
+    final future = _mutex.synchronized(() async {
+      if (_ready && _isOpened) return;
       // Surface the first-load (or resync) wait to observers: an empty
       // timeline that is still loading must not read as an empty session.
       _loading = true;
@@ -3701,42 +3719,54 @@ final class _SessionState {
       } finally {
         _loading = false;
         _publish();
+        _openFuture = null;
       }
     });
+
+    _openFuture = future;
+    return future;
   }
 
-  /// Reload the latest history tail page and re-baseline the window. Used when
-  /// re-opening a session that was opened earlier so messages that landed while
-  /// away are reflected immediately.
+  /// Reload the latest history tail page and non-destructively merge new
+  /// events into the existing window, preserving older paged history.
   Future<void> reload(Future<_HistoryPage> Function(int? beforeSeq) loader) {
-    return _mutex.synchronized(() async {
-      _loading = true;
-      _publish();
+    if (_openFuture != null) return _openFuture!;
+
+    final future = _mutex.synchronized(() async {
       try {
         final page = await loader(null);
-        _history = stableSortedBy(
-          page.events,
-          (event) => wireLong(event, 'seq'),
-        );
-        _hasMoreOlder = page.hasMore;
-        _reducer.reset(_history);
-        _statsFold.reset(_history);
-        _framesAfterOpen = List.of(_pending);
-        for (final frame in _pending) {
-          _reducer.ingestFrame(frame);
-          if (wireType(frame.payload) == 'session/event') {
-            _statsFold.ingestEvent(frame.payload['event']);
+        final existingSeqs = _history.map((e) => wireLong(e, 'seq')).toSet();
+        final newEvents = page.events
+            .where((e) => !existingSeqs.contains(wireLong(e, 'seq')))
+            .toList();
+        if (newEvents.isNotEmpty || !_ready) {
+          _history = stableSortedBy(<JsonMap>[
+            ..._history,
+            ...newEvents,
+          ], (event) => wireLong(event, 'seq'));
+          _hasMoreOlder = _hasMoreOlder || page.hasMore;
+          _reducer.reset(_history);
+          _statsFold.reset(_history);
+          for (final frame in _framesAfterOpen) {
+            _reducer.ingestFrame(frame);
+            if (wireType(frame.payload) == 'session/event') {
+              _statsFold.ingestEvent(frame.payload['event']);
+            }
           }
+          sessionStats.value = _statsFold.value;
+          _publish();
         }
-        sessionStats.value = _statsFold.value;
-        _pending = <ServerRequest>[];
         _ready = true;
         _isOpened = true;
+      } catch (_) {
+        // Non-fatal: keep current timeline intact.
       } finally {
-        _loading = false;
-        _publish();
+        _openFuture = null;
       }
     });
+
+    _openFuture = future;
+    return future;
   }
 
   /// Apply one complete window snapshot from the session/follow opening frame.
@@ -3767,6 +3797,7 @@ final class _SessionState {
   void prepareResync() {
     if (!_isOpened) return;
     _ready = false;
+    _openFuture = null;
     _loading = false;
     _loadingOlder = false;
     _hasMoreOlder = false;
