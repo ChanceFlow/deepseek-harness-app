@@ -104,6 +104,7 @@ class SessionPanel extends ConsumerStatefulWidget {
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
+    this.onCreateSessionInWorkspace,
   });
 
   /// Drawer form: no rail toggle, full-height fill.
@@ -144,6 +145,13 @@ class SessionPanel extends ConsumerStatefulWidget {
   final void Function(String backendId, String sessionId)? onRenameSession;
   final void Function(String backendId, String sessionId)? onForkSession;
   final void Function(String backendId, String sessionId)? onArchiveSession;
+
+  /// Web ProjectRowItem's new-session seat as a sidebar project-header
+  /// long-press: creates a session in that workspace on the backend that
+  /// owns the group. The browsing surfaces have no room for the Workspaces
+  /// tab's per-row `+`, so the verb rides the header's long-press instead.
+  final void Function(String backendId, String workspaceId)?
+  onCreateSessionInWorkspace;
 
   @override
   ConsumerState<SessionPanel> createState() => _SessionPanelState();
@@ -313,6 +321,21 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     final backendId = _actionBackend(slice);
     if (backendId == null || verb == null) return;
     verb(backendId, sessionId);
+  }
+
+  /// Project-header long-press verb: a new session in that workspace. The
+  /// group's slice routes to its own backend; the flat single-host tree
+  /// falls back to the panel's own create verb when no backend id
+  /// resolved, and otherwise stays a no-op (never one host's workspace on
+  /// another host's controller).
+  void _newSessionIn(BackendSessionSlice? slice, String workspaceId) {
+    final create = widget.onCreateSessionInWorkspace;
+    final backendId = _actionBackend(slice);
+    if (backendId != null && create != null) {
+      create(backendId, workspaceId);
+      return;
+    }
+    if (slice == null) widget.onCreateSession(workspaceId);
   }
 
   /// Web tree.ts `labelOf`: the workspace title when an account holds the
@@ -586,6 +609,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             onToggle: () => _toggleGroup(groups[i].key),
             onToggleOverflow: () => _toggleOverflow(groups[i].key),
             onSelectSession: widget.onSelectSession,
+            // The Ungrouped bucket has no backing workspace, so it has no
+            // session to create in (the web rule that drops workspace
+            // management there).
+            onNewSession: groups[i].key == kUngroupedKey
+                ? null
+                : () => _newSessionIn(null, groups[i].key),
             onRenameSession: (sessionId) =>
                 _sessionVerb(null, sessionId, widget.onRenameSession),
             onForkSession: (sessionId) =>
@@ -676,6 +705,9 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
           onToggleOverflow: () =>
               _toggleOverflow(_sliceGroupKey(slice, groups[i].key)),
           onSelectSession: (sessionId) => _selectSessionOn(slice, sessionId),
+          onNewSession: groups[i].key == kUngroupedKey
+              ? null
+              : () => _newSessionIn(slice, groups[i].key),
           onRenameSession: (sessionId) =>
               _sessionVerb(slice, sessionId, widget.onRenameSession),
           onForkSession: (sessionId) =>
@@ -1036,7 +1068,8 @@ class _BackendSectionHeader extends StatelessWidget {
 /// programmatic sync never writes a browsing override. The current group
 /// (holds the active session) never folds: its header is inert
 /// (`enabled: false` with the disabled ink overridden so it is not
-/// visually dimmed).
+/// visually dimmed) — a long press on that header still creates a session
+/// in the group, because the verb sits above the inert tile.
 class _GroupSection extends StatefulWidget {
   const _GroupSection({
     required this.group,
@@ -1048,6 +1081,7 @@ class _GroupSection extends StatefulWidget {
     required this.onToggle,
     required this.onToggleOverflow,
     required this.onSelectSession,
+    this.onNewSession,
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
@@ -1062,6 +1096,12 @@ class _GroupSection extends StatefulWidget {
   final VoidCallback onToggle;
   final VoidCallback onToggleOverflow;
   final void Function(String sessionId) onSelectSession;
+
+  /// Project-header long-press: a new session in this workspace (the web
+  /// ProjectRowItem `+` verb, which the browsing surfaces reach by
+  /// long-press). Null for the Ungrouped bucket and when the panel was
+  /// given no create wiring.
+  final VoidCallback? onNewSession;
 
   /// Web SessionNodeItem session verbs (long-press row menu).
   final void Function(String sessionId)? onRenameSession;
@@ -1201,13 +1241,23 @@ class _GroupSectionState extends State<_GroupSection> {
     // disabled ink follows ThemeData.disabledColor, so the scoped theme
     // points it back at the normal on-surface ink. The leading folder
     // glyph keeps its explicit accent/tertiary color regardless.
+    //
+    // The long-press verb wraps the tile: a press on the header creates a
+    // session in this workspace (the browsing surfaces have no `+` seat
+    // for it). The tile keeps a tap recognizer only, so the long press
+    // wins the arena on the header — and a session row inside the run
+    // keeps its own verbs, because that row's recognizer is deeper in the
+    // hit-test path and wins the long-press tie.
+    final Widget pressable = widget.onNewSession == null
+        ? tile
+        : GestureDetector(onLongPress: widget.onNewSession, child: tile);
     if (widget.containsCurrent) {
       return Theme(
         data: theme.copyWith(disabledColor: theme.colorScheme.onSurface),
-        child: tile,
+        child: pressable,
       );
     }
-    return tile;
+    return pressable;
   }
 }
 

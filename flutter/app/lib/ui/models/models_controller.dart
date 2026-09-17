@@ -21,7 +21,7 @@ class ModelsController {
       }),
     );
     if (initialSessionId != null) {
-      unawaited(_loadModels(initialSessionId));
+      unawaited(_bindModels(initialSessionId));
     }
   }
 
@@ -30,6 +30,7 @@ class ModelsController {
     const ModelsUiState(),
   );
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
+  StreamSubscription<void>? _modelsSub;
 
   List<SessionSummary> _sessions = const <SessionSummary>[];
   String? _selectedSessionId;
@@ -42,6 +43,7 @@ class ModelsController {
   Stream<ModelsUiState> get uiState => _state.stream;
 
   void dispose() {
+    unawaited(_modelsSub?.cancel());
     for (final sub in _subs) {
       unawaited(sub.cancel());
     }
@@ -86,7 +88,19 @@ class ModelsController {
   void _selectSession(String sessionId) {
     _selectedSessionId = sessionId;
     _publish();
-    unawaited(_loadModels(sessionId));
+    unawaited(_bindModels(sessionId));
+  }
+
+  Future<void> _bindModels(String sessionId) async {
+    unawaited(_modelsSub?.cancel());
+    _modelsSub = _repository.observeSessionModels(sessionId).listen((models) {
+      if (models != null && _selectedSessionId == sessionId) {
+        _models = models;
+        _selected = models.current;
+        _publish();
+      }
+    });
+    await _loadModels(sessionId);
   }
 
   void _selectModel(String provider, String model, String? reasoningEffort) {

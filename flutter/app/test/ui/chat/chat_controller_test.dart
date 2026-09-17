@@ -117,6 +117,18 @@ class FakeChatRepository extends ChatRepository {
         const Stream<PermissionSelect?>.empty();
   }
 
+  final Map<String, StreamController<SessionModels?>> sessionModelsControllers =
+      <String, StreamController<SessionModels?>>{};
+
+  @override
+  Stream<SessionModels?> observeSessionModels(String sessionId) =>
+      sessionModelsControllers
+          .putIfAbsent(
+            sessionId,
+            () => StreamController<SessionModels?>.broadcast(),
+          )
+          .stream;
+
   @override
   Stream<SandboxModeFact?> observeSandboxMode(String sessionId) {
     return sandboxModeSource?.call(sessionId) ??
@@ -850,6 +862,34 @@ void main() {
     expect(controller.state.modelPrefs?.effortFor('test', 'pro'), 'high');
     expect(persistence.writes, hasLength(1));
   });
+
+  test(
+    'external model selection update reflects live in controller state',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
+
+      controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+      await pumpEventQueue();
+
+      const updated = SessionModels(
+        current: ModelSelection(
+          provider: 'anthropic',
+          model: 'claude-3-7-sonnet',
+        ),
+        routable: true,
+      );
+      repository.sessionModelsControllers[FakeChatRepository.initialSession.id]
+          ?.add(updated);
+      await settlePublish();
+
+      expect(controller.state.models?.current.provider, 'anthropic');
+      expect(controller.state.models?.current.model, 'claude-3-7-sonnet');
+    },
+  );
 
   test('a blank session applies the remembered selection', () async {
     final repository = FakeChatRepository(

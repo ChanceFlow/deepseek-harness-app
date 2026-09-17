@@ -218,6 +218,7 @@ class ChatController {
   StreamSubscription<void>? _permissionsSub;
   StreamSubscription<void>? _sandboxSub;
   StreamSubscription<void>? _schedulesSub;
+  StreamSubscription<void>? _modelsSub;
 
   ChatUiState get state => _state.value;
 
@@ -262,6 +263,7 @@ class ChatController {
     unawaited(_permissionsSub?.cancel());
     unawaited(_sandboxSub?.cancel());
     unawaited(_schedulesSub?.cancel());
+    unawaited(_modelsSub?.cancel());
     _subs.clear();
   }
 
@@ -549,6 +551,7 @@ class ChatController {
     unawaited(_permissionsSub?.cancel());
     unawaited(_sandboxSub?.cancel());
     unawaited(_schedulesSub?.cancel());
+    unawaited(_modelsSub?.cancel());
     if (sessionId == null) {
       _timelineWindow = const TimelineWindow();
       _plan = null;
@@ -572,6 +575,7 @@ class ChatController {
       _permissionsSub = null;
       _sandboxSub = null;
       _schedulesSub = null;
+      _modelsSub = null;
       return;
     }
     // Session-scoped projections reset on rebind: the leaving
@@ -643,6 +647,17 @@ class ChatController {
     _schedulesSub = _repository.observeSchedules(sessionId).listen((reminders) {
       _schedules = reminders;
       _publishUpstream();
+    });
+    // The session's effective models (host catalog + modelSelection projection):
+    // live stream updates when web or mobile changes model or catalog.
+    _modelsSub = _repository.observeSessionModels(sessionId).listen((models) {
+      if (models != null) {
+        _models = models;
+        _modelsSessionId = sessionId;
+        _modelsBySession[sessionId] = models;
+        _publishUpstream();
+        _maybeApplyModelPreferences();
+      }
     });
   }
 

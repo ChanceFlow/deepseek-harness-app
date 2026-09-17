@@ -183,6 +183,25 @@ class ChatRoute extends ConsumerWidget {
                   dispatchSessionAction: (backendId, action) => ref
                       .read(chatControllerProvider(backendId))
                       .onAction(action),
+                  // Sidebar project-header long-press: a new session in
+                  // that workspace. Another host's group switches the
+                  // presented backend first, so the session it mints is
+                  // the one the chat surface shows.
+                  onCreateSessionInWorkspace: (backendId, workspaceId) {
+                    if (backendId != resolved) {
+                      unawaited(
+                        ref
+                            .read(backendRegistryProvider.future)
+                            .then(
+                              (registry) =>
+                                  registry.onAction(SelectBackend(backendId)),
+                            ),
+                      );
+                    }
+                    ref
+                        .read(chatControllerProvider(backendId))
+                        .onAction(CreateSessionInWorkspace(workspaceId));
+                  },
                 ),
               ),
             ],
@@ -220,6 +239,7 @@ class ChatScreen extends StatefulWidget {
     this.onSelectBackend,
     this.onSelectBackendSession,
     this.dispatchSessionAction,
+    this.onCreateSessionInWorkspace,
   });
 
   final ChatUiState uiState;
@@ -258,6 +278,12 @@ class ChatScreen extends StatefulWidget {
   /// owned here).
   final void Function(String backendId, ChatAction action)?
   dispatchSessionAction;
+
+  /// Sidebar project-header long-press: create a session in that
+  /// workspace on its owning backend (the Web ProjectRowItem new-session
+  /// verb, reached by long-press on the browsing surfaces).
+  final void Function(String backendId, String workspaceId)?
+  onCreateSessionInWorkspace;
 
   static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
     return Future<Uint8List?>.value();
@@ -501,6 +527,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             onRenameSession: _dispatchRenameSession,
                             onForkSession: _dispatchForkSession,
                             onArchiveSession: _dispatchArchiveSession,
+                            onCreateSessionInWorkspace:
+                                widget.onCreateSessionInWorkspace,
                           ),
                         ),
                         Expanded(
@@ -562,6 +590,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onRenameSession: _dispatchRenameSession,
                 onForkSession: _dispatchForkSession,
                 onArchiveSession: _dispatchArchiveSession,
+                onCreateSessionInWorkspace: widget.onCreateSessionInWorkspace,
               ),
             ),
           ),

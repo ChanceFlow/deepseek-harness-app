@@ -245,6 +245,12 @@ abstract class ChatRepository {
 
   Stream<List<WorkspaceSummary>> observeWorkspaces();
 
+  /// Observe live session models (the host model catalog combined with the
+  /// session's durable `modelSelection` projection); updates live when any
+  /// client selects a model or when the host catalog updates.
+  Stream<SessionModels?> observeSessionModels(String sessionId) =>
+      const Stream<SessionModels?>.empty();
+
   /// Registry-global archive set mirrored from the `workspace/follow`
   /// stream's baseline and increment frames — the pinned contract's only
   /// workspace source (there is no unary workspace list).

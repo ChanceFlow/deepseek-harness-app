@@ -151,6 +151,9 @@ class _AppRootState extends ConsumerState<AppRoot> {
     // network-availability hints into an immediate reconnect for every
     // enabled backend instead of waiting out the loss backoff.
     ref.watch(networkReconnectProvider);
+    // Also watched for the app's lifetime: re-checks connection health and
+    // re-syncs session rosters whenever the app returns to the foreground.
+    ref.watch(appResumeSyncProvider);
     // Keeps system-notification copy in step with the in-app language
     // choice; notification copy is composed outside the widget tree.
     ref.watch(notificationLocaleSyncProvider);
