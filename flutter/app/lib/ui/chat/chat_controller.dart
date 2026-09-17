@@ -520,15 +520,21 @@ class ChatController {
   }
 
   void _selectSession(String sessionId, {bool landAtLatest = false}) {
+    final alreadySelected = _selectedSessionId == sessionId;
     _selectedSessionId = sessionId;
     _selectionRequestSeq++;
     _selectionLandsAtLatest = landAtLatest;
     _rememberSelectedSession(sessionId);
-    _timelineWindow = const TimelineWindow();
-    _bindSelected(sessionId);
-    _loadSkills(sessionId);
-    _loadCommands(sessionId);
-    _loadModels(sessionId);
+    // Reference parity: when re-selecting the currently active session, do
+    // not wipe the window or churn subscriptions. Only state updates that
+    // need re-arming run.
+    if (!alreadySelected) {
+      _timelineWindow = const TimelineWindow();
+      _bindSelected(sessionId);
+      _loadSkills(sessionId);
+      _loadCommands(sessionId);
+      _loadModels(sessionId);
+    }
     _publish();
     unawaited(_runCatchingForUi(() => _repository.openSession(sessionId)));
     _telemetry?.count('chat.session.select');
