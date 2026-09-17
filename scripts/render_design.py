@@ -47,14 +47,28 @@ DEFAULT_WWW = (
 DEFAULT_URL = "http://127.0.0.1:8899/design/"
 
 # Widget tests get no font fallback chain, so a host with no Han face
-# renders every Chinese string as a rectangle. The harness looks here
-# first; --fetch-fonts fills it without touching the system font dirs.
-FONT_CACHE = Path.home() / ".cache" / "dsh-design" / "fonts"
-CJK_FONT = FONT_CACHE / "NotoSansSC.ttf"
+# renders every Chinese string as a rectangle. The cache lives inside the
+# repository tree on purpose: the toolchain runs in a container that mounts
+# only the tree, so a face cached under $HOME is invisible to the renderer.
+CJK_FILE_NAME = "NotoSansSC.ttf"
+FONT_CACHE = FLUTTER_DIR / "app" / "test" / "design" / "fonts"
+CJK_FONT = FONT_CACHE / CJK_FILE_NAME
 CJK_URL = (
     "https://github.com/google/fonts/raw/main/ofl/notosanssc/"
     "NotoSansSC%5Bwght%5D.ttf"
 )
+
+
+def cjk_font() -> Path | None:
+    """The Han face the renderer should load: the tree cache, then the host's."""
+    for candidate in (
+        CJK_FONT,
+        Path.home() / ".cache" / "dsh-design" / "fonts" / CJK_FILE_NAME,
+        Path.home() / ".local" / "share" / "fonts" / CJK_FILE_NAME,
+    ):
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def flutter_bin() -> str:
@@ -69,7 +83,7 @@ def flutter_bin() -> str:
 
 
 def fetch_fonts() -> None:
-    """One-time, ~17MB, into the user cache. Skipped once present."""
+    """One-time, ~17MB, into the tree cache. Skipped once present."""
     if CJK_FONT.exists():
         print(f"Han face already cached at {CJK_FONT}")
         return
@@ -82,7 +96,7 @@ def fetch_fonts() -> None:
         CJK_FONT.unlink(missing_ok=True)
         sys.exit(
             "fetch failed. Any Han .ttf under "
-            f"{FONT_CACHE} named NotoSansSC.ttf works instead."
+            f"{FONT_CACHE} named {CJK_FILE_NAME} works instead."
         )
 
 
@@ -100,17 +114,25 @@ def render(only: str | None) -> None:
         "design",
         "--update-goldens",
         str(TEST_DIR),
+        # The gate travels as a compile-time define: the test runner hands the
+        # test isolate a curated environment, so an exported variable never
+        # reaches it. The same channel carries the Han face, which lives only
+        # on the host and would otherwise be invisible to a container render.
+        "--dart-define=DSH_DESIGN_SHOTS=true",
     ]
+    face = cjk_font()
+    if face is None:
+        print(
+            "design shots: no Han face found — Chinese renders as boxes. "
+            "Fix: python3 scripts/render_design.py --fetch-fonts",
+            file=sys.stderr,
+        )
+    else:
+        command.append(f"--dart-define=DSH_DESIGN_CJK_FONT={face}")
     if only is not None:
         command[-1:-1] = ["--plain-name", only]
     print("$ " + " ".join(command))
-    # The harness skips itself unless this is set, so no other run of the
-    # suite — CI's included — depends on host fonts or on PNGs that are
-    # gitignored.
-    environment = {**os.environ, "DSH_DESIGN_SHOTS": "1"}
-    result = subprocess.run(
-        command, cwd=FLUTTER_DIR, env=environment, check=False
-    )
+    result = subprocess.run(command, cwd=FLUTTER_DIR, env=os.environ, check=False)
     if result.returncode != 0:
         sys.exit("render failed — the harness threw before it wrote its PNGs")
 

@@ -22,6 +22,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
@@ -35,6 +36,7 @@ import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
 import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
+import 'package:app/ui/chat/tool_images.dart';
 import 'package:app/ui/chat/turn_status_row.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -124,6 +126,17 @@ ChatUiState _state({
   );
 }
 
+/// Decodes one durable attachment lazily; returns null on any failure.
+typedef AttachmentLoader = Future<Uint8List?> Function(
+  String sessionId,
+  AttachmentRef ref,
+);
+
+/// The bare pump's answer for a durable attachment: nothing was fetched, so
+/// an image row renders its placeholder.
+Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
+    Future<Uint8List?>.value();
+
 Future<void> _pump(
   WidgetTester tester,
   ChatUiState uiState,
@@ -133,6 +146,7 @@ Future<void> _pump(
   ChatLocalState? localState,
   ThemeData? theme,
   Key? screenKey,
+  AttachmentLoader? loadAttachment,
 }) {
   // Phone-scale logical surface so both panes and rows lay out naturally.
   tester.view.physicalSize = Size(width, height);
@@ -156,6 +170,7 @@ Future<void> _pump(
           uiState: uiState,
           onAction: actions.add,
           localState: localState,
+          loadAttachment: loadAttachment ?? _noAttachmentBytes,
         ),
       ),
     ),
@@ -3537,6 +3552,66 @@ void main() {
         expect(find.text('Goal'), findsNothing);
       },
     );
+
+    testWidgets('a read_image result renders its image card, not IN/OUT', (
+      tester,
+    ) async {
+      // A 1x1 transparent PNG — the smallest real decode the card can take.
+      final png = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      );
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineToolCall(
+              id: 'read-image-call',
+              name: 'read_image',
+              arguments: '{"file_path":"red.png"}',
+              result:
+                  '<path>/tmp/red.png</path>\n<type>image</type>\n'
+                  '<content>\nimage/png image, 1x1 px, 69 bytes\n</content>',
+              status: ToolRunStatus.completed,
+              images: [
+                AttachmentRef(
+                  attachmentId: 'sha256:b1ff',
+                  mediaType: 'image/png',
+                  bytes: 69,
+                  width: 512,
+                  height: 512,
+                  name: 'red.png',
+                ),
+              ],
+            ),
+          ],
+        ),
+        <ChatAction>[],
+        loadAttachment: (sessionId, ref) async => png,
+      );
+
+      // The read variant titles the row; the path is its summary.
+      expect(find.text('Read'), findsOneWidget);
+
+      await tester.tap(find.text('Read'));
+      await tester.pumpAndSettle();
+
+      // The reference image card replaces the generic args/result card: the
+      // gallery plus the model-facing envelope as the meta line.
+      expect(find.byType(ToolImageGallery), findsOneWidget);
+      expect(find.byType(Image), findsWidgets);
+      expect(find.text('IN'), findsNothing);
+      expect(find.textContaining('image/png image, 1x1 px'), findsOneWidget);
+
+      // Tapping the frame opens the lightbox.
+      await tester.tap(find.byType(Image).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+    });
 
     testWidgets('expanded tool call offers a copy button for its payload', (
       tester,

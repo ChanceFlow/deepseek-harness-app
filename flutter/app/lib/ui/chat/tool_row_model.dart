@@ -34,6 +34,9 @@ const Map<String, ToolRowVariant> _toolVariants = <String, ToolRowVariant>{
   // title from [_toolTitles], not the generic others row.
   'pwsh': ToolRowVariant.bash,
   'read': ToolRowVariant.read,
+  // The image read is a read with a picture behind it (web `TOOL_VARIANTS`);
+  // the row keeps the read title and path summary, and adds the image body.
+  'read_image': ToolRowVariant.read,
   'web_fetch': ToolRowVariant.read,
   'web_search': ToolRowVariant.search,
   'grep': ToolRowVariant.search,

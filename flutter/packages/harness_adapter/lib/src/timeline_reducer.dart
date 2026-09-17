@@ -862,6 +862,7 @@ class TimelineReducer {
     final isError = wireBool(data, 'isError') || data['error'] != null;
     final name = wireString(data, 'name');
     final result = _extractContentText(data['content']);
+    final images = _imageRefs(data['content']);
 
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
@@ -873,6 +874,7 @@ class TimelineReducer {
           call.children,
           name: name,
           result: result,
+          images: images,
           isError: isError,
           settle: true,
         );
@@ -892,6 +894,7 @@ class TimelineReducer {
         status: isError ? ToolRunStatus.failed : ToolRunStatus.completed,
         parentCallId: wireString(data, 'parentCallId'),
         startedAtEpochMs: _eventTime(event),
+        images: images,
       ),
     );
   }
@@ -948,6 +951,7 @@ class TimelineReducer {
     List<TimelineToolCall> children, {
     String? name,
     String? result,
+    List<AttachmentRef>? images,
     bool isError = false,
     bool settle = false,
   }) => TimelineToolCall(
@@ -964,6 +968,7 @@ class TimelineReducer {
     children: children,
     startedAtEpochMs: call.startedAtEpochMs,
     presentation: call.presentation,
+    images: images ?? call.images,
   );
 
   /// The logged event time, or null when the host sent none — a start
@@ -997,6 +1002,42 @@ class TimelineReducer {
       }
     }
     return buffer.toString();
+  }
+
+  /// Durable image references carried by a content block list:
+  /// `{type: 'image', attachment: ImageAttachmentRef}`
+  /// (`packages/attachment/attachment/src/types.ts`). The bytes never ride
+  /// the event; the surface fetches them by `attachmentId`.
+  ///
+  /// A block that does not narrow (no id, a non-image media type) is dropped
+  /// rather than failing the row, the same posture the reference's
+  /// `imageReferences` narrowing takes — the message or call still renders
+  /// its text.
+  List<AttachmentRef> _imageRefs(Object? blocks) {
+    final list = asJsonArray(blocks);
+    if (list == null) return const <AttachmentRef>[];
+    final images = <AttachmentRef>[];
+    for (final block in list) {
+      final obj = asJsonObject(block);
+      if (obj == null || wireType(obj) != 'image') continue;
+      final attachment = asJsonObject(obj['attachment']);
+      if (attachment == null) continue;
+      final attachmentId = wireString(attachment, 'attachmentId');
+      if (attachmentId == null) continue;
+      final mediaType = wireString(attachment, 'mediaType') ?? '';
+      if (mediaType.isNotEmpty && !mediaType.startsWith('image/')) continue;
+      images.add(
+        AttachmentRef(
+          attachmentId: attachmentId,
+          mediaType: mediaType,
+          bytes: wireLong(attachment, 'bytes'),
+          width: wireLong(attachment, 'width'),
+          height: wireLong(attachment, 'height'),
+          name: wireString(attachment, 'name'),
+        ),
+      );
+    }
+    return images;
   }
 
   void _appendToolResult(JsonMap event) {
@@ -1047,6 +1088,9 @@ class TimelineReducer {
       parentCallId: previous?.parentCallId,
       children: previous?.children ?? const <TimelineToolCall>[],
       startedAtEpochMs: previous?.startedAtEpochMs ?? _eventTime(event),
+      // Result images ride the ToolResultBlock's own content list
+      // (`message.content[0].content[]`), beside the text envelope.
+      images: _imageRefs(resultBlock?['content']),
       // The tool's persisted render intent (`output.presentationMeta`); the
       // host's `presentCall`/`presentResult` functions themselves never
       // cross the wire, so this `meta` member is the only structured card
@@ -1621,30 +1665,7 @@ class TimelineReducer {
   }
 
   /// Image blocks carry a durable `attachment` reference, never inline data.
-  List<AttachmentRef> _extractImages(JsonMap obj) {
-    final content = asJsonArray(obj['content']);
-    if (content == null) return const <AttachmentRef>[];
-    final refs = <AttachmentRef>[];
-    for (final block in content) {
-      final blockObj = asJsonObject(block);
-      if (blockObj == null || wireType(blockObj) != 'image') continue;
-      final attachment = asJsonObject(blockObj['attachment']);
-      if (attachment == null) continue;
-      final id = wireString(attachment, 'attachmentId');
-      if (id == null) continue;
-      refs.add(
-        AttachmentRef(
-          attachmentId: id,
-          mediaType: wireString(attachment, 'mediaType') ?? '',
-          bytes: wireLong(attachment, 'bytes'),
-          width: wireLong(attachment, 'width'),
-          height: wireLong(attachment, 'height'),
-          name: wireString(attachment, 'name'),
-        ),
-      );
-    }
-    return refs;
-  }
+  List<AttachmentRef> _extractImages(JsonMap obj) => _imageRefs(obj['content']);
 
   String _turnStepKey(int turn, int step) => '$turn:$step';
 }

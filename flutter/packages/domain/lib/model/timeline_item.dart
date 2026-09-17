@@ -3,6 +3,7 @@
 /// Only the harness adapter is allowed to create these from dsh events.
 library;
 
+import 'attachment.dart';
 import 'chat_message.dart';
 import 'hook.dart';
 import 'jobs.dart';
@@ -261,6 +262,7 @@ final class TimelineToolCall extends TimelineItem {
     this.children = const <TimelineToolCall>[],
     this.startedAtEpochMs,
     this.presentation,
+    this.images = const <AttachmentRef>[],
   });
 
   final String id;
@@ -284,6 +286,12 @@ final class TimelineToolCall extends TimelineItem {
   /// `meta`), or null when the tool persisted none or the payload carries
   /// no known card. Null is the reference's own generic fallback.
   final ToolResultPresentation? presentation;
+
+  /// Durable images the result carried as `{type: 'image', attachment}`
+  /// blocks (the `read_image` family). Bytes are never inline: each ref is
+  /// fetched through `ChatRepository.readAttachment` on demand, the same
+  /// seam user-attached images use.
+  final List<AttachmentRef> images;
 
   /// Whether this call ran nested inside another call's code dispatch.
   bool get isNested => parentCallId != null;
@@ -312,6 +320,7 @@ final class TimelineToolCall extends TimelineItem {
           other.parentCallId == parentCallId &&
           other.startedAtEpochMs == startedAtEpochMs &&
           other.presentation == presentation &&
+          _listEquals(other.images, images) &&
           _listEquals(other.children, children));
 
   @override
@@ -328,6 +337,7 @@ final class TimelineToolCall extends TimelineItem {
     Object.hashAll(children),
     startedAtEpochMs,
     presentation,
+    Object.hashAll(images),
   );
 }
 

@@ -8,6 +8,7 @@
 library;
 
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/attachment.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/context_pressure.dart';
@@ -1042,6 +1043,11 @@ ChatUiState timelineFoldingStateZh() {
   );
 }
 
+/// A 16x10 PNG (a stand-in screenshot) so the image card renders real
+/// pixels instead of its placeholder glyph.
+const String kDesignImagePngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAKCAIAAAAy3EnLAAAAFElEQVR4nGOIqnhGEmIY1TA0NQAA6MQTEJdTNawAAAAASUVORK5CYII=';
+
 ChatUiState timelineFoldingStateEn() {
   final items = <TimelineItem>[
     const TimelineMessage(
@@ -1153,3 +1159,55 @@ ChatUiState timelineFoldingStateEn() {
 }
 
 ChatUiState timelineFoldingState() => timelineFoldingStateEn();
+
+/// A `read_image` result: the row carries the durable reference, and the
+/// card renders the picture plus the model-facing envelope beneath it.
+ChatUiState toolImageState() {
+  final items = <TimelineItem>[
+    const TimelineMessage(
+      ChatMessage(
+        id: 'ti_u1',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: 'What does this screenshot show?',
+        createdAtEpochMs: kNow,
+        seq: 1,
+      ),
+    ),
+    const TimelineMessage(
+      ChatMessage(
+        id: 'ti_a1',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: 'Opening the capture to read it.',
+        createdAtEpochMs: kNow + 1000,
+        seq: 2,
+      ),
+    ),
+    const TimelineToolCall(
+      id: 'ti_read',
+      name: 'read_image',
+      arguments: '{"file_path":"captures/launch.png"}',
+      result:
+          '<path>/home/user/captures/launch.png</path>\n<type>image</type>\n'
+          '<content>\nimage/png image, 1280x800 px, 48213 bytes\n</content>',
+      status: ToolRunStatus.completed,
+      images: <AttachmentRef>[
+        AttachmentRef(
+          attachmentId: 'sha256:9f21c0',
+          mediaType: 'image/png',
+          bytes: 48213,
+          width: 1280,
+          height: 800,
+          name: 'launch.png',
+        ),
+      ],
+    ),
+  ];
+
+  return ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: items,
+  );
+}

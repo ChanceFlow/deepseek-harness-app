@@ -17,6 +17,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show max;
 
@@ -34,6 +35,7 @@ import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:asr/asr.dart';
+import 'package:domain/model/attachment.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
@@ -48,9 +50,16 @@ const Size _kPhone = Size(720, 1688);
 const double _kDevicePixelRatio = 2.0;
 
 /// Set by `scripts/render_design.py`; unset everywhere else.
-final String? _skip = Platform.environment['DSH_DESIGN_SHOTS'] == '1'
+///
+/// A compile-time define, not an environment variable: the test runner hands
+/// the isolate a curated environment, so an exported variable never arrives.
+const String? _skip = bool.fromEnvironment('DSH_DESIGN_SHOTS')
     ? null
     : 'design shots: python3 scripts/render_design.py';
+
+/// The Han face `scripts/render_design.py` resolved on the host, as an
+/// absolute path; empty when the script ran without one.
+const String _cjkFontPath = String.fromEnvironment('DSH_DESIGN_CJK_FONT');
 
 /// What a shot does after the screen settles, when the state alone cannot
 /// express it — opening the drawer, holding a bubble.
@@ -64,6 +73,7 @@ final class DesignShot {
     this.act,
     this.dark = true,
     this.locale,
+    this.loadAttachment,
   });
 
   final String name;
@@ -89,7 +99,16 @@ final class DesignShot {
   /// (English). A localized chrome string (e.g. the question card's
   /// recommended badge, "Recommended" vs "推荐") earns a zh twin.
   final Locale? locale;
+
+  /// Durable-attachment answer for a state that carries result images; null
+  /// leaves the surface's bare-pump answer (a placeholder frame).
+  final AttachmentLoader? loadAttachment;
 }
+
+/// The bare harness' answer for a durable attachment: nothing was fetched,
+/// so an image card renders its placeholder frame.
+Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) =>
+    Future<Uint8List?>.value();
 
 final List<DesignShot> shots = <DesignShot>[
   DesignShot(name: 'timeline-folding', state: timelineFoldingStateEn()),
@@ -130,6 +149,27 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'prose', state: proseState()),
+  // A tool result that carried a durable image: the row folds its picture
+  // card open, the way the reference `read_image` toolview does.
+  DesignShot(
+    name: 'tool-image',
+    state: toolImageState(),
+    loadAttachment: (sessionId, ref) async =>
+        base64Decode(kDesignImagePngBase64),
+    act: (tester) async {
+      await tester.tap(find.text('Read'));
+      await settle(tester);
+      // A memory image decode needs the real event loop; without this the
+      // frame is still pending when the golden is captured.
+      await tester.runAsync(() async {
+        await precacheImage(
+          MemoryImage(base64Decode(kDesignImagePngBase64)),
+          tester.element(find.byType(MaterialApp)),
+        );
+      });
+      await settle(tester);
+    },
+  ),
   DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),
   DesignShot(name: 'empty', state: emptyState(), dark: false),
   DesignShot(
@@ -455,6 +495,9 @@ Future<void> _loadFonts() async {
   ], first: true);
   final home = Platform.environment['HOME'] ?? '';
   _cjkLoaded = await _load('NotoSansCJK', <String>[
+    // The path the script resolved on the host travels as a define: the
+    // renderer runs in a container that mounts the tree, not the home dir.
+    if (_cjkFontPath.isNotEmpty) _cjkFontPath,
     '$home/.cache/dsh-design/fonts/NotoSansSC.ttf',
     '$home/.local/share/fonts/NotoSansSC.ttf',
     '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
@@ -1142,7 +1185,11 @@ Future<void> _render(
               supportedLocales: AppLocalizations.supportedLocales,
               locale: shot.locale,
               theme: _withRealFonts(theme),
-              home: ChatScreen(uiState: shot.state!, onAction: (_) {}),
+              home: ChatScreen(
+                uiState: shot.state!,
+                onAction: (_) {},
+                loadAttachment: shot.loadAttachment ?? _noAttachment,
+              ),
             ),
           ),
   );
