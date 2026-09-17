@@ -50,6 +50,7 @@ import 'produced_files.dart';
 import 'produced_files_row.dart';
 import 'session_log_export_action.dart';
 import 'session_panel.dart';
+import 'tool_images.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -92,6 +93,10 @@ typedef AttachmentLoader = Future<Uint8List?> Function(
   String sessionId,
   AttachmentRef ref,
 );
+
+/// Bare pumps own no repository: a durable image stays a placeholder frame.
+Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
+    Future<Uint8List?>.value();
 
 class ChatRoute extends ConsumerWidget {
   const ChatRoute({super.key, this.backendId});
@@ -1641,6 +1646,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 group: row,
                 onAction: widget.onAction,
                 loadAttachment: widget.loadAttachment,
+                sessionId: uiState.selectedSessionId,
                 onPreviewFile: _openFilePreview,
                 expansion: _sessionState,
                 onOpenChild: _openWorkflowMember,
@@ -1652,6 +1658,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 item: row,
                 onAction: widget.onAction,
                 loadAttachment: widget.loadAttachment,
+                sessionId: uiState.selectedSessionId,
                 onPreviewFile: _openFilePreview,
                 expansion: _sessionState,
                 onOpenChild: _openWorkflowMember,
@@ -2162,6 +2169,7 @@ class TimelineRow extends StatelessWidget {
     required this.onAction,
     required this.loadAttachment,
     super.key,
+    this.sessionId,
     this.onPreviewFile,
     this.expansion,
     this.producedPaths,
@@ -2171,6 +2179,9 @@ class TimelineRow extends StatelessWidget {
   final TimelineItem item;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Session a tool row's durable result images are read against.
+  final String? sessionId;
 
   /// File-preview action for a tool row's generated/edited path.
   final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
@@ -2214,6 +2225,8 @@ class TimelineRow extends StatelessWidget {
       ),
       TimelineToolCall() => ToolCallRow(
         call: item as TimelineToolCall,
+        sessionId: sessionId,
+        loadAttachment: loadAttachment,
         onPreviewFile: onPreviewFile,
         expansion: expansion,
       ),
@@ -2749,6 +2762,7 @@ class ActivityGroupRow extends StatefulWidget {
     required this.onAction,
     required this.loadAttachment,
     super.key,
+    this.sessionId,
     this.onPreviewFile,
     this.expansion,
     this.onOpenChild,
@@ -2757,6 +2771,9 @@ class ActivityGroupRow extends StatefulWidget {
   final TimelineActivityGroup group;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Session a member's durable result images are read against.
+  final String? sessionId;
 
   /// File-preview action for a grouped tool row's generated/edited path.
   final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
@@ -2885,145 +2902,139 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
       ],
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(kShapeCard),
-        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: SweepHighlight(
-              controller: running > 0 && !DshMotion.isReducedMotion(context)
-                  ? _sweep
-                  : null,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                child: Row(
-                  children: [
-                    leadingWidget,
-                    const SizedBox(width: 8),
-                    Text(
-                      title,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      const Spacer(),
-                    ],
-                    if (failed > 0) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        l10n.turnFailedCount(failed),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.error,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 4),
-                    Icon(
-                      _expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18,
+    // The group header is the reference turn-process fold: a full-width
+    // 24px line over an 8px gap and a hairline rule, no card, no fill, no
+    // bold — the chrome that made the chip read as a foreign surface.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: SweepHighlight(
+            controller: running > 0 && !DshMotion.isReducedMotion(context)
+                ? _sweep
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  leadingWidget,
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const Spacer(),
                   ],
-                ),
+                  if (failed > 0) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      l10n.turnFailedCount(failed),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 4),
+                  // The reference chevron: one glyph rotating from the
+                  // closed right-pointing seat to the open down seat over
+                  // the shared 100ms disclosure beat, never a glyph swap.
+                  AnimatedRotation(
+                    turns: _expanded ? 0 : -0.25,
+                    duration: DshMotion.durationMicro,
+                    curve: DshMotion.curveStandard,
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (_expanded) ...[
-            Container(
-              height: 1,
-              color: scheme.outlineVariant.withValues(alpha: 0.4),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 8, 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: scheme.outlineVariant.withValues(alpha: 0.4),
-                      width: 1.2,
-                    ),
-                  ),
-                ),
-                padding: const EdgeInsets.only(left: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final entry in entries)
-                      switch (entry) {
-                        TimelineToolCall() => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: ToolCallRow(
-                            key: ValueKey(timelineKey(entry)),
-                            call: entry,
-                            onPreviewFile: widget.onPreviewFile,
-                            expansion: widget.expansion,
-                          ),
-                        ),
-                        TimelineContextInjection() => Material(
-                          type: MaterialType.transparency,
-                          child: ContextInjectionRow(
-                            key: ValueKey(timelineKey(entry)),
-                            injection: entry,
-                          ),
-                        ),
-                        TimelineMessage(:final value) => Material(
-                          type: MaterialType.transparency,
-                          child: ReasoningRow(
-                            key: ValueKey(timelineKey(entry)),
-                            text: value.reasoning ?? '',
-                            running: value.streaming,
-                            elapsedDuration: value.reasoningDuration,
-                          ),
-                        ),
-                        TimelineHookAudit(:final audit) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: HookAuditRow(
-                            key: ValueKey(timelineKey(entry)),
-                            audit: audit,
-                          ),
-                        ),
-                        final TimelineWorkflowRun run => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: WorkflowRunRow(
-                            key: ValueKey(timelineKey(entry)),
-                            run: run,
-                            onOpenChild: widget.onOpenChild,
-                          ),
-                        ),
-                        _ => const SizedBox.shrink(),
-                      },
-                  ],
+        ),
+        // Web `.root`: the header always rules itself off bottom.
+        Container(height: 0.5, color: scheme.outlineVariant),
+        if (_expanded) ...[
+          // Web ToolCallTree `.subCalls`: 22px indent, 8px padding, one
+          // hairline guide — the nesting the reference gives a call's own
+          // sub-calls, borrowed for a batch group's members.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 4, 0, 2),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: scheme.outlineVariant, width: 0.5),
                 ),
               ),
+              padding: const EdgeInsets.only(left: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < entries.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 4),
+                    switch (entries[i]) {
+                      final TimelineToolCall call => ToolCallRow(
+                        key: ValueKey(timelineKey(call)),
+                        call: call,
+                        sessionId: widget.sessionId,
+                        loadAttachment: widget.loadAttachment,
+                        onPreviewFile: widget.onPreviewFile,
+                        expansion: widget.expansion,
+                      ),
+                      final TimelineContextInjection injection => Material(
+                        type: MaterialType.transparency,
+                        child: ContextInjectionRow(
+                          key: ValueKey(timelineKey(injection)),
+                          injection: injection,
+                        ),
+                      ),
+                      TimelineMessage(:final value) => Material(
+                        type: MaterialType.transparency,
+                        child: ReasoningRow(
+                          key: ValueKey(timelineKey(entries[i])),
+                          text: value.reasoning ?? '',
+                          running: value.streaming,
+                          elapsedDuration: value.reasoningDuration,
+                        ),
+                      ),
+                      TimelineHookAudit(:final audit) => HookAuditRow(
+                        key: ValueKey(timelineKey(entries[i])),
+                        audit: audit,
+                      ),
+                      final TimelineWorkflowRun run => WorkflowRunRow(
+                        key: ValueKey(timelineKey(entries[i])),
+                        run: run,
+                        onOpenChild: widget.onOpenChild,
+                      ),
+                      _ => const SizedBox.shrink(),
+                    },
+                  ],
+                ],
+              ),
             ),
-          ],
-        ],
-      ),
+          ),
+        ] else
+          // Web `.root:not([data-open])`: a closed fold keeps 8px below.
+          const SizedBox(height: 8),
+      ],
     );
   }
 }
@@ -3041,11 +3052,20 @@ class ToolCallRow extends StatefulWidget {
   const ToolCallRow({
     required this.call,
     super.key,
+    this.sessionId,
+    this.loadAttachment = _noAttachmentBytes,
     this.expansion,
     this.onPreviewFile,
   });
 
   final TimelineToolCall call;
+
+  /// Session the durable images of this call are read against; null keeps
+  /// the image body hidden (a bare test pump owns no repository).
+  final String? sessionId;
+
+  /// Session-authorized byte loader for a result image reference.
+  final AttachmentLoader loadAttachment;
 
   /// Expansion persistence keyed by this row's [timelineKey] value;
   /// null keeps expansion in memory only.
@@ -3120,7 +3140,15 @@ class _ToolCallRowState extends State<ToolCallRow>
     final model = deriveToolRowModel(call, l10n);
     final running = model.state == ToolRowState.running;
     final failed = model.state == ToolRowState.error;
-    final hasDetails = model.body != null || model.output != null;
+    // A result that carried durable images renders the reference's image
+    // card instead of the generic IN/OUT body: the text envelope (path,
+    // media type, pixel size) reads as the card's meta line under the
+    // gallery, and the args never take a card of their own.
+    final images = widget.sessionId == null || failed
+        ? const <AttachmentRef>[]
+        : call.images;
+    final hasDetails =
+        model.body != null || model.output != null || images.isNotEmpty;
     return Semantics(
       label: running
           ? l10n.semanticsRunning
@@ -3176,18 +3204,26 @@ class _ToolCallRowState extends State<ToolCallRow>
                             color: scheme.onSurfaceVariant,
                           )
                         : _leading(context, model.state),
-                    const SizedBox(width: 8),
-                    // Type carries the semantics: the verb is a label, the
-                    // payload is data. Monospace on the payload also keeps
-                    // paths and patterns legible at a glance.
+                    // Web DisclosureRow / ToolRow header: `[16 leading] gap6
+                    // [title 13] gap8 [2x2 dot] gap8 [summary FILL
+                    // truncate]` — the verb is a label, the payload is data,
+                    // and neither is bold or monospace.
+                    const SizedBox(width: 6),
                     Text(
                       model.title,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurface,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    Container(
+                      width: 2,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: scheme.outline,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     Expanded(
                       child: Text(
                         // Web ToolRow: the summary is args-derived; the
@@ -3198,7 +3234,6 @@ class _ToolCallRowState extends State<ToolCallRow>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
                           color: failed
                               ? theme.colorScheme.error
                               : scheme.onSurfaceVariant,
@@ -3224,7 +3259,25 @@ class _ToolCallRowState extends State<ToolCallRow>
           // The theme's childrenPadding (left 20) carries the web IN/OUT
           // card's inset; the card keeps only its top gap.
           children: [
-            if (hasDetails)
+            if (images.isNotEmpty) ...[
+              // The reference image card: the gallery, then the model-facing
+              // envelope (path, media type, pixel size) as its meta line.
+              ToolImageGallery(
+                sessionId: widget.sessionId!,
+                images: images,
+                loadAttachment: widget.loadAttachment,
+              ),
+              if (model.output case final output?)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
+                  child: Text(
+                    output,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ] else if (hasDetails)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(top: 4),

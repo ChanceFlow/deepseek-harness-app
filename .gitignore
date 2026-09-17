@@ -25,6 +25,9 @@ __pycache__/
 
 # Design shots are renders to look at, republished every pass
 flutter/app/test/design/shots/
+# The Han face the renderer loads: cached in the tree because the
+# toolchain container mounts the tree, not the host home directory.
+flutter/app/test/design/fonts/
 
 # Internal-only working files — stay on the machine, never committed.
 # Decision 2026-08-21: Gitea and GitHub share ONE cleaned history, so

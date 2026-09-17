@@ -346,6 +346,105 @@ void main() {
     expect(tool.result, 'ok');
   });
 
+  test('tool result image block folds its durable reference onto the call', () {
+    final history = <JsonMap>[
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'read-image-call',
+        'name': 'read_image',
+        'arguments': '{"file_path":"red.png"}',
+      }),
+      event(2, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'meta': <String, Object?>{'path': '/tmp/red.png'},
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'read-image-call',
+              'content': <Object?>[
+                textBlock(
+                  '<path>/tmp/red.png</path>\n<type>image</type>\n'
+                  '<content>\nimage/png image, 1x1 px, 69 bytes\n</content>',
+                ),
+                <String, Object?>{
+                  'type': 'image',
+                  'attachment': <String, Object?>{
+                    'attachmentId': 'sha256:b1ff',
+                    'mediaType': 'image/png',
+                    'bytes': 69,
+                    'width': 1,
+                    'height': 1,
+                    'name': 'red.png',
+                  },
+                },
+              ],
+              'isError': false,
+            },
+          ],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final tool = reducer.snapshot().single as TimelineToolCall;
+    expect(tool.name, 'read_image');
+    expect(tool.images, hasLength(1));
+    expect(tool.images.single.attachmentId, 'sha256:b1ff');
+    expect(tool.images.single.mediaType, 'image/png');
+    expect(tool.images.single.width, 1);
+    expect(tool.images.single.name, 'red.png');
+    // The model-facing envelope still reaches the row as its result text.
+    expect(tool.result, contains('image/png image, 1x1 px, 69 bytes'));
+  });
+
+  test('a non-image attachment block never narrows into a result image', () {
+    final history = <JsonMap>[
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'call-doc',
+        'name': 'read',
+        'arguments': '{}',
+      }),
+      event(2, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'call-doc',
+              'content': <Object?>[
+                textBlock('ok'),
+                <String, Object?>{
+                  'type': 'image',
+                  'attachment': <String, Object?>{
+                    'attachmentId': 'sha256:doc',
+                    'mediaType': 'application/pdf',
+                    'bytes': 10,
+                    'width': 1,
+                    'height': 1,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final tool = reducer.snapshot().single as TimelineToolCall;
+    expect(tool.images, isEmpty);
+  });
+
   test('tool result block isError marks the paired call failed', () {
     final history = <JsonMap>[
       event(1, 'tool/call', <String, Object?>{
