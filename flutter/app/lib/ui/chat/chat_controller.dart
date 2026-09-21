@@ -689,13 +689,23 @@ class ChatController {
 
   /// Blank-session preset switch (web AgentPresetSeat select); host
   /// refusals (`agent-preset-locked`) surface through the error strip.
+  ///
+  /// A successful switch drops this session's cached skill catalog: the
+  /// preset decides which skill providers the agent reads, so the cached
+  /// entries are the old preset's (the web client invalidates its skill cache
+  /// on the `agent-preset/selected` forwarded event for the same reason).
   void _selectAgentPreset(SelectAgentPreset action) {
-    unawaited(
-      _runCatchingForUi(
+    unawaited(() async {
+      final applied = await _runCatchingForUi<String>(
         () =>
             _repository.selectAgentPreset(action.sessionId, action.agentPreset),
-      ),
-    );
+      );
+      if (applied == null) return;
+      _skillsBySession.remove(action.sessionId);
+      if (_selectedSessionId == action.sessionId) {
+        _loadSkills(action.sessionId);
+      }
+    }());
   }
 
   /// Skill catalog for the `/` composer source: one fetch per session,
@@ -837,10 +847,12 @@ class ChatController {
       },
     );
     // Optimistic user message for immediate visual feedback before network roundtrip
+    String? optimisticId;
     if (prompt.isNotEmpty || images.isNotEmpty) {
+      optimisticId = 'optimistic-${DateTime.now().microsecondsSinceEpoch}';
       final optimisticMessage = TimelineMessage(
         ChatMessage(
-          id: 'optimistic-${DateTime.now().microsecondsSinceEpoch}',
+          id: optimisticId,
           sessionId: sessionId,
           role: MessageRole.user,
           text: prompt,
@@ -893,6 +905,12 @@ class ChatController {
         if (sent) {
           _pendingImages = const <PendingImage>[];
         } else {
+          // The host never accepted the prompt: the local echo was a
+          // prediction, and a prediction that failed must not keep reading as
+          // a sent message (the reference retires a failed submission —
+          // `Session.retireFailedSubmission`). Withdraw it here rather than
+          // waiting for a window the host will never grow.
+          _withdrawOptimistic(optimisticId);
           _telemetry?.count('chat.message.send_failed');
           _telemetry?.event(
             'chat.message.send_failed',
@@ -905,6 +923,27 @@ class ChatController {
       }
       action.onSettled?.call(sent);
     }());
+  }
+
+  /// Retires a locally echoed user message whose send the host refused.
+  ///
+  /// A no-op when the id is null or the row is already gone (a window
+  /// refresh may have replaced it first), so a late failure cannot remove a
+  /// message the host did accept under the same id.
+  void _withdrawOptimistic(String? id) {
+    if (id == null) return;
+    final items = _timelineWindow.items;
+    final remaining = <TimelineItem>[
+      for (final item in items)
+        if (!(item is TimelineMessage && item.value.id == id)) item,
+    ];
+    if (remaining.length == items.length) return;
+    _timelineWindow = TimelineWindow(
+      items: remaining,
+      hasMoreOlder: _timelineWindow.hasMoreOlder,
+      isLoadingOlder: _timelineWindow.isLoadingOlder,
+      isLoading: _timelineWindow.isLoading,
+    );
   }
 
   /// Executes one slash-command line. The images ride the command's
