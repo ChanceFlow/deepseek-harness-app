@@ -2383,11 +2383,23 @@ abstract class AppLocalizations {
   /// **'Next question'**
   String get questionNext;
 
-  /// No description provided for @questionCancel.
+  /// Dismiss the whole pending question batch.
   ///
   /// In en, this message translates to:
   /// **'Dismiss all questions'**
   String get questionCancel;
+
+  /// Fold an interactive decision card down to its header strip.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse the card'**
+  String get questionMinimize;
+
+  /// Unfold a collapsed decision card.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand the card'**
+  String get questionMaximize;
 
   /// No description provided for @questionRecommended.
   ///

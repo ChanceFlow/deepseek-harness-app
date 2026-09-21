@@ -1886,6 +1886,97 @@ void main() {
     },
   );
 
+  testWidgets('question card folds to its header strip and back', (
+    tester,
+  ) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-fold-1',
+            questions: [
+              QuestionItem(
+                id: 'q1',
+                question: 'Pick',
+                detail: 'Body text',
+                options: ['a', 'b'],
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    expect(find.textContaining('Body text'), findsOneWidget);
+    expect(find.text('a'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Collapse the card'));
+    await tester.pump();
+
+    // The question stays readable; the detail, the options, and the action
+    // row fold away behind the header strip.
+    expect(find.text('Pick'), findsOneWidget);
+    expect(find.textContaining('Body text'), findsNothing);
+    expect(find.text('a'), findsNothing);
+    expect(find.byTooltip('Expand the card'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Expand the card'));
+    await tester.pump();
+    expect(find.textContaining('Body text'), findsOneWidget);
+    expect(find.text('a'), findsOneWidget);
+  });
+
+  testWidgets('plan review folds to its strip and back', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: const [
+          TimelineQuestionRequest(
+            requestId: 'rpc-fold-2',
+            questions: [
+              QuestionItem(
+                id: 'plan-fold',
+                question: 'Approve this plan?',
+                detail: '## Plan\n\nStep one.',
+                options: ['Approve', 'Keep planning'],
+                intent: QuestionIntent(kind: 'plan-review', approve: 'Approve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions,
+    );
+
+    expect(find.textContaining('Step one'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Collapse the card'));
+    await tester.pump();
+
+    expect(find.text('Plan review'), findsOneWidget);
+    expect(find.textContaining('Step one'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Approve'), findsNothing);
+    expect(find.byTooltip('Expand the card'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Expand the card'));
+    await tester.pump();
+    expect(find.textContaining('Step one'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
+  });
+
   testWidgets('plan review takes precedence over approval in composer dock', (
     tester,
   ) async {

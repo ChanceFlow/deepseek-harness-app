@@ -245,11 +245,35 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'question', state: questionState()),
+  // The same card folded to its header strip: the reading position above the
+  // takeover stays visible while the reader decides.
+  DesignShot(
+    name: 'question-folded',
+    state: questionState(),
+    act: (tester) async {
+      await tester.tap(find.byTooltip('Collapse the card'));
+      await settle(tester);
+    },
+  ),
+  DesignShot(name: 'plan-review', state: planReviewState()),
+  DesignShot(
+    name: 'plan-review-folded',
+    state: planReviewState(),
+    act: (tester) async {
+      await tester.tap(find.byTooltip('Collapse the card'));
+      await settle(tester);
+    },
+  ),
   // The zh twin renders the same card with the localized chrome — the
   // recommended badge must read 推荐, not Recommended.
   DesignShot(
     name: 'question-zh',
     state: questionState(),
+    locale: const Locale('zh'),
+  ),
+  DesignShot(
+    name: 'plan-review-zh',
+    state: planReviewState(),
     locale: const Locale('zh'),
   ),
   // Settings shots: the index over a two-host registry fixture, then each

@@ -797,6 +797,17 @@
   "questionPrev": "Previous question",
   "questionNext": "Next question",
   "questionCancel": "Dismiss all questions",
+  "@questionCancel": {
+    "description": "Dismiss the whole pending question batch."
+  },
+  "questionMinimize": "Collapse the card",
+  "@questionMinimize": {
+    "description": "Fold an interactive decision card down to its header strip."
+  },
+  "questionMaximize": "Expand the card",
+  "@questionMaximize": {
+    "description": "Unfold a collapsed decision card."
+  },
   "questionRecommended": "Recommended",
   "questionErrorIncomplete": "Please complete this question first.",
   "questionErrorUnanswered": "Please select an option or enter a custom answer.",

@@ -367,6 +367,8 @@
   "questionPrev": "上一题",
   "questionNext": "下一题",
   "questionCancel": "放弃整组问题",
+  "questionMinimize": "收起卡片",
+  "questionMaximize": "展开卡片",
   "questionRecommended": "推荐",
   "questionErrorIncomplete": "请先完成这道问题。",
   "questionErrorUnanswered": "请选择一个选项或填写自定义答案。",

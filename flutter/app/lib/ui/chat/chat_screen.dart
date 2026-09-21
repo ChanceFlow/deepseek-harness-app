@@ -4268,6 +4268,10 @@ class _QuestionRowState extends State<QuestionRow> {
   Map<String, QuestionDraft> _drafts = const <String, QuestionDraft>{};
   int _index = 0;
   String? _error;
+  // Collapsed to the header strip so the conversation above stays readable
+  // while the user decides (the reference `QuestionFlow`'s `minimized`).
+  // Component state, not a draft: it resets with the request.
+  bool _minimized = false;
 
   @override
   void didUpdateWidget(covariant QuestionRow oldWidget) {
@@ -4277,6 +4281,7 @@ class _QuestionRowState extends State<QuestionRow> {
       _drafts = const <String, QuestionDraft>{};
       _index = 0;
       _error = null;
+      _minimized = false;
     }
   }
 
@@ -4298,6 +4303,8 @@ class _QuestionRowState extends State<QuestionRow> {
       index: index,
       drafts: _drafts,
       error: _error,
+      minimized: _minimized,
+      onToggleMinimized: () => setState(() => _minimized = !_minimized),
       onChoose: _choose,
       onDraftChange: (id, draft) =>
           setState(() => _drafts = {..._drafts, id: draft}),
@@ -4478,6 +4485,8 @@ class _QuestionCard extends StatelessWidget {
     required this.index,
     required this.drafts,
     required this.error,
+    required this.minimized,
+    required this.onToggleMinimized,
     required this.onChoose,
     required this.onDraftChange,
     required this.onBack,
@@ -4490,6 +4499,11 @@ class _QuestionCard extends StatelessWidget {
   final int index;
   final Map<String, QuestionDraft> drafts;
   final String? error;
+
+  /// Folded down to the header strip, so the conversation above stays
+  /// readable while the user decides (the reference `cardMinimized`).
+  final bool minimized;
+  final VoidCallback onToggleMinimized;
   final void Function(String questionId, String option) onChoose;
   final void Function(String questionId, QuestionDraft draft) onDraftChange;
   final VoidCallback onBack;
@@ -4517,78 +4531,86 @@ class _QuestionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _QuestionCardHeader(question: question, onDismiss: onDismiss),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (question.detail case final String detail)
-                    MarkdownText(text: detail),
-                  if (hasOptions) ...[
-                    const SizedBox(height: 8),
-                    if (question.multiSelect)
-                      for (final option in question.options)
-                        _QuestionOptionTile(
-                          question: question,
-                          option: option,
-                          selected: draft.selected.contains(option),
-                          onChanged: () => onChoose(question.id, option),
-                        )
-                    else
-                      RadioGroup<String>(
-                        groupValue: draft.selected.isEmpty
-                            ? null
-                            : draft.selected.first,
-                        onChanged: (value) {
-                          if (value != null) onChoose(question.id, value);
-                        },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final option in question.options)
-                              _QuestionOptionTile(
-                                question: question,
-                                option: option,
-                                selected: draft.selected.contains(option),
-                                onChanged: () => onChoose(question.id, option),
-                              ),
-                          ],
+          _QuestionCardHeader(
+            question: question,
+            minimized: minimized,
+            onToggleMinimized: onToggleMinimized,
+            onDismiss: onDismiss,
+          ),
+          if (!minimized) ...[
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (question.detail case final String detail)
+                      MarkdownText(text: detail),
+                    if (hasOptions) ...[
+                      const SizedBox(height: 8),
+                      if (question.multiSelect)
+                        for (final option in question.options)
+                          _QuestionOptionTile(
+                            question: question,
+                            option: option,
+                            selected: draft.selected.contains(option),
+                            onChanged: () => onChoose(question.id, option),
+                          )
+                      else
+                        RadioGroup<String>(
+                          groupValue: draft.selected.isEmpty
+                              ? null
+                              : draft.selected.first,
+                          onChanged: (value) {
+                            if (value != null) onChoose(question.id, value);
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final option in question.options)
+                                _QuestionOptionTile(
+                                  question: question,
+                                  option: option,
+                                  selected: draft.selected.contains(option),
+                                  onChanged: () =>
+                                      onChoose(question.id, option),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-            child: hasOptions
-                ? _CustomAnswerRow(
-                    question: question,
-                    draft: draft,
-                    onDraftChange: (d) => onDraftChange(question.id, d),
-                  )
-                : _CustomAnswerField(
-                    question: question,
-                    draft: draft,
-                    onDraftChange: (d) => onDraftChange(question.id, d),
-                  ),
-          ),
-          _QuestionCardFooter(
-            total: questions.length,
-            index: index,
-            error: error,
-            answered: answered,
-            isLast: isLast,
-            onBack: onBack,
-            onNext: onNext,
-            onSkip: onSkip,
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+              child: hasOptions
+                  ? _CustomAnswerRow(
+                      question: question,
+                      draft: draft,
+                      onDraftChange: (d) => onDraftChange(question.id, d),
+                    )
+                  : _CustomAnswerField(
+                      question: question,
+                      draft: draft,
+                      onDraftChange: (d) => onDraftChange(question.id, d),
+                    ),
+            ),
+            _QuestionCardFooter(
+              total: questions.length,
+              index: index,
+              error: error,
+              answered: answered,
+              isLast: isLast,
+              onBack: onBack,
+              onNext: onNext,
+              onSkip: onSkip,
+            ),
+          ],
         ],
       ),
     );
@@ -4596,9 +4618,16 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _QuestionCardHeader extends StatelessWidget {
-  const _QuestionCardHeader({required this.question, required this.onDismiss});
+  const _QuestionCardHeader({
+    required this.question,
+    required this.minimized,
+    required this.onToggleMinimized,
+    required this.onDismiss,
+  });
 
   final QuestionItem question;
+  final bool minimized;
+  final VoidCallback onToggleMinimized;
   final VoidCallback onDismiss;
 
   @override
@@ -4635,6 +4664,13 @@ class _QuestionCardHeader extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          _RoundIconButton(
+            tooltip: minimized
+                ? AppLocalizations.of(context)!.questionMaximize
+                : AppLocalizations.of(context)!.questionMinimize,
+            icon: minimized ? Icons.expand_less : Icons.expand_more,
+            onPressed: onToggleMinimized,
           ),
           _RoundIconButton(
             tooltip: AppLocalizations.of(context)!.questionCancel,
@@ -5156,7 +5192,11 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
 /// Plan-review decision card (the web PlanReviewPanel port): a warn-tinted
 /// strip with a dot, the plan as the whole body (markdown), and a
 /// right-aligned action row — discuss (dismiss), decline, and approve.
-class _PlanReviewCard extends StatelessWidget {
+///
+/// The reference panel has no fold control; this one carries the same
+/// minimize toggle its sibling question card does, because a long plan is
+/// exactly the card that covers the conversation it is about.
+class _PlanReviewCard extends StatefulWidget {
   const _PlanReviewCard({
     required this.requestId,
     required this.review,
@@ -5175,13 +5215,21 @@ class _PlanReviewCard extends StatelessWidget {
   final void Function(ChatAction) onAction;
 
   @override
+  State<_PlanReviewCard> createState() => _PlanReviewCardState();
+}
+
+class _PlanReviewCardState extends State<_PlanReviewCard> {
+  bool _minimized = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final review = widget.review;
     void decide(String label) {
-      onAction(
+      widget.onAction(
         AnswerQuestionAction(
-          requestId: requestId,
+          requestId: widget.requestId,
           answers: [
             QuestionAnswer(questionId: review.id, selectedOptions: [label]),
           ],
@@ -5202,7 +5250,7 @@ class _PlanReviewCard extends StatelessWidget {
         children: [
           Container(
             color: scheme.warning.withValues(alpha: 0.12),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
             child: Row(
               children: [
                 Container(
@@ -5214,62 +5262,74 @@ class _PlanReviewCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  l10n.planReview,
-                  style: TextStyle(
-                    color: scheme.warning,
-                    fontSize: 13,
-                    height: 18 / 13,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    l10n.planReview,
+                    style: TextStyle(
+                      color: scheme.warning,
+                      fontSize: 13,
+                      height: 18 / 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                ),
+                _RoundIconButton(
+                  tooltip: _minimized
+                      ? l10n.questionMaximize
+                      : l10n.questionMinimize,
+                  icon: _minimized ? Icons.expand_less : Icons.expand_more,
+                  onPressed: () => setState(() => _minimized = !_minimized),
                 ),
               ],
             ),
           ),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+          if (!_minimized) ...[
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: MarkdownText(text: review.plan),
+              ),
             ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: MarkdownText(text: review.plan),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () => widget.onAction(
+                      DismissQuestionAction(requestId: widget.requestId),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: scheme.onSurfaceVariant,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.edit_outlined, size: 14),
+                        const SizedBox(width: 6),
+                        Text(l10n.planDiscuss),
+                      ],
+                    ),
+                  ),
+                  if (review.decline case final String decline)
+                    OutlinedButton(
+                      onPressed: () => decide(decline),
+                      child: Text(l10n.planDecline),
+                    ),
+                  FilledButton(
+                    onPressed: () => decide(review.approve),
+                    child: Text(l10n.planApprove),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () =>
-                      onAction(DismissQuestionAction(requestId: requestId)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: scheme.onSurfaceVariant,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.edit_outlined, size: 14),
-                      const SizedBox(width: 6),
-                      Text(l10n.planDiscuss),
-                    ],
-                  ),
-                ),
-                if (review.decline case final String decline)
-                  OutlinedButton(
-                    onPressed: () => decide(decline),
-                    child: Text(l10n.planDecline),
-                  ),
-                FilledButton(
-                  onPressed: () => decide(review.approve),
-                  child: Text(l10n.planApprove),
-                ),
-              ],
-            ),
-          ),
+          ],
         ],
       ),
     );

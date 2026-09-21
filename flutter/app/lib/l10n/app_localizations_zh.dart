@@ -1336,6 +1336,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get questionCancel => '放弃整组问题';
 
   @override
+  String get questionMinimize => '收起卡片';
+
+  @override
+  String get questionMaximize => '展开卡片';
+
+  @override
   String get questionRecommended => '推荐';
 
   @override
