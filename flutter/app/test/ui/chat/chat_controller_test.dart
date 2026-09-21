@@ -835,10 +835,7 @@ void main() {
     expect(repository.sentMessages, hasLength(1));
     // The local echo was a prediction; when the host refuses the prompt it
     // must not keep reading as a sent message.
-    expect(
-      controller.state.timeline.where((item) => item is TimelineMessage),
-      isEmpty,
-    );
+    expect(controller.state.timeline.whereType<TimelineMessage>(), isEmpty);
   });
 
   test(
