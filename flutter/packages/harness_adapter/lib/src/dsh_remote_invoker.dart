@@ -52,16 +52,23 @@ final class DshRemoteInvoker {
         'agentPreset': payload['agentPreset'],
       };
     }
+    // The `workspaceFiles` reads scope the file to a Session through the
+    // `workspaceFileScope` lookup, whose wire field is the lookup key plus
+    // `Id` — `workspaceFileScopeId`, not `sessionId`. The host refuses an
+    // unknown argument outright (`gateway/arguments-invalid`), so a renamed
+    // field is a hard failure, not a fallback
+    // (`reference/deepseek-harness/packages/api/workspace-files/src/index.ts`
+    // `ctx.typert.lookups.register('workspaceFileScope', …)`).
     if (endpoint == DshRpcEndpoints.workspaceFilesRead) {
       return <String, Object?>{
-        'sessionId': payload['sessionId'],
+        'workspaceFileScopeId': payload['sessionId'],
         'path': payload['path'],
         'range': payload['range'] ?? const <String, Object?>{},
       };
     }
     if (endpoint == DshRpcEndpoints.workspaceFilesReadBytes) {
       return <String, Object?>{
-        'sessionId': payload['sessionId'],
+        'workspaceFileScopeId': payload['sessionId'],
         'path': payload['path'],
         'range': payload['range'] ?? const <String, Object?>{},
       };
@@ -70,7 +77,7 @@ final class DshRemoteInvoker {
         endpoint == DshRpcEndpoints.workspaceFilesStat ||
         endpoint == DshRpcEndpoints.workspaceFilesList) {
       return <String, Object?>{
-        'sessionId': payload['sessionId'],
+        'workspaceFileScopeId': payload['sessionId'],
         'path': payload['path'],
       };
     }
