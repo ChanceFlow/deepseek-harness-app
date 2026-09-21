@@ -96,7 +96,111 @@ class TimelineReducer {
   int? _partialFirstTokenMs;
   bool _partialDirty = false;
 
+  /// Live assistant-stream cursor for this session
+  /// (`SessionAssistantStreamFrame`, opened by `assistantStream: true` on
+  /// `session/follow`). These frames are process-local and cursorless: the
+  /// durable log never carries a token delta, so continuity is
+  /// `attemptId` + `revision` + a dense `index`, and `ordinal` orders the
+  /// frames of one generation.
+  String? _liveAttemptId;
+  int _liveRevision = -1;
+  int _liveTurn = 0;
+  int _liveStep = 0;
+  int _liveNextIndex = 0;
+  int _liveOrdinal = 0;
+
+  /// One `assistant-stream` follow frame: the live attempt's start, a token
+  /// chunk, or its end (`SessionAssistantStreamFrame`,
+  /// `reference/.../api/session-controller/src/history.ts` and
+  /// `llm/llm/src/assistant-stream.ts`).
+  ///
+  /// The frames carry no `seq` — a token delta is never durable — so they
+  /// bypass [_ingestEvent]'s seq guard and keep their own continuity: frames
+  /// apply only while `attemptId` and `revision` match the attempt this fold
+  /// is holding, at the next dense `index`, in increasing `ordinal`. A frame
+  /// that fails any of those is dropped rather than stitched into the wrong
+  /// reply; the durable `assistant/message` that follows a committed ended
+  /// attempt carries the final text, so a dropped frame costs part of the
+  /// live preview, never the record.
+  ///
+  /// Returns whether the frame changed the timeline, so the caller publishes
+  /// only on a real move.
+  bool ingestAssistantStreamFrame(JsonMap frame, {required int ordinal}) {
+    if (ordinal <= _liveOrdinal) return false;
+    _liveOrdinal = ordinal;
+    switch (wireType(frame)) {
+      case 'start':
+        _liveAttemptId = wireString(frame, 'attemptId');
+        _liveRevision = wireLong(frame, 'revision');
+        _liveTurn = wireLong(frame, 'turn');
+        _liveStep = wireLong(frame, 'step');
+        _liveNextIndex = 0;
+        return false;
+      case 'chunk':
+        if (wireString(frame, 'attemptId') != _liveAttemptId ||
+            wireLong(frame, 'revision') != _liveRevision ||
+            wireLong(frame, 'index') != _liveNextIndex) {
+          return false;
+        }
+        final chunk = asJsonObject(frame['chunk']);
+        if (chunk == null) return false;
+        _liveNextIndex += 1;
+        _applyChunk(
+          chunk,
+          turn: _liveTurn,
+          step: _liveStep,
+          time: wireLong(frame, 'time'),
+        );
+        return true;
+      case 'end':
+        // A committed attempt's text arrives as the durable
+        // `assistant/message`/`assistant/attempt` at `outcome.seq`, which
+        // replaces the partial on its own. An abandoned one has no durable
+        // event coming, so the partial settles here as the text the reader
+        // already watched arrive.
+        final settled = _partialKey != null;
+        _finalizePartial();
+        _clearLiveAttempt();
+        return settled;
+      default:
+        return false;
+    }
+  }
+
+  /// Seeds the partial from a follow opening's
+  /// `SessionAssistantStreamBaseline`: the attempt's accumulated `stream`
+  /// plus its `nextIndex`, so a client that opens mid-reply renders what the
+  /// model has already produced instead of waiting for the commit.
+  void seedAssistantStreamBaseline(JsonMap baseline) {
+    final active = asJsonObject(baseline['activeAttempt']);
+    if (active == null) return;
+    _liveAttemptId = wireString(active, 'attemptId');
+    _liveRevision = wireLong(baseline, 'revision');
+    _liveTurn = wireLong(active, 'turn');
+    _liveStep = wireLong(active, 'step');
+    _liveNextIndex = wireLong(active, 'nextIndex');
+    final stream = asJsonArray(active['stream']) ?? const <Object?>[];
+    for (final entry in stream) {
+      final chunk = asJsonObject(entry);
+      if (chunk == null) continue;
+      _applyChunk(chunk, turn: _liveTurn, step: _liveStep, time: 0);
+    }
+  }
+
+  void _clearLiveAttempt() {
+    _liveAttemptId = null;
+    _liveRevision = -1;
+    _liveTurn = 0;
+    _liveStep = 0;
+    _liveNextIndex = 0;
+  }
+
   void reset(List<JsonMap> history) {
+    // A rebuild is a new generation: the live attempt cursor is scoped to one
+    // follow stream, so it starts over. The opening snapshot's
+    // `assistantStream` baseline re-seeds it when the model is mid-reply.
+    _clearLiveAttempt();
+    _liveOrdinal = 0;
     // The queue projection is not durable history: `session/queue` snapshots
     // never land in the session log, and the host pushes a session's baseline
     // exactly once per mux generation, right after its `session/subscribed`
@@ -646,12 +750,28 @@ class TimelineReducer {
 
   void _appendAssistantDelta(JsonMap event) {
     final data = _eventData(event);
-    final turn = wireLong(data, 'turn');
-    final step = wireLong(data, 'step');
     final chunk = asJsonObject(data['chunk']);
     if (chunk == null) return;
-    _ensurePartial(turn, step, event);
+    _applyChunk(
+      chunk,
+      turn: wireLong(data, 'turn'),
+      step: wireLong(data, 'step'),
+      time: wireLong(event, 'time'),
+    );
+  }
 
+  /// Applies one model stream chunk to the partial reply for `turn`/`step`.
+  ///
+  /// Both sources share this: the durable `assistant/chunk` event (the v1 log
+  /// format) and the live `assistant-stream` frames' `chunk` member, whose
+  /// payload vocabulary is identical.
+  void _applyChunk(
+    JsonMap chunk, {
+    required int turn,
+    required int step,
+    required int time,
+  }) {
+    _ensurePartial(turn, step, time);
     final chunkType = wireType(chunk);
     final text = _partialText ??= StringBuffer();
     var reasoning = _partialReasoning;
@@ -660,30 +780,22 @@ class TimelineReducer {
       case 'text-delta':
         final delta = wireString(chunk, 'text') ?? '';
         if (delta != '' && _partialFirstTokenMs == null) {
-          _partialFirstTokenMs = _streamTime(event);
+          _partialFirstTokenMs = _streamTime(time);
         }
         text.write(delta);
         _partialDirty = true;
       case 'reasoning-delta':
-        if (_partialReasoningStartMs == null) {
-          final time = wireLong(event, 'time');
-          _partialReasoningStartMs = time > 0
-              ? time
-              : DateTime.now().millisecondsSinceEpoch;
-        }
+        _partialReasoningStartMs ??= _streamTime(time);
         final delta = wireString(chunk, 'text') ?? '';
         if (delta != '' && _partialFirstTokenMs == null) {
-          _partialFirstTokenMs = _streamTime(event);
+          _partialFirstTokenMs = _streamTime(time);
         }
         reasoning = (reasoning ??= StringBuffer())..write(delta);
         _partialDirty = true;
       case 'block-start':
         final blockType = wireString(chunk, 'blockType');
-        if (blockType == 'reasoning' && _partialReasoningStartMs == null) {
-          final time = wireLong(event, 'time');
-          _partialReasoningStartMs = time > 0
-              ? time
-              : DateTime.now().millisecondsSinceEpoch;
+        if (blockType == 'reasoning') {
+          _partialReasoningStartMs ??= _streamTime(time);
         }
       case 'block-end':
         final block = asJsonObject(chunk['block']);
@@ -698,7 +810,6 @@ class TimelineReducer {
             }
           } else if (blockType == 'reasoning') {
             if (_partialReasoningStartMs != null) {
-              final time = wireLong(event, 'time');
               final nowMs = time > 0
                   ? time
                   : DateTime.now().millisecondsSinceEpoch;
@@ -724,7 +835,7 @@ class TimelineReducer {
     _partialReasoning = reasoning;
   }
 
-  void _ensurePartial(int turn, int step, JsonMap event) {
+  void _ensurePartial(int turn, int step, int time) {
     final key = _turnStepKey(turn, step);
     if (_partialKey == key) return;
     _finalizePartial();
@@ -741,7 +852,7 @@ class TimelineReducer {
           role: MessageRole.assistant,
           text: '',
           streaming: true,
-          createdAtEpochMs: wireLong(event, 'time'),
+          createdAtEpochMs: time,
           seq: _lastSeq,
         ),
         step: step,
@@ -806,13 +917,11 @@ class TimelineReducer {
     _partialDirty = false;
   }
 
-  /// Stream timestamp for a latency boundary: the event's logged time, or
+  /// Stream timestamp for a latency boundary: the frame's logged time, or
   /// the wall clock when the host sent none (a live delta always has one;
   /// the fallback keeps a replayed zero from collapsing a real interval).
-  int _streamTime(JsonMap event) {
-    final time = wireLong(event, 'time');
-    return time > 0 ? time : DateTime.now().millisecondsSinceEpoch;
-  }
+  int _streamTime(int time) =>
+      time > 0 ? time : DateTime.now().millisecondsSinceEpoch;
 
   void _appendToolCall(JsonMap event) {
     final data = _eventData(event);

@@ -360,7 +360,7 @@ never the payload), so a wire-coverage gap stays measurable.
 | `turn/start` | `TimelineItem.TurnBoundary`; a later `turn/end` folds the turn's summed step `usage` onto it |
 | `step/start` | no item — records its `(turn, step)` as the step owning the rows that follow (code-dispatch sub-calls carry no step on their own event) |
 | `user/message` | `TimelineItem.Message` with `MessageRole.USER` |
-| `assistant/chunk` | live `TimelineItem.Message` with `streaming = true` |
+| `assistant/chunk` (v1 log format) | live `TimelineItem.Message` with `streaming = true` |
 | `assistant/message` | final `TimelineItem.Message` with `streaming = false`, carrying its step's `usage` and the recorded stream's first-token time |
 | `tool/call` | `TimelineItem.ToolCall` with `status = RUNNING`, its step, and its logged start time |
 | `tool/result` | paired `TimelineItem.ToolCall` with result/error status |
@@ -376,6 +376,16 @@ never the payload), so a wire-coverage gap stays measurable.
 | `deliverables/presented` | no item — folds the event's `files` onto the `present` call named by its `callId`, so a declaration rides that call's own row; a declaration whose call lies outside the folded window publishes nothing |
 
 Text extraction handles `text` blocks and nested `tool-result` content.
+
+Live token deltas are the one fact the durable log does not carry: a 0.1.5 host
+publishes them as cursorless `assistant-stream` frames on a `session/follow`
+opened with `assistantStream: true`
+(`packages/api/session-controller/src/history.ts:163`, `types.ts` `SessionFollowFrame`).
+`TimelineReducer.ingestAssistantStreamFrame` folds those frames into the same
+streaming partial as `assistant/chunk`, continued by `attemptId` + `revision` +
+a dense `index` instead of `seq`, and the opening snapshot's
+`assistantStream` baseline seeds the partial for a reply that is already in
+flight. Neither the frames nor the baseline touches durable history.
 
 ## 7. Android UI Contract
 

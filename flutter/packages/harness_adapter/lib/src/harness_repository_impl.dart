@@ -150,6 +150,11 @@ class HarnessRepositoryImpl implements ChatRepository {
         'payload': <String, Object?>{
           'args': <String, Object?>{
             'request': <String, Object?>{
+              // Live token deltas are process-local frames the host attaches
+              // only on this flag (`api/session-controller/src/history.ts:163`;
+              // the durable log carries no token delta at all), so without it
+              // a reply appears only when its final message commits.
+              'assistantStream': true,
               'address': <String, Object?>{
                 'kind': 'session',
                 'sessionId': sessionId,
@@ -1397,6 +1402,14 @@ class HarnessRepositoryImpl implements ChatRepository {
       'childSessionId': childSessionId,
       'requestId': 'req-${DateTime.now().microsecondsSinceEpoch}',
       'mode': _subagentModeToWire(SubagentMode.continuable),
+      // `delivery` is required beside the fixed `mode`
+      // (`packages/subagent/subagent/src/control.ts`:
+      // `'subagent.prompt': z.object({… mode: z.literal('continuable'),
+      // delivery: z.enum(['queue','steer'])})`). Without it the host rejects
+      // the call at the boundary and no prompt ever reaches the child. The
+      // phone's child composer has no steer seat, so it always queues —
+      // appending after the child's current turn.
+      'delivery': 'queue',
       'content': <Object?>[
         <String, Object?>{'type': 'text', 'text': text},
       ],
@@ -1778,6 +1791,19 @@ class HarnessRepositoryImpl implements ChatRepository {
             final streamSessionId = frame.rpcId.substring(
               'session-follow-'.length,
             );
+            if (type == 'assistant-stream') {
+              // A live token frame: cursorless, so it goes straight to the
+              // reducer's live-attempt fold rather than through the ordered
+              // event path (see `ingestAssistantStreamFrame`).
+              final streamFrame = asJsonObject(frame.payload['frame']);
+              if (streamFrame != null) {
+                _sessionStates[streamSessionId]?.ingestAssistantStream(
+                  streamFrame,
+                  ordinal: wireLong(frame.payload, 'ordinal'),
+                );
+              }
+              return;
+            }
             if (type == 'snapshot') {
               final cursor = wireLong(frame.payload, 'cursor');
               if (cursor >= 0) _sessionCursors[streamSessionId] = cursor;
@@ -1793,9 +1819,15 @@ class HarnessRepositoryImpl implements ChatRepository {
                 }
               }
               final history = SessionHistoryValueWire.fromJson(frame.payload);
-              if (history.events.isNotEmpty) {
+              final assistantStream = asJsonObject(
+                frame.payload['assistantStream'],
+              );
+              if (history.events.isNotEmpty || assistantStream != null) {
                 unawaited(
-                  _sessionStates[streamSessionId]?.installSnapshot(history),
+                  _sessionStates[streamSessionId]?.installSnapshot(
+                    history,
+                    assistantStream: assistantStream,
+                  ),
                 );
               }
               return;
@@ -3770,7 +3802,15 @@ final class _SessionState {
   }
 
   /// Apply one complete window snapshot from the session/follow opening frame.
-  Future<void> installSnapshot(SessionHistoryValueWire snapshot) {
+  ///
+  /// [assistantStream] is the opening's `SessionAssistantStreamBaseline`: when
+  /// the session is mid-reply, it carries the attempt's accumulated stream so
+  /// the client renders what the model has already produced instead of waiting
+  /// for the commit.
+  Future<void> installSnapshot(
+    SessionHistoryValueWire snapshot, {
+    JsonMap? assistantStream,
+  }) {
     return _mutex.synchronized(() async {
       _history = stableSortedBy(
         snapshot.events,
@@ -3778,6 +3818,9 @@ final class _SessionState {
       );
       _hasMoreOlder = snapshot.hasMore;
       _reducer.reset(_history);
+      if (assistantStream != null) {
+        _reducer.seedAssistantStreamBaseline(assistantStream);
+      }
       _statsFold.reset(_history);
       _framesAfterOpen = List.of(_pending);
       for (final frame in _pending) {
@@ -3824,6 +3867,26 @@ final class _SessionState {
       _framesAfterOpen.add(frame);
       _publish(coalescable: _isStreamingChunk(frame));
     });
+  }
+
+  /// One live `assistant-stream` frame for this session
+  /// (`SessionAssistantStreamFrame`). Cursorless, so it never enters
+  /// [_history] or the frame log: it folds into the streaming partial and
+  /// publishes at frame cadence, exactly like a token delta.
+  void ingestAssistantStream(JsonMap frame, {required int ordinal}) {
+    unawaited(
+      _mutex.synchronized<void>(() async {
+        // Before the opening snapshot lands the partial has no window to sit
+        // in: the frames replayed ahead of it would be wiped by
+        // [installSnapshot]'s reset, and the baseline that snapshot carries
+        // already represents them.
+        if (!_ready) return;
+        if (!_reducer.ingestAssistantStreamFrame(frame, ordinal: ordinal)) {
+          return;
+        }
+        _publish(coalescable: true);
+      }),
+    );
   }
 
   /// Streaming token chunks publish at frame cadence (the reference web
