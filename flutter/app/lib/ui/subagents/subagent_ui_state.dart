@@ -33,6 +33,8 @@ final class SubagentUiState {
     this.selectedChildId,
     this.selectedChildParentId,
     this.childTimeline = const <TimelineItem>[],
+    this.childHasMoreOlder = false,
+    this.isLoadingChildOlder = false,
     this.childPlan,
     this.isChildLoading = false,
     this.isSendingChild = false,
@@ -59,6 +61,13 @@ final class SubagentUiState {
   final String? selectedChildParentId;
 
   final List<TimelineItem> childTimeline;
+
+  /// Whether the opened child's window holds history before its first row
+  /// (the child's own `session/page` `hasMore`).
+  final bool childHasMoreOlder;
+
+  /// Whether one older child-history page is in flight.
+  final bool isLoadingChildOlder;
 
   /// Plan projection of the opened child (the composer plan seat on the
   /// web); null while no child is open or the projection is unset/off.
@@ -141,6 +150,11 @@ final class SubagentUiState {
 
 sealed class SubagentAction {
   const SubagentAction();
+}
+
+/// Pages one older child-history window.
+final class LoadOlderChildHistory extends SubagentAction {
+  const LoadOlderChildHistory();
 }
 
 final class SelectParent extends SubagentAction {

@@ -28,7 +28,8 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
 import '../chat/activity_dot.dart';
-import '../chat/chat_screen.dart' show PlanChip, TimelineRow, timelineKey;
+import '../chat/chat_screen.dart'
+    show OlderHistoryRow, PlanChip, TimelineRow, timelineKey;
 import '../chat/sweep_highlight.dart';
 import '../shared/error_banner.dart';
 import '../shared/state_dot.dart';
@@ -884,6 +885,9 @@ class _ChildDetailView extends StatelessWidget {
     final rows = uiState.childTimelineRows;
     final queueItems = uiState.childQueueItems;
     final childId = uiState.selectedChildId!;
+    // The child is a resident window, so it pages like the chat transcript:
+    // the older-history seat rides the head of the record.
+    final showOlder = uiState.childHasMoreOlder || uiState.isLoadingChildOlder;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -895,10 +899,17 @@ class _ChildDetailView extends StatelessWidget {
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  itemCount: rows.length,
+                  itemCount: rows.length + (showOlder ? 1 : 0),
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    final item = rows[index];
+                    if (showOlder && index == 0) {
+                      return OlderHistoryRow(
+                        isLoading: uiState.isLoadingChildOlder,
+                        onLoadOlder: () =>
+                            onAction(const LoadOlderChildHistory()),
+                      );
+                    }
+                    final item = rows[index - (showOlder ? 1 : 0)];
                     return TimelineRow(
                       key: ValueKey(timelineKey(item)),
                       item: item,

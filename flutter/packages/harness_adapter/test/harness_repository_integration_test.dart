@@ -9,6 +9,7 @@
 // external repository state through the real entry paths
 // (`docs/testing.md`).
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
@@ -688,14 +689,23 @@ ServerRequest _readyFrame([String home = '/home/tester']) => ServerRequest(
   },
 );
 
-class ScriptedHarnessSocket implements DshEventSocket {
+class ScriptedHarnessSocket implements DshWritableEventSocket {
   ScriptedHarnessSocket({this.muxFrames = const <ServerRequest>[]});
 
   final List<ServerRequest> muxFrames;
   final Completer<void> _muxRelease = Completer<void>();
   final List<String> _paths = <String>[];
 
+  /// Upstream mux control messages this double received, decoded: the follow
+  /// opens the repository sends carry the session address under test.
+  final List<JsonMap> sentMuxMessages = <JsonMap>[];
+
   List<String> get connectedPaths => List<String>.of(_paths);
+
+  @override
+  void send(String path, String message) {
+    sentMuxMessages.add((jsonDecode(message) as Map).cast<String, Object?>());
+  }
 
   void releaseMuxFrames() {
     if (!_muxRelease.isCompleted) _muxRelease.complete();
@@ -3485,15 +3495,15 @@ void main() {
   );
 
   test(
-    'session/page addresses each subagent row with its own catalog mode',
+    'a child opens as a followed window addressed by its own catalog mode',
     () async {
       // Wire: the subagent address carries mode
       // ('one-shot' | 'continuable'), and the host rejects a mismatch
       // (surfaced as `subagent/unauthorized`) —
       // reference/deepseek-harness/packages/subagent/subagent/src/control-types.ts
       // `SubagentAddress` + packages/api/session-controller/src/history.ts.
-      // A one-shot row must go out
-      // as one-shot; the transcript folds through the reducer.
+      // A one-shot row must go out as one-shot, and the same address serves
+      // the page read and the live follow.
       final rpc = HarnessFakeRpc()
         ..subagentHistoryValue = <String, Object?>{
           'events': <Object?>[
@@ -3501,55 +3511,81 @@ void main() {
           ],
           'hasMore': false,
         };
-      final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
       await pumpEventQueue();
 
-      final items = await repository.loadSubagentHistory(
+      await repository.openSubagentSession(
         'session-root',
         'child-2',
         SubagentMode.oneShot,
       );
+      await pumpEventQueue();
 
-      final subHistoryPayload = rpc
-          .payloads(DshRpcEndpoints.sessionPage)
-          .single;
       final subHistoryArgs =
-          asJsonObject(subHistoryPayload['args']) ?? subHistoryPayload;
+          asJsonObject(
+            rpc.payloads(DshRpcEndpoints.sessionPage).single['args'],
+          ) ??
+          const <String, Object?>{};
       expect(subHistoryArgs['address'], <String, Object?>{
         'kind': 'subagent',
         'parentSessionId': 'session-root',
         'childSessionId': 'child-2',
         'mode': 'one-shot',
       });
-      expect(items, isNotEmpty);
+      final window = await repository
+          .observeTimelineWindow('child-2')
+          .firstWhere((value) => value.items.isNotEmpty);
+      expect(window.items, isNotEmpty);
 
-      await repository.loadSubagentHistory(
-        'session-root',
-        'child-1',
-        SubagentMode.continuable,
+      // The follow request carries the same address, so the child keeps
+      // updating instead of freezing at the first page.
+      final follow = socket.sentMuxMessages.firstWhere(
+        (message) => message['streamId'] == 'session-follow-child-2',
       );
-      final lastSubHistory = rpc.payloads(DshRpcEndpoints.sessionPage).last;
-      final lastSubHistoryArgs =
-          asJsonObject(lastSubHistory['args']) ?? lastSubHistory;
-      expect(
-        asJsonObject(lastSubHistoryArgs['address'])?['mode'],
-        'continuable',
+      final followAddress = asJsonObject(
+        asJsonObject(
+          asJsonObject(asJsonObject(follow['payload'])?['args'])?['request'],
+        )?['address'],
       );
+      expect(followAddress, <String, Object?>{
+        'kind': 'subagent',
+        'parentSessionId': 'session-root',
+        'childSessionId': 'child-2',
+        'mode': 'one-shot',
+      });
     },
   );
 
-  test('a child-history host failure surfaces to the caller', () async {
+  test('an ordinary open still addresses a session as itself', () async {
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.openSession('session-plain');
+    await pumpEventQueue();
+
+    final args =
+        asJsonObject(rpc.payloads(DshRpcEndpoints.sessionPage).first['args']) ??
+        const <String, Object?>{};
+    expect(args['address'], <String, Object?>{
+      'kind': 'session',
+      'sessionId': 'session-plain',
+    });
+  });
+
+  test('a child-history host failure reaches the opener', () async {
     // Fail-loud: a `subagent/unauthorized` answer (the host's mode-guard
-    // rejection) never decays into an empty transcript — the
-    // exception reaches the caller, which surfaces it on the error
-    // banner.
+    // rejection) never decays into a transcript that reads as "this child
+    // said nothing" — the subagent view has a catalog to fall back to, so the
+    // failure belongs on its banner rather than in an empty record.
     final rpc = HarnessFakeRpc()
       ..failNextCall(DshRpcEndpoints.sessionPage, 'subagent/unauthorized');
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
     await expectLater(
-      repository.loadSubagentHistory(
+      repository.openSubagentSession(
         'session-root',
         'child-2',
         SubagentMode.oneShot,
@@ -4826,10 +4862,11 @@ void main() {
     await repository.openSession('subagent-child');
     await pumpEventQueue();
 
-    // Diagnostic emitted naming subagent and loadSubagentHistory
+    // Diagnostic emitted: an unaddressed child cannot be opened as an
+    // ordinary session, and the message names the verb that can.
     final warning = diagnostics.firstWhere((d) => d.context == 'session.open');
     expect(warning.message, contains('subagent-child'));
-    expect(warning.message, contains('loadSubagentHistory'));
+    expect(warning.message, contains('openSubagentSession'));
 
     // No history/page calls made for subagent-child with address.kind: 'session'
     final historyPayloads = rpc
