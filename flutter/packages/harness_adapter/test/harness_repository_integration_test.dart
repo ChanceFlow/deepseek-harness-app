@@ -1410,6 +1410,183 @@ void main() {
     expect(breakdown?.messageTokens, 200);
   });
 
+  test('a projection frame older than the value held is dropped', () async {
+    // The reference's projection store has one ordering rule: a value whose
+    // `seq` is not newer than the row's is dropped
+    // (`projection-store.ts` `apply`). Without it a `session/list` pull that
+    // raced a live frame lands afterwards and flips the title back.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-wm',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+        // The list row's own projection block sits at an older cut than the
+        // live frame below, which is exactly the race the watermark settles.
+        'projections': <String, Object?>{
+          'asOfSeq': 5,
+          'values': <String, Object?>{'title': 'list title'},
+        },
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'projection-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-wm',
+            'key': 'title',
+            'value': 'newer title',
+            'seq': 40,
+          },
+        ),
+        ServerRequest(
+          rpcId: 'projection-2',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-wm',
+            'key': 'title',
+            'value': 'older title',
+            'seq': 12,
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+    // A later list pull must not reset the row either: the pull's own block
+    // sits at an older `asOfSeq`, so its title loses to the value held.
+    await repository.refreshSessions();
+    await pumpEventQueue();
+
+    final session = (await repository.observeSessions().first).single;
+    expect(session.title, 'newer title');
+  });
+
+  test('a complete baseline clears a projection key it omits', () async {
+    // A control baseline is the host's whole store for the session, so a key
+    // absent from it means the host no longer computes that value (the
+    // reference `ProjectionValueStore.seed` deletes rows the baseline omits) —
+    // a restarted host must not keep showing the previous goal.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-clear',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'baseline',
+            'value': <String, Object?>{
+              'projections': <String, Object?>{
+                'session-clear': <String, Object?>{
+                  'asOfSeq': 9,
+                  'values': <String, Object?>{
+                    'todos': <Object?>[
+                      <String, Object?>{
+                        'content': 'first item',
+                        'status': 'pending',
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        ),
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'baseline',
+            'value': <String, Object?>{
+              'projections': <String, Object?>{
+                'session-clear': <String, Object?>{
+                  'asOfSeq': 20,
+                  'values': <String, Object?>{},
+                },
+              },
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final todos = await repository.observeTodos('session-clear').first;
+    expect(todos, isEmpty);
+  });
+
+  test('a baseline queue seeds a session opened later', () async {
+    // The baseline is retained per session, not replayed once: a session this
+    // client had not instantiated when the generation's control frame landed
+    // still shows the messages that were already queued for it.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-late',
+        'updatedAt': 1,
+        'running': true,
+        'blank': false,
+      },
+    ])..historyEvents['session-late'] = <Object?>[_assistantMessageEvent()];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'baseline',
+            'value': <String, Object?>{
+              'queues': <String, Object?>{
+                'session-late': <Object?>[
+                  <String, Object?>{
+                    'id': 'queued-1',
+                    'placement': 'queued',
+                    'message': <String, Object?>{
+                      'content': <Object?>[
+                        <String, Object?>{'type': 'text', 'text': 'held'},
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    // Opening the session after the baseline still seeds its queue dock.
+    await repository.openSession('session-late');
+    await pumpEventQueue();
+    final window = await repository
+        .observeTimelineWindow('session-late')
+        .firstWhere(
+          (value) => value.items.any((item) => item is TimelineQueue),
+        );
+    final queue = window.items.whereType<TimelineQueue>().single;
+    expect(queue.items, hasLength(1));
+    expect(queue.items.single.itemId, 'queued-1');
+  });
+
   test(
     'session-control baseline and live projection frame update contextPressure',
     () async {
