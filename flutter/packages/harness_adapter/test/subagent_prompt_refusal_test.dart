@@ -32,6 +32,10 @@ import 'package:test/test.dart';
 class _RefusingRpc implements DshRpcClient {
   final List<String> calls = <String>[];
 
+  /// The `request` member of the last `subagents/prompt` call, so the test can
+  /// assert the control schema's required fields travel.
+  JsonMap? lastPromptRequest;
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -47,6 +51,9 @@ class _RefusingRpc implements DshRpcClient {
           value: <String, Object?>{'items': <Object?>[]},
         );
       case DshRpcEndpoints.subagentsPrompt:
+        lastPromptRequest = asJsonObject(
+          asJsonObject(payload['args'])?['request'],
+        );
         return RpcResult(
           ok: false,
           error: RpcError(
@@ -128,6 +135,12 @@ void main() {
         hasLength(1),
       );
       expect(rpc.calls, isNot(contains('subagent.prompt')));
+      // The control schema requires both discriminants: the fixed subagent
+      // `mode` and a `delivery`; a call missing either is refused at the
+      // gateway boundary before the child ever sees it
+      // (`packages/subagent/subagent/src/control.ts`).
+      expect(rpc.lastPromptRequest?['mode'], 'continuable');
+      expect(rpc.lastPromptRequest?['delivery'], 'queue');
     },
   );
 }

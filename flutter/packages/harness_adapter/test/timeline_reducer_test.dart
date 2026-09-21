@@ -21,6 +21,182 @@ JsonMap textBlock(String text) => <String, Object?>{
 };
 
 void main() {
+  group('live assistant stream (session/follow assistantStream)', () {
+    JsonMap chunk(
+      int index,
+      String text, {
+      String attempt = 'a1',
+      int revision = 1,
+    }) => <String, Object?>{
+      'type': 'chunk',
+      'attemptId': attempt,
+      'revision': revision,
+      'index': index,
+      'time': 100,
+      'chunk': <String, Object?>{
+        'type': 'text-delta',
+        'index': 0,
+        'text': text,
+      },
+    };
+
+    JsonMap start() => <String, Object?>{
+      'type': 'start',
+      'attemptId': 'a1',
+      'revision': 1,
+      'turn': 1,
+      'step': 1,
+    };
+
+    test('start then dense chunks stream text before the commit', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+
+      expect(reducer.ingestAssistantStreamFrame(start(), ordinal: 1), isFalse);
+      expect(
+        reducer.ingestAssistantStreamFrame(chunk(0, 'Hel'), ordinal: 2),
+        isTrue,
+      );
+      expect(
+        reducer.ingestAssistantStreamFrame(chunk(1, 'lo'), ordinal: 3),
+        isTrue,
+      );
+
+      final partial = reducer.snapshot().single as TimelineMessage;
+      expect(partial.value.text, 'Hello');
+      expect(partial.value.streaming, isTrue);
+      expect(partial.step, 1);
+    });
+
+    test('a skipped index is dropped rather than stitched in', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+      reducer.ingestAssistantStreamFrame(start(), ordinal: 1);
+      reducer.ingestAssistantStreamFrame(chunk(0, 'a'), ordinal: 2);
+      // index 2 never follows index 0: the frame is refused, so no half
+      // sentence is invented.
+      expect(
+        reducer.ingestAssistantStreamFrame(chunk(2, 'c'), ordinal: 3),
+        isFalse,
+      );
+      expect((reducer.snapshot().single as TimelineMessage).value.text, 'a');
+    });
+
+    test('a chunk from another attempt is refused', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+      reducer.ingestAssistantStreamFrame(start(), ordinal: 1);
+      expect(
+        reducer.ingestAssistantStreamFrame(
+          chunk(0, 'x', attempt: 'a2'),
+          ordinal: 2,
+        ),
+        isFalse,
+      );
+      expect(reducer.snapshot(), isEmpty);
+    });
+
+    test('an abandoned end settles the text the reader watched arrive', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+      reducer.ingestAssistantStreamFrame(start(), ordinal: 1);
+      reducer.ingestAssistantStreamFrame(chunk(0, 'half'), ordinal: 2);
+      expect(
+        reducer.ingestAssistantStreamFrame(<String, Object?>{
+          'type': 'end',
+          'attemptId': 'a1',
+          'revision': 1,
+          'index': 1,
+          'outcome': <String, Object?>{'kind': 'abandoned'},
+        }, ordinal: 3),
+        isTrue,
+      );
+      final settled = reducer.snapshot().single as TimelineMessage;
+      expect(settled.value.text, 'half');
+      expect(settled.value.streaming, isFalse);
+    });
+
+    test('a committed end lets the durable message replace the partial', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+      reducer.ingestAssistantStreamFrame(start(), ordinal: 1);
+      reducer.ingestAssistantStreamFrame(chunk(0, 'hello'), ordinal: 2);
+      reducer.ingestAssistantStreamFrame(<String, Object?>{
+        'type': 'end',
+        'attemptId': 'a1',
+        'revision': 1,
+        'index': 1,
+        'outcome': <String, Object?>{
+          'kind': 'committed',
+          'eventType': 'assistant/message',
+          'seq': 7,
+        },
+      }, ordinal: 3);
+
+      reducer.reset(<JsonMap>[
+        event(7, 'assistant/message', <String, Object?>{
+          'turn': 1,
+          'step': 1,
+          'message': <String, Object?>{
+            'id': 'assistant-1',
+            'role': 'assistant',
+            'content': <Object?>[textBlock('hello')],
+          },
+        }),
+      ]);
+      final snapshot = reducer.snapshot();
+      expect(snapshot, hasLength(1));
+      expect((snapshot.single as TimelineMessage).value.id, 'assistant-1');
+    });
+
+    test('a follow baseline seeds the partial mid-reply', () {
+      final reducer = TimelineReducer('s1');
+      reducer.reset(const <JsonMap>[]);
+      reducer.seedAssistantStreamBaseline(<String, Object?>{
+        'revision': 4,
+        'activeAttempt': <String, Object?>{
+          'attemptId': 'a1',
+          'startedAfterSeq': 6,
+          'turn': 2,
+          'step': 3,
+          'nextIndex': 2,
+          'stream': <Object?>[
+            <String, Object?>{'type': 'text-delta', 'index': 0, 'text': 'al'},
+            <String, Object?>{
+              'type': 'text-delta',
+              'index': 0,
+              'text': 'ready',
+            },
+          ],
+        },
+      });
+      final partial = reducer.snapshot().single as TimelineMessage;
+      expect(partial.value.text, 'already');
+      expect(partial.value.streaming, isTrue);
+      expect(partial.step, 3);
+      // The baseline's nextIndex keeps the dense-index contract: 2 is the next
+      // accepted frame.
+      expect(
+        reducer.ingestAssistantStreamFrame(
+          chunk(2, '!', revision: 4),
+          ordinal: 1,
+        ),
+        isTrue,
+      );
+      expect(
+        reducer.ingestAssistantStreamFrame(
+          chunk(3, '?', revision: 4),
+          ordinal: 2,
+        ),
+        isTrue,
+      );
+      expect(
+        (reducer.snapshot().single as TimelineMessage).value.text,
+        'already!?',
+      );
+    });
+  });
+
   test('history finalizes live assistant text from chunks', () {
     final history = <JsonMap>[
       event(1, 'assistant/chunk', <String, Object?>{
