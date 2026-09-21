@@ -389,6 +389,8 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// omits one clears it, so the list has to name them all.
   static const Set<String> _projectionKeys = <String>{
     'title',
+    'sessionStats',
+    'tokenUsage',
     'goal',
     'plan',
     'todos',
@@ -2211,6 +2213,25 @@ class HarnessRepositoryImpl implements ChatRepository {
         );
         _modelSelectionStateFor(sessionId).value = selection;
         _notifySessionModels(sessionId);
+      case 'sessionStats':
+        // Whole-log counters: the host computes them across the complete
+        // durable log, so they must not move when history is paged
+        // (`session-stats/src/types.ts`).
+        _sessionStateFor(sessionId).applyHostStats(
+          counters: _decodeProjection(
+            frame.payload['value'],
+            _parseHostSessionStats,
+            'sessionStats',
+          ),
+        );
+      case 'tokenUsage':
+        _sessionStateFor(sessionId).applyHostStats(
+          usage: _decodeProjection(
+            frame.payload['value'],
+            _parseHostTokenUsage,
+            'tokenUsage',
+          ),
+        );
       default:
         _onDiagnostic?.call(
           AdapterDiagnostic(
@@ -2418,6 +2439,26 @@ class HarnessRepositoryImpl implements ChatRepository {
           )
           .toList();
     }
+    if (values.containsKey('sessionStats') &&
+        _claimProjection(sessionId, 'sessionStats', seq)) {
+      _sessionStateFor(sessionId).applyHostStats(
+        counters: _decodeProjection(
+          values['sessionStats'],
+          _parseHostSessionStats,
+          'sessionStats',
+        ),
+      );
+    }
+    if (values.containsKey('tokenUsage') &&
+        _claimProjection(sessionId, 'tokenUsage', seq)) {
+      _sessionStateFor(sessionId).applyHostStats(
+        usage: _decodeProjection(
+          values['tokenUsage'],
+          _parseHostTokenUsage,
+          'tokenUsage',
+        ),
+      );
+    }
     if (values.containsKey('modelSelection') &&
         _claimProjection(sessionId, 'modelSelection', seq)) {
       final selection = _parseModelSelectionProjection(
@@ -2469,7 +2510,59 @@ class HarnessRepositoryImpl implements ChatRepository {
         _updateContextPressure(sessionId, null, 0);
       case 'contextBreakdown':
         _updateContextBreakdown(sessionId, null, 0);
+      case 'sessionStats':
+      case 'tokenUsage':
+        // The host no longer publishes whole-log figures: the window fold
+        // governs again.
+        _sessionStateFor(sessionId).applyHostStats(clear: true);
     }
+  }
+
+  /// Decodes one projection value: a JSON `null` (or the literal `"null"` some
+  /// hosts carry) is "the host holds no value", and a malformed one yields null
+  /// with a diagnostic — never a fabricated value.
+  T? _decodeProjection<T>(
+    Object? value,
+    T Function(JsonMap json) decode,
+    String what,
+  ) {
+    if (value == null || value == 'null') return null;
+    return _tryDecode(() {
+      final obj = asJsonObject(value);
+      if (obj == null) throw FormatException('$what: not an object');
+      return decode(obj);
+    }, what);
+  }
+
+  /// The `sessionStats` projection: whole-log counters
+  /// (`packages/session/session-stats/src/types.ts`). Every field is a count
+  /// or a millisecond total; an absent one reads as zero, the same value the
+  /// window fold starts from.
+  SessionWindowStats _parseHostSessionStats(JsonMap json) => SessionWindowStats(
+    turns: wireLong(json, 'turns'),
+    steps: wireLong(json, 'steps'),
+    llmMs: wireLong(json, 'llmMs'),
+    toolMs: wireLong(json, 'toolMs'),
+    ttftMs: wireLong(json, 'ttftMs'),
+    ttftSteps: wireLong(json, 'ttftSteps'),
+    decodeMs: wireLong(json, 'decodeMs'),
+    decodeTokens: wireLong(json, 'decodeTokens'),
+  );
+
+  /// The `tokenUsage` projection: the three disjoint prompt-side buckets plus
+  /// the provider's output total (`packages/llm/token-meter/src/projection.ts`).
+  /// [SessionWindowStats.billedInputTokens] is their sum, which is the
+  /// denominator the reference's cache-hit share uses.
+  SessionWindowStats _parseHostTokenUsage(JsonMap json) {
+    final cacheRead = wireLong(json, 'cacheReadTokens');
+    return SessionWindowStats(
+      billedInputTokens:
+          wireLong(json, 'uncachedInputTokens') +
+          cacheRead +
+          wireLong(json, 'cacheWriteTokens'),
+      outputTokens: wireLong(json, 'outputTokens'),
+      cacheReadTokens: cacheRead,
+    );
   }
 
   /// Wire `modelSelection` projection payload: `{ lastUsed, next }`.
@@ -3897,6 +3990,59 @@ final class _SessionState {
   final StateStream<SessionWindowStats> sessionStats =
       StateStream<SessionWindowStats>(const SessionWindowStats());
 
+  /// Whole-log counters the host published (`sessionStats` projection), or
+  /// null while it publishes none. Independent of the loaded window, so paging
+  /// cannot move them.
+  SessionWindowStats? _hostSessionStats;
+
+  /// Whole-log billing usage the host published (`tokenUsage` projection), or
+  /// null while it publishes none.
+  SessionWindowStats? _hostTokenUsage;
+
+  /// Applies one half of the host's whole-log figures. Each half governs its
+  /// own fields and falls back to the window fold for the other, so a host
+  /// that publishes only one of the two projections still gets the other
+  /// figure right.
+  void applyHostStats({
+    SessionWindowStats? counters,
+    SessionWindowStats? usage,
+    bool clear = false,
+  }) {
+    if (clear) {
+      _hostSessionStats = null;
+      _hostTokenUsage = null;
+    } else {
+      if (counters != null) _hostSessionStats = counters;
+      if (usage != null) _hostTokenUsage = usage;
+    }
+    refreshStats();
+  }
+
+  /// Publishes the session's statistics: the host's whole-log values where it
+  /// publishes them, the loaded window's fold for whatever it does not.
+  void refreshStats() {
+    final fold = _statsFold.value;
+    final counters = _hostSessionStats;
+    final usage = _hostTokenUsage;
+    if (counters == null && usage == null) {
+      sessionStats.value = fold;
+      return;
+    }
+    sessionStats.value = SessionWindowStats(
+      turns: counters?.turns ?? fold.turns,
+      steps: counters?.steps ?? fold.steps,
+      llmMs: counters?.llmMs ?? fold.llmMs,
+      toolMs: counters?.toolMs ?? fold.toolMs,
+      ttftMs: counters?.ttftMs ?? fold.ttftMs,
+      ttftSteps: counters?.ttftSteps ?? fold.ttftSteps,
+      decodeMs: counters?.decodeMs ?? fold.decodeMs,
+      decodeTokens: counters?.decodeTokens ?? fold.decodeTokens,
+      billedInputTokens: usage?.billedInputTokens ?? fold.billedInputTokens,
+      outputTokens: usage?.outputTokens ?? fold.outputTokens,
+      cacheReadTokens: usage?.cacheReadTokens ?? fold.cacheReadTokens,
+    );
+  }
+
   /// Session-level facts folded beside the timeline: the effective
   /// `sandbox/mode` override and the active `schedule/change` reminders.
   /// Both publish only when the reducer's facts revision moved, so a
@@ -3968,7 +4114,7 @@ final class _SessionState {
             _statsFold.ingestEvent(frame.payload['event']);
           }
         }
-        sessionStats.value = _statsFold.value;
+        refreshStats();
         _pending = <ServerRequest>[];
         _ready = true;
         _isOpened = true;
@@ -4009,7 +4155,7 @@ final class _SessionState {
               _statsFold.ingestEvent(frame.payload['event']);
             }
           }
-          sessionStats.value = _statsFold.value;
+          refreshStats();
           _publish();
         }
         _ready = true;
@@ -4053,7 +4199,7 @@ final class _SessionState {
           _statsFold.ingestEvent(frame.payload['event']);
         }
       }
-      sessionStats.value = _statsFold.value;
+      refreshStats();
       _pending = <ServerRequest>[];
       _ready = true;
       _isOpened = true;
@@ -4086,7 +4232,7 @@ final class _SessionState {
       final frameType = wireType(frame.payload);
       if (frameType == 'session/event' || frameType == 'event') {
         _statsFold.ingestEvent(frame.payload['event']);
-        sessionStats.value = _statsFold.value;
+        refreshStats();
       }
       _framesAfterOpen.add(frame);
       _publish(coalescable: _isStreamingChunk(frame));
@@ -4172,7 +4318,7 @@ final class _SessionState {
         _statsFold.ingestEvent(frame.payload['event']);
       }
     }
-    sessionStats.value = _statsFold.value;
+    refreshStats();
   }
 
   void _publish({bool coalescable = false}) {

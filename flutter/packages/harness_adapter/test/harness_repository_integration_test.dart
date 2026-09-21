@@ -1410,6 +1410,122 @@ void main() {
     expect(breakdown?.messageTokens, 200);
   });
 
+  test(
+    'whole-log sessionStats and tokenUsage projections govern the line',
+    () async {
+      // The host computes these across the complete durable log, so the figures
+      // must not move when history is paged — the window fold is only the
+      // fallback for an assembly that publishes neither key
+      // (`session-stats/src/types.ts`; `ui-chat/StatsPills.tsx:319`).
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-stats',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'projection-stats',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'projection',
+              'sessionId': 'session-stats',
+              'key': 'sessionStats',
+              'seq': 30,
+              'value': <String, Object?>{
+                'turns': 7,
+                'steps': 21,
+                'llmMs': 1000,
+                'toolMs': 2000,
+                'ttftMs': 300,
+                'ttftSteps': 7,
+                'decodeMs': 400,
+                'decodeTokens': 500,
+              },
+            },
+          ),
+          ServerRequest(
+            rpcId: 'projection-usage',
+            method: 'session/projection',
+            payload: <String, Object?>{
+              'type': 'projection',
+              'sessionId': 'session-stats',
+              'key': 'tokenUsage',
+              'seq': 31,
+              'value': <String, Object?>{
+                'uncachedInputTokens': 100,
+                'cacheReadTokens': 900,
+                'cacheWriteTokens': 0,
+                'outputTokens': 50,
+              },
+            },
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final stats = await repository.observeSessionStats('session-stats').first;
+      expect(stats.turns, 7);
+      expect(stats.steps, 21);
+      expect(stats.llmMs, 1000);
+      expect(stats.toolMs, 2000);
+      expect(stats.ttftMs, 300);
+      expect(stats.decodeTokens, 500);
+      // Billed input is the three prompt-side buckets summed, the reference's
+      // own denominator for the cache-hit share.
+      expect(stats.billedInputTokens, 1000);
+      expect(stats.cacheReadTokens, 900);
+      expect(stats.outputTokens, 50);
+      expect(stats.cacheHitPercent, 90);
+    },
+  );
+
+  test(
+    'a session the host reports no whole-log figures for keeps the fold',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-fold',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/control',
+            payload: <String, Object?>{
+              'type': 'baseline',
+              'value': <String, Object?>{
+                'projections': <String, Object?>{
+                  'session-fold': <String, Object?>{
+                    'asOfSeq': 4,
+                    'values': <String, Object?>{},
+                  },
+                },
+              },
+            },
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final stats = await repository.observeSessionStats('session-fold').first;
+      expect(stats, const SessionWindowStats());
+    },
+  );
+
   test('a projection frame older than the value held is dropped', () async {
     // The reference's projection store has one ordering rule: a value whose
     // `seq` is not newer than the row's is dropped
