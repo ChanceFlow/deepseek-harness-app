@@ -108,8 +108,12 @@ class FakeChatRepository extends ChatRepository {
   @override
   Future<String> selectAgentPreset(String sessionId, String agentPreset) async {
     selectedAgentPresets.add((sessionId, agentPreset));
+    if (failSelectAgentPreset) throw Exception('preset locked');
     return agentPreset;
   }
+
+  /// Scripted preset-switch refusal (`agent-preset-locked`).
+  bool failSelectAgentPreset = false;
 
   @override
   Stream<PermissionSelect?> observePermissions(String sessionId) {
@@ -203,7 +207,11 @@ class FakeChatRepository extends ChatRepository {
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
     sentMessages.add(request);
+    if (failSendMessage) throw Exception('host unreachable');
   }
+
+  /// Scripted send failure: the prompt never reaches the host.
+  bool failSendMessage = false;
 
   /// Host-command executions answered by the fake, keyed by the submitted
   /// line; a line absent from the map answers the unmatched miss (null —
@@ -810,6 +818,74 @@ void main() {
       repository.skillListCalls.single,
       FakeChatRepository.initialSession.id,
     );
+  });
+
+  test('a failed send withdraws its optimistic user message', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    )..failSendMessage = true;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+    controller.onAction(const SendPrompt('never sent'));
+    await pumpEventQueue();
+
+    expect(repository.sentMessages, hasLength(1));
+    // The local echo was a prediction; when the host refuses the prompt it
+    // must not keep reading as a sent message.
+    expect(
+      controller.state.timeline.where((item) => item is TimelineMessage),
+      isEmpty,
+    );
+  });
+
+  test(
+    'switching the agent preset drops that session\'s skill cache',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final controller = ChatController(repository);
+      await pumpEventQueue();
+
+      controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+      await pumpEventQueue();
+      expect(repository.skillListCalls, hasLength(1));
+
+      controller.onAction(
+        SelectAgentPreset(
+          sessionId: FakeChatRepository.initialSession.id,
+          agentPreset: 'ptc',
+        ),
+      );
+      await pumpEventQueue();
+
+      // The preset decides which skill providers the agent reads, so the
+      // catalog is re-read rather than served from the old preset's cache.
+      expect(repository.skillListCalls, hasLength(2));
+    },
+  );
+
+  test('a refused preset switch keeps the skill cache', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    )..failSelectAgentPreset = true;
+    final controller = ChatController(repository);
+    await pumpEventQueue();
+
+    controller.onAction(SelectSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+    controller.onAction(
+      SelectAgentPreset(
+        sessionId: FakeChatRepository.initialSession.id,
+        agentPreset: 'ptc',
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(repository.skillListCalls, hasLength(1));
   });
 
   test('send prompt delegates to repository', () async {
