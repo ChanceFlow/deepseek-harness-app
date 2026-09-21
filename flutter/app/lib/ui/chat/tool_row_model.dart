@@ -12,8 +12,11 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart' show IconData, Icons;
 
 /// Row variants selected by the generic atomic renderer (web
-/// `ToolRowVariant`).
-enum ToolRowVariant { search, read, bash, write, edit, code, others }
+/// `ToolRowVariant`). [present] is not a web variant: the reference renders
+/// the `present` tool through its own view
+/// (`ui-deliverables/src/client/PresentRow.tsx`), whose title and declared
+/// paths this row reproduces.
+enum ToolRowVariant { search, read, bash, write, edit, code, present, others }
 
 /// Figma row titles per variant, localized.
 Map<ToolRowVariant, String> variantTitles(AppLocalizations l10n) =>
@@ -24,6 +27,7 @@ Map<ToolRowVariant, String> variantTitles(AppLocalizations l10n) =>
       ToolRowVariant.write: l10n.toolWriteTitle,
       ToolRowVariant.edit: l10n.toolEditTitle,
       ToolRowVariant.code: l10n.toolCodeTitle,
+      ToolRowVariant.present: l10n.presentedFilesLabel,
       ToolRowVariant.others: l10n.toolCallTitle,
     };
 
@@ -49,6 +53,11 @@ const Map<String, ToolRowVariant> _toolVariants = <String, ToolRowVariant>{
   'cordis_run': ToolRowVariant.others,
   'cordis_stop': ToolRowVariant.others,
   'cordis_undefine': ToolRowVariant.others,
+  // The delivery declaration: its own title and its `files[]` paths, the
+  // reference PresentRow's collapsed content (web has no variant entry —
+  // `packages/client/ui-deliverables/src/client/index.ts` registers the
+  // view for key `present`).
+  'present': ToolRowVariant.present,
 };
 
 /// Tool-owned titles that refine a generic row variant without replacing
@@ -72,6 +81,9 @@ const Map<ToolRowVariant, List<String>> _summaryKeys =
       ToolRowVariant.write: ['path', 'file_path'],
       ToolRowVariant.edit: ['path', 'file_path'],
       ToolRowVariant.code: ['description'],
+      // The present row's summary is its `files[]` paths, not a top-level
+      // key; [_deriveSummary] reads it before this table is consulted.
+      ToolRowVariant.present: [],
       ToolRowVariant.others: [],
     };
 
@@ -117,12 +129,32 @@ String _deriveSummary(ToolRowVariant variant, String argsRaw) {
   final parsed = _parseArgs(argsRaw);
   if (parsed is! Map<String, Object?>) return _firstLine(argsRaw);
   final args = parsed.cast<String, Object?>();
+  if (variant == ToolRowVariant.present) {
+    // The reference's `fileNames`: the declared paths comma-joined, with the
+    // raw arguments staying visible when the payload carries no readable
+    // `files[]` (a call still streaming).
+    final names = _presentedFileNames(args);
+    return names.isEmpty ? _firstLine(argsRaw) : names;
+  }
   final picked = _pickString(args, _summaryKeys[variant]!);
   if (picked != null) return _firstLine(picked);
   for (final value in args.values) {
     if (value is String && value.isNotEmpty) return _firstLine(value);
   }
   return _firstLine(argsRaw);
+}
+
+/// The `files[].path` values of one `present` call's arguments, comma-joined.
+String _presentedFileNames(Map<String, Object?> args) {
+  final files = args['files'];
+  if (files is! List) return '';
+  final paths = <String>[];
+  for (final file in files) {
+    if (file is! Map) continue;
+    final path = file['path'];
+    if (path is String && path.isNotEmpty) paths.add(path);
+  }
+  return paths.join(', ');
 }
 
 String? _deriveFilePath(ToolRowVariant variant, String argsRaw) {

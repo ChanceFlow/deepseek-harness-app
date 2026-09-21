@@ -234,6 +234,83 @@ const PermissionSelect kDockAccess = PermissionSelect(
   ],
 );
 
+/// A settled turn that both wrote and delivered files: the produced-files
+/// chips row (本轮文件改动) and the delivered-files cards (交付文件) close the
+/// reply, and the `present` call itself is an ordinary transcript row above
+/// them. Five declarations so the collapse toggle is exercised the way a
+/// crowded turn looks.
+///
+/// The session is idle on purpose: the turn-tail rows wait for `turn/end`
+/// ([turnFilesByClosingMessage]), so a state with `running: true` would hide
+/// exactly what this shot exists to show.
+ChatUiState presentedFilesState() {
+  return const ChatUiState(
+    sessions: <SessionSummary>[
+      SessionSummary(
+        id: 's1',
+        title: 'hero render handoff',
+        blank: false,
+        updatedAtEpochMs: kNow,
+        cwd: '/home/user/Projects/art-pipeline',
+      ),
+    ],
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      TimelineTurnBoundary(1),
+      TimelineMessage(
+        ChatMessage(
+          id: 'pf-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'render the hero and hand me the assets',
+          createdAtEpochMs: kNow,
+          seq: 11,
+        ),
+      ),
+      TimelineToolCall(
+        id: 'pf-t1',
+        name: 'write',
+        arguments: '{"file_path":"out/hero.png","content":"<binary>"}',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineToolCall(
+        id: 'pf-t2',
+        name: 'write',
+        arguments: '{"file_path":"out/hero@2x.png","content":"<binary>"}',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineToolCall(
+        id: 'pf-t3',
+        name: 'present',
+        arguments:
+            '{"files":[{"path":"out/hero.png","description":"1x hero"},'
+            '{"path":"out/hero@2x.png"},{"path":"out/report.pdf"},'
+            '{"path":"out/LICENSE"},{"path":"out/atlas.png"}]}',
+        status: ToolRunStatus.completed,
+        presentedFiles: <PresentedFile>[
+          PresentedFile(path: 'out/hero.png', description: '1x hero'),
+          PresentedFile(path: 'out/hero@2x.png'),
+          PresentedFile(path: 'out/report.pdf', description: 'Render report'),
+          PresentedFile(path: 'out/LICENSE'),
+          PresentedFile(path: 'out/atlas.png'),
+        ],
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'pf-a1',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text:
+              'Rendered both densities and attached the report. The license '
+              'copy rides along for the store listing.',
+          createdAtEpochMs: kNow + 1000,
+          seq: 12,
+        ),
+      ),
+    ],
+  );
+}
+
 /// The outline's own fold: one settled turn carrying a failed tool (the
 /// ledger header wears the error dot and an error-ink failure count) and
 /// one still-running turn (the ongoing dot; singular counts too). The

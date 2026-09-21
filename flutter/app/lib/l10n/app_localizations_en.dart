@@ -2476,6 +2476,34 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get presentedFilesLabel => 'Present files';
+
+  @override
+  String get presentedFilesOpen => 'Open';
+
+  @override
+  String presentedFilesOpenName(String name) {
+    return 'Open $name';
+  }
+
+  @override
+  String get presentedFilesFile => 'File';
+
+  @override
+  String presentedFilesAll(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+    );
+    return 'All $_temp0';
+  }
+
+  @override
+  String get presentedFilesCollapse => 'Collapse';
+
+  @override
   String messageTokensPerSecond(String tps) {
     return '$tps tok/s';
   }

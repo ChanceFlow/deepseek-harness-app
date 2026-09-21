@@ -103,6 +103,7 @@ ToolGroupSummary deriveToolGroupSummary(
       case ToolRowVariant.bash:
         commands++;
       case ToolRowVariant.code:
+      case ToolRowVariant.present:
       case ToolRowVariant.others:
         // Other tools participate in breakdown and total count.
         break;

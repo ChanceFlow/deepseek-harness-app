@@ -272,6 +272,8 @@ class TimelineReducer {
         _appendToolCall(event);
       case 'tool/result':
         _appendToolResult(event);
+      case 'deliverables/presented':
+        _appendPresentedFiles(event);
       case 'tool/ptc-dispatch-start':
         _appendPtcDispatchStart(event);
       case 'tool/ptc-dispatch':
@@ -952,6 +954,7 @@ class TimelineReducer {
     String? name,
     String? result,
     List<AttachmentRef>? images,
+    List<PresentedFile>? presentedFiles,
     bool isError = false,
     bool settle = false,
   }) => TimelineToolCall(
@@ -969,6 +972,7 @@ class TimelineReducer {
     startedAtEpochMs: call.startedAtEpochMs,
     presentation: call.presentation,
     images: images ?? call.images,
+    presentedFiles: presentedFiles ?? call.presentedFiles,
   );
 
   /// The logged event time, or null when the host sent none — a start
@@ -1097,11 +1101,60 @@ class TimelineReducer {
       // data on the result event. A payload with no known card yields null
       // (the reference's generic fallback).
       presentation: decodeToolResultPresentation(data['meta']),
+      // A declaration folded before this result (the host appends
+      // `deliverables/presented` from its own `tools/result` hook, so the two
+      // events race in the journal) must survive the settle.
+      presentedFiles: previous?.presentedFiles ?? const <PresentedFile>[],
     );
     if (index >= 0) {
       _items[index] = newItem;
     } else {
       _items.add(newItem);
+    }
+  }
+
+  /// One `deliverables/presented` event: the files a successful `present`
+  /// call declared (`packages/fs/tool-present/src/index.ts`, which appends
+  /// the event from its `tools/result` hook). The event names the call, so
+  /// the declaration rides that call's own row instead of publishing a
+  /// second item — the reference pairs the same two facts in its turn node
+  /// (`ui-deliverables/src/client/turn-deliverables.ts`).
+  ///
+  /// A declaration without a non-empty `path` is skipped rather than failing
+  /// the event, the posture the reference's `isPresentedFile` takes; a
+  /// declaration whose `present` call is not in the folded window has no row
+  /// to ride and publishes nothing.
+  void _appendPresentedFiles(JsonMap event) {
+    final data = _eventData(event);
+    final callId = wireString(data, 'callId');
+    final rawFiles = asJsonArray(data['files']);
+    if (callId == null || rawFiles == null) {
+      throw const FormatException(
+        'deliverables/presented requires "callId" and a "files" array',
+      );
+    }
+    final files = <PresentedFile>[];
+    for (final entry in rawFiles) {
+      final file = asJsonObject(entry);
+      if (file == null) continue;
+      final path = wireString(file, 'path');
+      if (path == null || path.trim().isEmpty) continue;
+      files.add(
+        PresentedFile(path: path, description: wireString(file, 'description')),
+      );
+    }
+    if (files.isEmpty) return;
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item is! TimelineToolCall || _findCall(item, callId) == null) {
+        continue;
+      }
+      _items[i] = _updateCall(
+        item,
+        callId,
+        (call) => _withChildren(call, call.children, presentedFiles: files),
+      );
+      return;
     }
   }
 

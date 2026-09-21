@@ -4129,6 +4129,42 @@ abstract class AppLocalizations {
   /// **'Open {name}'**
   String producedFilesOpen(String name);
 
+  /// Title of the present tool's row and the caption above the declared-file cards a finished turn closes with (reference `row.title`).
+  ///
+  /// In en, this message translates to:
+  /// **'Present files'**
+  String get presentedFilesLabel;
+
+  /// Action seat of one presented-file card: opens the file in the in-app preview sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get presentedFilesOpen;
+
+  /// Accessible label of one presented-file card; the name is the path.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {name}'**
+  String presentedFilesOpenName(String name);
+
+  /// Fallback description of a presented file whose name carries no extension (reference `presented.file`).
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get presentedFilesFile;
+
+  /// Expand toggle of a presented-file list longer than the collapsed count.
+  ///
+  /// In en, this message translates to:
+  /// **'All {count, plural, =1{1 file} other{{count} files}}'**
+  String presentedFilesAll(int count);
+
+  /// Collapse toggle of an expanded presented-file list.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get presentedFilesCollapse;
+
   /// Decode throughput on a finalized assistant message's action row.
   ///
   /// In en, this message translates to:

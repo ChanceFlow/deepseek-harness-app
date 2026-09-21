@@ -2278,6 +2278,40 @@
       }
     }
   },
+  "presentedFilesLabel": "Present files",
+  "@presentedFilesLabel": {
+    "description": "Title of the present tool's row and the caption above the declared-file cards a finished turn closes with (reference `row.title`)."
+  },
+  "presentedFilesOpen": "Open",
+  "@presentedFilesOpen": {
+    "description": "Action seat of one presented-file card: opens the file in the in-app preview sheet."
+  },
+  "presentedFilesOpenName": "Open {name}",
+  "@presentedFilesOpenName": {
+    "description": "Accessible label of one presented-file card; the name is the path.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "presentedFilesFile": "File",
+  "@presentedFilesFile": {
+    "description": "Fallback description of a presented file whose name carries no extension (reference `presented.file`)."
+  },
+  "presentedFilesAll": "All {count, plural, =1{1 file} other{{count} files}}",
+  "@presentedFilesAll": {
+    "description": "Expand toggle of a presented-file list longer than the collapsed count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "presentedFilesCollapse": "Collapse",
+  "@presentedFilesCollapse": {
+    "description": "Collapse toggle of an expanded presented-file list."
+  },
   "messageTokensPerSecond": "{tps} tok/s",
   "@messageTokensPerSecond": {
     "description": "Decode throughput on a finalized assistant message's action row.",

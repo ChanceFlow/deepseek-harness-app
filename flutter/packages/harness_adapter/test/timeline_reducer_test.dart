@@ -346,6 +346,112 @@ void main() {
     expect(tool.result, 'ok');
   });
 
+  test('deliverables/presented folds its declared files onto the present call', () {
+    final history = <JsonMap>[
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'present-call',
+        'name': 'present',
+        'arguments':
+            '{"files":[{"path":"out/hero.png","description":"Rendered hero"}]}',
+      }),
+      event(2, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'present-call',
+              'content': <Object?>[textBlock('presented 1 file')],
+            },
+          ],
+        },
+      }),
+      event(3, 'deliverables/presented', <String, Object?>{
+        'turn': 1,
+        'callId': 'present-call',
+        'files': <Object?>[
+          <String, Object?>{
+            'path': 'out/hero.png',
+            'description': 'Rendered hero',
+          },
+          // A declaration without a usable path is skipped, the reference's
+          // `isPresentedFile` posture.
+          <String, Object?>{'path': '   '},
+        ],
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final call = reducer.snapshot().single as TimelineToolCall;
+    expect(call.name, 'present');
+    expect(call.status, ToolRunStatus.completed);
+    expect(call.result, 'presented 1 file');
+    expect(call.presentedFiles, <PresentedFile>[
+      const PresentedFile(path: 'out/hero.png', description: 'Rendered hero'),
+    ]);
+  });
+
+  test('a declaration with no reachable present call publishes nothing', () {
+    final history = <JsonMap>[
+      event(1, 'deliverables/presented', <String, Object?>{
+        'turn': 1,
+        'callId': 'missing-call',
+        'files': <Object?>[
+          <String, Object?>{'path': 'out/hero.png'},
+        ],
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    expect(reducer.snapshot(), isEmpty);
+  });
+
+  test('a declaration before its result survives the settle', () {
+    final history = <JsonMap>[
+      event(1, 'tool/call', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'callId': 'present-call',
+        'name': 'present',
+        'arguments': '{"files":[{"path":"out/hero.png"}]}',
+      }),
+      event(2, 'deliverables/presented', <String, Object?>{
+        'turn': 1,
+        'callId': 'present-call',
+        'files': <Object?>[
+          <String, Object?>{'path': 'out/hero.png'},
+        ],
+      }),
+      event(3, 'tool/result', <String, Object?>{
+        'turn': 1,
+        'step': 1,
+        'message': <String, Object?>{
+          'content': <Object?>[
+            <String, Object?>{
+              'type': 'tool-result',
+              'toolCallId': 'present-call',
+              'content': <Object?>[textBlock('done')],
+            },
+          ],
+        },
+      }),
+    ];
+
+    final reducer = TimelineReducer('s1');
+    reducer.reset(history);
+
+    final call = reducer.snapshot().single as TimelineToolCall;
+    expect(call.result, 'done');
+    expect(call.presentedFiles.single.path, 'out/hero.png');
+  });
+
   test('tool result image block folds its durable reference onto the call', () {
     final history = <JsonMap>[
       event(1, 'tool/call', <String, Object?>{

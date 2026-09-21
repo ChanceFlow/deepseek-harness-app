@@ -28,6 +28,30 @@ sealed class TimelineItem {
   const TimelineItem();
 }
 
+/// One file a `present` call declared to the reader
+/// (`reference/deepseek-harness/packages/fs/tool-present/src/types.ts`
+/// `PresentedFile`, carried by the `deliverables/presented` event).
+///
+/// [path] keeps the model's own spelling: absolute, or relative to the
+/// Session's working directory. [description] is the model's optional note
+/// about what the file is.
+final class PresentedFile {
+  const PresentedFile({required this.path, this.description});
+
+  final String path;
+  final String? description;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PresentedFile &&
+          other.path == path &&
+          other.description == description);
+
+  @override
+  int get hashCode => Object.hash('presented-file', path, description);
+}
+
 /// One chat message row.
 ///
 /// [step] is the logged `step/start` step that owns the row (assistant
@@ -263,6 +287,7 @@ final class TimelineToolCall extends TimelineItem {
     this.startedAtEpochMs,
     this.presentation,
     this.images = const <AttachmentRef>[],
+    this.presentedFiles = const <PresentedFile>[],
   });
 
   final String id;
@@ -293,6 +318,12 @@ final class TimelineToolCall extends TimelineItem {
   /// seam user-attached images use.
   final List<AttachmentRef> images;
 
+  /// Files this call declared through a successful `present` result — the
+  /// `deliverables/presented` event's `files` for this call's `callId`, in
+  /// declaration order. Empty for every other call, and for a declaration
+  /// whose `present` call is not in the folded window.
+  final List<PresentedFile> presentedFiles;
+
   /// Whether this call ran nested inside another call's code dispatch.
   bool get isNested => parentCallId != null;
 
@@ -321,6 +352,7 @@ final class TimelineToolCall extends TimelineItem {
           other.startedAtEpochMs == startedAtEpochMs &&
           other.presentation == presentation &&
           _listEquals(other.images, images) &&
+          _listEquals(other.presentedFiles, presentedFiles) &&
           _listEquals(other.children, children));
 
   @override
@@ -338,6 +370,7 @@ final class TimelineToolCall extends TimelineItem {
     startedAtEpochMs,
     presentation,
     Object.hashAll(images),
+    Object.hashAll(presentedFiles),
   );
 }
 

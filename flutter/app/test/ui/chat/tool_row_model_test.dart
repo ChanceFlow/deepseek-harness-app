@@ -15,6 +15,41 @@ import '../../l10n_app.dart';
 final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
+  test('a present call is the delivery row: title plus declared paths', () {
+    final model = deriveToolRowModel(
+      const TimelineToolCall(
+        id: 'p1',
+        name: 'present',
+        arguments:
+            '{"files":[{"path":"out/hero.png","description":"Hero"},'
+            '{"path":"out/report.pdf"}]}',
+        result: 'presented 2 files',
+        status: ToolRunStatus.completed,
+      ),
+      _en,
+    );
+    expect(model.variant, ToolRowVariant.present);
+    expect(model.title, 'Present files');
+    // The reference PresentRow's collapsed content: the paths, comma-joined,
+    // never the result text.
+    expect(model.summary, 'out/hero.png, out/report.pdf');
+    expect(model.summary, isNot(contains('presented 2')));
+  });
+
+  test('a partial present payload keeps its raw arguments visible', () {
+    final model = deriveToolRowModel(
+      const TimelineToolCall(
+        id: 'p2',
+        name: 'present',
+        arguments: '{"files":[{"path":"out/he',
+        status: ToolRunStatus.running,
+      ),
+      _en,
+    );
+    expect(model.variant, ToolRowVariant.present);
+    expect(model.summary, '{"files":[{"path":"out/he');
+  });
+
   test(
     'unknown tools keep the Tool call title; the name rides the summary',
     () {
