@@ -36,6 +36,17 @@ existing question wire channel:
   action row — "去聊天里说" (dismiss), "拒绝" (decline), "确认执行" (approve).
   The buttons answer with the asker's own option labels (`intent.approve` and
   the other offered option); the actions carry localised copy.
+- **Both cards fold.** The reference's question card carries a minimize
+  action (`nav.minimize`/`nav.maximize`) that collapses it to its header strip
+  "so the conversation above stays readable"; the reference plan panel has
+  none. This client's `_QuestionCard` adds that chevron beside the dismiss
+  seat and hides the detail, the options, the custom-answer row and the
+  pager/submit row while folded; `_PlanReviewCard` carries the same chevron on
+  its warning strip and hides the plan body and the discuss/decline/approve
+  row. Folding is component state keyed to the request, so it resets with the
+  next batch and never rides a draft. Extending the control to the plan card
+  is deliberate: the plan body is the longest card this client renders, and it
+  is the one that covers the conversation it is about.
 - **Dismiss is a wire verb.** `DismissQuestionAction` → repository
   `cancelQuestions` responds with the `cancelled` error envelope on the
   question RPC, resolving the asker's call as cancelled (the web
@@ -57,6 +68,10 @@ existing question wire channel:
 - **Route plan review per-question inside the generic card**: rejected —
   a mixed batch would render a decision card mid-quiz; the web's whole-request
   narrowing is the settled contract.
+- **Fold only the question card, exactly as the reference does**: rejected —
+  the plan card is the taller of the two, so the reader who needs the
+  conversation visible while deciding is the plan reader; the affordance is
+  the same chevron in the same header position on both.
 - **Dismiss as a no-op / only visual**: rejected — the host resolves the
   asker's tool call; leaving it unanswered would strand the agent turn.
 

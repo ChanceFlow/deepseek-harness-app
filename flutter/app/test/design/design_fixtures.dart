@@ -586,6 +586,56 @@ ChatUiState questionState() {
   );
 }
 
+/// A plan-review decision card: the warn strip, the plan as markdown, and the
+/// discuss/decline/approve row. The plan is long on purpose — it is the card
+/// whose fold control this change adds.
+ChatUiState planReviewState() {
+  return const ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      TimelineMessage(
+        ChatMessage(
+          id: 'pr-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: '先给我计划，确认之后再动手。',
+          createdAtEpochMs: kNow,
+          seq: 61,
+        ),
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'pr-a1',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text: '计划如下，确认后我就开工。',
+          createdAtEpochMs: kNow + 1000,
+          seq: 62,
+        ),
+      ),
+      TimelineQuestionRequest(
+        requestId: 'rpc-plan-shot',
+        questions: <QuestionItem>[
+          QuestionItem(
+            id: 'plan-shot',
+            question: '执行这份计划吗？',
+            detail:
+                '## 交付文件行\n\n'
+                '1. `deliverables/presented` 折到 `present` 调用自己的行上；\n'
+                '2. 回合收尾处新增「交付文件」卡片行，超过 4 个折叠；\n'
+                '3. `present` 工具行改用「交付文件」标题与 `files[].path` 摘要；\n'
+                '4. 补单测与 before/after 设计图。\n\n'
+                '风险：主桌面打开动作不做，只走应用内预览。',
+            options: <String>['确认执行', '继续规划'],
+            intent: QuestionIntent(kind: 'plan-review', approve: '确认执行'),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 /// ── Settings shots ────────────────────────────────────────────────────────
 /// The Settings index and the pages and sheets its rows open, on a two-host
 /// registry: the shots exercise the real screen against the real registry

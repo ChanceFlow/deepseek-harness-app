@@ -1432,6 +1432,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get questionCancel => 'Dismiss all questions';
 
   @override
+  String get questionMinimize => 'Collapse the card';
+
+  @override
+  String get questionMaximize => 'Expand the card';
+
+  @override
   String get questionRecommended => 'Recommended';
 
   @override
