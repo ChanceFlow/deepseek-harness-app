@@ -1,5 +1,6 @@
 /// Produced-file derivation — the phone port of the reference turn
-/// deliverables fold (`ui-deliverables/src/client/turn-deliverables.ts`).
+/// deliverables fold (`ui-deliverables/src/client/turn-deliverables.ts`
+/// `mutationPath` and `producedForClosing`).
 ///
 /// The vocabulary comes from successful first-party mutation tool calls,
 /// never from the closing prose: a `write`, `edit`, or mutating
@@ -9,18 +10,16 @@
 /// once per turn, so a file written and then edited in the same turn is one
 /// entry.
 ///
-/// Turn membership comes from the transcript's own [TimelineTurnBoundary]
-/// rows, so paths never spill across turns. The row attaches to the turn's
-/// closing assistant message — the last assistant message with visible text
-/// — which is the row the transcript's action row already rides under.
+/// [producedMutationPath] is the per-call extraction; [TurnFiles] owns the
+/// turn walk, the closing-message snapshot, and the pairing with the files a
+/// `present` call declared.
 library;
 
 import 'dart:convert';
 
-import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/timeline_item.dart';
 
-import 'timeline_grouping.dart';
+import 'turn_files.dart';
 
 /// The basename of a `/`- or `\`-separated path; the whole string when it
 /// carries no separator.
@@ -103,38 +102,16 @@ String? _editorMutationPath(Map<String, Object?> args) {
 
 /// Produced paths per closing assistant message id, in transcript order.
 ///
-/// [latestTurnClosed] suppresses only the newest turn's row while that turn
-/// is still running — the reference renders the row at the turn tail, after
-/// `turn/end`. Every earlier turn is closed by definition and keeps its row.
+/// The turn walk and the closing-message snapshot live in [TurnFiles], whose
+/// fold reads this module's [producedMutationPath] beside the presented-file
+/// facts; this reader projects just the produced half.
 Map<String, List<String>> producedFilesByClosingMessage(
   List<TimelineItem> items, {
   required bool latestTurnClosed,
-}) {
-  final groups = groupTimelineByTurn(items);
-  final byMessageId = <String, List<String>>{};
-  for (var index = 0; index < groups.length; index++) {
-    final latest = index == groups.length - 1;
-    if (latest && !latestTurnClosed) continue;
-    final paths = <String>[];
-    final seen = <String>{};
-    String? closingId;
-    var closingPaths = const <String>[];
-    for (final item in groups[index].items) {
-      if (item is TimelineToolCall) {
-        final path = producedMutationPath(item);
-        if (path != null && seen.add(path)) paths.add(path);
-      } else if (item is TimelineMessage &&
-          item.value.role == MessageRole.assistant &&
-          item.value.text.trim().isNotEmpty) {
-        // Calls logged after the closing reply belong to no rendered body,
-        // so the snapshot is taken at the reply rather than at turn end.
-        closingId = item.value.id;
-        closingPaths = List<String>.unmodifiable(paths);
-      }
-    }
-    if (closingId != null && closingPaths.isNotEmpty) {
-      byMessageId[closingId] = closingPaths;
-    }
-  }
-  return byMessageId;
-}
+}) => <String, List<String>>{
+  for (final entry in turnFilesByClosingMessage(
+    items,
+    latestTurnClosed: latestTurnClosed,
+  ).entries)
+    if (entry.value.produced.isNotEmpty) entry.key: entry.value.produced,
+};

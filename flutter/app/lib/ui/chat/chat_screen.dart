@@ -46,11 +46,12 @@ import 'message_icon_actions.dart';
 import 'message_run_metrics.dart';
 import 'model_select.dart';
 import 'permission_select.dart';
-import 'produced_files.dart';
+import 'presented_files_row.dart';
 import 'produced_files_row.dart';
 import 'session_log_export_action.dart';
 import 'session_panel.dart';
 import 'tool_images.dart';
+import 'turn_files.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -1593,7 +1594,7 @@ class _ChatPanelState extends State<ChatPanel> {
         uiState.timeline.any(
           (item) => item is TimelineMessage && item.value.streaming,
         );
-    final producedByMessage = producedFilesByClosingMessage(
+    final turnFilesByMessage = turnFilesByClosingMessage(
       items,
       latestTurnClosed: !sessionBusy,
     );
@@ -1663,7 +1664,10 @@ class _ChatPanelState extends State<ChatPanel> {
                 expansion: _sessionState,
                 onOpenChild: _openWorkflowMember,
                 producedPaths: row is TimelineMessage
-                    ? producedByMessage[row.value.id]
+                    ? turnFilesByMessage[row.value.id]?.produced
+                    : null,
+                presentedFiles: row is TimelineMessage
+                    ? turnFilesByMessage[row.value.id]?.presented
                     : null,
               );
             }
@@ -2173,6 +2177,7 @@ class TimelineRow extends StatelessWidget {
     this.onPreviewFile,
     this.expansion,
     this.producedPaths,
+    this.presentedFiles,
     this.onOpenChild,
   });
 
@@ -2194,6 +2199,11 @@ class TimelineRow extends StatelessWidget {
   /// turn's closing assistant message.
   final List<String>? producedPaths;
 
+  /// Files this turn's successful `present` calls declared; non-null only on
+  /// the turn's closing assistant message, and empty when the turn declared
+  /// none.
+  final List<PresentedFile>? presentedFiles;
+
   /// Jump target for a workflow member's child session; null renders the
   /// card read-only (a nested child record has no further navigation seat).
   final WorkflowMemberOpener? onOpenChild;
@@ -2211,6 +2221,7 @@ class TimelineRow extends StatelessWidget {
         usage: (item as TimelineMessage).usage,
         firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
         producedPaths: producedPaths,
+        presentedFiles: presentedFiles,
         onPreviewFile: onPreviewFile == null
             ? null
             : (path) => onPreviewFile!(path),
@@ -2269,6 +2280,7 @@ class MessageRow extends StatelessWidget {
     this.usage,
     this.firstTokenAtEpochMs,
     this.producedPaths,
+    this.presentedFiles,
     this.onPreviewFile,
   });
 
@@ -2290,6 +2302,10 @@ class MessageRow extends StatelessWidget {
   /// Paths the turn's successful mutations produced; rendered between the
   /// body and the action row on the closing assistant message.
   final List<String>? producedPaths;
+
+  /// Files the turn's successful `present` calls declared; rendered under the
+  /// produced-files row, before the action row.
+  final List<PresentedFile>? presentedFiles;
 
   /// Opens a produced path with the in-app preview sheet.
   final void Function(String path)? onPreviewFile;
@@ -2331,6 +2347,7 @@ class MessageRow extends StatelessWidget {
     // Assistant: flat markdown column (Think row + body + media).
     final l10n = AppLocalizations.of(context)!;
     final paths = producedPaths;
+    final presented = presentedFiles;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2349,14 +2366,19 @@ class MessageRow extends StatelessWidget {
             loadAttachment: loadAttachment,
           ),
         // The turn's produced files close the body, above the action row —
-        // the reference turn-tail order (ProducedFiles, then
-        // MessageIconActions). Streaming hides it: the row belongs to a
-        // finished turn.
+        // the reference turn-tail order (ProducedFiles, then the presented
+        // cards, then MessageIconActions). Streaming hides them: the rows
+        // belong to a finished turn.
         if (!message.streaming &&
             paths != null &&
             paths.isNotEmpty &&
             onPreviewFile != null)
           ProducedFilesRow(paths: paths, onOpenFile: onPreviewFile!),
+        if (!message.streaming &&
+            presented != null &&
+            presented.isNotEmpty &&
+            onPreviewFile != null)
+          PresentedFilesRow(files: presented, onOpenFile: onPreviewFile!),
         if (message.streaming) ...[
           // Once text flows the streaming tail is the blinking caret;
           // the pre-first-token wait is said once, by the turn-status

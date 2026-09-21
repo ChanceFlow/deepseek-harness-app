@@ -2323,6 +2323,28 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get presentedFilesLabel => '交付文件';
+
+  @override
+  String get presentedFilesOpen => '打开';
+
+  @override
+  String presentedFilesOpenName(String name) {
+    return '打开 $name';
+  }
+
+  @override
+  String get presentedFilesFile => '文件';
+
+  @override
+  String presentedFilesAll(int count) {
+    return '全部 $count 个文件';
+  }
+
+  @override
+  String get presentedFilesCollapse => '收起';
+
+  @override
   String messageTokensPerSecond(String tps) {
     return '$tps tok/s';
   }

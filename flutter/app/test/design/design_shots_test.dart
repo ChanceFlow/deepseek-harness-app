@@ -135,6 +135,19 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'transcript', state: busyState()),
+  // A turn that wrote and delivered files: both turn-tail rows, with the
+  // delivered-file cards collapsing behind their toggle.
+  DesignShot(name: 'presented-files', state: presentedFilesState()),
+  // The same turn with its activity group open, so the `present` call's own
+  // row — the delivery title and the declared paths — is readable.
+  DesignShot(
+    name: 'presented-files-call',
+    state: presentedFilesState(),
+    act: (tester) async {
+      await tester.tap(find.text('Modified 2 files'));
+      await settle(tester);
+    },
+  ),
   // The dock with every seat the host mounts and a draft waiting on a
   // running turn: the state where a phone-width action row runs out of room.
   DesignShot(

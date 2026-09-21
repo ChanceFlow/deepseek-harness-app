@@ -373,6 +373,7 @@ never the payload), so a wire-coverage gap stays measurable.
 | `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only baseline: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
 | `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
 | `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
+| `deliverables/presented` | no item — folds the event's `files` onto the `present` call named by its `callId`, so a declaration rides that call's own row; a declaration whose call lies outside the folded window publishes nothing |
 
 Text extraction handles `text` blocks and nested `tool-result` content.
 
