@@ -165,6 +165,21 @@ cd flutter
 DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
 ```
 
+0.1.5 主机的 `/api` 只对持有它签发的、绑定访问 authority 的浏览器 cookie 的
+调用方应答；该 cookie 由 `dsh web` 打印的 URL token 换取，目标主机属于这一类
+时用 `DSH_E2E_COOKIE` 传入：
+
+```sh
+curl -s -c jar "http://127.0.0.1:3080/?token=<dsh web 打印的 token>"
+cd flutter
+DSH_E2E_URL=http://127.0.0.1:3080 \
+  DSH_E2E_COOKIE="$(awk 'NF>=7 && $6 ~ /^dsh/ {print $6"="$7}' jar)" \
+  flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
+```
+
+该冒烟覆盖预览所依赖的整条线面——目录列举、`stat`、分页文本 `read`——因此
+workspace 文件作用域参数被改名时会在端到端处失败，而不是只在 UI 里显形。
+
 ## APK 发布
 
 发布 APK 由内部 forge 流水线

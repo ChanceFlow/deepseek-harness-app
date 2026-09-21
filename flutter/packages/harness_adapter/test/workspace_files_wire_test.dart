@@ -120,7 +120,10 @@ void main() {
         expect(rpc.calls.containsKey('workspaceFiles/read'), isTrue);
         final calledPayload = rpc.calls['workspaceFiles/read']!.last;
         final args = calledPayload['args'] as JsonMap?;
-        expect(args?['sessionId'], 'session-1');
+        // The scope argument is the `workspaceFileScope` lookup's wire field;
+        // `sessionId` is refused by the host as an unknown argument.
+        expect(args?['workspaceFileScopeId'], 'session-1');
+        expect(args?.containsKey('sessionId'), isFalse);
         expect(args?['path'], 'README.md');
         final range = args?['range'] as JsonMap?;
         expect(range?['offset'], 1);
@@ -140,6 +143,10 @@ void main() {
 
       final stat = await repo.statWorkspaceFile('session-1', 'doc.txt');
       expect(rpc.calls.containsKey('workspaceFiles/stat'), isTrue);
+      final statArgs =
+          rpc.calls['workspaceFiles/stat']!.last['args'] as JsonMap?;
+      expect(statArgs?['workspaceFileScopeId'], 'session-1');
+      expect(statArgs?.containsKey('sessionId'), isFalse);
       expect(stat.absolutePath, '/workspace/doc.txt');
       expect(stat.version, 'v2');
       expect(stat.bytes, 500);
@@ -152,6 +159,10 @@ void main() {
 
       final listing = await repo.listWorkspaceDirectory('session-1', '');
       expect(rpc.calls.containsKey('workspaceFiles/list'), isTrue);
+      final listArgs =
+          rpc.calls['workspaceFiles/list']!.last['args'] as JsonMap?;
+      expect(listArgs?['workspaceFileScopeId'], 'session-1');
+      expect(listArgs?.containsKey('sessionId'), isFalse);
       expect(listing.path, '');
       expect(listing.truncated, isFalse);
       expect(listing.entries.length, 2);

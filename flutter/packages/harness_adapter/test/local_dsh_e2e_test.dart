@@ -12,9 +12,24 @@ import 'package:harness_adapter/src/harness_repository_impl.dart';
 ///
 /// Set `DSH_E2E_URL` (for example `http://127.0.0.1:3080`) when running
 /// local harness tests. The test never creates sessions or sends prompts.
+///
+/// A 0.1.5 host answers every `/api` request only for a caller holding its
+/// authority-bound browser cookie, so `DSH_E2E_COOKIE` carries the
+/// `name=value` pair when the target is such a host:
+///
+/// ```sh
+/// curl -c jar "http://127.0.0.1:3080/?token=$(...)"   # URL dsh web prints
+/// DSH_E2E_COOKIE="$(awk '!/^#/ && NF {print $6"="$7}' jar)" \
+///   DSH_E2E_URL=http://127.0.0.1:3080 flutter test \
+///   packages/harness_adapter/test/local_dsh_e2e_test.dart
+/// ```
 void main() {
   final endpoint = Platform.environment['DSH_E2E_URL'];
   final enabled = endpoint != null && endpoint.trim().isNotEmpty;
+  final cookie = Platform.environment['DSH_E2E_COOKIE']?.trim();
+  final headers = cookie == null || cookie.isEmpty
+      ? const <String, String>{}
+      : <String, String>{'Cookie': cookie};
 
   test('realHostReadOnlySmoke', () async {
     if (!enabled) {
@@ -24,8 +39,8 @@ void main() {
     }
     final base = Uri.parse(endpoint);
 
-    final rpc = HttpDshRpcClient(base);
-    final socket = WebSocketDshEventSocket(base);
+    final rpc = HttpDshRpcClient(base, headers: headers);
+    final socket = WebSocketDshEventSocket(base, headers: headers);
     final manager = DshConnectionManager(socket, exponentialDshBackoffDelay);
     try {
       manager.start();
@@ -58,24 +73,48 @@ void main() {
       );
       final sessions = await repository.observeSessions().first;
       final workspaces = await repository.observeWorkspaces().first;
-      final firstSession = sessions.isEmpty ? null : sessions.first;
-      if (firstSession != null) {
-        await repository.openSession(firstSession.id);
-        await repository.observeTimelineWindow(firstSession.id).first;
-        final skills = await repository.listSkills(firstSession.id);
-        expect(skills.every((skill) => skill.name.trim().isNotEmpty), isTrue);
-      }
-      final nonBlank = sessions.where((s) => !s.blank).firstOrNull;
-      if (nonBlank != null) {
-        await repository.openSession(nonBlank.id);
-        final window = await repository
-            .observeTimelineWindow(nonBlank.id)
-            .first;
+      // The sidebar's rule (`session_panel.dart`): a blank placeholder and a
+      // subagent child are never a root transcript — `openSession` refuses the
+      // latter, and the subagent catalog is its route.
+      final roots = sessions
+          .where((session) => !session.blank && session.origin != 'subagent')
+          .toList();
+      final root = roots.isEmpty ? null : roots.first;
+      if (root != null) {
+        await repository.openSession(root.id);
+        final window = await repository.observeTimelineWindow(root.id).first;
         expect(
           window.items,
           isNotEmpty,
-          reason: 'Chat timeline items must load for non-blank session',
+          reason: 'Chat timeline items must load for a non-blank root session',
         );
+        final skills = await repository.listSkills(root.id);
+        expect(skills.every((skill) => skill.name.trim().isNotEmpty), isTrue);
+        // The preview surface: a workspace listing names a real file, and
+        // `stat` plus a paged `read` agree on it. These three calls carry the
+        // `workspaceFileScopeId` scope argument, so a renamed wire field fails
+        // here instead of only in the UI.
+        final listing = await repository.listWorkspaceDirectory(root.id, '.');
+        expect(listing.path, isEmpty, reason: '`.` lists the workspace root');
+        final file = listing.entries
+            .where((entry) => entry.type == 'file')
+            .firstOrNull;
+        if (file != null) {
+          final stat = await repository.statWorkspaceFile(root.id, file.name);
+          expect(stat.absolutePath.trim().isNotEmpty, isTrue);
+          expect(stat.version.trim().isNotEmpty, isTrue);
+          final content = await repository.readWorkspaceFile(
+            root.id,
+            file.name,
+            limit: 5,
+          );
+          expect(content.absolutePath, stat.absolutePath);
+          expect(content.offset, 1);
+          expect(content.lines, greaterThanOrEqualTo(1));
+          if ((stat.bytes ?? 0) > 0) {
+            expect(content.text, isNotEmpty);
+          }
+        }
       }
       final presets = await repository.listAgentPresets();
       expect(presets.entries.isNotEmpty, isTrue);

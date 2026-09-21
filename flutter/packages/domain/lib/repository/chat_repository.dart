@@ -404,6 +404,10 @@ abstract class ChatRepository {
 
   /// List entries in a directory inside the session's workspace
   /// (`workspaceFiles/list`).
+  ///
+  /// [path] is a workspace path: absolute, or relative to the workspace root,
+  /// which `'.'` names — the host refuses an empty string. A listed entry's
+  /// path is the listing's own `path` joined with its `name` by `/`.
   Future<WorkspaceDirectoryListing> listWorkspaceDirectory(
     String sessionId,
     String path,

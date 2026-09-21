@@ -238,6 +238,22 @@ cd flutter
 DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
 ```
 
+A 0.1.5 host answers `/api` only for a caller holding the authority-bound
+browser cookie minted from the URL token `dsh web` prints, so pass that cookie
+as `DSH_E2E_COOKIE` when the target is one:
+
+```sh
+curl -s -c jar "http://127.0.0.1:3080/?token=<token dsh web printed>"
+cd flutter
+DSH_E2E_URL=http://127.0.0.1:3080 \
+  DSH_E2E_COOKIE="$(awk 'NF>=7 && $6 ~ /^dsh/ {print $6"="$7}' jar)" \
+  flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
+```
+
+The smoke covers the wire surface a preview rides — a workspace listing,
+`stat`, and a paged text `read` — so a renamed workspace-file scope argument
+fails there instead of only in the UI.
+
 ## APK releases
 
 Release APKs are built by the internal forge pipeline
