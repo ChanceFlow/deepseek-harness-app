@@ -13,10 +13,12 @@ library;
 import 'package:app/ui/state_stream.dart';
 import 'package:app/ui/subagents/subagent_controller.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
+import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/timeline_window.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -278,6 +280,47 @@ void main() {
     },
   );
 
+  test('a running child updates on its own window, and pages older', () async {
+    final repository = _FakeRepository(catalog: _seedCatalog);
+    final controller = SubagentController(repository, initialSessionId: 'p1');
+    addTearDown(controller.dispose);
+
+    repository.sessions.value = const <SessionSummary>[_parent];
+    await pumpEventQueue();
+    controller.onAction(const OpenChild('child-2', SubagentMode.continuable));
+    await pumpEventQueue();
+
+    // The open addressed the child's own mode (the row's mode is the wire
+    // contract), and the record starts empty.
+    expect(repository.historyRequests.single.childSessionId, 'child-2');
+    expect(controller.state.childTimeline, isEmpty);
+
+    // A row the child produces later lands on its resident window — no
+    // reload request, which is the whole point of following a child.
+    repository.childWindows['child-2']!.value = const TimelineWindow(
+      items: <TimelineItem>[
+        TimelineMessage(
+          ChatMessage(
+            id: 'child-live',
+            sessionId: 'child-2',
+            role: MessageRole.assistant,
+            text: 'working on it',
+          ),
+        ),
+      ],
+      hasMoreOlder: true,
+    );
+    await pumpEventQueue();
+
+    expect(controller.state.childTimeline, hasLength(1));
+    expect(controller.state.childHasMoreOlder, isTrue);
+    expect(repository.historyRequests, hasLength(1));
+
+    controller.onAction(const LoadOlderChildHistory());
+    await pumpEventQueue();
+    expect(repository.olderHistoryRequests, <String>['child-2']);
+  });
+
   test(
     'a branch child gates the composer on its own level availability',
     () async {
@@ -460,13 +503,14 @@ void main() {
         ),
         ('child-1', 'grand-1', 'hello grandchild'),
       );
-      // History reload following prompt also uses direct parent 'child-1'.
+      // The open used the direct parent 'child-1', and a prompt needs no
+      // history reload: the grandchild's own follow stream delivers what
+      // follows it.
       expect(
         repository.historyRequests
             .map((c) => (c.parentSessionId, c.childSessionId, c.mode))
             .toList(),
         <(String, String, SubagentMode)>[
-          ('child-1', 'grand-1', SubagentMode.continuable),
           ('child-1', 'grand-1', SubagentMode.continuable),
         ],
       );
@@ -714,8 +758,13 @@ class _FakeRepository implements ChatRepository {
     return branchCatalog?.call(parentSessionId) ?? catalog;
   }
 
+  /// One resident window per opened child, so a test can publish rows the
+  /// controller must fold — the same stream the chat transcript reads.
+  final Map<String, AppStateStream<TimelineWindow>> childWindows =
+      <String, AppStateStream<TimelineWindow>>{};
+
   @override
-  Future<List<TimelineItem>> loadSubagentHistory(
+  Future<void> openSubagentSession(
     String parentSessionId,
     String childSessionId,
     SubagentMode mode,
@@ -723,8 +772,19 @@ class _FakeRepository implements ChatRepository {
     historyRequests.add(_HistoryCall(parentSessionId, childSessionId, mode));
     final failure = failHistoryWith;
     if (failure != null) throw failure;
-    return const <TimelineItem>[];
+    childWindows.putIfAbsent(
+      childSessionId,
+      () => AppStateStream<TimelineWindow>(const TimelineWindow()),
+    );
   }
+
+  @override
+  Stream<TimelineWindow> observeTimelineWindow(String sessionId) => childWindows
+      .putIfAbsent(
+        sessionId,
+        () => AppStateStream<TimelineWindow>(const TimelineWindow()),
+      )
+      .stream;
 
   @override
   Future<String> sendSubagentPrompt(
@@ -742,6 +802,15 @@ class _FakeRepository implements ChatRepository {
     String childSessionId,
   ) async {
     interruptRequests.add(_InterruptCall(parentSessionId, childSessionId));
+  }
+
+  /// Child ids whose older history the controller paged.
+  final List<String> olderHistoryRequests = <String>[];
+
+  @override
+  Future<bool> loadOlderHistory(String sessionId) async {
+    olderHistoryRequests.add(sessionId);
+    return true;
   }
 
   @override

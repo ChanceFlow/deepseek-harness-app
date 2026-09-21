@@ -15,6 +15,7 @@ import 'package:domain/model/plan.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/timeline_window.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +24,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/chat_screen.dart'
-    show MessageRow, PlanChip, TimelineRow, ToolCallRow;
+    show OlderHistoryRow, MessageRow, PlanChip, TimelineRow, ToolCallRow;
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/state_stream.dart';
 import 'package:app/ui/shared/state_dot.dart';
@@ -564,6 +565,55 @@ void main() {
     expect(find.text('Bash'), findsOneWidget);
   });
 
+  testWidgets('a child with older history shows the load-older seat', (
+    tester,
+  ) async {
+    final actions = <SubagentAction>[];
+    await _pump(
+      tester,
+      const SubagentUiState(
+        sessions: _sessions,
+        selectedParentId: 'p1',
+        catalog: _catalog,
+        selectedChildId: _workerId,
+        childTimeline: [
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: _workerId,
+              role: MessageRole.assistant,
+              text: 'the tail of the record',
+            ),
+          ),
+        ],
+        childHasMoreOlder: true,
+      ),
+      actions,
+    );
+
+    // The child is a resident window, so its head carries the same
+    // older-history seat the chat transcript has.
+    expect(find.byType(OlderHistoryRow), findsOneWidget);
+    await tester.tap(find.byType(OlderHistoryRow));
+    await tester.pump();
+    expect(actions, contains(const LoadOlderChildHistory()));
+  });
+
+  testWidgets('a fully loaded child shows no load-older seat', (tester) async {
+    await _pump(
+      tester,
+      const SubagentUiState(
+        sessions: _sessions,
+        selectedParentId: 'p1',
+        catalog: _catalog,
+        selectedChildId: _workerId,
+      ),
+      <SubagentAction>[],
+    );
+
+    expect(find.byType(OlderHistoryRow), findsNothing);
+  });
+
   testWidgets('continuable child with parent online keeps the composer', (
     tester,
   ) async {
@@ -984,8 +1034,12 @@ class _HostCatalogRepository implements ChatRepository {
   Future<SubagentCatalog> loadSubagents(String parentSessionId) async =>
       _catalog;
 
+  /// One resident window per child, seeded with the child's durable rows.
+  final Map<String, AppStateStream<TimelineWindow>> childWindows =
+      <String, AppStateStream<TimelineWindow>>{};
+
   @override
-  Future<List<TimelineItem>> loadSubagentHistory(
+  Future<void> openSubagentSession(
     String parentSessionId,
     String childSessionId,
     SubagentMode mode,
@@ -995,17 +1049,32 @@ class _HostCatalogRepository implements ChatRepository {
       childSessionId: childSessionId,
       mode: mode,
     ));
-    return const <TimelineItem>[
-      TimelineMessage(
-        ChatMessage(
-          id: 'child-message',
-          sessionId: _workerId,
-          role: MessageRole.assistant,
-          text: 'worker record',
+    childWindows.putIfAbsent(
+      childSessionId,
+      () => AppStateStream<TimelineWindow>(
+        const TimelineWindow(
+          items: <TimelineItem>[
+            TimelineMessage(
+              ChatMessage(
+                id: 'child-message',
+                sessionId: _workerId,
+                role: MessageRole.assistant,
+                text: 'worker record',
+              ),
+            ),
+          ],
         ),
       ),
-    ];
+    );
   }
+
+  @override
+  Stream<TimelineWindow> observeTimelineWindow(String sessionId) => childWindows
+      .putIfAbsent(
+        sessionId,
+        () => AppStateStream<TimelineWindow>(const TimelineWindow()),
+      )
+      .stream;
 
   @override
   Stream<PlanState?> observePlan(String sessionId) =>

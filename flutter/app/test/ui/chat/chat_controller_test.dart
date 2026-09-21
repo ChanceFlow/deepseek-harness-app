@@ -393,11 +393,11 @@ class FakeChatRepository extends ChatRepository {
   ) async {}
 
   @override
-  Future<List<TimelineItem>> loadSubagentHistory(
+  Future<void> openSubagentSession(
     String parentSessionId,
     String childSessionId,
     SubagentMode mode,
-  ) async => const <TimelineItem>[];
+  ) async {}
 
   @override
   Future<String> sendSubagentPrompt(

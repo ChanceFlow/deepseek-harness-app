@@ -139,6 +139,34 @@ class HarnessRepositoryImpl implements ChatRepository {
   String? _openSessionId;
   final Set<String> _followedSessionIds = <String>{};
 
+  /// Durable address of every subagent child this client has listed or
+  /// opened: `{direct parent, mode}`.
+  ///
+  /// A child's `session/page` and `session/follow` requests address it as
+  /// `{kind: 'subagent', parentSessionId, childSessionId, mode}`
+  /// (`SessionAddress`), and neither `session/list` nor the child's own id
+  /// carries the mode — only the subagent catalog row does. Recording it here
+  /// is what lets a child be a resident, followed window like any session
+  /// instead of a one-shot page.
+  final Map<String, ({String parentSessionId, SubagentMode mode})>
+  _subagentAddresses =
+      <String, ({String parentSessionId, SubagentMode mode})>{};
+
+  /// The wire address for one session id: its subagent address when this
+  /// client knows it is a child, else the ordinary session address.
+  Map<String, Object?> _sessionAddress(String sessionId) {
+    final child = _subagentAddresses[sessionId];
+    if (child == null) {
+      return <String, Object?>{'kind': 'session', 'sessionId': sessionId};
+    }
+    return <String, Object?>{
+      'kind': 'subagent',
+      'parentSessionId': child.parentSessionId,
+      'childSessionId': sessionId,
+      'mode': _subagentModeToWire(child.mode),
+    };
+  }
+
   void _followSession(String sessionId) {
     if (_followedSessionIds.contains(sessionId)) return;
     _followedSessionIds.add(sessionId);
@@ -155,10 +183,7 @@ class HarnessRepositoryImpl implements ChatRepository {
               // the durable log carries no token delta at all), so without it
               // a reply appears only when its final message commits.
               'assistantStream': true,
-              'address': <String, Object?>{
-                'kind': 'session',
-                'sessionId': sessionId,
-              },
+              'address': _sessionAddress(sessionId),
             },
           },
         },
@@ -710,12 +735,40 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<void> openSession(String sessionId) async {
-    if (_isSubagent(sessionId)) {
+  Future<void> openSubagentSession(
+    String parentSessionId,
+    String childSessionId,
+    SubagentMode mode,
+  ) async {
+    // The catalog row is the only place the child's mode exists, so the open
+    // registers the address before the ordinary open path builds the follow
+    // request and the first page read from it.
+    _subagentAddresses[childSessionId] = (
+      parentSessionId: parentSessionId,
+      mode: mode,
+    );
+    // A failed first read propagates here: the subagent view has a catalog to
+    // fall back to and no in-window error seat, so it closes the record and
+    // states the host failure on its banner — where an ordinary session
+    // keeps the empty window it already shows plus a diagnostic.
+    await _open(childSessionId, swallowHistoryFailure: false);
+  }
+
+  @override
+  Future<void> openSession(String sessionId) =>
+      _open(sessionId, swallowHistoryFailure: true);
+
+  Future<void> _open(
+    String sessionId, {
+    required bool swallowHistoryFailure,
+  }) async {
+    if (_isSubagent(sessionId) && !_subagentAddresses.containsKey(sessionId)) {
       _onDiagnostic?.call(
         AdapterDiagnostic(
           message:
-              'openSession called for subagent session $sessionId; subagents must use loadSubagentHistory',
+              'openSession called for subagent session $sessionId without its '
+              'durable address; a child opens through openSubagentSession, '
+              'which supplies the parent and mode the child address needs',
           level: AdapterDiagnosticLevel.warning,
           context: 'session.open',
         ),
@@ -749,6 +802,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         );
       }
     } catch (e, st) {
+      if (!swallowHistoryFailure) rethrow;
       _onDiagnostic?.call(
         AdapterDiagnostic(
           message: 'openSession history load failed for $sessionId: $e',
@@ -1285,7 +1339,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     final wire = SubagentListValueWire.fromJson(value);
-    return SubagentCatalog(
+    final catalog = SubagentCatalog(
       parentSessionId: parentSessionId,
       entries: wire.entries
           .map(
@@ -1302,6 +1356,18 @@ class HarnessRepositoryImpl implements ChatRepository {
           .toList(),
       parentAvailable: wire.parentAvailable,
     );
+    // A listing is where a child's address becomes knowable: the row carries
+    // the mode its `session/page` / `session/follow` address must repeat, so
+    // record it for the opens that follow.
+    for (final entry in catalog.entries) {
+      final mode = entry.mode;
+      if (entry.kind != 'child' || mode == null) continue;
+      _subagentAddresses[entry.id] = (
+        parentSessionId: parentSessionId,
+        mode: mode,
+      );
+    }
+    return catalog;
   }
 
   /// Maps one catalog row's `mode` onto the domain enum. Child rows carry
@@ -1350,45 +1416,6 @@ class HarnessRepositoryImpl implements ChatRepository {
       },
       _shortCallTimeout,
     ).valueOrThrow();
-  }
-
-  @override
-  Future<List<TimelineItem>> loadSubagentHistory(
-    String parentSessionId,
-    String childSessionId,
-    SubagentMode mode,
-  ) async {
-    final throughSeq = _sessionCursors[childSessionId] ?? 999999999;
-    final value = await _call(
-      DshRpcEndpoints.sessionPage,
-      DshRpcEndpoints.sessionPage,
-      {
-        'request': <String, Object?>{
-          'address': <String, Object?>{
-            'kind': 'subagent',
-            'parentSessionId': parentSessionId,
-            'childSessionId': childSessionId,
-            'mode': _subagentModeToWire(mode),
-          },
-          'throughSeq': throughSeq,
-          'maxMessages': _historyPageMessages,
-        },
-      },
-      _shortCallTimeout,
-    ).valueOrThrow();
-    final history = SessionHistoryValueWire.fromJson(value);
-    if (history.events.isNotEmpty) {
-      final lastSeq = wireLong(history.events.last, 'seq');
-      _sessionCursors[childSessionId] = lastSeq;
-    } else {
-      _sessionCursors[childSessionId] = -1;
-    }
-    final reducer = TimelineReducer(
-      childSessionId,
-      onDiagnostic: _onDiagnostic,
-    );
-    reducer.reset(history.events);
-    return reducer.snapshot();
   }
 
   @override
@@ -2515,7 +2542,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       // clearing here would race — and wipe — a baseline that already
       // landed (web author comment, reference session.ts:419-426).
       for (final state in _sessionStates.values) {
-        if (!state.isOpened || _isSubagent(state.sessionId)) continue;
+        if (!state.isOpened) continue;
         state.prepareResync();
       }
       // Web SessionManager `handleConnected` parity: the list pull and every
@@ -2528,7 +2555,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       // generations, and this action awaits the whole batch, so a following
       // generation's prep never overlaps an in-flight branch.
       final states = _sessionStates.values
-          .where((state) => state.isOpened && !_isSubagent(state.sessionId))
+          .where((state) => state.isOpened)
           .toList();
       await Future.wait<void>(<Future<void>>[
         () async {
@@ -2727,22 +2754,15 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   Future<_HistoryPage> _loadHistory(String sessionId, [int? beforeSeq]) async {
-    if (_isSubagent(sessionId)) {
-      throw StateError(
-        'cannot load history for subagent session $sessionId with session/page; '
-        'subagents require loadSubagentHistory with their durable parent address',
-      );
-    }
     final throughSeq = beforeSeq ?? _sessionCursors[sessionId] ?? 999999999;
     final value = await _call(
       DshRpcEndpoints.sessionPage,
       DshRpcEndpoints.sessionPage,
       {
         'request': <String, Object?>{
-          'address': <String, Object?>{
-            'kind': 'session',
-            'sessionId': sessionId,
-          },
+          // A child pages through its subagent address like any other window;
+          // the cursor it pages from is its own follow opening's.
+          'address': _sessionAddress(sessionId),
           'throughSeq': throughSeq,
           if (beforeSeq != null) 'beforeSeq': beforeSeq,
           'maxMessages': _historyPageMessages,

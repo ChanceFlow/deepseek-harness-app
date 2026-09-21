@@ -23,6 +23,7 @@ import 'package:domain/model/plan.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/timeline_window.dart';
 import 'package:domain/repository/chat_repository.dart';
 
 import '../shared/session_tree.dart';
@@ -88,6 +89,14 @@ class SubagentController {
   /// `subagent/unauthorized` on mismatch).
   SubagentMode? _selectedChildMode;
   List<TimelineItem> _childTimeline = const <TimelineItem>[];
+  bool _childHasMoreOlder = false;
+  bool _isLoadingChildOlder = false;
+
+  /// The opened child's resident window. A child is a followed session like
+  /// any other (`openSubagentSession`), so its rows arrive on the same stream
+  /// the chat transcript reads — a running child keeps updating without a
+  /// reload, and older history pages through the same `loadOlderHistory`.
+  StreamSubscription<TimelineWindow>? _childWindowSub;
   StreamSubscription<void>? _planSub;
   PlanState? _childPlan;
   int _childLoadSeq = 0;
@@ -119,6 +128,8 @@ class SubagentController {
     _subs.clear();
     unawaited(_planSub?.cancel());
     _planSub = null;
+    unawaited(_childWindowSub?.cancel());
+    _childWindowSub = null;
   }
 
   void _publish() {
@@ -147,6 +158,8 @@ class SubagentController {
       selectedChildId: _selectedChildId,
       selectedChildParentId: _selectedChildParentId,
       childTimeline: _childTimeline,
+      childHasMoreOlder: _childHasMoreOlder,
+      isLoadingChildOlder: _isLoadingChildOlder,
       childPlan: _childPlan,
       isChildLoading: _isChildLoading,
       isSendingChild: _isSendingChild,
@@ -192,6 +205,8 @@ class SubagentController {
         unawaited(_loadBranch(action.childSessionId));
       case CloseChildView():
         _closeChild();
+      case LoadOlderChildHistory():
+        _loadOlderChildHistory();
       case RefreshSubagentsAction():
         _refresh();
       case DismissSubagentError():
@@ -337,8 +352,11 @@ class SubagentController {
     _selectedChildParentId = null;
     _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
+    _childHasMoreOlder = false;
+    _isLoadingChildOlder = false;
     _isChildLoading = false;
     ++_childLoadSeq;
+    _bindChildWindow(null);
     _branchCatalogs.clear();
     _branchFailures.clear();
     _childIdsByParent.clear();
@@ -361,36 +379,70 @@ class SubagentController {
     _selectedChildParentId = directParentId;
     _selectedChildMode = mode;
     _childTimeline = const <TimelineItem>[];
+    _childHasMoreOlder = false;
+    _isLoadingChildOlder = false;
     _bindChildPlan(childSessionId);
+    _bindChildWindow(null);
     _publish();
-    // History loads are superseded by a later open of another child; only
-    // the newest request may land its timeline.
+    // Opens are superseded by a later open of another child; only the newest
+    // request may land its window binding.
     final seq = ++_childLoadSeq;
     unawaited(() async {
       _isChildLoading = true;
       _publish();
-      try {
-        final result = await _runCatchingForUi(
-          () => _repository.loadSubagentHistory(
-            directParentId,
-            childSessionId,
-            mode,
-          ),
+      final opened = await _runCatchingForUi<bool>(() async {
+        await _repository.openSubagentSession(
+          directParentId,
+          childSessionId,
+          mode,
         );
-        if (seq != _childLoadSeq) return;
-        if (result == null) {
-          // A failed record load never renders as a fake-empty
-          // transcript: the host failure is on the error banner, and
-          // the view returns to the catalog.
-          _closeChild();
-          return;
-        }
-        _childTimeline = result;
-      } finally {
-        if (seq == _childLoadSeq) {
-          _isChildLoading = false;
-          _publish();
-        }
+        return true;
+      });
+      if (seq != _childLoadSeq) return;
+      if (opened == null) {
+        // A failed record open never renders as a fake-empty transcript: the
+        // host failure is on the error banner, and the view returns to the
+        // catalog.
+        _closeChild();
+        return;
+      }
+      // The child is a resident, followed session now: every later row —
+      // including a running child's own new output and the reply to a prompt
+      // this client sends — arrives on its window stream.
+      _bindChildWindow(childSessionId);
+    }());
+  }
+
+  /// Binds the opened child's resident window (the chat transcript's own
+  /// stream, addressed at the child id).
+  void _bindChildWindow(String? childSessionId) {
+    unawaited(_childWindowSub?.cancel());
+    _childWindowSub = null;
+    if (childSessionId == null) return;
+    _childWindowSub = _repository.observeTimelineWindow(childSessionId).listen((
+      window,
+    ) {
+      if (_selectedChildId != childSessionId) return;
+      _childTimeline = window.items;
+      _childHasMoreOlder = window.hasMoreOlder;
+      _isLoadingChildOlder = window.isLoadingOlder;
+      _isChildLoading = window.isLoading;
+      _publish();
+    });
+  }
+
+  /// Pages one older child-history window (the chat transcript's older-history
+  /// seat, aimed at the child).
+  void _loadOlderChildHistory() {
+    final childId = _selectedChildId;
+    if (childId == null || _isLoadingChildOlder) return;
+    _isLoadingChildOlder = true;
+    _publish();
+    unawaited(() async {
+      await _runCatchingForUi(() => _repository.loadOlderHistory(childId));
+      if (_selectedChildId == childId) {
+        _isLoadingChildOlder = false;
+        _publish();
       }
     }());
   }
@@ -401,11 +453,14 @@ class SubagentController {
     _selectedChildParentId = null;
     _selectedChildMode = null;
     _childTimeline = const <TimelineItem>[];
+    _childHasMoreOlder = false;
+    _isLoadingChildOlder = false;
     _isChildLoading = false;
-    // A closed record is no longer the newest request; its in-flight
-    // history load must not land.
+    // A closed record is no longer the newest request; its in-flight open
+    // must not land.
     ++_childLoadSeq;
     _bindChildPlan(null);
+    _bindChildWindow(null);
     _publish();
   }
 
@@ -432,22 +487,15 @@ class SubagentController {
       _isSendingChild = true;
       _publish();
       try {
-        final sendResult = await _runCatchingForUi(
+        await _runCatchingForUi(
           () => _repository.sendSubagentPrompt(
             directParentId,
             childId,
             text.trim(),
           ),
         );
-        if (sendResult != null) {
-          final reloaded = await _runCatchingForUi(
-            () =>
-                _repository.loadSubagentHistory(directParentId, childId, mode),
-          );
-          if (reloaded != null && _selectedChildId == childId) {
-            _childTimeline = reloaded;
-          }
-        }
+        // No reload: the child's own follow stream delivers the queued
+        // message, the turn it starts, and the reply as they happen.
       } finally {
         _isSendingChild = false;
         _publish();
