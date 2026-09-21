@@ -167,6 +167,28 @@ class HarnessRepositoryImpl implements ChatRepository {
     };
   }
 
+  /// Claims the right to apply one projection value: true when [seq] is newer
+  /// than the value already held for `(sessionId, key)`, recording it. A frame
+  /// that loses is dropped whole — never partially applied.
+  /// True when the value held for `(sessionId, key)` is at least as new as
+  /// [seq]: that frame, block or list row carries nothing newer to apply.
+  bool _projectionIsStale(String sessionId, String key, int seq) {
+    final held = _projectionSeqs[sessionId]?[key];
+    return held != null && seq > 0 && seq <= held;
+  }
+
+  bool _claimProjection(String sessionId, String key, int seq) {
+    // A frame carrying no seq cannot be ordered against the value held, so it
+    // applies as the latest write and leaves the watermark untouched. The
+    // reference requires a `seq` on its projection updates; treating a missing
+    // one as seq 0 would instead let it lose to every recorded value.
+    if (seq <= 0) return true;
+    final held = _projectionSeqs[sessionId]?[key];
+    if (held != null && seq <= held) return false;
+    (_projectionSeqs[sessionId] ??= <String, int>{})[key] = seq;
+    return true;
+  }
+
   void _followSession(String sessionId) {
     if (_followedSessionIds.contains(sessionId)) return;
     _followedSessionIds.add(sessionId);
@@ -347,6 +369,39 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, StateStream<ContextPressure?>>{};
   final Map<String, StateStream<ContextBreakdown?>>
   _contextBreakdownProjections = <String, StateStream<ContextBreakdown?>>{};
+
+  /// Projection watermark: the seq of the value each `(session, key)` pair
+  /// currently holds. The reference's projection store has exactly one
+  /// ordering rule — a value whose `seq` is not newer than the one held is
+  /// dropped (`api/session-controller/src/client/sessions/projection-store.ts`
+  /// `apply`: `if (row !== undefined && seq <= row.seq) return`) — so a
+  /// `session/list` pull or a baseline that raced a live frame can never flip
+  /// the title, goal, plan, todo, permission or model chip back to an older
+  /// value.
+  final Map<String, Map<String, int>> _projectionSeqs =
+      <String, Map<String, int>>{};
+
+  /// The generation's `session/control` baseline, retained per session so a
+  /// session instantiated after it lands still gets its queue and jobs
+  /// (reference `manager.ts:288-297` seeds a lazily created session from the
+  /// manager-level maps the same way).
+  /// Every projection key this client folds. A complete baseline block that
+  /// omits one clears it, so the list has to name them all.
+  static const Set<String> _projectionKeys = <String>{
+    'title',
+    'goal',
+    'plan',
+    'todos',
+    'permissions',
+    'agentPreset',
+    'modelSelection',
+    'contextPressure',
+    'contextBreakdown',
+  };
+
+  final Map<String, List<Object?>> _baselineQueues = <String, List<Object?>>{};
+  final Map<String, List<Object?>> _baselineJobs = <String, List<Object?>>{};
+
   final Map<String, int> _contextPressureSeqs = <String, int>{};
   final Map<String, int> _contextBreakdownSeqs = <String, int>{};
   final Mutex _resyncMutex = Mutex();
@@ -2057,7 +2112,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     final sessionId = _frameSessionId(frame);
     if (sessionId == null) return;
     final seq = wireLong(frame.payload, 'seq');
-    switch (wireString(frame.payload, 'key')) {
+    final key = wireString(frame.payload, 'key');
+    if (key == null) return;
+    // Higher-seq-wins: a replayed frame, or one a newer value already
+    // superseded, changes nothing.
+    if (!_claimProjection(sessionId, key, seq)) return;
+    switch (key) {
       case 'title':
         final title = wireString(frame.payload, 'value');
         if (title != null && title != 'null') {
@@ -2166,6 +2226,16 @@ class HarnessRepositoryImpl implements ChatRepository {
     }
   }
 
+  /// Applies one `session/control` baseline: the generation's whole-value
+  /// snapshot of every session's projections, queues and jobs.
+  ///
+  /// The baseline **replaces** rather than patches (reference
+  /// `manager.ts:672-701` clears and reseeds its maps, then hands every
+  /// instantiated session `queues.get(id) ?? []`): a session the baseline
+  /// omits has an empty queue and no jobs, and a session's projection block
+  /// seeds its keys completely. Both list halves are retained per session, so
+  /// a session this client has not instantiated yet is seeded when it opens
+  /// instead of showing an empty dock until the queue next changes.
   void _handleControlBaseline(ServerRequest frame) {
     final rawBaseline = asJsonObject(frame.payload['value']) ?? frame.payload;
     final projections = asJsonObject(rawBaseline['projections']);
@@ -2174,132 +2244,231 @@ class HarnessRepositoryImpl implements ChatRepository {
         final sessionId = entry.key;
         final block = asJsonObject(entry.value);
         if (block == null) continue;
-        final asOfSeq = wireLong(block, 'asOfSeq');
         final values = asJsonObject(block['values']);
         if (values != null) {
-          _applySessionProjectionValues(sessionId, values, asOfSeq);
-        }
-      }
-    }
-    final queues = asJsonObject(rawBaseline['queues']);
-    if (queues != null) {
-      for (final entry in queues.entries) {
-        final sessionId = entry.key;
-        final items = asJsonArray(entry.value);
-        if (items != null) {
-          final queueFrame = ServerRequest(
-            rpcId: 'session-control',
-            method: 'session/queue',
-            payload: <String, Object?>{
-              'type': 'queue',
-              'sessionId': sessionId,
-              'items': items,
-            },
-          );
-          unawaited(
-            _sessionStates[sessionId]?.handleFrame(queueFrame) ??
-                Future<void>.value(),
+          _applySessionProjectionValues(
+            sessionId,
+            values,
+            wireLong(block, 'asOfSeq'),
+            complete: true,
           );
         }
       }
     }
-    final jobs = asJsonObject(rawBaseline['jobs']);
-    if (jobs != null) {
-      for (final entry in jobs.entries) {
-        final sessionId = entry.key;
-        final jobsList = asJsonArray(entry.value);
-        if (jobsList != null) {
-          final jobsFrame = ServerRequest(
-            rpcId: 'session-control',
-            method: 'session/jobs',
-            payload: <String, Object?>{
-              'type': 'jobs',
-              'sessionId': sessionId,
-              'jobs': jobsList,
-            },
-          );
-          unawaited(
-            _sessionStates[sessionId]?.handleFrame(jobsFrame) ??
-                Future<void>.value(),
-          );
-        }
-      }
+    _baselineQueues
+      ..clear()
+      ..addAll(_controlLists(rawBaseline['queues']));
+    _baselineJobs
+      ..clear()
+      ..addAll(_controlLists(rawBaseline['jobs']));
+    for (final sessionId in _sessionStates.keys) {
+      _pushControlBaseline(sessionId);
     }
   }
 
+  /// One baseline list block (`queues` / `jobs`) as `sessionId -> items`.
+  Map<String, List<Object?>> _controlLists(Object? raw) {
+    final blocks = asJsonObject(raw);
+    if (blocks == null) return <String, List<Object?>>{};
+    return <String, List<Object?>>{
+      for (final entry in blocks.entries)
+        if (asJsonArray(entry.value) case final List<Object?> items)
+          entry.key: items,
+    };
+  }
+
+  /// Sends one session the retained baseline queue and job frames; a session
+  /// the baseline omitted gets the empty lists that clear its mirrors.
+  void _pushControlBaseline(String sessionId) {
+    final state = _sessionStates[sessionId];
+    if (state == null) return;
+    for (final (method, type, key, lists)
+        in <(String, String, String, Map<String, List<Object?>>)>[
+          ('session/queue', 'queue', 'items', _baselineQueues),
+          ('session/jobs', 'jobs', 'jobs', _baselineJobs),
+        ]) {
+      unawaited(
+        state.handleFrame(
+          ServerRequest(
+            rpcId: 'session-control',
+            method: method,
+            payload: <String, Object?>{
+              'type': type,
+              'sessionId': sessionId,
+              key: lists[sessionId] ?? const <Object?>[],
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Seeds one session's projection values from a whole-value block (the
+  /// control baseline, the follow opening, a list row, or an `added` event).
+  ///
+  /// Every key is claimed under the same newer-seq rule a live frame obeys, so
+  /// a block that raced a frame loses the keys the frame already owns and
+  /// still wins the ones it carries alone. [complete] marks the block as the
+  /// host's whole store for this session (the control baseline, the reference's
+  /// `seed`): a key it omits then clears rather than keeping the previous
+  /// value, which is how a restarted host stops showing a goal or todo list it
+  /// no longer computes.
   void _applySessionProjectionValues(
     String sessionId,
     JsonMap values,
-    int seq,
-  ) {
-    final pressureValue = values['contextPressure'];
-    if (pressureValue != null && pressureValue != 'null') {
-      final pressure = _parseContextPressureProjection(pressureValue);
-      _updateContextPressure(sessionId, pressure, seq);
+    int seq, {
+    bool complete = false,
+  }) {
+    if (complete) {
+      // The baseline is authoritative per key: drop watermarks above the cut
+      // so a value the new host no longer publishes cannot be protected by an
+      // older generation's seq (`ProjectionValueStore.truncate`).
+      _projectionSeqs[sessionId]?.removeWhere((_, rowSeq) => rowSeq > seq);
     }
-    final breakdownValue = values['contextBreakdown'];
-    if (breakdownValue != null && breakdownValue != 'null') {
-      final breakdown = _parseContextBreakdownProjection(breakdownValue);
-      _updateContextBreakdown(sessionId, breakdown, seq);
+    if (values.containsKey('contextPressure') &&
+        _claimProjection(sessionId, 'contextPressure', seq)) {
+      final pressureValue = values['contextPressure'];
+      _updateContextPressure(
+        sessionId,
+        (pressureValue == null || pressureValue == 'null')
+            ? null
+            : _parseContextPressureProjection(pressureValue),
+        seq,
+      );
     }
-    if (values.containsKey('plan')) {
+    if (values.containsKey('contextBreakdown') &&
+        _claimProjection(sessionId, 'contextBreakdown', seq)) {
+      final breakdownValue = values['contextBreakdown'];
+      _updateContextBreakdown(
+        sessionId,
+        (breakdownValue == null || breakdownValue == 'null')
+            ? null
+            : _parseContextBreakdownProjection(breakdownValue),
+        seq,
+      );
+    }
+    if (values.containsKey('plan') &&
+        _claimProjection(sessionId, 'plan', seq)) {
       final planValue = values['plan'];
       _planProjectionStateFor(sessionId)
           .value = (planValue != null && planValue != 'null')
           ? _parsePlanProjection(planValue)
           : null;
     }
-    if (values.containsKey('todos')) {
+    if (values.containsKey('todos') &&
+        _claimProjection(sessionId, 'todos', seq)) {
       final todosValue = values['todos'];
       _todoProjectionStateFor(sessionId)
           .value = (todosValue != null && todosValue != 'null')
           ? _parseTodosProjection(todosValue)
           : const <TodoItem>[];
     }
-    if (values.containsKey('goal')) {
+    if (values.containsKey('goal') &&
+        _claimProjection(sessionId, 'goal', seq)) {
       final goalValue = values['goal'];
       _goalProjectionStateFor(sessionId)
           .value = (goalValue != null && goalValue != 'null')
           ? _parseGoalProjection(goalValue)
           : null;
     }
-    final permValue = values['permissions'];
-    if (permValue != null && permValue != 'null') {
-      final obj = asJsonObject(permValue);
-      if (obj != null) {
-        final select = _tryDecode(
-          () => _toDomainPermissionSelect(PermissionSelectWire.fromJson(obj)),
-          'permissions',
-        );
-        _permissionProjectionStateFor(sessionId).value = select;
-      }
+    if (values.containsKey('permissions') &&
+        _claimProjection(sessionId, 'permissions', seq)) {
+      final permValue = values['permissions'];
+      final obj = permValue == null ? null : asJsonObject(permValue);
+      _permissionProjectionStateFor(sessionId).value = obj == null
+          ? null
+          : _tryDecode(
+              () =>
+                  _toDomainPermissionSelect(PermissionSelectWire.fromJson(obj)),
+              'permissions',
+            );
     }
-    final titleValue = wireString(values, 'title');
-    if (titleValue != null && titleValue != 'null') {
+    if (values.containsKey('title') &&
+        _claimProjection(sessionId, 'title', seq)) {
+      // `title` is `string | null` on the wire, and null means the host holds
+      // no title: it clears rather than keeping the previous text
+      // (`session-title/src/types.ts`).
+      final titleValue = values['title'];
+      final title = (titleValue == null || titleValue == 'null')
+          ? null
+          : wireString(values, 'title');
       _sessions.value = _sessions.value
           .map(
             (item) => item.id == sessionId
-                ? _copySession(item, title: titleValue)
+                ? _copySession(item, title: title, clearTitle: title == null)
                 : item,
           )
           .toList();
     }
-    final presetValue = wireString(values, 'agentPreset');
-    if (presetValue != null && presetValue != 'null') {
+    if (values.containsKey('agentPreset') &&
+        _claimProjection(sessionId, 'agentPreset', seq)) {
+      final presetValue = values['agentPreset'];
+      final preset = (presetValue == null || presetValue == 'null')
+          ? null
+          : wireString(values, 'agentPreset');
       _sessions.value = _sessions.value
           .map(
             (item) => item.id == sessionId
-                ? _copySession(item, agentPreset: presetValue)
+                ? _copySession(
+                    item,
+                    agentPreset: preset,
+                    clearAgentPreset: preset == null,
+                  )
                 : item,
           )
           .toList();
     }
-    if (values.containsKey('modelSelection')) {
+    if (values.containsKey('modelSelection') &&
+        _claimProjection(sessionId, 'modelSelection', seq)) {
       final selection = _parseModelSelectionProjection(
         values['modelSelection'],
       );
       _modelSelectionStateFor(sessionId).value = selection;
       _notifySessionModels(sessionId);
+    }
+    if (complete) {
+      for (final key in _projectionKeys) {
+        if (values.containsKey(key)) continue;
+        if (!_claimProjection(sessionId, key, seq)) continue;
+        _clearProjection(sessionId, key);
+      }
+    }
+  }
+
+  /// Clears one projection key: the value the host no longer computes.
+  void _clearProjection(String sessionId, String key) {
+    switch (key) {
+      case 'title':
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, clearTitle: true)
+                  : item,
+            )
+            .toList();
+      case 'agentPreset':
+        _sessions.value = _sessions.value
+            .map(
+              (item) => item.id == sessionId
+                  ? _copySession(item, clearAgentPreset: true)
+                  : item,
+            )
+            .toList();
+      case 'goal':
+        _goalProjectionStateFor(sessionId).value = null;
+      case 'plan':
+        _planProjectionStateFor(sessionId).value = null;
+      case 'todos':
+        _todoProjectionStateFor(sessionId).value = const <TodoItem>[];
+      case 'permissions':
+        _permissionProjectionStateFor(sessionId).value = null;
+      case 'modelSelection':
+        _modelSelectionStateFor(sessionId).value = null;
+        _notifySessionModels(sessionId);
+      case 'contextPressure':
+        _updateContextPressure(sessionId, null, 0);
+      case 'contextBreakdown':
+        _updateContextBreakdown(sessionId, null, 0);
     }
   }
 
@@ -2531,6 +2700,11 @@ class HarnessRepositoryImpl implements ChatRepository {
     await _resyncMutex.synchronized(() async {
       _contextPressureSeqs.clear();
       _contextBreakdownSeqs.clear();
+      // A new generation's baselines are authoritative: a watermark or a
+      // retained list from the previous one must not block (or outlive) them.
+      _projectionSeqs.clear();
+      _baselineQueues.clear();
+      _baselineJobs.clear();
       _cachedModelCatalog = null;
       _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
       _notifyModelCatalogChanged();
@@ -2692,8 +2866,25 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final item in _sessions.value)
         if (item.agentError case final message?) item.id: message,
     };
+    final heldById = <String, SessionSummary>{
+      for (final item in _sessions.value) item.id: item,
+    };
     final result = listing.map((wire) {
-      final session = _toDomainSession(wire);
+      var session = _toDomainSession(wire);
+      // The list row carries its own projection block at `asOfSeq`: a pull
+      // that read the store before a live frame must not reset the row's
+      // projected facts to the older value (the reference derives the row
+      // from the projection store, whose higher-seq-wins rule already
+      // rejected it).
+      final held = heldById[session.id];
+      if (held != null && wire.asOfSeq >= 0) {
+        if (_projectionIsStale(session.id, 'title', wire.asOfSeq)) {
+          session = _copySession(session, title: held.title);
+        }
+        if (_projectionIsStale(session.id, 'agentPreset', wire.asOfSeq)) {
+          session = _copySession(session, agentPreset: held.agentPreset);
+        }
+      }
       final armed =
           (completedById[session.id] ?? false) ||
           armedByPull.contains(session.id);
@@ -3023,15 +3214,20 @@ class HarnessRepositoryImpl implements ChatRepository {
     bool? completed,
     int? updatedAtEpochMs,
     String? agentError,
+    bool clearTitle = false,
     bool clearAgentError = false,
+    bool clearAgentPreset = false,
   }) => SessionSummary(
     id: session.id,
-    title: title ?? session.title,
+    // A null [title]/[agentPreset] means "not supplied here" for every caller
+    // patching one fact onto a row; the explicit `clear*` flags are how a
+    // projection says the host holds no value any more.
+    title: clearTitle ? null : (title ?? session.title),
     running: running ?? session.running,
     blank: blank ?? session.blank,
     updatedAtEpochMs: updatedAtEpochMs ?? session.updatedAtEpochMs,
     cwd: session.cwd,
-    agentPreset: agentPreset ?? session.agentPreset,
+    agentPreset: clearAgentPreset ? null : (agentPreset ?? session.agentPreset),
     origin: session.origin,
     parentSessionId: session.parentSessionId,
     completed: completed ?? session.completed,
@@ -3052,6 +3248,13 @@ class HarnessRepositoryImpl implements ChatRepository {
       for (final frame in buffered) {
         unawaited(state.handleFrame(frame));
       }
+    }
+    // A session opened after this generation's baseline still gets its queue
+    // and jobs (reference `manager.ts:288-297` seeds a lazily created session
+    // from the manager-level maps).
+    if (_baselineQueues.containsKey(sessionId) ||
+        _baselineJobs.containsKey(sessionId)) {
+      _pushControlBaseline(sessionId);
     }
     return state;
   }
@@ -3462,6 +3665,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     _contextBreakdownProjections.remove(sessionId);
     _contextPressureSeqs.remove(sessionId);
     _contextBreakdownSeqs.remove(sessionId);
+    _projectionSeqs.remove(sessionId);
     _pendingBuffers.remove(sessionId);
     _prevRunningBySession.remove(sessionId);
     if (_pendingBySession.remove(sessionId) != null) _publishPending();
