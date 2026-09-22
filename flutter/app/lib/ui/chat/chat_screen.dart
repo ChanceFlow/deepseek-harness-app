@@ -2925,8 +2925,8 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
     );
 
     // The group header is the reference turn-process fold: a full-width
-    // 24px line over an 8px gap and a hairline rule, no card, no fill, no
-    // bold — the chrome that made the chip read as a foreign surface.
+    // 24px line over an 8px gap, no card, no fill, no bold — the chrome
+    // that made the chip read as a foreign surface.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2992,8 +2992,8 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
             ),
           ),
         ),
-        // Web `.root`: the header always rules itself off bottom.
-        Container(height: 0.5, color: scheme.outlineVariant),
+        // The phase divides from what follows with the header's own 8px
+        // gap; the transcript's rows carry no rules of their own.
         if (_expanded) ...[
           // Web ToolCallTree `.subCalls`: 22px indent, 8px padding, one
           // hairline guide — the nesting the reference gives a call's own
@@ -3054,7 +3054,8 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
             ),
           ),
         ] else
-          // Web `.root:not([data-open])`: a closed fold keeps 8px below.
+          // A closed fold keeps the header's 8px tail, so the phase reads as
+          // a block rather than a step.
           const SizedBox(height: 8),
       ],
     );
@@ -6889,10 +6890,10 @@ class CompactionRow extends StatelessWidget {
         showTrailingIcon: expandable,
         dense: true,
         visualDensity: VisualDensity.compact,
-        minTileHeight: 28,
+        minTileHeight: 30,
         shape: const Border(),
         collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
         title: Row(
           children: [
             Icon(
@@ -6903,7 +6904,7 @@ class CompactionRow extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               l10n.contextCompacted,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
@@ -6921,7 +6922,7 @@ class CompactionRow extends StatelessWidget {
                 caption,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
               ),
@@ -7026,7 +7027,7 @@ class _CommandRowState extends State<CommandRow>
               const SizedBox(width: 6),
               Text(
                 '/${command.name}',
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: failed
                       ? scheme.error
                       : running
@@ -7049,7 +7050,7 @@ class _CommandRowState extends State<CommandRow>
                     summaryText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: failed
                           ? scheme.error
                           : running
@@ -7098,7 +7099,7 @@ class ContextInjectionRow extends StatelessWidget {
         const SizedBox(width: 6),
         Text(
           injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: theme.textTheme.bodySmall?.copyWith(
             color: scheme.onSurfaceVariant,
           ),
         ),
@@ -7117,7 +7118,7 @@ class ContextInjectionRow extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
@@ -7130,7 +7131,7 @@ class ContextInjectionRow extends StatelessWidget {
               summary,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
@@ -7163,17 +7164,26 @@ class ContextInjectionRow extends StatelessWidget {
       );
     }
     final hasBody = injection.text.trim().isNotEmpty;
-    return ExpansionTile(
-      // No body means a non-interactive disclosure: the native tile drops
-      // its ripple and trailing arrow (web rule).
-      enabled: hasBody,
-      showTrailingIcon: hasBody,
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      minTileHeight: 28,
-      tilePadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-      title: _headerRow(context),
-      children: [_body(context)],
+    // The same one-line step chrome as a tool or thought row: the ambient
+    // icon size keeps the stock 24px chevron from setting the row height,
+    // and an expanded row divides with space rather than the tile's own
+    // rules.
+    return IconTheme.merge(
+      data: const IconThemeData(size: 18),
+      child: ExpansionTile(
+        // No body means a non-interactive disclosure: the native tile drops
+        // its ripple and trailing arrow (web rule).
+        enabled: hasBody,
+        showTrailingIcon: hasBody,
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        minTileHeight: 30,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+        title: _headerRow(context),
+        children: [_body(context)],
+      ),
     );
   }
 }
