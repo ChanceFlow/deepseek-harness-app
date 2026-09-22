@@ -135,6 +135,19 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'transcript', state: busyState()),
+  // The transcript's one-line marker rows in one column: the context
+  // injection, the compaction marker, the slash command and a tool row.
+  DesignShot(name: 'marker-rows', state: markerRowsState()),
+  // The same column with the phase opened, so the inline injection row sits
+  // beside the thought and the tool call it shares its chrome with.
+  DesignShot(
+    name: 'marker-rows-expanded',
+    state: markerRowsState(),
+    act: (tester) async {
+      await tester.tap(find.byType(ActivityGroupRow));
+      await settle(tester);
+    },
+  ),
   // A turn that wrote and delivered files: both turn-tail rows, with the
   // delivered-file cards collapsing behind their toggle.
   DesignShot(name: 'presented-files', state: presentedFilesState()),

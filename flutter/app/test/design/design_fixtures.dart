@@ -1287,6 +1287,78 @@ ChatUiState timelineFoldingStateEn() {
 
 ChatUiState timelineFoldingState() => timelineFoldingStateEn();
 
+/// The transcript's one-line marker rows stacked in one column: a lone
+/// context injection above the compaction, slash-command and tool rows it
+/// shares a rhythm with. A drift in row height or label size between them
+/// is only visible when they sit together, so they share one fixture.
+ChatUiState markerRowsState() {
+  final items = <TimelineItem>[
+    const TimelineMessage(
+      ChatMessage(
+        id: 'mk_u1',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: 'Pick the wire seam back up.',
+        createdAtEpochMs: kNow,
+        seq: 1,
+      ),
+    ),
+    const TimelineContextInjection(
+      id: 'mk_ctx',
+      text: 'Earlier decision: the adapter owns every dsh type.',
+      producerLabel: 'AGENTS.md',
+      summary: 'workspace instructions',
+    ),
+    const TimelineCompaction(
+      id: 'mk_cmp',
+      shadowedCount: 12,
+      shadowedTokens: 8400,
+      summary: 'Earlier turns compacted into a summary.',
+    ),
+    const TimelineCommand(
+      commandId: 'mk_cmd',
+      name: 'compact',
+      status: CommandRunStatus.success,
+      text: 'Context compacted',
+    ),
+    // A phase of three members, so opening it puts the inline injection
+    // row directly beside the thought and the tool call.
+    const TimelineMessage(
+      ChatMessage(
+        id: 'mk_a1',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        reasoning: 'Re-read the boundary note before touching the adapter.',
+        reasoningDuration: Duration(seconds: 4),
+        text: '',
+        createdAtEpochMs: kNow + 1000,
+        seq: 2,
+      ),
+    ),
+    const TimelineContextInjection(
+      id: 'mk_ctx2',
+      text: 'Recall: the import boundary is absolute.',
+      producerLabel: 'recall · wire seam',
+      isRecall: true,
+      summary: 'recalled 1 decision',
+    ),
+    const TimelineToolCall(
+      id: 'mk_t1',
+      name: 'read',
+      arguments:
+          '{"file_path":"packages/harness_adapter/lib/src/rpc_map.dart"}',
+      result: '210 lines',
+      status: ToolRunStatus.completed,
+    ),
+  ];
+
+  return ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: items,
+  );
+}
+
 /// A `read_image` result: the row carries the durable reference, and the
 /// card renders the picture plus the model-facing envelope beneath it.
 ChatUiState toolImageState() {
