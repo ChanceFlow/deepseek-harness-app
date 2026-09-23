@@ -1019,17 +1019,20 @@ class HarnessRepositoryImpl implements ChatRepository {
   ) async {
     // The typert remote envelope: the args carry the addressed agent (a
     // session id — sessions are agent-backed), the complete line, and
-    // the base64-encoded composer images in submission order (the host
-    // admission enforces the command's image-acceptance flag).
+    // `submittedAttachments` — base64-encoded composer images in
+    // submission order, each tagged `type: 'image'` (the host admission
+    // enforces the command's attachment-acceptance flag). The descriptor
+    // is strict about both the key and the tag.
     final result = await _call(
       DshRpcEndpoints.commandsExecute,
       DshRpcEndpoints.commandsExecute,
       <String, Object?>{
         'agentId': sessionId,
         'line': line,
-        'images': <Object?>[
+        'submittedAttachments': <Object?>[
           for (final image in images)
             <String, Object?>{
+              'type': 'image',
               'mediaType': image.mediaType,
               'data': image.base64Data,
               if (image.name != null) 'name': image.name,

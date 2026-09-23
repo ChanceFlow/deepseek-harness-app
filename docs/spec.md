@@ -605,16 +605,19 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 - `commands/execute` (typert remote bridge: wire path
   `/api/commands/execute`, envelope `payload.args {agentId, line,
-  images}`) executes one slash-command line through the host command
-  registry — the line never reaches the model (`session.prompt` does not
+  submittedAttachments}`) executes one slash-command line through the host
+  command registry — the line never reaches the model (`session.prompt` does not
   parse commands; the host's own docs notwithstanding, the model would
   receive the text as ordinary content). A matched command returns the
   settled execution (`commandId`, `result.kind` `success|error`,
   optional `text`); an unmatched name returns ok with no value slot.
-  The `images` arg carries base64-encoded composer uploads
-  (`{mediaType, data, name?}` in submission order); the host admission
-  settles an error result when the command does not declare image
-  acceptance (`plan` and `goal` do).
+  The `submittedAttachments` arg carries base64-encoded composer uploads
+  (`{type: 'image', mediaType, data, name?}` in submission order); the
+  descriptor validates the key and the tag strictly, so an untagged or
+  differently-named slot fails the whole call
+  (`gateway/arguments-invalid`). The host admission settles an error
+  result when the command does not declare attachment acceptance
+  (`plan` and `goal` do).
 - The chat controller routes a submitted line whose leading token names
   a roster host command through `commands/execute` (args-tolerant when
   the command advertises an input hint, bare-only otherwise — the web

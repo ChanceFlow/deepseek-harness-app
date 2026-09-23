@@ -2560,19 +2560,21 @@ void main() {
     expect(execution.kind, CommandOutcomeKind.success);
     expect(execution.text, 'Plan mode on. Use /plan off to leave.');
     // The typert remote envelope: the args carry the addressed agent
-    // (session id), the complete line, and the images slot.
+    // (session id), the complete line, and `submittedAttachments` — the
+    // descriptor's third parameter name, strict in both directions.
     final payload = rpc.payloads(DshRpcEndpoints.commandsExecute).single;
     final args = asJsonObject(payload['args']);
     expect(args, isNotNull, reason: 'missing args envelope');
     expect(args!['agentId'], 'session-1');
     expect(args['line'], '/plan');
-    expect(args['images'], <Object?>[]);
+    expect(args['submittedAttachments'], <Object?>[]);
   });
 
   test('executeCommand encodes composer images in submission order', () async {
-    // Reference admission (dsh-attachment admitEncodedImages): each
-    // image is {mediaType, data (canonical base64), name?} in caller
-    // order; the host enforces the command's image-acceptance flag.
+    // Reference `CommandSubmitAttachment` (commands/src/types.ts): an
+    // image entry is `{type: 'image'}` intersected with
+    // `EncodedImageAttachment` `{mediaType, data (canonical base64),
+    // name?}`; the tag is required and carries no other variant here.
     final rpc = HarnessFakeRpc();
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
@@ -2589,15 +2591,20 @@ void main() {
 
     final payload = rpc.payloads(DshRpcEndpoints.commandsExecute).single;
     final args = asJsonObject(payload['args'])!;
-    final images = args['images'];
-    expect(images, isA<List<Object?>>());
-    expect(images, <Object?>[
+    final attachments = args['submittedAttachments'];
+    expect(attachments, isA<List<Object?>>());
+    expect(attachments, <Object?>[
       <String, Object?>{
+        'type': 'image',
         'mediaType': 'image/png',
         'data': 'aGVsbG8=',
         'name': 'mockup.png',
       },
-      <String, Object?>{'mediaType': 'image/jpeg', 'data': 'dw=='},
+      <String, Object?>{
+        'type': 'image',
+        'mediaType': 'image/jpeg',
+        'data': 'dw==',
+      },
     ]);
   });
 
