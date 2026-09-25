@@ -112,11 +112,14 @@ box, a tunneled remote dsh.
 
 ## Feature surface
 
-- **Chat & Agent execution timeline** — Cursor Composer and Windsurf
-  Cascade-style activity timeline: collapsible thought blocks with duration
-  ("Thought 10s"), smart semantic tool-call aggregation ("Explored 3 files,
-  2 searches"), live in-flight activity dots and sweeps, tree-line step
-  disclosure with arguments and results, session list (search,
+- **Chat & Agent execution timeline** — the reference client's two-level
+  process disclosure: one Turn control per turn ("Deep diving for 8s",
+  "Took 2m 03s", "Stopped", "Failed") that folds everything the agent did
+  before its answer — the answer itself never folds — over category-iconed
+  process groups titled by their top three kinds ("Searched code and read
+  files") with a live one-line running detail, collapsible thought blocks with
+  duration ("Thought 10s"), live in-flight activity dots and sweeps, tree-line
+  step disclosure with arguments and results, session list (search,
   create-in-workspace, rename, archive, fork, running indicator), ledger-style
   outline with collapsible turn groups, markdown rendering (fenced code,
   headings, lists, tables, clickable links), queue rows, approvals,

@@ -1,6 +1,9 @@
-/// Cursor/Windsurf-style timeline activity folding: one collapsed card per
-/// execution phase, holding that phase's thoughts, injected context and tool
-/// calls in transcript order.
+/// Timeline activity folding: one disclosure per execution phase, holding that
+/// phase's thoughts, injected context and tool calls in transcript order.
+///
+/// The phase's label and live detail come from the reference chat grouping's
+/// own model ([deriveProcessActivity] in `process_activity.dart`); this module
+/// owns only which rows a phase holds.
 library;
 
 import 'package:domain/model/chat_message.dart';
@@ -12,7 +15,11 @@ import 'package:domain/model/timeline_item.dart';
 /// The card owns the phase's only disclosure: its members render inline when
 /// the card opens, never as a fold of their own.
 final class TimelineActivityGroup {
-  const TimelineActivityGroup({required this.id, required this.entries});
+  const TimelineActivityGroup({
+    required this.id,
+    required this.entries,
+    this.closed = true,
+  });
 
   /// Stable identity of the phase: the first member's own id.
   final String id;
@@ -20,6 +27,10 @@ final class TimelineActivityGroup {
   /// Phase members in transcript order: reasoning-only assistant messages,
   /// [TimelineContextInjection] rows and [TimelineToolCall] rows.
   final List<TimelineItem> entries;
+
+  /// Whether the phase's Turn has ended. A closed phase keeps its settled
+  /// label and stops shimmering; an open one names what is running.
+  final bool closed;
 
   /// The phase's tool calls in order.
   List<TimelineToolCall> get calls =>
@@ -33,20 +44,19 @@ final class TimelineActivityGroup {
     return null;
   }
 
-  /// True when the phase holds any tool call (the card's summary source).
-  bool get hasCalls => entries.any((entry) => entry is TimelineToolCall);
-
   @override
   bool operator ==(Object other) =>
       other is TimelineActivityGroup &&
       other.id == id &&
+      other.closed == closed &&
       _listEquals(other.entries, entries);
 
   @override
-  int get hashCode => Object.hash(id, Object.hashAll(entries));
+  int get hashCode => Object.hash(id, closed, Object.hashAll(entries));
 
   @override
-  String toString() => 'TimelineActivityGroup(id: $id, entries: $entries)';
+  String toString() =>
+      'TimelineActivityGroup(id: $id, closed: $closed, entries: $entries)';
 
   static bool _listEquals<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
@@ -62,6 +72,13 @@ final class TimelineActivityGroup {
 /// injected-context rows that used to delimit a phase join it instead — an
 /// injection is a step in the run, so it gets a tool call's treatment rather
 /// than a row of its own.
+///
+/// A reply-bearing step whose own reasoning is non-empty contributes that
+/// reasoning to the phase **and** renders its reply as a row: the reference
+/// emits both from the one step (`process-groups.ts`: the node is pushed as a
+/// `reasoning` member, then the group flushes and the same node is emitted as
+/// the `response`), so a reader who opens the phase sees the thinking that
+/// produced the answer they just read.
 ///
 /// A phase of one member is emitted as that member, so a lone tool call, a
 /// lone thought and a lone injection keep their own row.
@@ -79,8 +96,17 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
   // newest chunk's id while it streams, so keying the card on it would remount
   // — and collapse — the card on every chunk; the first member's id is stable.
   String? firstMemberId;
+  // Whether the Turn the phase belongs to has ended, read off the boundary that
+  // opened it. A timeline whose window cut the boundary is read as settled.
+  var turnEnded = true;
 
-  void flushPhase() {
+  /// Emit the phase being collected.
+  ///
+  /// [tail] marks the phase the Turn's own log ends on. The reference closes
+  /// every group as soon as any node follows it and leaves only the trailing
+  /// one live (`process-groups.ts` `flush`), so a phase with an answer or a
+  /// marker after it wears its settled label however open its Turn still is.
+  void flushPhase({bool tail = false}) {
     if (steps.isEmpty && thoughts.isEmpty) return;
     final entries = <TimelineItem>[];
     if (thoughts.isNotEmpty) {
@@ -97,6 +123,7 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
           : TimelineActivityGroup(
               id: firstMemberId!,
               entries: List<TimelineItem>.unmodifiable(entries),
+              closed: !tail || turnEnded,
             ),
     );
     steps.clear();
@@ -107,28 +134,47 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
 
   for (final item in items) {
     switch (item) {
+      case TimelineTurnBoundary(:final endSeq):
+        flushPhase();
+        // The phase that follows belongs to this Turn, so its settled state
+        // comes from the boundary the reducer filled when `turn/end` folded.
+        turnEnded = endSeq != null;
+        result.add(item);
       case TimelineToolCall():
       case TimelineContextInjection():
         firstMemberId ??= _entryId(item);
         steps.add(item);
       case TimelineMessage(:final value):
-        if (value.role == MessageRole.assistant && value.text.trim().isEmpty) {
+        if (value.role == MessageRole.assistant) {
+          final hasReply = value.text.trim().isNotEmpty;
           final reasoning = value.reasoning;
-          if (reasoning != null && reasoning.trim().isNotEmpty) {
+          final hasReasoning = reasoning != null && reasoning.trim().isNotEmpty;
+          if (hasReasoning) {
             firstMemberId ??= _entryId(item);
             if (thoughts.isEmpty) thoughtInsertAt = steps.length;
-            thoughts.add(item);
+            thoughts.add(hasReply ? _reasoningOnly(item, value) : item);
           }
-          // Dropped if reasoning is null or empty (protocol artifact).
+          if (hasReply) {
+            // The reply is its own row, and it ends the phase — the reasoning
+            // above stays with the work that produced it. The row carries only
+            // the reply: the reference emits this step as the phase's
+            // `response` part, which suppresses its reasoning blocks
+            // (`AssistantMarkdown.tsx`), so one thought never renders twice.
+            flushPhase();
+            result.add(hasReasoning ? _replyOnly(item, value) : item);
+          } else if (!hasReasoning) {
+            // An assistant message with neither reply text nor reasoning is a
+            // protocol artifact: it publishes no row and does not split the
+            // phase.
+          }
         } else {
           flushPhase();
           result.add(item);
         }
-      case TimelineTurnBoundary():
-      case TimelineQuestionRequest():
-      case TimelineApprovalRequest():
       case TimelineCommand():
       case TimelineCompaction():
+      case TimelineQuestionRequest():
+      case TimelineApprovalRequest():
       case TimelineError():
       case TimelineQueue():
       case TimelineJobs():
@@ -139,9 +185,48 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
     }
   }
 
-  flushPhase();
+  // The phase the log ends on: the Turn's trailing one, which is the only phase
+  // that may still be live.
+  flushPhase(tail: true);
   return result;
 }
+
+/// The reasoning half of one step, for the phase it reasons inside: the same
+/// identity, seq and timing, with the reply text removed so the member renders
+/// as the thought it is.
+TimelineMessage _reasoningOnly(TimelineItem item, ChatMessage value) =>
+    TimelineMessage(
+      ChatMessage(
+        id: value.id,
+        sessionId: value.sessionId,
+        role: value.role,
+        text: '',
+        reasoning: value.reasoning,
+        reasoningDuration: value.reasoningDuration,
+        streaming: value.streaming,
+        createdAtEpochMs: value.createdAtEpochMs,
+        images: value.images,
+        seq: value.seq,
+      ),
+    );
+
+/// The reply half of one step whose reasoning joined its phase: the same
+/// identity, seq and timing, with the reasoning removed so the reader does not
+/// read the same thought twice — once behind the phase's fold and once over the
+/// answer.
+TimelineMessage _replyOnly(TimelineItem item, ChatMessage value) =>
+    TimelineMessage(
+      ChatMessage(
+        id: value.id,
+        sessionId: value.sessionId,
+        role: value.role,
+        text: value.text,
+        streaming: value.streaming,
+        createdAtEpochMs: value.createdAtEpochMs,
+        images: value.images,
+        seq: value.seq,
+      ),
+    );
 
 /// One thought block from a phase's reasoning-only messages: the last
 /// message's identity and seq, every reasoning text joined, the durations

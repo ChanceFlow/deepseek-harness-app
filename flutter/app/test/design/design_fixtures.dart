@@ -1281,6 +1281,188 @@ ChatUiState timelineFoldingStateEn() {
 
 ChatUiState timelineFoldingState() => timelineFoldingStateEn();
 
+/// [kSessions] with the selected session settled. A shot about a finished Turn
+/// must not mount the running chrome: the live status line would sit under a
+/// control that already reports the Turn's total time.
+final List<SessionSummary> kSettledSessions = <SessionSummary>[
+  const SessionSummary(
+    id: 's1',
+    title: 'dock vertical budget',
+    blank: false,
+    updatedAtEpochMs: kNow,
+    cwd: '/home/user/Projects/deepseek-harness-app',
+  ),
+  ...kSessions.skip(1),
+];
+
+/// Two settled Turns with their work behind the Turn control. The Turn control
+/// and the phase card are the transcript's two disclosures and they only meet
+/// here — the control owns the card — so this is the fixture where "the reply
+/// survives the fold" and "the collapsed Turn is one line plus its answer" are
+/// visible. Short enough that a whole Turn fits above the fold: the expanded
+/// shot must show its body, not the scroll position.
+ChatUiState turnProcessFoldedState({bool zh = false}) {
+  final String ask = zh ? '把生成链路的关键细节补齐' : 'Fill in the pipeline details';
+  final String opened = zh
+      ? '先看仓库结构和核心文档，确认客户端与服务端之间的通讯契约。'
+      : 'Start from the repository layout and the core docs to pin down the '
+            'client/server wire contract.';
+  final String closing = zh
+      ? '适配层独占所有 dsh 类型，结论可以写得短一些。'
+      : 'The adapter owns every dsh type, so the answer can stay short.';
+  final String firstAnswer = zh
+      ? '仓库分三层：提示词模板、步骤编排和产物落盘。'
+      : 'The repository splits into prompt templates, step orchestration and '
+            'artifact landing.';
+  final String answer = zh
+      ? '生成链路的细节在 docs/spec.md 里：一次 run 从模板渲染开始，'
+            '按步骤编排调用工具，最后把产物写回工作区。适配层独占所有 dsh 类型，'
+            'app 和 domain 都看不到一个。'
+      : 'The pipeline details live in docs/spec.md: a run renders its template, '
+            'walks the steps through their tool calls, then lands the artifacts '
+            'back in the workspace. The adapter owns every dsh type, so neither '
+            'app nor domain ever sees one.';
+  return ChatUiState(
+    sessions: kSettledSessions,
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      // A settled Turn above, so the reader sees the fold repeat rather than
+      // one control floating alone.
+      const TimelineTurnBoundary(
+        1,
+        startedAtEpochMs: kNow - 300000,
+        endedAtEpochMs: kNow - 240000,
+        endSeq: 3,
+        endReason: 'completed',
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tp0-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: zh ? '这个项目是做什么的' : 'What is this project',
+          createdAtEpochMs: kNow - 300000,
+          seq: 1,
+        ),
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tp0-a1',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text: firstAnswer,
+          createdAtEpochMs: kNow - 240000,
+          seq: 3,
+        ),
+      ),
+      // The Turn the two shots act on: reads and a search, then an answer that
+      // carries reasoning of its own — the reference keeps that reasoning with
+      // the work and renders the reply as its own row.
+      const TimelineTurnBoundary(
+        2,
+        startedAtEpochMs: kNow - 123000,
+        endedAtEpochMs: kNow,
+        endSeq: 12,
+        endReason: 'completed',
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tp1-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: ask,
+          createdAtEpochMs: kNow - 123000,
+          seq: 4,
+        ),
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tp1-th1',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          reasoning: opened,
+          reasoningDuration: const Duration(seconds: 6),
+          text: '',
+          createdAtEpochMs: kNow - 120000,
+          seq: 5,
+        ),
+      ),
+      const TimelineToolCall(
+        id: 'tp1-t1',
+        name: 'read',
+        arguments: '{"file_path":"AGENTS.md"}',
+        status: ToolRunStatus.completed,
+      ),
+      const TimelineToolCall(
+        id: 'tp1-t2',
+        name: 'read',
+        arguments: '{"file_path":"docs/spec.md"}',
+        status: ToolRunStatus.completed,
+      ),
+      const TimelineToolCall(
+        id: 'tp1-t3',
+        name: 'grep',
+        arguments: '{"pattern":"pipeline"}',
+        status: ToolRunStatus.completed,
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tp1-a1',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          reasoning: closing,
+          reasoningDuration: const Duration(seconds: 4),
+          text: answer,
+          createdAtEpochMs: kNow,
+          seq: 12,
+        ),
+      ),
+    ],
+  );
+}
+
+/// A Turn in flight with a tool call still running: the control counts the
+/// elapsed seconds and never folds, and the phase card names what is happening
+/// right now — its live label plus the first readable argument of the running
+/// call, which is the one line the reference adds over a bare tool name.
+ChatUiState turnProcessLiveState() {
+  // A live Turn's label counts real elapsed time, so its clock is the host's:
+  // the fixtures' fixed [kNow] would render the run as years long.
+  final int now = DateTime.now().millisecondsSinceEpoch;
+  return ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      TimelineTurnBoundary(1, startedAtEpochMs: now - 8000),
+      TimelineMessage(
+        ChatMessage(
+          id: 'tl-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'Run the chat tests',
+          createdAtEpochMs: now - 8000,
+          seq: 1,
+        ),
+      ),
+      TimelineToolCall(
+        id: 'tl-t1',
+        name: 'grep',
+        arguments: '{"pattern":"ActivityGroupRow","path":"lib/ui/chat"}',
+        result: 'lib/ui/chat/chat_screen.dart:2811',
+        status: ToolRunStatus.completed,
+        startedAtEpochMs: now - 6000,
+      ),
+      TimelineToolCall(
+        id: 'tl-t2',
+        name: 'bash',
+        arguments: '{"command":"flutter test app/test/ui/chat"}',
+        status: ToolRunStatus.running,
+        startedAtEpochMs: now - 3000,
+      ),
+    ],
+  );
+}
+
 /// The transcript's one-line marker rows stacked in one column: a lone
 /// context injection above the compaction, slash-command and tool rows it
 /// shares a rhythm with. A drift in row height or label size between them

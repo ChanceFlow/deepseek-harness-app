@@ -371,15 +371,8 @@
   "toolTodoPlanCompleted": "{done}/{total} completed",
   "thoughtDuration": "Thought {duration}",
   "thinkingDuration": "Thinking · {duration}",
-  "exploredFilesAndSearches": "{files, plural, =1{Explored 1 file} other{Explored {files} files}}, {searches, plural, =1{1 search} other{{searches} searches}}",
-  "exploredFiles": "{count, plural, =1{Explored 1 file} other{Explored {count} files}}",
   "exploringFiles": "{count, plural, =1{Exploring 1 file} other{Exploring {count} files}}",
-  "searchedCount": "{count, plural, =1{1 search} other{{count} searches}}",
-  "modifiedFiles": "{count, plural, =1{Modified 1 file} other{Modified {count} files}}",
-  "ranCommands": "{count, plural, =1{Ran 1 command} other{Ran {count} commands}}",
   "runningCommands": "{count, plural, =1{Running 1 command} other{Running {count} commands}}",
-  "toolGroupOperations": "{count, plural, =1{1 operation} other{{count} operations}}",
-  "toolWorkingSteps": "Working ({count, plural, =1{1 step} other{{count} steps}})",
   "statsTurnsSteps": "{turns} turns · {steps} steps",
   "statsLlmDuration": "LLM {duration}",
   "statsToolDuration": "Tool call {duration}",
@@ -1061,25 +1054,6 @@
       }
     }
   },
-  "@exploredFilesAndSearches": {
-    "description": "Collapsed action summary when both files were explored and searches were conducted.",
-    "placeholders": {
-      "files": {
-        "type": "int"
-      },
-      "searches": {
-        "type": "int"
-      }
-    }
-  },
-  "@exploredFiles": {
-    "description": "Collapsed action summary for explored files.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "@exploringFiles": {
     "description": "In-flight action summary for exploring files.",
     "placeholders": {
@@ -1088,48 +1062,8 @@
       }
     }
   },
-  "@searchedCount": {
-    "description": "Action summary for search operations.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "@modifiedFiles": {
-    "description": "Action summary for file edits/writes.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "@ranCommands": {
-    "description": "Action summary for executed terminal commands.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "@runningCommands": {
     "description": "In-flight action summary for executing terminal commands.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "@toolGroupOperations": {
-    "description": "Fallback action summary count.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "@toolWorkingSteps": {
-    "description": "In-flight multi-step action header.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -2761,5 +2695,128 @@
   "batteryOptimizationRequestFailed": "Could not open the battery optimization dialog on this device.",
   "@batteryOptimizationRequestFailed": {
     "description": "Stated under the exemption row when the system dialog could not be opened."
+  },
+  "stepProcessThinking": "Analyzing the request",
+  "stepProcessRead": "Reading files",
+  "stepProcessReadImage": "Reading images",
+  "stepProcessWrite": "Writing files",
+  "stepProcessSearch": "Searching code",
+  "stepProcessEdit": "Editing files",
+  "stepProcessCommands": "Running commands",
+  "stepProcessCode": "Running code",
+  "stepProcessWebSearch": "Searching the web",
+  "stepProcessWebFetch": "Visiting web pages",
+  "stepProcessSubagents": "Coordinating subagents",
+  "stepProcessPlan": "Updating the plan",
+  "stepProcessQuestions": "Waiting for your action",
+  "stepProcessTools": "Calling tools",
+  "stepProcessPrepareRead": "Preparing to read files",
+  "stepProcessPrepareReadImage": "Preparing to read images",
+  "stepProcessPrepareWrite": "Preparing to write files",
+  "stepProcessPrepareSearch": "Preparing to search code",
+  "stepProcessPrepareEdit": "Preparing to edit files",
+  "stepProcessPrepareCommands": "Preparing to run commands",
+  "stepProcessPrepareCode": "Preparing to run code",
+  "stepProcessPrepareWebSearch": "Preparing to search the web",
+  "stepProcessPrepareWebFetch": "Preparing to visit web pages",
+  "stepProcessPrepareSubagents": "Preparing to coordinate subagents",
+  "stepProcessPreparePlan": "Preparing to update the plan",
+  "stepProcessPrepareQuestions": "Preparing questions",
+  "stepProcessPrepareTools": "Preparing tool calls",
+  "stepProcessDoneThinking": "Analysis completed",
+  "stepProcessDoneRead": "Read files",
+  "stepProcessDoneReadImage": "Read images",
+  "stepProcessDoneWrite": "Wrote files",
+  "stepProcessDoneSearch": "Searched code",
+  "stepProcessDoneEdit": "Edited files",
+  "stepProcessDoneCommands": "Ran commands",
+  "stepProcessDoneCode": "Ran code",
+  "stepProcessDoneWebSearch": "Searched the web",
+  "stepProcessDoneWebFetch": "Visited web pages",
+  "stepProcessDoneSubagents": "Coordinated subagents",
+  "stepProcessDonePlan": "Updated the plan",
+  "stepProcessDoneQuestions": "Asked questions",
+  "stepProcessDoneTools": "Called tools",
+  "stepProcessJoinTwo": "{first} and {second}",
+  "@stepProcessJoinTwo": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "first": {
+        "type": "String"
+      },
+      "second": {
+        "type": "String"
+      }
+    }
+  },
+  "stepProcessComma": ", ",
+  "stepProcessSharedPrefix": "",
+  "stepProcessMore": "{title}, etc.",
+  "@stepProcessMore": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "turnProcessDeepDiving": "Deep diving",
+  "turnProcessDeepDivingFor": "Deep diving for {duration}",
+  "@turnProcessDeepDivingFor": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "turnProcessTook": "Took {duration}",
+  "@turnProcessTook": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "turnProcessWorked": "Worked",
+  "turnProcessFailed": "Failed",
+  "turnProcessStopped": "Stopped",
+  "turnProcessSeparator": " \u00b7 ",
+  "runDurationSeconds": "{seconds}s",
+  "@runDurationSeconds": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "runDurationMinutes": "{minutes}m {seconds}s",
+  "@runDurationMinutes": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
+  "runDurationHours": "{hours}h {minutes}m {seconds}s",
+  "@runDurationHours": {
+    "description": "Localized chat process copy.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "String"
+      }
+    }
   }
 }

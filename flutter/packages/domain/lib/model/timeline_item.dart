@@ -121,6 +121,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     this.startedAtEpochMs,
     this.endedAtEpochMs,
     this.endSeq,
+    this.endReason,
   });
 
   final int turn;
@@ -135,6 +136,12 @@ final class TimelineTurnBoundary extends TimelineItem {
   /// inclusive event seq, not a turn lookup.
   final int? endSeq;
 
+  /// The `turn/end` reason kind (`completed`, `aborted`, `error`,
+  /// `max-tokens`, `interrupted`, `blocked`); null while the turn is open.
+  /// A stopped or failed turn never folds its process behind the turn
+  /// disclosure, which is what a surface reads this for.
+  final String? endReason;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -143,7 +150,8 @@ final class TimelineTurnBoundary extends TimelineItem {
           other.usage == usage &&
           other.startedAtEpochMs == startedAtEpochMs &&
           other.endedAtEpochMs == endedAtEpochMs &&
-          other.endSeq == endSeq);
+          other.endSeq == endSeq &&
+          other.endReason == endReason);
 
   @override
   int get hashCode => Object.hash(
@@ -153,6 +161,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     startedAtEpochMs,
     endedAtEpochMs,
     endSeq,
+    endReason,
   );
 }
 

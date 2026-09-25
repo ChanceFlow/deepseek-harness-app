@@ -1330,7 +1330,7 @@ class TimelineReducer {
         ),
       );
     }
-    _foldTurnUsage(turn, _eventTime(event));
+    _foldTurnUsage(turn, _eventTime(event), endReason: kind ?? 'completed');
   }
 
   // -------------------------------------------------------------------------
@@ -1624,7 +1624,7 @@ class TimelineReducer {
   /// over figures the host already sent with each `assistant/message`; a turn
   /// whose steps reported nothing keeps a null usage rather than a fabricated
   /// zero, and a missing `time` stays null.
-  void _foldTurnUsage(int turn, int? endedAtEpochMs) {
+  void _foldTurnUsage(int turn, int? endedAtEpochMs, {String? endReason}) {
     var boundaryIndex = -1;
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
@@ -1652,6 +1652,7 @@ class TimelineReducer {
       // closing boundary: the anchor `session/fork` needs to cut a completed
       // turn rather than a partial one.
       endSeq: _lastSeq,
+      endReason: endReason ?? boundary.endReason,
     );
   }
 

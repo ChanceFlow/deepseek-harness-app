@@ -383,48 +383,13 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String exploredFilesAndSearches(int files, int searches) {
-    return '浏览了 $files 个文件，$searches 次搜索';
-  }
-
-  @override
-  String exploredFiles(int count) {
-    return '浏览了 $count 个文件';
-  }
-
-  @override
   String exploringFiles(int count) {
     return '正在浏览 $count 个文件';
   }
 
   @override
-  String searchedCount(int count) {
-    return '$count 次搜索';
-  }
-
-  @override
-  String modifiedFiles(int count) {
-    return '修改了 $count 个文件';
-  }
-
-  @override
-  String ranCommands(int count) {
-    return '运行了 $count 条命令';
-  }
-
-  @override
   String runningCommands(int count) {
     return '正在运行 $count 条命令';
-  }
-
-  @override
-  String toolGroupOperations(int count) {
-    return '$count 个操作';
-  }
-
-  @override
-  String toolWorkingSteps(int count) {
-    return '执行中 ($count 步)';
   }
 
   @override
@@ -2659,4 +2624,183 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get batteryOptimizationRequestFailed => '无法在此设备上打开电池优化对话框。';
+
+  @override
+  String get stepProcessThinking => '正在分析请求';
+
+  @override
+  String get stepProcessRead => '正在读取文件';
+
+  @override
+  String get stepProcessReadImage => '正在读取图片';
+
+  @override
+  String get stepProcessWrite => '正在写入文件';
+
+  @override
+  String get stepProcessSearch => '正在搜索代码';
+
+  @override
+  String get stepProcessEdit => '正在编辑文件';
+
+  @override
+  String get stepProcessCommands => '正在运行命令';
+
+  @override
+  String get stepProcessCode => '正在运行代码';
+
+  @override
+  String get stepProcessWebSearch => '正在搜索网页';
+
+  @override
+  String get stepProcessWebFetch => '正在访问网页';
+
+  @override
+  String get stepProcessSubagents => '正在协调子智能体';
+
+  @override
+  String get stepProcessPlan => '正在更新计划';
+
+  @override
+  String get stepProcessQuestions => '等待你的操作';
+
+  @override
+  String get stepProcessTools => '正在调用工具';
+
+  @override
+  String get stepProcessPrepareRead => '准备读取文件';
+
+  @override
+  String get stepProcessPrepareReadImage => '准备读取图片';
+
+  @override
+  String get stepProcessPrepareWrite => '准备写入文件';
+
+  @override
+  String get stepProcessPrepareSearch => '准备搜索代码';
+
+  @override
+  String get stepProcessPrepareEdit => '准备编辑文件';
+
+  @override
+  String get stepProcessPrepareCommands => '准备运行命令';
+
+  @override
+  String get stepProcessPrepareCode => '准备运行代码';
+
+  @override
+  String get stepProcessPrepareWebSearch => '准备搜索网页';
+
+  @override
+  String get stepProcessPrepareWebFetch => '准备访问网页';
+
+  @override
+  String get stepProcessPrepareSubagents => '准备协调子智能体';
+
+  @override
+  String get stepProcessPreparePlan => '准备更新计划';
+
+  @override
+  String get stepProcessPrepareQuestions => '准备提问';
+
+  @override
+  String get stepProcessPrepareTools => '准备调用工具';
+
+  @override
+  String get stepProcessDoneThinking => '已完成分析';
+
+  @override
+  String get stepProcessDoneRead => '已读取文件';
+
+  @override
+  String get stepProcessDoneReadImage => '已读取图片';
+
+  @override
+  String get stepProcessDoneWrite => '已写入文件';
+
+  @override
+  String get stepProcessDoneSearch => '已搜索代码';
+
+  @override
+  String get stepProcessDoneEdit => '修改了文件';
+
+  @override
+  String get stepProcessDoneCommands => '执行了命令';
+
+  @override
+  String get stepProcessDoneCode => '运行了代码';
+
+  @override
+  String get stepProcessDoneWebSearch => '已搜索网页';
+
+  @override
+  String get stepProcessDoneWebFetch => '已访问网页';
+
+  @override
+  String get stepProcessDoneSubagents => '已协调子智能体';
+
+  @override
+  String get stepProcessDonePlan => '更新了计划';
+
+  @override
+  String get stepProcessDoneQuestions => '向用户提出了问题';
+
+  @override
+  String get stepProcessDoneTools => '已调用工具';
+
+  @override
+  String stepProcessJoinTwo(String first, String second) {
+    return '$first并$second';
+  }
+
+  @override
+  String get stepProcessComma => '，';
+
+  @override
+  String get stepProcessSharedPrefix => '已';
+
+  @override
+  String stepProcessMore(String title) {
+    return '$title等';
+  }
+
+  @override
+  String get turnProcessDeepDiving => '深度求索中';
+
+  @override
+  String turnProcessDeepDivingFor(String duration) {
+    return '深度求索中，用时$duration';
+  }
+
+  @override
+  String turnProcessTook(String duration) {
+    return '用时 $duration';
+  }
+
+  @override
+  String get turnProcessWorked => '已完成工作';
+
+  @override
+  String get turnProcessFailed => '处理失败';
+
+  @override
+  String get turnProcessStopped => '已停止';
+
+  @override
+  String get turnProcessSeparator => ' · ';
+
+  @override
+  String runDurationSeconds(String seconds) {
+    return '$seconds秒';
+  }
+
+  @override
+  String runDurationMinutes(String minutes, String seconds) {
+    return '$minutes分$seconds秒';
+  }
+
+  @override
+  String runDurationHours(int hours, String minutes, String seconds) {
+    return '$hours小时$minutes分$seconds秒';
+  }
 }
