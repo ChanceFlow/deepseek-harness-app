@@ -366,6 +366,8 @@ class TimelineReducer {
         _resolveCommandDone(event);
       case 'system/message':
         _appendSystemMessage(event);
+      case 'developer/message':
+        _appendDeveloperMessage(event);
       case 'user/message':
         _appendUserMessage(event);
       case 'assistant/message':
@@ -598,6 +600,32 @@ class TimelineReducer {
         text: promptText,
         producerLabel: 'system-prompt',
         summary: 'System prompt updated',
+      ),
+    );
+  }
+
+  /// A `developer/message`: an incremental agent session change (tool
+  /// additions and removals) recorded on the model-visible surface
+  /// (`packages/core/session/src/types.ts`, added in 0.1.7). The upstream chat
+  /// client presents it through the same context-row lifecycle as an injected
+  /// `user/message` (`ui-chat/src/client/conversation-nodes/message.ts`
+  /// `developerMessageDefinition`), so it folds onto the same context-injection
+  /// row rather than a user bubble.
+  void _appendDeveloperMessage(JsonMap event) {
+    _finalizePartial();
+    // The event data wraps the message beside the turn/step it was admitted at
+    // (`packages/core/session/src/types.ts` `'developer/message'`), unlike
+    // `user/message`, whose data IS the message.
+    final data = _eventData(event);
+    final message = asJsonObject(data['message']) ?? data;
+    final messageId = wireString(message, 'id') ?? 'developer:$_lastSeq';
+    final source = asJsonObject(message['source']);
+    _items.add(
+      _contextInjection(
+        messageId,
+        message,
+        source,
+        wireString(source ?? const <String, Object?>{}, 'kind'),
       ),
     );
   }
@@ -1620,6 +1648,10 @@ class TimelineReducer {
       usage: usages.isEmpty ? boundary.usage : _sumUsage(usages),
       startedAtEpochMs: boundary.startedAtEpochMs,
       endedAtEpochMs: endedAtEpochMs,
+      // The fold runs on the `turn/end` event, so `_lastSeq` is the turn's own
+      // closing boundary: the anchor `session/fork` needs to cut a completed
+      // turn rather than a partial one.
+      endSeq: _lastSeq,
     );
   }
 

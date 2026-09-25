@@ -61,15 +61,13 @@ const AgentPresetRoster _roster = AgentPresetRoster(
   entries: <AgentPresetEntry>[
     AgentPresetEntry(
       id: 'standard',
-      trust: AgentPresetTrust.system,
       isDefault: true,
       description: 'Full coding agent with file editing, shell, and search.',
     ),
-    AgentPresetEntry(id: 'code', trust: AgentPresetTrust.system),
-    AgentPresetEntry(id: 'minimal', trust: AgentPresetTrust.system),
+    AgentPresetEntry(id: 'code'),
+    AgentPresetEntry(id: 'minimal'),
     AgentPresetEntry(
       id: 'my-agent',
-      trust: AgentPresetTrust.user,
       name: 'My Agent',
       broken: 'agent.cordis.yml not found',
     ),
@@ -505,13 +503,15 @@ void main() {
         actions,
       );
 
-      expect(find.text('Built-in'), findsNothing);
+      expect(find.text('In use'), findsNothing);
 
       await tester.tap(find.text('Agent preset'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Built-in'), findsOneWidget);
-      expect(find.text('Custom'), findsNWidgets(2));
+      // One flat list: the roster carries no trust, so there is no
+      // Built-in/Custom grouping and no authoring affordance.
+      expect(find.text('Built-in'), findsNothing);
+      expect(find.text('Custom'), findsNothing);
       expect(find.text('In use'), findsOneWidget);
       expect(find.text('My Agent'), findsOneWidget);
       expect(find.text('Failed to load'), findsOneWidget);
@@ -539,11 +539,11 @@ void main() {
     // The row stays: an empty roster is a page that says so, not a
     // disappeared subject.
     expect(find.text('Agent preset'), findsOneWidget);
-    expect(find.textContaining('authored on the host'), findsNothing);
+    expect(find.textContaining('declared on the host'), findsNothing);
 
     await tester.tap(find.text('Agent preset'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('authored on the host'), findsOneWidget);
+    expect(find.textContaining('declared on the host'), findsOneWidget);
     expect(find.text('Built-in'), findsNothing);
   });
 

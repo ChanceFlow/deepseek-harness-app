@@ -132,6 +132,24 @@ class SubagentController {
     _childWindowSub = null;
   }
 
+  /// The direct parent of one catalogued child row: the explicit address when
+  /// the opener carried one, else the catalog that owns the row — the same
+  /// resolution [SubagentUiState.selectedChildCatalog] performs on the state
+  /// side.
+  String? _childParentIdFor(String childId) {
+    final addressed = _selectedChildParentId;
+    if (addressed != null) return addressed;
+    for (final entry in _branchCatalogs.entries) {
+      if (entry.value.entries.any((row) => row.id == childId)) {
+        return entry.key;
+      }
+    }
+    if (_catalog.entries.any((row) => row.id == childId)) {
+      return _catalog.parentSessionId;
+    }
+    return null;
+  }
+
   void _publish() {
     // App-wide session rule (web tree.ts `sessionVisible`): subagent
     // children never surface in the parent-picking sheet either — the
@@ -143,12 +161,20 @@ class SubagentController {
     // `api-session/error` has no turn position, so no timeline item carries
     // it); the record view reads it from here.
     final childId = _selectedChildId;
-    final childAgentError = childId == null
+    final childRow = childId == null
+        ? null
+        : _sessions.where((session) => session.id == childId).firstOrNull;
+    final childAgentError = childRow?.agentError;
+    // The composer's read-only rule needs facts about the opened child and its
+    // direct parent, and the visible list hides both: a child row never
+    // surfaces there. They are resolved here, against the full roster.
+    final childParentId = childId == null ? null : _childParentIdFor(childId);
+    final childParentAgentAvailable = childParentId == null
         ? null
         : _sessions
-              .where((session) => session.id == childId)
+              .where((session) => session.id == childParentId)
               .firstOrNull
-              ?.agentError;
+              ?.agentAvailable;
     _state.value = SubagentUiState(
       sessions: visible,
       selectedParentId: _selectedParentId,
@@ -157,6 +183,8 @@ class SubagentController {
       branchFailures: Set.unmodifiable(_branchFailures),
       selectedChildId: _selectedChildId,
       selectedChildParentId: _selectedChildParentId,
+      childParentAgentAvailable: childParentAgentAvailable,
+      isChildRunning: childRow?.running ?? false,
       childTimeline: _childTimeline,
       childHasMoreOlder: _childHasMoreOlder,
       isLoadingChildOlder: _isLoadingChildOlder,
@@ -183,7 +211,7 @@ class SubagentController {
       return;
     }
     final entry = _catalog.entries
-        .where((entry) => entry.id == childId && entry.kind == 'child')
+        .where((entry) => entry.id == childId)
         .firstOrNull;
     final mode = entry?.mode;
     if (mode == null) return;
@@ -292,19 +320,15 @@ class SubagentController {
       var changed = false;
       final entries = <SubagentEntry>[];
       for (final entry in catalog.entries) {
-        if (entry.id == childId &&
-            entry.kind == 'child' &&
-            entry.activity != activity) {
+        if (entry.id == childId && entry.activity != activity) {
           changed = true;
           entries.add(
             SubagentEntry(
               id: entry.id,
-              kind: entry.kind,
               mode: entry.mode,
               activity: activity,
               hasChildren: entry.hasChildren,
               label: entry.label,
-              reason: entry.reason,
             ),
           );
         } else {
@@ -315,7 +339,6 @@ class SubagentController {
           ? SubagentCatalog(
               parentSessionId: catalog.parentSessionId,
               entries: entries,
-              parentAvailable: catalog.parentAvailable,
             )
           : catalog;
     }

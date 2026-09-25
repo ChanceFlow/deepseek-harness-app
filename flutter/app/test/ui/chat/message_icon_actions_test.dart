@@ -106,7 +106,10 @@ void main() {
         return null;
       },
     );
-    await _pump(tester, [TimelineMessage(_message(role: MessageRole.user))]);
+    await _pump(tester, [
+      const TimelineTurnBoundary(1, endSeq: 7),
+      TimelineMessage(_message(role: MessageRole.user)),
+    ]);
     await tester.longPress(find.text('copy me'));
     await tester.pumpAndSettle();
     expect(find.text('Fork from here'), findsOneWidget);
@@ -130,11 +133,32 @@ void main() {
     expect(find.text('Fork from here'), findsNothing);
   });
 
-  testWidgets('the reply footer forks at the message seq', (tester) async {
+  testWidgets('the reply footer forks at its completed turn end', (
+    tester,
+  ) async {
+    // `session/fork`'s `atSeq` is an exact inclusive event seq, so the seat
+    // names the turn's own `turn/end` rather than the message's seq — the
+    // resolution the host used to do itself.
     final actions = <ChatAction>[];
-    await _pump(tester, [TimelineMessage(_message(seq: 42))], actions);
+    await _pump(tester, [
+      const TimelineTurnBoundary(1, endSeq: 42),
+      TimelineMessage(_message(seq: 40)),
+    ], actions);
     await tester.tap(find.byTooltip('Fork from here'));
     await tester.pump();
     expect(actions, [const ForkSession('s1', atSeq: 42)]);
+  });
+
+  testWidgets('a message inside an open turn offers no fork', (tester) async {
+    // Without a `turn/end` there is no completed prefix to cut: the host would
+    // synthesize closers for a partial turn, so the seat stays hidden.
+    await _pump(tester, [
+      const TimelineTurnBoundary(1),
+      TimelineMessage(_message(role: MessageRole.user, seq: 41)),
+    ]);
+    await tester.longPress(find.text('copy me'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Fork from here'), findsNothing);
   });
 }

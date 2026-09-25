@@ -19,8 +19,12 @@ enum SubagentReadOnlyReason {
   /// One-shot record: the task never accepts follow-ups.
   oneShot,
 
-  /// Continuable child whose parent session is offline.
+  /// Continuable child whose direct parent holds no live Agent.
   parentUnavailable,
+
+  /// The child's catalog recorded a mode this build does not recognize, so
+  /// whether it can be continued is only knowable after reading it.
+  unknown,
 }
 
 final class SubagentUiState {
@@ -41,6 +45,8 @@ final class SubagentUiState {
     this.isLoading = false,
     this.errorMessage,
     this.childAgentError,
+    this.childParentAgentAvailable,
+    this.isChildRunning = false,
   });
 
   final List<SessionSummary> sessions;
@@ -55,6 +61,17 @@ final class SubagentUiState {
   final Set<String> branchFailures;
 
   final String? selectedChildId;
+
+  /// The opened child's direct parent's `agentAvailable` bit, resolved by the
+  /// controller against the full session roster — [sessions] is the visible
+  /// parent-picking list, which hides child rows. Null when the roster has not
+  /// stated it (web `SessionSnapshot.subagent.parentAvailable`).
+  final bool? childParentAgentAvailable;
+
+  /// Whether the opened child is currently running (web
+  /// `SessionSnapshot.running`): a running child keeps its composer so its
+  /// Stop stays reachable even while the parent is offline.
+  final bool isChildRunning;
 
   /// Direct parent session id of the opened child (web
   /// `SubagentAddress.parentSessionId`).
@@ -118,21 +135,29 @@ final class SubagentUiState {
         .firstOrNull;
   }
 
-  /// Read-only composer reason for the opened child: one-shot records
-  /// never accept input, and a continuable child needs the parent of the
-  /// catalog its row lives in online (web `selectReadOnlySubagent`;
-  /// mobile keeps the simple rule — only continuable + parent-available
-  /// keeps the message field).
+  /// Read-only composer reason for the opened child, mirroring the web
+  /// `selectReadOnlySubagent` rule
+  /// (`client/ui-subagent/src/client/index.ts`): an unknown mode cannot be
+  /// judged before the child is read, a one-shot record never accepts input,
+  /// and a continuable child is read-only only once its direct parent is known
+  /// to hold no live Agent — while that child is still running the normal
+  /// composer stays, so its Stop remains reachable. A parent the roster has not
+  /// stated is unknown, never offline.
   SubagentReadOnlyReason? get childReadOnlyReason {
     final entry = selectedChildEntry;
     if (entry == null) return null;
-    if (entry.mode == SubagentMode.oneShot) {
-      return SubagentReadOnlyReason.oneShot;
+    switch (entry.mode) {
+      case SubagentMode.unknown:
+        return SubagentReadOnlyReason.unknown;
+      case SubagentMode.oneShot:
+        return SubagentReadOnlyReason.oneShot;
+      case SubagentMode.continuable:
+        break;
+      case null:
+        return null;
     }
-    if (selectedChildCatalog?.parentAvailable == false) {
-      return SubagentReadOnlyReason.parentUnavailable;
-    }
-    return null;
+    if (childParentAgentAvailable != false) return null;
+    return isChildRunning ? null : SubagentReadOnlyReason.parentUnavailable;
   }
 
   /// Timeline rows for the child detail view: the queue rides the dock

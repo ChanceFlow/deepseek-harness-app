@@ -49,6 +49,27 @@ List<TimelineTurnGroup> groupTimelineByTurn(List<TimelineItem> items) {
   return groups;
 }
 
+/// The `turn/end` seq of the completed turn each message belongs to, keyed by
+/// message id.
+///
+/// `session/fork`'s `atSeq` is an exact inclusive event seq, so anchoring a
+/// fork at a turn means naming that turn's own `turn/end`. The host used to do
+/// that resolution itself; a message whose turn has not closed yet (or whose
+/// window cut dropped the `turn/end`) has no anchor and is absent from the map,
+/// which is what keeps a fork from cutting a partial turn.
+Map<String, int> turnEndSeqByMessage(List<TimelineItem> items) {
+  final byMessageId = <String, int>{};
+  int? endSeq;
+  for (final item in items) {
+    if (item is TimelineTurnBoundary) {
+      endSeq = item.endSeq;
+    } else if (item is TimelineMessage && endSeq != null) {
+      byMessageId[item.value.id] = endSeq;
+    }
+  }
+  return byMessageId;
+}
+
 /// Request-header preview: the first user message of a group, folded to
 /// one line and truncated — the trajectory outline's prompt echo.
 String? promptPreview(List<TimelineItem> items, {int maxChars = 60}) {

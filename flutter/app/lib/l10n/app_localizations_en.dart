@@ -828,17 +828,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentPresetsIntro =>
-      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.';
-
-  @override
-  String get presetGroupBuiltIn => 'Built-in';
-
-  @override
-  String get presetGroupCustom => 'Custom';
+      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. Choose the one new sessions start with.';
 
   @override
   String get presetsFooter =>
-      'Presets are authored on the host: copy, edit, and delete them from the desktop settings.';
+      'Presets are declared on the host; this app reads the roster and picks the default new sessions start with.';
 
   @override
   String get noDescription => 'No description.';
@@ -1243,19 +1237,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modeContinuable => 'continuable';
 
   @override
+  String get modeUnknown => 'unknown mode';
+
+  @override
   String get activityRunning => 'running';
 
   @override
   String get activityNotRunning => 'not running';
-
-  @override
-  String get diagnosticCorrupt => 'corrupted session record';
-
-  @override
-  String get diagnosticUnsupported => 'unsupported subagent record version';
-
-  @override
-  String get diagnosticUnavailable => 'session record temporarily unavailable';
 
   @override
   String get oneShotRecordTitle => 'One-shot subagent record';
@@ -1270,6 +1258,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get parentUnavailableBody =>
       'The parent session is offline; reopen it to continue sending messages.';
+
+  @override
+  String get unknownRecordBody =>
+      'Read the child session to determine whether it can be continued.';
 
   @override
   String backendVersion(String version) {

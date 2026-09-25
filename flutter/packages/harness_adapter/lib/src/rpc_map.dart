@@ -33,11 +33,18 @@ abstract final class DshRpcEndpoints {
   static const String sessionHistory = 'session/history';
   static const String sessionPage = 'session/page';
 
+  /// Non-activating read of every registered projection for one Session
+  /// (`packages/api/session-controller/src/index.ts` `@Remote('projections')`).
+  /// It replaced `subagents/list`: the subagent roster is the parent's
+  /// `subagentCatalog` projection value, not a dedicated method.
+  static const String sessionProjections = 'session/projections';
+
   // Skills (DSH 0.1.2 plural namespace)
   static const String skillsList = 'skills/list';
 
-  // Subagents (DSH 0.1.2 plural namespace and renamed verbs)
-  static const String subagentsList = 'subagents/list';
+  // Subagents (DSH 0.1.2 plural namespace and renamed verbs). 0.1.7 deleted
+  // `subagents/list`; the roster moved to the `subagentCatalog` projection
+  // (see [sessionProjections]).
   static const String subagentsPrompt = 'subagents/prompt';
   static const String subagentsInterrupt = 'subagents/interruptByParent';
   static const String subagentsHistory = 'subagent/history';
@@ -67,11 +74,13 @@ abstract final class DshRpcEndpoints {
       'workspace/insertSessionBefore';
   static const String workspaceArchiveSession = 'workspace/archiveSession';
 
-  // Workspace Files (DSH 0.1.5 workspaceFiles service)
+  // Workspace Files (DSH 0.1.5 workspaceFiles service). 0.1.7 deleted
+  // `readAll` (whole-file bytes now ride `readBytes` with no range) and
+  // `readRelated`, and moved `readBytes` to a binary attachment codec this
+  // client's JSON carrier cannot decode; neither byte read is declared here
+  // because the client has no whole-file-bytes call site.
   static const String workspaceFilesStat = 'workspaceFiles/stat';
   static const String workspaceFilesRead = 'workspaceFiles/read';
-  static const String workspaceFilesReadBytes = 'workspaceFiles/readBytes';
-  static const String workspaceFilesReadAll = 'workspaceFiles/readAll';
   static const String workspaceFilesList = 'workspaceFiles/list';
 
   // Settings & Commands

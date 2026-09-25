@@ -7,7 +7,6 @@ void main() {
   group('AgentPreset models', () {
     const entry1 = AgentPresetEntry(
       id: 'p-sys',
-      trust: AgentPresetTrust.system,
       isDefault: true,
       name: 'System Default',
       description: 'Default preset',
@@ -17,17 +16,13 @@ void main() {
     test('displayName uses name when available or falls back to id', () {
       expect(entry1.displayName, 'System Default');
 
-      const noName = AgentPresetEntry(
-        id: 'p-fallback',
-        trust: AgentPresetTrust.user,
-      );
+      const noName = AgentPresetEntry(id: 'p-fallback');
       expect(noName.displayName, 'p-fallback');
     });
 
     test('AgentPresetEntry equality and hashCode', () {
       const copy = AgentPresetEntry(
         id: 'p-sys',
-        trust: AgentPresetTrust.system,
         isDefault: true,
         name: 'System Default',
         description: 'Default preset',
@@ -35,7 +30,6 @@ void main() {
       );
       const diff = AgentPresetEntry(
         id: 'p-sys',
-        trust: AgentPresetTrust.system,
         isDefault: false,
         name: 'System Default',
       );
@@ -46,30 +40,19 @@ void main() {
     });
 
     test('AgentPresetRoster equality and defaultEntry resolution', () {
-      const rosterA = AgentPresetRoster(
-        entries: [entry1],
-        authorable: true,
-        hasDocument: true,
-      );
+      const rosterA = AgentPresetRoster(entries: [entry1]);
       const rosterB = AgentPresetRoster(
         entries: [
           AgentPresetEntry(
             id: 'p-sys',
-            trust: AgentPresetTrust.system,
             isDefault: true,
             name: 'System Default',
             description: 'Default preset',
             broken: null,
           ),
         ],
-        authorable: true,
-        hasDocument: true,
       );
-      const diff = AgentPresetRoster(
-        entries: [],
-        authorable: false,
-        hasDocument: false,
-      );
+      const diff = AgentPresetRoster(entries: []);
 
       expect(rosterA, equals(rosterB));
       expect(rosterA.hashCode, equals(rosterB.hashCode));
@@ -82,36 +65,31 @@ void main() {
   group('Subagent models', () {
     const subEntry = SubagentEntry(
       id: 'sub-1',
-      kind: 'child',
       mode: SubagentMode.continuable,
       activity: 'running',
       hasChildren: true,
       label: 'Research agent',
-      reason: 'searching',
     );
 
     test('isInterruptible returns true only for running continuable child', () {
       expect(subEntry.isInterruptible, isTrue);
 
-      const notChild = SubagentEntry(
-        id: 'sub-2',
-        kind: 'other',
-        mode: SubagentMode.continuable,
-        activity: 'running',
-      );
-      expect(notChild.isInterruptible, isFalse);
-
       const oneShot = SubagentEntry(
         id: 'sub-3',
-        kind: 'child',
         mode: SubagentMode.oneShot,
         activity: 'running',
       );
       expect(oneShot.isInterruptible, isFalse);
 
+      const unknown = SubagentEntry(
+        id: 'sub-5',
+        mode: SubagentMode.unknown,
+        activity: 'running',
+      );
+      expect(unknown.isInterruptible, isFalse);
+
       const notRunning = SubagentEntry(
         id: 'sub-4',
-        kind: 'child',
         mode: SubagentMode.continuable,
         activity: 'idle',
       );
@@ -121,16 +99,13 @@ void main() {
     test('SubagentEntry equality and hashCode', () {
       const copy = SubagentEntry(
         id: 'sub-1',
-        kind: 'child',
         mode: SubagentMode.continuable,
         activity: 'running',
         hasChildren: true,
         label: 'Research agent',
-        reason: 'searching',
       );
       const diff = SubagentEntry(
         id: 'sub-1',
-        kind: 'child',
         mode: SubagentMode.continuable,
         activity: 'running',
         hasChildren: false,
@@ -142,25 +117,18 @@ void main() {
     });
 
     test('SubagentCatalog equality with entries collection', () {
-      const a = SubagentCatalog(
-        parentSessionId: 'sess-p',
-        entries: [subEntry],
-        parentAvailable: true,
-      );
+      const a = SubagentCatalog(parentSessionId: 'sess-p', entries: [subEntry]);
       const b = SubagentCatalog(
         parentSessionId: 'sess-p',
         entries: [
           SubagentEntry(
             id: 'sub-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
             hasChildren: true,
             label: 'Research agent',
-            reason: 'searching',
           ),
         ],
-        parentAvailable: true,
       );
       const diff = SubagentCatalog(parentSessionId: 'sess-other');
 

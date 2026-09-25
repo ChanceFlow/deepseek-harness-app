@@ -177,11 +177,11 @@ box, a tunneled remote dsh.
 
 The upstream dsh repository is pinned as a git submodule under
 [`reference/deepseek-harness`](reference/) at one official commit —
-currently **`dsh-v0.1.5-rc.2`**
+currently **`dsh-v0.1.7-rc.2`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 52 of 84 Remote methods registered by the pinned
+version. Coverage today is 50 of 125 Remote methods registered by the pinned
 tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
 the unwired remainder, and the two reviewed declared-only names; the
 `verify_wire_pin` gate holds both documents to the two registries and fails a
@@ -236,19 +236,24 @@ image, reached through `scripts/flutter.sh`. Real-host e2e is opt-in — see
 
 ```sh
 cd flutter
-DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
+flutter test --dart-define=DSH_E2E_URL=http://127.0.0.1:3080 \
+  packages/harness_adapter/test/local_dsh_e2e_test.dart
 ```
 
-A 0.1.5 host answers `/api` only for a caller holding the authority-bound
+The target travels as a dart define because `flutter test` forwards only a
+fixed set of environment variables to the test process; a plain
+`DSH_E2E_URL=… flutter test` reaches nothing.
+
+A 0.1.7 host answers `/api` only for a caller holding the authority-bound
 browser cookie minted from the URL token `dsh web` prints, so pass that cookie
 as `DSH_E2E_COOKIE` when the target is one:
 
 ```sh
 curl -s -c jar "http://127.0.0.1:3080/?token=<token dsh web printed>"
 cd flutter
-DSH_E2E_URL=http://127.0.0.1:3080 \
-  DSH_E2E_COOKIE="$(awk 'NF>=7 && $6 ~ /^dsh/ {print $6"="$7}' jar)" \
-  flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
+flutter test --dart-define=DSH_E2E_URL=http://127.0.0.1:3080 \
+  --dart-define=DSH_E2E_COOKIE="$(awk 'NF>=7 && $6 ~ /^dsh/ {print $6"="$7}' jar)" \
+  packages/harness_adapter/test/local_dsh_e2e_test.dart
 ```
 
 The smoke covers the wire surface a preview rides — a workspace listing,

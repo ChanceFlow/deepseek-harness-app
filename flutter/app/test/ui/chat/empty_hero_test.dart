@@ -128,16 +128,8 @@ void main() {
         selectedSessionId: 's1',
         agentPresets: AgentPresetRoster(
           entries: [
-            AgentPresetEntry(
-              id: 'standard',
-              trust: AgentPresetTrust.system,
-              isDefault: true,
-            ),
-            AgentPresetEntry(
-              id: 'ghost',
-              trust: AgentPresetTrust.user,
-              broken: 'composition missing',
-            ),
+            AgentPresetEntry(id: 'standard', isDefault: true),
+            AgentPresetEntry(id: 'ghost', broken: 'composition missing'),
           ],
         ),
       ),

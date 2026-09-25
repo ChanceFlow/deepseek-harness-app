@@ -24,6 +24,7 @@ final class SessionSummary {
     this.pendingInteraction,
     this.completed = false,
     this.agentError,
+    this.agentAvailable,
   });
 
   final String id;
@@ -67,6 +68,16 @@ final class SessionSummary {
   /// prompt (the attempt supersedes the failure) and never cleared by a
   /// resync.
   final String? agentError;
+
+  /// Whether this session currently owns a live Agent (the wire
+  /// `sessionSummarySchema.agentAvailable`, added in 0.1.7). Null means the
+  /// host has not stated it for this row — a surface must read null as
+  /// "unknown" and never as "offline".
+  ///
+  /// A subagent child's continuation authority is this bit on its *direct
+  /// parent*: the composer stays read-only while the parent reports false, and
+  /// the host re-checks on every prompt regardless.
+  final bool? agentAvailable;
 
   /// The workspace's display label: the last non-empty path segment of
   /// [cwd], or null when the session carries no workspace path. Notification
@@ -114,7 +125,8 @@ final class SessionSummary {
           other.parentSessionId == parentSessionId &&
           other.pendingInteraction == pendingInteraction &&
           other.completed == completed &&
-          other.agentError == agentError);
+          other.agentError == agentError &&
+          other.agentAvailable == agentAvailable);
 
   @override
   int get hashCode => Object.hash(
@@ -130,6 +142,7 @@ final class SessionSummary {
     pendingInteraction,
     completed,
     agentError,
+    agentAvailable,
   );
 }
 

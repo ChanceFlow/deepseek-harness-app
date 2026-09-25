@@ -11,7 +11,7 @@ constant and the suite stays green. This gate is that missing comparison.
 Derivation source (the reviewed choice)
 ---------------------------------------
 0.1.2 deleted the static `packages/host/apiproxy/src/api/rpc-map.ts` registry;
-0.1.5 registers methods as `@Remote(...)` decorators on `TypertRemoteService`
+the pin registers methods as `@Remote(...)` decorators on `TypertRemoteService`
 subclasses, and the wire endpoint is composed at build time by the Typert
 generator as `<namespace>/<exportName>` (`packages/typert/protocol/src/index.ts`
 `Remote`, `bindTypertRemote`). No committed file carries the composed endpoint
@@ -20,24 +20,29 @@ therefore scans declaration sites, which is the registration itself:
 
   * every `class X extends TypertRemoteService` under
     `reference/deepseek-harness/packages/**/src/**/*.ts` (a `tests` path
-    component is skipped: generator fixtures contain decoy declarations),
+    component is skipped: generator fixtures contain decoy declarations), in
+    any of the export forms the tree uses — bare `class`, `export class`, and
+    `export default class` (`client/ui-plugin-manager/src/index.ts`,
+    `experimental/api-speech-to-text/src/index.ts`),
   * the `super(ctx, <serviceKey>[, { namespace }])` call that binds the wire
     namespace (`this.typertRemote = bindTypertRemote(...)`),
   * each line-anchored `@Remote` / `@Remote('export')` /
     `@Remote({ mode: 'stream' })` decorator and the method it decorates
     (bare `@Remote` exports the method name; an object argument marks a
-    logical stream, which is not a unary endpoint constant),
+    logical stream, which is not a unary endpoint constant). The decorated
+    method may be a generator (`api/account-controller/src/index.ts`
+    `async *watchExpiry`) or an async method with a return type annotation,
   * the Gateway's own `$events/result` constant
     (`packages/api/gateway/src/stream-protocol.ts`), which is a Remote method
     but not a decorator.
 
-`fixture.ts` was rejected as the source: it is the upstream *client's* fake,
-and it omits endpoints the 0.1.5 host does register
-(`workspaceFiles/readBytes`, `workspaceFiles/readAll`). Deriving from it would
-report a drift that does not exist. The bundle composition
-(`packages/bundle/*/cordis.patch.yml`) is closer to one deployment's loaded
-set but is a patch-overlay parse with no clean library here; the declaration
-scan is deployment-independent and a superset of every composition.
+The bundle composition (`packages/bundle/*/cordis.patch.yml`) is the only
+other candidate: it is closer to one deployment's loaded set but is a
+patch-overlay parse with no clean library here, so the declaration scan —
+deployment-independent and a superset of every composition — is what the gate
+derives from. The 0.1.5 tree also carried `client/connection/src/client/fixture.ts`,
+the upstream *client's* fake; 0.1.7 deleted it, so it is not a source the gate
+could read even if its omissions were acceptable.
 
 Normalisation and allowlist
 ---------------------------
@@ -63,7 +68,7 @@ directions:
 Privileged / loopback classification
 ------------------------------------
 0.1.1 carried `PRIVILEGED_METHODS` in `packages/client/connection/src/index.ts`
-and refused every member off loopback. 0.1.5 removed it: the browser-trust
+and refused every member off loopback. The pin removed it: the browser-trust
 fence (`isTrustedApiRequest`) and the signed browser-session cookie now apply
 to every `/api` method uniformly, and the surviving concept is
 `ctx.connection.isLoopback` (consumed by the Web UI, not by a per-method
@@ -77,14 +82,19 @@ coverage block in `docs/spec.md` — against the derived surface.
 Documented limitations
 ----------------------
 * The scan covers the whole pinned tree, so a method registered only by a
-  package the `dsh web` bundle does not mount (today `agentTeams/*`) counts as
-  upstream. That is a deliberate superset: it cannot false-fail the client,
-  but it could let a client call to an unmounted namespace pass.
+  package the `dsh web` bundle does not mount counts as upstream. That is a
+  deliberate superset: it cannot false-fail the client, but it could let a
+  client call to an unmounted namespace pass.
 * A method registered by a runtime-built binding (not a literal
   `super(ctx, '<key>')` in a source file) is invisible; an unparsable
   declaration fails the gate loudly instead of being dropped.
 * Streams (`@Remote({ mode: 'stream' })`) are counted but excluded from the
   unary comparison; the client registry holds no stream constant.
+* Because streams stay out of the registry, the stream endpoints the client
+  opens with a literal (`workspace/follow`, `session/control`, `session/follow`,
+  `$events`, and the per-session `job/list`) are **not** compared against the
+  pin by this gate. A renamed or removed stream route is therefore invisible
+  here and has to be caught by hand or by the opt-in real-host tier.
 * The pin is checked at the submodule's *checked-out* commit
   (`git -C reference/deepseek-harness rev-parse HEAD`), not the parent's
   recorded gitlink.
@@ -120,14 +130,14 @@ CLIENT_CONST = re.compile(r"static\s+const\s+String\s+(\w+)\s*=\s*")
 
 CLIENT_VALUE = re.compile(r"(?:\s|//[^\n]*\n)*r?'([^']*)'\s*;")
 CLASS_DECL = re.compile(
-    r"^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)\s+extends\s+TypertRemoteService\b"
+    r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)\s+extends\s+TypertRemoteService\b"
 )
 SUPER_BIND = re.compile(r"super\(\s*ctx\s*,\s*'([^']+)'\s*(?:,\s*\{([^}]*)\})?\s*\)")
 NAMESPACE = re.compile(r"namespace\s*:\s*'([^']+)'")
 REMOTE_DECORATOR = re.compile(r"^\s*@Remote(?:\(|$)")
 REMOTE_ARGUMENT = re.compile(r"^\s*@Remote\(\s*(.*?)\s*\)\s*$")
 METHOD_DECL = re.compile(
-    r"^\s*(?:public\s+|private\s+|protected\s+|static\s+|async\s+)*([A-Za-z_$][\w$]*)\s*\("
+    r"^\s*(?:public\s+|private\s+|protected\s+|static\s+|async\s+|\*\s*)*([A-Za-z_$][\w$]*)\s*\("
 )
 STREAM_DECORATOR = re.compile(r"mode\s*:\s*'stream'")
 GATEWAY_CONST = re.compile(r"export\s+const\s+REMOTE_EVENT_RESULT_ENDPOINT\s*=\s*'([^']+)'")

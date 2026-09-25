@@ -753,16 +753,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentPresetsIntro =>
-      '预设即一个会话的 Agent 所运行的插件组装 —— 它的工具、提示词与能力。复制一份既有预设改成自己的，或用「创造模式」让 Agent 帮你创建。';
+      '预设即一个会话的 Agent 所运行的插件组装 —— 它的工具、提示词与能力。在这里选择新会话默认启用的预设。';
 
   @override
-  String get presetGroupBuiltIn => '内置';
-
-  @override
-  String get presetGroupCustom => '自定义';
-
-  @override
-  String get presetsFooter => '预设由宿主机编写：请在桌面端设置中复制、编辑与删除。';
+  String get presetsFooter => '预设由宿主机声明；本应用读取花名册并选择新会话默认启用的那一项。';
 
   @override
   String get noDescription => '无描述。';
@@ -1150,19 +1144,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modeContinuable => '可继续';
 
   @override
+  String get modeUnknown => '模式未知';
+
+  @override
   String get activityRunning => '正在运行';
 
   @override
   String get activityNotRunning => '当前未运行';
-
-  @override
-  String get diagnosticCorrupt => '会话记录损坏';
-
-  @override
-  String get diagnosticUnsupported => '子代理记录版本不受支持';
-
-  @override
-  String get diagnosticUnavailable => '会话记录暂不可用';
 
   @override
   String get oneShotRecordTitle => '一次性子代理记录';
@@ -1175,6 +1163,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get parentUnavailableBody => '父会话当前不在线，重新打开父会话后即可继续发送消息。';
+
+  @override
+  String get unknownRecordBody => '读取子会话后才能确定是否可继续。';
 
   @override
   String backendVersion(String version) {

@@ -513,57 +513,45 @@ class _CatalogBranch extends StatelessWidget {
   Widget build(BuildContext context) {
     // Web reserveDisclosure: leaf rows keep the disclosure seat when any
     // sibling has a branch so labels stay aligned.
-    final reserveDisclosure = catalog.entries.any(
-      (entry) => entry.kind != 'diagnostic' && entry.hasChildren,
-    );
+    final reserveDisclosure = catalog.entries.any((entry) => entry.hasChildren);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final entry in catalog.entries)
-          if (entry.kind == 'diagnostic')
-            _DiagnosticEntryRow(
-              key: ValueKey(
-                'diagnostic-${catalog.parentSessionId}-${entry.id}',
-              ),
-              entry: entry,
-              level: level,
-              reserveDisclosure: reserveDisclosure,
-            )
-          else ...[
-            _CatalogEntryRow(
-              key: ValueKey('catalog-${catalog.parentSessionId}-${entry.id}'),
-              entry: entry,
-              summary: sessions
-                  .where((session) => session.id == entry.id)
-                  .firstOrNull,
-              level: level,
-              expanded: expanded.contains(entry.id),
-              reserveDisclosure: reserveDisclosure,
-              onOpen: () {
-                // A child opens under its own catalog mode: the
-                // child-history read (`session/page` with a `subagent`
-                // address) is host-guarded against a mode mismatch
-                // (`subagent/unauthorized`). The adapter decodes child rows
-                // with a required mode, so only a row lacking one —
-                // impossible past fail-loud decode — stays closed.
-                final mode = entry.mode;
-                if (mode != null) {
-                  onAction(
-                    OpenChild(
-                      entry.id,
-                      mode,
-                      parentSessionId: catalog.parentSessionId,
-                    ),
-                  );
-                }
-              },
-              onToggleBranch: entry.hasChildren
-                  ? () => onToggleBranch(entry.id)
-                  : null,
-            ),
-            if (entry.hasChildren && expanded.contains(entry.id))
-              _branchBody(context, entry),
-          ],
+        for (final entry in catalog.entries) ...[
+          _CatalogEntryRow(
+            key: ValueKey('catalog-${catalog.parentSessionId}-${entry.id}'),
+            entry: entry,
+            summary: sessions
+                .where((session) => session.id == entry.id)
+                .firstOrNull,
+            level: level,
+            expanded: expanded.contains(entry.id),
+            reserveDisclosure: reserveDisclosure,
+            onOpen: () {
+              // A child opens under its own catalog mode: the
+              // child-history read (`session/page` with a `subagent`
+              // address) is host-guarded against a mode mismatch
+              // (`subagent/unauthorized`). The adapter decodes child rows
+              // with a required mode, so only a row lacking one —
+              // impossible past fail-loud decode — stays closed.
+              final mode = entry.mode;
+              if (mode != null) {
+                onAction(
+                  OpenChild(
+                    entry.id,
+                    mode,
+                    parentSessionId: catalog.parentSessionId,
+                  ),
+                );
+              }
+            },
+            onToggleBranch: entry.hasChildren
+                ? () => onToggleBranch(entry.id)
+                : null,
+          ),
+          if (entry.hasChildren && expanded.contains(entry.id))
+            _branchBody(context, entry),
+        ],
       ],
     );
   }
@@ -687,72 +675,6 @@ class _CatalogEntryRow extends StatelessWidget {
                   color: scheme.onSurfaceVariant,
                 ),
               ),
-      ),
-    );
-  }
-}
-
-/// Diagnostic catalog entry (web `entry.kind === 'diagnostic'`): disabled
-/// row with the error dot and the reason as its only summary. A [ListTile]
-/// without a tap handler, wrapped in the disabled semantics the web tree
-/// row carries.
-class _DiagnosticEntryRow extends StatelessWidget {
-  const _DiagnosticEntryRow({
-    required this.entry,
-    required this.level,
-    required this.reserveDisclosure,
-    super.key,
-  });
-
-  final SubagentEntry entry;
-  final int level;
-  final bool reserveDisclosure;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final reason = _diagnosticReasonLabel(entry.reason, l10n);
-    return Padding(
-      padding: EdgeInsets.only(left: _catalogIndent(level)),
-      child: Semantics(
-        enabled: false,
-        child: ListTile(
-          dense: true,
-          visualDensity: VisualDensity.compact,
-          minTileHeight: _kRowMinHeight,
-          minLeadingWidth: 0,
-          horizontalTitleGap: _kGlyphTextGap,
-          contentPadding: const EdgeInsets.only(right: _kCatalogIndentBase),
-          leading: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (reserveDisclosure) const SizedBox(width: _kDisclosureWidth),
-              const StateDot(state: StateDotState.error, size: 8),
-            ],
-          ),
-          title: Text(
-            entry.id,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              height: 1.2,
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          subtitle: reason == null
-              ? null
-              : Text(
-                  reason,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    height: 1.2,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-        ),
       ),
     );
   }
@@ -1188,6 +1110,7 @@ String? _modeLabel(SubagentMode? mode, AppLocalizations l10n) => switch (mode) {
   null => null,
   SubagentMode.oneShot => l10n.modeOneShot,
   SubagentMode.continuable => l10n.modeContinuable,
+  SubagentMode.unknown => l10n.modeUnknown,
 };
 
 /// Web locales.ts EN `activity.*`; unknown activities surface verbatim.
@@ -1199,28 +1122,21 @@ String? _activityLabel(String? activity, AppLocalizations l10n) =>
       final other => other,
     };
 
-/// Web locales.ts EN `diagnostic.*` reasons.
-String? _diagnosticReasonLabel(String? reason, AppLocalizations l10n) =>
-    switch (reason) {
-      null => null,
-      'corrupt' => l10n.diagnosticCorrupt,
-      'unsupported' => l10n.diagnosticUnsupported,
-      'unavailable' => l10n.diagnosticUnavailable,
-      final other => other,
-    };
-
-/// Web locales.ts EN `readonly.oneShot.*`.
+/// Web locales.ts EN `readonly.oneShot.title` / `readonly.title`.
 String _readOnlyTitle(SubagentReadOnlyReason reason, AppLocalizations l10n) =>
     switch (reason) {
       SubagentReadOnlyReason.oneShot => l10n.oneShotRecordTitle,
-      SubagentReadOnlyReason.parentUnavailable => l10n.parentUnavailableTitle,
+      SubagentReadOnlyReason.parentUnavailable ||
+      SubagentReadOnlyReason.unknown => l10n.parentUnavailableTitle,
     };
 
-/// Web locales.ts EN `readonly.oneShot.body` / `readonly.body`.
+/// Web locales.ts EN `readonly.oneShot.body` / `readonly.body` /
+/// `readonly.unknown.body`.
 String _readOnlyBody(SubagentReadOnlyReason reason, AppLocalizations l10n) =>
     switch (reason) {
       SubagentReadOnlyReason.oneShot => l10n.oneShotRecordBody,
       SubagentReadOnlyReason.parentUnavailable => l10n.parentUnavailableBody,
+      SubagentReadOnlyReason.unknown => l10n.unknownRecordBody,
     };
 
 /// Child records render without durable attachments: the loader always

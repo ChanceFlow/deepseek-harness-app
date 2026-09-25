@@ -1313,25 +1313,13 @@ abstract class AppLocalizations {
   /// No description provided for @agentPresetsIntro.
   ///
   /// In en, this message translates to:
-  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.'**
+  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities. Choose the one new sessions start with.'**
   String get agentPresetsIntro;
-
-  /// No description provided for @presetGroupBuiltIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Built-in'**
-  String get presetGroupBuiltIn;
-
-  /// No description provided for @presetGroupCustom.
-  ///
-  /// In en, this message translates to:
-  /// **'Custom'**
-  String get presetGroupCustom;
 
   /// No description provided for @presetsFooter.
   ///
   /// In en, this message translates to:
-  /// **'Presets are authored on the host: copy, edit, and delete them from the desktop settings.'**
+  /// **'Presets are declared on the host; this app reads the roster and picks the default new sessions start with.'**
   String get presetsFooter;
 
   /// No description provided for @noDescription.
@@ -2054,6 +2042,12 @@ abstract class AppLocalizations {
   /// **'continuable'**
   String get modeContinuable;
 
+  /// No description provided for @modeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown mode'**
+  String get modeUnknown;
+
   /// No description provided for @activityRunning.
   ///
   /// In en, this message translates to:
@@ -2065,24 +2059,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'not running'**
   String get activityNotRunning;
-
-  /// No description provided for @diagnosticCorrupt.
-  ///
-  /// In en, this message translates to:
-  /// **'corrupted session record'**
-  String get diagnosticCorrupt;
-
-  /// No description provided for @diagnosticUnsupported.
-  ///
-  /// In en, this message translates to:
-  /// **'unsupported subagent record version'**
-  String get diagnosticUnsupported;
-
-  /// No description provided for @diagnosticUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'session record temporarily unavailable'**
-  String get diagnosticUnavailable;
 
   /// No description provided for @oneShotRecordTitle.
   ///
@@ -2107,6 +2083,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The parent session is offline; reopen it to continue sending messages.'**
   String get parentUnavailableBody;
+
+  /// No description provided for @unknownRecordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the child session to determine whether it can be continued.'**
+  String get unknownRecordBody;
 
   /// Localized screen copy.
   ///

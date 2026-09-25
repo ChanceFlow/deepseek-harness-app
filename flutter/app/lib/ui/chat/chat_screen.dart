@@ -76,6 +76,7 @@ import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import '../trajectory/trajectory_entry.dart';
 import 'timeline_folding.dart';
+import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'tool_group_summary.dart';
 import 'tool_row_model.dart';
@@ -1598,6 +1599,7 @@ class _ChatPanelState extends State<ChatPanel> {
       items,
       latestTurnClosed: !sessionBusy,
     );
+    final turnEndSeqByMessageId = turnEndSeqByMessage(items);
     // The status line rides the tail of the transcript: with nothing
     // visible to be a tail after (a queue-only window), it renders nothing
     // — the queue dock and the composer seat already carry the run.
@@ -1668,6 +1670,9 @@ class _ChatPanelState extends State<ChatPanel> {
                     : null,
                 presentedFiles: row is TimelineMessage
                     ? turnFilesByMessage[row.value.id]?.presented
+                    : null,
+                forkAtSeq: row is TimelineMessage
+                    ? turnEndSeqByMessageId[row.value.id]
                     : null,
               );
             }
@@ -2178,6 +2183,7 @@ class TimelineRow extends StatelessWidget {
     this.expansion,
     this.producedPaths,
     this.presentedFiles,
+    this.forkAtSeq,
     this.onOpenChild,
   });
 
@@ -2204,6 +2210,11 @@ class TimelineRow extends StatelessWidget {
   /// none.
   final List<PresentedFile>? presentedFiles;
 
+  /// This row's message's completed-turn anchor for `session/fork`; null when
+  /// the message's turn has not closed, which hides the fork seat rather than
+  /// asking the host to cut a partial turn.
+  final int? forkAtSeq;
+
   /// Jump target for a workflow member's child session; null renders the
   /// card read-only (a nested child record has no further navigation seat).
   final WorkflowMemberOpener? onOpenChild;
@@ -2215,9 +2226,11 @@ class TimelineRow extends StatelessWidget {
       TimelineMessage(:final value) => MessageRow(
         message: value,
         loadAttachment: loadAttachment,
-        onFork: value.seq == null
+        // `session/fork`'s `atSeq` is an exact inclusive event seq, so the
+        // seat cuts the completed turn the message sits in.
+        onFork: forkAtSeq == null
             ? null
-            : () => onAction(ForkSession(value.sessionId, atSeq: value.seq)),
+            : () => onAction(ForkSession(value.sessionId, atSeq: forkAtSeq)),
         usage: (item as TimelineMessage).usage,
         firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
         producedPaths: producedPaths,

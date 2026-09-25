@@ -21,9 +21,9 @@ the environment contradicts them. These tiers are that environment.
    (required field absent → throws with the field name); every collapsible
    or disposable interaction has a test that observes the collapsed/removed
    state.
-5. **Self-skip credential tiers.** Tests needing a live host read
-   `DSH_E2E_URL` and skip with a printed reason when it is unset — CI stays
-   green without secrets, and the tier still runs locally
+5. **Self-skip credential tiers.** Tests needing a live host read the
+   `DSH_E2E_URL` dart define and skip with a printed reason when it is absent —
+   CI stays green without secrets, and the tier still runs locally
    ([README §Opt-in real-host e2e](../README.md#opt-in-real-host-e2e)).
 
 ## Tiers

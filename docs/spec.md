@@ -208,7 +208,7 @@ client puts on the Session handle, and `domain.SessionSummary` has no field to
 hold it yet, so folding it needs a model field and a roster surface rather than
 a switch arm.
 
-The pinned 0.1.5 tree registers no host-frame vocabulary and serves no
+The pinned 0.1.7 tree registers no host-frame vocabulary and serves no
 `/api/events.host` route: the host dropped `host/session-status`,
 `host/session-added` and `host/session-removed` by 0.1.2-alpha.1, and the
 client neither dials the leg nor listens for those names. Session running
@@ -228,19 +228,19 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 54
-upstream = 84
-identical = 52
-missing = 32
+declared = 52
+upstream = 125
+identical = 50
+missing = 75
 client-only = 2
-out-of-scope = agentPresets/read, agentPresets/copy, agentPresets/deletePreset
+out-of-scope = agentPresets/read
 <!-- wire-pin:coverage:end -->
 
 `declared` counts the client's endpoint constants; `upstream` counts every
 unary Typert Remote method the pinned source tree registers (a superset of any
 one deployment's loaded plugins; logical streams are excluded); `identical` is
 their intersection; `missing` is registered upstream but not wired by the
-client; `client-only` is declared by the client but not registered at 0.1.5 —
+client; `client-only` is declared by the client but not registered at 0.1.7 —
 the reviewed names in
 [scripts/gates_manifest.json](../scripts/gates_manifest.json)
 (`wire_pin.declared_only_allowlist`). That list excuses a *declaration* only:
@@ -249,6 +249,12 @@ a name on it must have no call site under
 gate as a defect. `out-of-scope` lists registered methods the client
 intentionally does not wire: a name here must be a real pin method and must
 stay unwired.
+
+A stream the client opens with a literal string rather than through
+`DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,
+`$events`, and the per-session `job/list` — is outside this block's
+comparison entirely, so a renamed or withdrawn stream route has to be caught
+by hand or by the opt-in real-host tier.
 
 ### 4.7 Non-RPC routes
 
@@ -370,14 +376,14 @@ never the payload), so a wire-coverage gap stays measurable.
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
-| `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only baseline: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
+| `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only view the adapter publishes from the session's `inbox` projection: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
 | `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
 | `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
 | `deliverables/presented` | no item — folds the event's `files` onto the `present` call named by its `callId`, so a declaration rides that call's own row; a declaration whose call lies outside the folded window publishes nothing |
 
 Text extraction handles `text` blocks and nested `tool-result` content.
 
-Live token deltas are the one fact the durable log does not carry: a 0.1.5 host
+Live token deltas are the one fact the durable log does not carry: a 0.1.7 host
 publishes them as cursorless `assistant-stream` frames on a `session/follow`
 opened with `assistantStream: true`
 (`packages/api/session-controller/src/history.ts:163`, `types.ts` `SessionFollowFrame`).
@@ -434,8 +440,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   loopback `HttpServer` (success, exact query parameters, non-200, and a body
   truncated below its declared length); the export's UI states run through the
   real chat controller over the fake repository.
-- Integration with a real `dsh web` is opt-in: set `DSH_E2E_URL` and run
-  `LocalDshE2eTest`; it is skipped otherwise.
+- Integration with a real `dsh web` is opt-in: pass `--dart-define=DSH_E2E_URL=…`
+  and run `LocalDshE2eTest`; it is skipped otherwise. The define is what carries
+  the target, because `flutter test` forwards only a fixed set of environment
+  variables to the test process.
 
 ## 10. Known Limitations and Deferred Work
 
@@ -544,12 +552,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 ## 11. Subagent Ownership
 
 - A subagent is addressed by `parentSessionId` + `childSessionId`, never by display label.
-- `SubagentEntry` exposes `id`, `kind`, `mode`, `activity`, `hasChildren`, `label`, and `reason`. `mode` is the domain enum `SubagentMode` (`oneShot` / `continuable`), required on child rows: a child row with a missing or unknown wire mode fails loud at decode; diagnostic rows carry none.
-- `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent; its `parentAvailable` gates the composer for the rows of that catalog level only.
-- MVP supports `subagent.list`, `subagent.prompt`, and `subagent.interrupt`; a child's transcript is read through `session/page` carrying a `subagent` address (`{kind: 'subagent', parentSessionId, childSessionId, mode}`). The pre-0.1.5 `subagent/history` name stays declared in the endpoint registry as a declared-only constant with no call site.
+- `SubagentEntry` exposes `id`, `mode`, `activity`, `hasChildren`, and `label`. `mode` is the domain enum `SubagentMode` (`oneShot` / `continuable` / `unknown`), required on every roster row: a row with a missing mode — or one whose wire literal this build does not know — fails loud at decode. `hasChildren` is derived from `mode` (only a continuable child can host descendants) and `activity` from the session roster's own running bit, because the projection publishes neither.
+- `SubagentCatalog` carries `parentSessionId` explicitly and is scoped to that parent.
+- The roster is the parent Session's `subagentCatalog` projection, read through `session/projections`; `subagents/prompt` and `subagents/interruptByParent` remain the control verbs, and a child's transcript is read through `session/page` carrying a `subagent` address (`{kind: 'subagent', parentSessionId, childSessionId, mode}`). The pre-0.1.5 `subagent/history` name stays declared in the endpoint registry as a declared-only constant with no call site.
 - That `subagent` address carries the addressed row's own `mode`; the host matches it against the durable entry and answers a mismatch as `subagent/unauthorized`, and a child the catalog no longer lists as `subagent/not-found`. `subagent.prompt` and `subagent.interrupt` are pinned to `'continuable'` by the request schemas.
-- The catalog tree is a host-reported fact: `subagent.list` reads durable
-  state, so a cold host answers the parent's complete child tree.
+- The catalog tree is a host-reported fact: the projection folds the parent's
+  own durable `subagent/catalog` events, so a cold host answers the parent's
+  complete child tree.
   `SubagentController` seeds the pre-selected parent's catalog once the
   host's `session.list` includes that session; each landed snapshot
   replaces the tree, and live events never merge catalog rows.
@@ -571,19 +580,25 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 14. Background Jobs
 
-- `session/jobs` mux frames fold into `TimelineItem.Jobs`.
+- The adapter opens one `job/list` stream per followed session
+  (`packages/api/job-controller/src/index.ts`, `@Remote({ mode: 'stream' }) list`)
+  and republishes each `{type: 'rows', jobs}` frame as the `session/jobs` frame
+  the fold owns, so `TimelineItem.Jobs` keeps one decode site. 0.1.7 deleted the
+  control baseline's `jobs` block, which was the only earlier source.
 - Job identity is backend-issued `id`; kind/status/detail/label stay display-only.
+  `JobView` is a superset of the deleted `SessionJob`, so an added field is
+  ignored rather than decoded.
 - Jobs are live snapshots, not durable session events; history replay does not reconstruct them.
 
 ## 15. Agent Presets & Permissions
 
-- `agentPresets/list` decodes the roster: entries
-  (`id`, `trust system|user`, `isDefault`, optional `name`/`description`/
-  `broken`) plus `authorable` and `hasDocument`. A bad `trust` value or a
-  missing required field fails loud.
+- `agentPresets/list` decodes the roster: entries (`id`, `isDefault`,
+  optional `name`/`description`/`broken`). 0.1.7 dropped the per-row `trust`
+  and the roster-level `authorable`, so the roster is path-free and
+  trust-free; a missing required field fails loud.
 - `agentPresets/select` switches a blank session's preset and returns the
   echoed id; host refusals (`agent-preset-locked`, `agent-preset-not-found`,
-  `agent-preset-invalid`, `agent-preset-read-only`) surface as
+  `agent-preset-invalid`) surface as
   `DshBusinessException` with the host code.
 - The forwarded owner event `agent-preset/selected` (a `$events` `emit` item
   with `args [sessionId, agentPreset]`, §4.5) folds the session summary's
@@ -595,11 +610,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `observePermissions`. A `null`-valued or malformed frame yields null —
   the same hidden state as a host composing no permission service.
   Unknown projection keys are ignored (the key set is open).
-- `agentPresets/read`, `agentPresets/copy`, and `agentPresets/deletePreset`
-  stay uncovered: a mobile client cannot manage the roster, only read it and
-  switch blank sessions. 0.1.5 removed the 0.1.1 per-method loopback pin
-  (`PRIVILEGED_METHODS`), so these are out of scope by product decision, not by
-  a host-side privilege fence (§4.6).
+- `agentPresets/read` stays uncovered: a mobile client cannot manage the
+  roster, only read it and switch blank sessions. 0.1.7 deleted `copy`,
+  `deletePreset`, and the preset-directory settings methods along with the
+  trust and authoring facts they served, so the app shows the roster as one
+  flat list and offers no authoring affordance. The 0.1.1 per-method loopback
+  pin (`PRIVILEGED_METHODS`) is gone from the pin, so these are out of scope
+  by product decision, not by a host-side privilege fence (§4.6).
 
 ## 16. Host Commands
 
@@ -665,7 +682,7 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   carries a failed pull (`session/agent-busy`). `commands/change`
   invalidates every cached roster and re-pulls the selected session.
 
-### 4.8 Session-event folds added on the 0.1.5 pin
+### 4.8 Session-event folds
 
 The reducer folds five event families the client previously dropped. Each
 decoder reads its field names from the pinned source named below; a required
@@ -678,7 +695,7 @@ the §4.5 diagnostic.
   (`packages/api/session-controller/src/types.ts`) admits only `type`, `seq`,
   `time`, `data`, `ignorable`, `surfaceOp`, and `sourceEventSeqs`, and
   `assertSessionWireEvent` rejects any other member. A `{for: 'call'|'result'}`
-  `view` payload therefore does not exist at 0.1.5; what the host ships is each
+  `view` payload therefore does not exist on the wire; what the host ships is each
   tool's persisted `output.presentationMeta` as the `tool/result` event's
   `meta` member. The adapter narrows that opaque member into
   `ToolResultPresentation` arms — `read` (path, offset, numbered lines,

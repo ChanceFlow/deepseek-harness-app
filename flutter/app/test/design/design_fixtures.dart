@@ -685,15 +685,13 @@ const AgentPresetRoster kSettingsRoster = AgentPresetRoster(
   entries: [
     AgentPresetEntry(
       id: 'standard',
-      trust: AgentPresetTrust.system,
       isDefault: true,
       description: 'Full coding agent with file editing, shell, and search.',
     ),
-    AgentPresetEntry(id: 'code', trust: AgentPresetTrust.system),
-    AgentPresetEntry(id: 'minimal', trust: AgentPresetTrust.system),
+    AgentPresetEntry(id: 'code'),
+    AgentPresetEntry(id: 'minimal'),
     AgentPresetEntry(
       id: 'my-agent',
-      trust: AgentPresetTrust.user,
       name: 'My Agent',
       broken: 'agent.cordis.yml not found',
     ),
@@ -708,16 +706,14 @@ SettingsUiState settingsUiState() => const SettingsUiState(
 
 /// The Subagents screen's catalog fixture: the same family the widget
 /// test tree renders — a running continuable child with an expandable
-/// branch, a settled one-shot child, and a corrupt diagnostic row.
+/// branch and a settled one-shot child.
 const String kSubagentWorkerId = 'child-12345678abcd';
 
 const SubagentCatalog kSubagentCatalog = SubagentCatalog(
   parentSessionId: 'p1',
-  parentAvailable: true,
   entries: [
     SubagentEntry(
       id: kSubagentWorkerId,
-      kind: 'child',
       mode: SubagentMode.continuable,
       activity: 'running',
       hasChildren: true,
@@ -725,11 +721,9 @@ const SubagentCatalog kSubagentCatalog = SubagentCatalog(
     ),
     SubagentEntry(
       id: 'one-shot-1',
-      kind: 'child',
       mode: SubagentMode.oneShot,
       activity: 'inactive',
     ),
-    SubagentEntry(id: 'broken-1', kind: 'diagnostic', reason: 'corrupt'),
   ],
 );
 

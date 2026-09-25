@@ -16,7 +16,7 @@ void main() {
     expect(stats.turns, 2);
 
     // 3. agent_preset.dart
-    const preset = AgentPresetEntry(id: 'p1', trust: AgentPresetTrust.system);
+    const preset = AgentPresetEntry(id: 'p1');
     expect(preset.id, 'p1');
     const roster = AgentPresetRoster(entries: [preset]);
     expect(roster.entries, hasLength(1));

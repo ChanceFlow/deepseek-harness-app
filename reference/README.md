@@ -5,20 +5,21 @@ symlink. The submodule pins a specific official dsh commit, so the Android contr
 truth is reproducible across clones. dsh is under active development with breaking changes —
 the pin is the wire contract; do not assume compatibility with a different dsh version.
 
-- Pinned commit: `fb2c4b9e698e30edb738bca4cf0618587db7d203` (official `dsh-v0.1.5-rc.2`).
-- Registration-source digest: `e4d5aace6a5457558cfdb7af77a27410aebcfcca151e5a6d7891cc2bb1745597`
-  (sha256 over the 21 source files that declare a registration plus the Gateway endpoint
+- Pinned commit: `477b4f420553e8a52c2fbccc464d7561b239c443` (official `dsh-v0.1.7-rc.2`).
+- Registration-source digest: `e32e1b25e5e212da625821ad9bf0420bdb115845ba3bad395a0e60d0a871b1c0`
+  (sha256 over the 29 source files that declare a registration plus the Gateway endpoint
   constants, fed as `relpath\0bytes\0` in sorted path order; regenerate with
   `python3 scripts/verify_wire_pin.py --print-digest`).
 - Wire contract source of truth: `reference/deepseek-harness/packages/api/` — the Typert
   Remote services the gateway registers. DSH 0.1.2 replaced the dot-namespaced
   `packages/host/apiproxy/src/api/rpc-map.ts` registry with slash-namespaced Typert Remote
-  services, and that file no longer exists in the 0.1.5 tree.
+  services, and that file no longer exists in the 0.1.7 tree.
 - Remote method registration: a `class … extends TypertRemoteService` plus its
   `super(ctx, '<serviceKey>'[, { namespace }])` binding and the `@Remote` decorators on
   its methods (`reference/deepseek-harness/packages/typert/protocol/src/index.ts` defines
   the decorator); the declaration scan is what [scripts/verify_wire_pin.py](../scripts/verify_wire_pin.py)
-  derives the registered surface from.
+  derives the registered surface from. The class may be exported as `export default class`
+  and a decorated method may be a generator (`async *name`); the gate parses both forms.
 - Connection lifecycle: `reference/deepseek-harness/packages/client/connection/src/client/connection.ts`
 - Web routes and the event mux: `reference/deepseek-harness/packages/client/connection/src/api-path.ts`
   and `reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts` (`/api/remote.mux`).
@@ -55,9 +56,12 @@ counts in `docs/spec.md` §4.6, the README coverage sentence, and the adapter su
 for a reintroduced name-folding map. Re-run it after every re-pin; a re-pin that skips it is
 unverified.
 
-Two things the gate cannot see, so verify them by hand when the pin moves: a method registered
-by a runtime-built binding rather than a literal `super(ctx, '<key>')`, and the gap between
+Three things the gate cannot see, so verify them by hand when the pin moves: a method registered
+by a runtime-built binding rather than a literal `super(ctx, '<key>')`; the gap between
 the tree-wide declaration surface it derives and one deployment's loaded plugin set (the
 bundle patches under `deepseek-harness/packages/bundle/*/cordis.patch.yml`) — the scan is a
 documented superset, so an endpoint served only by an unmounted experimental package would
-pass. An unparsable registration fails the gate loudly rather than being skipped.
+pass; and the stream endpoints the client opens with a literal string rather than through
+`DshRpcEndpoints` (`workspace/follow`, `session/control`, `session/follow`, `$events`, and the
+per-session `job/list`), which the gate never compares. An unparsable registration fails the
+gate loudly rather than being skipped.

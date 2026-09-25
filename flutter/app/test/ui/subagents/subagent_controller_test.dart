@@ -32,13 +32,18 @@ const _childRow = SessionSummary(
 
 /// One attributed child row as the host's `session.list` answers it
 /// (`sessionSummarySchema`: `parentSessionId` + `origin: 'subagent'`).
-SessionSummary _childOf(String id, {bool running = false}) => SessionSummary(
+SessionSummary _childOf(
+  String id, {
+  bool running = false,
+  bool? agentAvailable,
+}) => SessionSummary(
   id: id,
   title: 'Child $id',
   blank: false,
   origin: 'subagent',
   parentSessionId: 'p1',
   running: running,
+  agentAvailable: agentAvailable,
 );
 
 /// Waits past the controller's catalog-refresh debounce window and lets
@@ -50,17 +55,12 @@ Future<void> _pastDebounceWindow() async {
 
 const _worker = SubagentEntry(
   id: 'child-1',
-  kind: 'child',
   mode: SubagentMode.continuable,
   activity: 'running',
   label: 'Worker',
 );
 
-const _seedCatalog = SubagentCatalog(
-  parentSessionId: 'p1',
-  entries: [_worker],
-  parentAvailable: true,
-);
+const _seedCatalog = SubagentCatalog(parentSessionId: 'p1', entries: [_worker]);
 
 void main() {
   test(
@@ -326,11 +326,9 @@ void main() {
     () async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'inactive',
             hasChildren: true,
@@ -339,11 +337,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: false,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'inactive',
           ),
@@ -357,7 +353,10 @@ void main() {
 
       repository.sessions.value = <SessionSummary>[
         _parent,
-        _childOf('child-1'),
+        // child-1 holds no live Agent: that bit on the row's own direct
+        // parent is what gates grand-1's composer (0.1.7 stopped publishing a
+        // per-catalog `parentAvailable` hint).
+        _childOf('child-1', agentAvailable: false),
       ];
       await pumpEventQueue();
       controller.onAction(const LoadSubagentBranch('child-1'));
@@ -371,8 +370,8 @@ void main() {
       );
       await pumpEventQueue();
 
-      // The root tree reports its parent online; grand-1's owning level
-      // (child-1 offline) is what gates the composer.
+      // The root tree's parent is online; grand-1's own direct parent
+      // (child-1, offline) is what gates the composer.
       expect(controller.state.selectedChildEntry?.id, 'grand-1');
       expect(
         controller.state.childReadOnlyReason,
@@ -386,11 +385,9 @@ void main() {
     () async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'inactive',
             hasChildren: true,
@@ -399,11 +396,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
           ),
@@ -446,11 +441,9 @@ void main() {
     () async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'inactive',
             hasChildren: true,
@@ -459,11 +452,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
           ),
@@ -535,18 +526,15 @@ void main() {
     () async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'inactive',
             hasChildren: true,
           ),
           SubagentEntry(
             id: 'child-2',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
           ),
@@ -554,11 +542,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
           ),

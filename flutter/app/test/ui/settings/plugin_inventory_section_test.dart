@@ -74,7 +74,6 @@ const PluginInventorySnapshot _presets = PluginInventorySnapshot(
   agentPresets: <AgentPresetPluginGroup>[
     AgentPresetPluginGroup(
       id: 'standard',
-      trust: 'system',
       name: 'Standard',
       isDefault: true,
       rows: <AgentPresetPluginRow>[
@@ -99,7 +98,6 @@ const PluginInventorySnapshot _presets = PluginInventorySnapshot(
     ),
     AgentPresetPluginGroup(
       id: 'code',
-      trust: 'system',
       name: 'Code',
       isDefault: false,
       rows: <AgentPresetPluginRow>[
@@ -208,7 +206,9 @@ void main() {
     // The default preset opens with its composition.
     expect(find.text('Standard'), findsOneWidget);
     expect(find.text('Default'), findsOneWidget);
-    expect(find.textContaining('Built-in'), findsNWidgets(2));
+    // The composition subtitle carries the row count alone: 0.1.7 stopped
+    // publishing a preset's trust, so there is no Built-in/Custom label.
+    expect(find.text('3 plugins'), findsOneWidget);
     expect(find.text('tool-bash'), findsOneWidget);
 
     // A non-default preset waits collapsed.
