@@ -76,8 +76,11 @@ import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
 import '../trajectory/trajectory_entry.dart';
 import 'timeline_folding.dart';
+import 'timeline_grouping.dart';
 import 'todo_panel.dart';
-import 'tool_group_summary.dart';
+import 'process_activity.dart';
+import 'process_disclosure.dart';
+import 'turn_process.dart';
 import 'tool_row_model.dart';
 import 'turn_status_row.dart';
 import 'workflow_run_row.dart';
@@ -1583,7 +1586,7 @@ class _ChatPanelState extends State<ChatPanel> {
       );
     }
     final items = _timelineItems;
-    final groupedItems = foldTimelineActivities(items);
+    final groupedItems = foldTurnProcesses(foldTimelineActivities(items));
     final steering = _pendingSteering;
     // The produced-files row closes a finished turn. The newest turn only
     // counts as finished once the session stops running, so its row appears
@@ -1598,6 +1601,7 @@ class _ChatPanelState extends State<ChatPanel> {
       items,
       latestTurnClosed: !sessionBusy,
     );
+    final turnEndSeqByMessageId = turnEndSeqByMessage(items);
     // The status line rides the tail of the transcript: with nothing
     // visible to be a tail after (a queue-only window), it renders nothing
     // — the queue dock and the composer seat already carry the run.
@@ -1616,6 +1620,69 @@ class _ChatPanelState extends State<ChatPanel> {
     // hand the reader 200-character lines: the reading column is capped and
     // centred, so a wide surface gains margins instead of longer paragraphs.
     // The cap binds only above it, which is why a phone is untouched.
+    // One transcript row, shared by the list and by a Turn's process
+    // disclosure, which renders the rows it owns through the same path a
+    // top-level row takes.
+    Widget buildRow(Object row) {
+      if (identical(row, _olderHistorySlot)) {
+        return OlderHistoryRow(
+          isLoading: uiState.isLoadingOlder,
+          onLoadOlder: () {
+            _recordScrollAnchor();
+            _autoLoadDispatched = true;
+            widget.onAction(const LoadOlderHistoryAction());
+          },
+        );
+      }
+      if (row is TurnProcessSection) {
+        return TurnProcessRow(
+          key: ValueKey('turn-process:${row.facts.turn}'),
+          section: row,
+          buildRow: buildRow,
+        );
+      }
+      if (row is TimelineActivityGroup) {
+        return ActivityGroupRow(
+          key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
+          group: row,
+          onAction: widget.onAction,
+          loadAttachment: widget.loadAttachment,
+          sessionId: uiState.selectedSessionId,
+          onPreviewFile: _openFilePreview,
+          expansion: _sessionState,
+          onOpenChild: _openWorkflowMember,
+        );
+      }
+      if (row is TimelineItem) {
+        return TimelineRow(
+          key: ValueKey(timelineKey(row)),
+          item: row,
+          onAction: widget.onAction,
+          loadAttachment: widget.loadAttachment,
+          sessionId: uiState.selectedSessionId,
+          onPreviewFile: _openFilePreview,
+          expansion: _sessionState,
+          onOpenChild: _openWorkflowMember,
+          producedPaths: row is TimelineMessage
+              ? turnFilesByMessage[row.value.id]?.produced
+              : null,
+          presentedFiles: row is TimelineMessage
+              ? turnFilesByMessage[row.value.id]?.presented
+              : null,
+          forkAtSeq: row is TimelineMessage
+              ? turnEndSeqByMessageId[row.value.id]
+              : null,
+        );
+      }
+      if (row is SessionQueueItem) {
+        return PendingSteeringRow(
+          key: ValueKey('steering:${row.itemId}'),
+          text: row.text,
+        );
+      }
+      return const TurnStatusRow(key: ValueKey('turn-status'));
+    }
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kReadingMeasure),
@@ -1629,56 +1696,7 @@ class _ChatPanelState extends State<ChatPanel> {
               index + 1 < rows.length ? rows[index + 1] : null,
             ),
           ),
-          itemBuilder: (context, index) {
-            final row = rows[index];
-            if (identical(row, _olderHistorySlot)) {
-              return OlderHistoryRow(
-                isLoading: uiState.isLoadingOlder,
-                onLoadOlder: () {
-                  _recordScrollAnchor();
-                  _autoLoadDispatched = true;
-                  widget.onAction(const LoadOlderHistoryAction());
-                },
-              );
-            }
-            if (row is TimelineActivityGroup) {
-              return ActivityGroupRow(
-                key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
-                group: row,
-                onAction: widget.onAction,
-                loadAttachment: widget.loadAttachment,
-                sessionId: uiState.selectedSessionId,
-                onPreviewFile: _openFilePreview,
-                expansion: _sessionState,
-                onOpenChild: _openWorkflowMember,
-              );
-            }
-            if (row is TimelineItem) {
-              return TimelineRow(
-                key: ValueKey(timelineKey(row)),
-                item: row,
-                onAction: widget.onAction,
-                loadAttachment: widget.loadAttachment,
-                sessionId: uiState.selectedSessionId,
-                onPreviewFile: _openFilePreview,
-                expansion: _sessionState,
-                onOpenChild: _openWorkflowMember,
-                producedPaths: row is TimelineMessage
-                    ? turnFilesByMessage[row.value.id]?.produced
-                    : null,
-                presentedFiles: row is TimelineMessage
-                    ? turnFilesByMessage[row.value.id]?.presented
-                    : null,
-              );
-            }
-            if (row is SessionQueueItem) {
-              return PendingSteeringRow(
-                key: ValueKey('steering:${row.itemId}'),
-                text: row.text,
-              );
-            }
-            return const TurnStatusRow(key: ValueKey('turn-status'));
-          },
+          itemBuilder: (context, index) => buildRow(rows[index]),
         ),
       ),
     );
@@ -1691,12 +1709,17 @@ class _ChatPanelState extends State<ChatPanel> {
   /// the turn-status line and a pending steering row — open their own
   /// block like a message does (steering is the reader's own words). A
   /// null `below` is the tail: block.
+  ///
+  /// A Turn's `turn/start` boundary no longer reaches here: the Turn's process
+  /// control takes its place in the list, and its hairline rule carries the
+  /// break the boundary used to.
   static double _gapAfter(Object above, Object? below) {
     const double step = 6;
     const double block = 16;
-    const double turn = 24;
     if (below == null) return block;
-    if (below is TimelineTurnBoundary) return turn;
+    // A Turn's process control opens the Turn's own block: its border and its
+    // label carry the break, so the gap stays the paragraph gap.
+    if (below is TurnProcessSection) return block;
     final bool aboveIsStep = !_opensBlock(above);
     final bool belowIsStep = !_opensBlock(below);
     return aboveIsStep && belowIsStep ? step : block;
@@ -1707,6 +1730,7 @@ class _ChatPanelState extends State<ChatPanel> {
       return row.value.text.trim().isNotEmpty;
     }
     return row is SessionQueueItem ||
+        row is TurnProcessSection ||
         identical(row, _turnStatusSlot) ||
         identical(row, _olderHistorySlot);
   }
@@ -2178,6 +2202,7 @@ class TimelineRow extends StatelessWidget {
     this.expansion,
     this.producedPaths,
     this.presentedFiles,
+    this.forkAtSeq,
     this.onOpenChild,
   });
 
@@ -2204,6 +2229,11 @@ class TimelineRow extends StatelessWidget {
   /// none.
   final List<PresentedFile>? presentedFiles;
 
+  /// This row's message's completed-turn anchor for `session/fork`; null when
+  /// the message's turn has not closed, which hides the fork seat rather than
+  /// asking the host to cut a partial turn.
+  final int? forkAtSeq;
+
   /// Jump target for a workflow member's child session; null renders the
   /// card read-only (a nested child record has no further navigation seat).
   final WorkflowMemberOpener? onOpenChild;
@@ -2215,9 +2245,11 @@ class TimelineRow extends StatelessWidget {
       TimelineMessage(:final value) => MessageRow(
         message: value,
         loadAttachment: loadAttachment,
-        onFork: value.seq == null
+        // `session/fork`'s `atSeq` is an exact inclusive event seq, so the
+        // seat cuts the completed turn the message sits in.
+        onFork: forkAtSeq == null
             ? null
-            : () => onAction(ForkSession(value.sessionId, atSeq: value.seq)),
+            : () => onAction(ForkSession(value.sessionId, atSeq: forkAtSeq)),
         usage: (item as TimelineMessage).usage,
         firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
         producedPaths: producedPaths,
@@ -2857,139 +2889,36 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
     final entries = widget.group.entries;
     final calls = widget.group.calls;
     final thought = widget.group.thought;
-    final firstInjection = entries
-        .whereType<TimelineContextInjection>()
-        .firstOrNull;
 
-    final summary = deriveToolGroupSummary(calls, l10n);
-    final running = summary.runningCalls;
-    final failed = summary.failedCalls;
-    final thoughtLabel = thought == null
-        ? null
-        : reasoningLabel(
-            l10n,
-            running: thought.value.streaming,
-            elapsed: thought.value.reasoningDuration,
-          );
-    // The header names the phase: the tool summary while tools ran, and the
-    // thought or the injection when the phase only reasoned or was handed
-    // context. The thinking time rides the subtitle so a phase that both
-    // thought and worked keeps both facts on its collapsed line.
-    final title = calls.isNotEmpty
-        ? summary.title
-        : thoughtLabel ??
-              (firstInjection?.isRecall ?? false
-                  ? l10n.recallLabel
-                  : firstInjection == null
-                  ? ''
-                  : l10n.contextInjectionLabel);
-    final baseSubtitle = summary.subtitle;
-    final showBaseSubtitle =
-        running > 0 || (title.contains('operation') || title.contains('操作'));
-    final subtitle = <String>[
-      if (showBaseSubtitle && baseSubtitle.isNotEmpty && baseSubtitle != title)
-        baseSubtitle,
-      if (calls.isNotEmpty && thoughtLabel != null) thoughtLabel,
-    ].join(' · ');
-
-    final settledCount = calls.length - running - failed;
-    final leadingWidget = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (running > 0) const ActivityDot(),
-        if (running > 0 && settledCount > 0) const SizedBox(width: 4),
-        if (settledCount > 0 && running > 0)
-          Icon(Icons.check, size: 14, color: scheme.success),
-        if (running == 0)
-          if (failed > 0)
-            Icon(Icons.close, size: 14, color: scheme.error)
-          else if (calls.isEmpty && thought != null)
-            Icon(
-              Icons.psychology_outlined,
-              size: 14,
-              color: scheme.onSurfaceVariant,
-            )
-          else if (calls.isEmpty)
-            Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant)
-          else if (summary.filesExplored > 0 || summary.searches > 0)
-            Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant)
-          else
-            Icon(Icons.check, size: 14, color: scheme.success),
-      ],
+    // The group's ranked work and the one line it is doing now: the reference
+    // grouping's own `processActivity` model drives both the settled title
+    // (its top three categories) and the live label with its running detail.
+    final summary = deriveProcessActivity(
+      calls,
+      reasoningDetail: () => latestReasoningDetail(thought?.value.reasoning),
     );
+    final running = summary.running != null;
 
-    // The group header is the reference turn-process fold: a full-width
-    // 24px line over an 8px gap, no card, no fill, no bold — the chrome
-    // that made the chip read as a foreign surface.
+    // The group header is the reference's process card: a 16px leading box
+    // holding the category icon under a chevron that fades in on hover or
+    // while open, then the label — the running detail joins it after the
+    // locale's separator.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: SweepHighlight(
-            controller: running > 0 && !DshMotion.isReducedMotion(context)
-                ? _sweep
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  leadingWidget,
-                  const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ] else ...[
-                    const Spacer(),
-                  ],
-                  if (failed > 0) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      l10n.turnFailedCount(failed),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.error,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 4),
-                  // The reference chevron: one glyph rotating from the
-                  // closed right-pointing seat to the open down seat over
-                  // the shared 100ms disclosure beat, never a glyph swap.
-                  AnimatedRotation(
-                    turns: _expanded ? 0 : -0.25,
-                    duration: DshMotion.durationMicro,
-                    curve: DshMotion.curveStandard,
-                    child: Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 16,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        SweepHighlight(
+          controller: running && !DshMotion.isReducedMotion(context)
+              ? _sweep
+              : null,
+          child: ProcessGroupHeader(
+            summary: summary,
+            closed: widget.group.closed,
+            open: _expanded,
+            onTap: () => setState(() => _expanded = !_expanded),
           ),
         ),
         // The phase divides from what follows with the header's own 8px
@@ -2998,58 +2927,52 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
           // Web ToolCallTree `.subCalls`: 22px indent, 8px padding, one
           // hairline guide — the nesting the reference gives a call's own
           // sub-calls, borrowed for a batch group's members.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 4, 0, 2),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: scheme.outlineVariant, width: 0.5),
+          ProcessGroupBody(
+            startAtBottom: !widget.group.closed,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 4, 0, 2),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: scheme.outlineVariant, width: 0.5),
+                  ),
                 ),
-              ),
-              padding: const EdgeInsets.only(left: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < entries.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 4),
-                    switch (entries[i]) {
-                      final TimelineToolCall call => ToolCallRow(
-                        key: ValueKey(timelineKey(call)),
-                        call: call,
-                        sessionId: widget.sessionId,
-                        loadAttachment: widget.loadAttachment,
-                        onPreviewFile: widget.onPreviewFile,
-                        expansion: widget.expansion,
-                      ),
-                      final TimelineContextInjection injection => Material(
-                        type: MaterialType.transparency,
-                        child: ContextInjectionRow(
-                          key: ValueKey(timelineKey(injection)),
-                          injection: injection,
+                padding: const EdgeInsets.only(left: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < entries.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 4),
+                      switch (entries[i]) {
+                        final TimelineToolCall call => ToolCallRow(
+                          key: ValueKey(timelineKey(call)),
+                          call: call,
+                          sessionId: widget.sessionId,
+                          loadAttachment: widget.loadAttachment,
+                          onPreviewFile: widget.onPreviewFile,
+                          expansion: widget.expansion,
                         ),
-                      ),
-                      TimelineMessage(:final value) => Material(
-                        type: MaterialType.transparency,
-                        child: ReasoningRow(
-                          key: ValueKey(timelineKey(entries[i])),
-                          text: value.reasoning ?? '',
-                          running: value.streaming,
-                          elapsedDuration: value.reasoningDuration,
+                        final TimelineContextInjection injection => Material(
+                          type: MaterialType.transparency,
+                          child: ContextInjectionRow(
+                            key: ValueKey(timelineKey(injection)),
+                            injection: injection,
+                          ),
                         ),
-                      ),
-                      TimelineHookAudit(:final audit) => HookAuditRow(
-                        key: ValueKey(timelineKey(entries[i])),
-                        audit: audit,
-                      ),
-                      final TimelineWorkflowRun run => WorkflowRunRow(
-                        key: ValueKey(timelineKey(entries[i])),
-                        run: run,
-                        onOpenChild: widget.onOpenChild,
-                      ),
-                      _ => const SizedBox.shrink(),
-                    },
+                        TimelineMessage(:final value) => Material(
+                          type: MaterialType.transparency,
+                          child: ReasoningRow(
+                            key: ValueKey(timelineKey(entries[i])),
+                            text: value.reasoning ?? '',
+                            running: value.streaming,
+                            elapsedDuration: value.reasoningDuration,
+                          ),
+                        ),
+                        _ => const SizedBox.shrink(),
+                      },
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

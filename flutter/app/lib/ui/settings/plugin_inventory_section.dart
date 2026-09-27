@@ -582,12 +582,7 @@ class _PresetTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        <String>[
-          preset.trust == 'system'
-              ? l10n.presetGroupBuiltIn
-              : l10n.presetGroupCustom,
-          l10n.pluginInventoryPluginCount(preset.rows.length),
-        ].join(' · '),
+        l10n.pluginInventoryPluginCount(preset.rows.length),
         style: theme.textTheme.bodySmall?.copyWith(
           color: scheme.onSurfaceVariant,
         ),

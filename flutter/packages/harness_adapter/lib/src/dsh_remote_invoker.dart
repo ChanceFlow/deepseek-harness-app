@@ -33,6 +33,10 @@ final class DshRemoteInvoker {
     DshRpcEndpoints.workspaceInsertSessionBefore,
     DshRpcEndpoints.workspaceArchiveSession,
     DshRpcEndpoints.sessionPage,
+    // `session/projections` takes one `request` object and answers a
+    // nullable baseline, so its caller reads the raw `RpcResult` rather
+    // than `invoke` (which rejects a null value).
+    DshRpcEndpoints.sessionProjections,
     DshRpcEndpoints.subagentsPrompt,
   };
 
@@ -66,15 +70,7 @@ final class DshRemoteInvoker {
         'range': payload['range'] ?? const <String, Object?>{},
       };
     }
-    if (endpoint == DshRpcEndpoints.workspaceFilesReadBytes) {
-      return <String, Object?>{
-        'workspaceFileScopeId': payload['sessionId'],
-        'path': payload['path'],
-        'range': payload['range'] ?? const <String, Object?>{},
-      };
-    }
-    if (endpoint == DshRpcEndpoints.workspaceFilesReadAll ||
-        endpoint == DshRpcEndpoints.workspaceFilesStat ||
+    if (endpoint == DshRpcEndpoints.workspaceFilesStat ||
         endpoint == DshRpcEndpoints.workspaceFilesList) {
       return <String, Object?>{
         'workspaceFileScopeId': payload['sessionId'],

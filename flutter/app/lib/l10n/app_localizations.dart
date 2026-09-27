@@ -734,59 +734,17 @@ abstract class AppLocalizations {
   /// **'Thinking · {duration}'**
   String thinkingDuration(String duration);
 
-  /// Collapsed action summary when both files were explored and searches were conducted.
-  ///
-  /// In en, this message translates to:
-  /// **'{files, plural, =1{Explored 1 file} other{Explored {files} files}}, {searches, plural, =1{1 search} other{{searches} searches}}'**
-  String exploredFilesAndSearches(int files, int searches);
-
-  /// Collapsed action summary for explored files.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Explored 1 file} other{Explored {count} files}}'**
-  String exploredFiles(int count);
-
   /// In-flight action summary for exploring files.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{Exploring 1 file} other{Exploring {count} files}}'**
   String exploringFiles(int count);
 
-  /// Action summary for search operations.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 search} other{{count} searches}}'**
-  String searchedCount(int count);
-
-  /// Action summary for file edits/writes.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Modified 1 file} other{Modified {count} files}}'**
-  String modifiedFiles(int count);
-
-  /// Action summary for executed terminal commands.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Ran 1 command} other{Ran {count} commands}}'**
-  String ranCommands(int count);
-
   /// In-flight action summary for executing terminal commands.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{Running 1 command} other{Running {count} commands}}'**
   String runningCommands(int count);
-
-  /// Fallback action summary count.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 operation} other{{count} operations}}'**
-  String toolGroupOperations(int count);
-
-  /// In-flight multi-step action header.
-  ///
-  /// In en, this message translates to:
-  /// **'Working ({count, plural, =1{1 step} other{{count} steps}})'**
-  String toolWorkingSteps(int count);
 
   /// Localized screen copy.
   ///
@@ -1313,25 +1271,13 @@ abstract class AppLocalizations {
   /// No description provided for @agentPresetsIntro.
   ///
   /// In en, this message translates to:
-  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.'**
+  /// **'A preset is the plugin composition one session\'\'s agent runs — its tools, prompt, and capabilities. Choose the one new sessions start with.'**
   String get agentPresetsIntro;
-
-  /// No description provided for @presetGroupBuiltIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Built-in'**
-  String get presetGroupBuiltIn;
-
-  /// No description provided for @presetGroupCustom.
-  ///
-  /// In en, this message translates to:
-  /// **'Custom'**
-  String get presetGroupCustom;
 
   /// No description provided for @presetsFooter.
   ///
   /// In en, this message translates to:
-  /// **'Presets are authored on the host: copy, edit, and delete them from the desktop settings.'**
+  /// **'Presets are declared on the host; this app reads the roster and picks the default new sessions start with.'**
   String get presetsFooter;
 
   /// No description provided for @noDescription.
@@ -2054,6 +2000,12 @@ abstract class AppLocalizations {
   /// **'continuable'**
   String get modeContinuable;
 
+  /// No description provided for @modeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown mode'**
+  String get modeUnknown;
+
   /// No description provided for @activityRunning.
   ///
   /// In en, this message translates to:
@@ -2065,24 +2017,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'not running'**
   String get activityNotRunning;
-
-  /// No description provided for @diagnosticCorrupt.
-  ///
-  /// In en, this message translates to:
-  /// **'corrupted session record'**
-  String get diagnosticCorrupt;
-
-  /// No description provided for @diagnosticUnsupported.
-  ///
-  /// In en, this message translates to:
-  /// **'unsupported subagent record version'**
-  String get diagnosticUnsupported;
-
-  /// No description provided for @diagnosticUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'session record temporarily unavailable'**
-  String get diagnosticUnavailable;
 
   /// No description provided for @oneShotRecordTitle.
   ///
@@ -2107,6 +2041,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The parent session is offline; reopen it to continue sending messages.'**
   String get parentUnavailableBody;
+
+  /// No description provided for @unknownRecordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the child session to determine whether it can be continued.'**
+  String get unknownRecordBody;
 
   /// Localized screen copy.
   ///
@@ -4704,6 +4644,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not open the battery optimization dialog on this device.'**
   String get batteryOptimizationRequestFailed;
+
+  /// No description provided for @stepProcessThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyzing the request'**
+  String get stepProcessThinking;
+
+  /// No description provided for @stepProcessRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading files'**
+  String get stepProcessRead;
+
+  /// No description provided for @stepProcessReadImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading images'**
+  String get stepProcessReadImage;
+
+  /// No description provided for @stepProcessWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing files'**
+  String get stepProcessWrite;
+
+  /// No description provided for @stepProcessSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching code'**
+  String get stepProcessSearch;
+
+  /// No description provided for @stepProcessEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing files'**
+  String get stepProcessEdit;
+
+  /// No description provided for @stepProcessCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'Running commands'**
+  String get stepProcessCommands;
+
+  /// No description provided for @stepProcessCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Running code'**
+  String get stepProcessCode;
+
+  /// No description provided for @stepProcessWebSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching the web'**
+  String get stepProcessWebSearch;
+
+  /// No description provided for @stepProcessWebFetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Visiting web pages'**
+  String get stepProcessWebFetch;
+
+  /// No description provided for @stepProcessSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'Coordinating subagents'**
+  String get stepProcessSubagents;
+
+  /// No description provided for @stepProcessPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating the plan'**
+  String get stepProcessPlan;
+
+  /// No description provided for @stepProcessQuestions.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your action'**
+  String get stepProcessQuestions;
+
+  /// No description provided for @stepProcessTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Calling tools'**
+  String get stepProcessTools;
+
+  /// No description provided for @stepProcessPrepareRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to read files'**
+  String get stepProcessPrepareRead;
+
+  /// No description provided for @stepProcessPrepareReadImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to read images'**
+  String get stepProcessPrepareReadImage;
+
+  /// No description provided for @stepProcessPrepareWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to write files'**
+  String get stepProcessPrepareWrite;
+
+  /// No description provided for @stepProcessPrepareSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to search code'**
+  String get stepProcessPrepareSearch;
+
+  /// No description provided for @stepProcessPrepareEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to edit files'**
+  String get stepProcessPrepareEdit;
+
+  /// No description provided for @stepProcessPrepareCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to run commands'**
+  String get stepProcessPrepareCommands;
+
+  /// No description provided for @stepProcessPrepareCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to run code'**
+  String get stepProcessPrepareCode;
+
+  /// No description provided for @stepProcessPrepareWebSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to search the web'**
+  String get stepProcessPrepareWebSearch;
+
+  /// No description provided for @stepProcessPrepareWebFetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to visit web pages'**
+  String get stepProcessPrepareWebFetch;
+
+  /// No description provided for @stepProcessPrepareSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to coordinate subagents'**
+  String get stepProcessPrepareSubagents;
+
+  /// No description provided for @stepProcessPreparePlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing to update the plan'**
+  String get stepProcessPreparePlan;
+
+  /// No description provided for @stepProcessPrepareQuestions.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing questions'**
+  String get stepProcessPrepareQuestions;
+
+  /// No description provided for @stepProcessPrepareTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing tool calls'**
+  String get stepProcessPrepareTools;
+
+  /// No description provided for @stepProcessDoneThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Analysis completed'**
+  String get stepProcessDoneThinking;
+
+  /// No description provided for @stepProcessDoneRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read files'**
+  String get stepProcessDoneRead;
+
+  /// No description provided for @stepProcessDoneReadImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Read images'**
+  String get stepProcessDoneReadImage;
+
+  /// No description provided for @stepProcessDoneWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrote files'**
+  String get stepProcessDoneWrite;
+
+  /// No description provided for @stepProcessDoneSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Searched code'**
+  String get stepProcessDoneSearch;
+
+  /// No description provided for @stepProcessDoneEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited files'**
+  String get stepProcessDoneEdit;
+
+  /// No description provided for @stepProcessDoneCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'Ran commands'**
+  String get stepProcessDoneCommands;
+
+  /// No description provided for @stepProcessDoneCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Ran code'**
+  String get stepProcessDoneCode;
+
+  /// No description provided for @stepProcessDoneWebSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Searched the web'**
+  String get stepProcessDoneWebSearch;
+
+  /// No description provided for @stepProcessDoneWebFetch.
+  ///
+  /// In en, this message translates to:
+  /// **'Visited web pages'**
+  String get stepProcessDoneWebFetch;
+
+  /// No description provided for @stepProcessDoneSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'Coordinated subagents'**
+  String get stepProcessDoneSubagents;
+
+  /// No description provided for @stepProcessDonePlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated the plan'**
+  String get stepProcessDonePlan;
+
+  /// No description provided for @stepProcessDoneQuestions.
+  ///
+  /// In en, this message translates to:
+  /// **'Asked questions'**
+  String get stepProcessDoneQuestions;
+
+  /// No description provided for @stepProcessDoneTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Called tools'**
+  String get stepProcessDoneTools;
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} and {second}'**
+  String stepProcessJoinTwo(String first, String second);
+
+  /// No description provided for @stepProcessComma.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get stepProcessComma;
+
+  /// No description provided for @stepProcessSharedPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **''**
+  String get stepProcessSharedPrefix;
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{title}, etc.'**
+  String stepProcessMore(String title);
+
+  /// No description provided for @turnProcessDeepDiving.
+  ///
+  /// In en, this message translates to:
+  /// **'Deep diving'**
+  String get turnProcessDeepDiving;
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Deep diving for {duration}'**
+  String turnProcessDeepDivingFor(String duration);
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Took {duration}'**
+  String turnProcessTook(String duration);
+
+  /// No description provided for @turnProcessWorked.
+  ///
+  /// In en, this message translates to:
+  /// **'Worked'**
+  String get turnProcessWorked;
+
+  /// No description provided for @turnProcessFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get turnProcessFailed;
+
+  /// No description provided for @turnProcessStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get turnProcessStopped;
+
+  /// No description provided for @turnProcessSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **' · '**
+  String get turnProcessSeparator;
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds}s'**
+  String runDurationSeconds(String seconds);
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m {seconds}s'**
+  String runDurationMinutes(String minutes, String seconds);
+
+  /// Localized chat process copy.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h {minutes}m {seconds}s'**
+  String runDurationHours(int hours, String minutes, String seconds);
 }
 
 class _AppLocalizationsDelegate

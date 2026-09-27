@@ -64,37 +64,16 @@ class SettingsAgentPresetsPage extends StatelessWidget {
                     ),
                   )
                 else ...<Widget>[
-                  for (final (AgentPresetTrust trust, String heading)
-                      in <(AgentPresetTrust, String)>[
-                        (AgentPresetTrust.system, l10n.presetGroupBuiltIn),
-                        (AgentPresetTrust.user, l10n.presetGroupCustom),
-                      ])
-                    if (entries.any(
-                      (AgentPresetEntry entry) => entry.trust == trust,
-                    )) ...<Widget>[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 8),
-                        child: Text(
-                          heading,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ),
-                      for (final AgentPresetEntry entry in entries.where(
-                        (AgentPresetEntry e) => e.trust == trust,
-                      )) ...<Widget>[
-                        _PresetCard(
-                          key: ValueKey<String>(entry.id),
-                          entry: entry,
-                          writable: writable,
-                          busy: state.isLoading,
-                          onAction: onAction,
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ],
+                  for (final AgentPresetEntry entry in entries) ...<Widget>[
+                    _PresetCard(
+                      key: ValueKey<String>(entry.id),
+                      entry: entry,
+                      writable: writable,
+                      busy: state.isLoading,
+                      onAction: onAction,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     l10n.presetsFooter,
@@ -969,10 +948,6 @@ class _PresetCard extends StatelessWidget {
                     if (broken) ...<Widget>[
                       const SizedBox(width: 8),
                       _PresetBadge(label: l10n.presetBrokenBadge, filled: true),
-                    ],
-                    if (entry.trust == AgentPresetTrust.user) ...<Widget>[
-                      const SizedBox(width: 8),
-                      _PresetBadge(label: l10n.presetGroupCustom),
                     ],
                     if (active) ...<Widget>[
                       const SizedBox(width: 8),

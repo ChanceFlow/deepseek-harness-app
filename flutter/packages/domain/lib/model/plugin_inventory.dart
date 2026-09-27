@@ -95,7 +95,6 @@ final class AgentPresetPluginRow {
 final class AgentPresetPluginGroup {
   const AgentPresetPluginGroup({
     required this.id,
-    required this.trust,
     required this.isDefault,
     required this.rows,
     this.name,
@@ -103,9 +102,6 @@ final class AgentPresetPluginGroup {
   });
 
   final String id;
-
-  /// `'system'` or `'user'`.
-  final String trust;
 
   /// Display name the preset published; null means fall back to [id].
   final String? name;
@@ -124,7 +120,6 @@ final class AgentPresetPluginGroup {
       identical(this, other) ||
       (other is AgentPresetPluginGroup &&
           other.id == id &&
-          other.trust == trust &&
           other.name == name &&
           other.isDefault == isDefault &&
           other.broken == broken &&
@@ -132,7 +127,7 @@ final class AgentPresetPluginGroup {
 
   @override
   int get hashCode =>
-      Object.hash(id, trust, name, isDefault, broken, Object.hashAll(rows));
+      Object.hash(id, name, isDefault, broken, Object.hashAll(rows));
 }
 
 /// Point-in-time `pluginInventory/list` snapshot.

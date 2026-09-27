@@ -384,73 +384,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String exploredFilesAndSearches(int files, int searches) {
-    String _temp0 = intl.Intl.pluralLogic(
-      files,
-      locale: localeName,
-      other: 'Explored $files files',
-      one: 'Explored 1 file',
-    );
-    String _temp1 = intl.Intl.pluralLogic(
-      searches,
-      locale: localeName,
-      other: '$searches searches',
-      one: '1 search',
-    );
-    return '$_temp0, $_temp1';
-  }
-
-  @override
-  String exploredFiles(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Explored $count files',
-      one: 'Explored 1 file',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String exploringFiles(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
       other: 'Exploring $count files',
       one: 'Exploring 1 file',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String searchedCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count searches',
-      one: '1 search',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String modifiedFiles(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Modified $count files',
-      one: 'Modified 1 file',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String ranCommands(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Ran $count commands',
-      one: 'Ran 1 command',
     );
     return '$_temp0';
   }
@@ -464,28 +403,6 @@ class AppLocalizationsEn extends AppLocalizations {
       one: 'Running 1 command',
     );
     return '$_temp0';
-  }
-
-  @override
-  String toolGroupOperations(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count operations',
-      one: '1 operation',
-    );
-    return '$_temp0';
-  }
-
-  @override
-  String toolWorkingSteps(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count steps',
-      one: '1 step',
-    );
-    return 'Working ($_temp0)';
   }
 
   @override
@@ -828,17 +745,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentPresetsIntro =>
-      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. Duplicate an existing one and make it yours, or let the agent draft one for you in Creator mode.';
-
-  @override
-  String get presetGroupBuiltIn => 'Built-in';
-
-  @override
-  String get presetGroupCustom => 'Custom';
+      'A preset is the plugin composition one session\'s agent runs — its tools, prompt, and capabilities. Choose the one new sessions start with.';
 
   @override
   String get presetsFooter =>
-      'Presets are authored on the host: copy, edit, and delete them from the desktop settings.';
+      'Presets are declared on the host; this app reads the roster and picks the default new sessions start with.';
 
   @override
   String get noDescription => 'No description.';
@@ -1243,19 +1154,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modeContinuable => 'continuable';
 
   @override
+  String get modeUnknown => 'unknown mode';
+
+  @override
   String get activityRunning => 'running';
 
   @override
   String get activityNotRunning => 'not running';
-
-  @override
-  String get diagnosticCorrupt => 'corrupted session record';
-
-  @override
-  String get diagnosticUnsupported => 'unsupported subagent record version';
-
-  @override
-  String get diagnosticUnavailable => 'session record temporarily unavailable';
 
   @override
   String get oneShotRecordTitle => 'One-shot subagent record';
@@ -1270,6 +1175,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get parentUnavailableBody =>
       'The parent session is offline; reopen it to continue sending messages.';
+
+  @override
+  String get unknownRecordBody =>
+      'Read the child session to determine whether it can be continued.';
 
   @override
   String backendVersion(String version) {
@@ -2838,4 +2747,183 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get batteryOptimizationRequestFailed =>
       'Could not open the battery optimization dialog on this device.';
+
+  @override
+  String get stepProcessThinking => 'Analyzing the request';
+
+  @override
+  String get stepProcessRead => 'Reading files';
+
+  @override
+  String get stepProcessReadImage => 'Reading images';
+
+  @override
+  String get stepProcessWrite => 'Writing files';
+
+  @override
+  String get stepProcessSearch => 'Searching code';
+
+  @override
+  String get stepProcessEdit => 'Editing files';
+
+  @override
+  String get stepProcessCommands => 'Running commands';
+
+  @override
+  String get stepProcessCode => 'Running code';
+
+  @override
+  String get stepProcessWebSearch => 'Searching the web';
+
+  @override
+  String get stepProcessWebFetch => 'Visiting web pages';
+
+  @override
+  String get stepProcessSubagents => 'Coordinating subagents';
+
+  @override
+  String get stepProcessPlan => 'Updating the plan';
+
+  @override
+  String get stepProcessQuestions => 'Waiting for your action';
+
+  @override
+  String get stepProcessTools => 'Calling tools';
+
+  @override
+  String get stepProcessPrepareRead => 'Preparing to read files';
+
+  @override
+  String get stepProcessPrepareReadImage => 'Preparing to read images';
+
+  @override
+  String get stepProcessPrepareWrite => 'Preparing to write files';
+
+  @override
+  String get stepProcessPrepareSearch => 'Preparing to search code';
+
+  @override
+  String get stepProcessPrepareEdit => 'Preparing to edit files';
+
+  @override
+  String get stepProcessPrepareCommands => 'Preparing to run commands';
+
+  @override
+  String get stepProcessPrepareCode => 'Preparing to run code';
+
+  @override
+  String get stepProcessPrepareWebSearch => 'Preparing to search the web';
+
+  @override
+  String get stepProcessPrepareWebFetch => 'Preparing to visit web pages';
+
+  @override
+  String get stepProcessPrepareSubagents => 'Preparing to coordinate subagents';
+
+  @override
+  String get stepProcessPreparePlan => 'Preparing to update the plan';
+
+  @override
+  String get stepProcessPrepareQuestions => 'Preparing questions';
+
+  @override
+  String get stepProcessPrepareTools => 'Preparing tool calls';
+
+  @override
+  String get stepProcessDoneThinking => 'Analysis completed';
+
+  @override
+  String get stepProcessDoneRead => 'Read files';
+
+  @override
+  String get stepProcessDoneReadImage => 'Read images';
+
+  @override
+  String get stepProcessDoneWrite => 'Wrote files';
+
+  @override
+  String get stepProcessDoneSearch => 'Searched code';
+
+  @override
+  String get stepProcessDoneEdit => 'Edited files';
+
+  @override
+  String get stepProcessDoneCommands => 'Ran commands';
+
+  @override
+  String get stepProcessDoneCode => 'Ran code';
+
+  @override
+  String get stepProcessDoneWebSearch => 'Searched the web';
+
+  @override
+  String get stepProcessDoneWebFetch => 'Visited web pages';
+
+  @override
+  String get stepProcessDoneSubagents => 'Coordinated subagents';
+
+  @override
+  String get stepProcessDonePlan => 'Updated the plan';
+
+  @override
+  String get stepProcessDoneQuestions => 'Asked questions';
+
+  @override
+  String get stepProcessDoneTools => 'Called tools';
+
+  @override
+  String stepProcessJoinTwo(String first, String second) {
+    return '$first and $second';
+  }
+
+  @override
+  String get stepProcessComma => ', ';
+
+  @override
+  String get stepProcessSharedPrefix => '';
+
+  @override
+  String stepProcessMore(String title) {
+    return '$title, etc.';
+  }
+
+  @override
+  String get turnProcessDeepDiving => 'Deep diving';
+
+  @override
+  String turnProcessDeepDivingFor(String duration) {
+    return 'Deep diving for $duration';
+  }
+
+  @override
+  String turnProcessTook(String duration) {
+    return 'Took $duration';
+  }
+
+  @override
+  String get turnProcessWorked => 'Worked';
+
+  @override
+  String get turnProcessFailed => 'Failed';
+
+  @override
+  String get turnProcessStopped => 'Stopped';
+
+  @override
+  String get turnProcessSeparator => ' · ';
+
+  @override
+  String runDurationSeconds(String seconds) {
+    return '${seconds}s';
+  }
+
+  @override
+  String runDurationMinutes(String minutes, String seconds) {
+    return '${minutes}m ${seconds}s';
+  }
+
+  @override
+  String runDurationHours(int hours, String minutes, String seconds) {
+    return '${hours}h ${minutes}m ${seconds}s';
+  }
 }

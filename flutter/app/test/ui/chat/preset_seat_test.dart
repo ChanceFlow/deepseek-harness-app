@@ -18,22 +18,14 @@ import 'package:app/ui/chat/preset_seat.dart';
 
 import '../../l10n_app.dart';
 
-/// Roster fixture: the web client's four shipped ids plus one broken
-/// user row (ui-agent-preset locales.ts + agent-presets.schema semantics).
+/// Roster fixture: the web client's shipped ids plus one broken row
+/// (ui-agent-preset locales.ts semantics).
 const AgentPresetRoster _roster = AgentPresetRoster(
   entries: [
-    AgentPresetEntry(
-      id: 'standard',
-      trust: AgentPresetTrust.system,
-      isDefault: true,
-    ),
-    AgentPresetEntry(id: 'code', trust: AgentPresetTrust.system),
-    AgentPresetEntry(id: 'minimal', trust: AgentPresetTrust.system),
-    AgentPresetEntry(
-      id: 'ghost',
-      trust: AgentPresetTrust.user,
-      broken: 'composition missing',
-    ),
+    AgentPresetEntry(id: 'standard', isDefault: true),
+    AgentPresetEntry(id: 'code'),
+    AgentPresetEntry(id: 'minimal'),
+    AgentPresetEntry(id: 'ghost', broken: 'composition missing'),
   ],
 );
 

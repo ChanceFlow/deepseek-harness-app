@@ -29,6 +29,7 @@ import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
@@ -116,7 +117,7 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'timeline-folding-expanded',
     state: timelineFoldingStateEn(),
     act: (tester) async {
-      await tester.tap(find.text('Explored 3 files, 2 searches'));
+      await tester.tap(find.byType(ActivityGroupRow).last);
       await settle(tester);
     },
   ),
@@ -130,10 +131,39 @@ final List<DesignShot> shots = <DesignShot>[
     state: timelineFoldingStateZh(),
     locale: const Locale('zh'),
     act: (tester) async {
-      await tester.tap(find.text('浏览了 3 个文件，2 次搜索'));
+      await tester.tap(find.byType(ActivityGroupRow).last);
       await settle(tester);
     },
   ),
+  // The Turn control over the phase card: a settled Turn reads as one line plus
+  // the answer it produced, and its work — the phase, the reasoning, the tool
+  // rows — is what the line reveals. The pair is the whole two-level fold: the
+  // reply must survive the collapse, and the phase card must not survive it.
+  DesignShot(name: 'turn-process-folded', state: turnProcessFoldedState()),
+  DesignShot(
+    name: 'turn-process-open',
+    state: turnProcessFoldedState(),
+    act: (tester) async {
+      // The second Turn is the one with work; the first folds to a bare line.
+      // The section's own control row is its first InkWell — the answer row it
+      // wraps carries taps of its own (copy, fork), so the row's centre is not
+      // the control.
+      final section = find.byType(TurnProcessRow).last;
+      await tester.tap(
+        find.descendant(of: section, matching: find.byType(InkWell)).first,
+      );
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'turn-process-folded-zh',
+    state: turnProcessFoldedState(zh: true),
+    locale: const Locale('zh'),
+  ),
+  // A Turn in flight: the control counts seconds and never folds, and the phase
+  // header carries the live label plus the running call's first readable
+  // argument — the one line the reference adds over a bare tool name.
+  DesignShot(name: 'turn-process-live', state: turnProcessLiveState()),
   DesignShot(name: 'transcript', state: busyState()),
   // The transcript's one-line marker rows in one column: the context
   // injection, the compaction marker, the slash command and a tool row.
@@ -157,7 +187,7 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'presented-files-call',
     state: presentedFilesState(),
     act: (tester) async {
-      await tester.tap(find.text('Modified 2 files'));
+      await tester.tap(find.byType(ActivityGroupRow));
       await settle(tester);
     },
   ),

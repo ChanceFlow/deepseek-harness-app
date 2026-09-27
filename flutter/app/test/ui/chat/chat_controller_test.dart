@@ -1740,13 +1740,7 @@ void main() {
   );
   test('loads the agent-preset roster into uiState', () async {
     const roster = AgentPresetRoster(
-      entries: [
-        AgentPresetEntry(
-          id: 'standard',
-          trust: AgentPresetTrust.system,
-          isDefault: true,
-        ),
-      ],
+      entries: [AgentPresetEntry(id: 'standard', isDefault: true)],
     );
     final repository = FakeChatRepository()..agentPresetRoster = roster;
     final controller = ChatController(repository);

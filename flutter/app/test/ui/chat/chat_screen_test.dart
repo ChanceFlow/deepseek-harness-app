@@ -26,14 +26,17 @@ import 'dart:convert';
 
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
+import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/approval_panel.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
+import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/reasoning_row.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
+import 'package:app/ui/chat/run_duration.dart';
 import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/tool_images.dart';
@@ -43,6 +46,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n_app.dart';
 import 'chat_local_state_fake.dart';
+
+/// The English ARB strings the process disclosure renders. Expectations read
+/// the same key the widget reads, so no test invents a translation.
+final AppLocalizations _l10n = lookupAppLocalizations(const Locale('en'));
+
+/// The reference's `continuation` (chat/step-process.ts): only the first
+/// character of a joined label is lowered.
+String _continued(String label) =>
+    label.isEmpty ? label : label[0].toLowerCase() + label.substring(1);
 
 class _FakeRpc implements DshRpcClient {
   @override
@@ -504,20 +516,21 @@ void main() {
         actions,
       );
 
-      // Consecutive injections are one phase of the run: an activity card
-      // headed by the role its first member plays, with every producer and
+      // Consecutive injections are one phase of the run: one activity card
+      // whose settled title comes from the group's ranked work — nothing
+      // ranked, so the reference's thinking label — with every producer and
       // body behind the card's own fold.
       expect(find.byType(ActivityGroupRow), findsOneWidget);
-      expect(find.text('Context injection'), findsOneWidget);
+      expect(find.text(_l10n.stepProcessDoneThinking), findsOneWidget);
       expect(find.text('goal'), findsNothing);
       expect(find.text('goal objective: Ship the MVP'), findsNothing);
 
-      await tester.tap(find.text('Context injection'));
+      await tester.tap(find.text(_l10n.stepProcessDoneThinking));
       await tester.pumpAndSettle();
 
       expect(find.text('goal'), findsOneWidget);
       expect(find.text('Yesterday debugging'), findsOneWidget);
-      expect(find.text('Session recall'), findsOneWidget);
+      expect(find.text(_l10n.recallLabel), findsOneWidget);
       expect(find.text('compacted 12 events'), findsOneWidget);
 
       await tester.tap(find.text('goal'));
@@ -582,7 +595,10 @@ void main() {
       actions,
     );
 
-    expect(find.text('Turn 1'), findsOneWidget);
+    // The turn boundary is now the Turn's process control, not a `Turn N`
+    // caption: this Turn has no `turn/end` yet, so the control reads its live
+    // label and keeps its body open without a tap.
+    expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
     // User text rides a plain bubble (no speaker label); assistant renders
     // flat markdown.
     expect(find.text('do the thing'), findsOneWidget);
@@ -723,17 +739,42 @@ void main() {
       actions,
     );
     await tester.pump();
+    // The two calls fold into one activity card: a settled title naming the
+    // ranked categories, with the rows themselves behind its own fold.
+    expect(
+      find.text(
+        _l10n.stepProcessJoinTwo(
+          _l10n.stepProcessDoneCommands,
+          _continued(_l10n.stepProcessDoneRead),
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.text(
+        _l10n.stepProcessJoinTwo(
+          _l10n.stepProcessDoneCommands,
+          _continued(_l10n.stepProcessDoneRead),
+        ),
+      ),
+    );
+    // The card's own sweep repeats while a call runs, so the tree never
+    // settles: expand with one frame.
+    await tester.pump();
+
     // Running and settled share the one 14px leading geometry — dot, then
     // check — and the timeline body wears no spinner anywhere.
     expect(find.byType(ActivityDot), findsOneWidget);
     expect(find.byIcon(Icons.check), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    // The sweep is the only running motion: exactly one row glares.
+    // The sweep is the only running motion: the card's own header glares while
+    // a call is in flight, and so does the running call's row.
     expect(
       tester
           .widgetList<SweepHighlight>(find.byType(SweepHighlight))
           .where((s) => s.controller != null),
-      hasLength(1),
+      hasLength(2),
     );
   });
 
@@ -3753,7 +3794,7 @@ void main() {
     });
 
     testWidgets(
-      'multiple completed tool calls collapse into ToolGroupRow by default and expand on tap',
+      'multiple completed tool calls fold into one activity card that expands on tap',
       (tester) async {
         await _pump(
           tester,
@@ -3789,15 +3830,20 @@ void main() {
           <ChatAction>[],
         );
 
-        // Collapsed summary row is visible by default.
-        expect(find.text('3 operations'), findsOneWidget);
-        expect(find.text('bash 1 · edit 1 · read 1'), findsOneWidget);
+        // A batch of calls reads as one line: the reference's settled title
+        // names the ranked categories without counts.
+        final title = <String>[
+          _l10n.stepProcessDoneCommands,
+          _continued(_l10n.stepProcessDoneRead),
+          _continued(_l10n.stepProcessDoneEdit),
+        ].join(_l10n.stepProcessComma);
+        expect(find.text(title), findsOneWidget);
 
         // Child tool call rows are hidden behind the collapse by default.
         expect(find.text('cargo check'), findsNothing);
 
         // Tap to expand.
-        await tester.tap(find.text('3 operations'));
+        await tester.tap(find.text(title));
         await tester.pumpAndSettle();
 
         // Individual tool rows are now disclosed.
@@ -3805,7 +3851,7 @@ void main() {
         expect(find.text('src/main.rs'), findsWidgets);
 
         // Tap again to collapse.
-        await tester.tap(find.text('3 operations'));
+        await tester.tap(find.text(title));
         await tester.pumpAndSettle();
 
         expect(find.text('cargo check'), findsNothing);
@@ -3851,46 +3897,62 @@ void main() {
     );
 
     testWidgets(
-      'in-flight tool calls update on the collapsed single-line summary in real time',
+      'in-flight tool calls update on the live single-line summary in real time',
       (tester) async {
-        await _pump(
-          tester,
-          _state(
-            sessions: const [
-              SessionSummary(id: 's1', title: 'Alpha', blank: false),
-            ],
-            selectedSessionId: 's1',
-            timeline: const [
-              TimelineToolCall(
-                id: 't-read',
-                name: 'read',
-                arguments: '{"file_path":"pubspec.yaml"}',
-                result: 'name: app',
-                status: ToolRunStatus.completed,
-              ),
-              TimelineToolCall(
-                id: 't-run',
-                name: 'bash',
-                arguments: '{"command":"flutter test"}',
-                status: ToolRunStatus.running,
-              ),
-            ],
-          ),
-          <ChatAction>[],
+        // A Turn with no `turn/end` is live: its group is not closed, so the
+        // card names what is running right now instead of a settled title.
+        ChatUiState liveState(String command) => _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: [
+            const TimelineTurnBoundary(1),
+            const TimelineToolCall(
+              id: 't-read',
+              name: 'read',
+              arguments: '{"file_path":"pubspec.yaml"}',
+              result: 'name: app',
+              status: ToolRunStatus.completed,
+            ),
+            TimelineToolCall(
+              id: 't-run',
+              name: 'bash',
+              arguments: '{"command":"$command"}',
+              status: ToolRunStatus.running,
+            ),
+          ],
         );
 
-        // Real-time updating single-line status:
-        expect(find.text('Working (2 steps)'), findsOneWidget);
+        await _pump(tester, liveState('flutter test'), <ChatAction>[]);
+
+        // Real-time updating single line: the live activity label, then the
+        // running call's own task detail after the locale separator.
         expect(
-          find.textContaining('Running bash: flutter test'),
+          find.text(
+            '${_l10n.stepProcessCommands}'
+            '${_l10n.turnProcessSeparator}flutter test',
+          ),
           findsOneWidget,
         );
-        expect(find.byType(ActivityDot), findsOneWidget);
+
+        // The next frame's running call re-reads the same line in place.
+        await _pump(tester, liveState('flutter build apk'), <ChatAction>[]);
+        await tester.pump();
+
+        expect(
+          find.text(
+            '${_l10n.stepProcessCommands}'
+            '${_l10n.turnProcessSeparator}flutter build apk',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('flutter test'), findsNothing);
       },
     );
 
     testWidgets(
-      'Cursor/Windsurf style: groups file exploration and searches into Explored 3 files, 2 searches',
+      'the phase card groups file exploration and searches into one activity line',
       (tester) async {
         await _pump(
           tester,
@@ -3940,11 +4002,16 @@ void main() {
           <ChatAction>[],
         );
 
-        // Collapsed semantic action chip matching screenshot
-        expect(find.text('Explored 3 files, 2 searches'), findsOneWidget);
+        // The collapsed semantic line: the reference's top categories in count
+        // order — three reads outrank two searches — with no counts in it.
+        final title = _l10n.stepProcessJoinTwo(
+          _l10n.stepProcessDoneRead,
+          _continued(_l10n.stepProcessDoneSearch),
+        );
+        expect(find.text(title), findsOneWidget);
 
         // Tap to expand
-        await tester.tap(find.text('Explored 3 files, 2 searches'));
+        await tester.tap(find.text(title));
         await tester.pumpAndSettle();
 
         // Individual steps disclosed
@@ -3955,7 +4022,7 @@ void main() {
     );
 
     testWidgets(
-      'Cursor/Windsurf style: realistic agent execution with interleaved thoughts and tools folds into one activity card',
+      'realistic agent execution with interleaved thoughts and tools folds into one activity card',
       (tester) async {
         await _pump(
           tester,
@@ -4016,16 +4083,23 @@ void main() {
           <ChatAction>[],
         );
 
-        // Turn boundary rendered
-        expect(find.text('Turn 1'), findsOneWidget);
+        // The boundary is the Turn's process control: this Turn has no
+        // `turn/end` yet, so it reads its live label and stays open.
+        expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
 
-        // One phase, one card: the tool summary heads it and the phase's
-        // thinking time (4s + 6s) rides the same collapsed line.
-        expect(find.text('Explored 1 file, 1 search'), findsOneWidget);
-        expect(find.text('Thought 10s'), findsOneWidget);
+        // One phase, one card. The reply follows the card, so the card is
+        // settled even though its Turn is still open (the reference closes a
+        // group as soon as any node follows it) and reads the ranked
+        // categories without counts.
+        final groupTitle = _l10n.stepProcessJoinTwo(
+          _l10n.stepProcessDoneRead,
+          _continued(_l10n.stepProcessDoneSearch),
+        );
         expect(find.byType(ActivityGroupRow), findsOneWidget);
+        expect(find.text(groupTitle), findsOneWidget);
 
-        // Assistant final answer rendered
+        // Assistant final answer rendered: it is the Turn's answer, so it never
+        // folds behind the process control.
         expect(
           find.text('Found the timeline items and checked AGENTS.md.'),
           findsOneWidget,
@@ -4038,12 +4112,13 @@ void main() {
           findsNothing,
         );
 
-        await tester.tap(find.text('Explored 1 file, 1 search'));
+        await tester.tap(find.text(groupTitle));
         await tester.pumpAndSettle();
 
-        // Opened: the thought row and the tool rows in phase order.
+        // Opened: the merged thought (4s + 6s) and the tool rows in phase
+        // order.
         expect(find.text('AGENTS.md'), findsOneWidget);
-        expect(find.text('Thought 10s'), findsNWidgets(2));
+        expect(find.text('Thought 10s'), findsOneWidget);
 
         // Disclose the thought row to view its reasoning text.
         await tester.tap(
@@ -4054,15 +4129,308 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(
-          find.textContaining('First inspect project files'),
+          find.descendant(
+            of: find.byType(ReasoningRow),
+            matching: find.textContaining('First inspect project files'),
+          ),
           findsOneWidget,
         );
         expect(
-          find.textContaining('Now search for timeline item references'),
+          find.descendant(
+            of: find.byType(ReasoningRow),
+            matching: find.textContaining(
+              'Now search for timeline item references',
+            ),
+          ),
           findsOneWidget,
         );
       },
     );
+
+    testWidgets('only the last phase of a live turn keeps its live line', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineTurnBoundary(1),
+            TimelineToolCall(
+              id: 't1',
+              name: 'read',
+              arguments: '{"file_path":"AGENTS.md"}',
+              result: '# AGENTS.md',
+              status: ToolRunStatus.completed,
+            ),
+            TimelineToolCall(
+              id: 't2',
+              name: 'read',
+              arguments: '{"file_path":"README.md"}',
+              result: '# README.md',
+              status: ToolRunStatus.completed,
+            ),
+            TimelineMessage(
+              ChatMessage(
+                id: 'a1',
+                sessionId: 's1',
+                role: MessageRole.assistant,
+                text: 'Read the guides.',
+                seq: 4,
+              ),
+            ),
+            TimelineToolCall(
+              id: 't3',
+              name: 'bash',
+              arguments: '{"command":"flutter test"}',
+              status: ToolRunStatus.running,
+            ),
+            TimelineToolCall(
+              id: 't4',
+              name: 'grep',
+              arguments: '{"pattern":"TimelineItem"}',
+              result: 'match',
+              status: ToolRunStatus.completed,
+            ),
+          ],
+        ),
+        <ChatAction>[],
+      );
+
+      // The read phase was followed by the reply, so it closed and reads its
+      // settled title; only the phase the Turn's log ends on is still live and
+      // names what is running.
+      expect(find.byType(ActivityGroupRow), findsNWidgets(2));
+      expect(find.text(_l10n.stepProcessDoneRead), findsOneWidget);
+      expect(
+        find.text(
+          '${_l10n.stepProcessCommands}'
+          '${_l10n.turnProcessSeparator}flutter test',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Read the guides.'), findsOneWidget);
+    });
+
+    testWidgets('a finished turn folds its process behind the turn control', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineTurnBoundary(
+              1,
+              startedAtEpochMs: 1000000,
+              endedAtEpochMs: 1005000,
+              endSeq: 9,
+            ),
+            TimelineMessage(
+              ChatMessage(
+                id: 'th-1',
+                sessionId: 's1',
+                role: MessageRole.assistant,
+                text: '',
+                reasoning: 'weigh the options',
+                seq: 2,
+              ),
+            ),
+            TimelineToolCall(
+              id: 't1',
+              name: 'read',
+              arguments: '{"file_path":"AGENTS.md"}',
+              result: '# AGENTS.md',
+              status: ToolRunStatus.completed,
+            ),
+            TimelineMessage(
+              ChatMessage(
+                id: 'a1',
+                sessionId: 's1',
+                role: MessageRole.assistant,
+                text: 'All done.',
+                seq: 4,
+              ),
+            ),
+          ],
+        ),
+        <ChatAction>[],
+      );
+
+      // The finished Turn's control reports how long it took and owns a
+      // chevron; the reader keeps the answer it produced but not the work
+      // behind it.
+      final turnLabel = _l10n.turnProcessTook(formatRunDuration(5000, _l10n));
+      expect(find.text(turnLabel), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TurnProcessRow),
+          matching: find.byIcon(Icons.keyboard_arrow_down),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('All done.'), findsOneWidget);
+      expect(find.byType(ActivityGroupRow), findsNothing);
+      expect(find.byType(ReasoningRow), findsNothing);
+      expect(find.text(_l10n.stepProcessDoneRead), findsNothing);
+      expect(find.text('AGENTS.md'), findsNothing);
+
+      await tester.tap(find.text(turnLabel));
+      await tester.pumpAndSettle();
+
+      // Opened: the phase card is back, still folded on its own.
+      expect(find.byType(ActivityGroupRow), findsOneWidget);
+      expect(find.text(_l10n.stepProcessDoneRead), findsOneWidget);
+      expect(find.text('AGENTS.md'), findsNothing);
+
+      await tester.tap(find.text(_l10n.stepProcessDoneRead));
+      await tester.pumpAndSettle();
+      expect(find.text('AGENTS.md'), findsOneWidget);
+    });
+
+    testWidgets(
+      'a running, stopped, failed or interrupted turn never folds its process',
+      (tester) async {
+        ChatUiState turnState({
+          int? endSeq,
+          String? endReason,
+          bool interleaved = false,
+          bool clock = true,
+        }) => _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: [
+            TimelineTurnBoundary(
+              1,
+              endSeq: endSeq,
+              endReason: endReason,
+              startedAtEpochMs: clock ? 1000000 : null,
+              endedAtEpochMs: clock ? 1005000 : null,
+            ),
+            const TimelineMessage(
+              ChatMessage(
+                id: 'u1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'go',
+              ),
+            ),
+            const TimelineToolCall(
+              id: 't1',
+              name: 'read',
+              arguments: '{"file_path":"AGENTS.md"}',
+              result: '# AGENTS.md',
+              status: ToolRunStatus.completed,
+            ),
+            if (interleaved)
+              const TimelineMessage(
+                ChatMessage(
+                  id: 'u2',
+                  sessionId: 's1',
+                  role: MessageRole.user,
+                  text: 'wait',
+                ),
+              ),
+          ],
+        );
+
+        // Still running: no `turn/end` yet, and no logged clock, so the control
+        // reads the plain live label.
+        await _pump(tester, turnState(clock: false), <ChatAction>[]);
+        expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
+        expect(find.text('AGENTS.md'), findsOneWidget);
+
+        // Stopped by the reader.
+        await _pump(
+          tester,
+          turnState(endSeq: 9, endReason: 'aborted'),
+          <ChatAction>[],
+        );
+        await tester.pump();
+        expect(find.text(_l10n.turnProcessStopped), findsOneWidget);
+        expect(find.text('AGENTS.md'), findsOneWidget);
+
+        // Failed.
+        await _pump(
+          tester,
+          turnState(endSeq: 9, endReason: 'error'),
+          <ChatAction>[],
+        );
+        await tester.pump();
+        expect(find.text(_l10n.turnProcessFailed), findsOneWidget);
+        expect(find.text('AGENTS.md'), findsOneWidget);
+
+        // A human spoke inside the Turn: the work stays visible even though
+        // the Turn closed cleanly.
+        await _pump(
+          tester,
+          turnState(endSeq: 9, interleaved: true),
+          <ChatAction>[],
+        );
+        await tester.pump();
+        expect(
+          find.text(_l10n.turnProcessTook(formatRunDuration(5000, _l10n))),
+          findsOneWidget,
+        );
+        expect(find.text('AGENTS.md'), findsOneWidget);
+      },
+    );
+
+    testWidgets('a turn whose rows are all unfoldable shows no chevron', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Session 1', blank: false),
+          ],
+          selectedSessionId: 's1',
+          timeline: const [
+            TimelineTurnBoundary(1, endSeq: 9),
+            TimelineMessage(
+              ChatMessage(
+                id: 'u1',
+                sessionId: 's1',
+                role: MessageRole.user,
+                text: 'go',
+              ),
+            ),
+            TimelineCommand(
+              commandId: 'cmd-1',
+              name: 'compact',
+              status: CommandRunStatus.success,
+              text: 'Compacted 3 history items.',
+            ),
+            TimelineCompaction(id: 'c1', shadowedCount: 3, shadowedTokens: 150),
+            TimelineError(id: 'e1', message: 'boom'),
+          ],
+        ),
+        <ChatAction>[],
+      );
+
+      // Nothing in this Turn is process work: the control has no chevron and
+      // nothing to reveal, and every row stays visible.
+      expect(find.text(_l10n.turnProcessWorked), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TurnProcessRow),
+          matching: find.byIcon(Icons.keyboard_arrow_down),
+        ),
+        findsNothing,
+      );
+      expect(find.text('/compact'), findsOneWidget);
+      expect(find.text('Context compacted'), findsOneWidget);
+      expect(find.text('boom'), findsOneWidget);
+    });
   });
 
   group('composer dock bands', () {

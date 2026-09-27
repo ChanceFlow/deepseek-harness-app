@@ -68,6 +68,9 @@ final class SessionWire {
       updatedAt = wireLong(json, 'updatedAt'),
       running = wireBool(json, 'running'),
       blank = json.containsKey('blank') ? wireBool(json, 'blank') : true,
+      agentAvailable = json.containsKey('agentAvailable')
+          ? wireBool(json, 'agentAvailable')
+          : null,
       parentSessionId = wireString(json, 'parentSessionId'),
       origin = wireString(json, 'origin'),
       cwd = wireString(json, 'cwd'),
@@ -84,6 +87,11 @@ final class SessionWire {
   final int updatedAt;
   final bool running;
   final bool blank;
+
+  /// Whether the Session currently owns a live Agent (0.1.7's
+  /// `SessionSummary.agentAvailable`); null when the row does not state it,
+  /// which a consumer must read as unknown rather than offline.
+  final bool? agentAvailable;
   final String? parentSessionId;
   final String? origin;
   final String? cwd;
@@ -92,6 +100,15 @@ final class SessionWire {
 
   int get asOfSeq =>
       projections == null ? 0 : wireLong(projections!, 'asOfSeq');
+
+  /// Which sequence space [asOfSeq] belongs to (`SessionProjectionHints.kind`,
+  /// added in 0.1.7): `sequenced` blocks come from the Host's live registry for
+  /// an attached Session and are comparable with its baselines and frames;
+  /// `cached` blocks were viewed from the persisted checkpoint by a
+  /// header-only listing and must not be compared with them at all. Null is a
+  /// host that publishes no kind, which behaved as `sequenced`.
+  String? get projectionKind =>
+      projections == null ? null : wireString(projections!, 'kind');
 
   JsonMap? get projectionValues =>
       projections == null ? null : asJsonObject(projections!['values']);
@@ -265,40 +282,39 @@ final class SessionModelsValueWire {
 }
 
 // ---------------------------------------------------------------------------
-// Subagents
+// Subagents — the `subagentCatalog` session projection
+// (reference/deepseek-harness/packages/subagent/subagent/src/catalog.ts
+// `viewSchema`; row shape in `projection-types.ts` `SubagentCatalogEntry`).
+//
+// 0.1.7 deleted the `subagents/list` RPC, so the roster is the parent
+// Session's projection value. That value is narrower than the deleted RPC's
+// answer: it carries no `kind`, `reason` or `hasChildren`, and `mode` may be
+// `'unknown'` for a child recorded by a newer catalog event version.
 // ---------------------------------------------------------------------------
 
-final class SubagentEntryWire {
-  SubagentEntryWire.fromJson(JsonMap json)
-    : kind = wireString(json, 'kind') ?? 'child',
-      id = _reqString(json, 'id'),
-      mode = wireString(json, 'mode'),
-      activity = wireString(json, 'activity'),
-      hasChildren = wireBool(json, 'hasChildren'),
-      label = wireString(json, 'label'),
-      reason = wireString(json, 'reason');
+final class SubagentCatalogEntryWire {
+  SubagentCatalogEntryWire.fromJson(JsonMap json)
+    : id = _reqString(json, 'id'),
+      createdAt = _reqLong(json, 'createdAt'),
+      mode = _reqString(json, 'mode'),
+      label = wireString(json, 'label');
 
-  final String kind;
   final String id;
-  final String? mode;
-  final String? activity;
-  final bool hasChildren;
+  final int createdAt;
+
+  /// `'one-shot'`, `'continuable'` or `'unknown'`.
+  final String mode;
   final String? label;
-  final String? reason;
 }
 
-final class SubagentListValueWire {
-  SubagentListValueWire.fromJson(JsonMap json)
-    : entries = (asJsonArray(json['entries']) ?? const <Object?>[])
-          .map(asJsonObject)
-          .whereType<JsonMap>()
-          .map(SubagentEntryWire.fromJson)
-          .toList(),
-      parentAvailable = wireBool(json, 'parentAvailable');
-
-  final List<SubagentEntryWire> entries;
-  final bool parentAvailable;
-}
+/// Decodes one `subagentCatalog` projection value: an array of direct-child
+/// rows. An absent value is an empty catalog; a malformed row throws.
+List<SubagentCatalogEntryWire> decodeSubagentCatalogProjection(Object? value) =>
+    (asJsonArray(value) ?? const <Object?>[])
+        .map(asJsonObject)
+        .whereType<JsonMap>()
+        .map(SubagentCatalogEntryWire.fromJson)
+        .toList();
 
 // ---------------------------------------------------------------------------
 // Goals
@@ -695,24 +711,23 @@ List<SkillEntryWire> decodeSkillListValue(JsonMap value) =>
         .toList();
 
 // ---------------------------------------------------------------------------
-// Agent presets (agentPreset.list / agentPreset.select —
-// reference/deepseek-harness/packages/preset/agent-presets/src/types.ts)
+// Agent presets (agentPresets/list / agentPresets/select —
+// reference/deepseek-harness/packages/preset/agent-preset-registry/src/types.ts).
+// 0.1.7 removed the per-row `trust` and the roster-level `authorable`: preset
+// authoring moved off the Remote surface (`copy`, `deletePreset`, and the
+// directory-opening settings methods are all gone), so the roster is now a
+// path-free, trust-free row list.
 // ---------------------------------------------------------------------------
 
 final class AgentPresetEntryWire {
   AgentPresetEntryWire.fromJson(JsonMap json)
     : id = _reqString(json, 'id'),
-      trust = _reqString(json, 'trust'),
       isDefault = _reqBool(json, 'isDefault'),
       name = wireString(json, 'name'),
       description = wireString(json, 'description'),
       broken = wireString(json, 'broken');
 
   final String id;
-
-  /// `'system'` or `'user'`; the repository maps it to the domain enum
-  /// and fails loud on any other value.
-  final String trust;
   final bool isDefault;
   final String? name;
   final String? description;
@@ -725,13 +740,9 @@ final class AgentPresetListValueWire {
           .map(asJsonObject)
           .whereType<JsonMap>()
           .map(AgentPresetEntryWire.fromJson)
-          .toList(),
-      authorable = _reqBool(json, 'authorable'),
-      hasDocument = wireBool(json, 'hasDocument');
+          .toList();
 
   final List<AgentPresetEntryWire> presets;
-  final bool authorable;
-  final bool hasDocument;
 }
 
 // ---------------------------------------------------------------------------
@@ -894,10 +905,13 @@ AgentPresetPluginRow _presetRowFromJson(JsonMap json) => AgentPresetPluginRow(
   fiberPhase: _pluginFiberPhase(json['fiberPhase']),
 );
 
+/// One `pluginInventory/list` preset composition
+/// (`reference/deepseek-harness/packages/host/plugin-inventory/src/types.ts`
+/// `AgentPresetPluginGroup`). 0.1.7 dropped the group-level `trust` and gained
+/// an optional per-row `meta`; neither changes the fields the client shows.
 AgentPresetPluginGroup _presetGroupFromJson(JsonMap json) =>
     AgentPresetPluginGroup(
       id: _reqString(json, 'id'),
-      trust: _reqString(json, 'trust'),
       name: wireString(json, 'name'),
       isDefault: _reqBool(json, 'isDefault'),
       broken: wireString(json, 'broken'),

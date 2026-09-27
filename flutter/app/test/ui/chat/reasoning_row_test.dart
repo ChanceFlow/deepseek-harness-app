@@ -32,6 +32,10 @@ Future<void> _pump(
   );
 }
 
+/// A step that reasoned and then replied. The fold splits it: the reasoning
+/// becomes the phase's own thought row, and the reply is emitted without it
+/// (the reference's `groupPart: 'response'`), so the step publishes exactly one
+/// Think disclosure.
 ChatMessage _message({String? reasoning, bool streaming = false}) {
   return ChatMessage(
     id: 'm1',

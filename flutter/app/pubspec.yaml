@@ -31,6 +31,7 @@ dependencies:
   flutter_local_notifications: ^19.0.0
   url_launcher: ^6.3.2
   flutter_displaymode: ^0.7.0
+  characters: ^1.4.0 # direct: the process detail cap counts grapheme clusters, not code units
 
 dev_dependencies:
   flutter_test:

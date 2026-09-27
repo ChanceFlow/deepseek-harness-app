@@ -39,11 +39,9 @@ const _workerId = 'child-12345678abcd';
 
 const _catalog = SubagentCatalog(
   parentSessionId: 'p1',
-  parentAvailable: true,
   entries: [
     SubagentEntry(
       id: _workerId,
-      kind: 'child',
       mode: SubagentMode.continuable,
       activity: 'running',
       hasChildren: true,
@@ -51,11 +49,9 @@ const _catalog = SubagentCatalog(
     ),
     SubagentEntry(
       id: 'one-shot-1',
-      kind: 'child',
       mode: SubagentMode.oneShot,
       activity: 'inactive',
     ),
-    SubagentEntry(id: 'broken-1', kind: 'diagnostic', reason: 'corrupt'),
   ],
 );
 
@@ -65,20 +61,15 @@ const _sessions = <SessionSummary>[
   SessionSummary(id: _workerId, title: 'Porting tests', blank: false),
 ];
 
-/// Same tree as [_catalog] with the parent marked offline.
-const _offlineCatalog = SubagentCatalog(
-  parentSessionId: 'p1',
-  parentAvailable: false,
-  entries: [
-    SubagentEntry(
-      id: _workerId,
-      kind: 'child',
-      mode: SubagentMode.continuable,
-      activity: 'running',
-      hasChildren: true,
-      label: 'Worker',
-    ),
-  ],
+/// [_catalog]'s parent reporting no live Agent: that bit, not the catalog, is
+/// what makes the composer read-only. The controller resolves it against the
+/// full session roster and hands it to the screen.
+const _offlineParent = SubagentUiState(
+  sessions: _sessions,
+  selectedParentId: 'p1',
+  catalog: _catalog,
+  selectedChildId: _workerId,
+  childParentAgentAvailable: false,
 );
 
 Future<void> _pump(
@@ -123,16 +114,13 @@ void main() {
     expect(find.text('Porting tests · continuable · running'), findsOneWidget);
     expect(find.text('one-shot-1'), findsOneWidget);
     expect(find.text('one-shot · not running'), findsOneWidget);
-    // StateDot: running = ongoing, inactive = done, diagnostic = error.
+    // StateDot: running = ongoing, inactive = done.
     expect(_dot(StateDotState.ongoing), findsOneWidget);
     expect(_dot(StateDotState.done), findsOneWidget);
-    expect(_dot(StateDotState.error), findsOneWidget);
   });
 
   group('design language', () {
-    testWidgets('catalog, diagnostic, and selector rows ride ListTile', (
-      tester,
-    ) async {
+    testWidgets('catalog and selector rows ride ListTile', (tester) async {
       await _pump(
         tester,
         const SubagentUiState(
@@ -144,11 +132,10 @@ void main() {
       );
 
       // Every row is a framework ListTile — no hand-built InkWell rows.
-      for (final label in ['Worker', 'one-shot-1', 'broken-1', 'Parent one']) {
+      for (final label in ['Worker', 'one-shot-1', 'Parent one']) {
         expect(
           find.ancestor(of: find.text(label), matching: find.byType(ListTile)),
           findsOneWidget,
-          reason: '"$label" should render inside a ListTile',
         );
       }
     });
@@ -371,27 +358,6 @@ void main() {
     });
   });
 
-  testWidgets('diagnostic entries render disabled and never open', (
-    tester,
-  ) async {
-    final actions = <SubagentAction>[];
-    await _pump(
-      tester,
-      const SubagentUiState(
-        sessions: _sessions,
-        selectedParentId: 'p1',
-        catalog: _catalog,
-      ),
-      actions,
-    );
-
-    expect(find.text('broken-1'), findsOneWidget);
-    expect(find.text('corrupted session record'), findsOneWidget);
-    await tester.tap(find.text('broken-1'));
-    await tester.pump();
-    expect(actions, isEmpty);
-  });
-
   testWidgets('tapping a child row opens it; the app bar follows', (
     tester,
   ) async {
@@ -484,11 +450,9 @@ void main() {
         branchCatalogs: {
           _workerId: SubagentCatalog(
             parentSessionId: _workerId,
-            parentAvailable: true,
             entries: [
               SubagentEntry(
                 id: 'grand-1',
-                kind: 'child',
                 mode: SubagentMode.continuable,
                 activity: 'inactive',
               ),
@@ -672,12 +636,56 @@ void main() {
   testWidgets('parent-offline child shows the parent-unavailable notice', (
     tester,
   ) async {
+    await _pump(tester, _offlineParent, []);
+
+    expect(find.text('This subagent is read-only for now'), findsOneWidget);
+    expect(
+      find.text(
+        'The parent session is offline; reopen it to continue sending '
+        'messages.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('a running parent-offline child keeps its composer', (
+    tester,
+  ) async {
+    // Web `selectReadOnlySubagent`: the takeover returns only once the child
+    // stops, so the same primary Stop stays reachable while it runs.
     await _pump(
       tester,
       const SubagentUiState(
         sessions: _sessions,
         selectedParentId: 'p1',
-        catalog: _offlineCatalog,
+        catalog: _catalog,
+        selectedChildId: _workerId,
+        childParentAgentAvailable: false,
+        isChildRunning: true,
+      ),
+      [],
+    );
+
+    expect(find.text('This subagent is read-only for now'), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('an unknown-mode child explains that it must be read first', (
+    tester,
+  ) async {
+    // 0.1.7 records `mode: 'unknown'` for a child whose catalog event used a
+    // mode this build does not know; whether it can be continued is only
+    // knowable after reading it.
+    await _pump(
+      tester,
+      const SubagentUiState(
+        sessions: _sessions,
+        selectedParentId: 'p1',
+        catalog: SubagentCatalog(
+          parentSessionId: 'p1',
+          entries: [SubagentEntry(id: _workerId, mode: SubagentMode.unknown)],
+        ),
         selectedChildId: _workerId,
       ),
       [],
@@ -686,8 +694,8 @@ void main() {
     expect(find.text('This subagent is read-only for now'), findsOneWidget);
     expect(
       find.text(
-        'The parent session is offline; reopen it to continue sending '
-        'messages.',
+        'Read the child session to determine whether it can be '
+        'continued.',
       ),
       findsOneWidget,
     );
@@ -800,11 +808,9 @@ void main() {
     (tester) async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
             hasChildren: true,
@@ -814,11 +820,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
             label: 'Grandchild Worker',
@@ -867,11 +871,9 @@ void main() {
     (tester) async {
       const rootCatalog = SubagentCatalog(
         parentSessionId: 'p1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'child-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
             hasChildren: true,
@@ -881,11 +883,9 @@ void main() {
       );
       const branchCatalog = SubagentCatalog(
         parentSessionId: 'child-1',
-        parentAvailable: true,
         entries: [
           SubagentEntry(
             id: 'grand-1',
-            kind: 'child',
             mode: SubagentMode.continuable,
             activity: 'running',
             label: 'Grandchild Worker',

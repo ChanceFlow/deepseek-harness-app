@@ -120,12 +120,27 @@ final class TimelineTurnBoundary extends TimelineItem {
     this.usage,
     this.startedAtEpochMs,
     this.endedAtEpochMs,
+    this.endSeq,
+    this.endReason,
   });
 
   final int turn;
   final TokenUsage? usage;
   final int? startedAtEpochMs;
   final int? endedAtEpochMs;
+
+  /// The matching `turn/end` event's seq, so a surface can name the turn's own
+  /// log boundary. Null while the turn is still open (or when the window cut
+  /// removed the `turn/end`), which is what makes a completed-turn fork anchor
+  /// knowable client-side — the 0.1.7 `session/fork` `atSeq` is an exact
+  /// inclusive event seq, not a turn lookup.
+  final int? endSeq;
+
+  /// The `turn/end` reason kind (`completed`, `aborted`, `error`,
+  /// `max-tokens`, `interrupted`, `blocked`); null while the turn is open.
+  /// A stopped or failed turn never folds its process behind the turn
+  /// disclosure, which is what a surface reads this for.
+  final String? endReason;
 
   @override
   bool operator ==(Object other) =>
@@ -134,11 +149,20 @@ final class TimelineTurnBoundary extends TimelineItem {
           other.turn == turn &&
           other.usage == usage &&
           other.startedAtEpochMs == startedAtEpochMs &&
-          other.endedAtEpochMs == endedAtEpochMs);
+          other.endedAtEpochMs == endedAtEpochMs &&
+          other.endSeq == endSeq &&
+          other.endReason == endReason);
 
   @override
-  int get hashCode =>
-      Object.hash('turn', turn, usage, startedAtEpochMs, endedAtEpochMs);
+  int get hashCode => Object.hash(
+    'turn',
+    turn,
+    usage,
+    startedAtEpochMs,
+    endedAtEpochMs,
+    endSeq,
+    endReason,
+  );
 }
 
 /// Context compaction from a logged `compaction/summary` event.

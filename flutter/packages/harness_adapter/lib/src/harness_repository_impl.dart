@@ -139,6 +139,17 @@ class HarnessRepositoryImpl implements ChatRepository {
   String? _openSessionId;
   final Set<String> _followedSessionIds = <String>{};
 
+  /// Mux stream id prefix for one session's job roster. The `job/list` route is
+  /// a logical stream, so it lives here as a literal rather than in
+  /// `DshRpcEndpoints`, whose members are unary endpoint constants.
+  static const String _jobStreamPrefix = 'job-list-';
+
+  /// Sessions whose `job/list` stream this client currently holds open. The
+  /// roster is a per-session stream since 0.1.7 replaced the control baseline's
+  /// `jobs` block (`packages/api/job-controller/src/index.ts`,
+  /// `@Remote({ mode: 'stream' }) list`).
+  final Set<String> _jobStreamSessionIds = <String>{};
+
   /// Durable address of every subagent child this client has listed or
   /// opened: `{direct parent, mode}`.
   ///
@@ -210,6 +221,79 @@ class HarnessRepositoryImpl implements ChatRepository {
           },
         },
       }),
+    );
+    _followJobs(sessionId);
+  }
+
+  /// Opens one session's `job/list` roster stream. The host answers whole-set
+  /// `{type: 'rows', jobs: [...]}` frames, so a reconnect's first frame is
+  /// already the truth and no watermark is needed here.
+  void _followJobs(String sessionId) {
+    if (_jobStreamSessionIds.contains(sessionId)) return;
+    _jobStreamSessionIds.add(sessionId);
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'open',
+        'streamId': '$_jobStreamPrefix$sessionId',
+        'endpoint': 'job/list',
+        'payload': <String, Object?>{
+          'args': <String, Object?>{
+            'request': <String, Object?>{'sessionId': sessionId},
+          },
+        },
+      }),
+    );
+  }
+
+  /// Closes one session's job roster stream and clears the mirror it fed.
+  void _unfollowJobs(String sessionId) {
+    if (!_jobStreamSessionIds.remove(sessionId)) return;
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'cancel',
+        'streamId': '$_jobStreamPrefix$sessionId',
+      }),
+    );
+  }
+
+  /// One `job/list` frame for [sessionId]
+  /// (`packages/api/job-controller/src/types.ts` `JobListFrame`). The roster is
+  /// republished as the `session/jobs` frame the timeline fold already owns, so
+  /// `JobView` decoding stays in one place. A non-`rows` frame is a host
+  /// failure on this stream and is reported rather than folded.
+  void _handleJobListFrame(String sessionId, ServerRequest frame) {
+    final type = wireString(frame.payload, 'type');
+    if (type != 'rows') {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'job/list sent an unrecognized "$type" frame — no fold',
+          level: AdapterDiagnosticLevel.debug,
+          context: 'job.list',
+          metadata: <String, Object?>{'sessionId': sessionId, 'type': type},
+        ),
+      );
+      return;
+    }
+    final jobs = asJsonArray(frame.payload['jobs']);
+    if (jobs == null) {
+      throw const FormatException(
+        'job/list "rows" frame missing required field "jobs"',
+      );
+    }
+    final state = _sessionStates[sessionId];
+    if (state == null) return;
+    unawaited(
+      state.handleFrame(
+        ServerRequest(
+          rpcId: _jobStreamPrefix,
+          method: 'session/jobs',
+          payload: <String, Object?>{
+            'type': 'jobs',
+            'sessionId': sessionId,
+            'jobs': jobs,
+          },
+        ),
+      ),
     );
   }
 
@@ -381,10 +465,6 @@ class HarnessRepositoryImpl implements ChatRepository {
   final Map<String, Map<String, int>> _projectionSeqs =
       <String, Map<String, int>>{};
 
-  /// The generation's `session/control` baseline, retained per session so a
-  /// session instantiated after it lands still gets its queue and jobs
-  /// (reference `manager.ts:288-297` seeds a lazily created session from the
-  /// manager-level maps the same way).
   /// Every projection key this client folds. A complete baseline block that
   /// omits one clears it, so the list has to name them all.
   static const Set<String> _projectionKeys = <String>{
@@ -399,10 +479,15 @@ class HarnessRepositoryImpl implements ChatRepository {
     'modelSelection',
     'contextPressure',
     'contextBreakdown',
+    // The authoritative pending-input snapshot. 0.1.7 removed the control
+    // baseline's `queues` block; the dock is folded from this projection now.
+    'inbox',
   };
 
-  final Map<String, List<Object?>> _baselineQueues = <String, List<Object?>>{};
-  final Map<String, List<Object?>> _baselineJobs = <String, List<Object?>>{};
+  /// Last `inbox` projection value per session, retained so a session this
+  /// client has not instantiated yet is seeded when it opens instead of showing
+  /// an empty dock until the inbox next changes.
+  final Map<String, JsonMap> _inboxBySession = <String, JsonMap>{};
 
   final Map<String, int> _contextPressureSeqs = <String, int>{};
   final Map<String, int> _contextBreakdownSeqs = <String, int>{};
@@ -424,6 +509,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       );
     }
     _followedSessionIds.clear();
+    for (final id in _jobStreamSessionIds.toList()) {
+      _unfollowJobs(id);
+    }
     for (final state in _sessionStates.values) {
       state.discard();
     }
@@ -483,8 +571,6 @@ class HarnessRepositoryImpl implements ChatRepository {
     final decoded = AgentPresetListValueWire.fromJson(value);
     return AgentPresetRoster(
       entries: decoded.presets.map(_toDomainAgentPresetEntry).toList(),
-      authorable: decoded.authorable,
-      hasDocument: decoded.hasDocument,
     );
   }
 
@@ -1392,36 +1478,66 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   @override
   Future<SubagentCatalog> loadSubagents(String parentSessionId) async {
-    final value = await _call(
-      DshRpcEndpoints.subagentsList,
-      DshRpcEndpoints.subagentsList,
-      {'parentSessionId': parentSessionId},
+    // 0.1.7 deleted `subagents/list`. The roster is the parent Session's
+    // `subagentCatalog` projection
+    // (`packages/subagent/subagent/src/catalog.ts`), read through the
+    // non-activating `session/projections` method
+    // (`packages/api/session-controller/src/index.ts` `@Remote('projections')`),
+    // which answers every registered projection for one Session.
+    //
+    // Its value is nullable: `null` means the Session does not exist. That is
+    // a failed read to report, never an empty roster — an empty roster and a
+    // session nobody can see must not look the same to the caller.
+    final result = await _call(
+      DshRpcEndpoints.sessionProjections,
+      DshRpcEndpoints.sessionProjections,
+      {'sessionId': parentSessionId},
       _shortCallTimeout,
-    ).valueOrThrow();
-    final wire = SubagentListValueWire.fromJson(value);
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final baseline = asJsonObject(result.value);
+    if (baseline == null) {
+      throw DshBusinessException(
+        code: 'subagent/parent-unavailable',
+        message:
+            'session "$parentSessionId" has no projection baseline; its '
+            'subagent catalog cannot be read',
+      );
+    }
+    final values = asJsonObject(baseline['values']);
+    final rows = decodeSubagentCatalogProjection(values?['subagentCatalog']);
+
     final catalog = SubagentCatalog(
       parentSessionId: parentSessionId,
-      entries: wire.entries
+      entries: rows
           .map(
-            (entry) => SubagentEntry(
-              id: entry.id,
-              kind: entry.kind,
-              mode: _subagentModeFromWire(entry),
-              activity: entry.activity,
-              hasChildren: entry.hasChildren,
-              label: entry.label,
-              reason: entry.reason,
+            (row) => SubagentEntry(
+              id: row.id,
+              mode: _subagentModeFromWire(row),
+              // The deleted RPC re-sampled each child's live Agent driver for
+              // this bit; the projection does not carry it, so it comes from
+              // the session roster's own running fact (web
+              // `SubagentHeaderLineage.tsx` reads the same source).
+              activity: _subagentActivity(row.id),
+              hasChildren: row.mode == 'continuable',
+              label: row.label,
             ),
           )
           .toList(),
-      parentAvailable: wire.parentAvailable,
     );
     // A listing is where a child's address becomes knowable: the row carries
     // the mode its `session/page` / `session/follow` address must repeat, so
     // record it for the opens that follow.
     for (final entry in catalog.entries) {
       final mode = entry.mode;
-      if (entry.kind != 'child' || mode == null) continue;
+      if (mode == null) continue;
       _subagentAddresses[entry.id] = (
         parentSessionId: parentSessionId,
         mode: mode,
@@ -1430,24 +1546,33 @@ class HarnessRepositoryImpl implements ChatRepository {
     return catalog;
   }
 
-  /// Maps one catalog row's `mode` onto the domain enum. Child rows carry
-  /// it per `subagentListEntrySchema` (only `'one-shot'` /
-  /// `'continuable'`); a child row with a missing or unknown mode fails
-  /// loud naming the field. Diagnostic rows carry none and map to null.
-  SubagentMode? _subagentModeFromWire(SubagentEntryWire entry) {
-    if (entry.kind != 'child') return null;
-    return switch (entry.mode) {
-      'one-shot' => SubagentMode.oneShot,
-      'continuable' => SubagentMode.continuable,
-      null => throw FormatException(
-        'required field "mode" missing or mistyped in ${entry.id}',
-      ),
-      final other => throw FormatException(
-        'field "mode" has unknown value "$other" for subagent child '
-        '${entry.id}',
-      ),
-    };
+  /// The live running bit the session roster currently holds for one child;
+  /// `'inactive'` when the roster does not know that Session at all.
+  String _subagentActivity(String childSessionId) {
+    for (final session in _sessions.value) {
+      if (session.id == childSessionId) {
+        return session.running ? 'running' : 'inactive';
+      }
+    }
+    return 'inactive';
   }
+
+  /// Maps one `subagentCatalog` row's `mode` onto the domain enum
+  /// (`packages/subagent/subagent/src/projection-types.ts`
+  /// `SubagentCatalogEntry`). Every arm is a real value: 0.1.7 records
+  /// `'unknown'` for a child whose catalog event used a mode this build does
+  /// not recognize, and the host resolves such an address at child-history
+  /// read time instead of refusing it.
+  SubagentMode _subagentModeFromWire(SubagentCatalogEntryWire row) =>
+      switch (row.mode) {
+        'one-shot' => SubagentMode.oneShot,
+        'continuable' => SubagentMode.continuable,
+        'unknown' => SubagentMode.unknown,
+        final other => throw FormatException(
+          'field "mode" has unknown value "$other" for subagent child '
+          '${row.id}',
+        ),
+      };
 
   /// The child-history read (`session/page` carrying a `subagent` address)
   /// takes the addressed row's own mode: the host validates the address
@@ -1458,8 +1583,17 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// The prompt and interrupt verbs are pinned to `'continuable'` by the wire
   /// schema (`subagentPromptRequestSchema`, `subagentInterruptRequestSchema`);
   /// the UI surfaces those controls only for continuable rows.
-  static String _subagentModeToWire(SubagentMode mode) =>
-      mode == SubagentMode.oneShot ? 'one-shot' : 'continuable';
+  static String _subagentModeToWire(SubagentMode mode) => switch (mode) {
+    SubagentMode.oneShot => 'one-shot',
+    SubagentMode.continuable => 'continuable',
+    // A row the parent's catalog recorded with a mode this build does not
+    // know. 0.1.7 accepts the literal on a `session/page` /
+    // `session/follow` address and resolves it against the child's durable
+    // descriptor there (`history.ts` `validateAddress` skips the comparison
+    // for `'unknown'`); the prompt and interrupt verbs are pinned to
+    // `'continuable'` and are never offered for such a row.
+    SubagentMode.unknown => 'unknown',
+  };
 
   @override
   Future<void> interruptSubagent(
@@ -1827,6 +1961,7 @@ class HarnessRepositoryImpl implements ChatRepository {
           final toFollow = Set<String>.of(_followedSessionIds);
           if (_openSessionId != null) toFollow.add(_openSessionId!);
           _followedSessionIds.clear();
+          _jobStreamSessionIds.clear();
           for (final id in toFollow) {
             _followSession(id);
           }
@@ -1848,7 +1983,6 @@ class HarnessRepositoryImpl implements ChatRepository {
           if (frame.rpcId == 'session-control' ||
               (type == 'baseline' &&
                   (frame.payload.containsKey('projections') ||
-                      frame.payload.containsKey('queues') ||
                       asJsonObject(frame.payload['value'])
                               ?.containsKey('projections') ==
                           true))) {
@@ -1872,6 +2006,13 @@ class HarnessRepositoryImpl implements ChatRepository {
           }
           if (type == 'session/projection' || type == 'projection') {
             _handleProjection(frame);
+            return;
+          }
+          if (frame.rpcId.startsWith(_jobStreamPrefix)) {
+            _handleJobListFrame(
+              frame.rpcId.substring(_jobStreamPrefix.length),
+              frame,
+            );
             return;
           }
           if (frame.rpcId.startsWith('session-follow-')) {
@@ -2111,6 +2252,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     pendingInteraction: pending ?? session.pendingInteraction,
     completed: session.completed,
     agentError: session.agentError,
+    agentAvailable: session.agentAvailable,
   );
 
   void _handleProjection(ServerRequest frame) {
@@ -2235,6 +2377,10 @@ class HarnessRepositoryImpl implements ChatRepository {
             'tokenUsage',
           ),
         );
+      case 'inbox':
+        // A live whole-value pending-input update: the dock is rebuilt from the
+        // projection exactly as the control baseline does it.
+        _applyInboxProjection(sessionId, frame.payload['value']);
       default:
         _onDiagnostic?.call(
           AdapterDiagnostic(
@@ -2253,13 +2399,16 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// Applies one `session/control` baseline: the generation's whole-value
   /// snapshot of every session's projections, queues and jobs.
   ///
-  /// The baseline **replaces** rather than patches (reference
-  /// `manager.ts:672-701` clears and reseeds its maps, then hands every
-  /// instantiated session `queues.get(id) ?? []`): a session the baseline
-  /// omits has an empty queue and no jobs, and a session's projection block
-  /// seeds its keys completely. Both list halves are retained per session, so
-  /// a session this client has not instantiated yet is seeded when it opens
-  /// instead of showing an empty dock until the queue next changes.
+  /// The baseline **replaces** rather than patches: a session's projection
+  /// block seeds its keys completely, and a session the baseline omits has an
+  /// empty inbox. The inbox half is retained per session (`_inboxBySession`),
+  /// so a session this client has not instantiated yet is seeded when it opens
+  /// instead of showing an empty dock until the inbox next changes.
+  ///
+  /// 0.1.7 removed the baseline's `queues` and `jobs` blocks along with the
+  /// `queue`/`jobs` frame types. The inbox now arrives as an ordinary
+  /// projection value inside `projections`, and the job roster moved to the
+  /// per-session `job/list` stream (see [_followJobsFor]).
   void _handleControlBaseline(ServerRequest frame) {
     final rawBaseline = asJsonObject(frame.payload['value']) ?? frame.payload;
     final projections = asJsonObject(rawBaseline['projections']);
@@ -2279,52 +2428,30 @@ class HarnessRepositoryImpl implements ChatRepository {
         }
       }
     }
-    _baselineQueues
-      ..clear()
-      ..addAll(_controlLists(rawBaseline['queues']));
-    _baselineJobs
-      ..clear()
-      ..addAll(_controlLists(rawBaseline['jobs']));
     for (final sessionId in _sessionStates.keys) {
-      _pushControlBaseline(sessionId);
+      _pushQueueSnapshot(sessionId);
     }
   }
 
-  /// One baseline list block (`queues` / `jobs`) as `sessionId -> items`.
-  Map<String, List<Object?>> _controlLists(Object? raw) {
-    final blocks = asJsonObject(raw);
-    if (blocks == null) return <String, List<Object?>>{};
-    return <String, List<Object?>>{
-      for (final entry in blocks.entries)
-        if (asJsonArray(entry.value) case final List<Object?> items)
-          entry.key: items,
-    };
-  }
-
-  /// Sends one session the retained baseline queue and job frames; a session
-  /// the baseline omitted gets the empty lists that clear its mirrors.
-  void _pushControlBaseline(String sessionId) {
+  /// Sends one session its retained pending-input snapshot as the
+  /// `session/queue` frame the timeline folds; a session whose inbox the
+  /// control baseline never carried gets the empty list that clears its mirror.
+  void _pushQueueSnapshot(String sessionId) {
     final state = _sessionStates[sessionId];
     if (state == null) return;
-    for (final (method, type, key, lists)
-        in <(String, String, String, Map<String, List<Object?>>)>[
-          ('session/queue', 'queue', 'items', _baselineQueues),
-          ('session/jobs', 'jobs', 'jobs', _baselineJobs),
-        ]) {
-      unawaited(
-        state.handleFrame(
-          ServerRequest(
-            rpcId: 'session-control',
-            method: method,
-            payload: <String, Object?>{
-              'type': type,
-              'sessionId': sessionId,
-              key: lists[sessionId] ?? const <Object?>[],
-            },
-          ),
+    unawaited(
+      state.handleFrame(
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/queue',
+          payload: <String, Object?>{
+            'type': 'queue',
+            'sessionId': sessionId,
+            'items': _queueItemsFromInbox(_inboxBySession[sessionId]),
+          },
         ),
-      );
-    }
+      ),
+    );
   }
 
   /// Seeds one session's projection values from a whole-value block (the
@@ -2470,6 +2597,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       _modelSelectionStateFor(sessionId).value = selection;
       _notifySessionModels(sessionId);
     }
+    if (values.containsKey('inbox') &&
+        _claimProjection(sessionId, 'inbox', seq)) {
+      _applyInboxProjection(sessionId, values['inbox']);
+    }
     if (complete) {
       for (final key in _projectionKeys) {
         if (values.containsKey(key)) continue;
@@ -2477,6 +2608,91 @@ class HarnessRepositoryImpl implements ChatRepository {
         _clearProjection(sessionId, key);
       }
     }
+  }
+
+  /// Fills projection keys from a `session/list` block the host labeled
+  /// `cached`: a zero-I/O view of the persisted checkpoint whose watermark
+  /// lives in that record's own sequence space. A cached value therefore lands
+  /// only where no sequenced value exists, and records no watermark of its own
+  /// — a connected Session has already answered for such a key, and the
+  /// checkpoint cannot be newer than it (0.1.7 `SessionProjectionHints.kind`;
+  /// `client/sessions/projection-store.ts` `applyCached`).
+  void _fillProjectionValuesFromCache(String sessionId, JsonMap values) {
+    final unfilled = <String, Object?>{
+      for (final entry in values.entries)
+        if (!(_projectionSeqs[sessionId]?.containsKey(entry.key) ?? false))
+          entry.key: entry.value,
+    };
+    if (unfilled.isEmpty) return;
+    // Seq 0 applies the values while leaving every watermark untouched
+    // (`_claimProjection`), which is what keeps a cached block unorderable.
+    _applySessionProjectionValues(sessionId, unfilled, 0);
+  }
+
+  /// Applies one `inbox` projection value: retain it for sessions that open
+  /// later, then republish it as the `session/queue` frame the timeline folds.
+  ///
+  /// The projection is the whole authoritative pending-input state
+  /// (`packages/core/agent-loop/src/inbox.ts` `inboxProjectionDefinition`), so
+  /// a value that is absent or null is an empty inbox, and the frame it
+  /// produces is the empty `items` list that clears the dock mirror.
+  void _applyInboxProjection(String sessionId, Object? value) {
+    final inbox = asJsonObject(value);
+    if (inbox == null) {
+      _inboxBySession.remove(sessionId);
+    } else {
+      _inboxBySession[sessionId] = inbox;
+    }
+    _pushQueueSnapshot(sessionId);
+  }
+
+  /// One `inbox` projection value as the `session/queue` `items` array.
+  ///
+  /// This is a faithful port of the host function 0.1.7 deleted
+  /// (`dsh-v0.1.5-rc.2` `api/session-controller/src/control.ts`
+  /// `queueItemsFromInbox`): `next-turn` entries are `queued`, `next-step`
+  /// entries are `steering` for a human-authored message and `context`
+  /// otherwise, queued turns come first, and each item reports only
+  /// `{id, content}` as its message. `rpcId` rides a browser-submitted
+  /// message's user source and is what retires the matching local submission
+  /// echo.
+  List<Object?> _queueItemsFromInbox(JsonMap? inbox) {
+    if (inbox == null) return const <Object?>[];
+    final items = <Object?>[];
+    void add(String target, String Function(JsonMap source) placement) {
+      for (final entry in asJsonArray(inbox[target]) ?? const <Object?>[]) {
+        final message = asJsonObject(entry);
+        if (message == null) {
+          throw FormatException(
+            'inbox projection "$target" entry is not an object',
+          );
+        }
+        final id = wireString(message, 'id');
+        if (id == null) {
+          throw FormatException(
+            'inbox projection "$target" entry missing required field "id"',
+          );
+        }
+        final source =
+            asJsonObject(message['source']) ?? const <String, Object?>{};
+        final rpcId = source['kind'] == 'user'
+            ? wireString(source, 'rpcId')
+            : null;
+        items.add(<String, Object?>{
+          'id': id,
+          'placement': placement(source),
+          if (rpcId != null) 'rpcId': rpcId,
+          'message': <String, Object?>{'id': id, 'content': message['content']},
+        });
+      }
+    }
+
+    add('next-turn', (_) => 'queued');
+    add(
+      'next-step',
+      (source) => source['kind'] == 'user' ? 'steering' : 'context',
+    );
+    return items;
   }
 
   /// Clears one projection key: the value the host no longer computes.
@@ -2513,6 +2729,8 @@ class HarnessRepositoryImpl implements ChatRepository {
         _updateContextPressure(sessionId, null, 0);
       case 'contextBreakdown':
         _updateContextBreakdown(sessionId, null, 0);
+      case 'inbox':
+        _applyInboxProjection(sessionId, null);
       case 'sessionStats':
       case 'tokenUsage':
         // The host no longer publishes whole-log figures: the window fold
@@ -2624,23 +2842,18 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
-  /// Wire roster row (`agent-presets.schema.ts` AgentPresetEntry): trust
-  /// maps onto the domain enum and any other value fails loud.
-  AgentPresetEntry _toDomainAgentPresetEntry(AgentPresetEntryWire wire) {
-    final trust = switch (wire.trust) {
-      'system' => AgentPresetTrust.system,
-      'user' => AgentPresetTrust.user,
-      _ => throw FormatException('agentPreset.list: bad trust ${wire.trust}'),
-    };
-    return AgentPresetEntry(
-      id: wire.id,
-      trust: trust,
-      isDefault: wire.isDefault,
-      name: wire.name,
-      description: wire.description,
-      broken: wire.broken,
-    );
-  }
+  /// Wire roster row (`packages/preset/agent-preset-registry/src/types.ts`
+  /// `AgentPresetRow`): identity, published display copy, whether it is the
+  /// default, and why it cannot compose a session. 0.1.7 carries no trust
+  /// signal on this row, so none is invented here.
+  AgentPresetEntry _toDomainAgentPresetEntry(AgentPresetEntryWire wire) =>
+      AgentPresetEntry(
+        id: wire.id,
+        isDefault: wire.isDefault,
+        name: wire.name,
+        description: wire.description,
+        broken: wire.broken,
+      );
 
   /// Wire `todos` projection payload: the whole list, or null before the
   /// first write / after a later turn begins.
@@ -2799,8 +3012,7 @@ class HarnessRepositoryImpl implements ChatRepository {
       // A new generation's baselines are authoritative: a watermark or a
       // retained list from the previous one must not block (or outlive) them.
       _projectionSeqs.clear();
-      _baselineQueues.clear();
-      _baselineJobs.clear();
+      _inboxBySession.clear();
       _cachedModelCatalog = null;
       _commandRosterEpoch.value = _commandRosterEpoch.value + 1;
       _notifyModelCatalogChanged();
@@ -2894,11 +3106,18 @@ class HarnessRepositoryImpl implements ChatRepository {
       }
       final values = session.projectionValues;
       if (values != null) {
-        _applySessionProjectionValues(
-          session.sessionId,
-          values,
-          session.asOfSeq,
-        );
+        // A list row labels which sequence space its block came from (0.1.7
+        // `SessionProjectionHints.kind`). A `cached` block is a view of the
+        // persisted checkpoint and fills only keys no sequenced value holds.
+        if (session.projectionKind == 'cached') {
+          _fillProjectionValuesFromCache(session.sessionId, values);
+        } else {
+          _applySessionProjectionValues(
+            session.sessionId,
+            values,
+            session.asOfSeq,
+          );
+        }
       }
       final parsed = _imageLimitsFromProjections(session);
       if (parsed != null && _imageLimits.value != parsed) {
@@ -2973,7 +3192,18 @@ class HarnessRepositoryImpl implements ChatRepository {
       // from the projection store, whose higher-seq-wins rule already
       // rejected it).
       final held = heldById[session.id];
-      if (held != null && wire.asOfSeq >= 0) {
+      if (held != null && wire.projectionKind == 'cached') {
+        // A cached block was viewed from the persisted checkpoint, so it says
+        // nothing this client does not already hold for a Session it follows:
+        // keep the row's own title and preset (0.1.7 `kind`).
+        session = _copySession(
+          session,
+          title: held.title,
+          clearTitle: held.title == null,
+          agentPreset: held.agentPreset,
+          clearAgentPreset: held.agentPreset == null,
+        );
+      } else if (held != null && wire.asOfSeq >= 0) {
         if (_projectionIsStale(session.id, 'title', wire.asOfSeq)) {
           session = _copySession(session, title: held.title);
         }
@@ -3026,6 +3256,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     agentPreset: wire.agentPreset,
     origin: wire.origin,
     parentSessionId: wire.parentSessionId,
+    agentAvailable: wire.agentAvailable,
   );
 
   /// `imageLimits` is a host-config projection; one value serves all
@@ -3326,6 +3557,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     agentPreset: clearAgentPreset ? null : (agentPreset ?? session.agentPreset),
     origin: session.origin,
     parentSessionId: session.parentSessionId,
+    agentAvailable: session.agentAvailable,
     completed: completed ?? session.completed,
     agentError: clearAgentError ? null : (agentError ?? session.agentError),
   );
@@ -3346,11 +3578,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       }
     }
     // A session opened after this generation's baseline still gets its queue
-    // and jobs (reference `manager.ts:288-297` seeds a lazily created session
-    // from the manager-level maps).
-    if (_baselineQueues.containsKey(sessionId) ||
-        _baselineJobs.containsKey(sessionId)) {
-      _pushControlBaseline(sessionId);
+    // (the retained inbox snapshot) and its job roster (the stream this open
+    // starts).
+    if (_inboxBySession.containsKey(sessionId)) {
+      _pushQueueSnapshot(sessionId);
     }
     return state;
   }

@@ -2,9 +2,14 @@
 ///
 /// Port of the web `presetDisplayText` rule
 /// (reference/deepseek-harness/packages/client/ui-agent-preset/src/client/
-/// locales.ts): the four shipped system ids resolve to localized
-/// name/description; every other row (user-authored or unknown
-/// system id) keeps its own published metadata, falling back to the id.
+/// locales.ts): a row's own published metadata wins, and a row that publishes
+/// none falls back to the localized copy for a shipped id, then to its id.
+///
+/// The rule used to be keyed on the row's trust — shipped ids resolved to
+/// localized copy and every other row kept its published metadata. 0.1.7
+/// removed the trust signal from the roster, so published metadata is now the
+/// first choice everywhere and the localized copy is the fallback that keeps a
+/// nameless shipped row readable.
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -21,22 +26,18 @@ Map<String, (String, String)> _builtInCopy(AppLocalizations l10n) =>
 
 /// Label a surface shows for one preset row.
 String agentPresetDisplayName(AgentPresetEntry entry, AppLocalizations l10n) {
-  if (entry.trust == AgentPresetTrust.system) {
-    final builtIn = _builtInCopy(l10n)[entry.id];
-    if (builtIn != null) return builtIn.$1;
-  }
-  return entry.displayName;
+  final published = entry.name;
+  if (published != null) return published;
+  return _builtInCopy(l10n)[entry.id]?.$1 ?? entry.id;
 }
 
 /// One-sentence description for one preset row; null when nothing was
-/// published.
+/// published and the id is not a known shipped one.
 String? agentPresetDisplayDescription(
   AgentPresetEntry entry,
   AppLocalizations l10n,
 ) {
-  if (entry.trust == AgentPresetTrust.system) {
-    final builtIn = _builtInCopy(l10n)[entry.id];
-    if (builtIn != null) return builtIn.$2;
-  }
-  return entry.description;
+  final published = entry.description;
+  if (published != null) return published;
+  return _builtInCopy(l10n)[entry.id]?.$2;
 }

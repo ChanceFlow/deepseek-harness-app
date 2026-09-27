@@ -26,9 +26,9 @@ import 'package:domain/model/settings.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
-import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
@@ -215,8 +215,8 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.sessionModelCatalog,
     DshRpcEndpoints.sessionHistory,
     DshRpcEndpoints.sessionPage,
+    DshRpcEndpoints.sessionProjections,
     DshRpcEndpoints.skillsList,
-    DshRpcEndpoints.subagentsList,
     DshRpcEndpoints.subagentsPrompt,
     DshRpcEndpoints.subagentsInterrupt,
     DshRpcEndpoints.subagentsHistory,
@@ -238,8 +238,6 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.workspaceArchiveSession,
     DshRpcEndpoints.workspaceFilesStat,
     DshRpcEndpoints.workspaceFilesRead,
-    DshRpcEndpoints.workspaceFilesReadBytes,
-    DshRpcEndpoints.workspaceFilesReadAll,
     DshRpcEndpoints.workspaceFilesList,
     DshRpcEndpoints.commandsExecute,
     DshRpcEndpoints.settingsDescribe,
@@ -324,13 +322,17 @@ class HarnessFakeRpc implements DshRpcClient {
     },
   };
 
-  /// Scripted subagent.list value slot: the parent's durable child tree
-  /// (`reference/deepseek-harness/packages/subagent/subagent/src/`
-  /// `control-types.ts` `SubagentCatalog` shape).
-  JsonMap subagentListValue = <String, Object?>{
-    'entries': <Object?>[],
-    'parentAvailable': false,
-  };
+  /// Scripted `session/projections` roster slot: the parent Session's
+  /// `subagentCatalog` projection value
+  /// (`reference/deepseek-harness/packages/subagent/subagent/src/catalog.ts`
+  /// `viewSchema`, rows shaped by `projection-types.ts`
+  /// `SubagentCatalogEntry`). 0.1.7 deleted `subagents/list`, so this
+  /// projection is the tree's fact source.
+  List<Object?> subagentCatalogValue = <Object?>[];
+
+  /// Models the `session/projections` contract's null answer: the Session does
+  /// not exist, so no baseline can be read for it.
+  bool projectionsSessionMissing = false;
 
   /// Scripted child-history value slot for `session/page`
   /// (`subagentHistoryValueSchema`: the session history block shape, events
@@ -457,6 +459,10 @@ class HarnessFakeRpc implements DshRpcClient {
     if (endpoint == DshRpcEndpoints.commandsExecute) {
       return RpcResult(ok: true, value: commandValue);
     }
+    if (endpoint == DshRpcEndpoints.sessionProjections &&
+        projectionsSessionMissing) {
+      return RpcResult(ok: true, value: null);
+    }
     final value = _valueFor(endpoint, payload);
     return RpcResult(ok: true, value: value);
   }
@@ -468,8 +474,11 @@ class HarnessFakeRpc implements DshRpcClient {
     switch (endpoint) {
       case DshRpcEndpoints.sessionList:
         return <String, Object?>{'items': sessionsValue};
-      case DshRpcEndpoints.subagentsList:
-        return subagentListValue;
+      case DshRpcEndpoints.sessionProjections:
+        return <String, Object?>{
+          'asOfSeq': 7,
+          'values': <String, Object?>{'subagentCatalog': subagentCatalogValue},
+        };
       case DshRpcEndpoints.subagentsHistory:
         return subagentHistoryValue;
       case DshRpcEndpoints.subagentsPrompt:
@@ -628,31 +637,27 @@ class HarnessFakeRpc implements DshRpcClient {
         };
       case DshRpcEndpoints.agentPresetsList:
         // Fixture transcribed from
-        // reference/deepseek-harness/packages/preset/agent-presets/src/
-        // types.ts AgentPresetRoster.
+        // reference/deepseek-harness/packages/preset/agent-preset-registry/
+        // src/types.ts AgentPresetRoster: the row carries no trust signal and
+        // the roster carries no authoring capability, because 0.1.7 moved
+        // preset authoring off the Remote surface.
         return <String, Object?>{
           'presets': <Object?>[
-            <String, Object?>{
-              'id': 'standard',
-              'trust': 'system',
-              'isDefault': true,
-            },
+            <String, Object?>{'id': 'standard', 'isDefault': true, 'order': 1},
             <String, Object?>{
               'id': 'minimal',
-              'trust': 'system',
               'isDefault': false,
+              'order': 2,
               'name': 'Tiny',
               'description': 'Two tools only',
             },
             <String, Object?>{
               'id': 'my-agent',
-              'trust': 'user',
               'isDefault': false,
+              'order': 3,
               'broken': 'composition missing',
             },
           ],
-          'authorable': true,
-          'hasDocument': false,
         };
       case DshRpcEndpoints.agentPresetsSelect:
         return <String, Object?>{'agentPreset': 'minimal'};
@@ -725,6 +730,18 @@ class ScriptedHarnessSocket implements DshWritableEventSocket {
     await Completer<void>().future;
   }
 }
+
+/// One `inbox` projection entry: a user-role message in the shape
+/// `packages/core/agent-loop/src/inbox.ts` publishes
+/// (`inboxProjectionSchema` carries whole `UserMessage` values).
+JsonMap _inboxUserMessage(String id, String text) => <String, Object?>{
+  'id': id,
+  'role': 'user',
+  'source': <String, Object?>{'kind': 'user'},
+  'content': <Object?>[
+    <String, Object?>{'type': 'text', 'text': text},
+  ],
+};
 
 const String _muxPath = '/api/remote.mux';
 
@@ -1647,10 +1664,15 @@ void main() {
     expect(todos, isEmpty);
   });
 
-  test('a baseline queue seeds a session opened later', () async {
+  test('a baseline inbox seeds a session opened later', () async {
     // The baseline is retained per session, not replayed once: a session this
     // client had not instantiated when the generation's control frame landed
     // still shows the messages that were already queued for it.
+    //
+    // Fixture: 0.1.7's control baseline carries each session's whole projection
+    // block (there is no separate `queues` block any more), and the pending
+    // input lives in the `inbox` value
+    // (`packages/core/agent-loop/src/inbox.ts` `inboxProjectionSchema`).
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
         'sessionId': 'session-late',
@@ -1667,18 +1689,25 @@ void main() {
           payload: <String, Object?>{
             'type': 'baseline',
             'value': <String, Object?>{
-              'queues': <String, Object?>{
-                'session-late': <Object?>[
-                  <String, Object?>{
-                    'id': 'queued-1',
-                    'placement': 'queued',
-                    'message': <String, Object?>{
-                      'content': <Object?>[
-                        <String, Object?>{'type': 'text', 'text': 'held'},
+              'projections': <String, Object?>{
+                'session-late': <String, Object?>{
+                  'asOfSeq': 4,
+                  'values': <String, Object?>{
+                    'inbox': <String, Object?>{
+                      'next-turn': <Object?>[
+                        <String, Object?>{
+                          'id': 'queued-1',
+                          'role': 'user',
+                          'source': <String, Object?>{'kind': 'user'},
+                          'content': <Object?>[
+                            <String, Object?>{'type': 'text', 'text': 'held'},
+                          ],
+                        },
                       ],
+                      'next-step': <Object?>[],
                     },
                   },
-                ],
+                },
               },
             },
           },
@@ -1701,6 +1730,359 @@ void main() {
     final queue = window.items.whereType<TimelineQueue>().single;
     expect(queue.items, hasLength(1));
     expect(queue.items.single.itemId, 'queued-1');
+  });
+
+  test('inbox projection values reach the dock with the host placements', () async {
+    // 0.1.7 publishes pending input as the `inbox` projection, whose two
+    // targets are the whole placement vocabulary left on the wire: `next-turn`
+    // is a queued turn, and `next-step` is `steering` for a human-authored
+    // message and `context` otherwise — the mapping the deleted control-stream
+    // host function `queueItemsFromInbox` used.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 1,
+        'blank': false,
+      },
+    ])..historyEvents['session-a'] = <Object?>[_assistantMessageEvent()];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'baseline',
+            'value': <String, Object?>{
+              'projections': <String, Object?>{
+                'session-a': <String, Object?>{
+                  'asOfSeq': 9,
+                  'values': <String, Object?>{
+                    'inbox': <String, Object?>{
+                      'next-turn': <Object?>[
+                        <String, Object?>{
+                          'id': 'turn-1',
+                          'role': 'user',
+                          'source': <String, Object?>{
+                            'kind': 'user',
+                            'rpcId': 'rpc-local-1',
+                          },
+                          'content': <Object?>[
+                            <String, Object?>{'type': 'text', 'text': 'queued'},
+                          ],
+                        },
+                      ],
+                      'next-step': <Object?>[
+                        <String, Object?>{
+                          'id': 'step-1',
+                          'role': 'user',
+                          'source': <String, Object?>{'kind': 'user'},
+                          'content': <Object?>[
+                            <String, Object?>{'type': 'text', 'text': 'steer'},
+                          ],
+                        },
+                        <String, Object?>{
+                          'id': 'step-2',
+                          'role': 'user',
+                          'source': <String, Object?>{
+                            'kind': 'skill-invocation',
+                          },
+                          'content': <Object?>[
+                            <String, Object?>{
+                              'type': 'text',
+                              'text': 'context',
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-a');
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final window = await repository
+        .observeTimelineWindow('session-a')
+        .firstWhere(
+          (value) => value.items.any((item) => item is TimelineQueue),
+        );
+    final queue = window.items.whereType<TimelineQueue>().single;
+    // Queued turns first, then next-step in its own order (the deleted host
+    // function's array order).
+    expect(queue.items.map((item) => item.itemId).toList(), <String>[
+      'turn-1',
+      'step-1',
+      'step-2',
+    ]);
+    expect(queue.items.map((item) => item.placement).toList(), <QueuePlacement>[
+      QueuePlacement.queued,
+      QueuePlacement.steering,
+      QueuePlacement.context,
+    ]);
+    expect(queue.items.first.text, 'queued');
+  });
+
+  test('a live inbox projection frame replaces the dock in place', () async {
+    // A live `inbox` update is a whole-value replacement: the generation's
+    // baseline seeds one queued turn, and the frame that follows carries a
+    // different one, so the dock must show exactly the later state.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 1,
+        'blank': false,
+      },
+    ])..historyEvents['session-a'] = <Object?>[_assistantMessageEvent()];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'baseline',
+            'value': <String, Object?>{
+              'projections': <String, Object?>{
+                'session-a': <String, Object?>{
+                  'asOfSeq': 9,
+                  'values': <String, Object?>{
+                    'inbox': <String, Object?>{
+                      'next-turn': <Object?>[
+                        _inboxUserMessage('turn-1', 'baseline'),
+                      ],
+                      'next-step': <Object?>[],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ),
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-a',
+            'key': 'inbox',
+            'seq': 12,
+            'value': <String, Object?>{
+              'next-turn': <Object?>[_inboxUserMessage('turn-2', 'later')],
+              'next-step': <Object?>[],
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-a');
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final window = await repository
+        .observeTimelineWindow('session-a')
+        .firstWhere(
+          (value) => value.items.whereType<TimelineQueue>().any(
+            (queue) => queue.items.isNotEmpty,
+          ),
+        );
+    final queue = window.items.whereType<TimelineQueue>().single;
+    expect(queue.items.map((item) => item.itemId).toList(), <String>['turn-2']);
+    expect(queue.items.single.text, 'later');
+  });
+
+  test('an emptied inbox projection clears the dock', () async {
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-a',
+        'updatedAt': 1,
+        'blank': false,
+      },
+    ])..historyEvents['session-a'] = <Object?>[_assistantMessageEvent()];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-a',
+            'key': 'inbox',
+            'seq': 13,
+            'value': <String, Object?>{
+              'next-turn': <Object?>[],
+              'next-step': <Object?>[],
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-a');
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final window = await repository
+        .observeTimelineWindow('session-a')
+        .firstWhere(
+          (value) => value.items.any((item) => item is TimelineQueue),
+        );
+    expect(window.items.whereType<TimelineQueue>().single.items, isEmpty);
+  });
+
+  test(
+    'each followed session opens one job/list stream and folds its rows',
+    () async {
+      // 0.1.7 moved the job roster off the control baseline onto a per-session
+      // stream (`packages/api/job-controller/src/index.ts`
+      // `@Remote({ mode: 'stream' }) list`), whose frames are whole-set `rows`.
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-j',
+          'updatedAt': 1,
+          'blank': false,
+        },
+      ])..historyEvents['session-j'] = <Object?>[_assistantMessageEvent()];
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'job-list-session-j',
+            method: 'job/list',
+            payload: <String, Object?>{
+              'type': 'rows',
+              'jobs': <Object?>[
+                <String, Object?>{
+                  'id': 'bash-1',
+                  'kind': 'bash',
+                  'label': 'pnpm test',
+                  'progress': '3/10',
+                  'owner': 'session-j',
+                  'outputLimitBytes': 4096,
+                  'status': 'running',
+                  'startedAt': 5,
+                },
+                <String, Object?>{
+                  'id': 'bash-2',
+                  'kind': 'bash',
+                  'label': 'build apk',
+                  'status': 'completed',
+                  'startedAt': 1,
+                  'finishedAt': 4,
+                  'detail': 'exit code: 0',
+                },
+              ],
+            },
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      await repository.openSession('session-j');
+      await pumpEventQueue();
+
+      final open = socket.sentMuxMessages.firstWhere(
+        (message) => message['streamId'] == 'job-list-session-j',
+      );
+      expect(open['type'], 'open');
+      expect(open['endpoint'], 'job/list');
+      expect(open['payload'], <String, Object?>{
+        'args': <String, Object?>{
+          'request': <String, Object?>{'sessionId': 'session-j'},
+        },
+      });
+
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final window = await repository
+          .observeTimelineWindow('session-j')
+          .firstWhere(
+            (value) => value.items.whereType<TimelineJobs>().any(
+              (item) => item.jobs.isNotEmpty,
+            ),
+          );
+      final jobs = window.items.whereType<TimelineJobs>().single.jobs;
+      expect(jobs.map((job) => job.id).toList(), <String>['bash-1', 'bash-2']);
+      expect(jobs.first.status, JobStatus.running);
+      // `JobView` is a superset of the deleted `SessionJob`: the extra `owner`,
+      // `progress`, and `outputLimitBytes` a 0.1.7 host sends are ignored, not
+      // decoded into nothing.
+      expect(jobs.first.label, 'pnpm test');
+      expect(jobs.last.status, JobStatus.completed);
+      expect(jobs.last.detail, 'exit code: 0');
+    },
+  );
+
+  test('a developer/message folds as a context row, not a user bubble', () async {
+    // 0.1.7 added `developer/message` (an incremental agent session change on
+    // the model-visible surface). The upstream chat client presents it through
+    // the same context-row lifecycle as an injected `user/message`
+    // (`ui-chat/src/client/conversation-nodes/message.ts`
+    // `developerMessageDefinition`).
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-d',
+        'updatedAt': 1,
+        'blank': false,
+      },
+    ])..historyEvents['session-d'] = <Object?>[_assistantMessageEvent()];
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        _muxFrame('session/event', 'session-d', <String, Object?>{
+          'type': 'developer/message',
+          'seq': 90,
+          'time': 20,
+          'data': <String, Object?>{
+            'turn': 1,
+            'step': 1,
+            'message': <String, Object?>{
+              'id': 'developer-1',
+              'role': 'developer',
+              'source': <String, Object?>{'kind': 'developer'},
+              'content': <Object?>[
+                <String, Object?>{'type': 'text', 'text': 'Added tool: read'},
+              ],
+            },
+          },
+        }),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-d');
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final timeline = await repository
+        .observeTimeline('session-d')
+        .firstWhere(
+          (items) => items.whereType<TimelineContextInjection>().any(
+            (item) => item.text.contains('Added tool'),
+          ),
+        );
+    final injection = timeline.whereType<TimelineContextInjection>().firstWhere(
+      (item) => item.text.contains('Added tool'),
+    );
+    expect(injection.producerLabel, 'developer');
+    // No user bubble: the message is model-visible state, not a human turn.
+    expect(
+      timeline.whereType<TimelineMessage>().where(
+        (item) => item.value.role == MessageRole.user,
+      ),
+      isEmpty,
+    );
   });
 
   test(
@@ -3641,79 +4023,72 @@ void main() {
     },
   );
 
-  // The subagent catalog is the tree's fact source: `subagent.list` reads
-  // durable session state, so a cold host answers the parent's complete
-  // child tree — the fact the Subagents screen cold-seeds from.
-  test('subagent.list decodes the host-reported child tree', () async {
+  // The subagent roster is the tree's fact source: 0.1.7 deleted
+  // `subagents/list`, so the parent Session's `subagentCatalog` projection —
+  // read through the non-activating `session/projections` method — is what the
+  // Subagents screen cold-seeds from.
+  test('session/projections decodes the parent subagent catalog', () async {
     // Fixture transcribed from
-    // reference/deepseek-harness/packages/subagent/subagent/src/
-    // control-types.ts SubagentCatalog: continuable and
-    // one-shot child rows (label required/optional per mode) plus a
-    // diagnostic row.
+    // reference/deepseek-harness/packages/subagent/subagent/src/catalog.ts
+    // `subagentCatalogEntries` / `projection-types.ts` SubagentCatalogEntry:
+    // continuable and one-shot rows (label required/optional per mode) plus
+    // the 0.1.7 `unknown` arm.
     final rpc = HarnessFakeRpc()
-      ..subagentListValue = <String, Object?>{
-        'entries': <Object?>[
-          <String, Object?>{
-            'kind': 'child',
-            'id': 'child-1',
-            'mode': 'continuable',
-            'activity': 'running',
-            'hasChildren': true,
-            'label': 'Worker',
-          },
-          <String, Object?>{
-            'kind': 'child',
-            'id': 'child-2',
-            'mode': 'one-shot',
-            'activity': 'inactive',
-            'hasChildren': false,
-          },
-          <String, Object?>{
-            'kind': 'diagnostic',
-            'id': 'child-3',
-            'reason': 'corrupt',
-          },
-        ],
-        'parentAvailable': true,
-      };
+      ..subagentCatalogValue = <Object?>[
+        <String, Object?>{
+          'id': 'child-1',
+          'createdAt': 1,
+          'mode': 'continuable',
+          'label': 'Worker',
+        },
+        <String, Object?>{'id': 'child-2', 'createdAt': 2, 'mode': 'one-shot'},
+        <String, Object?>{'id': 'child-3', 'createdAt': 3, 'mode': 'unknown'},
+      ];
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
 
     final catalog = await repository.loadSubagents('session-root');
 
-    final subagentPayload = rpc.payloads(DshRpcEndpoints.subagentsList).first;
+    final subagentPayload = rpc
+        .payloads(DshRpcEndpoints.sessionProjections)
+        .first;
     final subagentArgs =
         asJsonObject(subagentPayload['args']) ?? subagentPayload;
-    expect(subagentArgs, <String, Object?>{'parentSessionId': 'session-root'});
+    // `payloads` flattens the request envelope for assertions; the wire
+    // argument is the one `request` object the descriptor names.
+    expect(subagentArgs['request'], <String, Object?>{
+      'sessionId': 'session-root',
+    });
     expect(catalog.parentSessionId, 'session-root');
-    expect(catalog.parentAvailable, isTrue);
+    // `activity` comes from the session roster's own running bit (the deleted
+    // RPC re-sampled each child's Agent driver); an unlisted child reads
+    // inactive. `hasChildren` is derived from the mode, the only descendant
+    // signal the projection carries.
     expect(catalog.entries, const <SubagentEntry>[
       SubagentEntry(
         id: 'child-1',
-        kind: 'child',
         mode: SubagentMode.continuable,
-        activity: 'running',
+        activity: 'inactive',
         hasChildren: true,
         label: 'Worker',
       ),
       SubagentEntry(
         id: 'child-2',
-        kind: 'child',
         mode: SubagentMode.oneShot,
         activity: 'inactive',
       ),
-      SubagentEntry(id: 'child-3', kind: 'diagnostic', reason: 'corrupt'),
+      SubagentEntry(
+        id: 'child-3',
+        mode: SubagentMode.unknown,
+        activity: 'inactive',
+      ),
     ]);
   });
 
   test(
-    'subagent.list answers a parent without children as an empty catalog',
+    'a parent with no catalogued children answers an empty roster',
     () async {
-      final rpc = HarnessFakeRpc()
-        ..subagentListValue = <String, Object?>{
-          'entries': <Object?>[],
-          'parentAvailable': false,
-        };
+      final rpc = HarnessFakeRpc();
       final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
       await pumpEventQueue();
 
@@ -3721,63 +4096,84 @@ void main() {
 
       expect(catalog.parentSessionId, 'session-root');
       expect(catalog.entries, isEmpty);
-      expect(catalog.parentAvailable, isFalse);
     },
   );
 
   test(
-    'subagent.list child row without id fails loud with the field name',
+    'session/projections answering null fails loud instead of an empty roster',
     () async {
-      // Negative fixture: the contract requires `id` on every row; a row
-      // missing it must throw naming the field, never decode to a default.
-      final rpc = HarnessFakeRpc()
-        ..subagentListValue = <String, Object?>{
-          'entries': <Object?>[
-            <String, Object?>{
-              'kind': 'child',
-              'mode': 'continuable',
-              'activity': 'running',
-              'hasChildren': false,
-              'label': 'Worker',
-            },
-          ],
-          'parentAvailable': true,
-        };
+      // `SessionProjectionsValue` is nullable: null means the Session does not
+      // exist. An empty roster and an unreadable parent must not look the same
+      // to the caller.
+      final rpc = HarnessFakeRpc()..projectionsSessionMissing = true;
       final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
       await pumpEventQueue();
 
       await expectLater(
         repository.loadSubagents('session-root'),
         throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('"id"'),
+          isA<DshBusinessException>().having(
+            (error) => error.code,
+            'code',
+            'subagent/parent-unavailable',
           ),
         ),
       );
     },
   );
 
+  test('a catalog row without id fails loud with the field name', () async {
+    // Negative fixture: the projection schema requires `id` on every row; a
+    // row missing it must throw naming the field, never decode to a default.
+    final rpc = HarnessFakeRpc()
+      ..subagentCatalogValue = <Object?>[
+        <String, Object?>{'createdAt': 1, 'mode': 'continuable'},
+      ];
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.loadSubagents('session-root'),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('"id"'),
+        ),
+      ),
+    );
+  });
+
+  test('a catalog row without a mode fails loud naming the field', () async {
+    // Negative fixture: `projection-types.ts` SubagentCatalogEntry requires
+    // `mode` on every row ('one-shot' | 'continuable' | 'unknown'); a row
+    // without it must throw naming the field, never decode modeless.
+    final rpc = HarnessFakeRpc()
+      ..subagentCatalogValue = <Object?>[
+        <String, Object?>{'id': 'child-1', 'createdAt': 1},
+      ];
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.loadSubagents('session-root'),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('"mode"'),
+        ),
+      ),
+    );
+  });
+
   test(
-    'subagent.list child row without a mode fails loud naming the field',
+    'a catalog row with an unrecorded mode fails loud naming the value',
     () async {
-      // Negative fixture: `subagentListEntrySchema` requires `mode` on
-      // every child row ('one-shot' | 'continuable'); a child row
-      // without it must throw naming the field, never decode modeless.
       final rpc = HarnessFakeRpc()
-        ..subagentListValue = <String, Object?>{
-          'entries': <Object?>[
-            <String, Object?>{
-              'kind': 'child',
-              'id': 'child-1',
-              'activity': 'running',
-              'hasChildren': false,
-              'label': 'Worker',
-            },
-          ],
-          'parentAvailable': true,
-        };
+        ..subagentCatalogValue = <Object?>[
+          <String, Object?>{'id': 'child-1', 'createdAt': 1, 'mode': 'future'},
+        ];
       final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
       await pumpEventQueue();
 
@@ -3787,7 +4183,7 @@ void main() {
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('"mode"'),
+            contains('"future"'),
           ),
         ),
       );
@@ -4400,10 +4796,10 @@ void main() {
     },
   );
 
-  // Wire shape: agentPreset.list roster
-  // (reference/deepseek-harness/packages/preset/agent-presets/src/
+  // Wire shape: agentPresets/list roster
+  // (reference/deepseek-harness/packages/preset/agent-preset-registry/src/
   // types.ts).
-  test('agentPreset.list decodes the roster and deployment facts', () async {
+  test('agentPresets/list decodes the roster', () async {
     final rpc = HarnessFakeRpc();
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
     await pumpEventQueue();
@@ -4413,12 +4809,9 @@ void main() {
     final presetPayload = rpc.payloads(DshRpcEndpoints.agentPresetsList).single;
     final presetArgs = asJsonObject(presetPayload['args']) ?? presetPayload;
     expect(presetArgs, isEmpty);
-    expect(roster.authorable, isTrue);
-    expect(roster.hasDocument, isFalse);
     expect(roster.entries, hasLength(3));
     final standard = roster.entries[0];
     expect(standard.id, 'standard');
-    expect(standard.trust, AgentPresetTrust.system);
     expect(standard.isDefault, isTrue);
     expect(standard.name, isNull);
     expect(roster.defaultEntry?.id, 'standard');
@@ -4426,7 +4819,6 @@ void main() {
     expect(minimal.name, 'Tiny');
     expect(minimal.description, 'Two tools only');
     final custom = roster.entries[2];
-    expect(custom.trust, AgentPresetTrust.user);
     expect(custom.broken, 'composition missing');
   });
 
@@ -4464,12 +4856,13 @@ void main() {
     );
   });
 
-  // Negative fixture: a required roster field absent must fail loud.
-  test('agentPreset.list value without authorable throws', () {
+  // Negative fixture: a required roster-row field absent must fail loud.
+  test('agentPresets/list row without isDefault throws', () {
     expect(
       () => AgentPresetListValueWire.fromJson(<String, Object?>{
-        'presets': <Object?>[],
-        'hasDocument': false,
+        'presets': <Object?>[
+          <String, Object?>{'id': 'standard'},
+        ],
       }),
       throwsFormatException,
     );
