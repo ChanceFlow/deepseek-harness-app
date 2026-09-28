@@ -1149,6 +1149,14 @@ class ChatController {
     String path,
   ) => _repository.readWorkspaceFile(sessionId, path);
 
+  /// Reads a complete workspace file's raw bytes for the file-preview sheet
+  /// (`workspaceFiles/readBytes`). The controller stays locale-free: a failure
+  /// propagates to the sheet, which renders the localized message.
+  Future<WorkspaceFileBytes> readWorkspaceFileBytes(
+    String sessionId,
+    String path,
+  ) => _repository.readWorkspaceFileBytes(sessionId, path);
+
   Future<T> _locked<T>(Future<T> Function() action) {
     final run = _attachmentLock.then((_) => action());
     _attachmentLock = run.then((_) {}, onError: (_) {});

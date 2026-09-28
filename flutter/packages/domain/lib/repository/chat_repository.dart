@@ -403,6 +403,25 @@ abstract class ChatRepository {
     int? limit,
   }) => _unsupported('readWorkspaceFile');
 
+  /// Read a complete file's raw bytes, or one byte window of it
+  /// (`workspaceFiles/readBytes`).
+  ///
+  /// Omitting both [offset] and [length] reads the complete file under the
+  /// host's full-file byte cap; supplying either sends a byte range whose first
+  /// byte is 0-based. [baseFile] resolves [path] from that file's own
+  /// directory, and the host refuses an absolute or scheme-qualified [path]
+  /// when [baseFile] is present
+  /// (`reference/deepseek-harness/packages/api/workspace-files/src/index.ts:344-348`).
+  /// The result's `eof` is the host's answer: true for a whole-file read and
+  /// when the window includes the file's last byte.
+  Future<WorkspaceFileBytes> readWorkspaceFileBytes(
+    String sessionId,
+    String path, {
+    int? offset,
+    int? length,
+    String? baseFile,
+  }) => _unsupported('readWorkspaceFileBytes');
+
   /// Inspect a regular file's metadata (`workspaceFiles/stat`).
   Future<WorkspaceFileStat> statWorkspaceFile(String sessionId, String path) =>
       _unsupported('statWorkspaceFile');

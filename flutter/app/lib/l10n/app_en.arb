@@ -1720,6 +1720,18 @@
   "@filePreviewBinary": {
     "description": "Preview notice for a binary or undecodable file."
   },
+  "filePreviewTooLarge": "This file is too large to preview.",
+  "@filePreviewTooLarge": {
+    "description": "Preview notice when the host refuses the page over its byte cap (workspace-file/too-large)."
+  },
+  "filePreviewNotFound": "This file is no longer there.",
+  "@filePreviewNotFound": {
+    "description": "Preview notice when the path has no entry (workspace-file/not-found)."
+  },
+  "filePreviewUnsupported": "This file type can''t be previewed in the app.",
+  "@filePreviewUnsupported": {
+    "description": "Preview notice for a file whose format the app has no renderer for (pdf, zip, office, media, fonts); the state offers Copy path instead of Retry."
+  },
   "filePreviewEmpty": "This file is empty.",
   "@filePreviewEmpty": {
     "description": "Preview notice for a zero-byte text file."

@@ -30,7 +30,7 @@ process/contract drift, not Flutter behavior.
   the `super(ctx, '<key>'[, { namespace }])` binding, and each line-anchored
   `@Remote` decorator, plus the Gateway's `REMOTE_EVENT_RESULT_ENDPOINT`.
   `fixture.ts` was rejected — it is the upstream client's fake and omits
-  endpoints the 0.1.5 host registers (`workspaceFiles/readBytes`, `readAll`)
+  endpoints the pinned host registers (`workspaceFiles/readBytes` among them)
   — and the bundle patch was rejected as an overlay parse with no stdlib
   reader. An unparsable declaration fails the gate loudly; nothing is dropped.
 - **One normalisation, then a reviewed declared-only allowlist.** Comparison

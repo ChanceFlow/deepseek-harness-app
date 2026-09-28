@@ -19,10 +19,10 @@ The Flutter client aligns with DSH 0.1.5 contracts:
   - In-history system prompt replacements (`surfaceOp == 'append'` or updates after Node 0) fold into `TimelineContextInjection` records with `producerLabel: 'system-prompt'`, providing inspectable notice cards titled with localized prompt-update copy.
   - Safe pass-through for unknown `team/*` events in `TimelineReducer`.
 - **`workspaceFiles` Remote API integration**:
-  - `DshRpcEndpoints` registers `workspaceFiles/stat`, `workspaceFiles/read`, `workspaceFiles/readBytes`, `workspaceFiles/readAll`, and `workspaceFiles/list`.
-  - `DshRemoteInvoker._prepareArgs` normalizes `{ sessionId, path, range }` arguments for `workspaceFiles/*` methods.
-  - Handwritten wire DTOs (`WorkspaceFileStatWire`, `WorkspaceFileTextWire`, `WorkspaceDirectoryEntryWire`, `WorkspaceDirectoryListingWire`) enforce fail-loud validation on missing required wire fields.
-  - `ChatRepository` and `HarnessRepositoryImpl` expose `readWorkspaceFile`, `statWorkspaceFile`, and `listWorkspaceDirectory`.
+  - `DshRpcEndpoints` registers `workspaceFiles/stat`, `workspaceFiles/read`, `workspaceFiles/readBytes`, and `workspaceFiles/list`.
+  - `DshRemoteInvoker._prepareArgs` maps the local `{ sessionId, path, … }` arguments onto each method's wire fields: `{ workspaceFileScopeId, path, range }` for `read`, `{ workspaceFileScopeId, path, options }` for `readBytes`, `{ workspaceFileScopeId, path }` for `stat` and `list`.
+  - Handwritten wire DTOs (`WorkspaceFileStatWire`, `WorkspaceFileTextWire`, `WorkspaceFileBytesWire`, `WorkspaceDirectoryEntryWire`, `WorkspaceDirectoryListingWire`) enforce fail-loud validation on missing required wire fields.
+  - `ChatRepository` and `HarnessRepositoryImpl` expose `readWorkspaceFile`, `readWorkspaceFileBytes`, `statWorkspaceFile`, and `listWorkspaceDirectory`.
 - **Mobile file preview & deliverable artifact actions**:
   - `ToolCallRow` inspects `model.filePath` for file-modifying tools (`write`, `edit`, `read`) and renders action buttons ("Preview" and "Copy path").
   - The chat surface passes a real preview action into both production `ToolCallRow` sites — the flat `TimelineRow` path and the grouped `ActivityGroupRow` path — from `ChatController.readWorkspaceFile`, so the button is no longer test-only.

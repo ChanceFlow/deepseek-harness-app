@@ -184,7 +184,7 @@ currently **`dsh-v0.1.7-rc.2`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 50 of 125 Remote methods registered by the pinned
+version. Coverage today is 51 of 125 Remote methods registered by the pinned
 tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
 the unwired remainder, and the two reviewed declared-only names; the
 `verify_wire_pin` gate holds both documents to the two registries and fails a

@@ -3499,6 +3499,24 @@ abstract class AppLocalizations {
   /// **'This file isn\'\'t text, so it can\'\'t be previewed.'**
   String get filePreviewBinary;
 
+  /// Preview notice when the host refuses the page over its byte cap (workspace-file/too-large).
+  ///
+  /// In en, this message translates to:
+  /// **'This file is too large to preview.'**
+  String get filePreviewTooLarge;
+
+  /// Preview notice when the path has no entry (workspace-file/not-found).
+  ///
+  /// In en, this message translates to:
+  /// **'This file is no longer there.'**
+  String get filePreviewNotFound;
+
+  /// Preview notice for a file whose format the app has no renderer for (pdf, zip, office, media, fonts); the state offers Copy path instead of Retry.
+  ///
+  /// In en, this message translates to:
+  /// **'This file type can\'\'t be previewed in the app.'**
+  String get filePreviewUnsupported;
+
   /// Preview notice for a zero-byte text file.
   ///
   /// In en, this message translates to:

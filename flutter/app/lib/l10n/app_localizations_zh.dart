@@ -1939,6 +1939,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filePreviewBinary => '该文件不是文本，无法预览。';
 
   @override
+  String get filePreviewTooLarge => '该文件过大，无法预览。';
+
+  @override
+  String get filePreviewNotFound => '该文件已不存在。';
+
+  @override
+  String get filePreviewUnsupported => '该文件类型无法在应用内预览。';
+
+  @override
   String get filePreviewEmpty => '该文件为空。';
 
   @override
