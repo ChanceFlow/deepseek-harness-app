@@ -70,6 +70,18 @@ final class DshRemoteInvoker {
         'range': payload['range'] ?? const <String, Object?>{},
       };
     }
+    if (endpoint == DshRpcEndpoints.workspaceFilesReadBytes) {
+      // The scope lookup's wire field plus the required
+      // `WorkspaceByteReadOptions` argument; every option field is optional, so
+      // `{}` reads the complete file. Cancellation reaches the host as the
+      // injected `signal`, never in `args`
+      // (reference/deepseek-harness/packages/typert/protocol/src/types.ts:359-363).
+      return <String, Object?>{
+        'workspaceFileScopeId': payload['sessionId'],
+        'path': payload['path'],
+        'options': payload['options'] ?? const <String, Object?>{},
+      };
+    }
     if (endpoint == DshRpcEndpoints.workspaceFilesStat ||
         endpoint == DshRpcEndpoints.workspaceFilesList) {
       return <String, Object?>{

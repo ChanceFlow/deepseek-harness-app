@@ -1,6 +1,8 @@
 /// Pure-Dart domain representations for DSH 0.1.5 workspaceFiles service.
 library;
 
+import 'dart:typed_data';
+
 /// File metadata without content.
 final class WorkspaceFileStat {
   const WorkspaceFileStat({
@@ -60,6 +62,68 @@ final class WorkspaceFileContent {
   @override
   int get hashCode =>
       Object.hash(absolutePath, version, text, offset, lines, eof, bytes);
+}
+
+/// Raw bytes read from a workspace file, with the stat that preceded the read.
+///
+/// Mirrors the reference `WorkspaceFileBytes`
+/// (`reference/deepseek-harness/packages/api/workspace-files/src/types.ts:84`):
+/// the byte window's bytes plus the file's identity and freshness. A whole-file
+/// read is [offset] `0` with [eof] true.
+final class WorkspaceFileBytes {
+  const WorkspaceFileBytes({
+    required this.absolutePath,
+    required this.version,
+    required this.offset,
+    required this.data,
+    required this.eof,
+    this.bytes,
+  });
+
+  final String absolutePath;
+  final String version;
+
+  /// Byte size of the complete file, when the backend reports it.
+  final int? bytes;
+
+  /// First byte of the window; 0 for a whole-file read.
+  final int offset;
+
+  /// The window's native bytes; empty at or past EOF.
+  final Uint8List data;
+
+  /// Whether the window includes the file's last byte.
+  final bool eof;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkspaceFileBytes &&
+          other.absolutePath == absolutePath &&
+          other.version == version &&
+          other.bytes == bytes &&
+          other.offset == offset &&
+          other.eof == eof &&
+          _sameBytes(other.data, data));
+
+  @override
+  int get hashCode => Object.hash(
+    absolutePath,
+    version,
+    bytes,
+    offset,
+    Object.hashAll(data),
+    eof,
+  );
+}
+
+/// Compares two byte views by content, not identity.
+bool _sameBytes(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 /// An entry inside a workspace directory listing.

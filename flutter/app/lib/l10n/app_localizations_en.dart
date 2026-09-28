@@ -2024,6 +2024,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'This file isn\'t text, so it can\'t be previewed.';
 
   @override
+  String get filePreviewTooLarge => 'This file is too large to preview.';
+
+  @override
+  String get filePreviewNotFound => 'This file is no longer there.';
+
+  @override
+  String get filePreviewUnsupported =>
+      'This file type can\'t be previewed in the app.';
+
+  @override
   String get filePreviewEmpty => 'This file is empty.';
 
   @override

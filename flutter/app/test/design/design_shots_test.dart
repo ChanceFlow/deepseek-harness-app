@@ -29,6 +29,7 @@ import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
@@ -38,6 +39,7 @@ import 'package:app/ui/theme/theme.dart';
 import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/workspace_file.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -75,6 +77,8 @@ final class DesignShot {
     this.dark = true,
     this.locale,
     this.loadAttachment,
+    this.readFile,
+    this.readFileBytes,
   });
 
   final String name;
@@ -104,12 +108,55 @@ final class DesignShot {
   /// Durable-attachment answer for a state that carries result images; null
   /// leaves the surface's bare-pump answer (a placeholder frame).
   final AttachmentLoader? loadAttachment;
+
+  /// Workspace-file answer for a state whose shot opens the preview sheet;
+  /// null leaves the surface's bare-pump answer, which refuses the read.
+  final WorkspaceFileReader? readFile;
+
+  /// Byte answer for the same sheet: an image path reads bytes directly, and
+  /// a text path falls back to them after a `not-text` refusal. Null leaves
+  /// the bare-pump refusal.
+  final WorkspaceFileBytesReader? readFileBytes;
 }
 
 /// The bare harness' answer for a durable attachment: nothing was fetched,
 /// so an image card renders its placeholder frame.
 Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) =>
     Future<Uint8List?>.value();
+
+/// The bare harness' answer for a workspace-file read: the seam is unwired, so
+/// the preview sheet renders its failure state rather than a fetched file.
+Future<WorkspaceFileContent> _noWorkspaceFileRead(
+  String sessionId,
+  String path,
+) async {
+  throw UnsupportedError('workspaceFiles/read is not wired');
+}
+
+/// The bare harness' answer for a workspace byte read, refused for the same
+/// reason: the seam has no repository behind it.
+Future<WorkspaceFileBytes> _noWorkspaceFileBytes(
+  String sessionId,
+  String path,
+) async {
+  throw UnsupportedError('workspaceFiles/readBytes is not wired');
+}
+
+/// The text the extensionless-licence preview shot shows: a plain file that
+/// takes the sheet's text window rather than an image or a refusal.
+const String kDesignLicenceText = '''
+ISC License
+
+Copyright (c) 2026 the deepseek-harness-app authors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS.
+''';
 
 final List<DesignShot> shots = <DesignShot>[
   DesignShot(name: 'timeline-folding', state: timelineFoldingStateEn()),
@@ -188,6 +235,114 @@ final List<DesignShot> shots = <DesignShot>[
     state: presentedFilesState(),
     act: (tester) async {
       await tester.tap(find.byType(ActivityGroupRow));
+      await settle(tester);
+    },
+  ),
+  // The preview sheet on a delivered file, one shot per answer the sheet can
+  // give: it used to collapse every failure into a single "load failed" line
+  // with a Retry that could never succeed. The first delivered card is a
+  // rendered PNG, so its open takes the image path — the byte read — while a
+  // PDF card takes the no-renderer path without spending a call at all.
+  DesignShot(
+    name: 'preview-too-large',
+    state: presentedFilesState(),
+    readFile: (sessionId, path) async => throw DshBusinessException(
+      code: 'workspace-file/too-large',
+      message: 'lines 1-5000 of "$path" exceed the 2097152 byte cap',
+    ),
+    readFileBytes: (sessionId, path) async => throw DshBusinessException(
+      code: 'workspace-file/too-large',
+      message: 'lines 1-5000 of "$path" exceed the 2097152 byte cap',
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').first);
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'preview-not-found',
+    state: presentedFilesState(),
+    readFile: (sessionId, path) async => throw DshBusinessException(
+      code: 'workspace-file/not-found',
+      message: path,
+    ),
+    readFileBytes: (sessionId, path) async => throw DshBusinessException(
+      code: 'workspace-file/not-found',
+      message: path,
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').first);
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'preview-failed',
+    state: presentedFilesState(),
+    readFile: (sessionId, path) async => throw DshBusinessException(
+      code: 'gateway/unavailable',
+      message: 'gateway down',
+    ),
+    readFileBytes: (sessionId, path) async => throw DshBusinessException(
+      code: 'gateway/unavailable',
+      message: 'gateway down',
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').first);
+      await settle(tester);
+    },
+  ),
+  // A declared PDF: no renderer exists, so the sheet names the path and offers
+  // the copy action instead of spending a read that cannot change the answer.
+  DesignShot(
+    name: 'preview-unsupported',
+    state: presentedFilesState(),
+    act: (tester) async {
+      await tester.tap(find.text('Open').at(2));
+      await settle(tester);
+    },
+  ),
+  // The two answers a readable file gets: a licence file with no extension is
+  // read as text and takes the fenced window, and the rendered PNG is read as
+  // bytes and drawn — the sheet spends the byte call only on the image path.
+  DesignShot(
+    name: 'preview-text',
+    state: presentedFilesState(),
+    readFile: (sessionId, path) async => WorkspaceFileContent(
+      absolutePath: '/srv/art-pipeline/$path',
+      version: 'v1',
+      text: kDesignLicenceText,
+      offset: 1,
+      lines: kDesignLicenceText.split('\n').length,
+      eof: true,
+      bytes: kDesignLicenceText.length,
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').at(3));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'preview-image',
+    state: presentedFilesState(),
+    readFileBytes: (sessionId, path) async => WorkspaceFileBytes(
+      absolutePath: '/srv/art-pipeline/$path',
+      version: 'v1',
+      offset: 0,
+      data: base64Decode(kDesignImagePngBase64),
+      eof: true,
+      bytes: base64Decode(kDesignImagePngBase64).length,
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').first);
+      await settle(tester);
+      // A memory image decode needs the real event loop; without this the
+      // frame is still pending when the golden is captured.
+      await tester.runAsync(() async {
+        await precacheImage(
+          MemoryImage(base64Decode(kDesignImagePngBase64)),
+          tester.element(find.byType(MaterialApp)),
+        );
+      });
       await settle(tester);
     },
   ),
@@ -1269,6 +1424,9 @@ Future<void> _render(
                 uiState: shot.state!,
                 onAction: (_) {},
                 loadAttachment: shot.loadAttachment ?? _noAttachment,
+                readWorkspaceFile: shot.readFile ?? _noWorkspaceFileRead,
+                readWorkspaceFileBytes:
+                    shot.readFileBytes ?? _noWorkspaceFileBytes,
               ),
             ),
           ),

@@ -5,6 +5,8 @@
 /// into nulls with `runCatching` exactly like the Kotlin code).
 library;
 
+import 'dart:typed_data';
+
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
@@ -56,6 +58,28 @@ JsonMap _reqObject(JsonMap json, String key) {
   final value = asJsonObject(json[key]);
   if (value == null) _missing(json, key);
   return value;
+}
+
+/// Reads one byte view.
+///
+/// The transport splices the attachment's bytes over the codec's `null`
+/// placeholder, so a present `data` is a [Uint8List] (or a JSON number array
+/// from a fixture); a `null` placeholder, an absent key, or a non-byte element
+/// is host breakage and fails loud naming [key].
+Uint8List _reqBytes(JsonMap json, String key) {
+  if (!json.containsKey(key)) _missing(json, key);
+  final value = json[key];
+  if (value is Uint8List) return value;
+  if (value is List) {
+    final bytes = Uint8List(value.length);
+    for (var i = 0; i < value.length; i++) {
+      final byte = value[i];
+      if (byte is! int || byte < 0 || byte > 255) _missing(json, key);
+      bytes[i] = byte;
+    }
+    return bytes;
+  }
+  _missing(json, key);
 }
 
 // ---------------------------------------------------------------------------
@@ -977,6 +1001,23 @@ final class WorkspaceFileTextWire {
   final int offset;
   final String text;
   final int lines;
+  final bool eof;
+}
+
+final class WorkspaceFileBytesWire {
+  WorkspaceFileBytesWire.fromJson(JsonMap json)
+    : absolutePath = _reqString(json, 'absolutePath'),
+      version = _reqString(json, 'version'),
+      bytes = wireLongOrNull(json, 'bytes'),
+      offset = _reqLong(json, 'offset'),
+      data = _reqBytes(json, 'data'),
+      eof = _reqBool(json, 'eof');
+
+  final String absolutePath;
+  final String version;
+  final int? bytes;
+  final int offset;
+  final Uint8List data;
   final bool eof;
 }
 

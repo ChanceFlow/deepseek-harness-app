@@ -655,6 +655,47 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<WorkspaceFileBytes> readWorkspaceFileBytes(
+    String sessionId,
+    String path, {
+    int? offset,
+    int? length,
+    String? baseFile,
+  }) async {
+    // `options` is the required `WorkspaceByteReadOptions` argument; an empty
+    // object is the whole-file read (`range` absent). The `sessionId` key is
+    // mapped to the scope lookup's `workspaceFileScopeId` wire field by
+    // `DshRemoteInvoker._prepareArgs`.
+    final options = <String, Object?>{
+      if (offset != null || length != null)
+        'range': <String, Object?>{
+          if (offset != null) 'offset': offset,
+          if (length != null) 'length': length,
+        },
+      if (baseFile != null) 'baseFile': baseFile,
+    };
+    final value = await _call(
+      DshRpcEndpoints.workspaceFilesReadBytes,
+      DshRpcEndpoints.workspaceFilesReadBytes,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'path': path,
+        'options': options,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final wire = WorkspaceFileBytesWire.fromJson(value);
+    return WorkspaceFileBytes(
+      absolutePath: wire.absolutePath,
+      version: wire.version,
+      bytes: wire.bytes,
+      offset: wire.offset,
+      data: wire.data,
+      eof: wire.eof,
+    );
+  }
+
+  @override
   Future<WorkspaceFileStat> statWorkspaceFile(
     String sessionId,
     String path,

@@ -6,5 +6,6 @@ export 'dsh_event_socket.dart';
 export 'dsh_exceptions.dart';
 export 'dsh_rpc_client.dart';
 export 'http_dsh_rpc_client.dart';
+export 'rpc_binary_envelope.dart';
 export 'rpc_envelope.dart';
 export 'web_socket_dsh_event_socket.dart';

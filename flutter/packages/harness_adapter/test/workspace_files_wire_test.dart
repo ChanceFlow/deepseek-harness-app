@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:harness_adapter/src/dsh_connection_manager.dart';
 import 'package:harness_adapter/src/dsh_wire_types.dart';
@@ -80,6 +81,95 @@ void main() {
       expect(textWire.eof, isTrue);
     });
 
+    test('WorkspaceFileBytesWire decodes the spliced byte view', () {
+      final json = <String, Object?>{
+        'absolutePath': '/workspace/blob.bin',
+        'version': 'v9',
+        'bytes': 4,
+        'offset': 0,
+        'data': Uint8List.fromList(<int>[0, 1, 254, 255]),
+        'eof': true,
+      };
+
+      final wire = WorkspaceFileBytesWire.fromJson(json);
+      expect(wire.absolutePath, '/workspace/blob.bin');
+      expect(wire.version, 'v9');
+      expect(wire.bytes, 4);
+      expect(wire.offset, 0);
+      expect(wire.data, <int>[0, 1, 254, 255]);
+      expect(wire.eof, isTrue);
+    });
+
+    test('WorkspaceFileBytesWire accepts a JSON number array for data', () {
+      final wire = WorkspaceFileBytesWire.fromJson(<String, Object?>{
+        'absolutePath': '/workspace/blob.bin',
+        'version': 'v9',
+        'offset': 0,
+        'data': <Object?>[7, 8],
+        'eof': false,
+      });
+
+      expect(wire.data, <int>[7, 8]);
+      expect(wire.bytes, isNull);
+      expect(wire.eof, isFalse);
+    });
+
+    test('WorkspaceFileBytesWire fails loud when the bytes never arrived', () {
+      // The result codec leaves `data: null`; only the transport's attachment
+      // splice fills it in, so a `null` here is a carrier that did not carry
+      // the binary part.
+      expect(
+        () => WorkspaceFileBytesWire.fromJson(<String, Object?>{
+          'absolutePath': '/workspace/blob.bin',
+          'version': 'v9',
+          'offset': 0,
+          'data': null,
+          'eof': true,
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('data'),
+          ),
+        ),
+      );
+      expect(
+        () => WorkspaceFileBytesWire.fromJson(<String, Object?>{
+          'absolutePath': '/workspace/blob.bin',
+          'version': 'v9',
+          'offset': 0,
+          'eof': true,
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('data'),
+          ),
+        ),
+      );
+    });
+
+    test('WorkspaceFileBytesWire rejects a non-byte data element', () {
+      expect(
+        () => WorkspaceFileBytesWire.fromJson(<String, Object?>{
+          'absolutePath': '/workspace/blob.bin',
+          'version': 'v9',
+          'offset': 0,
+          'data': <Object?>[1, 'two'],
+          'eof': true,
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('data'),
+          ),
+        ),
+      );
+    });
+
     test('WorkspaceDirectoryListingWire decodes entries and truncated', () {
       final json = <String, Object?>{
         'path': 'src',
@@ -136,6 +226,88 @@ void main() {
       },
     );
 
+    test('readWorkspaceFileBytes reads the whole file with empty options', () async {
+      final rpc = _FakeFilesRpc();
+      final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
+      final repo = HarnessRepositoryImpl(rpc, manager);
+
+      final bytes = await repo.readWorkspaceFileBytes('session-1', 'blob.bin');
+      expect(rpc.calls.containsKey('workspaceFiles/readBytes'), isTrue);
+      final args =
+          rpc.calls['workspaceFiles/readBytes']!.last['args'] as JsonMap?;
+      // The scope argument is the `workspaceFileScope` lookup's wire field;
+      // `sessionId` is refused by the host as an unknown argument.
+      expect(args?['workspaceFileScopeId'], 'session-1');
+      expect(args?.containsKey('sessionId'), isFalse);
+      expect(args?['path'], 'blob.bin');
+      // `options` is required on the wire; `{}` means "no range" = whole file.
+      expect(args?['options'], <String, Object?>{});
+
+      expect(bytes.absolutePath, '/workspace/blob.bin');
+      expect(bytes.version, 'v9');
+      expect(bytes.bytes, 4);
+      expect(bytes.offset, 0);
+      expect(bytes.eof, isTrue);
+      expect(bytes.data, <int>[0, 1, 254, 255]);
+    });
+
+    test(
+      'readWorkspaceFileBytes sends the byte window and base file',
+      () async {
+        final rpc = _FakeFilesRpc();
+        final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
+        final repo = HarnessRepositoryImpl(rpc, manager);
+
+        await repo.readWorkspaceFileBytes(
+          'session-1',
+          'blob.bin',
+          offset: 4,
+          length: 8,
+          baseFile: 'notes.txt',
+        );
+        final args =
+            rpc.calls['workspaceFiles/readBytes']!.last['args'] as JsonMap?;
+        final options = args?['options'] as JsonMap?;
+        expect(options?['range'], <String, Object?>{'offset': 4, 'length': 8});
+        expect(options?['baseFile'], 'notes.txt');
+      },
+    );
+
+    test('readWorkspaceFileBytes decodes an empty file', () async {
+      final rpc = _FakeFilesRpc()
+        ..readBytesData = Uint8List(0)
+        ..readBytesSize = 0;
+      final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
+      final repo = HarnessRepositoryImpl(rpc, manager);
+
+      final bytes = await repo.readWorkspaceFileBytes('session-1', 'empty.bin');
+      expect(bytes.data, isEmpty);
+      expect(bytes.bytes, 0);
+      expect(bytes.eof, isTrue);
+    });
+
+    test(
+      'readWorkspaceFileBytes fails loud when the byte part never arrived',
+      () async {
+        // A reply whose `data` is still the codec's `null` placeholder: the
+        // transport carried no binary part.
+        final rpc = _FakeFilesRpc()..readBytesData = null;
+        final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
+        final repo = HarnessRepositoryImpl(rpc, manager);
+
+        await expectLater(
+          repo.readWorkspaceFileBytes('session-1', 'blob.bin'),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains('data'),
+            ),
+          ),
+        );
+      },
+    );
+
     test('statWorkspaceFile invokes workspaceFiles/stat', () async {
       final rpc = _FakeFilesRpc();
       final manager = DshConnectionManager(_FakeSocket(), (_) => 10000);
@@ -177,6 +349,13 @@ void main() {
 class _FakeFilesRpc implements DshRpcClient {
   final Map<String, List<JsonMap>> calls = <String, List<JsonMap>>{};
 
+  /// Bytes a `workspaceFiles/readBytes` reply carries. Null leaves the codec's
+  /// unspliced `data` placeholder, the shape a transport that dropped the
+  /// binary part would deliver.
+  Object? readBytesData = Uint8List.fromList(<int>[0, 1, 254, 255]);
+
+  int readBytesSize = 4;
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -185,6 +364,19 @@ class _FakeFilesRpc implements DshRpcClient {
     Duration? timeout,
   }) async {
     calls.putIfAbsent(endpoint, () => <JsonMap>[]).add(payload);
+    if (endpoint == 'workspaceFiles/readBytes') {
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{
+          'absolutePath': '/workspace/blob.bin',
+          'version': 'v9',
+          'bytes': readBytesSize,
+          'offset': 0,
+          'data': readBytesData,
+          'eof': true,
+        },
+      );
+    }
     if (endpoint == 'workspaceFiles/read') {
       return RpcResult(
         ok: true,

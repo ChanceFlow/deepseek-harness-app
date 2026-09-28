@@ -11,6 +11,7 @@ import 'package:http/io_client.dart' show IOClient;
 
 import 'dsh_exceptions.dart';
 import 'dsh_rpc_client.dart';
+import 'rpc_binary_envelope.dart';
 import 'rpc_envelope.dart';
 
 /// Bound on TCP/TLS connection establishment only — never a request deadline
@@ -106,10 +107,20 @@ final class HttpDshRpcClient implements DshRpcClient {
     String expectedRpcId, {
     Duration? timeout,
   }) async {
-    final responseText = await _executeRaw(path, requestJson, timeout: timeout);
+    final response = await _post(path, requestJson, timeout: timeout);
+    final contentType = response.headers['content-type'];
     final ServerResponse decoded;
     try {
-      decoded = ServerResponse.fromJson(jsonDecode(responseText));
+      // A result carrying bytes arrives as `multipart/form-data` with the byte
+      // fields projected out of the JSON body; see `rpc_binary_envelope.dart`.
+      decoded = isRpcAttachmentResponse(contentType)
+          ? decodeRpcAttachmentResponse(
+              bodyBytes: response.bodyBytes,
+              contentType: contentType ?? '',
+            )
+          : ServerResponse.fromJson(
+              jsonDecode(utf8.decode(response.bodyBytes)),
+            );
     } catch (error) {
       throw DshTransportException('invalid server-response for $path', error);
     }
@@ -123,6 +134,13 @@ final class HttpDshRpcClient implements DshRpcClient {
   }
 
   Future<String> _executeRaw(
+    String path,
+    JsonMap requestJson, {
+    Duration? timeout,
+  }) async =>
+      utf8.decode((await _post(path, requestJson, timeout: timeout)).bodyBytes);
+
+  Future<http.Response> _post(
     String path,
     JsonMap requestJson, {
     Duration? timeout,
@@ -155,8 +173,9 @@ final class HttpDshRpcClient implements DshRpcClient {
     } catch (error) {
       throw DshTransportException('transport failure for $path', error);
     }
-    final responseText = utf8.decode(response.bodyBytes);
     if (response.statusCode ~/ 100 != 2) {
+      // A failure is always a JSON envelope, never the multipart carrier.
+      final responseText = utf8.decode(response.bodyBytes);
       final clipped = responseText.length <= 300
           ? responseText
           : responseText.substring(0, 300);
@@ -165,7 +184,7 @@ final class HttpDshRpcClient implements DshRpcClient {
         response.statusCode,
       );
     }
-    return responseText;
+    return response;
   }
 }
 

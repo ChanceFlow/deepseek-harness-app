@@ -228,10 +228,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 52
+declared = 53
 upstream = 125
-identical = 50
-missing = 75
+identical = 51
+missing = 74
 client-only = 2
 out-of-scope = agentPresets/read
 <!-- wire-pin:coverage:end -->
@@ -250,20 +250,36 @@ gate as a defect. `out-of-scope` lists registered methods the client
 intentionally does not wire: a name here must be a real pin method and must
 stay unwired.
 
+The comparison is by **name only**. A payload or result shape that changes
+under a stable name — a renamed argument, a codec swap such as base64 to
+multipart — is invisible here, so a shape claim rests on the reference citation
+in the client code, not on this block.
+
 A stream the client opens with a literal string rather than through
 `DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,
 `$events`, and the per-session `job/list` — is outside this block's
 comparison entirely, so a renamed or withdrawn stream route has to be caught
-by hand or by the opt-in real-host tier.
+by hand or by the opt-in real-host tier. The same blindness covers a unary
+endpoint called by a literal: this gate reads the `DshRpcEndpoints` registry,
+so a call site that bypasses the registry is invisible to it. Routing every
+call through `DshRpcEndpoints` is what keeps the block meaningful.
 
 ### 4.7 Non-RPC routes
 
-One host route is a plain HTTP GET outside the typert RPC envelope: it answers
-with a file body, so it has no `result` to unwrap and no method name for the
-Remote registry. The client declares it in `DshHttpRoutes`
-(`flutter/packages/harness_adapter/lib/src/rpc_map.dart`), deliberately
-outside `DshRpcEndpoints`, whose members §4.6 compares against the pinned
-Remote surface.
+The client declares one host route that is a plain HTTP GET outside the typert
+RPC envelope: it answers with a file body, so it has no `result` to unwrap and
+no method name for the Remote registry. The client declares it in
+`DshHttpRoutes` (`flutter/packages/harness_adapter/lib/src/rpc_map.dart`),
+deliberately outside `DshRpcEndpoints`, whose members §4.6 compares against the
+pinned Remote surface.
+
+The pin serves further non-RPC routes the client does not declare, so this
+section is the client's list, not the pin's: `GET|HEAD /api/file?path=<absolute>`
+returns one file's whole bytes (no `Range`, capped by the attachment image
+limit, MIME from the extension,
+`reference/deepseek-harness/packages/api/session-controller/src/media-references.ts`),
+and `present-open` / `changes-open` open or reveal a delivered path on the host
+itself (`.../client/ui-deliverables/src/present-open.ts`).
 
 | Route | Methods | Body | Client surface |
 |---|---|---|---|

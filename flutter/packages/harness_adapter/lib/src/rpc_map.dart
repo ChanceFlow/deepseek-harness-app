@@ -74,13 +74,33 @@ abstract final class DshRpcEndpoints {
       'workspace/insertSessionBefore';
   static const String workspaceArchiveSession = 'workspace/archiveSession';
 
-  // Workspace Files (DSH 0.1.5 workspaceFiles service). 0.1.7 deleted
-  // `readAll` (whole-file bytes now ride `readBytes` with no range) and
-  // `readRelated`, and moved `readBytes` to a binary attachment codec this
-  // client's JSON carrier cannot decode; neither byte read is declared here
-  // because the client has no whole-file-bytes call site.
+  // Workspace Files. `read` pages decoded UTF-8 text; `readBytes` returns
+  // native bytes — the whole file when `options.range` is absent, one window
+  // otherwise. Both scope the file through the `workspaceFileScope` lookup.
+  //
+  // `readBytes` answers a `WorkspaceFileBytes` whose `data` is a `Uint8Array`
+  // (reference/deepseek-harness/packages/api/workspace-files/src/index.ts:256
+  // `@Remote`, :262 return type, :270 ranged return, :279 whole-file return;
+  // types.ts:84). The Typert result codec projects a `Uint8Array` field out of
+  // the JSON body as a `null` placeholder and records it at its result-relative
+  // path (packages/typert/protocol/src/types.ts:283-288 `encode`/`writeBytes`;
+  // packages/typert/generator/src/emitter.ts:1059 roots that path at the result
+  // value, :575-576 writes the placeholder for the leaf;
+  // packages/api/gateway/src/index.ts:991-1001 collects `{path, bytes}`).
+  // A reply carrying attachments is therefore `multipart/form-data` — a
+  // `metadata` JSON field plus one `bytes-<i>` binary part per attachment
+  // (packages/client/connection/src/rpc-host.ts:300-311) — and the reference
+  // client splices each part back over its placeholder
+  // (packages/client/connection/src/client/rpc.ts:83-139).
+  // `decodeRpcAttachmentResponse` in package:network performs that splice, so
+  // the byte carrier reaches this package as an ordinary result value.
   static const String workspaceFilesStat = 'workspaceFiles/stat';
   static const String workspaceFilesRead = 'workspaceFiles/read';
+
+  /// Whole-file or byte-window read —
+  /// `readBytes(workspaceFileScope, path, options, signal)`; the file preview's
+  /// byte path.
+  static const String workspaceFilesReadBytes = 'workspaceFiles/readBytes';
   static const String workspaceFilesList = 'workspaceFiles/list';
 
   // Settings & Commands

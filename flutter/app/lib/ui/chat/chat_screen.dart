@@ -158,6 +158,7 @@ class ChatRoute extends ConsumerWidget {
                   onAction: controller.onAction,
                   loadAttachment: controller.loadAttachmentBytes,
                   readWorkspaceFile: controller.readWorkspaceFile,
+                  readWorkspaceFileBytes: controller.readWorkspaceFileBytes,
                   backendId: resolved,
                   backendSlices: slices,
                   onRefreshModels: controller.refreshModels,
@@ -241,6 +242,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     this.loadAttachment = _noAttachment,
     this.readWorkspaceFile = _noWorkspaceFileRead,
+    this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
     this.onRefreshModels,
     this.backendId,
     this.localState,
@@ -257,6 +259,10 @@ class ChatScreen extends StatefulWidget {
 
   /// Repository seam for the file-preview sheet (`workspaceFiles/read`).
   final WorkspaceFileReader readWorkspaceFile;
+
+  /// Repository seam for the file-preview sheet's byte reads
+  /// (`workspaceFiles/readBytes`).
+  final WorkspaceFileBytesReader readWorkspaceFileBytes;
 
   /// The backend this surface presents (drives pushed session-tool
   /// pages); null falls back to the active backend at push time.
@@ -305,6 +311,15 @@ class ChatScreen extends StatefulWidget {
     String path,
   ) async {
     throw UnsupportedError('workspaceFiles/read is not wired');
+  }
+
+  /// Bare pumps own no repository: an image preview opened without a real byte
+  /// reader surfaces the localized failure instead of rendering nothing.
+  static Future<WorkspaceFileBytes> _noWorkspaceFileBytes(
+    String sessionId,
+    String path,
+  ) async {
+    throw UnsupportedError('workspaceFiles/readBytes is not wired');
   }
 
   @override
@@ -546,6 +561,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
                             readWorkspaceFile: widget.readWorkspaceFile,
+                            readWorkspaceFileBytes:
+                                widget.readWorkspaceFileBytes,
                             models: uiState.models,
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
@@ -612,6 +629,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
                     readWorkspaceFile: widget.readWorkspaceFile,
+                    readWorkspaceFileBytes: widget.readWorkspaceFileBytes,
                     models: uiState.models,
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
@@ -869,6 +887,7 @@ class ChatPanel extends StatefulWidget {
     required this.onAction,
     required this.loadAttachment,
     required this.readWorkspaceFile,
+    required this.readWorkspaceFileBytes,
     super.key,
     this.outline = false,
     this.models,
@@ -884,6 +903,9 @@ class ChatPanel extends StatefulWidget {
 
   /// Repository seam the file-preview sheet reads through.
   final WorkspaceFileReader readWorkspaceFile;
+
+  /// Repository seam the file-preview sheet reads bytes through.
+  final WorkspaceFileBytesReader readWorkspaceFileBytes;
 
   /// The backend this surface presents; drives the pushed subagent record a
   /// workflow member row opens. Null leaves member rows read-only.
@@ -1549,6 +1571,7 @@ class _ChatPanelState extends State<ChatPanel> {
         sessionId: sessionId,
         path: path,
         readFile: widget.readWorkspaceFile,
+        readFileBytes: widget.readWorkspaceFileBytes,
         initialDiff: diff,
       ),
     );
