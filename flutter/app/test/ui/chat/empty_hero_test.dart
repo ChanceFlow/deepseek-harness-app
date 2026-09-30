@@ -183,7 +183,62 @@ void main() {
     );
   });
 
-  testWidgets('empty timeline while the conversation loads shows a spinner', (
+  testWidgets('a window holding only the live chrome mirrors keeps the hero', (
+    tester,
+  ) async {
+    // The host republishes two live mirrors for every followed session — the
+    // queue snapshot and the job roster, the latter answered on open even
+    // when it is empty. With neither mirror showing a row, nothing has
+    // happened in this conversation yet (the sidebar's long-press create
+    // reuses such a session, whose window is already warm from a follow).
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: true)],
+        selectedSessionId: 's1',
+        timeline: [
+          TimelineQueue(items: []),
+          TimelineJobs(jobs: []),
+        ],
+      ),
+      [],
+    );
+
+    expect(find.byType(EmptyHero), findsOneWidget);
+    expect(find.text('Into the Unknown'), findsOneWidget);
+    expect(find.text('Preview'), findsOneWidget);
+  });
+
+  testWidgets('a row in the live queue mirror keeps the hero away', (
+    tester,
+  ) async {
+    // The queue mirror is chrome only while it holds nothing: a queued or
+    // steered message is the reader's own words and renders on this surface,
+    // so the conversation is no longer blank.
+    await _pump(
+      tester,
+      const ChatUiState(
+        sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: true)],
+        selectedSessionId: 's1',
+        timeline: [
+          TimelineQueue(
+            items: [
+              SessionQueueItem(
+                itemId: 'st1',
+                placement: QueuePlacement.steering,
+                text: 'steer now',
+              ),
+            ],
+          ),
+        ],
+      ),
+      [],
+    );
+
+    expect(find.byType(EmptyHero), findsNothing);
+  });
+
+  testWidgets('the live mirrors beside a message still hide the hero', (
     tester,
   ) async {
     await _pump(
@@ -191,17 +246,47 @@ void main() {
       const ChatUiState(
         sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: false)],
         selectedSessionId: 's1',
-        isTimelineLoading: true,
+        timeline: [
+          TimelineJobs(jobs: []),
+          TimelineMessage(
+            ChatMessage(
+              id: 'm1',
+              sessionId: 's1',
+              role: MessageRole.user,
+              text: 'hello',
+            ),
+          ),
+        ],
       ),
       [],
     );
 
-    // The in-flight first load must read as a wait, not as an empty
-    // session: a centered loader replaces the empty hero.
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byType(EmptyHero), findsNothing);
     expect(find.text('Into the Unknown'), findsNothing);
   });
+
+  testWidgets(
+    'the live mirrors while the conversation loads show a spinner, not the hero',
+    (tester) async {
+      await _pump(
+        tester,
+        const ChatUiState(
+          sessions: [SessionSummary(id: 's1', title: 'Alpha', blank: true)],
+          selectedSessionId: 's1',
+          isTimelineLoading: true,
+          timeline: [TimelineJobs(jobs: [])],
+        ),
+        [],
+      );
+
+      // The in-flight first load must read as a wait, not as an empty
+      // session: a centered loader replaces the empty hero — the mirrors do
+      // not turn the wait into content.
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(EmptyHero), findsNothing);
+      expect(find.text('Into the Unknown'), findsNothing);
+    },
+  );
 
   testWidgets('empty timeline after a settled load shows the empty hero', (
     tester,

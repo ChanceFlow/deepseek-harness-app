@@ -2024,6 +2024,48 @@ void main() {
     },
   );
 
+  test(
+    'a followed session with no jobs still carries the roster mirror',
+    () async {
+      // `job/list` yields one whole-set `rows` frame on open
+      // (`packages/api/job-controller/src/rows.ts` yields it
+      // unconditionally), so a session with no jobs answers `jobs: []` and
+      // the fold still mints its `TimelineJobs` item. The window of an
+      // otherwise message-free conversation is therefore never empty: the UI
+      // cannot read an empty `timeline` as "nothing has happened here yet".
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-k',
+          'updatedAt': 1,
+          'blank': true,
+        },
+      ])..historyEvents['session-k'] = <Object?>[];
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'job-list-session-k',
+            method: 'job/list',
+            payload: <String, Object?>{'type': 'rows', 'jobs': <Object?>[]},
+          ),
+        ],
+      );
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+      await repository.openSession('session-k');
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final window = await repository
+          .observeTimelineWindow('session-k')
+          .firstWhere(
+            (value) => value.items.any((item) => item is TimelineJobs),
+          );
+      expect(window.items.whereType<TimelineJobs>().single.jobs, isEmpty);
+      expect(window.items, isNotEmpty);
+    },
+  );
+
   test('a developer/message folds as a context row, not a user bubble', () async {
     // 0.1.7 added `developer/message` (an incremental agent session change on
     // the model-visible surface). The upstream chat client presents it through
