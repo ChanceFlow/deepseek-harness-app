@@ -82,6 +82,37 @@ class _NeverSocket implements DshEventSocket {
   }
 }
 
+/// A socket that answers the `$events` ready handshake, so a surface that
+/// watches a backend-scoped provider settles its connection generation
+/// instead of leaving a handshake timeout pending at teardown
+/// (`reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts`
+/// `RemoteEventReadyFrame`).
+class _ReadySocket implements DshEventSocket {
+  final StreamController<ServerRequest> _frames =
+      StreamController<ServerRequest>.broadcast();
+
+  @override
+  Stream<ServerRequest> connect(String path, {void Function()? onOpen}) {
+    onOpen?.call();
+    // A broadcast controller drops events with no listener; the handshake
+    // frame therefore lands after this call's listener attaches.
+    scheduleMicrotask(
+      () => _frames.add(
+        ServerRequest(
+          rpcId: 'remote-events',
+          method: 'item',
+          payload: <String, Object?>{
+            'type': 'ready',
+            'clientId': 'client-1',
+            'host': <String, Object?>{'home': '/home/tester'},
+          },
+        ),
+      ),
+    );
+    return _frames.stream;
+  }
+}
+
 const _catalog = SessionModels(
   current: ModelSelection(
     provider: 'deepseek',
@@ -3295,8 +3326,11 @@ void main() {
     Future<void> pumpCompact(
       WidgetTester tester,
       ChatUiState uiState,
-      List<ChatAction> actions,
-    ) {
+      List<ChatAction> actions, {
+      String? backendId,
+      void Function(String backendId, String workspaceId)?
+      onCreateSessionInWorkspace,
+    }) {
       tester.view.physicalSize = const Size(600, 1280);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -3304,11 +3338,38 @@ void main() {
       return tester.pumpWidget(
         ProviderScope(
           child: l10nApp(
-            home: ChatScreen(uiState: uiState, onAction: actions.add),
+            home: ChatScreen(
+              uiState: uiState,
+              onAction: actions.add,
+              backendId: backendId,
+              onCreateSessionInWorkspace: onCreateSessionInWorkspace,
+            ),
           ),
         ),
       );
     }
+
+    /// One session inside one registered workspace: the drawer's grouped
+    /// tree needs both to render a project header.
+    ChatUiState groupedState() => _state(
+      sessions: const [
+        SessionSummary(
+          id: 's1',
+          title: 'Alpha',
+          blank: false,
+          cwd: '/tmp/proj',
+        ),
+      ],
+      workspaces: const [
+        WorkspaceSummary(
+          workspaceId: 'w1',
+          path: '/tmp/proj',
+          title: 'proj',
+          sessionIds: <String>['s1'],
+        ),
+      ],
+      selectedSessionId: 's1',
+    );
 
     testWidgets('the phone bar carries the session context and an overflow', (
       tester,
@@ -3413,6 +3474,94 @@ void main() {
 
       expect(actions, contains(const SelectSession('s2')));
       expect(find.byTooltip('Search sessions'), findsNothing); // drawer closed
+    });
+
+    testWidgets(
+      'long-pressing a project header closes the drawer and creates a session',
+      (tester) async {
+        final actions = <ChatAction>[];
+        await pumpCompact(tester, groupedState(), actions);
+
+        await tester.tap(find.byTooltip('Open navigation menu'));
+        await tester.pumpAndSettle();
+        final header = find.byKey(const ValueKey<String>('sidebar-group-w1'));
+        expect(header, findsOneWidget);
+        await tester.longPress(
+          find.descendant(of: header, matching: find.text('proj')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(actions, contains(const CreateSessionInWorkspace('w1')));
+        // The session is minted behind the drawer, so the reader must land
+        // on it rather than stay in the list (the row tap's own rule).
+        expect(find.byTooltip('Search sessions'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a backend-wired project-header long-press routes to the owning host '
+      'and closes the drawer',
+      (tester) async {
+        final actions = <ChatAction>[];
+        final dispatched = <String>[];
+        tester.view.physicalSize = const Size(600, 1280);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        // A backend-scoped surface reaches the connection manager; the fakes
+        // keep the test off the network and settle its handshake.
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              dshRpcClientProvider(Uri.parse(kDshBaseUrl))
+                  .overrideWithValue(_FakeRpc()),
+              dshEventSocketProvider(Uri.parse(kDshBaseUrl))
+                  .overrideWithValue(_ReadySocket()),
+            ],
+            child: l10nApp(
+              home: ChatScreen(
+                uiState: groupedState(),
+                onAction: actions.add,
+                backendId: 'b1',
+                onCreateSessionInWorkspace: (backendId, workspaceId) {
+                  dispatched.add('$backendId/$workspaceId');
+                },
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.byTooltip('Open navigation menu'));
+        await tester.pumpAndSettle();
+        await tester.longPress(
+          find.descendant(
+            of: find.byKey(const ValueKey<String>('sidebar-group-w1')),
+            matching: find.text('proj'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(dispatched, <String>['b1/w1']);
+        expect(actions, isEmpty);
+        expect(find.byTooltip('Search sessions'), findsNothing);
+      },
+    );
+
+    testWidgets('the New session bar closes the drawer when it creates', (
+      tester,
+    ) async {
+      final actions = <ChatAction>[];
+      await pumpCompact(tester, groupedState(), actions);
+
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('New session'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Default'));
+      await tester.pumpAndSettle();
+
+      expect(actions, contains(const CreateSessionInWorkspace(null)));
+      expect(find.byTooltip('Search sessions'), findsNothing);
     });
 
     testWidgets('rail collapse shrinks the pane, not the chat', (tester) async {

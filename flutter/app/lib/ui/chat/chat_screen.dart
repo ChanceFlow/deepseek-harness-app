@@ -425,6 +425,36 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.dispatchSessionAction?.call(backendId, ArchiveSession(sessionId));
   }
 
+  /// One create from the drawer's New session bar — its dialog's Default
+  /// seat mints an unaccounted session, so the workspace id may be null. The
+  /// session is minted behind the drawer, so the drawer closes and the reader
+  /// lands on it, the way a row tap lands them on theirs.
+  void _createSessionFromDrawer(
+    BuildContext drawerContext,
+    String? workspaceId,
+  ) {
+    widget.onAction(CreateSessionInWorkspace(workspaceId));
+    Scaffold.of(drawerContext).closeDrawer();
+  }
+
+  /// One create from a drawer project header's long-press, which always
+  /// names its workspace. The panel's own routing survives: the
+  /// backend-aware verb when the surface was given one, the active
+  /// controller's verb otherwise.
+  void _createSessionInWorkspaceFromDrawer(
+    BuildContext drawerContext,
+    String backendId,
+    String workspaceId,
+  ) {
+    final create = widget.onCreateSessionInWorkspace;
+    if (create != null) {
+      create(backendId, workspaceId);
+    } else {
+      widget.onAction(CreateSessionInWorkspace(workspaceId));
+    }
+    Scaffold.of(drawerContext).closeDrawer();
+  }
+
   PreferredSizeWidget _chatAppBar(
     BuildContext context,
     ChatUiState uiState,
@@ -590,33 +620,46 @@ class _ChatScreenState extends State<ChatScreen> {
             // stock drawer's own step.
             backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
             child: SafeArea(
-              child: SessionPanel(
-                inDrawer: true,
-                sessions: uiState.sessions,
-                workspaces: uiState.workspaces,
-                searchResults: uiState.searchResults,
-                selectedSessionId: uiState.selectedSessionId,
-                onSelectSession: (id) {
-                  onAction(SelectSession(id));
-                  Navigator.of(context).pop();
-                },
-                onCreateSession: (workspaceId) =>
-                    onAction(CreateSessionInWorkspace(workspaceId)),
-                onSearchSessions: (query) => onAction(SearchSessions(query)),
-                backendSlices: widget.backendSlices,
-                onSelectBackend: (backendId) {
-                  widget.onSelectBackend?.call(backendId);
-                  Navigator.of(context).pop();
-                },
-                onSelectBackendSession: (backendId, sessionId) {
-                  widget.onSelectBackendSession?.call(backendId, sessionId);
-                  Navigator.of(context).pop();
-                },
-                backendId: widget.backendId,
-                onRenameSession: _dispatchRenameSession,
-                onForkSession: _dispatchForkSession,
-                onArchiveSession: _dispatchArchiveSession,
-                onCreateSessionInWorkspace: widget.onCreateSessionInWorkspace,
+              // The drawer's own context: both create verbs — the New
+              // session bar's dialog and the project header's long-press —
+              // mint a session behind the drawer, so the drawer closes and
+              // the reader lands on it the way a row tap lands on theirs.
+              // A dialog opened by the bar is a route of its own and pops
+              // itself; closing the drawer under it is independent of that.
+              child: Builder(
+                builder: (drawerContext) => SessionPanel(
+                  inDrawer: true,
+                  sessions: uiState.sessions,
+                  workspaces: uiState.workspaces,
+                  searchResults: uiState.searchResults,
+                  selectedSessionId: uiState.selectedSessionId,
+                  onSelectSession: (id) {
+                    onAction(SelectSession(id));
+                    Navigator.of(context).pop();
+                  },
+                  onCreateSession: (workspaceId) =>
+                      _createSessionFromDrawer(drawerContext, workspaceId),
+                  onSearchSessions: (query) => onAction(SearchSessions(query)),
+                  backendSlices: widget.backendSlices,
+                  onSelectBackend: (backendId) {
+                    widget.onSelectBackend?.call(backendId);
+                    Navigator.of(context).pop();
+                  },
+                  onSelectBackendSession: (backendId, sessionId) {
+                    widget.onSelectBackendSession?.call(backendId, sessionId);
+                    Navigator.of(context).pop();
+                  },
+                  backendId: widget.backendId,
+                  onRenameSession: _dispatchRenameSession,
+                  onForkSession: _dispatchForkSession,
+                  onArchiveSession: _dispatchArchiveSession,
+                  onCreateSessionInWorkspace: (backendId, workspaceId) =>
+                      _createSessionInWorkspaceFromDrawer(
+                        drawerContext,
+                        backendId,
+                        workspaceId,
+                      ),
+                ),
               ),
             ),
           ),
@@ -1577,8 +1620,31 @@ class _ChatPanelState extends State<ChatPanel> {
     );
   }
 
+  /// Whether the window carries any conversation at all: the durable
+  /// transcript, with the live mirrors the host republishes for every
+  /// followed session counted only for what they actually show. Both land
+  /// unconditionally (`job/list` yields one whole-set `rows` frame on open,
+  /// an empty roster included), so a session nothing has happened in still
+  /// carries a non-empty window; "nothing here yet" is *this* predicate, not
+  /// [ChatUiState.timeline]. The roster is pure chrome; the queue snapshot
+  /// is chrome only while it holds no row, since a queued or steered message
+  /// is the reader's own words and renders on this surface (the composer
+  /// dock or the transcript tail). Reading the raw list would leave a blank
+  /// session's hero (fish headline, workspace and preset seats) hidden behind
+  /// two seats the reader cannot see — the state a session reached through
+  /// the sidebar's long-press create lands in, because its window is already
+  /// warm from an earlier follow.
+  static bool _hasConversationContent(ChatUiState uiState) =>
+      uiState.timeline.any(
+        (item) => switch (item) {
+          TimelineJobs() => false,
+          TimelineQueue(:final items) => items.isNotEmpty,
+          _ => true,
+        },
+      );
+
   Widget _timelineBody(ChatUiState uiState, SessionSummary? session) {
-    if (uiState.timeline.isEmpty) {
+    if (!_hasConversationContent(uiState)) {
       if (uiState.isTimelineLoading) {
         // First load of the selected conversation: never read the wait as
         // an empty session. A centered loader mirrors the subagent pane.

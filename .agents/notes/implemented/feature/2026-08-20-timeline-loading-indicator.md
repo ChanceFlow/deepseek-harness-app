@@ -26,11 +26,13 @@ was still loading, or a silent blank wait. The window carried
   fold into the loaded snapshot.
 - **Controller** (chat_controller.dart): threads `_timelineWindow.isLoading`
   into `ChatUiState.isTimelineLoading`.
-- **UI** (chat_screen.dart `_timelineBody`): when the timeline is empty
-  and `isTimelineLoading` is true, render a centered `CircularProgressIndicator`
-  (the same pattern the subagent pane uses for its empty-and-loading
-  state) instead of the EmptyHero. Once the window settles with no items,
-  the EmptyHero returns for genuinely blank sessions.
+- **UI** (chat_screen.dart `_timelineBody`): when the window carries no
+  conversation content — no transcript item beyond the live queue and job
+  mirrors — and `isTimelineLoading` is true, render a centered
+  `CircularProgressIndicator` (the same pattern the subagent pane uses for
+  its empty-and-loading state) instead of the EmptyHero. Once the window
+  settles with no content, the EmptyHero returns for genuinely blank
+  sessions ([the mirror rule](../bug-fix/2026-09-30-blank-session-hero-behind-live-mirrors.md)).
 
 ## Alternatives considered
 
@@ -55,8 +57,8 @@ was still loading, or a silent blank wait. The window carried
 The initial conversation load now reads as a wait instead of an empty
 session: no more EmptyHero flash (or silent blank) while history fetches.
 On reconnect, a resyncing non-empty session keeps its rendered rows
-because the spinner only replaces the EmptyHero when the timeline is
-empty — stale content never blinks out. Adapter tests assert the window
-emits `[false, true, false]` across the load (and after a failed load),
-the controller test threads the flag, and the widget tests pin both the
-spinner and the settled EmptyHero rendering.
+because the spinner only replaces the EmptyHero when the window carries no
+conversation content — stale content never blinks out. Adapter tests assert
+the window emits `[false, true, false]` across the load (and after a failed
+load), the controller test threads the flag, and the widget tests pin both
+the spinner and the settled EmptyHero rendering.

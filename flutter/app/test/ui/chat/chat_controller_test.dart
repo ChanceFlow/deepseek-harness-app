@@ -35,6 +35,7 @@ import 'package:app/ui/chat/chat_controller.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/chat/empty_hero.dart';
 import 'package:app/ui/state_stream.dart';
 
 import '../../l10n_app.dart';
@@ -1349,6 +1350,68 @@ void main() {
     expect(repository.openedSessionIds, <String>[blankSession.id]);
     expect(controller.state.selectedSessionId, blankSession.id);
   });
+
+  testWidgets(
+    'a workspace create lands on the hero of the reused blank session',
+    (tester) async {
+      // The sidebar project-header long-press reuses its workspace's blank
+      // session. That session is already warm — the host answered its
+      // follow's `job/list` with an empty roster — so its window holds the
+      // live mirror and nothing else. The reader must still land on the
+      // empty hero rather than on a transcript with nothing in it.
+      const blankSession = SessionSummary(
+        id: 'blank-workspace-session',
+        blank: true,
+        cwd: '/tmp/reusable-workspace',
+      );
+      const workspace = WorkspaceSummary(
+        workspaceId: 'workspace-1',
+        path: '/tmp/reusable-workspace',
+        title: 'Workspace',
+        sessionIds: <String>['blank-workspace-session'],
+      );
+      final repository = FakeChatRepository(
+        initialSessions: const <SessionSummary>[
+          FakeChatRepository.initialSession,
+          blankSession,
+        ],
+        initialWorkspaces: const <WorkspaceSummary>[workspace],
+      );
+      final windows = AppStateStream<TimelineWindow>(
+        const TimelineWindow(items: [TimelineJobs(jobs: [])]),
+      );
+      repository.windowSource = (_) => windows.stream;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+
+      ChatUiState rendered = const ChatUiState();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: l10nApp(
+            home: StreamBuilder<ChatUiState>(
+              stream: controller.uiState,
+              builder: (context, snapshot) {
+                rendered = snapshot.data ?? rendered;
+                return ChatScreen(
+                  uiState: rendered,
+                  onAction: controller.onAction,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+
+      controller.onAction(CreateSessionInWorkspace(workspace.workspaceId));
+      await tester.pump(const Duration(milliseconds: 40));
+
+      expect(repository.createRequests, isEmpty);
+      expect(rendered.selectedSessionId, blankSession.id);
+      expect(find.byType(EmptyHero), findsOneWidget);
+      expect(find.text('Into the Unknown'), findsOneWidget);
+    },
+  );
 
   test('queue edit action delegates edited text', () async {
     final repository = FakeChatRepository(
