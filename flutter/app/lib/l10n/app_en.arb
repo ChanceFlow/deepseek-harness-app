@@ -3261,5 +3261,118 @@
         "type": "String"
       }
     }
+  },
+  "settingsNavAccount": "Account",
+  "@settingsNavAccount": {
+    "description": "Settings index row and app-bar title for the account surface."
+  },
+  "accountIntro": "The account credential this host stores, the DeepSeek Platform profile and balance it reports, and any granted bonus it has not yet recorded as displayed.",
+  "@accountIntro": {
+    "description": "Intro paragraph on the Account settings page."
+  },
+  "accountLoading": "Loading account facts…",
+  "@accountLoading": {
+    "description": "Placeholder while the account reads are in flight."
+  },
+  "accountUnavailable": "This host reports no account plane",
+  "@accountUnavailable": {
+    "description": "Heading when the deployment composes no account service."
+  },
+  "accountUnavailableBody": "This deployment does not compose the account service, so there is no sign-in state, profile, or balance to show.",
+  "@accountUnavailableBody": {
+    "description": "Explanation under the unavailable heading."
+  },
+  "accountSignedOut": "Not signed in to DeepSeek",
+  "@accountSignedOut": {
+    "description": "Sign-in state when the host stores no account credential."
+  },
+  "accountSignedOutBody": "This host stores no account credential, so it reports no profile and no balance.",
+  "@accountSignedOutBody": {
+    "description": "Explanation under the signed-out state."
+  },
+  "accountSignedIn": "Signed in to DeepSeek",
+  "@accountSignedIn": {
+    "description": "Sign-in state when the host stores an account credential."
+  },
+  "accountProfileUnavailable": "The host could not read the Platform profile.",
+  "@accountProfileUnavailable": {
+    "description": "Shown when the profile read failed or answered nothing."
+  },
+  "accountProfileId": "Account id {id}",
+  "@accountProfileId": {
+    "description": "The Platform account id reported with the profile.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "accountBalance": "Topped-up balance",
+  "@accountBalance": {
+    "description": "Label for the recharge wallet balances."
+  },
+  "accountBonusBalance": "Granted balance",
+  "@accountBonusBalance": {
+    "description": "Label for the bonus wallet balances."
+  },
+  "accountBalanceUnavailable": "The host could not read the balance.",
+  "@accountBalanceUnavailable": {
+    "description": "Shown when the balance read failed."
+  },
+  "accountBalanceAbsent": "The host reports no balance for this account.",
+  "@accountBalanceAbsent": {
+    "description": "Shown when the balance read answered nothing because the host holds no account grant."
+  },
+  "accountBonusUnavailable": "The host could not read granted bonuses.",
+  "@accountBonusUnavailable": {
+    "description": "Shown when the unseen-bonus read failed."
+  },
+  "accountBonusAbsent": "The host reports no unseen bonus.",
+  "@accountBonusAbsent": {
+    "description": "Shown when the unseen-bonus read answered nothing because the host holds no account grant."
+  },
+  "accountBalanceNone": "No topped-up wallet reported.",
+  "@accountBalanceNone": {
+    "description": "Shown when the host reports no recharge wallet."
+  },
+  "accountBonusNone": "No granted wallet reported.",
+  "@accountBonusNone": {
+    "description": "Shown when the host reports no bonus wallet."
+  },
+  "accountUnseenBonus": "Unseen bonus",
+  "@accountUnseenBonus": {
+    "description": "Section heading for a granted bonus not yet recorded as displayed."
+  },
+  "accountBonusTitle": "Bonus credited",
+  "@accountBonusTitle": {
+    "description": "Title of the granted-bonus card; the notice copy itself is server-authored."
+  },
+  "accountBonusWindow": "Granted {grantedAt}, expires {expiresAt}",
+  "@accountBonusWindow": {
+    "description": "Grant and expiry timestamps exactly as the server supplied them.",
+    "placeholders": {
+      "grantedAt": {
+        "type": "String"
+      },
+      "expiresAt": {
+        "type": "String"
+      }
+    }
+  },
+  "accountBonusAck": "Got it",
+  "@accountBonusAck": {
+    "description": "Dismisses the granted-bonus card and records it as displayed."
+  },
+  "accountBonusAckFailed": "The host did not record this bonus as displayed.",
+  "@accountBonusAckFailed": {
+    "description": "Shown when the acknowledgement did not land."
+  },
+  "accountBonusAckRetry": "Try again",
+  "@accountBonusAckRetry": {
+    "description": "Retries the bonus acknowledgement."
+  },
+  "fileReferenceSectionTitle": "Files & folders",
+  "@fileReferenceSectionTitle": {
+    "description": "Group label above the composer @ file-reference candidates."
   }
 }

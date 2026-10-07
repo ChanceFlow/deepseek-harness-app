@@ -116,6 +116,14 @@ abstract final class DshRpcEndpoints {
   // Settings & Commands
   static const String commandsList = 'commands/list';
   static const String commandsExecute = 'commands/execute';
+
+  // File-reference discovery (DSH 0.2.0 `fileReferences` namespace —
+  // reference/deepseek-harness/packages/api/session-controller/src/
+  // file-references.ts, `super(ctx, 'sessionFileReferences', { namespace:
+  // 'fileReferences' })`). Its one method takes the Agent lookup, whose wire
+  // field is `agentId`, plus the `@` path query.
+  static const String fileReferencesList = 'fileReferences/list';
+
   static const String settingsDescribe = 'settings/describe';
   static const String settingsUpdate = 'settings/update';
   static const String settingsReplace = 'settings/replace';
@@ -124,6 +132,21 @@ abstract final class DshRpcEndpoints {
   static const String credentialsDescribe = 'credentials/describe';
   static const String credentialsSet = 'credentials/set';
   static const String credentialsUnset = 'credentials/unset';
+
+  // Account (DSH 0.2.0 `accountController` service —
+  // reference/deepseek-harness/packages/api/account-controller/src/index.ts,
+  // `super(ctx, 'accountController', { namespace: 'account' })`). The four
+  // verbs that remain unwired are deliberate: `startSignIn`/`cancelSignIn`/
+  // `signOut` need a browser OAuth flow or a Platform callback origin a phone
+  // surface cannot supply, and `hasRunningAccountTasks` only gates that flow.
+  // `account/watch` and `account/watchExpiry` are streams and stay literals
+  // (docs/spec.md §4.6).
+  static const String accountGetState = 'account/getState';
+  static const String accountGetProfile = 'account/getProfile';
+  static const String accountGetBalance = 'account/getBalance';
+  static const String accountGetUnnotifiedBonuses =
+      'account/getUnnotifiedBonuses';
+  static const String accountAckBonusNotified = 'account/ackBonusNotified';
 
   // LLM provider/model administration (DSH 0.1.5 `llm` service —
   // reference/deepseek-harness/packages/llm/llm/src/index.ts `LlmRuntime`,

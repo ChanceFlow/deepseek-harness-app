@@ -3453,4 +3453,83 @@ class AppLocalizationsZh extends AppLocalizations {
   String runDurationHours(int hours, String minutes, String seconds) {
     return '$hours小时$minutes分$seconds秒';
   }
+
+  @override
+  String get settingsNavAccount => '账号';
+
+  @override
+  String get accountIntro => '本主机保存的账号凭据、DeepSeek 开放平台返回的资料与余额，以及尚未记录为已展示的赠金。';
+
+  @override
+  String get accountLoading => '正在读取账号信息…';
+
+  @override
+  String get accountUnavailable => '本主机未提供账号功能';
+
+  @override
+  String get accountUnavailableBody => '该部署未装配账号服务，因此没有登录状态、资料或余额可显示。';
+
+  @override
+  String get accountSignedOut => '尚未登录 DeepSeek';
+
+  @override
+  String get accountSignedOutBody => '本主机没有保存账号凭据，因此不提供资料与余额。';
+
+  @override
+  String get accountSignedIn => '已登录 DeepSeek';
+
+  @override
+  String get accountProfileUnavailable => '主机无法读取开放平台资料。';
+
+  @override
+  String accountProfileId(String id) {
+    return '账号 ID $id';
+  }
+
+  @override
+  String get accountBalance => '充值余额';
+
+  @override
+  String get accountBonusBalance => '赠金余额';
+
+  @override
+  String get accountBalanceUnavailable => '主机无法读取余额。';
+
+  @override
+  String get accountBalanceAbsent => '主机未提供此账号的余额。';
+
+  @override
+  String get accountBonusUnavailable => '主机无法读取赠金信息。';
+
+  @override
+  String get accountBonusAbsent => '主机没有未查看的赠金。';
+
+  @override
+  String get accountBalanceNone => '主机未返回充值钱包。';
+
+  @override
+  String get accountBonusNone => '主机未返回赠金钱包。';
+
+  @override
+  String get accountUnseenBonus => '未查看的赠金';
+
+  @override
+  String get accountBonusTitle => '赠金已到账';
+
+  @override
+  String accountBonusWindow(String grantedAt, String expiresAt) {
+    return '发放于 $grantedAt，到期于 $expiresAt';
+  }
+
+  @override
+  String get accountBonusAck => '知道了';
+
+  @override
+  String get accountBonusAckFailed => '主机未把此赠金记录为已展示。';
+
+  @override
+  String get accountBonusAckRetry => '重试';
+
+  @override
+  String get fileReferenceSectionTitle => '文件与文件夹';
 }

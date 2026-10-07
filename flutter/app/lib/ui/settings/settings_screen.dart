@@ -30,6 +30,7 @@ import '../../di/providers.dart';
 import '../shared/agent_preset_display.dart';
 import '../shared/backend_connection_dot.dart';
 import '../theme/theme.dart';
+import 'account.dart';
 import 'backend_reachability.dart';
 import 'battery_optimization_section.dart';
 import 'busy_enter_preference.dart';
@@ -398,6 +399,8 @@ class _AppSection extends StatelessWidget {
         ),
         const SettingsSectionCard(
           children: <Widget>[
+            _AccountEntryRow(),
+            SettingsCardDivider(),
             _LanguageRow(),
             SettingsCardDivider(),
             SettingsAppearanceEntryRow(),
@@ -575,6 +578,24 @@ class _AboutSection extends StatelessWidget {
           onTap: () => _pushSettingsPage(context, const SettingsAboutPage()),
         ),
       ],
+    );
+  }
+}
+
+/// The host's account: the sign-in state, the Platform profile and balance it
+/// reports, and any granted bonus it has not recorded as displayed. Always
+/// navigable — a deployment without the account service opens a page that
+/// states that rather than a dead row.
+class _AccountEntryRow extends StatelessWidget {
+  const _AccountEntryRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return SettingsNavRow(
+      title: l10n.settingsNavAccount,
+      leading: const Icon(Icons.account_circle_outlined),
+      onTap: () => _pushSettingsPage(context, const SettingsAccountPage()),
     );
   }
 }

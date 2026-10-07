@@ -3602,4 +3602,91 @@ class AppLocalizationsEn extends AppLocalizations {
   String runDurationHours(int hours, String minutes, String seconds) {
     return '${hours}h ${minutes}m ${seconds}s';
   }
+
+  @override
+  String get settingsNavAccount => 'Account';
+
+  @override
+  String get accountIntro =>
+      'The account credential this host stores, the DeepSeek Platform profile and balance it reports, and any granted bonus it has not yet recorded as displayed.';
+
+  @override
+  String get accountLoading => 'Loading account facts…';
+
+  @override
+  String get accountUnavailable => 'This host reports no account plane';
+
+  @override
+  String get accountUnavailableBody =>
+      'This deployment does not compose the account service, so there is no sign-in state, profile, or balance to show.';
+
+  @override
+  String get accountSignedOut => 'Not signed in to DeepSeek';
+
+  @override
+  String get accountSignedOutBody =>
+      'This host stores no account credential, so it reports no profile and no balance.';
+
+  @override
+  String get accountSignedIn => 'Signed in to DeepSeek';
+
+  @override
+  String get accountProfileUnavailable =>
+      'The host could not read the Platform profile.';
+
+  @override
+  String accountProfileId(String id) {
+    return 'Account id $id';
+  }
+
+  @override
+  String get accountBalance => 'Topped-up balance';
+
+  @override
+  String get accountBonusBalance => 'Granted balance';
+
+  @override
+  String get accountBalanceUnavailable =>
+      'The host could not read the balance.';
+
+  @override
+  String get accountBalanceAbsent =>
+      'The host reports no balance for this account.';
+
+  @override
+  String get accountBonusUnavailable =>
+      'The host could not read granted bonuses.';
+
+  @override
+  String get accountBonusAbsent => 'The host reports no unseen bonus.';
+
+  @override
+  String get accountBalanceNone => 'No topped-up wallet reported.';
+
+  @override
+  String get accountBonusNone => 'No granted wallet reported.';
+
+  @override
+  String get accountUnseenBonus => 'Unseen bonus';
+
+  @override
+  String get accountBonusTitle => 'Bonus credited';
+
+  @override
+  String accountBonusWindow(String grantedAt, String expiresAt) {
+    return 'Granted $grantedAt, expires $expiresAt';
+  }
+
+  @override
+  String get accountBonusAck => 'Got it';
+
+  @override
+  String get accountBonusAckFailed =>
+      'The host did not record this bonus as displayed.';
+
+  @override
+  String get accountBonusAckRetry => 'Try again';
+
+  @override
+  String get fileReferenceSectionTitle => 'Files & folders';
 }

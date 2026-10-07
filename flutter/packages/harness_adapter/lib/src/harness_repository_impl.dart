@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
+import 'package:domain/model/account.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
@@ -14,6 +15,7 @@ import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/cordis.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/llm_provider.dart';
@@ -1453,6 +1455,98 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<AccountState> loadAccountState() async {
+    final value = await _call(
+      DshRpcEndpoints.accountGetState,
+      DshRpcEndpoints.accountGetState,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeAccountState(value);
+  }
+
+  /// One nullable account detail read (`getProfile`, `getBalance`,
+  /// `getUnnotifiedBonuses`).
+  ///
+  /// Each answers `T | null`: null is the host holding no account grant for
+  /// the stored credential, so it stays null here. A Host error — no account
+  /// plane in the composition, a refusal, a transport failure — throws with
+  /// its own code instead of decoding as an absent account.
+  Future<JsonMap?> _accountDetail(
+    String endpoint,
+    AccountClientIdentity client,
+  ) async {
+    final result = await _call(endpoint, endpoint, {
+      'client': accountClientMetadataJson(client),
+    }, _shortCallTimeout);
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    return result.value;
+  }
+
+  @override
+  Future<AccountProfileResult?> loadAccountProfile(
+    AccountClientIdentity client,
+  ) async {
+    final value = await _accountDetail(
+      DshRpcEndpoints.accountGetProfile,
+      client,
+    );
+    return value == null ? null : decodeAccountProfileResult(value);
+  }
+
+  @override
+  Future<AccountBalanceResult?> loadAccountBalance(
+    AccountClientIdentity client,
+  ) async {
+    final value = await _accountDetail(
+      DshRpcEndpoints.accountGetBalance,
+      client,
+    );
+    return value == null ? null : decodeAccountBalanceResult(value);
+  }
+
+  @override
+  Future<AccountBonusBatch?> loadUnnotifiedBonuses(
+    AccountClientIdentity client,
+  ) async {
+    final value = await _accountDetail(
+      DshRpcEndpoints.accountGetUnnotifiedBonuses,
+      client,
+    );
+    return value == null ? null : decodeAccountBonusBatch(value);
+  }
+
+  @override
+  Future<bool> ackBonusNotified(
+    AccountClientIdentity client, {
+    required String accountId,
+    required String orderId,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.accountAckBonusNotified,
+      DshRpcEndpoints.accountAckBonusNotified,
+      <String, Object?>{
+        'accountId': accountId,
+        'orderId': orderId,
+        'client': accountClientMetadataJson(client),
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    // `Promise<boolean>` is not a JSON object, so the envelope parks the raw
+    // answer under `value` (`RpcResult.fromJson` in package:network). The
+    // host's own `false` (no grant, or the account changed) is a settled
+    // answer; a missing or non-boolean body is host breakage, not a false.
+    return wireRequiredBool(value, 'value');
+  }
+
+  @override
   Future<SettingsNamespace> updateSetting(
     String ns,
     String key,
@@ -1859,6 +1953,20 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     return decodeCommandDescriptorList(value);
+  }
+
+  @override
+  Future<List<FileReferenceCandidate>> listFileReferences(
+    String sessionId,
+    String query,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.fileReferencesList,
+      DshRpcEndpoints.fileReferencesList,
+      {'agentId': sessionId, 'query': query},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeFileReferenceCandidateList(value);
   }
 
   @override

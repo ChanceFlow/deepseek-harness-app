@@ -6102,6 +6102,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{hours}h {minutes}m {seconds}s'**
   String runDurationHours(int hours, String minutes, String seconds);
+
+  /// Settings index row and app-bar title for the account surface.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsNavAccount;
+
+  /// Intro paragraph on the Account settings page.
+  ///
+  /// In en, this message translates to:
+  /// **'The account credential this host stores, the DeepSeek Platform profile and balance it reports, and any granted bonus it has not yet recorded as displayed.'**
+  String get accountIntro;
+
+  /// Placeholder while the account reads are in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading account facts…'**
+  String get accountLoading;
+
+  /// Heading when the deployment composes no account service.
+  ///
+  /// In en, this message translates to:
+  /// **'This host reports no account plane'**
+  String get accountUnavailable;
+
+  /// Explanation under the unavailable heading.
+  ///
+  /// In en, this message translates to:
+  /// **'This deployment does not compose the account service, so there is no sign-in state, profile, or balance to show.'**
+  String get accountUnavailableBody;
+
+  /// Sign-in state when the host stores no account credential.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in to DeepSeek'**
+  String get accountSignedOut;
+
+  /// Explanation under the signed-out state.
+  ///
+  /// In en, this message translates to:
+  /// **'This host stores no account credential, so it reports no profile and no balance.'**
+  String get accountSignedOutBody;
+
+  /// Sign-in state when the host stores an account credential.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in to DeepSeek'**
+  String get accountSignedIn;
+
+  /// Shown when the profile read failed or answered nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'The host could not read the Platform profile.'**
+  String get accountProfileUnavailable;
+
+  /// The Platform account id reported with the profile.
+  ///
+  /// In en, this message translates to:
+  /// **'Account id {id}'**
+  String accountProfileId(String id);
+
+  /// Label for the recharge wallet balances.
+  ///
+  /// In en, this message translates to:
+  /// **'Topped-up balance'**
+  String get accountBalance;
+
+  /// Label for the bonus wallet balances.
+  ///
+  /// In en, this message translates to:
+  /// **'Granted balance'**
+  String get accountBonusBalance;
+
+  /// Shown when the balance read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The host could not read the balance.'**
+  String get accountBalanceUnavailable;
+
+  /// Shown when the balance read answered nothing because the host holds no account grant.
+  ///
+  /// In en, this message translates to:
+  /// **'The host reports no balance for this account.'**
+  String get accountBalanceAbsent;
+
+  /// Shown when the unseen-bonus read failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The host could not read granted bonuses.'**
+  String get accountBonusUnavailable;
+
+  /// Shown when the unseen-bonus read answered nothing because the host holds no account grant.
+  ///
+  /// In en, this message translates to:
+  /// **'The host reports no unseen bonus.'**
+  String get accountBonusAbsent;
+
+  /// Shown when the host reports no recharge wallet.
+  ///
+  /// In en, this message translates to:
+  /// **'No topped-up wallet reported.'**
+  String get accountBalanceNone;
+
+  /// Shown when the host reports no bonus wallet.
+  ///
+  /// In en, this message translates to:
+  /// **'No granted wallet reported.'**
+  String get accountBonusNone;
+
+  /// Section heading for a granted bonus not yet recorded as displayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unseen bonus'**
+  String get accountUnseenBonus;
+
+  /// Title of the granted-bonus card; the notice copy itself is server-authored.
+  ///
+  /// In en, this message translates to:
+  /// **'Bonus credited'**
+  String get accountBonusTitle;
+
+  /// Grant and expiry timestamps exactly as the server supplied them.
+  ///
+  /// In en, this message translates to:
+  /// **'Granted {grantedAt}, expires {expiresAt}'**
+  String accountBonusWindow(String grantedAt, String expiresAt);
+
+  /// Dismisses the granted-bonus card and records it as displayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get accountBonusAck;
+
+  /// Shown when the acknowledgement did not land.
+  ///
+  /// In en, this message translates to:
+  /// **'The host did not record this bonus as displayed.'**
+  String get accountBonusAckFailed;
+
+  /// Retries the bonus acknowledgement.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get accountBonusAckRetry;
+
+  /// Group label above the composer @ file-reference candidates.
+  ///
+  /// In en, this message translates to:
+  /// **'Files & folders'**
+  String get fileReferenceSectionTitle;
 }
 
 class _AppLocalizationsDelegate
