@@ -208,7 +208,7 @@ client puts on the Session handle, and `domain.SessionSummary` has no field to
 hold it yet, so folding it needs a model field and a roster surface rather than
 a switch arm.
 
-The pinned 0.1.7 tree registers no host-frame vocabulary and serves no
+The pinned 0.2.0 tree registers no host-frame vocabulary and serves no
 `/api/events.host` route: the host dropped `host/session-status`,
 `host/session-added` and `host/session-removed` by 0.1.2-alpha.1, and the
 client neither dials the leg nor listens for those names. Session running
@@ -229,18 +229,18 @@ invokes.
 
 <!-- wire-pin:coverage:begin -->
 declared = 53
-upstream = 125
+upstream = 128
 identical = 51
-missing = 74
+missing = 77
 client-only = 2
-out-of-scope = agentPresets/read
+out-of-scope = agentPresets/read, productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
 
 `declared` counts the client's endpoint constants; `upstream` counts every
 unary Typert Remote method the pinned source tree registers (a superset of any
 one deployment's loaded plugins; logical streams are excluded); `identical` is
 their intersection; `missing` is registered upstream but not wired by the
-client; `client-only` is declared by the client but not registered at 0.1.7 —
+client; `client-only` is declared by the client but not registered at 0.2.0 —
 the reviewed names in
 [scripts/gates_manifest.json](../scripts/gates_manifest.json)
 (`wire_pin.declared_only_allowlist`). That list excuses a *declaration* only:
@@ -399,7 +399,7 @@ never the payload), so a wire-coverage gap stays measurable.
 
 Text extraction handles `text` blocks and nested `tool-result` content.
 
-Live token deltas are the one fact the durable log does not carry: a 0.1.7 host
+Live token deltas are the one fact the durable log does not carry: a 0.2.0 host
 publishes them as cursorless `assistant-stream` frames on a `session/follow`
 opened with `assistantStream: true`
 (`packages/api/session-controller/src/history.ts:163`, `types.ts` `SessionFollowFrame`).
@@ -480,8 +480,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   truncated — `promptPreview`), and a per-tool status-count summary
   (e.g. "bash 3✓ 1✗"); headers collapse their rows on tap with an
   expand-all reset. Grouping and preview are pure UI-layer functions over
-  the folded timeline (`groupTimelineByTurn`/`promptPreview`, JVM-tested).
-  Compaction and session-end markers stay deferred.
+  the folded timeline (`groupTimelineByTurn`/`promptPreview`,
+  `app/test/ui/chat/timeline_grouping_test.dart`). A compaction marker
+  renders as its own timeline row (below), not as a group header; a
+  session-end marker stays deferred.
 - **Settings namespaces patch one top-level key at a time.** For writable
   hosts (`describe.writable`), each namespace row opens an editor with two
   modes: key patch (`settings.update {ns, patch, expectedRevision}`) and
@@ -489,16 +491,28 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   object-only JSON). The revision from the last describe acts as the CAS
   guard, the host validates against the namespace schema, and the response
   view re-describes the page. `settings.mutate` (path-addressed set/unset
-  ops) is wire-complete at the adapter (`SettingPathOp`); no dedicated UI —
-  the two editor modes cover the same surface. Schema-driven forms (the
+  ops, `SettingPathOp`) backs the provider-profile editor in Models &
+  credentials — pasting a key's env ref, adding or configuring a profile,
+  and removing one; the namespace editor's two modes cover every other
+  namespace. Schema-driven forms (the
   Web's schema-form engine), secret-slot writes, and `settings.openDocument`
   stay deferred. `credentials.set`/`unset` store and clear writable
   credential refs; the whole plane stays loopback-gated.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select, optionless text, custom
-  text, and per-question skip are supported; rich rendering and plan-review
-  intents are not.
+  text, and per-question skip are supported; the plan-review intent renders
+  its own decision card (below), and any other presentation intent falls back
+  to the generic editor.
+- **A timed `ask_user_question` is not mirrored.** 0.2.0 can ask through a
+  foreground wait (`tool-ask-user` row `mode: timed`, default `legacy`) that the
+  reference Web client holds open over the `userQuestions/attachWait` stream and
+  answers after continuation through `userQuestions/answer`; the shipped bundle
+  leaves the blocking legacy tool in place. This client keeps answering the
+  waterfall through `$events/result`, so a question a timed host still holds
+  open works, but no countdown is rendered, and a question the host has already
+  continued can only be answered from the Web client — the late reply arrives as
+  a `user-question-reply` user message and the phone shows its payload as text.
 - **Queue editing is text-only.** Queued text items can be edited into a
   single text content block; non-text queued items disable the edit action,
   matching the Web client.
@@ -560,10 +574,10 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   image blocks (`{type:'image', attachment:{...}}`) fold into `AttachmentRef`
   and download lazily through `session.attachment` (bytes cached, bounded).
   Re-encoding/downscaling, drag-drop, and clipboard paste stay out of scope.
-- **Directory browsing is listing-only.** `host.listDirectory` /
-  `host.createDirectory` power an in-app folder picker (navigate, create
-  folder, select path back into the workspace field); manual workspace
-  reordering and desktop `host.pickDirectory` dialogs remain out of scope.
+- **Directory browsing is listing-only.** `directoryPicker/list` /
+  `directoryPicker/createDirectory` power an in-app folder picker (navigate,
+  create folder, select path back into the workspace field); manual workspace
+  reordering and the desktop `directoryPicker/pick` dialog remain out of scope.
 
 ## 11. Subagent Ownership
 

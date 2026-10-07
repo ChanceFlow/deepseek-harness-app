@@ -121,11 +121,11 @@ URL 为种子，所以在你添加第二台主机（笔记本、构建机、隧�
 ## 协议兼容性
 
 上游 dsh 仓库以 git submodule 形式钉在 [`reference/deepseek-harness`](reference/)
-下的一个官方提交——当前是 **`dsh-v0.1.5-rc.2`**
+下的一个官方提交——当前是 **`dsh-v0.2.0-rc.2`**
 （[钉版本与契约文件映射](reference/README.md)）。dsh 正在快速迭代且有破坏性变更：
 本客户端只追踪这一个钉死的契约，请勿假设与其他 dsh 版本协议兼容。目前覆盖钉死源码树
-注册的 84 个 Remote 方法中的 52 个——精确计数、未接线余量与两个经复核的
-「仅声明」名称见 [docs/spec.md §4.6](docs/spec.md#46-wire-coverage)，两者的一致性由
+注册的 128 个 Remote 方法中的 51 个——精确计数、未接线余量与经复核的
+「仅声明」/「有意不接线」名称见 [docs/spec.md §4.6](docs/spec.md#46-wire-coverage)，两者的一致性由
 `verify_wire_pin` 门禁守护；该门禁还会让一个「仅声明」却被线上层实际调用的名称失败。
 
 ## 模块边界
@@ -166,7 +166,7 @@ cd flutter
 DSH_E2E_URL=http://127.0.0.1:3080 flutter test packages/harness_adapter/test/local_dsh_e2e_test.dart
 ```
 
-0.1.5 主机的 `/api` 只对持有它签发的、绑定访问 authority 的浏览器 cookie 的
+0.2.0 主机的 `/api` 只对持有它签发的、绑定访问 authority 的浏览器 cookie 的
 调用方应答；该 cookie 由 `dsh web` 打印的 URL token 换取，目标主机属于这一类
 时用 `DSH_E2E_COOKIE` 传入：
 
