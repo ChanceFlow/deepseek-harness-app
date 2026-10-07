@@ -5,15 +5,15 @@ symlink. The submodule pins a specific official dsh commit, so the Android contr
 truth is reproducible across clones. dsh is under active development with breaking changes —
 the pin is the wire contract; do not assume compatibility with a different dsh version.
 
-- Pinned commit: `477b4f420553e8a52c2fbccc464d7561b239c443` (official `dsh-v0.1.7-rc.2`).
-- Registration-source digest: `e32e1b25e5e212da625821ad9bf0420bdb115845ba3bad395a0e60d0a871b1c0`
-  (sha256 over the 29 source files that declare a registration plus the Gateway endpoint
+- Pinned commit: `639ed015397290b3745d163aafe02ffee4aa3f84` (official `dsh-v0.2.0-rc.2`).
+- Registration-source digest: `110adafa6756e334e104c903332c7f0dfbd38fde073bf1636cf9534f8ba94902`
+  (sha256 over the 31 source files that declare a registration plus the Gateway endpoint
   constants, fed as `relpath\0bytes\0` in sorted path order; regenerate with
   `python3 scripts/verify_wire_pin.py --print-digest`).
 - Wire contract source of truth: `reference/deepseek-harness/packages/api/` — the Typert
   Remote services the gateway registers. DSH 0.1.2 replaced the dot-namespaced
   `packages/host/apiproxy/src/api/rpc-map.ts` registry with slash-namespaced Typert Remote
-  services, and that file no longer exists in the 0.1.7 tree.
+  services, and that file no longer exists in the 0.2.0 tree.
 - Remote method registration: a `class … extends TypertRemoteService` plus its
   `super(ctx, '<serviceKey>'[, { namespace }])` binding and the `@Remote` decorators on
   its methods (`reference/deepseek-harness/packages/typert/protocol/src/index.ts` defines
@@ -24,6 +24,28 @@ the pin is the wire contract; do not assume compatibility with a different dsh v
 - Web routes and the event mux: `reference/deepseek-harness/packages/client/connection/src/api-path.ts`
   and `reference/deepseek-harness/packages/api/gateway/src/stream-protocol.ts` (`/api/remote.mux`).
 - Render/UI decision reference: `reference/deepseek-harness/packages/client/ui-*/`
+
+## The deployed fork
+
+The client is deployed against a downstream fork of this tree, not against the
+official tag alone. That fork's current release is `dsh-v0.2.0-rc.2-chance.0`,
+whose upstream base is exactly the pinned commit above — the official tag is an
+ancestor of the fork tag — and whose registered Remote surface is the pinned
+surface name for name (128 unary methods, 13 streams). The pin therefore stays
+the official tag: it is reproducible from the public remote, and it loses no
+coverage against the fork. Verify that on a fork bump by deriving the surface
+from the fork tag with the same scan (`scripts/verify_wire_pin.py`'s
+`pin_endpoints`), not by reading a changelog.
+
+The fork's own commits are wire-neutral — no Remote method, stream, or event
+shape differs from the pin. What it adds is behavior the phone never encodes:
+its client classifies private LAN hostnames as local connection state, its Web
+bundle ships additional declarative agent presets (the roster a host composes
+changes; the `agentPresets/*` wire contract does not), and it carries
+`llm-pi-ai` replay fixes plus the release-mirroring tooling that publishes the
+fork's own tags. The `/api` trust fence is not among them: the fork's
+classification feeds `ctx.connection` state, while
+`packages/client/connection/src/api-request-trust.ts` keeps the pinned rule.
 
 Upstream repository:
 
@@ -62,6 +84,7 @@ the tree-wide declaration surface it derives and one deployment's loaded plugin 
 bundle patches under `deepseek-harness/packages/bundle/*/cordis.patch.yml`) — the scan is a
 documented superset, so an endpoint served only by an unmounted experimental package would
 pass; and the stream endpoints the client opens with a literal string rather than through
-`DshRpcEndpoints` (`workspace/follow`, `session/control`, `session/follow`, `$events`, and the
-per-session `job/list`), which the gate never compares. An unparsable registration fails the
+`DshRpcEndpoints` (`workspace/follow`, `session/control`, `session/follow`, `$events`, the
+per-session `job/list`, the per-job `job/follow`, and the per-terminal `terminal/follow` /
+`terminal/retain`), which the gate never compares. An unparsable registration fails the
 gate loudly rather than being skipped.

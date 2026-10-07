@@ -180,13 +180,14 @@ box, a tunneled remote dsh.
 
 The upstream dsh repository is pinned as a git submodule under
 [`reference/deepseek-harness`](reference/) at one official commit —
-currently **`dsh-v0.1.7-rc.2`**
+currently **`dsh-v0.2.0-rc.2`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 51 of 125 Remote methods registered by the pinned
+version. Coverage today is 51 of 128 Remote methods registered by the pinned
 tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
-the unwired remainder, and the two reviewed declared-only names; the
+the unwired remainder, and the reviewed names the client deliberately leaves
+unwired or declares only; the
 `verify_wire_pin` gate holds both documents to the two registries and fails a
 declared-only name that the wire layer actually calls.
 
@@ -247,7 +248,7 @@ The target travels as a dart define because `flutter test` forwards only a
 fixed set of environment variables to the test process; a plain
 `DSH_E2E_URL=… flutter test` reaches nothing.
 
-A 0.1.7 host answers `/api` only for a caller holding the authority-bound
+A 0.2.0 host answers `/api` only for a caller holding the authority-bound
 browser cookie minted from the URL token `dsh web` prints, so pass that cookie
 as `DSH_E2E_COOKIE` when the target is one:
 
