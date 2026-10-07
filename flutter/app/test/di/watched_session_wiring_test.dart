@@ -31,6 +31,7 @@ import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/todo.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/repository/chat_repository.dart';
@@ -108,6 +109,11 @@ class _Repository extends Fake implements ChatRepository {
   @override
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
       const Stream<ContextPressure?>.empty();
+
+  @override
+  Stream<List<PendingUserQuestion>> observePendingUserQuestions(
+    String sessionId,
+  ) => const Stream<List<PendingUserQuestion>>.empty();
 
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>

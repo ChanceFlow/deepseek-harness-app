@@ -26,6 +26,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/token_usage.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1438,6 +1439,19 @@ class _ChatPanelState extends State<ChatPanel> {
     return null;
   }
 
+  /// First timed question whose foreground wait already ended. The waterfall
+  /// cannot settle it any more, so it takes the composer seat and its answer
+  /// rides `userQuestions/answer` (controller routing).
+  PendingUserQuestion? get _continuedQuestion {
+    for (final row in widget.uiState.pendingUserQuestions) {
+      if (row.state == UserQuestionState.continued &&
+          row.questions.isNotEmpty) {
+        return row;
+      }
+    }
+    return null;
+  }
+
   /// First pending dynamic-Cordis activation that actually needs a decision;
   /// it takes over the composer seat like an approval.
   ///
@@ -2010,6 +2024,15 @@ class _ChatPanelState extends State<ChatPanel> {
                   CordisRequestPanel(
                     key: ValueKey('cordis-takeover:${cordis.requestId}'),
                     request: cordis,
+                    onAction: widget.onAction,
+                  )
+                else if (_continuedQuestion case final continued?)
+                  QuestionRow(
+                    key: ValueKey('continued-question:${continued.callId}'),
+                    request: TimelineQuestionRequest(
+                      requestId: continued.callId,
+                      questions: continued.questions,
+                    ),
                     onAction: widget.onAction,
                   )
                 else

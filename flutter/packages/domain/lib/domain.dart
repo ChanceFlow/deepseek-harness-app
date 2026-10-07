@@ -32,6 +32,7 @@ export 'model/timeline_window.dart';
 export 'model/token_usage.dart';
 export 'model/todo.dart';
 export 'model/tool_presentation.dart';
+export 'model/user_question.dart';
 export 'model/workspace.dart';
 export 'model/workspace_file.dart';
 export 'repository/chat_repository.dart';

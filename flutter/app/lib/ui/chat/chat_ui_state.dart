@@ -19,6 +19,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 
@@ -47,6 +48,7 @@ final class ChatUiState {
     this.skills = const <SkillEntry>[],
     this.contextPressure,
     this.contextBreakdown,
+    this.pendingUserQuestions = const <PendingUserQuestion>[],
     this.sessionStats = const SessionWindowStats(),
     this.goal,
     this.models,
@@ -122,6 +124,11 @@ final class ChatUiState {
 
   /// Heuristic composition shown in the ring's panel.
   final ContextBreakdown? contextBreakdown;
+
+  /// Timed `ask_user_question` calls the host can still take an answer for
+  /// (`userQuestions` projection). A `continued` row outlived its wait, so the
+  /// ordinary waterfall answer no longer settles it.
+  final List<PendingUserQuestion> pendingUserQuestions;
 
   /// Window stats for the composer stats line.
   final SessionWindowStats sessionStats;

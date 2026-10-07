@@ -30,6 +30,7 @@ import '../model/subagent.dart';
 import '../model/timeline_item.dart';
 import '../model/timeline_window.dart';
 import '../model/todo.dart';
+import '../model/user_question.dart';
 import '../model/workspace.dart';
 import '../model/workspace_file.dart';
 
@@ -237,6 +238,23 @@ abstract class ChatRepository {
   Future<void> respondToApproval(ApprovalAnswer answer);
 
   Future<void> answerQuestions(String requestId, QuestionEvidence evidence);
+
+  /// Timed `ask_user_question` calls this Session still holds, from the
+  /// `userQuestions` session projection. An [UserQuestionState.open] row is
+  /// settled by the ordinary waterfall answer; a
+  /// [UserQuestionState.continued] row is not.
+  Stream<List<PendingUserQuestion>> observePendingUserQuestions(
+    String sessionId,
+  ) => Stream.value(const <PendingUserQuestion>[]);
+
+  /// Answer a question whose foreground wait already ended: the host steers
+  /// the reply into the agent as a new turn instead of settling the original
+  /// call (`userQuestions/answer`).
+  Future<void> answerContinuedQuestion(
+    String sessionId,
+    String callId,
+    QuestionEvidence evidence,
+  ) => _unsupported('answerContinuedQuestion');
 
   /// Dismiss a pending question request without answering; the host resolves
   /// the asker's call as cancelled.

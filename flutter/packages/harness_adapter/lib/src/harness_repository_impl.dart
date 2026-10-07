@@ -29,6 +29,7 @@ import 'package:domain/model/skills.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:domain/model/agent_preset.dart';
@@ -454,6 +455,12 @@ class HarnessRepositoryImpl implements ChatRepository {
   final Map<String, StateStream<ContextBreakdown?>>
   _contextBreakdownProjections = <String, StateStream<ContextBreakdown?>>{};
 
+  /// Timed `ask_user_question` calls the host still holds, per session, from
+  /// the 0.2.0 `userQuestions` projection.
+  final Map<String, StateStream<List<PendingUserQuestion>>>
+  _pendingQuestionProjections =
+      <String, StateStream<List<PendingUserQuestion>>>{};
+
   /// Projection watermark: the seq of the value each `(session, key)` pair
   /// currently holds. The reference's projection store has exactly one
   /// ordering rule — a value whose `seq` is not newer than the one held is
@@ -482,6 +489,8 @@ class HarnessRepositoryImpl implements ChatRepository {
     // The authoritative pending-input snapshot. 0.1.7 removed the control
     // baseline's `queues` block; the dock is folded from this projection now.
     'inbox',
+    // Timed questions the host can still take an answer for (0.2.0).
+    'userQuestions',
   };
 
   /// Last `inbox` projection value per session, retained so a session this
@@ -491,6 +500,7 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   final Map<String, int> _contextPressureSeqs = <String, int>{};
   final Map<String, int> _contextBreakdownSeqs = <String, int>{};
+  final Map<String, int> _pendingQuestionSeqs = <String, int>{};
   final Mutex _resyncMutex = Mutex();
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
@@ -1417,6 +1427,34 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<void> answerContinuedQuestion(
+    String sessionId,
+    String callId,
+    QuestionEvidence evidence,
+  ) async {
+    await _call(
+      DshRpcEndpoints.userQuestionsAnswer,
+      DshRpcEndpoints.userQuestionsAnswer,
+      <String, Object?>{
+        'agentId': sessionId,
+        'callId': callId,
+        'answer': <String, Object?>{
+          'answers': evidence.answers
+              .map(
+                (answer) => <String, Object?>{
+                  'id': answer.questionId,
+                  'selected': answer.selectedOptions,
+                  if (answer.customText != null) 'custom': answer.customText,
+                },
+              )
+              .toList(),
+        },
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+  }
+
+  @override
   Future<void> cancelQuestions(String requestId, String sessionId) async {
     if (_pendingRemoteEvents[requestId]?.kind == _RemoteEventKind.question) {
       // A dismissed question refuses the waterfall with the question domain's
@@ -1704,6 +1742,11 @@ class HarnessRepositoryImpl implements ChatRepository {
   @override
   Stream<ContextPressure?> observeContextPressure(String sessionId) =>
       _contextPressureStateFor(sessionId).stream;
+
+  @override
+  Stream<List<PendingUserQuestion>> observePendingUserQuestions(
+    String sessionId,
+  ) => _pendingQuestionStateFor(sessionId).stream;
 
   @override
   Stream<ContextBreakdown?> observeContextBreakdown(String sessionId) =>
@@ -2384,6 +2427,12 @@ class HarnessRepositoryImpl implements ChatRepository {
           breakdown = _parseContextBreakdownProjection(value);
         }
         _updateContextBreakdown(sessionId, breakdown, seq);
+      case 'userQuestions':
+        _updatePendingUserQuestions(
+          sessionId,
+          _parsePendingUserQuestions(frame.payload['value']),
+          seq,
+        );
       case 'agentPreset':
         final preset = wireString(frame.payload, 'value');
         _sessions.value = _sessions.value
@@ -2536,6 +2585,14 @@ class HarnessRepositoryImpl implements ChatRepository {
         (breakdownValue == null || breakdownValue == 'null')
             ? null
             : _parseContextBreakdownProjection(breakdownValue),
+        seq,
+      );
+    }
+    if (values.containsKey('userQuestions') &&
+        _claimProjection(sessionId, 'userQuestions', seq)) {
+      _updatePendingUserQuestions(
+        sessionId,
+        _parsePendingUserQuestions(values['userQuestions']),
         seq,
       );
     }
@@ -2770,6 +2827,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         _updateContextPressure(sessionId, null, 0);
       case 'contextBreakdown':
         _updateContextBreakdown(sessionId, null, 0);
+      case 'userQuestions':
+        _updatePendingUserQuestions(
+          sessionId,
+          const <PendingUserQuestion>[],
+          0,
+        );
       case 'inbox':
         _applyInboxProjection(sessionId, null);
       case 'sessionStats':
@@ -4031,8 +4094,10 @@ class HarnessRepositoryImpl implements ChatRepository {
     _permissionProjections.remove(sessionId);
     _contextPressureProjections.remove(sessionId);
     _contextBreakdownProjections.remove(sessionId);
+    _pendingQuestionProjections.remove(sessionId);
     _contextPressureSeqs.remove(sessionId);
     _contextBreakdownSeqs.remove(sessionId);
+    _pendingQuestionSeqs.remove(sessionId);
     _projectionSeqs.remove(sessionId);
     _pendingBuffers.remove(sessionId);
     _prevRunningBySession.remove(sessionId);
@@ -4151,6 +4216,13 @@ class HarnessRepositoryImpl implements ChatRepository {
         () => StateStream<ContextPressure?>(null),
       );
 
+  StateStream<List<PendingUserQuestion>> _pendingQuestionStateFor(
+    String sessionId,
+  ) => _pendingQuestionProjections.putIfAbsent(
+    sessionId,
+    () => StateStream<List<PendingUserQuestion>>(const <PendingUserQuestion>[]),
+  );
+
   StateStream<ContextBreakdown?> _contextBreakdownStateFor(String sessionId) =>
       _contextBreakdownProjections.putIfAbsent(
         sessionId,
@@ -4166,6 +4238,57 @@ class HarnessRepositoryImpl implements ChatRepository {
     if (seq < currentSeq) return;
     _contextPressureSeqs[sessionId] = seq;
     _contextPressureStateFor(sessionId).value = pressure;
+  }
+
+  /// Decode the `userQuestions` projection's `active` half: the timed calls
+  /// the host can still take an answer for. `settled` records what a late
+  /// reply closed, which the transcript row — not this client — renders.
+  List<PendingUserQuestion> _parsePendingUserQuestions(Object? value) {
+    if (value == null || value == 'null') return const <PendingUserQuestion>[];
+    return _tryDecode(() {
+          final obj = asJsonObject(value);
+          if (obj == null) {
+            throw const FormatException('userQuestions: not an object');
+          }
+          final active = asJsonArray(obj['active']) ?? const <Object?>[];
+          final rows = <PendingUserQuestion>[];
+          for (final entry in active) {
+            final row = asJsonObject(entry);
+            if (row == null) continue;
+            final callId = wireString(row, 'callId');
+            if (callId == null) {
+              throw const FormatException('userQuestions: callId is absent');
+            }
+            rows.add(
+              PendingUserQuestion(
+                callId: callId,
+                questions: (asJsonArray(row['questions']) ?? const <Object?>[])
+                    .map((question) => asJsonObject(question))
+                    .whereType<JsonMap>()
+                    .map(decodeQuestionItem)
+                    .whereType<QuestionItem>()
+                    .toList(),
+                state: switch (wireString(row, 'state')) {
+                  'continued' => UserQuestionState.continued,
+                  _ => UserQuestionState.open,
+                },
+              ),
+            );
+          }
+          return rows;
+        }, 'userQuestions') ??
+        const <PendingUserQuestion>[];
+  }
+
+  void _updatePendingUserQuestions(
+    String sessionId,
+    List<PendingUserQuestion> questions,
+    int seq,
+  ) {
+    final currentSeq = _pendingQuestionSeqs[sessionId] ?? -1;
+    if (seq < currentSeq) return;
+    _pendingQuestionSeqs[sessionId] = seq;
+    _pendingQuestionStateFor(sessionId).value = questions;
   }
 
   void _updateContextBreakdown(

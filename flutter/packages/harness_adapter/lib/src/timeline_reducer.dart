@@ -23,6 +23,51 @@ import 'rpc_map.dart';
 import 'session_event_payloads.dart';
 import 'wire_json.dart';
 
+/// Decode one wire question. Required-field semantics: an entry with no `id`
+/// is not a question and yields null. Top-level so the `userQuestions`
+/// projection folds the same shape the interaction waterfall does.
+QuestionItem? decodeQuestionItem(JsonMap obj) {
+  final id = wireString(obj, 'id');
+  if (id == null) return null;
+  final optionArray = asJsonArray(obj['options']);
+  final options =
+      optionArray
+          ?.map((option) => asJsonObject(option))
+          .whereType<JsonMap>()
+          .map((optionObj) => wireString(optionObj, 'label'))
+          .whereType<String>()
+          .toList() ??
+      <String>[];
+  final optionDescriptions = <String, String>{};
+  if (optionArray != null) {
+    for (final option in optionArray) {
+      final optionObj = asJsonObject(option);
+      if (optionObj == null) continue;
+      final label = wireString(optionObj, 'label');
+      final description = wireString(optionObj, 'description');
+      if (label != null && description != null) {
+        optionDescriptions[label] = description;
+      }
+    }
+  }
+  return QuestionItem(
+    id: id,
+    question: wireString(obj, 'question') ?? '',
+    detail: wireString(obj, 'detail'),
+    options: options,
+    multiSelect: wireBool(obj, 'multiSelect'),
+    header: wireString(obj, 'header'),
+    optionDescriptions: optionDescriptions,
+    intent: () {
+      final intent = asJsonObject(obj['intent']);
+      if (intent == null) return null;
+      final kind = wireString(intent, 'kind');
+      if (kind == null) return null;
+      return QuestionIntent(kind: kind, approve: wireString(intent, 'approve'));
+    }(),
+  );
+}
+
 class TimelineReducer {
   TimelineReducer(this.sessionId, {this.onDiagnostic});
 
@@ -290,7 +335,7 @@ class TimelineReducer {
             questionArray
                 ?.map((entry) => asJsonObject(entry))
                 .whereType<JsonMap>()
-                .map(_toQuestionItem)
+                .map(decodeQuestionItem)
                 .whereType<QuestionItem>()
                 .toList() ??
             <QuestionItem>[];
@@ -1772,51 +1817,6 @@ class TimelineReducer {
       detail: wireString(obj, 'detail'),
       startedAt: wireLong(obj, 'startedAt'),
       finishedAt: wireLongOrNull(obj, 'finishedAt'),
-    );
-  }
-
-  QuestionItem? _toQuestionItem(JsonMap obj) {
-    final id = wireString(obj, 'id');
-    if (id == null) return null;
-    final optionArray = asJsonArray(obj['options']);
-    final options =
-        optionArray
-            ?.map((option) => asJsonObject(option))
-            .whereType<JsonMap>()
-            .map((optionObj) => wireString(optionObj, 'label'))
-            .whereType<String>()
-            .toList() ??
-        <String>[];
-    final optionDescriptions = <String, String>{};
-    if (optionArray != null) {
-      for (final option in optionArray) {
-        final optionObj = asJsonObject(option);
-        if (optionObj == null) continue;
-        final label = wireString(optionObj, 'label');
-        final description = wireString(optionObj, 'description');
-        if (label != null && description != null) {
-          optionDescriptions[label] = description;
-        }
-      }
-    }
-    return QuestionItem(
-      id: id,
-      question: wireString(obj, 'question') ?? '',
-      detail: wireString(obj, 'detail'),
-      options: options,
-      multiSelect: wireBool(obj, 'multiSelect'),
-      header: wireString(obj, 'header'),
-      optionDescriptions: optionDescriptions,
-      intent: () {
-        final intent = asJsonObject(obj['intent']);
-        if (intent == null) return null;
-        final kind = wireString(intent, 'kind');
-        if (kind == null) return null;
-        return QuestionIntent(
-          kind: kind,
-          approve: wireString(intent, 'approve'),
-        );
-      }(),
     );
   }
 
