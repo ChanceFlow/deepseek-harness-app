@@ -476,6 +476,8 @@
   "archiveSession": "归档会话",
   "unarchiveSession": "取消归档会话",
   "archivedBadge": "已归档",
+  "pinSession": "固定会话",
+  "unpinSession": "取消固定",
   "filterSessionsTooltip": "筛选会话",
   "viewHideArchived": "隐藏已归档",
   "viewShowArchived": "全部对话（显示已归档）",

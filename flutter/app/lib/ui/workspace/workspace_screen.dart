@@ -590,6 +590,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           widget.onAction(ArchiveSessionAction(sessionId)),
       onUnarchiveSession: (sessionId) =>
           widget.onAction(UnarchiveSessionAction(sessionId)),
+      onPinSession: (sessionId) => widget.onAction(PinSessionAction(sessionId)),
+      onUnpinSession: (sessionId) =>
+          widget.onAction(UnpinSessionAction(sessionId)),
+      pinnedSessionIds: uiState.pinnedSessionIds,
       archivedFilter: _archivedFilter(),
       onViewOtherSessions: _viewOtherSessions,
       shrinkWrap: widget.embedded,
@@ -898,6 +902,9 @@ class _WorkspaceTree extends StatelessWidget {
     this.onForkSession,
     this.onArchiveSession,
     this.onUnarchiveSession,
+    this.onPinSession,
+    this.onUnpinSession,
+    this.pinnedSessionIds = const <String>[],
     this.archivedFilter = ArchivedFilter.hide,
     this.onViewOtherSessions,
     this.shrinkWrap = false,
@@ -921,6 +928,11 @@ class _WorkspaceTree extends StatelessWidget {
   final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
   final void Function(String sessionId)? onUnarchiveSession;
+  final void Function(String sessionId)? onPinSession;
+  final void Function(String sessionId)? onUnpinSession;
+
+  /// Registry-global pin set, most recently pinned first.
+  final List<String> pinnedSessionIds;
 
   /// Which archived rows this tree shows (the same filter the sidebar
   /// uses; both surfaces read one provider).
@@ -944,6 +956,7 @@ class _WorkspaceTree extends StatelessWidget {
       l10n,
       nowEpochMs: nowEpochMs,
       archivedFilter: archivedFilter,
+      pinnedSessionIds: pinnedSessionIds,
     );
     if (groups.isEmpty) {
       // Web `EmptySessions`: the archived-only view names its filter and
@@ -1002,6 +1015,9 @@ class _WorkspaceTree extends StatelessWidget {
             onForkSession: onForkSession,
             onArchiveSession: onArchiveSession,
             onUnarchiveSession: onUnarchiveSession,
+            onPinSession: onPinSession,
+            onUnpinSession: onUnpinSession,
+            pinnedSessionIds: pinnedSessionIds,
           ),
         ],
       ],
@@ -1030,6 +1046,9 @@ class _WorkspaceGroup extends StatelessWidget {
     this.onForkSession,
     this.onArchiveSession,
     this.onUnarchiveSession,
+    this.onPinSession,
+    this.onUnpinSession,
+    this.pinnedSessionIds = const <String>[],
   });
 
   final SessionGroupData group;
@@ -1049,6 +1068,9 @@ class _WorkspaceGroup extends StatelessWidget {
   final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
   final void Function(String sessionId)? onUnarchiveSession;
+  final void Function(String sessionId)? onPinSession;
+  final void Function(String sessionId)? onUnpinSession;
+  final List<String> pinnedSessionIds;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,6 +1120,13 @@ class _WorkspaceGroup extends StatelessWidget {
               onUnarchive: onUnarchiveSession == null
                   ? null
                   : () => onUnarchiveSession!(sessions[i].id),
+              onPin: onPinSession == null
+                  ? null
+                  : () => onPinSession!(sessions[i].id),
+              onUnpin: onUnpinSession == null
+                  ? null
+                  : () => onUnpinSession!(sessions[i].id),
+              pinned: pinnedSessionIds.contains(sessions[i].id),
               // The management surface keeps the verbs discoverable for
               // touch: always-visible ellipsis seat beside the timestamp
               // (the long-press stays active too).

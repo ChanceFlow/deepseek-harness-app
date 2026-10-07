@@ -548,6 +548,12 @@ abstract class ChatRepository {
   Stream<Set<String>> observeArchivedSessionIds() =>
       Stream.value(const <String>{});
 
+  /// Registry-global pin set mirrored from the same stream, most recently
+  /// pinned first. Pinned sessions lead their group and the flat list; the
+  /// order is the user's own, not the session list's.
+  Stream<List<String>> observePinnedSessionIds() =>
+      Stream.value(const <String>[]);
+
   /// A no-op on the pinned contract: the workspace roster is push-only, so
   /// there is nothing to pull. Kept on the interface so a caller's refresh
   /// gesture stays a valid call instead of a compile error.
@@ -573,6 +579,17 @@ abstract class ChatRepository {
   /// the row reappearing is the feedback.
   Future<void> unarchiveSession(String sessionId) =>
       _unsupported('unarchiveSession');
+
+  /// Pin a session (dsh `workspace.pinSession`): the row leads its group and
+  /// the flat list, at the head of the pinned block, until it is unpinned.
+  /// The Host refuses an archived or unknown session with a
+  /// [RepositoryFailure]; the pin set is unchanged on that path.
+  Future<void> pinSession(String sessionId) => _unsupported('pinSession');
+
+  /// Drop a session's pin (dsh `workspace.unpinSession`): the row returns to
+  /// its own saved order. Unpinning a session that is not pinned is not an
+  /// error — the call is idempotent, so a lost race resolves as a no-op.
+  Future<void> unpinSession(String sessionId) => _unsupported('unpinSession');
 
   Future<WorkspaceSummary> createWorkspace(String path);
 

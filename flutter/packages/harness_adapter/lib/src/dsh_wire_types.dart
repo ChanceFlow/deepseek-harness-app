@@ -178,10 +178,15 @@ final class WorkspaceListValueWire {
           .whereType<JsonMap>()
           .map(WorkspaceWire.fromJson)
           .toList(),
-      archivedSessionIds = _stringList(json['archivedSessionIds']);
+      archivedSessionIds = _stringList(json['archivedSessionIds']),
+      pinnedSessionIds = _stringList(json['pinnedSessionIds']);
 
   final List<WorkspaceWire> items;
   final List<String> archivedSessionIds;
+
+  /// Registry-global pin set, most recently pinned first. Absent on a Host
+  /// that predates `workspace/pinSession`, which reads as "nothing pinned".
+  final List<String> pinnedSessionIds;
 }
 
 // ---------------------------------------------------------------------------

@@ -68,6 +68,10 @@ class _Repository extends Fake implements ChatRepository {
       const Stream<Set<String>>.empty();
 
   @override
+  Stream<List<String>> observePinnedSessionIds() =>
+      const Stream<List<String>>.empty();
+
+  @override
   Stream<ImageLimits?> observeImageLimits() =>
       const Stream<ImageLimits?>.empty();
 

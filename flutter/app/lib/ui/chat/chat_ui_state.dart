@@ -63,6 +63,7 @@ final class ChatUiState {
     this.commands,
     this.sandboxMode,
     this.schedules,
+    this.pinnedSessionIds = const <String>[],
   });
 
   final List<SessionSummary> sessions;
@@ -191,6 +192,10 @@ final class ChatUiState {
   /// that is. Never substitute a default here — an unknown mode renders as
   /// unknown.
   final SandboxModeFact? sandboxMode;
+
+  /// Registry-global pin set, most recently pinned first. Pinned rows lead
+  /// their group; the block order is the user's own.
+  final List<String> pinnedSessionIds;
 
   /// The selected session's active durable reminders, folded from its
   /// versioned `schedule/change` stream. Null means nothing has been
@@ -487,6 +492,38 @@ final class UnarchiveSession extends ChatAction {
   @override
   bool operator ==(Object other) =>
       other is UnarchiveSession && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => sessionId.hashCode;
+}
+
+/// Lift one session into its group's leading pin block (dsh
+/// `workspace/pinSession`). The row moving is the feedback; a Host refusal
+/// (an archived session, a session the Host no longer knows) is logged, not
+/// announced — the verb is hidden on those rows already.
+final class PinSession extends ChatAction {
+  const PinSession(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PinSession && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => sessionId.hashCode;
+}
+
+/// Drop one session back to its own order (dsh `workspace/unpinSession`);
+/// idempotent Host-side, so a double tap is a no-op rather than an error.
+final class UnpinSession extends ChatAction {
+  const UnpinSession(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnpinSession && other.sessionId == sessionId;
 
   @override
   int get hashCode => sessionId.hashCode;

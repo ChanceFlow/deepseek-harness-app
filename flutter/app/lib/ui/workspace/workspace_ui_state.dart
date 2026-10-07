@@ -10,6 +10,7 @@ final class WorkspaceUiState {
   const WorkspaceUiState({
     this.workspaces = const <WorkspaceSummary>[],
     this.sessions = const <SessionSummary>[],
+    this.pinnedSessionIds = const <String>[],
     this.searchResults = const <SessionSearchResult>[],
     this.isLoading = false,
     this.errorMessage,
@@ -23,6 +24,10 @@ final class WorkspaceUiState {
   /// Session summaries behind the workspace groups (web
   /// WorkspaceBrowser renders the session tree under each group).
   final List<SessionSummary> sessions;
+
+  /// Registry-global pin set, most recently pinned first (the Host's own
+  /// order); pinned rows lead their group on this surface too.
+  final List<String> pinnedSessionIds;
 
   /// Content-search results replacing the tree while a query is active
   /// (web `session.search` flat result list).
@@ -123,6 +128,32 @@ final class UnarchiveSessionAction extends WorkspaceAction {
 
   @override
   int get hashCode => Object.hash('unarchive-session', sessionId);
+}
+
+final class PinSessionAction extends WorkspaceAction {
+  const PinSessionAction(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PinSessionAction && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => Object.hash('pin-session', sessionId);
+}
+
+final class UnpinSessionAction extends WorkspaceAction {
+  const UnpinSessionAction(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnpinSessionAction && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => Object.hash('unpin-session', sessionId);
 }
 
 /// Rename one session (web SessionNodeItem "Rename session" — the

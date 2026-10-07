@@ -2996,6 +2996,18 @@ abstract class AppLocalizations {
   /// **'Archived'**
   String get archivedBadge;
 
+  /// Row verb that lifts a session to the top of its group.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin session'**
+  String get pinSession;
+
+  /// Row verb that drops a session back to its own order.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin session'**
+  String get unpinSession;
+
   /// No description provided for @filterSessionsTooltip.
   ///
   /// In en, this message translates to:

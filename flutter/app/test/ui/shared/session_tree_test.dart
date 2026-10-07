@@ -134,6 +134,72 @@ void main() {
     });
   });
 
+  group('pin order', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    const workspaces = <WorkspaceSummary>[
+      WorkspaceSummary(
+        workspaceId: 'w1',
+        path: '/a',
+        title: 'A',
+        sessionIds: <String>['a', 'b', 'c'],
+      ),
+    ];
+
+    test('the pin block leads the group, most recently pinned first', () {
+      final sessions = <SessionSummary>[
+        _session('a', updatedAtEpochMs: now),
+        _session('b', updatedAtEpochMs: now),
+        _session('c', updatedAtEpochMs: now),
+      ];
+      final groups = deriveSessionGroups(
+        sessions,
+        workspaces,
+        null,
+        _en,
+        nowEpochMs: now,
+        pinnedSessionIds: const <String>['c', 'a'],
+      );
+      expect(groups.single.sessions.map((s) => s.id), <String>[
+        'c',
+        'a',
+        'b',
+      ], reason: 'the user order leads; the unpinned remainder keeps its own');
+    });
+
+    test('the active session keeps its lead above the pin block', () {
+      final sessions = <SessionSummary>[
+        _session('a'),
+        _session('b'),
+        _session('c'),
+      ];
+      final groups = deriveSessionGroups(
+        sessions,
+        workspaces,
+        'b',
+        _en,
+        nowEpochMs: now,
+        pinnedSessionIds: const <String>['c'],
+      );
+      expect(groups.single.sessions.map((s) => s.id), <String>[
+        'b',
+        'c',
+        'a',
+      ], reason: 'the row the reader is in never hides behind a pin');
+    });
+
+    test('no pin set leaves every group in its own order', () {
+      final sessions = <SessionSummary>[_session('a'), _session('b')];
+      final groups = deriveSessionGroups(
+        sessions,
+        workspaces,
+        null,
+        _en,
+        nowEpochMs: now,
+      );
+      expect(groups.single.sessions.map((s) => s.id), <String>['a', 'b']);
+    });
+  });
+
   group('archived visibility', () {
     test('sessionVisible follows the filter: hide / show / only', () {
       final archived = _session('a', archived: true);

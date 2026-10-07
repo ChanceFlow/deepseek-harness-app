@@ -121,6 +121,7 @@ class ChatController {
 
   List<SessionSummary> _sessions = const <SessionSummary>[];
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
+  List<String> _pinnedSessionIds = const <String>[];
   ImageLimits _imageLimits = const ImageLimits();
   String? _selectedSessionId;
 
@@ -345,6 +346,7 @@ class ChatController {
     _state.value = ChatUiState(
       sessions: visibleSessions,
       workspaces: _workspaces,
+      pinnedSessionIds: _pinnedSessionIds,
       selectedSessionId: _selectedSessionId,
       selectionRequestSeq: _selectionRequestSeq,
       selectionLandsAtLatest: _selectionLandsAtLatest,
@@ -396,6 +398,14 @@ class ChatController {
     });
   }
 
+  /// One pin verb. The Host's reply replaces the whole mirror, so the row
+  /// lands in the order the Host itself will report on the next baseline.
+  Future<void> _pinSession(String sessionId) =>
+      _runCatchingForUi(() => _repository.pinSession(sessionId));
+
+  Future<void> _unpinSession(String sessionId) =>
+      _runCatchingForUi(() => _repository.unpinSession(sessionId));
+
   void _subscribeBaselines() {
     _subs.add(
       _repository.observeSessions().listen((sessions) {
@@ -424,6 +434,12 @@ class ChatController {
     _subs.add(
       _repository.observeWorkspaces().listen((workspaces) {
         _workspaces = workspaces;
+        _publishUpstream();
+      }),
+    );
+    _subs.add(
+      _repository.observePinnedSessionIds().listen((pinned) {
+        _pinnedSessionIds = pinned;
         _publishUpstream();
       }),
     );
@@ -499,6 +515,10 @@ class ChatController {
         );
       case UnarchiveSession():
         unawaited(_archiveFlow.unarchive(action.sessionId));
+      case PinSession():
+        unawaited(_pinSession(action.sessionId));
+      case UnpinSession():
+        unawaited(_unpinSession(action.sessionId));
       case RenameSession():
         if (action.title.trim().isNotEmpty) {
           unawaited(
