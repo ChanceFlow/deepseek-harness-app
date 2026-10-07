@@ -245,12 +245,12 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 85
+declared = 86
 upstream = 128
-identical = 83
-missing = 45
+identical = 84
+missing = 44
 client-only = 2
-out-of-scope = agentPresets/read, productAnalytics/enabled, productAnalytics/report
+out-of-scope = productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
 
 `declared` counts the client's endpoint constants; `upstream` counts every

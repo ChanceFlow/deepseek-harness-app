@@ -86,3 +86,43 @@ bool _listEquals<T>(List<T> a, List<T> b) {
   }
   return true;
 }
+
+/// One preset's declared composition, rendered for reading
+/// (`agentPresets/read` → the reference `AgentPresetDocument`).
+///
+/// [content] is the declared child-plugin list as entry-list YAML — the
+/// Loader's own dialect, so `!!js` conditions read as declared rather than as
+/// expression objects. This is a *view*: the roster [AgentPresetEntry] stays
+/// the identity, and nothing here writes.
+final class AgentPresetDocument {
+  const AgentPresetDocument({
+    required this.agentPreset,
+    required this.content,
+    this.name,
+    this.description,
+  });
+
+  /// The preset this composition belongs to.
+  final String agentPreset;
+
+  /// The declared composition, as YAML text.
+  final String content;
+
+  /// Display name the preset published; null when it published none.
+  final String? name;
+
+  /// One sentence on what this preset is for; null when unpublished.
+  final String? description;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentPresetDocument &&
+          other.agentPreset == agentPreset &&
+          other.content == content &&
+          other.name == name &&
+          other.description == description);
+
+  @override
+  int get hashCode => Object.hash(agentPreset, content, name, description);
+}

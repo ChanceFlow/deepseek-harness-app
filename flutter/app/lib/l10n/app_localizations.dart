@@ -2126,6 +2126,30 @@ abstract class AppLocalizations {
   /// **'Settings are read-only on this deployment.'**
   String get permissionDefaultsReadOnly;
 
+  /// Card affordance that opens a preset's declared composition.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get agentPresetViewDeclaration;
+
+  /// Page heading for one agent preset's declaration.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared composition'**
+  String get agentPresetDocumentTitle;
+
+  /// Intro line on the declared-composition page.
+  ///
+  /// In en, this message translates to:
+  /// **'The child plugin list this preset declares, as YAML. A view: presets are composed on the host.'**
+  String get agentPresetDocumentIntro;
+
+  /// Shown when the preset declaration read fails.
+  ///
+  /// In en, this message translates to:
+  /// **'The declaration could not be read from this host.'**
+  String get agentPresetDocumentUnavailable;
+
   /// No description provided for @settingsDocumentLabel.
   ///
   /// In en, this message translates to:

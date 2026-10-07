@@ -812,6 +812,22 @@
     "description": "Shown when the host has no permission preset catalog."
   },
   "permissionDefaultsReadOnly": "Settings are read-only on this deployment.",
+  "agentPresetViewDeclaration": "View",
+  "@agentPresetViewDeclaration": {
+    "description": "Card affordance that opens a preset's declared composition."
+  },
+  "agentPresetDocumentTitle": "Declared composition",
+  "@agentPresetDocumentTitle": {
+    "description": "Page heading for one agent preset's declaration."
+  },
+  "agentPresetDocumentIntro": "The child plugin list this preset declares, as YAML. A view: presets are composed on the host.",
+  "@agentPresetDocumentIntro": {
+    "description": "Intro line on the declared-composition page."
+  },
+  "agentPresetDocumentUnavailable": "The declaration could not be read from this host.",
+  "@agentPresetDocumentUnavailable": {
+    "description": "Shown when the preset declaration read fails."
+  },
   "@permissionDefaultsReadOnly": {
     "description": "Shown when the host's settings document is not writable."
   },

@@ -785,6 +785,23 @@ final class AgentPresetListValueWire {
 // src/types.ts)
 // ---------------------------------------------------------------------------
 
+/// `agentPresets/read` value
+/// (`packages/preset/agent-preset-registry/src/types.ts`
+/// `AgentPresetDocument`): the preset identity, its declared composition as
+/// entry-list YAML, and the published display copy.
+final class AgentPresetDocumentWire {
+  AgentPresetDocumentWire.fromJson(JsonMap json)
+    : agentPreset = _reqString(json, 'agentPreset'),
+      content = _reqString(json, 'content'),
+      name = wireString(json, 'name'),
+      description = wireString(json, 'description');
+
+  final String agentPreset;
+  final String content;
+  final String? name;
+  final String? description;
+}
+
 final class PermissionPresetOptionWire {
   PermissionPresetOptionWire.fromJson(JsonMap json)
     : value = _reqString(json, 'value'),

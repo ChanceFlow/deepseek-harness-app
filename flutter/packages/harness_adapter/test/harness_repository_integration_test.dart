@@ -319,6 +319,7 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.goalsComplete,
     DshRpcEndpoints.goalsClear,
     DshRpcEndpoints.agentPresetsList,
+    DshRpcEndpoints.agentPresetsRead,
     DshRpcEndpoints.agentPresetsSelect,
     DshRpcEndpoints.directoryPickerList,
     DshRpcEndpoints.directoryPickerCreate,
@@ -475,6 +476,14 @@ class HarnessFakeRpc implements DshRpcClient {
     'id': 'schedule-1',
     'updated': false,
     'code': 'schedule_conflict',
+  };
+
+  /// Scripted `agentPresets/read` value.
+  JsonMap agentPresetDocumentValue = <String, Object?>{
+    'agentPreset': 'standard',
+    'name': 'Standard',
+    'description': 'The default toolchain.',
+    'content': '- id: tool-bash\n  name: "@deepseek-ai/dsh-tool-bash"\n',
   };
 
   /// Scripted `permissionPresets/catalog` value.
@@ -892,6 +901,8 @@ class HarnessFakeRpc implements DshRpcClient {
         };
       case DshRpcEndpoints.directoryPickerCreate:
         return <String, Object?>{'path': '/tmp/chosen/new-folder'};
+      case DshRpcEndpoints.agentPresetsRead:
+        return agentPresetDocumentValue;
       case DshRpcEndpoints.permissionPresetsCatalog:
         return permissionCatalogValue;
       case DshRpcEndpoints.settingsDescribe:
@@ -4111,6 +4122,24 @@ void main() {
           .single['sessionId'],
       's-archived',
     );
+  });
+
+  test('agent preset read sends the id and decodes the declaration', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+
+    final document = await repository.readAgentPreset('standard');
+
+    expect(rpc.callCountFor(DshRpcEndpoints.agentPresetsRead), 1);
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.agentPresetsRead).single['agentPreset'],
+      'standard',
+    );
+    expect(document.agentPreset, 'standard');
+    expect(document.name, 'Standard');
+    expect(document.content, contains('dsh-tool-bash'));
   });
 
   test('permission catalog decodes both tables and the default', () async {
