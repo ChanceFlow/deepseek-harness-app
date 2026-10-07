@@ -10,10 +10,16 @@ import 'package:domain/repository/chat_repository.dart';
 
 import '../state_stream.dart';
 import '../../logging/error_log_collector.dart';
+import '../../notifications/session_notice_center.dart';
+import '../shared/session_archive_flow.dart';
 import 'workspace_ui_state.dart';
 
 class WorkspaceController {
-  WorkspaceController(this._repository) {
+  WorkspaceController(this._repository, {SessionNoticeSink? notices})
+    : _archiveFlow = SessionArchiveFlow(
+        repository: _repository,
+        notices: notices,
+      ) {
     _refresh();
     _subs.add(
       _repository.observeWorkspaces().listen((workspaces) {
@@ -33,6 +39,9 @@ class WorkspaceController {
   }
 
   final ChatRepository _repository;
+
+  /// The archive/unarchive verbs and their outcome mapping.
+  final SessionArchiveFlow _archiveFlow;
   final AppStateStream<WorkspaceUiState> _state =
       AppStateStream<WorkspaceUiState>(const WorkspaceUiState());
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
@@ -69,6 +78,15 @@ class WorkspaceController {
     );
   }
 
+  /// One row's display title for a notice body; the id itself when the roster
+  /// does not carry the row.
+  String _displayTitleOf(String sessionId) =>
+      _sessions
+          .where((session) => session.id == sessionId)
+          .firstOrNull
+          ?.displayTitle ??
+      sessionId;
+
   void onAction(WorkspaceAction action) {
     switch (action) {
       case CreateWorkspaceAction():
@@ -83,8 +101,13 @@ class WorkspaceController {
         );
       case ArchiveSessionAction():
         unawaited(
-          _runCatchingForUi(() => _repository.archiveSession(action.sessionId)),
+          _archiveFlow.archive(
+            sessionId: action.sessionId,
+            displayTitle: _displayTitleOf(action.sessionId),
+          ),
         );
+      case UnarchiveSessionAction():
+        unawaited(_archiveFlow.unarchive(action.sessionId));
       case RenameSessionAction():
         if (action.title.trim().isNotEmpty) {
           unawaited(

@@ -18,7 +18,9 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/schedule.dart';
+import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_archive.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -31,6 +33,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
+import 'package:app/notifications/session_notice.dart';
+import 'package:app/notifications/session_notice_center.dart';
 import 'package:app/ui/chat/chat_controller.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/chat_screen.dart';
@@ -166,8 +170,14 @@ class FakeChatRepository extends ChatRepository {
   @override
   Future<SessionSummary> createSession(CreateSessionRequest request) async {
     createRequests.add(request);
+    final failure = createFailure;
+    if (failure != null) throw failure;
     return initialSession;
   }
+
+  /// Scripted Host refusal for the next `createSession`; null mints the
+  /// fixture session.
+  RepositoryFailure? createFailure;
 
   @override
   Future<void> openSession(String sessionId) async {
@@ -201,9 +211,30 @@ class FakeChatRepository extends ChatRepository {
   }
 
   @override
-  Future<void> archiveSession(String sessionId) async {
+  Future<void> archiveSession(
+    String sessionId, {
+    bool stopActivity = false,
+  }) async {
     archivedSessionIds.add(sessionId);
+    final activity = archiveRefusalActivity;
+    if (activity == null) return;
+    // `stopActivity` is the confirmation's own path: it must succeed once the
+    // user confirmed, so the refusal only answers the plain call.
+    if (!stopActivity) {
+      throw SessionArchiveRefused(sessionId: sessionId, activity: activity);
+    }
   }
+
+  /// Scripted running work the Host refuses a plain archive over; null
+  /// archives cleanly.
+  List<SessionActivityEntry>? archiveRefusalActivity;
+
+  @override
+  Future<void> unarchiveSession(String sessionId) async {
+    unarchivedSessionIds.add(sessionId);
+  }
+
+  final List<String> unarchivedSessionIds = <String>[];
 
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
@@ -1266,6 +1297,152 @@ void main() {
       FakeChatRepository.initialSession.id,
     ]);
   });
+
+  test('a quiet archive raises the undo notice for its own backend', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    );
+    final seat = _NoticeSeat();
+    addTearDown(seat.dispose);
+    final controller = ChatController(repository, notices: seat.sink);
+    await pumpEventQueue();
+
+    controller.onAction(ArchiveSession(FakeChatRepository.initialSession.id));
+    await pumpEventQueue();
+
+    final notice = seat.notices.single;
+    expect(notice.kind, SessionNoticeKind.archived);
+    expect(notice.sessionId, FakeChatRepository.initialSession.id);
+    expect(notice.backendId, 'b1');
+    expect(seat.requests, isEmpty);
+  });
+
+  test(
+    'a running-work refusal asks for the stop-and-archive confirmation',
+    () async {
+      final repository =
+          FakeChatRepository(
+              initialSessions: <SessionSummary>[
+                FakeChatRepository.initialSession,
+              ],
+            )
+            ..archiveRefusalActivity = const <SessionActivityEntry>[
+              SessionActivityEntry(
+                kind: SessionActivityKind.turn,
+                rawKind: 'turn',
+              ),
+              SessionActivityEntry(
+                kind: SessionActivityKind.job,
+                rawKind: 'job',
+                items: <SessionActivityItem>[
+                  SessionActivityItem(id: 'job-1', label: 'build'),
+                ],
+              ),
+            ];
+      final seat = _NoticeSeat();
+      addTearDown(seat.dispose);
+      final controller = ChatController(repository, notices: seat.sink);
+      await pumpEventQueue();
+
+      controller.onAction(ArchiveSession(FakeChatRepository.initialSession.id));
+      await pumpEventQueue();
+
+      final request = seat.requests.single;
+      expect(request.sessionId, FakeChatRepository.initialSession.id);
+      expect(request.backendId, 'b1');
+      expect(request.displayTitle, 'Test session');
+      expect(request.activity, hasLength(2));
+      expect(request.activity.last.items.single.displayName, 'build');
+      expect(
+        seat.notices,
+        isEmpty,
+        reason: 'the refusal is answered by the dialog, not by a notice',
+      );
+    },
+  );
+
+  test(
+    'unarchive delegates and raises nothing (the row is the feedback)',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final seat = _NoticeSeat();
+      addTearDown(seat.dispose);
+      final controller = ChatController(repository, notices: seat.sink);
+      await pumpEventQueue();
+
+      controller.onAction(const UnarchiveSession('session-1'));
+      await pumpEventQueue();
+
+      expect(repository.unarchivedSessionIds, <String>['session-1']);
+      expect(seat.notices, isEmpty);
+    },
+  );
+
+  test(
+    'selecting an archived session explains instead of opening it',
+    () async {
+      const archived = SessionSummary(
+        id: 'session-archived',
+        title: 'Archived session',
+        blank: false,
+        archived: true,
+      );
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[archived],
+      );
+      final seat = _NoticeSeat();
+      addTearDown(seat.dispose);
+      final controller = ChatController(repository, notices: seat.sink);
+      await pumpEventQueue();
+
+      controller.onAction(const SelectSession('session-archived'));
+      await pumpEventQueue();
+
+      expect(
+        repository.openedSessionIds,
+        isEmpty,
+        reason: 'archived rows are not openable (web guardedOpen)',
+      );
+      expect(controller.state.selectedSessionId, isNull);
+      expect(seat.notices.single.kind, SessionNoticeKind.archiveNotOpenable);
+    },
+  );
+
+  test(
+    'a refused New Session raises the notice with the Host reason',
+    () async {
+      final repository =
+          FakeChatRepository(
+              initialSessions: <SessionSummary>[
+                FakeChatRepository.initialSession,
+              ],
+            )
+            ..createFailure = const RepositoryFailure(
+              'session-persistence/already-owned',
+              'locked by another client',
+            );
+      final seat = _NoticeSeat();
+      addTearDown(seat.dispose);
+      final controller = ChatController(repository, notices: seat.sink);
+      await pumpEventQueue();
+
+      controller.onAction(const CreateSessionInWorkspace(null));
+      await pumpEventQueue();
+
+      expect(repository.createRequests, hasLength(1));
+      final notice = seat.notices.single;
+      expect(notice.kind, SessionNoticeKind.createFailed);
+      expect(notice.code, 'session-persistence/already-owned');
+      expect(notice.message, 'locked by another client');
+      expect(
+        controller.state.errorMessage,
+        isNull,
+        reason: 'the notice replaces the generic error strip for this path',
+      );
+    },
+  );
 
   test('approval action delegates', () async {
     final repository = FakeChatRepository(
@@ -2352,5 +2529,34 @@ class _DetachedDispatchRepository extends FakeChatRepository {
         ),
       );
     }
+  }
+}
+
+/// The notice seat one controller test needs: a real [SessionNoticeCenter],
+/// a per-backend sink bound to it, and the two streams it fills. The streams
+/// are broadcast, so drain the event queue (`pumpEventQueue`) before reading.
+final class _NoticeSeat {
+  _NoticeSeat() {
+    _noticeSub = center.notices.listen(notices.add);
+    _requestSub = center.archiveRequests.listen(requests.add);
+  }
+
+  /// The backend every notice this seat captures belongs to.
+  static const String backendId = 'b1';
+
+  final SessionNoticeCenter center = SessionNoticeCenter();
+  final List<SessionNotice> notices = <SessionNotice>[];
+  final List<SessionArchiveRequest> requests = <SessionArchiveRequest>[];
+
+  late final StreamSubscription<SessionNotice> _noticeSub;
+  late final StreamSubscription<SessionArchiveRequest> _requestSub;
+
+  SessionNoticeSink get sink =>
+      SessionNoticeSink(center: center, backendId: backendId);
+
+  Future<void> dispose() async {
+    await _noticeSub.cancel();
+    await _requestSub.cancel();
+    center.dispose();
   }
 }

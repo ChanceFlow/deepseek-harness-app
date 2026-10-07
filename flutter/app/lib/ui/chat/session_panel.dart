@@ -17,6 +17,8 @@
 /// sessions makes it the backend the chat surface presents.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/session.dart';
@@ -25,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
+import '../shared/archived_filter.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/edge_fade.dart';
 import '../shared/session_tree.dart';
@@ -104,6 +107,7 @@ class SessionPanel extends ConsumerStatefulWidget {
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
+    this.onUnarchiveSession,
     this.onCreateSessionInWorkspace,
   });
 
@@ -141,10 +145,12 @@ class SessionPanel extends ConsumerStatefulWidget {
   final String? backendId;
 
   /// Web SessionNodeItem session verbs via long-press: rename / fork /
-  /// archive one session under any backend's slice.
+  /// archive one session under any backend's slice. An archived row shows
+  /// unarchive in place of archive.
   final void Function(String backendId, String sessionId)? onRenameSession;
   final void Function(String backendId, String sessionId)? onForkSession;
   final void Function(String backendId, String sessionId)? onArchiveSession;
+  final void Function(String backendId, String sessionId)? onUnarchiveSession;
 
   /// Web ProjectRowItem's new-session seat as a sidebar project-header
   /// long-press: creates a session in that workspace on the backend that
@@ -250,6 +256,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     });
     _persistBrowsingState();
   }
+
+  /// Web `ViewOptionsMenu`'s archived choice, defaulting to hide until the
+  /// store seeds it. This one read feeds the tree, the search results, and
+  /// the rail avatars, so all three agree.
+  ArchivedFilter _archivedFilter() => ref.watch(archivedFilterProvider);
 
   /// Applies the persisted browsing toggles ([_groupOverridesKey],
   /// [_overflowExpandedKey]) once the store resolves; until then the
@@ -459,7 +470,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             padding: const EdgeInsets.only(top: 4, bottom: 16),
             children: [
               for (final session in widget.sessions.where(
-                (session) => sessionVisible(session, widget.selectedSessionId),
+                (session) => sessionVisible(
+                  session,
+                  widget.selectedSessionId,
+                  archivedFilter: _archivedFilter(),
+                ),
               ))
                 _buildRailAvatar(context, scheme, session),
             ],
@@ -568,6 +583,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       return _buildBackendSections(context, scheme);
     }
     final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    final archivedFilter = _archivedFilter();
     final groups = deriveSessionGroups(
       widget.sessions,
       widget.workspaces,
@@ -581,15 +597,33 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       // recent-24h, recency).
       includeEmptyGroups: false,
       priorityOrder: true,
+      archivedFilter: archivedFilter,
     );
     if (groups.isEmpty) {
-      // Web `.empty` (aligned with the row grid).
+      // Web `EmptySessions`: the archived-only view names its filter and
+      // offers the way back; every other view keeps the plain line.
       return Padding(
         padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
-        child: Text(
-          l10n.noSessionsYet,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              archivedFilter == ArchivedFilter.only
+                  ? l10n.noArchivedSessions
+                  : l10n.noSessionsYet,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
+            ),
+            if (archivedFilter == ArchivedFilter.only)
+              TextButton(
+                onPressed: () => unawaited(
+                  ref
+                      .read(archivedFilterProvider.notifier)
+                      .select(ArchivedFilter.hide),
+                ),
+                child: Text(l10n.viewOtherSessions),
+              ),
+          ],
         ),
       );
     }
@@ -621,6 +655,8 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                 _sessionVerb(null, sessionId, widget.onForkSession),
             onArchiveSession: (sessionId) =>
                 _sessionVerb(null, sessionId, widget.onArchiveSession),
+            onUnarchiveSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onUnarchiveSession),
           ),
         ],
       ],
@@ -680,6 +716,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       nowEpochMs: nowEpochMs,
       includeEmptyGroups: false,
       priorityOrder: true,
+      archivedFilter: _archivedFilter(),
     );
     final currentGroupKey = currentGroupKeyOf(
       slice.sessions,
@@ -714,6 +751,8 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               _sessionVerb(slice, sessionId, widget.onForkSession),
           onArchiveSession: (sessionId) =>
               _sessionVerb(slice, sessionId, widget.onArchiveSession),
+          onUnarchiveSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onUnarchiveSession),
         ),
       ],
     ];
@@ -731,7 +770,12 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     final sessionsById = <String, SessionSummary>{
       for (final session in widget.sessions.where(
         (session) =>
-            !session.blank && sessionVisible(session, widget.selectedSessionId),
+            !session.blank &&
+            sessionVisible(
+              session,
+              widget.selectedSessionId,
+              archivedFilter: _archivedFilter(),
+            ),
       ))
         session.id: session,
     };
@@ -898,6 +942,10 @@ class _SectionHeader extends StatelessWidget {
                 ),
               ),
             ),
+            // Web `ViewOptionsMenu`: the section's archived-visibility
+            // control, beside the search seat (both browsers mount the same
+            // menu against one shared filter).
+            const ArchivedFilterMenu(),
             // Web WorkspaceBrowser `.iconButton`: the section's search
             // seat as a standard M3 IconButton (label-secondary ink;
             // on-surface ink while the capsule is engaged).
@@ -1085,6 +1133,7 @@ class _GroupSection extends StatefulWidget {
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
+    this.onUnarchiveSession,
   });
 
   final SessionGroupData group;
@@ -1107,6 +1156,9 @@ class _GroupSection extends StatefulWidget {
   final void Function(String sessionId)? onRenameSession;
   final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
+
+  /// The restore verb an archived row shows in place of archive.
+  final void Function(String sessionId)? onUnarchiveSession;
 
   @override
   State<_GroupSection> createState() => _GroupSectionState();
@@ -1223,6 +1275,9 @@ class _GroupSectionState extends State<_GroupSection> {
               onArchive: widget.onArchiveSession == null
                   ? null
                   : () => widget.onArchiveSession!(sessions[i].id),
+              onUnarchive: widget.onUnarchiveSession == null
+                  ? null
+                  : () => widget.onUnarchiveSession!(sessions[i].id),
             ),
           ],
           if (sessions.length > kCollapsedSessionLimit) ...[

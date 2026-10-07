@@ -21,6 +21,15 @@ extension DshSchemeColors on ColorScheme {
       ? const Color(0xFF1B6D24)
       : const Color(0xFF81C784);
 
+  /// The terminal screen's background and foreground. M3 has no "text console"
+  /// pair: the surface is a fixed dark panel in both brightnesses, the way a
+  /// terminal emulator is, so the host's plain text keeps its contrast
+  /// regardless of the app theme. `surface`/`onSurface` would make a light
+  /// theme render a dark-on-light console, which is not what the user picked
+  /// when they opened a shell.
+  Color get terminalBackground => const Color(0xFF101418);
+  Color get terminalForeground => const Color(0xFFE6E6E6);
+
   /// Warning amber — the "waiting on the user" state, kept apart from
   /// `error`'s red. M3 ships no warn role; the reference web palette does:
   /// `--dsw-alias-state-warn-primary` is amber-500 in both brightnesses

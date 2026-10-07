@@ -135,10 +135,19 @@ final class PluginInventorySnapshot {
   const PluginInventorySnapshot({
     required this.entries,
     this.agentPresets = const <AgentPresetPluginGroup>[],
+    this.managementAvailable = false,
   });
 
   /// Current non-group Loader entries, in Loader order.
   final List<PluginInventoryEntry> entries;
+
+  /// Whether the host composes a plugin manager at all
+  /// (`pluginInventory/list`'s `managementAvailable`, which is the host's
+  /// `ctx.get('pluginManager') !== undefined`). False means the manager
+  /// methods do not exist on this deployment, so a surface must not offer
+  /// them — the gate the reference page applies before its first
+  /// `listBundles`.
+  final bool managementAvailable;
 
   /// Per-preset compositions; empty when no roster is composed (the wire
   /// omits the member entirely).
@@ -149,11 +158,15 @@ final class PluginInventorySnapshot {
       identical(this, other) ||
       (other is PluginInventorySnapshot &&
           _listEquals(other.entries, entries) &&
-          _listEquals(other.agentPresets, agentPresets));
+          _listEquals(other.agentPresets, agentPresets) &&
+          other.managementAvailable == managementAvailable);
 
   @override
-  int get hashCode =>
-      Object.hash(Object.hashAll(entries), Object.hashAll(agentPresets));
+  int get hashCode => Object.hash(
+    Object.hashAll(entries),
+    Object.hashAll(agentPresets),
+    managementAvailable,
+  );
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

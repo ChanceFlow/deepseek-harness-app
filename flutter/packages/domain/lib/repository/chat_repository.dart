@@ -7,6 +7,7 @@ library;
 import 'dart:async';
 
 import '../model/agent_preset.dart';
+import '../model/agent_team.dart';
 import '../model/attachment.dart';
 import '../model/command.dart';
 import '../model/connection_state.dart';
@@ -16,15 +17,20 @@ import '../model/session_window_stats.dart';
 import '../model/directory.dart';
 import '../model/permission_select.dart';
 import '../model/goal.dart';
+import '../model/jobs.dart';
 import '../model/llm_provider.dart';
 import '../model/model_catalog.dart';
 import '../model/plan.dart';
 import '../model/plugin_inventory.dart';
+import '../model/plugin_management.dart';
 import '../model/prompt.dart';
+import '../model/repository_failure.dart';
 import '../model/sandbox.dart';
 import '../model/schedule.dart';
 import '../model/session.dart';
+import '../model/session_archive.dart';
 import '../model/settings.dart';
+import '../model/terminal.dart';
 import '../model/skills.dart';
 import '../model/subagent.dart';
 import '../model/timeline_item.dart';
@@ -41,10 +47,18 @@ Never _unsupported(String operation) => throw UnsupportedError(
 abstract class ChatRepository {
   Stream<ConnectionState> observeConnectionState();
 
+  /// Every root session the host reports, archived ones included and marked
+  /// through [SessionSummary.archived]. Visibility is the browsing
+  /// surfaces' own decision (the reference filters in its tree, not in its
+  /// session store), and the notification folds skip archived rows
+  /// explicitly.
   Stream<List<SessionSummary>> observeSessions();
 
   Future<void> refreshSessions();
 
+  /// Mint a session (or reuse the request's explicit id). A Host refusal
+  /// throws [RepositoryFailure] carrying the stable code and the Host's
+  /// message, the shape the "new session failed" notice quotes.
   Future<SessionSummary> createSession(CreateSessionRequest request);
 
   /// The agent-preset roster the host composes sessions from
@@ -200,6 +214,86 @@ abstract class ChatRepository {
   Stream<List<ScheduleReminder>> observeSchedules(String sessionId) =>
       const Stream<List<ScheduleReminder>>.empty();
 
+  /// One session's active host reminders, read without activating it
+  /// (`schedule/list`).
+  Future<List<ScheduleRecord>> listSchedules(String sessionId) =>
+      _unsupported('listSchedules');
+
+  /// Every host reminder, active and inactive, with its original session
+  /// binding (`schedule/catalog`). This is the only cross-session read, and
+  /// the surface's feature probe: a deployment that patches the schedule row
+  /// out answers `gateway/invocation-unavailable`.
+  Future<List<ScheduleCatalogEntry>> scheduleCatalog() =>
+      _unsupported('scheduleCatalog');
+
+  /// One task's saved deliveries, newest first (`schedule/history`).
+  Future<ScheduleHistoryResult> scheduleHistory({
+    required String sessionId,
+    required String id,
+    required int limit,
+    String? before,
+  }) => _unsupported('scheduleHistory');
+
+  /// Replace a task's name, instruction, and/or timing under a
+  /// compare-and-update against the record the caller observed
+  /// (`schedule/update`).
+  ///
+  /// A stale `expected` answers a miss rather than overwriting a change made
+  /// elsewhere; nothing is mutated on a miss.
+  Future<ScheduleUpdateResult> updateSchedule({
+    required String sessionId,
+    required String id,
+    required ScheduleRecord expected,
+    String? title,
+    String? prompt,
+    ScheduleTimingChange? change,
+  }) => _unsupported('updateSchedule');
+
+  /// Delete one task and its saved deliveries (`schedule/delete`).
+  Future<ScheduleDeleteResult> deleteSchedule({
+    required String sessionId,
+    required String id,
+  }) => _unsupported('deleteSchedule');
+
+  /// The Lead Session's durable team state (`agentTeam` Session projection).
+  ///
+  /// Null means this Session carries no Team — the experimental Agent Teams
+  /// package is not mounted, or the projection has not arrived. An empty team
+  /// and an absent one must not look the same to the caller, so absence stays
+  /// null rather than defaulting to an empty roster.
+  Stream<AgentTeam?> observeAgentTeam(String sessionId) =>
+      const Stream<AgentTeam?>.empty();
+
+  /// Non-activating read of one Session's `agentTeam` projection
+  /// (`session/projections`), for the cold seed a stream cannot give.
+  ///
+  /// Null means the Session exists but publishes no `agentTeam` value.
+  Future<AgentTeam?> loadAgentTeam(String sessionId) =>
+      _unsupported('loadAgentTeam');
+
+  /// One background job's retained output, observed from an absolute byte
+  /// offset (`job/follow`).
+  ///
+  /// The stream opens with a [JobOutputOpened] anchor and closes after the
+  /// terminal [JobOutputStatus]; [resumeFrom] continues a previous generation
+  /// at a [JobOutputChunks.next] offset, and omitting it anchors at the job's
+  /// oldest retained byte. A job this client cannot see answers no frames.
+  Stream<JobOutputFrame> observeJobOutput(
+    String sessionId,
+    String jobId, {
+    int? resumeFrom,
+  }) => const Stream<JobOutputFrame>.empty();
+
+  /// Stop one background job on the human's behalf (`job/kill`).
+  ///
+  /// The registry's owner fence is the only access rule, and the kill is not
+  /// the model's own, so the owning agent still receives the standard
+  /// completion notice. A job that already settled is a success, not an
+  /// error; an id this session's list does not carry throws
+  /// `job/not-found` (`packages/api/job-controller/src/index.ts`).
+  Future<void> killJob(String sessionId, String jobId) =>
+      _unsupported('killJob');
+
   /// Pending dynamic-Cordis plugin approval requests (`cordis/request-run`
   /// forwarded events). An empty list is the settled state.
   Stream<List<CordisRunRequest>> observeCordisRunRequests() =>
@@ -218,6 +312,185 @@ abstract class ChatRepository {
   /// each agent preset's plugin composition.
   Future<PluginInventorySnapshot> listPluginInventory() =>
       _unsupported('listPluginInventory');
+
+  /// The host's bundle roster (`pluginManager/listBundles`): installed
+  /// bundles and the optional ones a profile may add. Available only when
+  /// [PluginInventorySnapshot.managementAvailable] is true.
+  Future<List<PluginBundle>> listPluginBundles() =>
+      _unsupported('listPluginBundles');
+
+  /// The loaded plugin entries with their patch targets
+  /// (`pluginManager/listPlugins`).
+  Future<List<PluginInfo>> listPlugins() => _unsupported('listPlugins');
+
+  /// The registries an installation will ask, in order
+  /// (`pluginManager/registries`).
+  Future<PluginRegistries> pluginRegistries() =>
+      _unsupported('pluginRegistries');
+
+  /// Resolve one spec without installing it (`pluginManager/inspect`).
+  ///
+  /// A refusal is a value ([PluginSpecRefused]), not an exception.
+  Future<PluginSpecInspection> inspectPluginSpec(
+    String spec, {
+    String? registry,
+  }) => _unsupported('inspectPluginSpec');
+
+  /// Install one bundle spec on the host (`pluginManager/installBundle`).
+  ///
+  /// [requestId] is the client-minted id that makes the host emit progress
+  /// and log events for this attempt; the unary reply settles the attempt, and
+  /// [waitForPluginInstall] only reconciles a lost one. Activation is always
+  /// deferred — the caller enables the bundle afterwards.
+  Future<PluginChangeResult> installPluginBundle(
+    String spec, {
+    String? requestId,
+    String? registry,
+    List<String> approvedBuilds = const <String>[],
+  }) => _unsupported('installPluginBundle');
+
+  /// Reconcile one installation whose unary reply was lost
+  /// (`pluginManager/waitForInstall`). Null means the host has no record of
+  /// that request.
+  Future<PluginChangeResult?> waitForPluginInstall(String requestId) =>
+      _unsupported('waitForPluginInstall');
+
+  /// Ask the host to stop an in-flight installation
+  /// (`pluginManager/cancelInstall`).
+  Future<PluginInstallCancellation> cancelPluginInstall(String requestId) =>
+      _unsupported('cancelPluginInstall');
+
+  /// Enable or disable one installed bundle
+  /// (`pluginManager/setBundleEnabled`).
+  Future<PluginChangeResult> setPluginBundleEnabled(
+    String name,
+    bool enabled,
+  ) => _unsupported('setPluginBundleEnabled');
+
+  /// Enable or disable one plugin entry (`pluginManager/setPluginEnabled`).
+  Future<PluginChangeResult> setPluginEnabled(String id, bool enabled) =>
+      _unsupported('setPluginEnabled');
+
+  /// Uninstall one bundle (`pluginManager/removeBundle`). The only
+  /// destructive manager operation.
+  Future<PluginChangeResult> removePluginBundle(String name) =>
+      _unsupported('removePluginBundle');
+
+  /// The saved plugin-version exemptions
+  /// (`pluginManager/listVersionExemptions`).
+  Future<PluginVersionExemptions> listPluginVersionExemptions() =>
+      _unsupported('listPluginVersionExemptions');
+
+  /// Grant or revoke one exact plugin/runtime exemption
+  /// (`pluginManager/setVersionExemption`).
+  ///
+  /// A grant needs the exact current runtime version and an explicit
+  /// risk acceptance: it permits a package the running DSH version rejects.
+  Future<PluginChangeResult> setPluginVersionExemption({
+    required String packageVersion,
+    required String runtimeVersion,
+    required bool enabled,
+    bool acceptRisk = false,
+  }) => _unsupported('setPluginVersionExemption');
+
+  /// Race the public registries and answer the first one that responds
+  /// (`pluginRegistryProbe/fastest`). Null when none does or probing is off.
+  Future<String?> fastestPluginRegistry() =>
+      _unsupported('fastestPluginRegistry');
+
+  /// Installation progress pushed by `plugin-manager/install-state` events.
+  Stream<PluginInstallProgress> observePluginInstallProgress() =>
+      const Stream<PluginInstallProgress>.empty();
+
+  /// Package-run output pushed by `plugin-manager/install-log` events.
+  Stream<PluginInstallLogChunk> observePluginInstallLog() =>
+      const Stream<PluginInstallLogChunk>.empty();
+
+  /// The profile's composition changed (`plugin-manager/changed`), so every
+  /// roster read is stale.
+  Stream<void> observePluginChanges() => const Stream<void>.empty();
+
+  /// The session's terminal environment: its working directory and the input
+  /// and dimension limits every new or restored terminal shares
+  /// (`terminal/environment`).
+  Future<TerminalEnvironment> terminalEnvironment(String sessionId) =>
+      _unsupported('terminalEnvironment');
+
+  /// The shells the host verified in its own execution environment
+  /// (`terminal/shells`). Discovery allocates nothing.
+  Future<List<TerminalShell>> terminalShells(String sessionId) =>
+      _unsupported('terminalShells');
+
+  /// Every terminal this session owns, including restored ones
+  /// (`terminal/list`). This and [retainTerminal] are the only terminal calls
+  /// that need no live Agent.
+  Future<List<TerminalInfo>> listTerminals(String sessionId) =>
+      _unsupported('listTerminals');
+
+  /// Allocate one terminal, or return the existing one for the same
+  /// caller-chosen [id] (`terminal/create`).
+  ///
+  /// The identity is minted by the client and stable across reconnects;
+  /// creation is idempotent for an open identity.
+  Future<TerminalInfo> createTerminal(
+    String sessionId, {
+    required String id,
+    required int cols,
+    required int rows,
+    String? shellPath,
+  }) => _unsupported('createTerminal');
+
+  /// Attach to one terminal and observe its screen (`terminal/follow`).
+  ///
+  /// [attachmentId] is a fresh client-minted identity per generation; the
+  /// first attachment to follow a running terminal owns input control. The
+  /// stream opens with a [TerminalSnapshot] and stays live until the
+  /// attachment is cancelled or the host ends it.
+  Stream<TerminalFrame> observeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+  ) => const Stream<TerminalFrame>.empty();
+
+  /// Hold one terminal open for a window without taking input control
+  /// (`terminal/retain`). The single frame is the hold acknowledgement; the
+  /// stream stays open while the hold lives.
+  Stream<void> retainTerminal(String sessionId, String terminalId) =>
+      const Stream<void>.empty();
+
+  /// Send input to the attached terminal (`terminal/write`). Input travels as
+  /// UTF-8 text, control characters included; the host refuses it once this
+  /// attachment no longer owns control.
+  Future<void> writeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+    String data,
+  ) => _unsupported('writeTerminal');
+
+  /// Resize the terminal's pseudo-terminal and recovery screen
+  /// (`terminal/resize`).
+  Future<void> resizeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+    int cols,
+    int rows,
+  ) => _unsupported('resizeTerminal');
+
+  /// Rename one terminal without touching its shell (`terminal/rename`).
+  Future<void> renameTerminal(
+    String sessionId,
+    String terminalId,
+    String title,
+  ) => _unsupported('renameTerminal');
+
+  /// Close one terminal and kill its process range (`terminal/close`).
+  ///
+  /// Repeated closes succeed. Cleanup failures leave the terminal in place for
+  /// a later retry.
+  Future<void> closeTerminal(String sessionId, String terminalId) =>
+      _unsupported('closeTerminal');
 
   /// Download one durable image; bytes are session-authorized.
   Future<AttachmentData> readAttachment(
@@ -282,8 +555,24 @@ abstract class ChatRepository {
 
   /// Archive a session without deleting its log or workspace accounting
   /// slot.
-  Future<void> archiveSession(String sessionId) =>
+  ///
+  /// Without [stopActivity] the Host refuses a session that still has
+  /// running work by throwing [SessionArchiveRefused], whose activity names
+  /// what must stop first; the archive is not written on that path. With
+  /// [stopActivity] the Host writes the archive first and then asks its
+  /// providers to stop that work, so a stop can never undo the archive, and
+  /// the stopped work does not resume on its own. Any other failure throws
+  /// as itself — [RepositoryFailure] for a Host refusal, the transport error
+  /// otherwise.
+  Future<void> archiveSession(String sessionId, {bool stopActivity = false}) =>
       _unsupported('archiveSession');
+
+  /// Restore an archived session (dsh `workspace.unarchiveSession`): the row
+  /// returns to every grouping surface in its stored position, and its log
+  /// and accounting slot were never lost. Restoring is not notice-worthy —
+  /// the row reappearing is the feedback.
+  Future<void> unarchiveSession(String sessionId) =>
+      _unsupported('unarchiveSession');
 
   Future<WorkspaceSummary> createWorkspace(String path);
 

@@ -21,10 +21,13 @@ import '../../di/providers.dart';
 import '../../notifications/notification_events.dart' show AppNotificationEvent;
 import '../../notifications/notification_permission_gate.dart';
 import '../../notifications/notification_toast.dart';
+import '../../notifications/session_notice.dart';
+import '../../notifications/session_notice_host.dart';
 import '../../notifications/system_notifier.dart' show NotificationTarget;
 import '../chat/chat_screen.dart';
 import '../chat/chat_ui_state.dart' show SelectSession;
 import '../settings/settings_screen.dart';
+import '../shared/session_archive_confirm_dialog.dart';
 import '../theme/theme.dart';
 import '../workspace/workspace_screen.dart';
 import 'app_destination.dart';
@@ -50,6 +53,15 @@ class _AppRootState extends ConsumerState<AppRoot> {
   /// listener follows the new stream instead of holding a dead one.
   StreamSubscription<AppNotificationEvent>? _eventSub;
   Stream<AppNotificationEvent>? _subscribedEvents;
+
+  /// The transient action notices and the pending stop-and-archive
+  /// confirmations, both from the app-wide center.
+  StreamSubscription<SessionNotice>? _noticeSub;
+  StreamSubscription<SessionArchiveRequest>? _archiveSub;
+
+  /// One confirmation at a time: a second refusal arriving while the dialog
+  /// is open stays unshown rather than stacking a second modal.
+  bool _archiveConfirmOpen = false;
 
   bool _permissionAskInFlight = false;
 
@@ -78,6 +90,15 @@ class _AppRootState extends ConsumerState<AppRoot> {
     _workSub = ref
         .read(workInFlightChangesProvider)
         .listen((inFlight) => unawaited(_askForNotifications(inFlight)));
+    // Action outcomes ride their own seat: a controller raises a notice (it
+    // holds no context), the root renders it, and the archive refusal asks
+    // for the stop-and-archive confirmation here — the surfaces that raise
+    // these do not outlive the row menu, the app root does.
+    final notices = ref.read(sessionNoticeCenterProvider);
+    _noticeSub = notices.notices.listen(_showSessionNotice);
+    _archiveSub = notices.archiveRequests.listen(
+      (request) => unawaited(_confirmStopAndArchive(request)),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // A cold start from a notification tap navigates after the first
       // frame once the registry is available.
@@ -92,7 +113,67 @@ class _AppRootState extends ConsumerState<AppRoot> {
     unawaited(_targetSub?.cancel());
     unawaited(_workSub?.cancel());
     unawaited(_eventSub?.cancel());
+    unawaited(_noticeSub?.cancel());
+    unawaited(_archiveSub?.cancel());
     super.dispose();
+  }
+
+  /// Renders one controller-raised notice as the root SnackBar; the archived
+  /// notices carry the undo, which unarchives on the backend that owns the
+  /// session.
+  void _showSessionNotice(SessionNotice notice) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (l10n == null || messenger == null) return;
+    showSessionNotice(
+      messenger: messenger,
+      l10n: l10n,
+      notice: notice,
+      onUndo: _undoArchive,
+    );
+  }
+
+  /// The archive notice's undo: restore the session on its own backend. The
+  /// undo is silent — the row returning is the feedback — and a failure is
+  /// the repository's to log.
+  void _undoArchive(SessionNotice notice) {
+    final sessionId = notice.sessionId;
+    if (sessionId == null) return;
+    unawaited(
+      ref
+          .read(chatRepositoryProvider(notice.backendId))
+          .unarchiveSession(sessionId),
+    );
+  }
+
+  /// Asks the user to stop a session's running work and archive it (the
+  /// Host's `workspace/session-active` refusal). Confirming archives with
+  /// `stopActivity` and raises the stopped-and-archived notice; a failure
+  /// stays inside the dialog.
+  Future<void> _confirmStopAndArchive(SessionArchiveRequest request) async {
+    if (!mounted || _archiveConfirmOpen) return;
+    _archiveConfirmOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => SessionArchiveConfirmDialog(
+          request: request,
+          onConfirm: () => ref
+              .read(chatRepositoryProvider(request.backendId))
+              .archiveSession(request.sessionId, stopActivity: true),
+          onArchived: () => _showSessionNotice(
+            SessionNotice(
+              kind: SessionNoticeKind.stoppedAndArchived,
+              backendId: request.backendId,
+              sessionId: request.sessionId,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      _archiveConfirmOpen = false;
+    }
   }
 
   /// Explains why notifications are wanted, then spends the one system ask.

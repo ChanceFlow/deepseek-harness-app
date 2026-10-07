@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
+import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
@@ -14,16 +15,21 @@ import 'package:domain/model/cordis.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/goal.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/llm_provider.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/plugin_inventory.dart';
+import 'package:domain/model/plugin_management.dart';
 import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/schedule.dart';
+import 'package:domain/model/terminal.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_archive.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/subagent.dart';
@@ -57,6 +63,10 @@ const Duration kStreamPublishWindow = Duration(milliseconds: 16);
 
 const int _credentialsMaxRefs = 64;
 const int _historyPageMessages = 50;
+
+/// The Host's refusal code for archiving a session that still runs work
+/// (dsh `workspace/session-active`); its details carry the activity.
+const String _sessionActiveCode = 'workspace/session-active';
 
 /// Deadline for every short/unary RPC: one the host answers in well under a
 /// second when healthy (data reads, settings/credential mutations, session
@@ -150,6 +160,42 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// `jobs` block (`packages/api/job-controller/src/index.ts`,
   /// `@Remote({ mode: 'stream' }) list`).
   final Set<String> _jobStreamSessionIds = <String>{};
+
+  /// Mux stream id prefix for one terminal attachment (`terminal/follow`) and
+  /// one window hold (`terminal/retain`). Both are logical streams, so they
+  /// stay literals like the other stream routes.
+  static const String _terminalFollowPrefix = 'terminal-follow-';
+  static const String _terminalRetainPrefix = 'terminal-retain-';
+
+  /// Mux stream id -> the sink its frames feed.
+  final Map<String, StreamController<TerminalFrame>> _terminalFollows =
+      <String, StreamController<TerminalFrame>>{};
+  final Map<String, StreamController<void>> _terminalRetains =
+      <String, StreamController<void>>{};
+  int _terminalStreamSeq = 0;
+
+  /// Mux stream id prefix for one job's `job/follow` output observation.
+  ///
+  /// Like `job/list`, this is a logical stream, so it stays a literal; the
+  /// wire-pin gate compares unary registrations only (docs/spec.md §4.6).
+  static const String _jobOutputPrefix = 'job-follow-';
+
+  /// One live observation per `(sessionId, jobId)` this client is following,
+  /// keyed by [_jobOutputKey]. The expansion surface owns the lifetime: a
+  /// collapse cancels the route, and a re-expansion resumes from the last
+  /// published `next` offset.
+  final Map<String, _JobOutputMirror> _jobOutputMirrors =
+      <String, _JobOutputMirror>{};
+
+  /// Mux stream id -> the mirror it feeds, so one frame dispatch is a map
+  /// lookup rather than a separable id parse.
+  final Map<String, _JobOutputMirror> _jobOutputStreams =
+      <String, _JobOutputMirror>{};
+
+  int _jobOutputStreamSeq = 0;
+
+  static String _jobOutputKey(String sessionId, String jobId) =>
+      '$sessionId\u0000$jobId';
 
   /// Durable address of every subagent child this client has listed or
   /// opened: `{direct parent, mode}`.
@@ -298,6 +344,162 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
+  // -----------------------------------------------------------------------
+  // Background-job output observation (`job/follow`)
+  // -----------------------------------------------------------------------
+
+  @override
+  Stream<JobOutputFrame> observeJobOutput(
+    String sessionId,
+    String jobId, {
+    int? resumeFrom,
+  }) {
+    final key = _jobOutputKey(sessionId, jobId);
+    final mirror = _jobOutputMirrors.putIfAbsent(
+      key,
+      () => _JobOutputMirror(key: key, sessionId: sessionId, jobId: jobId),
+    );
+    if (resumeFrom != null) mirror.resumeFrom = resumeFrom;
+    final outgoing = StreamController<JobOutputFrame>.broadcast();
+    StreamSubscription<JobOutputFrame>? inner;
+    var cancelled = false;
+    outgoing.onListen = () {
+      mirror.listeners++;
+      inner = mirror.controller.stream.listen(
+        outgoing.add,
+        onError: outgoing.addError,
+        onDone: () {
+          if (!outgoing.isClosed) unawaited(outgoing.close());
+        },
+      );
+      if (!mirror.live) _openJobOutput(mirror);
+    };
+    outgoing.onCancel = () async {
+      await inner?.cancel();
+      if (cancelled) return;
+      cancelled = true;
+      mirror.listeners--;
+      if (mirror.listeners <= 0) _closeJobOutput(mirror);
+    };
+    return outgoing.stream;
+  }
+
+  /// Opens (or reopens) one job's `job/follow` route. `from` carries the last
+  /// published `next` so a re-expansion resumes instead of replaying the
+  /// retained head; omitting it anchors at the job's oldest retained byte,
+  /// never at zero (`packages/api/job-controller/src/observe.ts`).
+  void _openJobOutput(_JobOutputMirror mirror) {
+    final streamId = '$_jobOutputPrefix${_jobOutputStreamSeq++}';
+    mirror.streamId = streamId;
+    mirror.live = true;
+    _jobOutputStreams[streamId] = mirror;
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'open',
+        'streamId': streamId,
+        'endpoint': 'job/follow',
+        'payload': <String, Object?>{
+          'args': <String, Object?>{
+            'request': <String, Object?>{
+              'sessionId': mirror.sessionId,
+              'jobId': mirror.jobId,
+              if (mirror.resumeFrom != null) 'from': mirror.resumeFrom,
+            },
+          },
+        },
+      }),
+    );
+  }
+
+  /// Cancels one job's route and forgets the mirror. A generation that already
+  /// reached its terminal frame holds no route to cancel; its mirror is gone
+  /// as well.
+  void _closeJobOutput(_JobOutputMirror mirror) {
+    final streamId = mirror.streamId;
+    if (streamId != null) {
+      _jobOutputStreams.remove(streamId);
+      mirror.streamId = null;
+      _connectionManager.sendMuxMessage(
+        jsonEncode(<String, Object?>{'type': 'cancel', 'streamId': streamId}),
+      );
+    }
+    mirror.live = false;
+    if (mirror.listeners <= 0) {
+      _jobOutputMirrors.remove(mirror.key);
+    }
+  }
+
+  /// Re-opens every live observation on a fresh connection generation. The
+  /// host holds no cross-generation cursor, so each route restarts from the
+  /// offset this client last published.
+  void _reopenJobOutputs() {
+    _jobOutputStreams.clear();
+    for (final mirror in _jobOutputMirrors.values.toList()) {
+      mirror.streamId = null;
+      mirror.live = false;
+      _openJobOutput(mirror);
+    }
+  }
+
+  /// Cancels every terminal route and closes its stream: a generation change
+  /// reopens them from a fresh snapshot, and teardown ends them outright.
+  void _closeTerminalStreams() {
+    for (final entry in _terminalFollows.entries) {
+      if (!entry.value.isClosed) unawaited(entry.value.close());
+    }
+    _terminalFollows.clear();
+    _terminalFollowStreamIds.clear();
+    for (final entry in _terminalRetains.entries) {
+      if (!entry.value.isClosed) unawaited(entry.value.close());
+    }
+    _terminalRetains.clear();
+  }
+
+  /// Drops every observation, for a teardown that owns no route to cancel.
+  void _discardJobOutputs() {
+    for (final mirror in _jobOutputMirrors.values.toList()) {
+      _closeJobOutput(mirror);
+    }
+    _jobOutputMirrors.clear();
+    _jobOutputStreams.clear();
+  }
+
+  /// One `job/follow` frame (`packages/api/job-controller/src/types.ts`
+  /// `JobFollowFrame`). The frame reaches its mirror, advances the resume
+  /// offset on an output frame, and settles the observation on the terminal
+  /// status frame — which closes the stream, exactly as the host does.
+  void _handleJobOutputFrame(String streamId, ServerRequest frame) {
+    final mirror = _jobOutputStreams[streamId];
+    if (mirror == null || mirror.controller.isClosed) return;
+    final decoded = decodeJobFollowFrame(frame.payload);
+    switch (decoded) {
+      case JobOutputOpened():
+        mirror.resumeFrom = decoded.from;
+      case JobOutputChunks():
+        mirror.resumeFrom = decoded.next;
+      case JobOutputStatus():
+        mirror.settled = true;
+        mirror.live = false;
+        mirror.streamId = null;
+        _jobOutputStreams.remove(streamId);
+    }
+    mirror.controller.add(decoded);
+    if (mirror.settled) {
+      unawaited(mirror.controller.close());
+      _jobOutputMirrors.remove(mirror.key);
+    }
+  }
+
+  @override
+  Future<void> killJob(String sessionId, String jobId) async {
+    await _call(
+      DshRpcEndpoints.jobKill,
+      DshRpcEndpoints.jobKill,
+      <String, Object?>{'sessionId': sessionId, 'jobId': jobId},
+      _shortCallTimeout,
+    ).valueOrThrow();
+  }
+
   void _updateSessionRunning(String sessionId, bool running) {
     _prevRunningBySession[sessionId] = running;
     _sessions.value = _sessions.value.map((item) {
@@ -368,6 +570,406 @@ class HarnessRepositoryImpl implements ChatRepository {
   /// holds what the answer must echo back to the host.
   final Map<String, _RemoteEventWait> _pendingRemoteEvents =
       <String, _RemoteEventWait>{};
+
+  @override
+  Future<List<ScheduleRecord>> listSchedules(String sessionId) async {
+    final value = await _scheduleRead(
+      DshRpcEndpoints.scheduleList,
+      <String, Object?>{'sessionId': sessionId},
+      'schedules',
+    );
+    return value.map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException('schedule/list row must be an object');
+      }
+      return decodeScheduleRecordWire(json);
+    }).toList();
+  }
+
+  @override
+  Future<List<ScheduleCatalogEntry>> scheduleCatalog() async {
+    final value = await _scheduleRead(
+      DshRpcEndpoints.scheduleCatalog,
+      const <String, Object?>{},
+      'schedules',
+    );
+    return value.map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException('schedule/catalog row must be an object');
+      }
+      return decodeScheduleCatalogEntry(json);
+    }).toList();
+  }
+
+  /// One schedule read that answers a nullable list result: a host with no
+  /// tasks answers null rather than an empty array, and both read as "none".
+  Future<List<Object?>> _scheduleRead(
+    String endpoint,
+    JsonMap request,
+    String field,
+  ) async {
+    final result = await _call(endpoint, endpoint, request, _shortCallTimeout);
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final value = result.value;
+    if (value == null) return const <Object?>[];
+    return wireRequiredArray(value, field);
+  }
+
+  @override
+  Future<ScheduleHistoryResult> scheduleHistory({
+    required String sessionId,
+    required String id,
+    required int limit,
+    String? before,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleHistory,
+      DshRpcEndpoints.scheduleHistory,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'id': id,
+        'limit': limit,
+        if (before != null) 'before': before,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleHistoryResult(value);
+  }
+
+  @override
+  Future<ScheduleUpdateResult> updateSchedule({
+    required String sessionId,
+    required String id,
+    required ScheduleRecord expected,
+    String? title,
+    String? prompt,
+    ScheduleTimingChange? change,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleUpdate,
+      DshRpcEndpoints.scheduleUpdate,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'id': id,
+        // Only fields that actually differ travel: an omitted name or
+        // instruction keeps the stored one, and an omitted `change` keeps the
+        // committed target.
+        if (title != null) 'title': title,
+        if (prompt != null) 'prompt': prompt,
+        'expected': encodeScheduleRecordSnapshot(expected),
+        if (change != null) 'change': encodeScheduleTimingChange(change),
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleUpdateResult(value);
+  }
+
+  @override
+  Future<ScheduleDeleteResult> deleteSchedule({
+    required String sessionId,
+    required String id,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.scheduleDelete,
+      DshRpcEndpoints.scheduleDelete,
+      <String, Object?>{'sessionId': sessionId, 'id': id},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeScheduleDeleteResult(value);
+  }
+
+  // -----------------------------------------------------------------------
+  // Terminals
+  // -----------------------------------------------------------------------
+
+  @override
+  Future<TerminalEnvironment> terminalEnvironment(String sessionId) async {
+    final value = await _call(
+      DshRpcEndpoints.terminalEnvironment,
+      DshRpcEndpoints.terminalEnvironment,
+      <String, Object?>{'sessionId': sessionId},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeTerminalEnvironment(value);
+  }
+
+  @override
+  Future<List<TerminalShell>> terminalShells(String sessionId) async {
+    final result = await _call(
+      DshRpcEndpoints.terminalShells,
+      DshRpcEndpoints.terminalShells,
+      <String, Object?>{'sessionId': sessionId},
+      _shortCallTimeout,
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final value = result.value;
+    if (value == null) return const <TerminalShell>[];
+    return wireRequiredArray(value, 'shells').map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException('terminal/shells row must be an object');
+      }
+      return decodeTerminalShell(json);
+    }).toList();
+  }
+
+  @override
+  Future<List<TerminalInfo>> listTerminals(String sessionId) async {
+    final result = await _call(
+      DshRpcEndpoints.terminalList,
+      DshRpcEndpoints.terminalList,
+      <String, Object?>{'sessionId': sessionId},
+      _shortCallTimeout,
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final value = result.value;
+    if (value == null) return const <TerminalInfo>[];
+    return wireRequiredArray(value, 'terminals').map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException('terminal/list row must be an object');
+      }
+      return decodeTerminalInfo(json);
+    }).toList();
+  }
+
+  @override
+  Future<TerminalInfo> createTerminal(
+    String sessionId, {
+    required String id,
+    required int cols,
+    required int rows,
+    String? shellPath,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.terminalCreate,
+      DshRpcEndpoints.terminalCreate,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'request': <String, Object?>{
+          'id': id,
+          'cols': cols,
+          'rows': rows,
+          if (shellPath != null) 'shellPath': shellPath,
+        },
+      },
+      // Allocation spawns a process in the host's environment.
+      const Duration(minutes: 1),
+    ).valueOrThrow();
+    return decodeTerminalInfo(value);
+  }
+
+  @override
+  Stream<TerminalFrame> observeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+  ) {
+    late StreamController<TerminalFrame> controller;
+    controller = StreamController<TerminalFrame>(
+      onListen: () =>
+          _openTerminalFollow(controller, sessionId, terminalId, attachmentId),
+      onCancel: () {
+        final streamId = _terminalFollowStreamIds.remove(controller);
+        if (streamId != null) {
+          _connectionManager.sendMuxMessage(
+            jsonEncode(<String, Object?>{
+              'type': 'cancel',
+              'streamId': streamId,
+            }),
+          );
+        }
+        _terminalFollows.removeWhere((_, value) => value == controller);
+      },
+    );
+    return controller.stream;
+  }
+
+  final Map<StreamController<TerminalFrame>, String> _terminalFollowStreamIds =
+      <StreamController<TerminalFrame>, String>{};
+
+  void _openTerminalFollow(
+    StreamController<TerminalFrame> controller,
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+  ) {
+    final streamId = '$_terminalFollowPrefix${_terminalStreamSeq++}';
+    _terminalFollows[streamId] = controller;
+    _terminalFollowStreamIds[controller] = streamId;
+    _connectionManager.sendMuxMessage(
+      jsonEncode(<String, Object?>{
+        'type': 'open',
+        'streamId': streamId,
+        'endpoint': 'terminal/follow',
+        'payload': <String, Object?>{
+          'args': <String, Object?>{
+            // The Agent lookup's wire field, then the terminal identity and
+            // this generation's exclusive input attachment.
+            'agentId': sessionId,
+            'id': terminalId,
+            'attachmentId': attachmentId,
+          },
+        },
+      }),
+    );
+  }
+
+  @override
+  Stream<void> retainTerminal(String sessionId, String terminalId) {
+    late StreamController<void> controller;
+    controller = StreamController<void>(
+      onListen: () {
+        final streamId = '$_terminalRetainPrefix${_terminalStreamSeq++}';
+        _terminalRetains[streamId] = controller;
+        _connectionManager.sendMuxMessage(
+          jsonEncode(<String, Object?>{
+            'type': 'open',
+            'streamId': streamId,
+            'endpoint': 'terminal/retain',
+            'payload': <String, Object?>{
+              'args': <String, Object?>{
+                // `retain` takes the bare session id, not the Agent lookup:
+                // a window may hold a terminal of a dormant session.
+                'sessionId': sessionId,
+                'id': terminalId,
+              },
+            },
+          }),
+        );
+      },
+      onCancel: () {
+        for (final entry in _terminalRetains.entries.toList()) {
+          if (entry.value != controller) continue;
+          _terminalRetains.remove(entry.key);
+          _connectionManager.sendMuxMessage(
+            jsonEncode(<String, Object?>{
+              'type': 'cancel',
+              'streamId': entry.key,
+            }),
+          );
+        }
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
+  Future<void> writeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+    String data,
+  ) => _call(
+    DshRpcEndpoints.terminalWrite,
+    DshRpcEndpoints.terminalWrite,
+    <String, Object?>{
+      'sessionId': sessionId,
+      'id': terminalId,
+      'attachmentId': attachmentId,
+      'data': data,
+    },
+    _shortCallTimeout,
+  ).valueOrThrow().then((_) {});
+
+  @override
+  Future<void> resizeTerminal(
+    String sessionId,
+    String terminalId,
+    String attachmentId,
+    int cols,
+    int rows,
+  ) => _call(
+    DshRpcEndpoints.terminalResize,
+    DshRpcEndpoints.terminalResize,
+    <String, Object?>{
+      'sessionId': sessionId,
+      'id': terminalId,
+      'attachmentId': attachmentId,
+      'cols': cols,
+      'rows': rows,
+    },
+    _shortCallTimeout,
+  ).valueOrThrow().then((_) {});
+
+  @override
+  Future<void> renameTerminal(
+    String sessionId,
+    String terminalId,
+    String title,
+  ) => _call(
+    DshRpcEndpoints.terminalRename,
+    DshRpcEndpoints.terminalRename,
+    <String, Object?>{'sessionId': sessionId, 'id': terminalId, 'title': title},
+    _shortCallTimeout,
+  ).valueOrThrow().then((_) {});
+
+  @override
+  Future<void> closeTerminal(String sessionId, String terminalId) => _call(
+    DshRpcEndpoints.terminalClose,
+    DshRpcEndpoints.terminalClose,
+    <String, Object?>{'sessionId': sessionId, 'id': terminalId},
+    // Provider cleanup can wait on the process range.
+    const Duration(minutes: 1),
+  ).valueOrThrow().then((_) {});
+
+  /// One terminal frame: the attachment's sink receives it, and a snapshot
+  /// resets the expected sequence so a reconnect's anchor is the one the
+  /// client validates against.
+  void _handleTerminalFrame(String streamId, ServerRequest frame) {
+    final sink = _terminalFollows[streamId];
+    if (sink == null || sink.isClosed) return;
+    final decoded = _tryDecode(
+      () => decodeTerminalFrame(frame.payload),
+      'terminal/follow',
+    );
+    if (decoded == null) return;
+    sink.add(decoded);
+  }
+
+  /// One `terminal/retain` acknowledgement: the hold is live, which is all the
+  /// single-frame stream ever says.
+  void _handleTerminalRetain(String streamId, ServerRequest frame) {
+    final sink = _terminalRetains[streamId];
+    if (sink == null || sink.isClosed) return;
+    final type = wireString(frame.payload, 'type');
+    if (type != 'retained') {
+      _onDiagnostic?.call(
+        AdapterDiagnostic(
+          message:
+              'terminal/retain sent an unrecognized "$type" frame — no hold',
+          level: AdapterDiagnosticLevel.debug,
+          context: 'terminal.retain',
+          metadata: <String, Object?>{'type': type},
+        ),
+      );
+      return;
+    }
+    if (!sink.isClosed) sink.add(null);
+  }
 
   /// Pending dynamic-Cordis activation requests forwarded as
   /// `cordis/request-run` emit items, keyed by request id. The host blocks
@@ -444,6 +1046,8 @@ class HarnessRepositoryImpl implements ChatRepository {
 
   final Map<String, StateStream<GoalProjection?>> _goalProjections =
       <String, StateStream<GoalProjection?>>{};
+  final Map<String, StateStream<AgentTeam?>> _teamProjections =
+      <String, StateStream<AgentTeam?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
       <String, StateStream<PlanState?>>{};
   final Map<String, StateStream<List<TodoItem>?>> _todoProjections =
@@ -522,6 +1126,9 @@ class HarnessRepositoryImpl implements ChatRepository {
     for (final id in _jobStreamSessionIds.toList()) {
       _unfollowJobs(id);
     }
+    _discardJobOutputs();
+    _closeTerminalStreams();
+    unawaited(_pluginInstallLog.close());
     for (final state in _sessionStates.values) {
       state.discard();
     }
@@ -537,8 +1144,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     _archivedSessionIds.stream,
     _pendingInteractions.stream,
     (current, archived, pending) => current
-        .where((item) => !archived.contains(item.id))
-        .map((item) => _withPending(item, pending[item.id]))
+        .map(
+          (item) => _withPending(
+            _withArchived(item, archived.contains(item.id)),
+            pending[item.id],
+          ),
+        )
         .toList(),
   );
 
@@ -556,12 +1167,20 @@ class HarnessRepositoryImpl implements ChatRepository {
       if (request.cwd != null) 'cwd': request.cwd,
       if (request.agentPreset != null) 'agentPreset': request.agentPreset,
     };
-    final value = await _call(
-      DshRpcEndpoints.sessionCreate,
-      DshRpcEndpoints.sessionCreate,
-      payload,
-      _shortCallTimeout,
-    ).valueOrThrow();
+    // A refused create is the one path the "new session failed" notice
+    // quotes, so the Host's own code and message cross the boundary as
+    // themselves instead of a formatted transport exception.
+    final JsonMap value;
+    try {
+      value = await _call(
+        DshRpcEndpoints.sessionCreate,
+        DshRpcEndpoints.sessionCreate,
+        payload,
+        _shortCallTimeout,
+      ).valueOrThrow();
+    } on DshBusinessException catch (error) {
+      throw RepositoryFailure(error.code, error.message);
+    }
     final created = wireString(value, 'sessionId');
     if (created == null) {
       throw const FormatException('session/create missing sessionId');
@@ -1295,6 +1914,257 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
+  /// Installation progress pushed by `plugin-manager/install-state`.
+  final StateStream<PluginInstallProgress?> _pluginInstallProgress =
+      StateStream<PluginInstallProgress?>(null);
+
+  /// Package-run output pushed by `plugin-manager/install-log`.
+  final StreamController<PluginInstallLogChunk> _pluginInstallLog =
+      StreamController<PluginInstallLogChunk>.broadcast();
+
+  /// The profile's composition changed (`plugin-manager/changed`).
+  final StateStream<int> _pluginChangeEpoch = StateStream<int>(0);
+
+  @override
+  Stream<PluginInstallProgress> observePluginInstallProgress() =>
+      _pluginInstallProgress.stream
+          .where((PluginInstallProgress? progress) => progress != null)
+          .cast<PluginInstallProgress>();
+
+  @override
+  Stream<PluginInstallLogChunk> observePluginInstallLog() =>
+      _pluginInstallLog.stream;
+
+  @override
+  Stream<void> observePluginChanges() =>
+      _pluginChangeEpoch.stream.skip(1).map((_) => null).cast<void>();
+
+  @override
+  Future<List<PluginBundle>> listPluginBundles() async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerListBundles,
+      DshRpcEndpoints.pluginManagerListBundles,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return wireRequiredArray(value, 'bundles').map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException(
+          'pluginManager/listBundles row must be an object',
+        );
+      }
+      return decodePluginBundle(json);
+    }).toList();
+  }
+
+  @override
+  Future<List<PluginInfo>> listPlugins() async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerListPlugins,
+      DshRpcEndpoints.pluginManagerListPlugins,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return wireRequiredArray(value, 'plugins').map((Object? row) {
+      final json = asJsonObject(row);
+      if (json == null) {
+        throw const FormatException(
+          'pluginManager/listPlugins row must be an object',
+        );
+      }
+      return decodeManagedPlugin(json);
+    }).toList();
+  }
+
+  @override
+  Future<PluginRegistries> pluginRegistries() async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerRegistries,
+      DshRpcEndpoints.pluginManagerRegistries,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginRegistries(value);
+  }
+
+  @override
+  Future<PluginSpecInspection> inspectPluginSpec(
+    String spec, {
+    String? registry,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerInspect,
+      DshRpcEndpoints.pluginManagerInspect,
+      <String, Object?>{
+        'spec': spec,
+        if (registry != null)
+          'options': <String, Object?>{'registry': registry},
+      },
+      // The host probes registries and GitHub inside this call; it carries its
+      // own deadlines, so the client's is the long-but-bounded one.
+      const Duration(minutes: 2),
+    ).valueOrThrow();
+    return decodePluginSpecInspection(value);
+  }
+
+  @override
+  Future<PluginChangeResult> installPluginBundle(
+    String spec, {
+    String? requestId,
+    String? registry,
+    List<String> approvedBuilds = const <String>[],
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerInstallBundle,
+      DshRpcEndpoints.pluginManagerInstallBundle,
+      <String, Object?>{
+        'spec': spec,
+        'options': <String, Object?>{
+          // Activation is always deferred to a separate enable call, exactly
+          // as the reference install dialog does it.
+          'enabled': false,
+          if (requestId != null) 'requestId': requestId,
+          if (registry != null) 'registry': registry,
+          if (approvedBuilds.isNotEmpty) 'approvedBuilds': approvedBuilds,
+        },
+      },
+      // A pnpm install over a slow link is minutes, not seconds; the reply is
+      // recovered by `waitForPluginInstall` when it is lost.
+      _noCallDeadline,
+    ).valueOrThrow();
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<PluginChangeResult?> waitForPluginInstall(String requestId) async {
+    final result = await _call(
+      DshRpcEndpoints.pluginManagerWaitForInstall,
+      DshRpcEndpoints.pluginManagerWaitForInstall,
+      <String, Object?>{'requestId': requestId},
+      _noCallDeadline,
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final value = asJsonObject(result.value);
+    // A null value is the host's "no record of that request", which is a
+    // reconcile miss rather than a failure.
+    if (value == null) return null;
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<PluginInstallCancellation> cancelPluginInstall(
+    String requestId,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerCancelInstall,
+      DshRpcEndpoints.pluginManagerCancelInstall,
+      <String, Object?>{'requestId': requestId},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return switch (wireString(value, 'status')) {
+      'cancelled' => PluginInstallCancellation.cancelled,
+      'too-late' => PluginInstallCancellation.tooLate,
+      'not-running' => PluginInstallCancellation.notRunning,
+      final other => throw FormatException(
+        'install cancellation "status" has unknown value "$other"',
+      ),
+    };
+  }
+
+  @override
+  Future<PluginChangeResult> setPluginBundleEnabled(
+    String name,
+    bool enabled,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerSetBundleEnabled,
+      DshRpcEndpoints.pluginManagerSetBundleEnabled,
+      <String, Object?>{'name': name, 'enabled': enabled},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<PluginChangeResult> setPluginEnabled(String id, bool enabled) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerSetPluginEnabled,
+      DshRpcEndpoints.pluginManagerSetPluginEnabled,
+      <String, Object?>{'id': id, 'enabled': enabled},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<PluginChangeResult> removePluginBundle(String name) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerRemoveBundle,
+      DshRpcEndpoints.pluginManagerRemoveBundle,
+      <String, Object?>{'name': name},
+      // A removal runs pnpm too, so it shares the install deadline policy.
+      _noCallDeadline,
+    ).valueOrThrow();
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<PluginVersionExemptions> listPluginVersionExemptions() async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerListVersionExemptions,
+      DshRpcEndpoints.pluginManagerListVersionExemptions,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginVersionExemptions(value);
+  }
+
+  @override
+  Future<PluginChangeResult> setPluginVersionExemption({
+    required String packageVersion,
+    required String runtimeVersion,
+    required bool enabled,
+    bool acceptRisk = false,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.pluginManagerSetVersionExemption,
+      DshRpcEndpoints.pluginManagerSetVersionExemption,
+      <String, Object?>{
+        'packageVersion': packageVersion,
+        'runtimeVersion': runtimeVersion,
+        'enabled': enabled,
+        // The host refuses a grant that does not accept the risk explicitly.
+        if (enabled) 'acceptRisk': acceptRisk,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodePluginChangeResult(value);
+  }
+
+  @override
+  Future<String?> fastestPluginRegistry() async {
+    final result = await _call(
+      DshRpcEndpoints.pluginRegistryProbeFastest,
+      DshRpcEndpoints.pluginRegistryProbeFastest,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    );
+    if (!result.ok) return null;
+    // The probe answers `string | null`, so its result is not a JSON object:
+    // the transport carries a non-object body as `{value: <raw>, path: <raw>}`
+    // (`RpcResult.fromJson` in package:network).
+    final value = result.value?['value'];
+    return value is String ? value : null;
+  }
+
   @override
   Future<PluginInventorySnapshot> listPluginInventory() async {
     final value = await _call(
@@ -1625,6 +2495,48 @@ class HarnessRepositoryImpl implements ChatRepository {
     return catalog;
   }
 
+  @override
+  Stream<AgentTeam?> observeAgentTeam(String sessionId) =>
+      _teamProjectionStateFor(sessionId).stream;
+
+  @override
+  Future<AgentTeam?> loadAgentTeam(String sessionId) async {
+    // The `agentTeam` projection is published by the experimental Agent Teams
+    // package on the Lead Session; a host that mounts none answers a baseline
+    // without the key. Absence is a null team, never an empty one.
+    final result = await _call(
+      DshRpcEndpoints.sessionProjections,
+      DshRpcEndpoints.sessionProjections,
+      {'sessionId': sessionId},
+      _shortCallTimeout,
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'unknown dsh error',
+        details: failure?.details,
+      );
+    }
+    final baseline = asJsonObject(result.value);
+    if (baseline == null) {
+      throw DshBusinessException(
+        code: 'team/session-unavailable',
+        message:
+            'session "$sessionId" has no projection baseline; its team '
+            'cannot be read',
+      );
+    }
+    final values = asJsonObject(baseline['values']);
+    final teamValue = values?['agentTeam'];
+    if (teamValue == null || teamValue == 'null') return null;
+    final team = decodeAgentTeamProjection(teamValue);
+    // Seed the live stream so a panel that opened before any control frame
+    // renders the value this read returned.
+    _teamProjectionStateFor(sessionId).value = team;
+    return team;
+  }
+
   /// The live running bit the session roster currently holds for one child;
   /// `'inactive'` when the roster does not know that Session at all.
   String _subagentActivity(String childSessionId) {
@@ -1894,15 +2806,93 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<void> archiveSession(String sessionId) async {
+  Future<void> archiveSession(
+    String sessionId, {
+    bool stopActivity = false,
+  }) async {
+    final JsonMap result;
+    try {
+      result = await _call(
+        DshRpcEndpoints.workspaceArchiveSession,
+        DshRpcEndpoints.workspaceArchiveSession,
+        {'sessionId': sessionId, if (stopActivity) 'stopActivity': true},
+        _shortCallTimeout,
+      ).valueOrThrow();
+    } on DshBusinessException catch (error) {
+      // The one refusal a caller answers with a confirmation: the archive
+      // was not written, and the details name the work that must stop
+      // first (`workspace/session-active`).
+      if (error.code == _sessionActiveCode) {
+        throw SessionArchiveRefused(
+          sessionId: sessionId,
+          activity: _sessionActivity(error.details),
+        );
+      }
+      throw RepositoryFailure(error.code, error.message);
+    }
+    _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
+  }
+
+  @override
+  Future<void> unarchiveSession(String sessionId) async {
     final result = await _call(
-      DshRpcEndpoints.workspaceArchiveSession,
-      DshRpcEndpoints.workspaceArchiveSession,
+      DshRpcEndpoints.workspaceUnarchiveSession,
+      DshRpcEndpoints.workspaceUnarchiveSession,
       {'sessionId': sessionId},
       _shortCallTimeout,
     ).valueOrThrow();
     _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
   }
+
+  /// The running work a `workspace/session-active` refusal named in
+  /// `details.activity`, in the Host's provider order.
+  ///
+  /// A malformed entry is skipped rather than thrown on: this decoder runs
+  /// while handling the Host's own refusal, and replacing that failure with a
+  /// client decode error would lose the session identity the confirmation
+  /// needs. A family this program did not compile keeps its raw spelling for
+  /// the generic line.
+  List<SessionActivityEntry> _sessionActivity(Object? details) {
+    final map = asJsonObject(details);
+    final raw = map == null ? null : asJsonArray(map['activity']);
+    if (raw == null) return const <SessionActivityEntry>[];
+    final entries = <SessionActivityEntry>[];
+    for (final entry in raw) {
+      final record = asJsonObject(entry);
+      if (record == null) continue;
+      final rawKind = wireString(record, 'kind');
+      if (rawKind == null) continue;
+      final items = <SessionActivityItem>[];
+      for (final item in asJsonArray(record['items']) ?? const <Object?>[]) {
+        final itemRecord = asJsonObject(item);
+        if (itemRecord == null) continue;
+        final id = wireString(itemRecord, 'id');
+        if (id == null) continue;
+        items.add(
+          SessionActivityItem(id: id, label: wireString(itemRecord, 'label')),
+        );
+      }
+      entries.add(
+        SessionActivityEntry(
+          kind: _sessionActivityKind(rawKind),
+          rawKind: rawKind,
+          items: items,
+        ),
+      );
+    }
+    return entries;
+  }
+
+  /// The compiled family for one wire spelling; anything else is a family a
+  /// provider this program did not compile merged in.
+  static SessionActivityKind _sessionActivityKind(String rawKind) =>
+      switch (rawKind) {
+        'turn' => SessionActivityKind.turn,
+        'subagent' => SessionActivityKind.subagent,
+        'job' => SessionActivityKind.job,
+        'schedule' => SessionActivityKind.schedule,
+        _ => SessionActivityKind.other,
+      };
 
   @override
   Future<void> deleteWorkspace(String workspaceId) async {
@@ -2049,6 +3039,14 @@ class HarnessRepositoryImpl implements ChatRepository {
           for (final id in toFollow) {
             _followSession(id);
           }
+          // A job output observation outlives the connection: every route is
+          // reopened on the new generation so an expanded panel keeps
+          // streaming instead of freezing on its last frame.
+          _reopenJobOutputs();
+          // An attached terminal keeps its screen: the host holds no cursor,
+          // so the next generation's `follow` starts from a fresh snapshot,
+          // which the surface replays into its emulator.
+          _closeTerminalStreams();
           unawaited(_resync(connection));
         }
       }),
@@ -2097,6 +3095,18 @@ class HarnessRepositoryImpl implements ChatRepository {
               frame.rpcId.substring(_jobStreamPrefix.length),
               frame,
             );
+            return;
+          }
+          if (frame.rpcId.startsWith(_jobOutputPrefix)) {
+            _handleJobOutputFrame(frame.rpcId, frame);
+            return;
+          }
+          if (frame.rpcId.startsWith(_terminalFollowPrefix)) {
+            _handleTerminalFrame(frame.rpcId, frame);
+            return;
+          }
+          if (frame.rpcId.startsWith(_terminalRetainPrefix)) {
+            _handleTerminalRetain(frame.rpcId, frame);
             return;
           }
           if (frame.rpcId.startsWith('session-follow-')) {
@@ -2335,9 +3345,32 @@ class HarnessRepositoryImpl implements ChatRepository {
     parentSessionId: session.parentSessionId,
     pendingInteraction: pending ?? session.pendingInteraction,
     completed: session.completed,
+    archived: session.archived,
     agentError: session.agentError,
     agentAvailable: session.agentAvailable,
   );
+
+  /// One row's archive fact. The registry-global set is the only archive
+  /// source — the `workspace/follow` baseline, its increment frames, and the
+  /// archive/unarchive replies — so every row is re-stamped whenever any of
+  /// them publishes.
+  SessionSummary _withArchived(SessionSummary session, bool archived) =>
+      SessionSummary(
+        id: session.id,
+        title: session.title,
+        running: session.running,
+        blank: session.blank,
+        updatedAtEpochMs: session.updatedAtEpochMs,
+        cwd: session.cwd,
+        agentPreset: session.agentPreset,
+        origin: session.origin,
+        parentSessionId: session.parentSessionId,
+        pendingInteraction: session.pendingInteraction,
+        completed: session.completed,
+        archived: archived,
+        agentError: session.agentError,
+        agentAvailable: session.agentAvailable,
+      );
 
   void _handleProjection(ServerRequest frame) {
     final sessionId = _frameSessionId(frame);
@@ -2442,6 +3475,15 @@ class HarnessRepositoryImpl implements ChatRepository {
                   : item,
             )
             .toList();
+      case 'agentTeam':
+        // The experimental Agent Teams projection: one key on the same
+        // control stream, publishing the complete roster and non-deleted
+        // board on every change.
+        final value = frame.payload['value'];
+        _teamProjectionStateFor(sessionId)
+            .value = (value == null || value == 'null')
+            ? null
+            : _tryDecode(() => decodeAgentTeamProjection(value), 'agentTeam');
       case 'modelSelection':
         final selection = _parseModelSelectionProjection(
           frame.payload['value'],
@@ -2611,6 +3653,18 @@ class HarnessRepositoryImpl implements ChatRepository {
           .value = (todosValue != null && todosValue != 'null')
           ? _parseTodosProjection(todosValue)
           : const <TodoItem>[];
+    }
+    if (values.containsKey('agentTeam') &&
+        _claimProjection(sessionId, 'agentTeam', seq)) {
+      // The experimental Agent Teams package is the only publisher; a host
+      // that mounts none simply never carries the key, so absence is not a
+      // cleared team (`packages/experimental/agent-team/src/projection.ts`
+      // `key: 'agentTeam'`).
+      final teamValue = values['agentTeam'];
+      _teamProjectionStateFor(sessionId)
+          .value = (teamValue == null || teamValue == 'null')
+          ? null
+          : _tryDecode(() => decodeAgentTeamProjection(teamValue), 'agentTeam');
     }
     if (values.containsKey('goal') &&
         _claimProjection(sessionId, 'goal', seq)) {
@@ -3663,6 +4717,7 @@ class HarnessRepositoryImpl implements ChatRepository {
     parentSessionId: session.parentSessionId,
     agentAvailable: session.agentAvailable,
     completed: completed ?? session.completed,
+    archived: session.archived,
     agentError: clearAgentError ? null : (agentError ?? session.agentError),
   );
 
@@ -3960,6 +5015,28 @@ class HarnessRepositoryImpl implements ChatRepository {
         _applyCordisRequestResolved(args);
       case 'api-session/error':
         _applySessionErrorEvent(args);
+      case 'plugin-manager/install-state':
+        if (args.isEmpty) return;
+        final progress = asJsonObject(args.first);
+        if (progress == null) return;
+        _pluginInstallProgress.value = _tryDecode(
+          () => decodePluginInstallProgress(progress),
+          'plugin-manager/install-state',
+        );
+      case 'plugin-manager/install-log':
+        if (args.isEmpty) return;
+        final chunk = asJsonObject(args.first);
+        if (chunk == null) return;
+        final decoded = _tryDecode(
+          () => decodePluginInstallLogChunk(chunk),
+          'plugin-manager/install-log',
+        );
+        if (decoded != null && !_pluginInstallLog.isClosed) {
+          _pluginInstallLog.add(decoded);
+        }
+      case 'plugin-manager/changed':
+        // The profile's composition moved: every roster read is stale.
+        _pluginChangeEpoch.value = _pluginChangeEpoch.value + 1;
       case 'credentials/reference-updated':
       case 'llm/adapters-updated':
       case 'settings/document-updated':
@@ -4191,6 +5268,12 @@ class HarnessRepositoryImpl implements ChatRepository {
         () => StateStream<GoalProjection?>(null),
       );
 
+  StateStream<AgentTeam?> _teamProjectionStateFor(String sessionId) =>
+      _teamProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<AgentTeam?>(null),
+      );
+
   StateStream<PlanState?> _planProjectionStateFor(String sessionId) =>
       _planProjections.putIfAbsent(
         sessionId,
@@ -4348,6 +5431,11 @@ class HarnessRepositoryImpl implements ChatRepository {
 }
 
 extension on Future<RpcResult> {
+  /// The successful result's value, or the Host's failure as a
+  /// [DshBusinessException] that keeps its `code`, `message` **and**
+  /// `details` — a refusal's details are how a caller reads the structured
+  /// facts it answers with (the archive refusal's activity), so dropping them
+  /// here would make that branch unreachable.
   Future<JsonMap> valueOrThrow() async {
     final result = await this;
     if (result.ok) {
@@ -4364,6 +5452,7 @@ extension on Future<RpcResult> {
     throw DshBusinessException(
       code: failure?.code ?? 'internal',
       message: failure?.message ?? 'unknown dsh error',
+      details: failure?.details,
     );
   }
 }
@@ -4768,3 +5857,38 @@ final class _RemoteEventWait {
 
 /// The forwarded waterfall events this client answers.
 enum _RemoteEventKind { question, approval }
+
+/// One `job/follow` observation this client holds open.
+///
+/// [listeners] counts the surfaces driving the route: the last cancel closes
+/// it, so an expanded panel that is collapsed stops the host stream instead of
+/// draining a phone's radio in the background. [resumeFrom] is the offset the
+/// next open anchors at — the last `opened.from` or `output.next` the host
+/// published — so a re-expansion after a collapse resumes instead of replaying
+/// the retained head.
+final class _JobOutputMirror {
+  _JobOutputMirror({
+    required this.key,
+    required this.sessionId,
+    required this.jobId,
+  });
+
+  final String key;
+  final String sessionId;
+  final String jobId;
+
+  final StreamController<JobOutputFrame> controller =
+      StreamController<JobOutputFrame>.broadcast();
+
+  int listeners = 0;
+
+  /// True while this mirror owns a route on the current connection.
+  bool live = false;
+
+  /// True once the terminal status frame arrived: the generation is over and
+  /// the mirror has been dropped, so a later expand opens a fresh one.
+  bool settled = false;
+
+  int? resumeFrom;
+  String? streamId;
+}

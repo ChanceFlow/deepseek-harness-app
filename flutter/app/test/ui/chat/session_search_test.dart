@@ -96,7 +96,10 @@ class SearchTestFakeRepository extends ChatRepository {
   Future<bool> loadOlderHistory(String sessionId) async => true;
 
   @override
-  Future<void> archiveSession(String sessionId) async {}
+  Future<void> archiveSession(
+    String sessionId, {
+    bool stopActivity = false,
+  }) async {}
 
   @override
   Future<void> sendMessage(SendMessageRequest request) async {}

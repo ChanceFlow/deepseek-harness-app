@@ -176,6 +176,483 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get teamPanelTitle => 'Agent team';
+
+  @override
+  String get teamRosterHeading => 'Members';
+
+  @override
+  String get teamTasksHeading => 'Shared tasks';
+
+  @override
+  String get teamTaskBoardEmpty => 'No shared tasks yet';
+
+  @override
+  String get teamCurrentChat => 'Current chat';
+
+  @override
+  String get teamOpenMember => 'Open conversation';
+
+  @override
+  String get teamMemberRunning => 'running';
+
+  @override
+  String get teamMemberInactive => 'inactive';
+
+  @override
+  String get teamMemberProvisioning => 'provisioning';
+
+  @override
+  String get teamMemberFailed => 'failed';
+
+  @override
+  String get teamTaskPending => 'pending';
+
+  @override
+  String get teamTaskInProgress => 'in progress';
+
+  @override
+  String get teamTaskCompleted => 'completed';
+
+  @override
+  String teamTaskOwner(String name) {
+    return 'Owner: $name';
+  }
+
+  @override
+  String get teamTaskUnowned => 'unowned';
+
+  @override
+  String get teamTaskReady => 'ready';
+
+  @override
+  String get teamTaskBlocked => 'blocked';
+
+  @override
+  String teamTaskBlockedBy(String ids) {
+    return 'Blocked by: $ids';
+  }
+
+  @override
+  String teamTaskWriteScopes(String scopes) {
+    return 'Write scopes: $scopes';
+  }
+
+  @override
+  String get teamTaskShowMore => 'Show more';
+
+  @override
+  String get teamTaskShowLess => 'Show less';
+
+  @override
+  String teamFailure(String message) {
+    return 'Invalid persisted team record: $message';
+  }
+
+  @override
+  String get settingsNavPluginManager => 'Plugin manager';
+
+  @override
+  String get pluginManagerIntro =>
+      'Install bundles on the host, switch them and the plugins they compose on or off, and remove what you added.';
+
+  @override
+  String get pluginManagerEmpty => 'No bundles to manage on this host.';
+
+  @override
+  String get pluginManagerUnavailable =>
+      'This host composes no plugin manager, so plugins cannot be managed from here.';
+
+  @override
+  String get pluginManagerAdd => 'Add plugin';
+
+  @override
+  String get pluginManagerSearchHint => 'Search bundles';
+
+  @override
+  String get pluginManagerBetaTag => 'Beta';
+
+  @override
+  String get pluginManagerProblemTag => 'Problem';
+
+  @override
+  String get pluginManagerReadOnlyManagement =>
+      'Managed by the profile; change it on the host.';
+
+  @override
+  String get pluginManagerReadOnlyAddress =>
+      'Not addressable through the profile patch.';
+
+  @override
+  String get pluginManagerUninstall => 'Uninstall';
+
+  @override
+  String pluginManagerUninstallTitle(String name) {
+    return 'Uninstall $name?';
+  }
+
+  @override
+  String get pluginManagerUninstallBody =>
+      'The host removes the package and its files. This cannot be undone from here.';
+
+  @override
+  String pluginManagerRowsTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count plugins',
+      one: '1 plugin',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pluginExemptionsTitle => 'Version exemptions';
+
+  @override
+  String get pluginExemptionsIntro =>
+      'Packages this host has been told to run despite a version mismatch. Granting one accepts possible crashes and data loss.';
+
+  @override
+  String get pluginExemptionsEmpty =>
+      'No package is exempt from the version check.';
+
+  @override
+  String get pluginExemptionsRevoke => 'Revoke';
+
+  @override
+  String get pluginInstallChecking => 'Checking the spec';
+
+  @override
+  String get pluginInstallStarting => 'Starting the installation';
+
+  @override
+  String get pluginInstallRunning => 'Installing';
+
+  @override
+  String get pluginInstallCancelling => 'Cancelling';
+
+  @override
+  String get pluginInstallApplying => 'Applying the change';
+
+  @override
+  String get pluginInstallUnconfirmed =>
+      'The host never confirmed the result; reopen the plugin list to see what happened.';
+
+  @override
+  String get pluginInstallDone => 'Installed';
+
+  @override
+  String get pluginInstallFailed => 'Installation failed';
+
+  @override
+  String get pluginInstallApproveBuilds => 'Allow these scripts and retry';
+
+  @override
+  String get pluginInstallEnableNow => 'Enable now';
+
+  @override
+  String get pluginInstallRestartRequired =>
+      'Restart the host for this to take effect.';
+
+  @override
+  String get pluginInstallSpecHint => 'Package name, path, git URL, or tarball';
+
+  @override
+  String get pluginInstallRegistry => 'Registry';
+
+  @override
+  String get pluginInstallAction => 'Install';
+
+  @override
+  String get automationTasksTitle => 'Automation tasks';
+
+  @override
+  String get automationTasksIntro =>
+      'Reminders the host schedules for a session. They are created by asking the agent; here you can review, edit, and delete them.';
+
+  @override
+  String get automationTasksUnavailable =>
+      'This host composes no scheduler, so scheduled tasks cannot be managed from here.';
+
+  @override
+  String get automationTasksEmpty => 'No scheduled task on this host.';
+
+  @override
+  String get automationTasksNoMatches => 'No task matches this search.';
+
+  @override
+  String get automationTasksSearchHint => 'Search tasks';
+
+  @override
+  String get automationTasksFilterAll => 'All';
+
+  @override
+  String get automationTasksFilterEnabled => 'Enabled';
+
+  @override
+  String get automationTasksFilterInactive => 'Inactive';
+
+  @override
+  String get automationTaskStatusInactive => 'inactive';
+
+  @override
+  String automationTaskNextRun(String target) {
+    return 'next $target';
+  }
+
+  @override
+  String get automationTaskRules => 'Rules';
+
+  @override
+  String get automationTaskRecords => 'Records';
+
+  @override
+  String get automationTaskName => 'Name';
+
+  @override
+  String get automationTaskInstruction => 'Instruction';
+
+  @override
+  String get automationTaskFrequency => 'Repeat';
+
+  @override
+  String get automationTaskNext => 'Next run';
+
+  @override
+  String get automationTaskId => 'Task id';
+
+  @override
+  String get automationTaskLastDelivery => 'Last delivery';
+
+  @override
+  String get automationTaskEdit => 'Edit';
+
+  @override
+  String get automationTaskSaved => 'Saved.';
+
+  @override
+  String get automationTaskConflict =>
+      'This task changed elsewhere; reopen it and try again.';
+
+  @override
+  String get automationTaskEnded =>
+      'This task has ended and can only be replaced by a new one.';
+
+  @override
+  String get automationTaskMissing => 'This task no longer exists.';
+
+  @override
+  String get automationTaskError => 'The host refused the change.';
+
+  @override
+  String get automationTaskDelete => 'Delete';
+
+  @override
+  String automationTaskDeleteTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get automationTaskDeleteBody =>
+      'The task and its saved delivery records are removed from the host.';
+
+  @override
+  String get automationTaskRecordsEmpty => 'No delivery has been recorded yet.';
+
+  @override
+  String get automationTaskLoadOlder => 'Load older records';
+
+  @override
+  String get automationTaskCursorError =>
+      'That page of records is gone; reopen the task.';
+
+  @override
+  String get automationTaskNotFound => 'The task is no longer on the host.';
+
+  @override
+  String get automationTaskLegacyRecord => 'Prompt not retained';
+
+  @override
+  String automationTaskRetention(int days, int records) {
+    return 'Only the last $days days or $records records are kept.';
+  }
+
+  @override
+  String get automationTaskEarlierUnavailable =>
+      'Earlier records may be missing.';
+
+  @override
+  String automationFrequencyOnce(String target) {
+    return 'Once, at $target';
+  }
+
+  @override
+  String automationFrequencyEvery(int seconds) {
+    return 'Every $seconds seconds';
+  }
+
+  @override
+  String automationFrequencyDaily(String time, String zone) {
+    return 'Daily at $time ($zone)';
+  }
+
+  @override
+  String automationFrequencyWeekly(String days, String time, String zone) {
+    return '$days at $time ($zone)';
+  }
+
+  @override
+  String automationFrequencyCron(String expression, String zone) {
+    return 'Cron $expression ($zone)';
+  }
+
+  @override
+  String get automationWeekdayMon => 'Mon';
+
+  @override
+  String get automationWeekdayTue => 'Tue';
+
+  @override
+  String get automationWeekdayWed => 'Wed';
+
+  @override
+  String get automationWeekdayThu => 'Thu';
+
+  @override
+  String get automationWeekdayFri => 'Fri';
+
+  @override
+  String get automationWeekdaySat => 'Sat';
+
+  @override
+  String get automationWeekdaySun => 'Sun';
+
+  @override
+  String get scheduleEditRepeat => 'Repeat';
+
+  @override
+  String get scheduleKindOnce => 'Once';
+
+  @override
+  String get scheduleKindEvery => 'Every interval';
+
+  @override
+  String get scheduleKindDaily => 'Daily';
+
+  @override
+  String get scheduleKindWeekly => 'Weekly';
+
+  @override
+  String get scheduleKindCron => 'Cron expression';
+
+  @override
+  String get scheduleFieldDate => 'Date';
+
+  @override
+  String get scheduleFieldTime => 'Time';
+
+  @override
+  String get scheduleFieldZone => 'Time zone';
+
+  @override
+  String get scheduleFieldSeconds => 'Interval in seconds';
+
+  @override
+  String get scheduleFieldExpression => 'Expression';
+
+  @override
+  String get scheduleFieldWeekdays => 'Days';
+
+  @override
+  String get terminalInputHint => 'Type a command';
+
+  @override
+  String get terminalColorUnavailable =>
+      'Colors and cursor addressing are not rendered.';
+
+  @override
+  String get terminalTitle => 'Terminal';
+
+  @override
+  String get terminalNew => 'New terminal';
+
+  @override
+  String get terminalActions => 'Terminal actions';
+
+  @override
+  String get terminalRename => 'Rename';
+
+  @override
+  String get terminalClose => 'Close terminal';
+
+  @override
+  String get terminalTakeControl => 'Take control';
+
+  @override
+  String get terminalReconnect => 'Reconnect';
+
+  @override
+  String get terminalPickShell => 'Choose a shell';
+
+  @override
+  String get terminalUnavailable => 'This host composes no terminal service.';
+
+  @override
+  String get terminalNoTerminal =>
+      'No terminal is open in this session. Start one to run commands in the host workspace.';
+
+  @override
+  String get terminalStatusDetached => 'not attached';
+
+  @override
+  String get terminalStatusConnecting => 'connecting';
+
+  @override
+  String get terminalStatusRunning => 'running';
+
+  @override
+  String get terminalStatusDisconnected => 'disconnected';
+
+  @override
+  String terminalStatusExited(int code) {
+    return 'exited ($code)';
+  }
+
+  @override
+  String get terminalStatusFailed => 'failed to start';
+
+  @override
+  String terminalLimitReached(int limit) {
+    return 'This session already holds its limit of $limit terminals.';
+  }
+
+  @override
+  String get terminalOutputGap => 'Output was lost; the screen was re-read.';
+
+  @override
+  String get terminalInputTooLong =>
+      'That input is longer than the host accepts.';
+
+  @override
+  String get terminalInvalidTitle =>
+      'A terminal name needs 1 to 120 characters.';
+
+  @override
+  String get terminalCloseFailed =>
+      'The host could not close this terminal; try again.';
+
+  @override
+  String get terminalReadOnly =>
+      'Another window holds input; take control to type.';
+
+  @override
+  String get terminalNotRunning => 'The shell has exited.';
+
+  @override
+  String get terminalEntryTooltip => 'Terminal';
+
+  @override
   String get backgroundJobsTitle => 'Background jobs';
 
   @override
@@ -229,6 +706,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String jobDurationSeconds(int seconds) {
     return '${seconds}s';
   }
+
+  @override
+  String get jobKillStop => 'Stop';
+
+  @override
+  String get jobKillConfirm => 'Press again to stop';
+
+  @override
+  String get jobKillFailed => 'Stop refused';
+
+  @override
+  String get jobOutputGap => 'Earlier output was discarded';
+
+  @override
+  String jobOutputError(String error) {
+    return 'Output stream interrupted: $error';
+  }
+
+  @override
+  String get jobOutputEmpty => 'No output yet';
+
+  @override
+  String jobSettledCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count finished',
+      one: '1 finished',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobClearSettled => 'Clear';
+
+  @override
+  String get jobExpand => 'Show output';
+
+  @override
+  String get jobCollapse => 'Hide output';
 
   @override
   String get copyTooltip => 'Copy';
@@ -1204,11 +1721,122 @@ class AppLocalizationsEn extends AppLocalizations {
   String get archiveSession => 'Archive session';
 
   @override
-  String get archiveSessionBody =>
-      'The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.';
+  String get unarchiveSession => 'Unarchive session';
 
   @override
-  String get archive => 'Archive';
+  String get archivedBadge => 'Archived';
+
+  @override
+  String get filterSessionsTooltip => 'Filter sessions';
+
+  @override
+  String get viewHideArchived => 'Hide archived';
+
+  @override
+  String get viewShowArchived => 'All conversations (show archived)';
+
+  @override
+  String get viewOnlyArchived => 'Archived only';
+
+  @override
+  String get noArchivedSessions => 'No archived sessions yet';
+
+  @override
+  String get viewOtherSessions => 'View other sessions';
+
+  @override
+  String get archiveConfirmTitle => 'Stop and archive this session?';
+
+  @override
+  String archiveConfirmBody(String title) {
+    return '“$title” still has work in progress. Archiving stops it first; you can restore the session later from the “All conversations (show archived)” filter in the sidebar, and the stopped work will not resume on its own.';
+  }
+
+  @override
+  String get archiveConfirmActivity => 'Work that will be stopped';
+
+  @override
+  String get archiveConfirmTurn => 'The turn in progress';
+
+  @override
+  String archiveConfirmSubagents(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count running subagents: $names',
+      one: '1 running subagent: $names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmJobs(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count background jobs: $names',
+      one: '1 background job: $names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmSchedules(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count scheduled reminders: $names',
+      one: '1 scheduled reminder: $names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmOther(int count, String kind) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other items of work ($kind)',
+      one: '1 other item of work ($kind)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get archiveConfirmListSeparator => ', ';
+
+  @override
+  String get archiveConfirmAction => 'Stop and archive';
+
+  @override
+  String get archiveConfirmPending => 'Stopping and archiving…';
+
+  @override
+  String get archiveNoticeArchived => 'Session archived';
+
+  @override
+  String get archiveNoticeStopped => 'Session stopped and archived';
+
+  @override
+  String get archiveNotOpenableNotice =>
+      'Archived sessions cannot be opened. Unarchive it to view.';
+
+  @override
+  String get archiveFailedNotice => 'Archiving failed. Try again later.';
+
+  @override
+  String get undoAction => 'Undo';
+
+  @override
+  String createSessionFailedNotice(String message) {
+    return 'New session failed: $message';
+  }
+
+  @override
+  String get pluginRefreshFailedNotice => 'Refresh failed. Please try again.';
+
+  @override
+  String get linkOpenFailedNotice => 'Could not open the link. Try again.';
 
   @override
   String get expandAll => 'Expand all';

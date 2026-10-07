@@ -176,6 +176,462 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get teamPanelTitle => 'Agent 团队';
+
+  @override
+  String get teamRosterHeading => '成员';
+
+  @override
+  String get teamTasksHeading => '共享任务';
+
+  @override
+  String get teamTaskBoardEmpty => '暂无共享任务';
+
+  @override
+  String get teamCurrentChat => '当前会话';
+
+  @override
+  String get teamOpenMember => '打开会话';
+
+  @override
+  String get teamMemberRunning => '运行中';
+
+  @override
+  String get teamMemberInactive => '空闲';
+
+  @override
+  String get teamMemberProvisioning => '创建中';
+
+  @override
+  String get teamMemberFailed => '已失败';
+
+  @override
+  String get teamTaskPending => '待处理';
+
+  @override
+  String get teamTaskInProgress => '进行中';
+
+  @override
+  String get teamTaskCompleted => '已完成';
+
+  @override
+  String teamTaskOwner(String name) {
+    return '负责人：$name';
+  }
+
+  @override
+  String get teamTaskUnowned => '未分配';
+
+  @override
+  String get teamTaskReady => '可开始';
+
+  @override
+  String get teamTaskBlocked => '被阻塞';
+
+  @override
+  String teamTaskBlockedBy(String ids) {
+    return '被阻塞于：$ids';
+  }
+
+  @override
+  String teamTaskWriteScopes(String scopes) {
+    return '写入范围：$scopes';
+  }
+
+  @override
+  String get teamTaskShowMore => '展开';
+
+  @override
+  String get teamTaskShowLess => '收起';
+
+  @override
+  String teamFailure(String message) {
+    return '团队持久化记录无效：$message';
+  }
+
+  @override
+  String get settingsNavPluginManager => '插件管理';
+
+  @override
+  String get pluginManagerIntro => '在宿主上安装 bundle、开关 bundle 及其组成插件，并卸载自己添加的内容。';
+
+  @override
+  String get pluginManagerEmpty => '该宿主没有可管理的 bundle。';
+
+  @override
+  String get pluginManagerUnavailable => '该宿主没有装配插件管理器，无法从这里管理插件。';
+
+  @override
+  String get pluginManagerAdd => '添加插件';
+
+  @override
+  String get pluginManagerSearchHint => '搜索 bundle';
+
+  @override
+  String get pluginManagerBetaTag => 'Beta';
+
+  @override
+  String get pluginManagerProblemTag => '有问题';
+
+  @override
+  String get pluginManagerReadOnlyManagement => '由 profile 管理，请在宿主上修改。';
+
+  @override
+  String get pluginManagerReadOnlyAddress => '无法通过 profile patch 定位。';
+
+  @override
+  String get pluginManagerUninstall => '卸载';
+
+  @override
+  String pluginManagerUninstallTitle(String name) {
+    return '卸载 $name？';
+  }
+
+  @override
+  String get pluginManagerUninstallBody => '宿主会移除该包及其文件；这里无法撤销。';
+
+  @override
+  String pluginManagerRowsTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个插件',
+      one: '1 个插件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pluginExemptionsTitle => '版本豁免';
+
+  @override
+  String get pluginExemptionsIntro => '版本不匹配但被允许运行的包。授予豁免即接受可能的崩溃与数据丢失。';
+
+  @override
+  String get pluginExemptionsEmpty => '没有任何包豁免版本检查。';
+
+  @override
+  String get pluginExemptionsRevoke => '撤销';
+
+  @override
+  String get pluginInstallChecking => '正在检查 spec';
+
+  @override
+  String get pluginInstallStarting => '正在开始安装';
+
+  @override
+  String get pluginInstallRunning => '安装中';
+
+  @override
+  String get pluginInstallCancelling => '正在取消';
+
+  @override
+  String get pluginInstallApplying => '正在应用变更';
+
+  @override
+  String get pluginInstallUnconfirmed => '宿主没有确认结果；重新打开插件列表查看实际发生了什么。';
+
+  @override
+  String get pluginInstallDone => '已安装';
+
+  @override
+  String get pluginInstallFailed => '安装失败';
+
+  @override
+  String get pluginInstallApproveBuilds => '允许这些脚本并重试';
+
+  @override
+  String get pluginInstallEnableNow => '立即启用';
+
+  @override
+  String get pluginInstallRestartRequired => '需要重启宿主才会生效。';
+
+  @override
+  String get pluginInstallSpecHint => '包名、路径、git URL 或 tarball';
+
+  @override
+  String get pluginInstallRegistry => 'Registry';
+
+  @override
+  String get pluginInstallAction => '安装';
+
+  @override
+  String get automationTasksTitle => '定时任务';
+
+  @override
+  String get automationTasksIntro =>
+      '宿主为某个会话排定的提醒。创建需要让 agent 去做；这里可以查看、编辑与删除。';
+
+  @override
+  String get automationTasksUnavailable => '该宿主没有装配调度器，无法从这里管理定时任务。';
+
+  @override
+  String get automationTasksEmpty => '该宿主没有定时任务。';
+
+  @override
+  String get automationTasksNoMatches => '没有匹配的任务。';
+
+  @override
+  String get automationTasksSearchHint => '搜索任务';
+
+  @override
+  String get automationTasksFilterAll => '全部';
+
+  @override
+  String get automationTasksFilterEnabled => '启用中';
+
+  @override
+  String get automationTasksFilterInactive => '已结束';
+
+  @override
+  String get automationTaskStatusInactive => '已结束';
+
+  @override
+  String automationTaskNextRun(String target) {
+    return '下次 $target';
+  }
+
+  @override
+  String get automationTaskRules => '规则';
+
+  @override
+  String get automationTaskRecords => '投递记录';
+
+  @override
+  String get automationTaskName => '名称';
+
+  @override
+  String get automationTaskInstruction => '指令';
+
+  @override
+  String get automationTaskFrequency => '重复';
+
+  @override
+  String get automationTaskNext => '下次运行';
+
+  @override
+  String get automationTaskId => '任务 ID';
+
+  @override
+  String get automationTaskLastDelivery => '最近投递';
+
+  @override
+  String get automationTaskEdit => '编辑';
+
+  @override
+  String get automationTaskSaved => '已保存。';
+
+  @override
+  String get automationTaskConflict => '该任务已在别处被改动；请重新打开后重试。';
+
+  @override
+  String get automationTaskEnded => '该任务已结束，只能由新任务替代。';
+
+  @override
+  String get automationTaskMissing => '该任务已不存在。';
+
+  @override
+  String get automationTaskError => '宿主拒绝了这次改动。';
+
+  @override
+  String get automationTaskDelete => '删除';
+
+  @override
+  String automationTaskDeleteTitle(String name) {
+    return '删除 $name？';
+  }
+
+  @override
+  String get automationTaskDeleteBody => '该任务及其已保存的投递记录会从宿主移除。';
+
+  @override
+  String get automationTaskRecordsEmpty => '还没有投递记录。';
+
+  @override
+  String get automationTaskLoadOlder => '加载更早记录';
+
+  @override
+  String get automationTaskCursorError => '该页记录已失效；请重新打开任务。';
+
+  @override
+  String get automationTaskNotFound => '宿主上已没有该任务。';
+
+  @override
+  String get automationTaskLegacyRecord => '未保留指令内容';
+
+  @override
+  String automationTaskRetention(int days, int records) {
+    return '仅保留最近 $days 天或 $records 条记录。';
+  }
+
+  @override
+  String get automationTaskEarlierUnavailable => '更早的记录可能缺失。';
+
+  @override
+  String automationFrequencyOnce(String target) {
+    return '一次，$target';
+  }
+
+  @override
+  String automationFrequencyEvery(int seconds) {
+    return '每 $seconds 秒';
+  }
+
+  @override
+  String automationFrequencyDaily(String time, String zone) {
+    return '每天 $time（$zone）';
+  }
+
+  @override
+  String automationFrequencyWeekly(String days, String time, String zone) {
+    return '$days $time（$zone）';
+  }
+
+  @override
+  String automationFrequencyCron(String expression, String zone) {
+    return 'Cron $expression（$zone）';
+  }
+
+  @override
+  String get automationWeekdayMon => '周一';
+
+  @override
+  String get automationWeekdayTue => '周二';
+
+  @override
+  String get automationWeekdayWed => '周三';
+
+  @override
+  String get automationWeekdayThu => '周四';
+
+  @override
+  String get automationWeekdayFri => '周五';
+
+  @override
+  String get automationWeekdaySat => '周六';
+
+  @override
+  String get automationWeekdaySun => '周日';
+
+  @override
+  String get scheduleEditRepeat => '重复';
+
+  @override
+  String get scheduleKindOnce => '一次';
+
+  @override
+  String get scheduleKindEvery => '固定间隔';
+
+  @override
+  String get scheduleKindDaily => '每天';
+
+  @override
+  String get scheduleKindWeekly => '每周';
+
+  @override
+  String get scheduleKindCron => 'Cron 表达式';
+
+  @override
+  String get scheduleFieldDate => '日期';
+
+  @override
+  String get scheduleFieldTime => '时间';
+
+  @override
+  String get scheduleFieldZone => '时区';
+
+  @override
+  String get scheduleFieldSeconds => '间隔（秒）';
+
+  @override
+  String get scheduleFieldExpression => '表达式';
+
+  @override
+  String get scheduleFieldWeekdays => '星期';
+
+  @override
+  String get terminalInputHint => '输入命令';
+
+  @override
+  String get terminalColorUnavailable => '不渲染颜色与光标定位。';
+
+  @override
+  String get terminalTitle => '终端';
+
+  @override
+  String get terminalNew => '新建终端';
+
+  @override
+  String get terminalActions => '终端操作';
+
+  @override
+  String get terminalRename => '重命名';
+
+  @override
+  String get terminalClose => '关闭终端';
+
+  @override
+  String get terminalTakeControl => '接管输入';
+
+  @override
+  String get terminalReconnect => '重新连接';
+
+  @override
+  String get terminalPickShell => '选择 shell';
+
+  @override
+  String get terminalUnavailable => '该宿主没有装配终端服务。';
+
+  @override
+  String get terminalNoTerminal => '该会话还没有终端。新建一个即可在宿主工作区里执行命令。';
+
+  @override
+  String get terminalStatusDetached => '未连接';
+
+  @override
+  String get terminalStatusConnecting => '连接中';
+
+  @override
+  String get terminalStatusRunning => '运行中';
+
+  @override
+  String get terminalStatusDisconnected => '已断开';
+
+  @override
+  String terminalStatusExited(int code) {
+    return '已退出（$code）';
+  }
+
+  @override
+  String get terminalStatusFailed => '启动失败';
+
+  @override
+  String terminalLimitReached(int limit) {
+    return '该会话已达 $limit 个终端的上限。';
+  }
+
+  @override
+  String get terminalOutputGap => '输出丢失，已重新读取屏幕。';
+
+  @override
+  String get terminalInputTooLong => '输入超过宿主的单次上限。';
+
+  @override
+  String get terminalInvalidTitle => '终端名称需要 1 到 120 个字符。';
+
+  @override
+  String get terminalCloseFailed => '宿主未能关闭该终端，请重试。';
+
+  @override
+  String get terminalReadOnly => '其他窗口持有输入权；接管后才能输入。';
+
+  @override
+  String get terminalNotRunning => 'shell 已退出。';
+
+  @override
+  String get terminalEntryTooltip => '终端';
+
+  @override
   String get backgroundJobsTitle => '后台任务';
 
   @override
@@ -229,6 +685,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String jobDurationSeconds(int seconds) {
     return '$seconds秒';
   }
+
+  @override
+  String get jobKillStop => '停止';
+
+  @override
+  String get jobKillConfirm => '再按一次停止';
+
+  @override
+  String get jobKillFailed => '停止被拒绝';
+
+  @override
+  String get jobOutputGap => '更早的输出已被丢弃';
+
+  @override
+  String jobOutputError(String error) {
+    return '输出流中断：$error';
+  }
+
+  @override
+  String get jobOutputEmpty => '暂无输出';
+
+  @override
+  String jobSettledCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个已结束',
+      one: '1 个已结束',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get jobClearSettled => '清除';
+
+  @override
+  String get jobExpand => '查看输出';
+
+  @override
+  String get jobCollapse => '收起输出';
 
   @override
   String get copyTooltip => '复制';
@@ -1156,10 +1652,121 @@ class AppLocalizationsZh extends AppLocalizations {
   String get archiveSession => '归档会话';
 
   @override
-  String get archiveSessionBody => '会话日志与其工作区席位保留；此行将从所有分组界面隐藏。';
+  String get unarchiveSession => '取消归档会话';
 
   @override
-  String get archive => '归档';
+  String get archivedBadge => '已归档';
+
+  @override
+  String get filterSessionsTooltip => '筛选会话';
+
+  @override
+  String get viewHideArchived => '隐藏已归档';
+
+  @override
+  String get viewShowArchived => '全部对话（显示已归档）';
+
+  @override
+  String get viewOnlyArchived => '仅显示已归档';
+
+  @override
+  String get noArchivedSessions => '暂无已归档会话';
+
+  @override
+  String get viewOtherSessions => '查看其他会话';
+
+  @override
+  String get archiveConfirmTitle => '停止并归档此会话？';
+
+  @override
+  String archiveConfirmBody(String title) {
+    return '“$title”仍有正在进行的工作。归档会先停止这些工作；之后可在侧栏筛选“全部对话（显示已归档）”中恢复会话，被停止的工作不会自动继续。';
+  }
+
+  @override
+  String get archiveConfirmActivity => '将被停止的工作';
+
+  @override
+  String get archiveConfirmTurn => '进行中的回合';
+
+  @override
+  String archiveConfirmSubagents(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个运行中的子智能体：$names',
+      one: '1 个运行中的子智能体：$names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmJobs(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个后台任务：$names',
+      one: '1 个后台任务：$names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmSchedules(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条定时提醒：$names',
+      one: '1 条定时提醒：$names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String archiveConfirmOther(int count, String kind) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 项其他工作（$kind）',
+      one: '1 项其他工作（$kind）',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get archiveConfirmListSeparator => '、';
+
+  @override
+  String get archiveConfirmAction => '停止并归档';
+
+  @override
+  String get archiveConfirmPending => '正在停止并归档…';
+
+  @override
+  String get archiveNoticeArchived => '会话已归档';
+
+  @override
+  String get archiveNoticeStopped => '已停止并归档';
+
+  @override
+  String get archiveNotOpenableNotice => '已归档会话暂时无法查看，请先取消归档。';
+
+  @override
+  String get archiveFailedNotice => '归档失败，请稍后重试';
+
+  @override
+  String get undoAction => '撤销';
+
+  @override
+  String createSessionFailedNotice(String message) {
+    return '新建会话失败：$message';
+  }
+
+  @override
+  String get pluginRefreshFailedNotice => '刷新失败，请重试';
+
+  @override
+  String get linkOpenFailedNotice => '无法打开链接，请重试';
 
   @override
   String get expandAll => '全部展开';

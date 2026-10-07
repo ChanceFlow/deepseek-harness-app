@@ -12,8 +12,10 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/theme.dart';
+import 'archived_filter.dart';
 import 'state_dot.dart';
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
@@ -43,11 +45,23 @@ final class SessionGroupData {
   final List<SessionSummary> sessions;
 }
 
-/// Web tree.ts `sessionVisible`: subagent children never surface, and a
-/// blank placeholder renders only while it is the selected session.
-bool sessionVisible(SessionSummary session, String? selectedSessionId) =>
-    session.origin != _subagentOrigin &&
-    (!session.blank || session.id == selectedSessionId);
+/// Web tree.ts `sessionVisible`: subagent children never surface, a blank
+/// placeholder renders only while it is the selected session, and an
+/// archived row follows [archivedFilter] — hidden by default, shown beside
+/// the others, or alone.
+bool sessionVisible(
+  SessionSummary session,
+  String? selectedSessionId, {
+  ArchivedFilter archivedFilter = ArchivedFilter.hide,
+}) {
+  if (session.origin == _subagentOrigin) return false;
+  if (session.blank && session.id != selectedSessionId) return false;
+  return switch (archivedFilter) {
+    ArchivedFilter.hide => !session.archived,
+    ArchivedFilter.show => true,
+    ArchivedFilter.only => session.archived,
+  };
+}
 
 /// Web tree.ts `byRecency`: newest update first, session id as the
 /// deterministic tiebreak.
@@ -141,7 +155,8 @@ List<SessionSummary> withActiveSessionPinned(
 /// (the Workspaces management tab). The Ungrouped bucket is added only
 /// when it has members; workspace groups are added for every entity
 /// unless [includeEmptyGroups] is false (the switching surface drops
-/// groups with nothing visible).
+/// groups with nothing visible). [archivedFilter] decides archived-row
+/// visibility per row, exactly as [sessionVisible] does.
 List<SessionGroupData> deriveSessionGroups(
   List<SessionSummary> sessions,
   List<WorkspaceSummary> workspaces,
@@ -150,6 +165,7 @@ List<SessionGroupData> deriveSessionGroups(
   int nowEpochMs = 0,
   bool includeEmptyGroups = true,
   bool priorityOrder = false,
+  ArchivedFilter archivedFilter = ArchivedFilter.hide,
 }) {
   final sessionsById = <String, SessionSummary>{
     for (final session in sessions) session.id: session,
@@ -164,7 +180,13 @@ List<SessionGroupData> deriveSessionGroups(
       // summary lands (web rule).
       if (summary == null) continue;
       accounted.add(id);
-      if (!sessionVisible(summary, selectedSessionId)) continue;
+      if (!sessionVisible(
+        summary,
+        selectedSessionId,
+        archivedFilter: archivedFilter,
+      )) {
+        continue;
+      }
       members.add(summary);
     }
     if (!includeEmptyGroups && members.isEmpty) continue;
@@ -182,7 +204,11 @@ List<SessionGroupData> deriveSessionGroups(
     sessions.where(
       (session) =>
           !accounted.contains(session.id) &&
-          sessionVisible(session, selectedSessionId),
+          sessionVisible(
+            session,
+            selectedSessionId,
+            archivedFilter: archivedFilter,
+          ),
     ),
   );
   if (ungrouped.isNotEmpty) {
@@ -277,6 +303,7 @@ class SessionTreeRow extends StatelessWidget {
     this.onRename,
     this.onFork,
     this.onArchive,
+    this.onUnarchive,
     this.showVerbButton = false,
   });
 
@@ -291,21 +318,34 @@ class SessionTreeRow extends StatelessWidget {
   final VoidCallback? onFork;
   final VoidCallback? onArchive;
 
+  /// The restore verb an archived row offers in place of archive; the row
+  /// reads [SessionSummary.archived] to decide which of the two it shows.
+  final VoidCallback? onUnarchive;
+
   /// Renders the always-visible ellipsis seat beside the timestamp when
   /// the row carries verbs (the Workspaces tab's touch idiom; the
   /// switching sidebar keeps the long-press-only form).
   final bool showVerbButton;
 
-  bool get _hasVerbs => onRename != null || onFork != null || onArchive != null;
+  bool get _hasVerbs =>
+      onRename != null ||
+      onFork != null ||
+      onArchive != null ||
+      onUnarchive != null;
 
   void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final archived = session.archived;
     final items = <(IconData, String, VoidCallback)>[
       if (onRename != null)
         (Icons.edit_outlined, l10n.renameSession, onRename!),
       if (onFork != null)
         (Icons.call_split_outlined, l10n.forkSession, onFork!),
-      if (onArchive != null)
+      // Web ArchiveSessionMenuItem: the same entry restores an archived row
+      // (label, icon and action all flip on the archived fact).
+      if (archived && onUnarchive != null)
+        (Icons.unarchive_outlined, l10n.unarchiveSession, onUnarchive!)
+      else if (!archived && onArchive != null)
         (Icons.archive_outlined, l10n.archiveSession, onArchive!),
     ];
     unawaited(
@@ -328,6 +368,10 @@ class SessionTreeRow extends StatelessWidget {
     // Web `displayTitle`: blank rows show the New Session label.
     final title = session.blank ? l10n.newSession : session.displayTitle;
     final hasVerbs = !session.blank && _hasVerbs;
+    // Web `.archived`: the row keeps its slot but reads as inactive — the
+    // grayed ink is what carries the state beside the Archived label.
+    final archived = session.archived;
+    final rowInk = archived ? scheme.onSurfaceVariant : scheme.onSurface;
     return ListTile(
       dense: true,
       visualDensity: VisualDensity.compact,
@@ -355,7 +399,7 @@ class SessionTreeRow extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         // The body scale is set for transcript prose; a one-line row takes
         // the same size on a tighter leading.
-        style: theme.textTheme.bodyMedium?.copyWith(height: 1.2),
+        style: theme.textTheme.bodyMedium?.copyWith(height: 1.2, color: rowInk),
       ),
       // Web rule: a blank provisional row carries no timestamp — nothing
       // has happened in it yet — so its trailing seat stays empty.
@@ -364,6 +408,18 @@ class SessionTreeRow extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (archived) ...<Widget>[
+                  Text(
+                    l10n.archivedBadge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Text(
                   relativeTimeLabel(session.updatedAtEpochMs, nowEpochMs, l10n),
                   maxLines: 1,
@@ -514,7 +570,9 @@ class _VerbRow extends StatelessWidget {
 /// running renders the blue ongoing dot; a finished-but-unviewed session
 /// (`completed`) renders the green done dot; idle renders nothing (the
 /// web's `showStatus` is false for an idle row — the status seat stays
-/// empty).
+/// empty). An archived row keeps the seat empty too: the web drops the
+/// status line on an archived row because the grayed row and its Archived
+/// label already say the session is inactive.
 class SessionStatusDot extends StatelessWidget {
   const SessionStatusDot({required this.session, super.key});
 
@@ -522,6 +580,9 @@ class SessionStatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (session.archived) {
+      return const SizedBox(width: 10, height: 10);
+    }
     if (session.pendingInteraction != null) {
       return const WarningDot(size: 10);
     }
@@ -664,7 +725,10 @@ class SessionSearchResultRow extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         // The body scale is set for transcript prose; a one-line row takes
         // the same size on a tighter leading.
-        style: theme.textTheme.bodyMedium?.copyWith(height: 1.2),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          height: 1.2,
+          color: session.archived ? scheme.onSurfaceVariant : scheme.onSurface,
+        ),
       ),
       // Web `.searchResultMeta`: the workspace context then the content
       // excerpt; the native subtitle auto-indents under the title, which
@@ -713,4 +777,55 @@ class RunningDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       StateDot(state: StateDotState.ongoing, size: size);
+}
+
+/// Web `ViewOptionsMenu`'s archived half (mobile form): the browsing
+/// surfaces' control over which archived rows their list shows.
+///
+/// Both the chat sidebar and the Workspaces tab mount this one control
+/// against the one shared [archivedFilterProvider], so a choice made in
+/// either moves both. The menu is always present — the choice is what makes
+/// an archive recoverable after the undo notice has passed — and the check
+/// mark names the live choice.
+class ArchivedFilterMenu extends ConsumerWidget {
+  const ArchivedFilterMenu({super.key, this.iconSize = 20});
+
+  /// Glyph size; the sidebar's compact header shrinks it.
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
+    final filter = ref.watch(archivedFilterProvider);
+    return PopupMenuButton<ArchivedFilter>(
+      tooltip: l10n.filterSessionsTooltip,
+      icon: Icon(
+        Icons.filter_list,
+        size: iconSize,
+        color: scheme.onSurfaceVariant,
+      ),
+      // The menu reflects the persisted choice on open; the popup's own
+      // highlight is not used as the state (the check mark is).
+      onSelected: (next) =>
+          unawaited(ref.read(archivedFilterProvider.notifier).select(next)),
+      itemBuilder: (context) => <PopupMenuEntry<ArchivedFilter>>[
+        CheckedPopupMenuItem<ArchivedFilter>(
+          value: ArchivedFilter.hide,
+          checked: filter == ArchivedFilter.hide,
+          child: Text(l10n.viewHideArchived),
+        ),
+        CheckedPopupMenuItem<ArchivedFilter>(
+          value: ArchivedFilter.show,
+          checked: filter == ArchivedFilter.show,
+          child: Text(l10n.viewShowArchived),
+        ),
+        CheckedPopupMenuItem<ArchivedFilter>(
+          value: ArchivedFilter.only,
+          checked: filter == ArchivedFilter.only,
+          child: Text(l10n.viewOnlyArchived),
+        ),
+      ],
+    );
+  }
 }

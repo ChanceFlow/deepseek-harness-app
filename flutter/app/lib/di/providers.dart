@@ -26,6 +26,7 @@ import 'package:app/platform/disk_space.dart';
 import 'dsh_reachability.dart';
 import 'http_engine.dart';
 
+import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/backend.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/session.dart' show SessionSummary;
@@ -55,6 +56,7 @@ import '../notifications/app_notification_center.dart';
 import '../notifications/notification_events.dart' show AppNotificationEvent;
 import '../notifications/notification_ledger.dart';
 import '../notifications/notification_localizations.dart';
+import '../notifications/session_notice_center.dart';
 import '../notifications/system_notifier.dart';
 import '../notifications/watched_session.dart';
 import '../local_state/local_state_providers.dart';
@@ -848,6 +850,25 @@ final systemNotificationTargetsProvider = Provider<Stream<NotificationTarget>>(
   (ref) => ref.watch(systemNotifierProvider).targets,
 );
 
+/// The app-wide transient notice seat: the app root subscribes for the
+/// app's lifetime and renders each notice; the per-backend sinks below are
+/// how controllers reach it.
+final sessionNoticeCenterProvider = Provider<SessionNoticeCenter>((ref) {
+  final center = SessionNoticeCenter();
+  ref.onDispose(center.dispose);
+  return center;
+});
+
+/// One backend's notice sink: a controller of that backend raises notices
+/// through it, so the backend that owns an action travels with the notice
+/// (the archive undo dispatches there).
+final sessionNoticeSinkProvider = Provider.family<SessionNoticeSink, String>(
+  (ref, backendId) => SessionNoticeSink(
+    center: ref.watch(sessionNoticeCenterProvider),
+    backendId: backendId,
+  ),
+);
+
 /// Chat screen controller (UDF), one per backend.
 final chatControllerProvider = Provider.family
     .autoDispose<ChatController, String>((ref, backendId) {
@@ -865,6 +886,8 @@ final chatControllerProvider = Provider.family
         sessionSelection: ref.watch(
           sessionSelectionPersistenceProvider(backendId).future,
         ),
+        // Action outcomes (archive, refused create) ride the app-wide seat.
+        notices: ref.watch(sessionNoticeSinkProvider(backendId)),
         // The session-log archive is a plain HTTP GET, so it rides its own
         // seam rather than the wire repository.
         sessionLogExport: ref.watch(sessionLogExportProvider(backendId)),
@@ -894,6 +917,22 @@ final chatUiStateProvider = StreamProvider.family
     .autoDispose<ChatUiState, String>(
       (ref, backendId) => ref.watch(chatControllerProvider(backendId)).uiState,
     );
+
+/// The Lead Session's Agent-Team roster and shared task board, read from its
+/// `agentTeam` Session projection. A null value means the Session carries no
+/// Team — a host that mounts no Agent Teams package, or a projection that has
+/// not arrived — which is what hides the header action.
+final agentTeamProvider = StreamProvider.autoDispose
+    .family<AgentTeam?, (String, String)>((ref, key) {
+      final controller = ref.watch(chatControllerProvider(key.$1));
+      // Cold seed: the projection arrives with the control frames, so one
+      // non-activating read is what makes the first open render immediately.
+      // A session the host cannot see answers null and stays hidden.
+      unawaited(
+        controller.loadAgentTeam(key.$2).catchError((Object _) => null),
+      );
+      return controller.observeAgentTeam(key.$2);
+    });
 
 /// Every enabled backend's sidebar slice, keyed by the backend the
 /// chat surface presents (the slice's active flag follows it). Disabled
@@ -1001,6 +1040,9 @@ final workspaceControllerProvider = Provider.family
     .autoDispose<WorkspaceController, String>((ref, backendId) {
       final controller = WorkspaceController(
         ref.watch(chatRepositoryProvider(backendId)),
+        // Archive outcomes reach the same app-wide seat the chat controller
+        // uses, so the surface that raised one does not decide the notice.
+        notices: ref.watch(sessionNoticeSinkProvider(backendId)),
       );
       ref.onDispose(controller.dispose);
       return controller;

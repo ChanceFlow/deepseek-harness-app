@@ -2513,9 +2513,17 @@ void main() {
     await tester.tap(find.text('1 background job running'));
     await tester.pumpAndSettle();
 
-    // Sheet header + both rows; the live row sorts first.
+    // Sheet header + the live row; the settled tail folds behind its count
+    // while live work exists (web `ui-jobs` settledOpen default), so the
+    // settled row is one tap away.
     expect(find.text('Background jobs'), findsOneWidget);
     expect(find.text('watch'), findsOneWidget);
+    expect(find.text('1 finished'), findsOneWidget);
+    expect(find.text('build'), findsNothing);
+
+    await tester.tap(find.text('1 finished'));
+    await tester.pumpAndSettle();
+
     expect(find.text('build'), findsOneWidget);
     // Settled duration: 90s → 30s = 1m 0s; detail falls back to status word.
     expect(find.text('1m 0s'), findsOneWidget);

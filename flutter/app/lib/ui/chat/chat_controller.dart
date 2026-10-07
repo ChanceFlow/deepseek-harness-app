@@ -19,9 +19,11 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/agent_preset.dart';
+import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/prompt.dart';
+import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
@@ -39,7 +41,9 @@ import 'package:domain/repository/session_log_export_repository.dart'
 import 'package:dev/dev.dart' show DebugTelemetry;
 
 import '../../logging/error_log_collector.dart';
+import '../../notifications/session_notice_center.dart';
 import '../../platform/session_log_saver.dart';
+import '../shared/session_archive_flow.dart';
 import '../state_stream.dart';
 import 'command_roster.dart';
 import 'chat_local_state.dart';
@@ -73,9 +77,14 @@ class ChatController {
     this._repository, {
     Future<ModelPreferencePersistence?>? modelPreferences,
     Future<SessionSelectionPersistence?>? sessionSelection,
+    SessionNoticeSink? notices,
     this._sessionLogExport,
     this._saveSessionLog = saveSessionLogZip,
-  }) {
+  }) : _notices = notices,
+       _archiveFlow = SessionArchiveFlow(
+         repository: _repository,
+         notices: notices,
+       ) {
     _refresh();
     _subscribeBaselines();
     _loadAgentPresets();
@@ -84,6 +93,13 @@ class ChatController {
   }
 
   final ChatRepository _repository;
+
+  /// The notice seat; null in a bare controller (a test double that drives
+  /// only the wire calls), where outcomes are logged and nothing is shown.
+  final SessionNoticeSink? _notices;
+
+  /// The archive/unarchive verbs and their outcome mapping.
+  final SessionArchiveFlow _archiveFlow;
 
   /// The session-log archive seam; null when the deployment composed none,
   /// in which case the header action hides and `/export` reports failure
@@ -247,6 +263,54 @@ class ChatController {
   }
 
   Stream<ChatUiState> get uiState => _state.stream;
+
+  /// One background job's retained output (`job/follow`).
+  ///
+  /// The surface owns the subscription: it opens on expand and cancels on
+  /// collapse. [resumeFrom] continues a previous generation at the last
+  /// published `next` offset instead of replaying the retained head.
+  Stream<JobOutputFrame> observeJobOutput(
+    String sessionId,
+    String jobId, {
+    int? resumeFrom,
+  }) => _repository.observeJobOutput(sessionId, jobId, resumeFrom: resumeFrom);
+
+  /// The Lead Session's Agent-Team roster and task board (`agentTeam`
+  /// projection). Null means the Session carries no Team.
+  Stream<AgentTeam?> observeAgentTeam(String sessionId) =>
+      _repository.observeAgentTeam(sessionId);
+
+  /// One non-activating read of the same projection
+  /// (`session/projections`), for a panel's cold first frame.
+  Future<AgentTeam?> loadAgentTeam(String sessionId) =>
+      _repository.loadAgentTeam(sessionId);
+
+  /// Stop one background job on the human's behalf (`job/kill`).
+  ///
+  /// Returns true when the registry admitted the kill. A refusal (an id this
+  /// session's list no longer carries) returns false so the row can show its
+  /// own short-lived failure hint; the roster stream is still the authority
+  /// that settles the row. An unexpected failure is reported and reads false.
+  Future<bool> killJob(String sessionId, String jobId) async {
+    _telemetry?.count('chat.job.kill');
+    _telemetry?.event('chat.job.kill', attributes: {'jobId': jobId});
+    try {
+      await _repository.killJob(sessionId, jobId);
+      return true;
+    } catch (error, stackTrace) {
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: <String, Object?>{
+          'controller': 'ChatController',
+          'action': 'killJob',
+          'sessionId': sessionId,
+          'jobId': jobId,
+        },
+      );
+      return false;
+    }
+  }
 
   void dispose() {
     _disposed = true;
@@ -428,8 +492,13 @@ class ChatController {
         _searchSessions(action.query);
       case ArchiveSession():
         unawaited(
-          _runCatchingForUi(() => _repository.archiveSession(action.sessionId)),
+          _archiveFlow.archive(
+            sessionId: action.sessionId,
+            displayTitle: _displayTitleOf(action.sessionId),
+          ),
         );
+      case UnarchiveSession():
+        unawaited(_archiveFlow.unarchive(action.sessionId));
       case RenameSession():
         if (action.title.trim().isNotEmpty) {
           unawaited(
@@ -525,7 +594,30 @@ class ChatController {
     }
   }
 
+  /// One row's display title for a notice body; the id itself when the roster
+  /// does not carry the row (a session another client just archived).
+  String _displayTitleOf(String sessionId) =>
+      _sessions
+          .where((session) => session.id == sessionId)
+          .firstOrNull
+          ?.displayTitle ??
+      sessionId;
+
   void _selectSession(String sessionId, {bool landAtLatest = false}) {
+    // Web `guardedOpen`: archived sessions are not openable. The row stays
+    // visible under the archived filter, so a tap explains instead of
+    // navigating; the selection and the persisted last-opened row are left
+    // untouched.
+    final archived =
+        _sessions
+            .where((session) => session.id == sessionId)
+            .firstOrNull
+            ?.archived ??
+        false;
+    if (archived) {
+      _notices?.archiveNotOpenable();
+      return;
+    }
     final alreadySelected = _selectedSessionId == sessionId;
     _selectedSessionId = sessionId;
     _selectionRequestSeq++;
@@ -1459,14 +1551,10 @@ class ChatController {
       if (workspaceId != null) {
         sessionId = _reusableBlankSessionId(workspaceId);
       }
-      sessionId ??= (await _runCatchingForUi(
-        () => _repository.createSession(
-          CreateSessionRequest(
-            workspaceId: workspaceId,
-            agentPreset: agentPreset,
-          ),
-        ),
-      ))?.id;
+      sessionId ??= await _mintSession(
+        workspaceId: workspaceId,
+        agentPreset: agentPreset,
+      );
       final resolved = sessionId;
       if (resolved == null) return;
       _selectedSessionId = resolved;
@@ -1503,6 +1591,39 @@ class ChatController {
         );
       }
     }());
+  }
+
+  /// Mints one session for an explicit New Session request.
+  ///
+  /// A refusal is the one create outcome the user must be told about — the
+  /// request produced nothing and no surface moves — so it becomes the
+  /// localized "new session failed" notice carrying the Host's own code and
+  /// message instead of the generic error banner. Null means the row was not
+  /// created and the caller stops.
+  Future<String?> _mintSession({
+    String? workspaceId,
+    String? agentPreset,
+  }) async {
+    try {
+      final created = await _repository.createSession(
+        CreateSessionRequest(
+          workspaceId: workspaceId,
+          agentPreset: agentPreset,
+        ),
+      );
+      return created.id;
+    } catch (error, stackTrace) {
+      _notices?.createFailed(
+        code: error is RepositoryFailure ? error.code : '',
+        message: error is RepositoryFailure ? error.message : error.toString(),
+      );
+      ErrorLogCollector.instance.captureError(
+        error,
+        stackTrace: stackTrace,
+        context: const <String, Object?>{'controller': 'ChatController'},
+      );
+      return null;
+    }
   }
 
   String? _reusableBlankSessionId(String workspaceId) {

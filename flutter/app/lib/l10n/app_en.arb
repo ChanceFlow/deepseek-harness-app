@@ -180,7 +180,289 @@
   "todoCountDone": "{count} completed",
   "todoCountActive": "{count} in progress",
   "todoCountPending": "{count} pending",
+  "teamPanelTitle": "Agent team",
+  "teamRosterHeading": "Members",
+  "teamTasksHeading": "Shared tasks",
+  "teamTaskBoardEmpty": "No shared tasks yet",
+  "teamCurrentChat": "Current chat",
+  "teamOpenMember": "Open conversation",
+  "teamMemberRunning": "running",
+  "teamMemberInactive": "inactive",
+  "teamMemberProvisioning": "provisioning",
+  "teamMemberFailed": "failed",
+  "teamTaskPending": "pending",
+  "teamTaskInProgress": "in progress",
+  "teamTaskCompleted": "completed",
+  "teamTaskOwner": "Owner: {name}",
+  "teamTaskUnowned": "unowned",
+  "teamTaskReady": "ready",
+  "teamTaskBlocked": "blocked",
+  "teamTaskBlockedBy": "Blocked by: {ids}",
+  "teamTaskWriteScopes": "Write scopes: {scopes}",
+  "teamTaskShowMore": "Show more",
+  "teamTaskShowLess": "Show less",
+  "teamFailure": "Invalid persisted team record: {message}",
+  "settingsNavPluginManager": "Plugin manager",
+  "pluginManagerIntro": "Install bundles on the host, switch them and the plugins they compose on or off, and remove what you added.",
+  "pluginManagerEmpty": "No bundles to manage on this host.",
+  "pluginManagerUnavailable": "This host composes no plugin manager, so plugins cannot be managed from here.",
+  "pluginManagerAdd": "Add plugin",
+  "pluginManagerSearchHint": "Search bundles",
+  "pluginManagerBetaTag": "Beta",
+  "pluginManagerProblemTag": "Problem",
+  "pluginManagerReadOnlyManagement": "Managed by the profile; change it on the host.",
+  "pluginManagerReadOnlyAddress": "Not addressable through the profile patch.",
+  "pluginManagerUninstall": "Uninstall",
+  "pluginManagerUninstallTitle": "Uninstall {name}?",
+  "pluginManagerUninstallBody": "The host removes the package and its files. This cannot be undone from here.",
+  "pluginManagerRowsTitle": "{count, plural, =1{1 plugin} other{{count} plugins}}",
+  "pluginExemptionsTitle": "Version exemptions",
+  "pluginExemptionsIntro": "Packages this host has been told to run despite a version mismatch. Granting one accepts possible crashes and data loss.",
+  "pluginExemptionsEmpty": "No package is exempt from the version check.",
+  "pluginExemptionsRevoke": "Revoke",
+  "pluginInstallChecking": "Checking the spec",
+  "pluginInstallStarting": "Starting the installation",
+  "pluginInstallRunning": "Installing",
+  "pluginInstallCancelling": "Cancelling",
+  "pluginInstallApplying": "Applying the change",
+  "pluginInstallUnconfirmed": "The host never confirmed the result; reopen the plugin list to see what happened.",
+  "pluginInstallDone": "Installed",
+  "pluginInstallFailed": "Installation failed",
+  "pluginInstallApproveBuilds": "Allow these scripts and retry",
+  "pluginInstallEnableNow": "Enable now",
+  "pluginInstallRestartRequired": "Restart the host for this to take effect.",
+  "pluginInstallSpecHint": "Package name, path, git URL, or tarball",
+  "pluginInstallRegistry": "Registry",
+  "pluginInstallAction": "Install",
+  "automationTasksTitle": "Automation tasks",
+  "automationTasksIntro": "Reminders the host schedules for a session. They are created by asking the agent; here you can review, edit, and delete them.",
+  "automationTasksUnavailable": "This host composes no scheduler, so scheduled tasks cannot be managed from here.",
+  "automationTasksEmpty": "No scheduled task on this host.",
+  "automationTasksNoMatches": "No task matches this search.",
+  "automationTasksSearchHint": "Search tasks",
+  "automationTasksFilterAll": "All",
+  "automationTasksFilterEnabled": "Enabled",
+  "automationTasksFilterInactive": "Inactive",
+  "automationTaskStatusInactive": "inactive",
+  "automationTaskNextRun": "next {target}",
+  "automationTaskRules": "Rules",
+  "automationTaskRecords": "Records",
+  "automationTaskName": "Name",
+  "automationTaskInstruction": "Instruction",
+  "automationTaskFrequency": "Repeat",
+  "automationTaskNext": "Next run",
+  "automationTaskId": "Task id",
+  "automationTaskLastDelivery": "Last delivery",
+  "automationTaskEdit": "Edit",
+  "automationTaskSaved": "Saved.",
+  "automationTaskConflict": "This task changed elsewhere; reopen it and try again.",
+  "automationTaskEnded": "This task has ended and can only be replaced by a new one.",
+  "automationTaskMissing": "This task no longer exists.",
+  "automationTaskError": "The host refused the change.",
+  "automationTaskDelete": "Delete",
+  "automationTaskDeleteTitle": "Delete {name}?",
+  "automationTaskDeleteBody": "The task and its saved delivery records are removed from the host.",
+  "automationTaskRecordsEmpty": "No delivery has been recorded yet.",
+  "automationTaskLoadOlder": "Load older records",
+  "automationTaskCursorError": "That page of records is gone; reopen the task.",
+  "automationTaskNotFound": "The task is no longer on the host.",
+  "automationTaskLegacyRecord": "Prompt not retained",
+  "automationTaskRetention": "Only the last {days} days or {records} records are kept.",
+  "automationTaskEarlierUnavailable": "Earlier records may be missing.",
+  "automationFrequencyOnce": "Once, at {target}",
+  "automationFrequencyEvery": "Every {seconds} seconds",
+  "automationFrequencyDaily": "Daily at {time} ({zone})",
+  "automationFrequencyWeekly": "{days} at {time} ({zone})",
+  "automationFrequencyCron": "Cron {expression} ({zone})",
+  "automationWeekdayMon": "Mon",
+  "automationWeekdayTue": "Tue",
+  "automationWeekdayWed": "Wed",
+  "automationWeekdayThu": "Thu",
+  "automationWeekdayFri": "Fri",
+  "automationWeekdaySat": "Sat",
+  "automationWeekdaySun": "Sun",
+  "scheduleEditRepeat": "Repeat",
+  "scheduleKindOnce": "Once",
+  "scheduleKindEvery": "Every interval",
+  "scheduleKindDaily": "Daily",
+  "scheduleKindWeekly": "Weekly",
+  "scheduleKindCron": "Cron expression",
+  "scheduleFieldDate": "Date",
+  "scheduleFieldTime": "Time",
+  "scheduleFieldZone": "Time zone",
+  "scheduleFieldSeconds": "Interval in seconds",
+  "scheduleFieldExpression": "Expression",
+  "scheduleFieldWeekdays": "Days",
+  "terminalInputHint": "Type a command",
+  "terminalColorUnavailable": "Colors and cursor addressing are not rendered.",
+  "terminalTitle": "Terminal",
+  "terminalNew": "New terminal",
+  "terminalActions": "Terminal actions",
+  "terminalRename": "Rename",
+  "terminalClose": "Close terminal",
+  "terminalTakeControl": "Take control",
+  "terminalReconnect": "Reconnect",
+  "terminalPickShell": "Choose a shell",
+  "terminalUnavailable": "This host composes no terminal service.",
+  "terminalNoTerminal": "No terminal is open in this session. Start one to run commands in the host workspace.",
+  "terminalStatusDetached": "not attached",
+  "terminalStatusConnecting": "connecting",
+  "terminalStatusRunning": "running",
+  "terminalStatusDisconnected": "disconnected",
+  "terminalStatusExited": "exited ({code})",
+  "terminalStatusFailed": "failed to start",
+  "terminalLimitReached": "This session already holds its limit of {limit} terminals.",
+  "terminalOutputGap": "Output was lost; the screen was re-read.",
+  "terminalInputTooLong": "That input is longer than the host accepts.",
+  "terminalInvalidTitle": "A terminal name needs 1 to 120 characters.",
+  "terminalCloseFailed": "The host could not close this terminal; try again.",
+  "terminalReadOnly": "Another window holds input; take control to type.",
+  "terminalNotRunning": "The shell has exited.",
+  "terminalEntryTooltip": "Terminal",
   "backgroundJobsTitle": "Background jobs",
+  "@teamTaskOwner": {
+    "description": "Shared-task card owner line.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@teamTaskBlockedBy": {
+    "description": "Shared-task card blocker line.",
+    "placeholders": {
+      "ids": {
+        "type": "String"
+      }
+    }
+  },
+  "@teamTaskWriteScopes": {
+    "description": "Shared-task card write-scope line.",
+    "placeholders": {
+      "scopes": {
+        "type": "String"
+      }
+    }
+  },
+  "@teamFailure": {
+    "description": "Agent-team projection failure banner.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "@pluginManagerUninstallTitle": {
+    "description": "Uninstall confirmation title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@pluginManagerRowsTitle": {
+    "description": "Bundle row-count label.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@automationTaskNextRun": {
+    "description": "Next-run line on a task row.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationTaskDeleteTitle": {
+    "description": "Delete confirmation title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationTaskRetention": {
+    "description": "Delivery-retention footer.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "records": {
+        "type": "int"
+      }
+    }
+  },
+  "@automationFrequencyOnce": {
+    "description": "One-shot frequency line.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationFrequencyEvery": {
+    "description": "Fixed-interval frequency line.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@automationFrequencyDaily": {
+    "description": "Daily frequency line.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationFrequencyWeekly": {
+    "description": "Weekly frequency line.",
+    "placeholders": {
+      "days": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      },
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "@automationFrequencyCron": {
+    "description": "Cron frequency line.",
+    "placeholders": {
+      "expression": {
+        "type": "String"
+      },
+      "zone": {
+        "type": "String"
+      }
+    }
+  },
+  "@terminalStatusExited": {
+    "description": "Terminal status after the shell exited.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "@terminalLimitReached": {
+    "description": "Terminal quota notice.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
   "@backgroundJobsTitle": {
     "description": "Background-jobs sheet title."
   },
@@ -209,6 +491,16 @@
   "jobDurationHoursMinutes": "{hours}h {minutes}m",
   "jobDurationMinutesSeconds": "{minutes}m {seconds}s",
   "jobDurationSeconds": "{seconds}s",
+  "jobKillStop": "Stop",
+  "jobKillConfirm": "Press again to stop",
+  "jobKillFailed": "Stop refused",
+  "jobOutputGap": "Earlier output was discarded",
+  "jobOutputError": "Output stream interrupted: {error}",
+  "jobOutputEmpty": "No output yet",
+  "jobSettledCount": "{count, plural, =1{1 finished} other{{count} finished}}",
+  "jobClearSettled": "Clear",
+  "jobExpand": "Show output",
+  "jobCollapse": "Hide output",
   "copyTooltip": "Copy",
   "codeStreamingLabel": "streaming",
   "@codeStreamingLabel": {
@@ -748,8 +1040,87 @@
   "renameSession": "Rename session",
   "forkSession": "Fork session",
   "archiveSession": "Archive session",
-  "archiveSessionBody": "The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.",
-  "archive": "Archive",
+  "unarchiveSession": "Unarchive session",
+  "archivedBadge": "Archived",
+  "filterSessionsTooltip": "Filter sessions",
+  "viewHideArchived": "Hide archived",
+  "viewShowArchived": "All conversations (show archived)",
+  "viewOnlyArchived": "Archived only",
+  "noArchivedSessions": "No archived sessions yet",
+  "viewOtherSessions": "View other sessions",
+  "archiveConfirmTitle": "Stop and archive this session?",
+  "archiveConfirmBody": "“{title}” still has work in progress. Archiving stops it first; you can restore the session later from the “All conversations (show archived)” filter in the sidebar, and the stopped work will not resume on its own.",
+  "@archiveConfirmBody": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveConfirmActivity": "Work that will be stopped",
+  "archiveConfirmTurn": "The turn in progress",
+  "archiveConfirmSubagents": "{count, plural, =1{1 running subagent: {names}} other{{count} running subagents: {names}}}",
+  "@archiveConfirmSubagents": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveConfirmJobs": "{count, plural, =1{1 background job: {names}} other{{count} background jobs: {names}}}",
+  "@archiveConfirmJobs": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveConfirmSchedules": "{count, plural, =1{1 scheduled reminder: {names}} other{{count} scheduled reminders: {names}}}",
+  "@archiveConfirmSchedules": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveConfirmOther": "{count, plural, =1{1 other item of work ({kind})} other{{count} other items of work ({kind})}}",
+  "@archiveConfirmOther": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveConfirmListSeparator": ", ",
+  "archiveConfirmAction": "Stop and archive",
+  "archiveConfirmPending": "Stopping and archiving…",
+  "archiveNoticeArchived": "Session archived",
+  "archiveNoticeStopped": "Session stopped and archived",
+  "archiveNotOpenableNotice": "Archived sessions cannot be opened. Unarchive it to view.",
+  "archiveFailedNotice": "Archiving failed. Try again later.",
+  "undoAction": "Undo",
+  "createSessionFailedNotice": "New session failed: {message}",
+  "@createSessionFailedNotice": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "pluginRefreshFailedNotice": "Refresh failed. Please try again.",
+  "linkOpenFailedNotice": "Could not open the link. Try again.",
   "expandAll": "Expand all",
   "planBadge": "Plan",
   "imagePlaceholderSuffix": " · {name}",
@@ -997,6 +1368,22 @@
     "description": "Localized screen copy.",
     "placeholders": {
       "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@jobOutputError": {
+    "description": "Background-job output stream failure notice.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@jobSettledCount": {
+    "description": "Settled background-job section heading.",
+    "placeholders": {
+      "count": {
         "type": "int"
       }
     }

@@ -2,6 +2,7 @@
 library;
 
 export 'model/agent_preset.dart';
+export 'model/agent_team.dart';
 export 'model/attachment.dart';
 export 'model/backend.dart';
 export 'model/chat_message.dart';
@@ -18,15 +19,19 @@ export 'model/model_catalog.dart';
 export 'model/permission_select.dart';
 export 'model/plan.dart';
 export 'model/plugin_inventory.dart';
+export 'model/plugin_management.dart';
 export 'model/prompt.dart';
+export 'model/repository_failure.dart';
 export 'model/sandbox.dart';
 export 'model/schedule.dart';
 export 'model/session.dart';
+export 'model/session_archive.dart';
 export 'model/session_log_export.dart';
 export 'model/session_window_stats.dart';
 export 'model/settings.dart';
 export 'model/skills.dart';
 export 'model/subagent.dart';
+export 'model/terminal.dart';
 export 'model/timeline_item.dart';
 export 'model/timeline_window.dart';
 export 'model/token_usage.dart';

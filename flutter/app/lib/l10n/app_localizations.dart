@@ -398,6 +398,840 @@ abstract class AppLocalizations {
   /// **'{count} pending'**
   String todoCountPending(int count);
 
+  /// No description provided for @teamPanelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent team'**
+  String get teamPanelTitle;
+
+  /// No description provided for @teamRosterHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get teamRosterHeading;
+
+  /// No description provided for @teamTasksHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared tasks'**
+  String get teamTasksHeading;
+
+  /// No description provided for @teamTaskBoardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No shared tasks yet'**
+  String get teamTaskBoardEmpty;
+
+  /// No description provided for @teamCurrentChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Current chat'**
+  String get teamCurrentChat;
+
+  /// No description provided for @teamOpenMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversation'**
+  String get teamOpenMember;
+
+  /// No description provided for @teamMemberRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get teamMemberRunning;
+
+  /// No description provided for @teamMemberInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'inactive'**
+  String get teamMemberInactive;
+
+  /// No description provided for @teamMemberProvisioning.
+  ///
+  /// In en, this message translates to:
+  /// **'provisioning'**
+  String get teamMemberProvisioning;
+
+  /// No description provided for @teamMemberFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get teamMemberFailed;
+
+  /// No description provided for @teamTaskPending.
+  ///
+  /// In en, this message translates to:
+  /// **'pending'**
+  String get teamTaskPending;
+
+  /// No description provided for @teamTaskInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'in progress'**
+  String get teamTaskInProgress;
+
+  /// No description provided for @teamTaskCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'completed'**
+  String get teamTaskCompleted;
+
+  /// Shared-task card owner line.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner: {name}'**
+  String teamTaskOwner(String name);
+
+  /// No description provided for @teamTaskUnowned.
+  ///
+  /// In en, this message translates to:
+  /// **'unowned'**
+  String get teamTaskUnowned;
+
+  /// No description provided for @teamTaskReady.
+  ///
+  /// In en, this message translates to:
+  /// **'ready'**
+  String get teamTaskReady;
+
+  /// No description provided for @teamTaskBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'blocked'**
+  String get teamTaskBlocked;
+
+  /// Shared-task card blocker line.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked by: {ids}'**
+  String teamTaskBlockedBy(String ids);
+
+  /// Shared-task card write-scope line.
+  ///
+  /// In en, this message translates to:
+  /// **'Write scopes: {scopes}'**
+  String teamTaskWriteScopes(String scopes);
+
+  /// No description provided for @teamTaskShowMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Show more'**
+  String get teamTaskShowMore;
+
+  /// No description provided for @teamTaskShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get teamTaskShowLess;
+
+  /// Agent-team projection failure banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid persisted team record: {message}'**
+  String teamFailure(String message);
+
+  /// No description provided for @settingsNavPluginManager.
+  ///
+  /// In en, this message translates to:
+  /// **'Plugin manager'**
+  String get settingsNavPluginManager;
+
+  /// No description provided for @pluginManagerIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Install bundles on the host, switch them and the plugins they compose on or off, and remove what you added.'**
+  String get pluginManagerIntro;
+
+  /// No description provided for @pluginManagerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No bundles to manage on this host.'**
+  String get pluginManagerEmpty;
+
+  /// No description provided for @pluginManagerUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This host composes no plugin manager, so plugins cannot be managed from here.'**
+  String get pluginManagerUnavailable;
+
+  /// No description provided for @pluginManagerAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add plugin'**
+  String get pluginManagerAdd;
+
+  /// No description provided for @pluginManagerSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search bundles'**
+  String get pluginManagerSearchHint;
+
+  /// No description provided for @pluginManagerBetaTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Beta'**
+  String get pluginManagerBetaTag;
+
+  /// No description provided for @pluginManagerProblemTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Problem'**
+  String get pluginManagerProblemTag;
+
+  /// No description provided for @pluginManagerReadOnlyManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by the profile; change it on the host.'**
+  String get pluginManagerReadOnlyManagement;
+
+  /// No description provided for @pluginManagerReadOnlyAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Not addressable through the profile patch.'**
+  String get pluginManagerReadOnlyAddress;
+
+  /// No description provided for @pluginManagerUninstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall'**
+  String get pluginManagerUninstall;
+
+  /// Uninstall confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall {name}?'**
+  String pluginManagerUninstallTitle(String name);
+
+  /// No description provided for @pluginManagerUninstallBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The host removes the package and its files. This cannot be undone from here.'**
+  String get pluginManagerUninstallBody;
+
+  /// Bundle row-count label.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 plugin} other{{count} plugins}}'**
+  String pluginManagerRowsTitle(int count);
+
+  /// No description provided for @pluginExemptionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Version exemptions'**
+  String get pluginExemptionsTitle;
+
+  /// No description provided for @pluginExemptionsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages this host has been told to run despite a version mismatch. Granting one accepts possible crashes and data loss.'**
+  String get pluginExemptionsIntro;
+
+  /// No description provided for @pluginExemptionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No package is exempt from the version check.'**
+  String get pluginExemptionsEmpty;
+
+  /// No description provided for @pluginExemptionsRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get pluginExemptionsRevoke;
+
+  /// No description provided for @pluginInstallChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the spec'**
+  String get pluginInstallChecking;
+
+  /// No description provided for @pluginInstallStarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting the installation'**
+  String get pluginInstallStarting;
+
+  /// No description provided for @pluginInstallRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing'**
+  String get pluginInstallRunning;
+
+  /// No description provided for @pluginInstallCancelling.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelling'**
+  String get pluginInstallCancelling;
+
+  /// No description provided for @pluginInstallApplying.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying the change'**
+  String get pluginInstallApplying;
+
+  /// No description provided for @pluginInstallUnconfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'The host never confirmed the result; reopen the plugin list to see what happened.'**
+  String get pluginInstallUnconfirmed;
+
+  /// No description provided for @pluginInstallDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get pluginInstallDone;
+
+  /// No description provided for @pluginInstallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Installation failed'**
+  String get pluginInstallFailed;
+
+  /// No description provided for @pluginInstallApproveBuilds.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow these scripts and retry'**
+  String get pluginInstallApproveBuilds;
+
+  /// No description provided for @pluginInstallEnableNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable now'**
+  String get pluginInstallEnableNow;
+
+  /// No description provided for @pluginInstallRestartRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart the host for this to take effect.'**
+  String get pluginInstallRestartRequired;
+
+  /// No description provided for @pluginInstallSpecHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Package name, path, git URL, or tarball'**
+  String get pluginInstallSpecHint;
+
+  /// No description provided for @pluginInstallRegistry.
+  ///
+  /// In en, this message translates to:
+  /// **'Registry'**
+  String get pluginInstallRegistry;
+
+  /// No description provided for @pluginInstallAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get pluginInstallAction;
+
+  /// No description provided for @automationTasksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automation tasks'**
+  String get automationTasksTitle;
+
+  /// No description provided for @automationTasksIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders the host schedules for a session. They are created by asking the agent; here you can review, edit, and delete them.'**
+  String get automationTasksIntro;
+
+  /// No description provided for @automationTasksUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This host composes no scheduler, so scheduled tasks cannot be managed from here.'**
+  String get automationTasksUnavailable;
+
+  /// No description provided for @automationTasksEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No scheduled task on this host.'**
+  String get automationTasksEmpty;
+
+  /// No description provided for @automationTasksNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No task matches this search.'**
+  String get automationTasksNoMatches;
+
+  /// No description provided for @automationTasksSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search tasks'**
+  String get automationTasksSearchHint;
+
+  /// No description provided for @automationTasksFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get automationTasksFilterAll;
+
+  /// No description provided for @automationTasksFilterEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get automationTasksFilterEnabled;
+
+  /// No description provided for @automationTasksFilterInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get automationTasksFilterInactive;
+
+  /// No description provided for @automationTaskStatusInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'inactive'**
+  String get automationTaskStatusInactive;
+
+  /// Next-run line on a task row.
+  ///
+  /// In en, this message translates to:
+  /// **'next {target}'**
+  String automationTaskNextRun(String target);
+
+  /// No description provided for @automationTaskRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get automationTaskRules;
+
+  /// No description provided for @automationTaskRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get automationTaskRecords;
+
+  /// No description provided for @automationTaskName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get automationTaskName;
+
+  /// No description provided for @automationTaskInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Instruction'**
+  String get automationTaskInstruction;
+
+  /// No description provided for @automationTaskFrequency.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get automationTaskFrequency;
+
+  /// No description provided for @automationTaskNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next run'**
+  String get automationTaskNext;
+
+  /// No description provided for @automationTaskId.
+  ///
+  /// In en, this message translates to:
+  /// **'Task id'**
+  String get automationTaskId;
+
+  /// No description provided for @automationTaskLastDelivery.
+  ///
+  /// In en, this message translates to:
+  /// **'Last delivery'**
+  String get automationTaskLastDelivery;
+
+  /// No description provided for @automationTaskEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get automationTaskEdit;
+
+  /// No description provided for @automationTaskSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved.'**
+  String get automationTaskSaved;
+
+  /// No description provided for @automationTaskConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This task changed elsewhere; reopen it and try again.'**
+  String get automationTaskConflict;
+
+  /// No description provided for @automationTaskEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'This task has ended and can only be replaced by a new one.'**
+  String get automationTaskEnded;
+
+  /// No description provided for @automationTaskMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This task no longer exists.'**
+  String get automationTaskMissing;
+
+  /// No description provided for @automationTaskError.
+  ///
+  /// In en, this message translates to:
+  /// **'The host refused the change.'**
+  String get automationTaskError;
+
+  /// No description provided for @automationTaskDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get automationTaskDelete;
+
+  /// Delete confirmation title.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String automationTaskDeleteTitle(String name);
+
+  /// No description provided for @automationTaskDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The task and its saved delivery records are removed from the host.'**
+  String get automationTaskDeleteBody;
+
+  /// No description provided for @automationTaskRecordsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No delivery has been recorded yet.'**
+  String get automationTaskRecordsEmpty;
+
+  /// No description provided for @automationTaskLoadOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Load older records'**
+  String get automationTaskLoadOlder;
+
+  /// No description provided for @automationTaskCursorError.
+  ///
+  /// In en, this message translates to:
+  /// **'That page of records is gone; reopen the task.'**
+  String get automationTaskCursorError;
+
+  /// No description provided for @automationTaskNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The task is no longer on the host.'**
+  String get automationTaskNotFound;
+
+  /// No description provided for @automationTaskLegacyRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt not retained'**
+  String get automationTaskLegacyRecord;
+
+  /// Delivery-retention footer.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the last {days} days or {records} records are kept.'**
+  String automationTaskRetention(int days, int records);
+
+  /// No description provided for @automationTaskEarlierUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier records may be missing.'**
+  String get automationTaskEarlierUnavailable;
+
+  /// One-shot frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Once, at {target}'**
+  String automationFrequencyOnce(String target);
+
+  /// Fixed-interval frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {seconds} seconds'**
+  String automationFrequencyEvery(int seconds);
+
+  /// Daily frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily at {time} ({zone})'**
+  String automationFrequencyDaily(String time, String zone);
+
+  /// Weekly frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} at {time} ({zone})'**
+  String automationFrequencyWeekly(String days, String time, String zone);
+
+  /// Cron frequency line.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron {expression} ({zone})'**
+  String automationFrequencyCron(String expression, String zone);
+
+  /// No description provided for @automationWeekdayMon.
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get automationWeekdayMon;
+
+  /// No description provided for @automationWeekdayTue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tue'**
+  String get automationWeekdayTue;
+
+  /// No description provided for @automationWeekdayWed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wed'**
+  String get automationWeekdayWed;
+
+  /// No description provided for @automationWeekdayThu.
+  ///
+  /// In en, this message translates to:
+  /// **'Thu'**
+  String get automationWeekdayThu;
+
+  /// No description provided for @automationWeekdayFri.
+  ///
+  /// In en, this message translates to:
+  /// **'Fri'**
+  String get automationWeekdayFri;
+
+  /// No description provided for @automationWeekdaySat.
+  ///
+  /// In en, this message translates to:
+  /// **'Sat'**
+  String get automationWeekdaySat;
+
+  /// No description provided for @automationWeekdaySun.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get automationWeekdaySun;
+
+  /// No description provided for @scheduleEditRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get scheduleEditRepeat;
+
+  /// No description provided for @scheduleKindOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Once'**
+  String get scheduleKindOnce;
+
+  /// No description provided for @scheduleKindEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'Every interval'**
+  String get scheduleKindEvery;
+
+  /// No description provided for @scheduleKindDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get scheduleKindDaily;
+
+  /// No description provided for @scheduleKindWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get scheduleKindWeekly;
+
+  /// No description provided for @scheduleKindCron.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron expression'**
+  String get scheduleKindCron;
+
+  /// No description provided for @scheduleFieldDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get scheduleFieldDate;
+
+  /// No description provided for @scheduleFieldTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get scheduleFieldTime;
+
+  /// No description provided for @scheduleFieldZone.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone'**
+  String get scheduleFieldZone;
+
+  /// No description provided for @scheduleFieldSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Interval in seconds'**
+  String get scheduleFieldSeconds;
+
+  /// No description provided for @scheduleFieldExpression.
+  ///
+  /// In en, this message translates to:
+  /// **'Expression'**
+  String get scheduleFieldExpression;
+
+  /// No description provided for @scheduleFieldWeekdays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get scheduleFieldWeekdays;
+
+  /// No description provided for @terminalInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a command'**
+  String get terminalInputHint;
+
+  /// No description provided for @terminalColorUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Colors and cursor addressing are not rendered.'**
+  String get terminalColorUnavailable;
+
+  /// No description provided for @terminalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get terminalTitle;
+
+  /// No description provided for @terminalNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New terminal'**
+  String get terminalNew;
+
+  /// No description provided for @terminalActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal actions'**
+  String get terminalActions;
+
+  /// No description provided for @terminalRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get terminalRename;
+
+  /// No description provided for @terminalClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close terminal'**
+  String get terminalClose;
+
+  /// No description provided for @terminalTakeControl.
+  ///
+  /// In en, this message translates to:
+  /// **'Take control'**
+  String get terminalTakeControl;
+
+  /// No description provided for @terminalReconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get terminalReconnect;
+
+  /// No description provided for @terminalPickShell.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a shell'**
+  String get terminalPickShell;
+
+  /// No description provided for @terminalUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This host composes no terminal service.'**
+  String get terminalUnavailable;
+
+  /// No description provided for @terminalNoTerminal.
+  ///
+  /// In en, this message translates to:
+  /// **'No terminal is open in this session. Start one to run commands in the host workspace.'**
+  String get terminalNoTerminal;
+
+  /// No description provided for @terminalStatusDetached.
+  ///
+  /// In en, this message translates to:
+  /// **'not attached'**
+  String get terminalStatusDetached;
+
+  /// No description provided for @terminalStatusConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'connecting'**
+  String get terminalStatusConnecting;
+
+  /// No description provided for @terminalStatusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get terminalStatusRunning;
+
+  /// No description provided for @terminalStatusDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get terminalStatusDisconnected;
+
+  /// Terminal status after the shell exited.
+  ///
+  /// In en, this message translates to:
+  /// **'exited ({code})'**
+  String terminalStatusExited(int code);
+
+  /// No description provided for @terminalStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed to start'**
+  String get terminalStatusFailed;
+
+  /// Terminal quota notice.
+  ///
+  /// In en, this message translates to:
+  /// **'This session already holds its limit of {limit} terminals.'**
+  String terminalLimitReached(int limit);
+
+  /// No description provided for @terminalOutputGap.
+  ///
+  /// In en, this message translates to:
+  /// **'Output was lost; the screen was re-read.'**
+  String get terminalOutputGap;
+
+  /// No description provided for @terminalInputTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That input is longer than the host accepts.'**
+  String get terminalInputTooLong;
+
+  /// No description provided for @terminalInvalidTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'A terminal name needs 1 to 120 characters.'**
+  String get terminalInvalidTitle;
+
+  /// No description provided for @terminalCloseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The host could not close this terminal; try again.'**
+  String get terminalCloseFailed;
+
+  /// No description provided for @terminalReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Another window holds input; take control to type.'**
+  String get terminalReadOnly;
+
+  /// No description provided for @terminalNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'The shell has exited.'**
+  String get terminalNotRunning;
+
+  /// No description provided for @terminalEntryTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get terminalEntryTooltip;
+
   /// Background-jobs sheet title.
   ///
   /// In en, this message translates to:
@@ -463,6 +1297,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{seconds}s'**
   String jobDurationSeconds(int seconds);
+
+  /// No description provided for @jobKillStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get jobKillStop;
+
+  /// No description provided for @jobKillConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Press again to stop'**
+  String get jobKillConfirm;
+
+  /// No description provided for @jobKillFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop refused'**
+  String get jobKillFailed;
+
+  /// No description provided for @jobOutputGap.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier output was discarded'**
+  String get jobOutputGap;
+
+  /// Background-job output stream failure notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Output stream interrupted: {error}'**
+  String jobOutputError(String error);
+
+  /// No description provided for @jobOutputEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No output yet'**
+  String get jobOutputEmpty;
+
+  /// Settled background-job section heading.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 finished} other{{count} finished}}'**
+  String jobSettledCount(int count);
+
+  /// No description provided for @jobClearSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get jobClearSettled;
+
+  /// No description provided for @jobExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Show output'**
+  String get jobExpand;
+
+  /// No description provided for @jobCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide output'**
+  String get jobCollapse;
 
   /// Copy-message icon tooltip.
   ///
@@ -2090,17 +2984,167 @@ abstract class AppLocalizations {
   /// **'Archive session'**
   String get archiveSession;
 
-  /// No description provided for @archiveSessionBody.
+  /// No description provided for @unarchiveSession.
   ///
   /// In en, this message translates to:
-  /// **'The session log and its workspace seat are kept; this row is hidden from all grouping surfaces.'**
-  String get archiveSessionBody;
+  /// **'Unarchive session'**
+  String get unarchiveSession;
 
-  /// No description provided for @archive.
+  /// No description provided for @archivedBadge.
   ///
   /// In en, this message translates to:
-  /// **'Archive'**
-  String get archive;
+  /// **'Archived'**
+  String get archivedBadge;
+
+  /// No description provided for @filterSessionsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter sessions'**
+  String get filterSessionsTooltip;
+
+  /// No description provided for @viewHideArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide archived'**
+  String get viewHideArchived;
+
+  /// No description provided for @viewShowArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'All conversations (show archived)'**
+  String get viewShowArchived;
+
+  /// No description provided for @viewOnlyArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived only'**
+  String get viewOnlyArchived;
+
+  /// No description provided for @noArchivedSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'No archived sessions yet'**
+  String get noArchivedSessions;
+
+  /// No description provided for @viewOtherSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'View other sessions'**
+  String get viewOtherSessions;
+
+  /// No description provided for @archiveConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop and archive this session?'**
+  String get archiveConfirmTitle;
+
+  /// No description provided for @archiveConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'“{title}” still has work in progress. Archiving stops it first; you can restore the session later from the “All conversations (show archived)” filter in the sidebar, and the stopped work will not resume on its own.'**
+  String archiveConfirmBody(String title);
+
+  /// No description provided for @archiveConfirmActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Work that will be stopped'**
+  String get archiveConfirmActivity;
+
+  /// No description provided for @archiveConfirmTurn.
+  ///
+  /// In en, this message translates to:
+  /// **'The turn in progress'**
+  String get archiveConfirmTurn;
+
+  /// No description provided for @archiveConfirmSubagents.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 running subagent: {names}} other{{count} running subagents: {names}}}'**
+  String archiveConfirmSubagents(int count, String names);
+
+  /// No description provided for @archiveConfirmJobs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 background job: {names}} other{{count} background jobs: {names}}}'**
+  String archiveConfirmJobs(int count, String names);
+
+  /// No description provided for @archiveConfirmSchedules.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 scheduled reminder: {names}} other{{count} scheduled reminders: {names}}}'**
+  String archiveConfirmSchedules(int count, String names);
+
+  /// No description provided for @archiveConfirmOther.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 other item of work ({kind})} other{{count} other items of work ({kind})}}'**
+  String archiveConfirmOther(int count, String kind);
+
+  /// No description provided for @archiveConfirmListSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get archiveConfirmListSeparator;
+
+  /// No description provided for @archiveConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop and archive'**
+  String get archiveConfirmAction;
+
+  /// No description provided for @archiveConfirmPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping and archiving…'**
+  String get archiveConfirmPending;
+
+  /// No description provided for @archiveNoticeArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Session archived'**
+  String get archiveNoticeArchived;
+
+  /// No description provided for @archiveNoticeStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Session stopped and archived'**
+  String get archiveNoticeStopped;
+
+  /// No description provided for @archiveNotOpenableNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived sessions cannot be opened. Unarchive it to view.'**
+  String get archiveNotOpenableNotice;
+
+  /// No description provided for @archiveFailedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Archiving failed. Try again later.'**
+  String get archiveFailedNotice;
+
+  /// No description provided for @undoAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoAction;
+
+  /// No description provided for @createSessionFailedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'New session failed: {message}'**
+  String createSessionFailedNotice(String message);
+
+  /// No description provided for @pluginRefreshFailedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh failed. Please try again.'**
+  String get pluginRefreshFailedNotice;
+
+  /// No description provided for @linkOpenFailedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the link. Try again.'**
+  String get linkOpenFailedNotice;
 
   /// No description provided for @expandAll.
   ///

@@ -34,6 +34,8 @@ import 'backend_reachability.dart';
 import 'battery_optimization_section.dart';
 import 'busy_enter_preference.dart';
 import 'locale_preference.dart';
+import 'plugin_manager.dart';
+import 'schedule_manager.dart';
 import 'settings_backend_scope.dart';
 import 'settings_chrome.dart';
 import 'settings_controller.dart';
@@ -143,6 +145,8 @@ class SettingsScreen extends StatelessWidget {
                   _ModelsSection(channel: channel),
                   const SizedBox(height: 24),
                   _PluginsSection(channel: channel),
+                  const SizedBox(height: 24),
+                  const _AutomationSection(),
                   const SizedBox(height: 24),
                   const _AboutSection(),
                 ],
@@ -492,6 +496,13 @@ class _PluginsSection extends StatelessWidget {
         SettingsSectionCard(
           children: <Widget>[
             SettingsNavRow(
+              title: l10n.settingsNavPluginManager,
+              leading: const Icon(Icons.extension_outlined),
+              onTap: () =>
+                  _pushSettingsPage(context, const SettingsPluginManagerPage()),
+            ),
+            const SettingsCardDivider(),
+            SettingsNavRow(
               title: l10n.settingsNavPluginSettings,
               leading: const Icon(Icons.extension_outlined),
               onTap: () => _pushSettingsPage(
@@ -506,6 +517,37 @@ class _PluginsSection extends StatelessWidget {
               onTap: () => _pushSettingsPage(
                 context,
                 const SettingsPluginInventoryPage(),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// SECTION 5b: the host's scheduled reminders.
+class _AutomationSection extends StatelessWidget {
+  const _AutomationSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SettingsSectionHeading(
+          title: l10n.automationTasksTitle,
+          intro: l10n.automationTasksIntro,
+        ),
+        SettingsSectionCard(
+          children: <Widget>[
+            SettingsNavRow(
+              title: l10n.automationTasksTitle,
+              leading: const Icon(Icons.schedule_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                const SettingsAutomationTasksPage(),
               ),
             ),
           ],
