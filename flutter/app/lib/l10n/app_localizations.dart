@@ -3541,6 +3541,54 @@ abstract class AppLocalizations {
   /// **'Pick from gallery'**
   String get pickFromGallery;
 
+  /// Composer command-sheet row that opens the system document picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach a file'**
+  String get attachFile;
+
+  /// Detail line under the attach-file row naming where the picker looks.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from device storage'**
+  String get pickFileFromDevice;
+
+  /// Composer attachment strip state while the host staged file upload is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading · {size}'**
+  String fileUploading(String size);
+
+  /// Composer attachment strip state once the host staged the file upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploaded · {size}'**
+  String fileUploaded(String size);
+
+  /// Composer attachment strip state after a file upload failed; the host reason renders below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed'**
+  String get fileUploadFailed;
+
+  /// Accessibility label of the remove seat on a composer file attachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {name}'**
+  String removeFile(String name);
+
+  /// Refusal when a send is attempted while an attached file upload is still in flight or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} has not finished uploading'**
+  String fileAttachmentNotReady(String name);
+
+  /// Refusal when a picked document exceeds the phone's unary upload cap.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is larger than the {limit} MB upload limit'**
+  String fileTooLarge(int limit);
+
   /// Localized screen copy.
   ///
   /// In en, this message translates to:
@@ -3720,6 +3768,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'/{command} does not accept image attachments; remove them first'**
   String commandImagesUnsupported(String command);
+
+  /// Composer refusal for a submission carrying a staged file bound for a host command that does not accept attachments.
+  ///
+  /// In en, this message translates to:
+  /// **'/{command} does not accept attachments; remove them first'**
+  String commandFilesUnsupported(String command);
 
   /// No description provided for @parentSession.
   ///
@@ -6252,6 +6306,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Files & folders'**
   String get fileReferenceSectionTitle;
+
+  /// Accessible name of the thumbs-up control on an unrated assistant reply.
+  ///
+  /// In en, this message translates to:
+  /// **'Good response'**
+  String get feedbackRateUp;
+
+  /// Accessible name of the thumbs-down control on an unrated assistant reply.
+  ///
+  /// In en, this message translates to:
+  /// **'Bad response'**
+  String get feedbackRateDown;
+
+  /// Accessible name of a thumb whose judgment is the recorded one; pressing it deletes the record.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove rating'**
+  String get feedbackRetract;
+
+  /// Stated on the reply footer when the host refused the write or the write never reached it.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save feedback'**
+  String get feedbackSaveFailed;
+
+  /// Stated on the reply footer when a version conflict was reconciled from the host's authoritative record.
+  ///
+  /// In en, this message translates to:
+  /// **'This feedback changed elsewhere; the latest state is shown'**
+  String get feedbackChangedElsewhere;
+
+  /// Stated on the reply footer when the session's stored judgments could not be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load feedback'**
+  String get feedbackLoadFailed;
 }
 
 class _AppLocalizationsDelegate

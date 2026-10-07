@@ -21,6 +21,7 @@ import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/plugin_management.dart';
@@ -34,6 +35,7 @@ import 'package:domain/model/subagent.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/message_feedback.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/user_question.dart';
@@ -339,6 +341,7 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.workspaceFilesList,
     DshRpcEndpoints.commandsExecute,
     DshRpcEndpoints.fileReferencesList,
+    DshRpcEndpoints.fileUploadsUpload,
     DshRpcEndpoints.settingsDescribe,
     DshRpcEndpoints.settingsUpdate,
     DshRpcEndpoints.settingsReplace,
@@ -383,6 +386,10 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.terminalRename,
     DshRpcEndpoints.terminalClose,
     DshRpcEndpoints.jobKill,
+    DshRpcEndpoints.messageFeedbackList,
+    DshRpcEndpoints.messageFeedbackPut,
+    DshRpcEndpoints.messageFeedbackDelete,
+    DshRpcEndpoints.sessionFeedbackRecord,
     DshRpcEndpoints.eventsResult,
   };
 
@@ -626,6 +633,40 @@ class HarnessFakeRpc implements DshRpcClient {
     <String, Object?>{'path': 'src/main.dart', 'kind': 'file'},
   ];
 
+  /// Scripted `fileUploads/upload` receipt. Shapes transcribe
+  /// `reference/deepseek-harness/packages/client/file-upload/src/types.ts`
+  /// (`FileUploadValue` = `{receiptId, file: FileAttachmentRef}`) over
+  /// `packages/attachment/attachment/src/types.ts` (`FileAttachmentRef` =
+  /// `{attachmentId, name, bytes}`).
+  JsonMap fileUploadValue = <String, Object?>{
+    'receiptId': 'receipt-7',
+    'file': <String, Object?>{
+      'attachmentId': 'sha256:file-a',
+      'name': 'notes.pdf',
+      'bytes': 2,
+    },
+  };
+
+  /// Scripted `messageFeedback/list` items. Shapes transcribe
+  /// `reference/deepseek-harness/packages/feedback/message-feedback/src/
+  /// types.ts` `MessageFeedbackItem` (`messageId`, `rating`, optional `note`
+  /// and `category`, `version`, `createdAt`, `updatedAt`).
+  List<Object?> messageFeedbackItemsValue = <Object?>[];
+
+  /// Scripted `messageFeedback/list` result envelope; null answers the items
+  /// above. Set it to a `{ok: false, error}` envelope for a read refusal.
+  JsonMap? messageFeedbackListValue;
+
+  /// Scripted `messageFeedback/{put,delete}` result; null answers the
+  /// success branch (the committed item for `put`, `{absent: true}` for
+  /// `delete`). Set it to a `{ok: false, error}` envelope to exercise a
+  /// refusal.
+  JsonMap? messageFeedbackMutationValue;
+
+  /// Scripted `sessionFeedback/record` result; null answers
+  /// `{ok: true, value: {recorded: true}}`.
+  JsonMap? sessionFeedbackRecordValue;
+
   /// Scripted `session/projections` roster slot: the parent Session's
   /// `subagentCatalog` projection value
   /// (`reference/deepseek-harness/packages/subagent/subagent/src/catalog.ts`
@@ -817,6 +858,8 @@ class HarnessFakeRpc implements DshRpcClient {
     switch (endpoint) {
       case DshRpcEndpoints.sessionList:
         return <String, Object?>{'items': sessionsValue};
+      case DshRpcEndpoints.fileUploadsUpload:
+        return fileUploadValue;
       case DshRpcEndpoints.sessionProjections:
         return <String, Object?>{
           'asOfSeq': 7,
@@ -1114,6 +1157,42 @@ class HarnessFakeRpc implements DshRpcClient {
           },
           'entries': <Object?>[],
         };
+      case DshRpcEndpoints.messageFeedbackList:
+        return messageFeedbackListValue ??
+            <String, Object?>{
+              'ok': true,
+              'value': <String, Object?>{'items': messageFeedbackItemsValue},
+            };
+      case DshRpcEndpoints.messageFeedbackPut:
+        // A scripted envelope is a refusal or a hand-built item; otherwise the
+        // fake commits what the client asked for, the way the Host's `put`
+        // answers the durable item it just wrote.
+        final scriptedMutation = messageFeedbackMutationValue;
+        if (scriptedMutation != null) return scriptedMutation;
+        return <String, Object?>{
+          'ok': true,
+          'value': <String, Object?>{
+            'messageId': request['messageId'],
+            'rating': request['rating'],
+            if (request['note'] != null) 'note': request['note'],
+            if (request['category'] != null) 'category': request['category'],
+            'version': 'v-put-1',
+            'createdAt': 100,
+            'updatedAt': 100,
+          },
+        };
+      case DshRpcEndpoints.messageFeedbackDelete:
+        return messageFeedbackMutationValue ??
+            <String, Object?>{
+              'ok': true,
+              'value': <String, Object?>{'absent': true},
+            };
+      case DshRpcEndpoints.sessionFeedbackRecord:
+        return sessionFeedbackRecordValue ??
+            <String, Object?>{
+              'ok': true,
+              'value': <String, Object?>{'recorded': true},
+            };
       default:
         return <String, Object?>{};
     }
@@ -4366,6 +4445,145 @@ void main() {
     );
   });
 
+  test('fileUploads/upload carries the Agent lookup and base64 request', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+
+    final uploaded = await repository.uploadFile(
+      sessionId: 's-1',
+      name: 'notes.pdf',
+      bytes: Uint8List.fromList(<int>[0x68, 0x69]),
+    );
+
+    expect(rpc.callCountFor(DshRpcEndpoints.fileUploadsUpload), 1);
+    // `upload(agent: Agent, request: EncodedFileUploadRequest, signal)`:
+    // the Agent lookup rides `agentId`, the request object rides `request`
+    // (reference packages/client/file-upload/src/index.ts `@Remote('upload')`;
+    // the `(agentId, request, signal)` wire form is the one
+    // packages/typert/generator emits for `goals/create` and
+    // `terminal/create`). `data` is the canonical base64 of the bytes.
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.fileUploadsUpload).single,
+      <String, Object?>{
+        'agentId': 's-1',
+        'request': <String, Object?>{'data': 'aGk=', 'name': 'notes.pdf'},
+      },
+    );
+    expect(uploaded.receiptId, 'receipt-7');
+    expect(uploaded.attachmentId, 'sha256:file-a');
+    expect(uploaded.name, 'notes.pdf');
+    expect(uploaded.byteSize, 2);
+  });
+
+  test('fileUploads/upload omits an empty display name', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+
+    await repository.uploadFile(
+      sessionId: 's-1',
+      name: '',
+      bytes: Uint8List.fromList(<int>[0x68, 0x69]),
+    );
+
+    expect(
+      (rpc.rawPayloads(DshRpcEndpoints.fileUploadsUpload).single['request']
+          as Map<String, Object?>),
+      <String, Object?>{'data': 'aGk='},
+    );
+  });
+
+  test('fileUploads/upload refuses a file above the phone cap', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+
+    await expectLater(
+      repository.uploadFile(
+        sessionId: 's-1',
+        name: 'huge.bin',
+        bytes: Uint8List(FileUploadLimits.maxFileBytes + 1),
+      ),
+      throwsA(
+        isA<RepositoryFailure>().having(
+          (failure) => failure.code,
+          'code',
+          'session/attachment-invalid',
+        ),
+      ),
+    );
+    // The guard runs before the call, so no oversized body crosses the wire.
+    expect(rpc.callCountFor(DshRpcEndpoints.fileUploadsUpload), 0);
+  });
+
+  test(
+    'fileUploads/upload surfaces a host refusal as RepositoryFailure',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      rpc.failNextCall(
+        DshRpcEndpoints.fileUploadsUpload,
+        'session/attachment-invalid',
+      );
+
+      await expectLater(
+        repository.uploadFile(
+          sessionId: 's-1',
+          name: 'notes.pdf',
+          bytes: Uint8List.fromList(<int>[0x68, 0x69]),
+        ),
+        throwsA(
+          isA<RepositoryFailure>()
+              .having(
+                (failure) => failure.code,
+                'code',
+                'session/attachment-invalid',
+              )
+              .having(
+                (failure) => failure.message,
+                'message',
+                contains('session/attachment-invalid'),
+              ),
+        ),
+      );
+    },
+  );
+
+  test('fileUploads/upload missing a receipt field throws naming it', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    rpc.fileUploadValue = <String, Object?>{
+      'file': <String, Object?>{
+        'attachmentId': 'sha256:file-a',
+        'name': 'notes.pdf',
+        'bytes': 2,
+      },
+    };
+
+    await expectLater(
+      repository.uploadFile(
+        sessionId: 's-1',
+        name: 'notes.pdf',
+        bytes: Uint8List.fromList(<int>[0x68, 0x69]),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('receiptId'),
+        ),
+      ),
+    );
+  });
+
   test(
     'account/getState decodes the projection and sends no arguments',
     () async {
@@ -5315,6 +5533,42 @@ void main() {
     ]);
   });
 
+  test('executeCommand encodes staged file receipts after images', () async {
+    // Reference `CommandSubmitAttachment` (commands/src/types.ts): a file
+    // entry is `{type: 'file', receiptId}` — the staged receipt the host
+    // resolves inside this agent's scope, never the bytes again.
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.executeCommand(
+      'session-1',
+      '/goal Ship it',
+      const <PendingImage>[
+        PendingImage(id: 'img-1', mediaType: 'image/png', base64Data: 'dw=='),
+      ],
+      files: const <UploadedFile>[
+        UploadedFile(
+          receiptId: 'receipt-7',
+          attachmentId: 'sha256:file-a',
+          name: 'notes.pdf',
+          byteSize: 2,
+        ),
+      ],
+    );
+
+    final payload = rpc.payloads(DshRpcEndpoints.commandsExecute).single;
+    final args = asJsonObject(payload['args'])!;
+    expect(args['submittedAttachments'], <Object?>[
+      <String, Object?>{
+        'type': 'image',
+        'mediaType': 'image/png',
+        'data': 'dw==',
+      },
+      <String, Object?>{'type': 'file', 'receiptId': 'receipt-7'},
+    ]);
+  });
+
   test('executeCommand unmatched answers ok with no value slot', () async {
     final rpc = HarnessFakeRpc()..commandValue = null;
     final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
@@ -6175,6 +6429,49 @@ void main() {
     expect(image['mediaType'], 'image/png');
     expect(image['data'], 'aGk=');
     expect(image['name'], 'shot.png');
+  });
+
+  test('prompt with files appends file receipt parts after images', () async {
+    // Reference `PromptContentPart` (session-controller client contract): the
+    // staged file crosses as `{type: 'file', receiptId}` — the host resolves
+    // it inside the addressed agent's scope and never re-reads the bytes.
+    final rpc = HarnessFakeRpc();
+    final repository = await harnessRepository(rpc, ScriptedHarnessSocket());
+    await pumpEventQueue();
+
+    await repository.sendMessage(
+      const SendMessageRequest(
+        sessionId: 'session-1',
+        text: 'read this',
+        images: <PendingImage>[
+          PendingImage(
+            id: 'u1',
+            mediaType: 'image/png',
+            base64Data: 'aGk=',
+            name: 'shot.png',
+          ),
+        ],
+        files: <UploadedFile>[
+          UploadedFile(
+            receiptId: 'receipt-7',
+            attachmentId: 'sha256:file-a',
+            name: 'notes.pdf',
+            byteSize: 2,
+          ),
+        ],
+      ),
+    );
+
+    final payload = rpc.payloads(DshRpcEndpoints.sessionPrompt).single;
+    final payloadArgs = asJsonObject(payload['args']) ?? payload;
+    final content = asJsonArray(payloadArgs['content']) ?? const <Object?>[];
+    expect(content, hasLength(3));
+    expect(asJsonObject(content[0])!['type'], 'text');
+    expect(asJsonObject(content[1])!['type'], 'image');
+    expect(asJsonObject(content[2]), <String, Object?>{
+      'type': 'file',
+      'receiptId': 'receipt-7',
+    });
   });
 
   test('read attachment sends ids and decodes base64 payload', () async {
@@ -8015,6 +8312,308 @@ void main() {
       expect(
         timeline.whereType<TimelineMessage>().single.value.text,
         'updated from follow snapshot',
+      );
+    },
+  );
+
+  test('message feedback reads the Session log and writes its item', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..messageFeedbackItemsValue = <Object?>[
+        <String, Object?>{
+          'messageId': 'm-1',
+          'rating': 'positive',
+          'note': 'clear answer',
+          'category': 'task-result',
+          'version': 'v-1',
+          'createdAt': 100,
+          'updatedAt': 200,
+        },
+        <String, Object?>{
+          'messageId': 'm-2',
+          'rating': 'negative',
+          'version': 'v-2',
+          'createdAt': 300,
+          'updatedAt': 300,
+        },
+      ];
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    final items = await repository.listMessageFeedback('session-s');
+    expect(items, hasLength(2));
+    expect(items.first.messageId, 'm-1');
+    expect(items.first.rating, MessageFeedbackRating.positive);
+    expect(items.first.note, 'clear answer');
+    expect(items.first.category, MessageFeedbackCategory.taskResult);
+    expect(items.first.version, 'v-1');
+    expect(items.first.createdAtEpochMs, 100);
+    expect(items.first.updatedAtEpochMs, 200);
+    // An absent note or category stays absent; nothing defaults it.
+    expect(items.last.note, isNull);
+    expect(items.last.category, isNull);
+    expect(
+      asJsonObject(
+        requestPayload(
+          rpc.payloads(DshRpcEndpoints.messageFeedbackList).single,
+        ),
+      ),
+      <String, Object?>{'sessionId': 'session-s'},
+    );
+
+    final committed = await repository.putMessageFeedback(
+      'session-s',
+      messageId: 'm-1',
+      rating: MessageFeedbackRating.negative,
+      ifVersion: 'v-1',
+    );
+    final item = (committed as MessageFeedbackCommitted).item!;
+    expect(item.messageId, 'm-1');
+    expect(item.rating, MessageFeedbackRating.negative);
+    expect(item.version, 'v-put-1');
+
+    // The optional entry members stay off the wire when the caller omits them,
+    // and the compare-and-set version travels as the caller observed it.
+    final putRequest = asJsonObject(
+      requestPayload(rpc.payloads(DshRpcEndpoints.messageFeedbackPut).single),
+    )!;
+    expect(putRequest['sessionId'], 'session-s');
+    expect(putRequest['messageId'], 'm-1');
+    expect(putRequest['rating'], 'negative');
+    expect(putRequest['ifVersion'], 'v-1');
+    expect(putRequest.containsKey('note'), isFalse);
+    expect(putRequest.containsKey('category'), isFalse);
+
+    final deleted = await repository.deleteMessageFeedback(
+      'session-s',
+      messageId: 'm-1',
+      ifVersion: 'v-put-1',
+    );
+    expect((deleted as MessageFeedbackCommitted).item, isNull);
+    expect(
+      asJsonObject(
+        requestPayload(
+          rpc.payloads(DshRpcEndpoints.messageFeedbackDelete).single,
+        ),
+      ),
+      <String, Object?>{
+        'sessionId': 'session-s',
+        'messageId': 'm-1',
+        'ifVersion': 'v-put-1',
+      },
+    );
+  });
+
+  test('a null ifVersion still travels as an explicit wire field', () async {
+    final rpc = HarnessFakeRpc(<Object?>[]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    await repository.putMessageFeedback(
+      'session-s',
+      messageId: 'm-1',
+      rating: MessageFeedbackRating.positive,
+      ifVersion: null,
+      note: 'please keep the recap',
+      category: MessageFeedbackCategory.instructionFollowing,
+    );
+
+    final request = asJsonObject(
+      requestPayload(rpc.payloads(DshRpcEndpoints.messageFeedbackPut).single),
+    )!;
+    // Null demands that no item exists yet, so the key is present and null
+    // rather than omitted — the Host reads it for its compare-and-set.
+    expect(request.containsKey('ifVersion'), isTrue);
+    expect(request['ifVersion'], isNull);
+    expect(request['note'], 'please keep the recap');
+    expect(request['category'], 'instruction-following');
+  });
+
+  test('a version conflict answers the authoritative item', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..messageFeedbackMutationValue = <String, Object?>{
+        'ok': false,
+        'error': <String, Object?>{
+          'code': 'version-conflict',
+          'current': <String, Object?>{
+            'messageId': 'm-1',
+            'rating': 'negative',
+            'version': 'v-9',
+            'createdAt': 100,
+            'updatedAt': 400,
+          },
+        },
+      };
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    final result = await repository.putMessageFeedback(
+      'session-s',
+      messageId: 'm-1',
+      rating: MessageFeedbackRating.positive,
+      ifVersion: null,
+    );
+    final refused = result as MessageFeedbackRefused;
+    expect(refused.code, 'version-conflict');
+    expect(refused.current?.messageId, 'm-1');
+    expect(refused.current?.rating, MessageFeedbackRating.negative);
+    expect(refused.current?.version, 'v-9');
+  });
+
+  test('a refusal without an authoritative item decodes as absent', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..messageFeedbackMutationValue = <String, Object?>{
+        'ok': false,
+        'error': <String, Object?>{
+          'code': 'session-not-found',
+          'sessionId': 'session-s',
+        },
+      };
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    final result = await repository.deleteMessageFeedback(
+      'session-s',
+      messageId: 'm-1',
+      ifVersion: 'v-1',
+    );
+    final refused = result as MessageFeedbackRefused;
+    expect(refused.code, 'session-not-found');
+    expect(refused.current, isNull);
+  });
+
+  test('a message feedback list refusal is a RepositoryFailure', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..messageFeedbackListValue = <String, Object?>{
+        'ok': false,
+        'error': <String, Object?>{
+          'code': 'session-not-found',
+          'sessionId': 'session-s',
+        },
+      };
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.listMessageFeedback('session-s'),
+      throwsA(
+        isA<RepositoryFailure>().having(
+          (RepositoryFailure failure) => failure.code,
+          'code',
+          'session-not-found',
+        ),
+      ),
+    );
+  });
+
+  test('sessionFeedback/record writes its remark and reports a departed '
+      'session', () async {
+    final rpc = HarnessFakeRpc(<Object?>[]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    await repository.recordSessionFeedback(
+      'session-s',
+      text: 'the plan missed a step',
+      category: MessageFeedbackCategory.productInteraction,
+    );
+    expect(
+      asJsonObject(
+        requestPayload(
+          rpc.payloads(DshRpcEndpoints.sessionFeedbackRecord).single,
+        ),
+      ),
+      <String, Object?>{
+        'sessionId': 'session-s',
+        'text': 'the plan missed a step',
+        'category': 'product-interaction',
+      },
+    );
+
+    rpc.sessionFeedbackRecordValue = <String, Object?>{
+      'ok': false,
+      'error': <String, Object?>{
+        'code': 'session-not-found',
+        'sessionId': 'session-s',
+      },
+    };
+    await expectLater(
+      repository.recordSessionFeedback('session-s', text: 'again'),
+      throwsA(
+        isA<RepositoryFailure>().having(
+          (RepositoryFailure failure) => failure.code,
+          'code',
+          'session-not-found',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'a feedback envelope without a boolean ok fails loud naming it',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[])
+        ..messageFeedbackMutationValue = <String, Object?>{
+          'value': <String, Object?>{
+            'messageId': 'm-1',
+            'rating': 'positive',
+            'version': 'v-1',
+            'createdAt': 1,
+            'updatedAt': 1,
+          },
+        };
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.putMessageFeedback(
+          'session-s',
+          messageId: 'm-1',
+          rating: MessageFeedbackRating.positive,
+          ifVersion: null,
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (FormatException error) => error.message,
+            'message',
+            contains('ok'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'a feedback item missing a required field fails loud naming it',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[])
+        ..messageFeedbackItemsValue = <Object?>[
+          <String, Object?>{
+            'messageId': 'm-1',
+            'rating': 'positive',
+            'createdAt': 1,
+            'updatedAt': 1,
+          },
+        ];
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.listMessageFeedback('session-s'),
+        throwsA(
+          isA<FormatException>().having(
+            (FormatException error) => error.message,
+            'message',
+            contains('version'),
+          ),
+        ),
       );
     },
   );

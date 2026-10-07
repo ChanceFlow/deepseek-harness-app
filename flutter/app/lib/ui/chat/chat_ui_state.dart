@@ -10,6 +10,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/sandbox.dart';
@@ -22,7 +23,7 @@ import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show Uint8List, listEquals;
 
 import 'chat_local_state.dart';
 
@@ -44,6 +45,7 @@ final class ChatUiState {
     this.imageRejections = const <ImageRejection>[],
     this.pendingImages = const <PendingImage>[],
     this.imageLimits = const ImageLimits(),
+    this.pendingFiles = const <PendingFile>[],
     this.plan,
     this.todos,
     this.skills = const <SkillEntry>[],
@@ -110,6 +112,10 @@ final class ChatUiState {
 
   /// Host image admission limits; defaults until the projection arrives.
   final ImageLimits imageLimits;
+
+  /// Composer files attached for the next send, each with its Host upload
+  /// state; a failed row keeps its reason until the reader removes it.
+  final List<PendingFile> pendingFiles;
 
   /// Plan collaboration state of the selected session; null = not composed.
   final PlanState? plan;
@@ -624,6 +630,53 @@ final class RemovePendingImage extends ChatAction {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+/// One document the reader picked for the composer, ready to upload.
+final class FilePicked extends ChatAction {
+  const FilePicked({required this.name, required this.bytes});
+
+  final String name;
+  final Uint8List bytes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FilePicked &&
+      other.name == name &&
+      (identical(other.bytes, bytes) || listEquals(other.bytes, bytes));
+
+  @override
+  int get hashCode => Object.hash(name, bytes.length);
+}
+
+final class RemovePendingFile extends ChatAction {
+  const RemovePendingFile(this.id);
+
+  final String id;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RemovePendingFile && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// A document pick itself failed (no picker, an unreadable document, a file
+/// above [FileUploadLimits.maxFileBytes]); the shared error strip carries the
+/// platform's message. An upload failure is not this — it stays on the
+/// attachment's own row.
+final class FilePickError extends ChatAction {
+  const FilePickError(this.message);
+
+  final String message;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FilePickError && other.message == message;
+
+  @override
+  int get hashCode => message.hashCode;
 }
 
 /// Composer model seat selection (web conversation.input.model).

@@ -566,6 +566,14 @@
   "commandsTooltip": "命令",
   "attachImages": "附加图片",
   "pickFromGallery": "从相册选择",
+  "attachFile": "附加文件",
+  "pickFileFromDevice": "从设备存储中选择",
+  "fileUploading": "上传中 · {size}",
+  "fileUploaded": "已上传 · {size}",
+  "fileUploadFailed": "上传失败",
+  "removeFile": "移除 {name}",
+  "fileAttachmentNotReady": "{name} 尚未上传完成",
+  "fileTooLarge": "该文件超过 {limit} MB 的上传上限",
   "unknownImageType": "不支持的图片类型：{name}",
   "beforeFirstTurnHeader": "首轮之前 · {count, plural, other{{count} 条消息}}",
   "turnHeader": "第 {turn} 轮 · {count, plural, other{{count} 条消息}} · {toolCount, plural, other{{toolCount} 个工具}}",
@@ -614,6 +622,16 @@
   "commandImagesUnsupported": "/{command} 不接受图片附件，请先移除图片",
   "@commandImagesUnsupported": {
     "description": "Composer refusal for a submission carrying images bound for a host command that does not accept them.",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "compact"
+      }
+    }
+  },
+  "commandFilesUnsupported": "/{command} 不接受附件，请先移除附件",
+  "@commandFilesUnsupported": {
+    "description": "Composer refusal for a submission carrying a staged file bound for a host command that does not accept attachments.",
     "placeholders": {
       "command": {
         "type": "String",
@@ -1045,5 +1063,11 @@
   "accountBonusAck": "知道了",
   "accountBonusAckFailed": "主机未把此赠金记录为已展示。",
   "accountBonusAckRetry": "重试",
-  "fileReferenceSectionTitle": "文件与文件夹"
+  "fileReferenceSectionTitle": "文件与文件夹",
+  "feedbackRateUp": "回答不错",
+  "feedbackRateDown": "回答有问题",
+  "feedbackRetract": "取消评价",
+  "feedbackSaveFailed": "反馈保存失败",
+  "feedbackChangedElsewhere": "这条反馈已在别处改动，已显示最新状态",
+  "feedbackLoadFailed": "反馈状态加载失败"
 }

@@ -2061,6 +2061,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pickFromGallery => 'Pick from gallery';
 
   @override
+  String get attachFile => 'Attach a file';
+
+  @override
+  String get pickFileFromDevice => 'Pick from device storage';
+
+  @override
+  String fileUploading(String size) {
+    return 'Uploading · $size';
+  }
+
+  @override
+  String fileUploaded(String size) {
+    return 'Uploaded · $size';
+  }
+
+  @override
+  String get fileUploadFailed => 'Upload failed';
+
+  @override
+  String removeFile(String name) {
+    return 'Remove $name';
+  }
+
+  @override
+  String fileAttachmentNotReady(String name) {
+    return '$name has not finished uploading';
+  }
+
+  @override
+  String fileTooLarge(int limit) {
+    return 'That file is larger than the $limit MB upload limit';
+  }
+
+  @override
   String unknownImageType(String name) {
     return 'unknown image type for $name';
   }
@@ -2184,6 +2218,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String commandImagesUnsupported(String command) {
     return '/$command does not accept image attachments; remove them first';
+  }
+
+  @override
+  String commandFilesUnsupported(String command) {
+    return '/$command does not accept attachments; remove them first';
   }
 
   @override
@@ -3689,4 +3728,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fileReferenceSectionTitle => 'Files & folders';
+
+  @override
+  String get feedbackRateUp => 'Good response';
+
+  @override
+  String get feedbackRateDown => 'Bad response';
+
+  @override
+  String get feedbackRetract => 'Remove rating';
+
+  @override
+  String get feedbackSaveFailed => 'Could not save feedback';
+
+  @override
+  String get feedbackChangedElsewhere =>
+      'This feedback changed elsewhere; the latest state is shown';
+
+  @override
+  String get feedbackLoadFailed => 'Could not load feedback';
 }

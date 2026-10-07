@@ -5,6 +5,7 @@
 library;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../model/account.dart';
 import '../model/agent_preset.dart';
@@ -17,9 +18,11 @@ import '../model/cordis.dart';
 import '../model/session_window_stats.dart';
 import '../model/directory.dart';
 import '../model/file_reference.dart';
+import '../model/file_upload.dart';
 import '../model/permission_select.dart';
 import '../model/goal.dart';
 import '../model/jobs.dart';
+import '../model/message_feedback.dart';
 import '../model/llm_provider.dart';
 import '../model/model_catalog.dart';
 import '../model/plan.dart';
@@ -231,6 +234,21 @@ abstract class ChatRepository {
 
   Future<void> sendMessage(SendMessageRequest request);
 
+  /// Store one composer file for [sessionId] through the host's staged file
+  /// upload (`fileUploads/upload`).
+  ///
+  /// [sessionId] addresses the receiving agent the way [executeCommand] does;
+  /// [bytes] are the exact file bytes and [name] is the display name the
+  /// reader picked. The adapter owns the base64 encoding and the
+  /// [FileUploadLimits.maxFileBytes] guard — the phone's own bound, since the
+  /// Host stores verbatim files without admission limits. The returned receipt
+  /// is accepted only by a prompt addressed to the same session.
+  Future<UploadedFile> uploadFile({
+    required String sessionId,
+    required String name,
+    required Uint8List bytes,
+  }) => _unsupported('uploadFile');
+
   /// Executes one host slash-command line through the command registry
   /// (`commands/execute`): the line never reaches the model. The images
   /// ride the same admission the host applies to prompts — a command
@@ -239,6 +257,10 @@ abstract class ChatRepository {
   /// registered command for the line (an unmatched name is not an
   /// error — the caller falls back to the ordinary prompt channel, the
   /// web live-directory miss).
+  ///
+  /// [files] are staged receipts from [uploadFile]; the host resolves each
+  /// one inside the addressed agent's scope, so the same acceptance flag
+  /// governs them.
   ///
   /// When [retryOnTransportAbort] is set, a transport-level socket drop
   /// before any response bytes re-dispatches the line once on a fresh
@@ -251,6 +273,7 @@ abstract class ChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   });
 
@@ -837,6 +860,58 @@ abstract class ChatRepository {
     String sessionId,
     String path,
   ) => _unsupported('listWorkspaceDirectory');
+
+  // -------------------------------------------------------------------------
+  // Human feedback (`messageFeedback/*`, `sessionFeedback/record`)
+  // -------------------------------------------------------------------------
+
+  /// Every current judgment for one persisted Session
+  /// (`messageFeedback/list`), in first-creation order.
+  ///
+  /// The message trio works off the Session log rather than a live Agent, so a
+  /// closed Session still answers. A Session whose log is gone throws
+  /// [RepositoryFailure] carrying the Host's `session-not-found` code.
+  Future<List<MessageFeedbackItem>> listMessageFeedback(String sessionId) =>
+      _unsupported('listMessageFeedback');
+
+  /// Create or replace one assistant message's judgment
+  /// (`messageFeedback/put`).
+  ///
+  /// [ifVersion] is the version the caller last observed, or null to require
+  /// that the message carries no judgment yet — the Host's compare-and-set. A
+  /// refusal is a value ([MessageFeedbackRefused]), not an exception: a
+  /// `version-conflict` carries the authoritative item, which the caller
+  /// reconciles from. [note] and [category] stay optional, and the Host stores
+  /// exactly what it is given, so an omitted member clears the stored one.
+  Future<MessageFeedbackWrite> putMessageFeedback(
+    String sessionId, {
+    required String messageId,
+    required MessageFeedbackRating rating,
+    required String? ifVersion,
+    String? note,
+    MessageFeedbackCategory? category,
+  }) => _unsupported('putMessageFeedback');
+
+  /// Delete one message's judgment after observing its version
+  /// (`messageFeedback/delete`). An already-absent judgment succeeds without
+  /// writing; a stale [ifVersion] answers a `version-conflict` refusal.
+  Future<MessageFeedbackWrite> deleteMessageFeedback(
+    String sessionId, {
+    required String messageId,
+    required String ifVersion,
+  }) => _unsupported('deleteMessageFeedback');
+
+  /// Record one Session-level remark (`sessionFeedback/record`).
+  ///
+  /// It appends to a *live* Session, so an id the Host no longer holds throws
+  /// [RepositoryFailure] with its `session-not-found` code. The Host's
+  /// `/feedback <text>` command writes the same event through the ordinary
+  /// command roster (`commands/execute`), which is the path the composer uses.
+  Future<void> recordSessionFeedback(
+    String sessionId, {
+    String? text,
+    MessageFeedbackCategory? category,
+  }) => _unsupported('recordSessionFeedback');
 }
 
 final class QuestionEvidence {

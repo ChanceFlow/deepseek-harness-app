@@ -1986,6 +1986,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pickFromGallery => '从相册选择';
 
   @override
+  String get attachFile => '附加文件';
+
+  @override
+  String get pickFileFromDevice => '从设备存储中选择';
+
+  @override
+  String fileUploading(String size) {
+    return '上传中 · $size';
+  }
+
+  @override
+  String fileUploaded(String size) {
+    return '已上传 · $size';
+  }
+
+  @override
+  String get fileUploadFailed => '上传失败';
+
+  @override
+  String removeFile(String name) {
+    return '移除 $name';
+  }
+
+  @override
+  String fileAttachmentNotReady(String name) {
+    return '$name 尚未上传完成';
+  }
+
+  @override
+  String fileTooLarge(int limit) {
+    return '该文件超过 $limit MB 的上传上限';
+  }
+
+  @override
   String unknownImageType(String name) {
     return '不支持的图片类型：$name';
   }
@@ -2102,6 +2136,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String commandImagesUnsupported(String command) {
     return '/$command 不接受图片附件，请先移除图片';
+  }
+
+  @override
+  String commandFilesUnsupported(String command) {
+    return '/$command 不接受附件，请先移除附件';
   }
 
   @override
@@ -3532,4 +3571,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fileReferenceSectionTitle => '文件与文件夹';
+
+  @override
+  String get feedbackRateUp => '回答不错';
+
+  @override
+  String get feedbackRateDown => '回答有问题';
+
+  @override
+  String get feedbackRetract => '取消评价';
+
+  @override
+  String get feedbackSaveFailed => '反馈保存失败';
+
+  @override
+  String get feedbackChangedElsewhere => '这条反馈已在别处改动，已显示最新状态';
+
+  @override
+  String get feedbackLoadFailed => '反馈状态加载失败';
 }

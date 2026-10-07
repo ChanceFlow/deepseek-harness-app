@@ -13,7 +13,9 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/message_feedback.dart';
 import 'package:domain/model/plugin_inventory.dart';
 import 'package:domain/model/plugin_management.dart';
 import 'package:domain/model/schedule.dart';
@@ -685,6 +687,45 @@ ImageLimits decodeImageLimitsWire(JsonMap json) {
         wireLongOrNull(json, 'maxImageDimension') ??
         ImageLimits.defaultMaxImageDimension,
     mediaTypes: mediaTypes.isEmpty ? ImageLimits.defaultMediaTypes : mediaTypes,
+  );
+}
+
+/// `FileAttachmentRef` of a staged file upload (reference
+/// packages/attachment/attachment/src/types.ts): verbatim bytes, so `name`
+/// and `bytes` are required alongside the content-addressed id.
+final class FileAttachmentRefWire {
+  FileAttachmentRefWire.fromJson(JsonMap json)
+    : attachmentId = _reqString(json, 'attachmentId'),
+      name = _reqString(json, 'name'),
+      bytes = _reqLong(json, 'bytes');
+
+  final String attachmentId;
+
+  /// Host-sanitized display filename.
+  final String name;
+
+  final int bytes;
+}
+
+/// `FileUploadValue` (`packages/client/file-upload/src/types.ts`): the staged
+/// receipt a prompt cites plus the durable file reference behind it.
+final class FileUploadValueWire {
+  FileUploadValueWire.fromJson(JsonMap json)
+    : receiptId = _reqString(json, 'receiptId'),
+      file = FileAttachmentRefWire.fromJson(_reqObject(json, 'file'));
+
+  final String receiptId;
+  final FileAttachmentRefWire file;
+}
+
+/// Decodes the `fileUploads/upload` result into the staged domain receipt.
+UploadedFile decodeFileUploadValue(JsonMap value) {
+  final wire = FileUploadValueWire.fromJson(value);
+  return UploadedFile(
+    receiptId: wire.receiptId,
+    attachmentId: wire.file.attachmentId,
+    name: wire.file.name,
+    byteSize: wire.file.bytes,
   );
 }
 
@@ -2286,3 +2327,113 @@ AccountBonusBatch decodeAccountBonusBatch(JsonMap json) => AccountBonusBatch(
     'bonuses',
   ).map(_decodeAccountBonusGrant).toList(),
 );
+
+// ---------------------------------------------------------------------------
+// Human feedback (`messageFeedback/{list,put,delete}`, `sessionFeedback/record`
+// — reference/deepseek-harness/packages/feedback/*/src/{index,types}.ts)
+// ---------------------------------------------------------------------------
+
+/// The Host's business result envelope shared by all four feedback
+/// operations (`message-feedback/src/types.ts` `MessageFeedbackSuccess` /
+/// `MessageFeedbackRejected`; `sessionFeedback/record` answers the same shape).
+///
+/// It rides inside the transport's success branch: a refusal is a business
+/// verdict, not a failed call. Exactly one of [value] / [error] is non-null.
+final class MessageFeedbackResultWire {
+  const MessageFeedbackResultWire._({required this.value, required this.error});
+
+  /// Reads one envelope; an absent or non-boolean `ok` fails loud naming it.
+  factory MessageFeedbackResultWire.fromJson(JsonMap json) =>
+      _reqBool(json, 'ok')
+      ? MessageFeedbackResultWire._(
+          value: _reqObject(json, 'value'),
+          error: null,
+        )
+      : MessageFeedbackResultWire._(
+          value: null,
+          error: _reqObject(json, 'error'),
+        );
+
+  /// The success branch's payload; null when the Host refused.
+  final JsonMap? value;
+
+  /// The refusal branch's error object; null on success.
+  final JsonMap? error;
+}
+
+/// One current judgment (`message-feedback/src/types.ts` `MessageFeedbackItem`):
+/// its message, rating, optional note and category, compare-and-set version,
+/// and the Host's creation and update times.
+MessageFeedbackItem decodeMessageFeedbackItem(JsonMap json) =>
+    MessageFeedbackItem(
+      messageId: _reqString(json, 'messageId'),
+      rating: messageFeedbackRatingFromWire(_reqString(json, 'rating')),
+      note: wireString(json, 'note'),
+      category: json.containsKey('category')
+          ? messageFeedbackCategoryFromWire(_reqString(json, 'category'))
+          : null,
+      version: _reqString(json, 'version'),
+      createdAtEpochMs: _reqLong(json, 'createdAt'),
+      updatedAtEpochMs: _reqLong(json, 'updatedAt'),
+    );
+
+/// The refusal a feedback operation answered, as the domain value the surface
+/// states beside the control: the stable code plus the authoritative item a
+/// `version-conflict` carries (`types.ts` `MessageFeedbackVersionConflict`).
+MessageFeedbackRefused _messageFeedbackRefused(JsonMap error) {
+  final current = asJsonObject(error['current']);
+  return MessageFeedbackRefused(
+    _reqString(error, 'code'),
+    current: current == null ? null : decodeMessageFeedbackItem(current),
+  );
+}
+
+/// Decodes the `messageFeedback/list` success value: the Session's current
+/// items, in first-creation order.
+List<MessageFeedbackItem> decodeMessageFeedbackListValue(JsonMap value) =>
+    _reqObjectArray(value, 'items').map(decodeMessageFeedbackItem).toList();
+
+/// Decodes the `messageFeedback/put` result: the durable item the Host
+/// committed, or its explicit refusal.
+MessageFeedbackWrite decodeMessageFeedbackPutResult(JsonMap json) {
+  final result = MessageFeedbackResultWire.fromJson(json);
+  final error = result.error;
+  if (error != null) return _messageFeedbackRefused(error);
+  return MessageFeedbackCommitted(decodeMessageFeedbackItem(result.value!));
+}
+
+/// Decodes the `messageFeedback/delete` result: the idempotent absence
+/// postcondition, or the Host's explicit refusal.
+MessageFeedbackWrite decodeMessageFeedbackDeleteResult(JsonMap json) {
+  final result = MessageFeedbackResultWire.fromJson(json);
+  final error = result.error;
+  if (error != null) return _messageFeedbackRefused(error);
+  final value = result.value!;
+  if (!_reqBool(value, 'absent')) {
+    throw FormatException(
+      'messageFeedback/delete "absent" must be true in ${value.keys.toList()}',
+    );
+  }
+  return const MessageFeedbackCommitted(null);
+}
+
+/// Encodes one judgment for `messageFeedback/put`.
+String encodeMessageFeedbackRating(MessageFeedbackRating rating) =>
+    switch (rating) {
+      MessageFeedbackRating.positive => 'positive',
+      MessageFeedbackRating.negative => 'negative',
+    };
+
+/// Encodes one category id for a feedback write; the ids are durable log
+/// vocabulary (`command-feedback/src/types.ts` `FeedbackCategory`).
+String encodeMessageFeedbackCategory(MessageFeedbackCategory category) =>
+    switch (category) {
+      MessageFeedbackCategory.taskResult => 'task-result',
+      MessageFeedbackCategory.instructionFollowing => 'instruction-following',
+      MessageFeedbackCategory.productInteraction => 'product-interaction',
+      MessageFeedbackCategory.serviceStability => 'service-stability',
+      MessageFeedbackCategory.resourceCost => 'resource-cost',
+      MessageFeedbackCategory.securityPrivacyPermission =>
+        'security-privacy-permission',
+      MessageFeedbackCategory.other => 'other',
+    };
