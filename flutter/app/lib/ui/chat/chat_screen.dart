@@ -1030,6 +1030,36 @@ class _OlderHistorySlot {
 /// timeline item, only a row the gap math and the builder dispatch on.
 const Object _olderHistorySlot = _OlderHistorySlot();
 
+/// Share of the chat panel the input dock may occupy. The rest stays with the
+/// transcript, which is the surface the reader is reading while a decision
+/// waits; the floor is the smallest cap worth giving the dock on a short panel
+/// (a landscape phone, or one whose keyboard is open) and the ceiling stops it
+/// from swallowing a tall tablet pane.
+const double _dockBudgetShare = 0.62;
+
+/// Share the dock may occupy while a decision waits. Answering is the only
+/// thing the reader can do with that session, so the decision seat keeps more
+/// room than the composer ever needs — enough that its action row stays at the
+/// dock's bottom edge on a short phone instead of scrolling out of sight.
+const double _dockDecisionShare = 0.78;
+const double _dockMinHeight = 200;
+const double _dockMaxHeight = 520;
+
+/// Cap for a decision card's scrollable body when no dock publishes a budget
+/// (a bare pump of the card outside its host). Inside the dock the body takes
+/// what is left of the budget instead (see [_decisionBody]).
+const double _decisionBodyShare = 0.45;
+
+/// The plan-review card's own fixed chrome — its warn header and its action
+/// row, which wraps to two lines on a phone. The scrollable plan body takes
+/// what is left of the dock's budget, so the action row lands at the dock's
+/// bottom edge instead of below it.
+const double _planReviewChrome = 200;
+
+/// The question card's fixed chrome — its header, the custom-answer row and
+/// the footer that carries Submit.
+const double _questionChrome = 240;
+
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
     required this.uiState,
@@ -1987,6 +2017,20 @@ class _ChatPanelState extends State<ChatPanel> {
     // in the panel — model seat, permission seat, preset seat, the ➕
     // roster, the workspace picker: the sheets float above the dock's
     // top edge instead of hugging the screen bottom (see showMenuSheet).
+    // How tall the dock may grow, measured against this panel rather than the
+    // screen: the app bar, the root navigation bar and the system insets are
+    // already outside these constraints, and anything that grew past them
+    // would sit under the tab bar where no tap lands. A panel shorter than the
+    // floor keeps the floor out of the way — the dock may never exceed the
+    // panel it lives in.
+    double dockBudget(double panelHeight) {
+      final budget =
+          (panelHeight *
+                  (_hasPendingDecision ? _dockDecisionShare : _dockBudgetShare))
+              .clamp(_dockMinHeight, _dockMaxHeight);
+      return budget < panelHeight ? budget : panelHeight;
+    }
+
     return DockAnchor(
       dockKey: _dockKey,
       child: Padding(
@@ -1994,208 +2038,223 @@ class _ChatPanelState extends State<ChatPanel> {
         // under it. A gap there is a blank strip that also clips the first
         // row mid-line, which reads as a rendering fault.
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        child: Column(
-          children: [
-            if (uiState.errorMessage case final error?)
-              _errorBanner(
-                describeChatError(l10n, error),
-                onRetry: () => widget.onAction(const RetrySessions()),
-              )
-            else if (uiState.cordisAnswerFailed)
-              _errorBanner((message: l10n.cordisAnswerFailed, detail: null))
-            else if (uiState.commandFailed)
-              _errorBanner((message: l10n.commandFailed, detail: null))
-            else if (selectedSession?.agentError case final agentError?)
-              // The host reported a failure with no turn position: no
-              // timeline item carries it, so this strip is the only place the
-              // session can say why it stopped. Not dismissible — the next
-              // prompt clears it (web `ClientSession.prompt`).
-              _errorBanner((
-                message: l10n.sessionAgentFailed,
-                detail: agentError,
-              ), dismissible: false),
-            for (final rejection in uiState.imageRejections)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  switch (rejection) {
-                    UnsupportedImageType(:final name, :final mediaType) =>
-                      l10n.imageRejectionUnsupported(
-                        name ?? l10n.attachmentName,
-                        mediaType,
+        // The panel's own height is the only honest budget for the dock: the
+        // screen also carries the app bar, the root navigation bar and the
+        // system insets, none of which the dock may grow over.
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              if (uiState.errorMessage case final error?)
+                _errorBanner(
+                  describeChatError(l10n, error),
+                  onRetry: () => widget.onAction(const RetrySessions()),
+                )
+              else if (uiState.cordisAnswerFailed)
+                _errorBanner((message: l10n.cordisAnswerFailed, detail: null))
+              else if (uiState.commandFailed)
+                _errorBanner((message: l10n.commandFailed, detail: null))
+              else if (selectedSession?.agentError case final agentError?)
+                // The host reported a failure with no turn position: no
+                // timeline item carries it, so this strip is the only place the
+                // session can say why it stopped. Not dismissible — the next
+                // prompt clears it (web `ClientSession.prompt`).
+                _errorBanner((
+                  message: l10n.sessionAgentFailed,
+                  detail: agentError,
+                ), dismissible: false),
+              for (final rejection in uiState.imageRejections)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    switch (rejection) {
+                      UnsupportedImageType(:final name, :final mediaType) =>
+                        l10n.imageRejectionUnsupported(
+                          name ?? l10n.attachmentName,
+                          mediaType,
+                        ),
+                      ImageTooLarge(:final name, :final maxBytes) =>
+                        l10n.imageRejectionTooLarge(
+                          name ?? l10n.attachmentName,
+                          maxBytes,
+                        ),
+                      NoImageRoom(:final room) => l10n.imageRejectionNoRoom(
+                        room,
                       ),
-                    ImageTooLarge(:final name, :final maxBytes) =>
-                      l10n.imageRejectionTooLarge(
-                        name ?? l10n.attachmentName,
-                        maxBytes,
+                    },
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () {
+                          final primaryFocus =
+                              FocusManager.instance.primaryFocus;
+                          if (primaryFocus != null && primaryFocus.hasFocus) {
+                            primaryFocus.unfocus();
+                          }
+                        },
+                        child: _timelineBody(uiState, selectedSession),
                       ),
-                    NoImageRoom(:final room) => l10n.imageRejectionNoRoom(room),
-                  },
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: AnimatedSwitcher(
+                        duration: DshMotion.durationShort,
+                        switchInCurve: DshMotion.curveEnter,
+                        switchOutCurve: DshMotion.curveExit,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: animation,
+                            child: child,
+                          ),
+                        ),
+                        child: _showJumpToBottom
+                            ? _jumpToBottomFab()
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            Expanded(
-              child: Stack(
+              // The session's counters are the transcript's footer, not dock
+              // chrome: they caption the conversation above the input surface
+              // rather than wedge between two of its strips.
+              if (!_hasPendingDecision) StatsLine(stats: uiState.sessionStats),
+              // Web input-dock order 0: the plan strip before the goal and
+              // queue entries. While a decision (plan review, question, approval)
+              // is pending, the decision panel takes the composer seat, so the
+              // todo/goal chrome stands down — the decision moment keeps the
+              // transcript room instead of stacking chrome above it. Every strip
+              // shares one raised surface; the parts divide with hairlines, never
+              // with borders of their own.
+              _InputDock(
+                key: _dockKey,
+                maxHeight: dockBudget(constraints.maxHeight),
                 children: [
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () {
-                        final primaryFocus = FocusManager.instance.primaryFocus;
-                        if (primaryFocus != null && primaryFocus.hasFocus) {
-                          primaryFocus.unfocus();
-                        }
-                      },
-                      child: _timelineBody(uiState, selectedSession),
+                  if (!_hasPendingDecision) ...[
+                    TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
+                    GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
+                    // The session's durable reminders: nothing else on this
+                    // surface shows them (the pinned deployment composes no
+                    // `schedule` projection), and the dock is where the rest
+                    // of the session's standing state already lives. Nothing to
+                    // show leaves no strip at all: an unreported or empty set
+                    // would spend a row of every session's dock on a fact the
+                    // reader cannot act on.
+                    if (selectedSessionId != null &&
+                        (uiState.schedules?.isNotEmpty ?? false))
+                      ScheduleReminderStrip(reminders: uiState.schedules),
+                  ],
+                  // The queue dock is a display strip, not a filled seat:
+                  // it rides alongside the approval card the way web's
+                  // `conversation.input.dock` slot does (QueueDock is
+                  // registered per-session and stays mounted while an
+                  // approval panel owns the composer). An approval must
+                  // never hide the queued rows the reader is waiting to
+                  // send after the decision.
+                  if (_hasQueuedRows)
+                    QueueDock(
+                      items: [
+                        for (final dock
+                            in uiState.timeline.whereType<TimelineQueue>())
+                          ...dock.items,
+                      ],
+                      running: isSessionRunning,
+                      onAction: widget.onAction,
                     ),
-                  ),
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: AnimatedSwitcher(
-                      duration: DshMotion.durationShort,
-                      switchInCurve: DshMotion.curveEnter,
-                      switchOutCurve: DshMotion.curveExit,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(scale: animation, child: child),
+                  if (_pendingQuestion case final question?)
+                    QuestionRow(
+                      key: ValueKey('question-takeover:${question.requestId}'),
+                      request: question,
+                      onAction: widget.onAction,
+                    )
+                  else if (_pendingApproval case final approval?)
+                    ApprovalPanel(
+                      request: approval,
+                      command: _commandForApproval(approval),
+                      onAction: widget.onAction,
+                    )
+                  else if (_pendingCordisRequest case final cordis?)
+                    CordisRequestPanel(
+                      key: ValueKey('cordis-takeover:${cordis.requestId}'),
+                      request: cordis,
+                      onAction: widget.onAction,
+                    )
+                  else if (_continuedQuestion case final continued?)
+                    QuestionRow(
+                      key: ValueKey('continued-question:${continued.callId}'),
+                      request: TimelineQuestionRequest(
+                        requestId: continued.callId,
+                        questions: continued.questions,
                       ),
-                      child: _showJumpToBottom
-                          ? _jumpToBottomFab()
-                          : const SizedBox.shrink(),
+                      onAction: widget.onAction,
+                    )
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ComposerBar(
+                            onStop: selectedSessionId == null
+                                ? null
+                                : () =>
+                                      widget.onAction(const CancelTurnAction()),
+                            enabled:
+                                selectedSessionId != null && !uiState.isSending,
+                            isSending: uiState.isSending,
+                            running: isSessionRunning,
+                            plan: uiState.plan,
+                            models: widget.models,
+                            onSelectModel: widget.onSelectModel,
+                            onRefreshModels: widget.onRefreshModels,
+                            modelPrefs: uiState.modelPrefs,
+                            pendingImages: uiState.pendingImages,
+                            imageLimits: uiState.imageLimits,
+                            skills: uiState.skills,
+                            commands: uiState.commands,
+                            contextPressure: uiState.contextPressure,
+                            contextBreakdown: uiState.contextBreakdown,
+                            onAction: widget.onAction,
+                            sessionId: selectedSessionId,
+                            sessionState: _sessionState,
+                            permissions: uiState.permissions,
+                            sandboxMode: uiState.sandboxMode,
+                            // Web ComposerSubmissionPolicy: queue outside a
+                            // running turn; inside it the persisted busy-Enter
+                            // preference decides (the send button is the only
+                            // submit gesture on a soft keyboard). The future
+                            // resolves with the host's acceptance: the
+                            // composer clears its draft only then.
+                            onSend: (text) {
+                              final settled = Completer<bool>();
+                              widget.onAction(
+                                SendPrompt(
+                                  text,
+                                  mode: _promptModeFor(isSessionRunning),
+                                  onSettled: (accepted) {
+                                    if (!settled.isCompleted) {
+                                      settled.complete(accepted);
+                                    }
+                                  },
+                                ),
+                              );
+                              return settled.future;
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
                 ],
               ),
-            ),
-            // The session's counters are the transcript's footer, not dock
-            // chrome: they caption the conversation above the input surface
-            // rather than wedge between two of its strips.
-            if (!_hasPendingDecision) StatsLine(stats: uiState.sessionStats),
-            // Web input-dock order 0: the plan strip before the goal and
-            // queue entries. While a decision (plan review, question, approval)
-            // is pending, the decision panel takes the composer seat, so the
-            // todo/goal chrome stands down — the decision moment keeps the
-            // transcript room instead of stacking chrome above it. Every strip
-            // shares one raised surface; the parts divide with hairlines, never
-            // with borders of their own.
-            _InputDock(
-              key: _dockKey,
-              children: [
-                if (!_hasPendingDecision) ...[
-                  TodoPanel(todos: uiState.todos ?? const <TodoItem>[]),
-                  GoalBarStrip(goal: uiState.goal, onAction: widget.onAction),
-                  // The session's durable reminders: nothing else on this
-                  // surface shows them (the pinned deployment composes no
-                  // `schedule` projection), and the dock is where the rest
-                  // of the session's standing state already lives. Nothing to
-                  // show leaves no strip at all: an unreported or empty set
-                  // would spend a row of every session's dock on a fact the
-                  // reader cannot act on.
-                  if (selectedSessionId != null &&
-                      (uiState.schedules?.isNotEmpty ?? false))
-                    ScheduleReminderStrip(reminders: uiState.schedules),
-                ],
-                // The queue dock is a display strip, not a filled seat:
-                // it rides alongside the approval card the way web's
-                // `conversation.input.dock` slot does (QueueDock is
-                // registered per-session and stays mounted while an
-                // approval panel owns the composer). An approval must
-                // never hide the queued rows the reader is waiting to
-                // send after the decision.
-                if (_hasQueuedRows)
-                  QueueDock(
-                    items: [
-                      for (final dock
-                          in uiState.timeline.whereType<TimelineQueue>())
-                        ...dock.items,
-                    ],
-                    running: isSessionRunning,
-                    onAction: widget.onAction,
-                  ),
-                if (_pendingQuestion case final question?)
-                  QuestionRow(
-                    key: ValueKey('question-takeover:${question.requestId}'),
-                    request: question,
-                    onAction: widget.onAction,
-                  )
-                else if (_pendingApproval case final approval?)
-                  ApprovalPanel(
-                    request: approval,
-                    command: _commandForApproval(approval),
-                    onAction: widget.onAction,
-                  )
-                else if (_pendingCordisRequest case final cordis?)
-                  CordisRequestPanel(
-                    key: ValueKey('cordis-takeover:${cordis.requestId}'),
-                    request: cordis,
-                    onAction: widget.onAction,
-                  )
-                else if (_continuedQuestion case final continued?)
-                  QuestionRow(
-                    key: ValueKey('continued-question:${continued.callId}'),
-                    request: TimelineQuestionRequest(
-                      requestId: continued.callId,
-                      questions: continued.questions,
-                    ),
-                    onAction: widget.onAction,
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ComposerBar(
-                          onStop: selectedSessionId == null
-                              ? null
-                              : () => widget.onAction(const CancelTurnAction()),
-                          enabled:
-                              selectedSessionId != null && !uiState.isSending,
-                          isSending: uiState.isSending,
-                          running: isSessionRunning,
-                          plan: uiState.plan,
-                          models: widget.models,
-                          onSelectModel: widget.onSelectModel,
-                          onRefreshModels: widget.onRefreshModels,
-                          modelPrefs: uiState.modelPrefs,
-                          pendingImages: uiState.pendingImages,
-                          imageLimits: uiState.imageLimits,
-                          skills: uiState.skills,
-                          commands: uiState.commands,
-                          contextPressure: uiState.contextPressure,
-                          contextBreakdown: uiState.contextBreakdown,
-                          onAction: widget.onAction,
-                          sessionId: selectedSessionId,
-                          sessionState: _sessionState,
-                          permissions: uiState.permissions,
-                          sandboxMode: uiState.sandboxMode,
-                          // Web ComposerSubmissionPolicy: queue outside a
-                          // running turn; inside it the persisted busy-Enter
-                          // preference decides (the send button is the only
-                          // submit gesture on a soft keyboard). The future
-                          // resolves with the host's acceptance: the
-                          // composer clears its draft only then.
-                          onSend: (text) {
-                            final settled = Completer<bool>();
-                            widget.onAction(
-                              SendPrompt(
-                                text,
-                                mode: _promptModeFor(isSessionRunning),
-                                onSettled: (accepted) {
-                                  if (!settled.isCompleted) {
-                                    settled.complete(accepted);
-                                  }
-                                },
-                              ),
-                            );
-                            return settled.future;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2207,36 +2266,39 @@ class _ChatPanelState extends State<ChatPanel> {
 /// Each strip used to draw its own border and radius, which stacked three
 /// nested boxes at the screen's busiest edge; the surface belongs to the
 /// dock, and the strips divide with hairlines.
+///
+/// [maxHeight] is the panel's budget for the dock (see [_dockBudgetShare]).
+/// It bounds the dock so its content can never grow past the panel's own
+/// bottom edge, where the root navigation bar sits and nothing below can be
+/// tapped; content taller than the budget scrolls inside the dock instead.
+/// A decision card reads the same budget from [DockBudget] and sizes its
+/// scrollable body against it, so its own action row lands at the dock's
+/// bottom edge rather than below it. A bare pump without a budget keeps the
+/// dock's historical min-size shape.
 class _InputDock extends StatelessWidget {
-  const _InputDock({required this.children, super.key});
+  const _InputDock({required this.children, this.maxHeight, super.key});
 
   final List<Widget> children;
+
+  /// The height the dock may occupy, or null when no sized panel encloses
+  /// it (a widget test pumping the dock's host directly).
+  final double? maxHeight;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final mediaQuery = MediaQuery.of(context);
-    final isKeyboardOpen = mediaQuery.viewInsets.bottom > 0;
-    if (!isKeyboardOpen) {
-      return Container(
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(kShapeDock),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: kM3ShadowElevation1,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(mainAxisSize: MainAxisSize.min, children: children),
-      );
-    }
-    final availableHeight =
-        mediaQuery.size.height -
-        mediaQuery.viewInsets.bottom -
-        mediaQuery.padding.top -
-        mediaQuery.padding.bottom;
-    final maxDockHeight = (availableHeight * 0.50).clamp(160.0, 360.0);
-
-    return Container(
+    final budget = maxHeight;
+    final content = Column(mainAxisSize: MainAxisSize.min, children: children);
+    final Widget body = budget == null
+        ? content
+        : ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: budget),
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: content,
+            ),
+          );
+    final Widget dock = Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainer,
         borderRadius: BorderRadius.circular(kShapeDock),
@@ -2244,14 +2306,10 @@ class _InputDock extends StatelessWidget {
         boxShadow: kM3ShadowElevation1,
       ),
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxDockHeight),
-        child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: Column(mainAxisSize: MainAxisSize.min, children: children),
-        ),
-      ),
+      child: body,
     );
+    if (budget == null) return dock;
+    return DockBudget(maxHeight: budget, child: dock);
   }
 }
 
@@ -4661,6 +4719,7 @@ class _QuestionCard extends StatelessWidget {
     final answered =
         draft.selected.isNotEmpty || draft.customText.trim().isNotEmpty;
     final isLast = index == questions.length - 1;
+    final dockBudget = DockBudget.of(context);
     return Container(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
@@ -4670,6 +4729,7 @@ class _QuestionCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _QuestionCardHeader(
@@ -4679,11 +4739,11 @@ class _QuestionCard extends StatelessWidget {
             onDismiss: onDismiss,
           ),
           if (!minimized) ...[
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
-              ),
-              child: SingleChildScrollView(
+            _decisionBody(
+              context,
+              dockBudget,
+              _questionChrome,
+              SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5330,6 +5390,36 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
   }
 }
 
+/// One decision card's scrollable body, sized against the dock's budget.
+///
+/// [chrome] is the card's own fixed height (header, answer field or action
+/// row). Inside a sized dock the body takes the budget minus that chrome, so
+/// the card as a whole fits the dock and its actions — the only way to answer
+/// — land at the dock's bottom edge instead of below it, where the tab bar
+/// swallows the taps. Without a dock (a bare pump of the card) the historical
+/// fixed cap applies, which is all that is needed when nothing sits below it.
+Widget _decisionBody(
+  BuildContext context,
+  double? dockBudget,
+  double chrome,
+  Widget body,
+) {
+  if (dockBudget == null) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * _decisionBodyShare,
+      ),
+      child: body,
+    );
+  }
+  return ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: (dockBudget - chrome).clamp(0.0, dockBudget),
+    ),
+    child: body,
+  );
+}
+
 /// Plan-review decision card (the web PlanReviewPanel port): a warn-tinted
 /// strip with a dot, the plan as the whole body (markdown), and a
 /// right-aligned action row — discuss (dismiss), decline, and approve.
@@ -5367,6 +5457,7 @@ class _PlanReviewCardState extends State<_PlanReviewCard> {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final review = widget.review;
+    final dockBudget = DockBudget.of(context);
     void decide(String label) {
       widget.onAction(
         AnswerQuestionAction(
@@ -5387,6 +5478,7 @@ class _PlanReviewCardState extends State<_PlanReviewCard> {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
@@ -5425,11 +5517,11 @@ class _PlanReviewCardState extends State<_PlanReviewCard> {
             ),
           ),
           if (!_minimized) ...[
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
-              ),
-              child: SingleChildScrollView(
+            _decisionBody(
+              context,
+              dockBudget,
+              _planReviewChrome,
+              SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: MarkdownText(text: review.plan),
               ),

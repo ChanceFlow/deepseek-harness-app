@@ -479,6 +479,18 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'plan-review', state: planReviewState()),
+  // A short phone panel (a 616dp-class device, or one whose keyboard is open):
+  // the decision card must keep its action row above the panel's bottom edge —
+  // where the root tab bar sits and takes no taps — instead of letting it
+  // slide underneath. The plan body gives up the room.
+  DesignShot(
+    name: 'plan-review-short-panel',
+    state: planReviewState(),
+    act: (tester) async {
+      tester.view.physicalSize = const Size(720, 960);
+      await settle(tester);
+    },
+  ),
   DesignShot(
     name: 'plan-review-folded',
     state: planReviewState(),
