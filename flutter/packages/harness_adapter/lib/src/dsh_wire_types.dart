@@ -7,10 +7,12 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:domain/model/account.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/plugin_inventory.dart';
 import 'package:domain/model/plugin_management.dart';
@@ -930,6 +932,60 @@ List<CommandDescriptor> decodeCommandDescriptorList(JsonMap value) {
       inputHint: wire.input?.hint,
       acceptsAttachments: wire.input?.attachments ?? false,
     );
+  }).toList();
+}
+
+// ---------------------------------------------------------------------------
+// File-reference discovery (fileReferences/list value — a bare JSON array;
+// the envelope parks a non-object result under `value`, so the shape mirrors
+// the `llm/*` listings and `commands/list`). Reference:
+// reference/deepseek-harness/packages/context/file-reference/src/types.ts
+// `FileReferenceCandidate` (both `path` and `kind` are required; there are no
+// optional fields).
+// ---------------------------------------------------------------------------
+
+final class FileReferenceCandidateWire {
+  FileReferenceCandidateWire.fromJson(JsonMap json)
+    : path = _reqString(json, 'path'),
+      kind = _fileReferenceKind(json, 'kind');
+
+  final String path;
+  final FileReferenceKind kind;
+}
+
+/// Reads the candidate discriminant; an absent or unknown `kind` fails loud
+/// naming the field, so a new host variant cannot decode as a file.
+FileReferenceKind _fileReferenceKind(JsonMap json, String key) {
+  final value = wireString(json, key);
+  return switch (value) {
+    'file' => FileReferenceKind.file,
+    'directory' => FileReferenceKind.directory,
+    _ => throw FormatException(
+      'required field "$key" missing or mistyped in ${json.keys.toList()}',
+    ),
+  };
+}
+
+/// Decodes the `fileReferences/list` result: the addressed agent's ranked
+/// path candidates, in host order. The result is a bare array, so it rides
+/// the envelope's `value` slot.
+List<FileReferenceCandidate> decodeFileReferenceCandidateList(JsonMap value) {
+  final raw = value['value'];
+  if (raw is! List) {
+    throw FormatException(
+      '${DshRpcEndpoints.fileReferencesList} "value" must be a JSON array, '
+      'got: ${value.keys.toList()}',
+    );
+  }
+  return raw.map((Object? entry) {
+    final obj = asJsonObject(entry);
+    if (obj == null) {
+      throw const FormatException(
+        '${DshRpcEndpoints.fileReferencesList} entry is not an object',
+      );
+    }
+    final wire = FileReferenceCandidateWire.fromJson(obj);
+    return FileReferenceCandidate(path: wire.path, kind: wire.kind);
   }).toList();
 }
 
@@ -2022,3 +2078,211 @@ TerminalFrame decodeTerminalFrame(JsonMap frame) {
       throw FormatException('terminal frame "type" has unknown value "$type"');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Account (`account/getState`, `account/getProfile`, `account/getBalance`,
+// `account/getUnnotifiedBonuses`). Reference:
+// reference/deepseek-harness/packages/credentials/deepseek-account/src/types.ts
+// (`AccountView`, `SignInAttemptView`, `AccountLinks`, `AccountProfile`,
+// `AccountWallet`, `AccountDetails`, `AccountBonusNotification`,
+// `AccountBonusBatch`). The one optional field in the whole projection is
+// `AccountProfile.avatarUrl`; `attempt`, `id`, `name` and `contact` are
+// required keys that may hold null, so their absence is host breakage while
+// null is a fact.
+// ---------------------------------------------------------------------------
+
+/// One required key whose value may be null: absence throws naming the field,
+/// null stays null. The `AccountProfile` identity fields and `AccountView`
+/// `attempt` are declared this way in the reference.
+String? _reqNullableString(JsonMap json, String key) {
+  if (!json.containsKey(key)) _missing(json, key);
+  final value = json[key];
+  if (value == null) return null;
+  final text = wireString(json, key);
+  if (text == null) _missing(json, key);
+  return text;
+}
+
+/// One required array of objects; a non-array field or a non-object member
+/// fails loud naming the field. Sibling of the package-level
+/// `wireRequiredObjectArray`, which drops a malformed member instead.
+List<JsonMap> _reqObjectArray(JsonMap json, String key) {
+  final raw = json[key];
+  if (raw is! List) _missing(json, key);
+  final values = <JsonMap>[];
+  for (final Object? entry in raw) {
+    final object = asJsonObject(entry);
+    if (object == null) _missing(json, key);
+    values.add(object);
+  }
+  return values;
+}
+
+/// The `AccountClientMetadata` request argument: the identity of the
+/// requesting UI, from which the host derives the Platform request headers.
+JsonMap accountClientMetadataJson(AccountClientIdentity client) =>
+    <String, Object?>{
+      'version': client.version,
+      'locale': client.locale,
+      'timezoneOffsetSeconds': client.timezoneOffsetSeconds,
+    };
+
+/// Reads one `AccountWallet` / bonus `currency`; the reference union is
+/// closed, so an unknown value fails loud naming the field rather than
+/// decoding as either currency.
+AccountCurrency _accountCurrency(JsonMap json, String key) {
+  final value = _reqString(json, key);
+  switch (value) {
+    case 'CNY':
+      return AccountCurrency.cny;
+    case 'USD':
+      return AccountCurrency.usd;
+  }
+  throw FormatException('account "$key" has unknown value "$value"');
+}
+
+/// Reads one `SignInAttemptView.phase`; the reference union is closed.
+AccountSignInPhase _accountSignInPhase(JsonMap json, String key) {
+  final value = _reqString(json, key);
+  switch (value) {
+    case 'initializing':
+      return AccountSignInPhase.initializing;
+    case 'waiting-browser':
+      return AccountSignInPhase.waitingBrowser;
+    case 'exchanging':
+      return AccountSignInPhase.exchanging;
+    case 'committing':
+      return AccountSignInPhase.committing;
+    case 'succeeded':
+      return AccountSignInPhase.succeeded;
+    case 'cancelled':
+      return AccountSignInPhase.cancelled;
+    case 'expired':
+      return AccountSignInPhase.expired;
+    case 'failed':
+      return AccountSignInPhase.failed;
+  }
+  throw FormatException('account "$key" has unknown value "$value"');
+}
+
+AccountSignInAttempt _decodeAccountAttempt(
+  JsonMap json,
+) => AccountSignInAttempt(
+  id: _reqString(json, 'id'),
+  phase: _accountSignInPhase(json, 'phase'),
+  // The three optional members (`authorizeUrl?`, `expiresAt?`, `errorCode?`).
+  authorizeUrl: wireString(json, 'authorizeUrl'),
+  expiresAt: wireLongOrNull(json, 'expiresAt'),
+  errorCode: wireString(json, 'errorCode'),
+);
+
+AccountLinks _decodeAccountLinks(JsonMap json) => AccountLinks(
+  usageUrl: _reqString(json, 'usageUrl'),
+  topUpUrl: _reqString(json, 'topUpUrl'),
+);
+
+/// Decodes `account/getState`'s `AccountView`.
+///
+/// The `status` discriminant is closed and `attempt` is a required key that
+/// may be null — null is "the host holds no attempt", not a missing field.
+AccountState decodeAccountState(JsonMap json) {
+  final status = _reqString(json, 'status');
+  final AccountSignInStatus presence;
+  switch (status) {
+    case 'signed-out':
+      presence = AccountSignInStatus.signedOut;
+    case 'credential-stored':
+      presence = AccountSignInStatus.credentialStored;
+    default:
+      throw FormatException(
+        'account/getState "status" has unknown value "$status"',
+      );
+  }
+  if (!json.containsKey('attempt')) _missing(json, 'attempt');
+  final attempt = json['attempt'];
+  return AccountState(
+    status: presence,
+    links: _decodeAccountLinks(_reqObject(json, 'links')),
+    attempt: attempt == null
+        ? null
+        : _decodeAccountAttempt(
+            asJsonObject(attempt) ?? _missing(json, 'attempt'),
+          ),
+  );
+}
+
+AccountWallet _decodeAccountWallet(JsonMap json) => AccountWallet(
+  currency: _accountCurrency(json, 'currency'),
+  balance: _reqString(json, 'balance'),
+);
+
+/// Decodes `account/getProfile`'s `AccountDetails['profile']` outcome.
+///
+/// A null result (the host holds no account grant) is the caller's business,
+/// not this decoder's: it never invents `failed` from absence.
+AccountProfileResult decodeAccountProfileResult(JsonMap json) {
+  final status = _reqString(json, 'status');
+  switch (status) {
+    case 'ready':
+      final value = _reqObject(json, 'value');
+      return AccountProfileReady(
+        AccountProfile(
+          id: _reqNullableString(value, 'id'),
+          name: _reqNullableString(value, 'name'),
+          contact: _reqNullableString(value, 'contact'),
+          // `avatarUrl` is the one optional member of the projection.
+          avatarUrl: wireString(value, 'avatarUrl'),
+        ),
+      );
+    case 'failed':
+      return const AccountProfileFailed();
+  }
+  throw FormatException(
+    'account/getProfile "status" has unknown value "$status"',
+  );
+}
+
+/// Decodes `account/getBalance`'s `AccountDetails['balance']` outcome: the
+/// recharge wallets under `value` and the granted wallets under
+/// `bonusWallets`, kept separate because the reference keeps them separate.
+AccountBalanceResult decodeAccountBalanceResult(JsonMap json) {
+  final status = _reqString(json, 'status');
+  switch (status) {
+    case 'ready':
+      return AccountBalanceReady(
+        wallets: _reqObjectArray(
+          json,
+          'value',
+        ).map(_decodeAccountWallet).toList(),
+        bonusWallets: _reqObjectArray(
+          json,
+          'bonusWallets',
+        ).map(_decodeAccountWallet).toList(),
+      );
+    case 'failed':
+      return const AccountBalanceFailed();
+  }
+  throw FormatException(
+    'account/getBalance "status" has unknown value "$status"',
+  );
+}
+
+AccountBonusGrant _decodeAccountBonusGrant(JsonMap json) => AccountBonusGrant(
+  orderId: _reqString(json, 'orderId'),
+  campaign: _reqString(json, 'campaign'),
+  amount: _reqString(json, 'amount'),
+  currency: _accountCurrency(json, 'currency'),
+  grantedAt: _reqString(json, 'grantedAt'),
+  expiresAt: _reqString(json, 'expiresAt'),
+  message: _reqString(json, 'message'),
+);
+
+/// Decodes `account/getUnnotifiedBonuses`'s `AccountBonusBatch`: the account
+/// every grant belongs to plus the grants in Platform order.
+AccountBonusBatch decodeAccountBonusBatch(JsonMap json) => AccountBonusBatch(
+  accountId: _reqString(json, 'accountId'),
+  bonuses: _reqObjectArray(
+    json,
+    'bonuses',
+  ).map(_decodeAccountBonusGrant).toList(),
+);

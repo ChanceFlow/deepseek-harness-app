@@ -1,6 +1,7 @@
 /// Barrel export for the neutral domain vocabulary.
 library;
 
+export 'model/account.dart';
 export 'model/agent_preset.dart';
 export 'model/agent_team.dart';
 export 'model/attachment.dart';
@@ -11,6 +12,7 @@ export 'model/connection_state.dart';
 export 'model/context_pressure.dart';
 export 'model/cordis.dart';
 export 'model/directory.dart';
+export 'model/file_reference.dart';
 export 'model/goal.dart';
 export 'model/hook.dart';
 export 'model/jobs.dart';

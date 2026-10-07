@@ -13,12 +13,14 @@ import 'dart:convert';
 import 'dart:io' show SocketException;
 import 'dart:typed_data';
 
+import 'package:domain/model/account.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/plugin_management.dart';
@@ -336,6 +338,7 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.workspaceFilesRead,
     DshRpcEndpoints.workspaceFilesList,
     DshRpcEndpoints.commandsExecute,
+    DshRpcEndpoints.fileReferencesList,
     DshRpcEndpoints.settingsDescribe,
     DshRpcEndpoints.settingsUpdate,
     DshRpcEndpoints.settingsReplace,
@@ -344,6 +347,11 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.credentialsDescribe,
     DshRpcEndpoints.credentialsSet,
     DshRpcEndpoints.credentialsUnset,
+    DshRpcEndpoints.accountGetState,
+    DshRpcEndpoints.accountGetProfile,
+    DshRpcEndpoints.accountGetBalance,
+    DshRpcEndpoints.accountGetUnnotifiedBonuses,
+    DshRpcEndpoints.accountAckBonusNotified,
     DshRpcEndpoints.llmListProviders,
     DshRpcEndpoints.llmListConfigurableProviders,
     DshRpcEndpoints.llmDiscoverModels,
@@ -507,6 +515,63 @@ class HarnessFakeRpc implements DshRpcClient {
     'defaultPreset': 'workspace-write',
   };
 
+  /// Scripted `account/getState` value (`AccountView` —
+  /// reference/deepseek-harness/packages/credentials/deepseek-account/src/
+  /// types.ts).
+  JsonMap accountStateValue = <String, Object?>{
+    'status': 'credential-stored',
+    'links': <String, Object?>{
+      'usageUrl': 'https://platform.example/usage',
+      'topUpUrl': 'https://platform.example/top_up',
+    },
+    'attempt': <String, Object?>{'id': 'attempt-1', 'phase': 'succeeded'},
+  };
+
+  /// Scripted `account/getProfile` outcome; null answers the endpoint's null
+  /// result, which is the host holding no account grant.
+  JsonMap? accountProfileValue = <String, Object?>{
+    'status': 'ready',
+    'value': <String, Object?>{
+      'id': 'user-7',
+      'name': 'Ada',
+      'contact': 'a***@example.com',
+      'avatarUrl': null,
+    },
+  };
+
+  /// Scripted `account/getBalance` outcome; null answers the endpoint's null
+  /// result.
+  JsonMap? accountBalanceValue = <String, Object?>{
+    'status': 'ready',
+    'value': <Object?>[
+      <String, Object?>{'currency': 'CNY', 'balance': '12.34'},
+    ],
+    'bonusWallets': <Object?>[
+      <String, Object?>{'currency': 'USD', 'balance': '0.50'},
+    ],
+  };
+
+  /// Scripted `account/getUnnotifiedBonuses` batch; null answers the
+  /// endpoint's null result.
+  JsonMap? accountBonusesValue = <String, Object?>{
+    'accountId': 'user-7',
+    'bonuses': <Object?>[
+      <String, Object?>{
+        'orderId': 'order-1',
+        'campaign': 'welcome',
+        'amount': '5.00',
+        'currency': 'CNY',
+        'grantedAt': '2026-10-01T00:00:00Z',
+        'expiresAt': '2026-11-01T00:00:00Z',
+        'message': 'A 5.00 CNY bonus was credited.',
+      },
+    ],
+  };
+
+  /// Scripted `account/ackBonusNotified` answer: a bare boolean, so
+  /// [_valueFor] parks it under the envelope's `value` key.
+  bool accountAckValue = true;
+
   /// Scripted `workspace/pinSession` and `workspace/unpinSession` reply: the
   /// complete resulting pin set, most recently pinned first.
   JsonMap pinValue = <String, Object?>{'pinnedSessionIds': <String>[]};
@@ -550,6 +615,16 @@ class HarnessFakeRpc implements DshRpcClient {
       'text': 'Plan mode on. Use /plan off to leave.',
     },
   };
+
+  /// Scripted `fileReferences/list` rows. The result is a bare JSON array, so
+  /// [_valueFor] hands it over under the envelope's `value` key, exactly as
+  /// `RpcResult.fromJson` parks a non-object result. Shapes transcribe
+  /// `reference/deepseek-harness/packages/context/file-reference/src/types.ts`
+  /// `FileReferenceCandidate` (`path`, `kind`), ranked by the host.
+  List<Object?> fileReferenceRowsValue = <Object?>[
+    <String, Object?>{'path': 'src', 'kind': 'directory'},
+    <String, Object?>{'path': 'src/main.dart', 'kind': 'file'},
+  ];
 
   /// Scripted `session/projections` roster slot: the parent Session's
   /// `subagentCatalog` projection value
@@ -699,6 +774,14 @@ class HarnessFakeRpc implements DshRpcClient {
     if (endpoint == DshRpcEndpoints.commandsExecute) {
       return RpcResult(ok: true, value: commandValue);
     }
+    if (endpoint == DshRpcEndpoints.fileReferencesList) {
+      // A bare-array result rides the envelope's `value` slot
+      // (`packages/network/lib/rpc_envelope.dart` `RpcResult.fromJson`).
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{'value': fileReferenceRowsValue},
+      );
+    }
     if (endpoint == DshRpcEndpoints.pluginManagerWaitForInstall &&
         waitForInstallValue == null) {
       // The host's "no record of that request" is a null result, not an
@@ -707,6 +790,20 @@ class HarnessFakeRpc implements DshRpcClient {
     }
     if (endpoint == DshRpcEndpoints.sessionProjections &&
         projectionsSessionMissing) {
+      return RpcResult(ok: true, value: null);
+    }
+    // The three account detail reads answer `T | null`, where null is "this
+    // host holds no account grant": a null result is a value, not an error.
+    if (endpoint == DshRpcEndpoints.accountGetProfile &&
+        accountProfileValue == null) {
+      return RpcResult(ok: true, value: null);
+    }
+    if (endpoint == DshRpcEndpoints.accountGetBalance &&
+        accountBalanceValue == null) {
+      return RpcResult(ok: true, value: null);
+    }
+    if (endpoint == DshRpcEndpoints.accountGetUnnotifiedBonuses &&
+        accountBonusesValue == null) {
       return RpcResult(ok: true, value: null);
     }
     final value = _valueFor(endpoint, payload);
@@ -905,6 +1002,20 @@ class HarnessFakeRpc implements DshRpcClient {
         return agentPresetDocumentValue;
       case DshRpcEndpoints.permissionPresetsCatalog:
         return permissionCatalogValue;
+      case DshRpcEndpoints.accountGetState:
+        return accountStateValue;
+      // The three nullable reads never reach here with a null script (that
+      // path is answered in [_answer]); the fallback keeps the switch total.
+      case DshRpcEndpoints.accountGetProfile:
+        return accountProfileValue ?? const <String, Object?>{};
+      case DshRpcEndpoints.accountGetBalance:
+        return accountBalanceValue ?? const <String, Object?>{};
+      case DshRpcEndpoints.accountGetUnnotifiedBonuses:
+        return accountBonusesValue ?? const <String, Object?>{};
+      case DshRpcEndpoints.accountAckBonusNotified:
+        // `Promise<boolean>` is not a JSON object, so the envelope parks the
+        // raw answer under `value` (`RpcResult.fromJson`).
+        return <String, Object?>{'value': accountAckValue};
       case DshRpcEndpoints.settingsDescribe:
         return <String, Object?>{
           'writable': true,
@@ -4162,6 +4273,365 @@ void main() {
     );
     expect(catalog.options.first.description, 'Write inside the workspace.');
     expect(catalog.defaultOptions.first.description, isNull);
+  });
+
+  test(
+    'fileReferences/list carries the Agent lookup and the path query',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      final candidates = await repository.listFileReferences('s-1', 'src/');
+
+      expect(rpc.callCountFor(DshRpcEndpoints.fileReferencesList), 1);
+      // The addressed agent rides `agentId`; the path text after `@` rides
+      // `query` (reference
+      // packages/api/session-controller/src/file-references.ts `list(agent,
+      // query, signal)`).
+      final payload = rpc
+          .rawPayloads(DshRpcEndpoints.fileReferencesList)
+          .single;
+      expect(payload, <String, Object?>{'agentId': 's-1', 'query': 'src/'});
+      expect(candidates, <FileReferenceCandidate>[
+        const FileReferenceCandidate(
+          path: 'src',
+          kind: FileReferenceKind.directory,
+        ),
+        const FileReferenceCandidate(
+          path: 'src/main.dart',
+          kind: FileReferenceKind.file,
+        ),
+      ]);
+    },
+  );
+
+  test(
+    'fileReferences/list missing a candidate field throws naming it',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      rpc.fileReferenceRowsValue = <Object?>[
+        <String, Object?>{'kind': 'file'},
+      ];
+
+      await expectLater(
+        repository.listFileReferences('s-1', ''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('path'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'fileReferences/list with an unknown kind throws naming the field',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      rpc.fileReferenceRowsValue = <Object?>[
+        <String, Object?>{'path': 'src', 'kind': 'symlink'},
+      ];
+
+      await expectLater(
+        repository.listFileReferences('s-1', ''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('kind'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test('fileReferences/list answering a non-array result throws', () {
+    // The endpoint answered an object where its contract says an array
+    // (`FileReferenceCandidate[]`).
+    expect(
+      () => decodeFileReferenceCandidateList(<String, Object?>{
+        'value': <String, Object?>{},
+      }),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test(
+    'account/getState decodes the projection and sends no arguments',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      final state = await repository.loadAccountState();
+
+      expect(rpc.callCountFor(DshRpcEndpoints.accountGetState), 1);
+      expect(rpc.rawPayloads(DshRpcEndpoints.accountGetState).single, isEmpty);
+      expect(state.status, AccountSignInStatus.credentialStored);
+      expect(state.links.usageUrl, 'https://platform.example/usage');
+      expect(state.links.topUpUrl, 'https://platform.example/top_up');
+      expect(state.attempt?.id, 'attempt-1');
+      expect(state.attempt?.phase, AccountSignInPhase.succeeded);
+    },
+  );
+
+  test(
+    'account/getProfile carries the client identity and decodes it',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      final profile = await repository.loadAccountProfile(
+        const AccountClientIdentity(
+          version: '1.2.3',
+          locale: 'zh-CN',
+          timezoneOffsetSeconds: 28800,
+        ),
+      );
+
+      // The host derives the Platform request headers from this identity, so
+      // the three fields are the whole request.
+      expect(
+        rpc.rawPayloads(DshRpcEndpoints.accountGetProfile).single,
+        <String, Object?>{
+          'client': <String, Object?>{
+            'version': '1.2.3',
+            'locale': 'zh-CN',
+            'timezoneOffsetSeconds': 28800,
+          },
+        },
+      );
+      expect(profile, isA<AccountProfileReady>());
+      final ready = profile! as AccountProfileReady;
+      expect(ready.profile.id, 'user-7');
+      expect(ready.profile.name, 'Ada');
+      expect(ready.profile.contact, 'a***@example.com');
+      expect(ready.profile.avatarUrl, isNull);
+    },
+  );
+
+  test('account/getProfile keeps failed and absent apart', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    const client = AccountClientIdentity(
+      version: '1.2.3',
+      locale: 'en-US',
+      timezoneOffsetSeconds: 0,
+    );
+
+    rpc.accountProfileValue = <String, Object?>{'status': 'failed'};
+    expect(
+      await repository.loadAccountProfile(client),
+      isA<AccountProfileFailed>(),
+    );
+
+    // A null result is the host holding no grant: not a failure, not an
+    // empty profile.
+    rpc.accountProfileValue = null;
+    expect(await repository.loadAccountProfile(client), isNull);
+  });
+
+  test('account/getBalance decodes both wallet lists', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    const client = AccountClientIdentity(
+      version: '1.2.3',
+      locale: 'en-US',
+      timezoneOffsetSeconds: 0,
+    );
+
+    final balance = await repository.loadAccountBalance(client);
+
+    final ready = balance! as AccountBalanceReady;
+    expect(ready.wallets, <AccountWallet>[
+      const AccountWallet(currency: AccountCurrency.cny, balance: '12.34'),
+    ]);
+    expect(ready.bonusWallets, <AccountWallet>[
+      const AccountWallet(currency: AccountCurrency.usd, balance: '0.50'),
+    ]);
+
+    // A failed read is its own outcome, never a zero balance.
+    rpc.accountBalanceValue = <String, Object?>{'status': 'failed'};
+    expect(
+      await repository.loadAccountBalance(client),
+      isA<AccountBalanceFailed>(),
+    );
+  });
+
+  test(
+    'account/getUnnotifiedBonuses decodes the batch and its absence',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      const client = AccountClientIdentity(
+        version: '1.2.3',
+        locale: 'en-US',
+        timezoneOffsetSeconds: 0,
+      );
+
+      final batch = await repository.loadUnnotifiedBonuses(client);
+
+      expect(batch?.accountId, 'user-7');
+      expect(batch?.bonuses, <AccountBonusGrant>[
+        const AccountBonusGrant(
+          orderId: 'order-1',
+          campaign: 'welcome',
+          amount: '5.00',
+          currency: AccountCurrency.cny,
+          grantedAt: '2026-10-01T00:00:00Z',
+          expiresAt: '2026-11-01T00:00:00Z',
+          message: 'A 5.00 CNY bonus was credited.',
+        ),
+      ]);
+
+      rpc.accountBonusesValue = null;
+      expect(await repository.loadUnnotifiedBonuses(client), isNull);
+    },
+  );
+
+  test('account/ackBonusNotified names the account and order and reads the boolean', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    const client = AccountClientIdentity(
+      version: '1.2.3',
+      locale: 'en-US',
+      timezoneOffsetSeconds: -18000,
+    );
+
+    expect(
+      await repository.ackBonusNotified(
+        client,
+        accountId: 'user-7',
+        orderId: 'order-1',
+      ),
+      isTrue,
+    );
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.accountAckBonusNotified).single,
+      <String, Object?>{
+        'accountId': 'user-7',
+        'orderId': 'order-1',
+        'client': <String, Object?>{
+          'version': '1.2.3',
+          'locale': 'en-US',
+          'timezoneOffsetSeconds': -18000,
+        },
+      },
+    );
+
+    // The host's own false means it could not settle the order; it is an
+    // answer, not an error.
+    rpc.accountAckValue = false;
+    expect(
+      await repository.ackBonusNotified(
+        client,
+        accountId: 'user-7',
+        orderId: 'order-1',
+      ),
+      isFalse,
+    );
+  });
+
+  test('account decoders fail loud naming the field that moved', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    const client = AccountClientIdentity(
+      version: '1.2.3',
+      locale: 'en-US',
+      timezoneOffsetSeconds: 0,
+    );
+
+    rpc.accountBonusesValue = <String, Object?>{
+      'accountId': 'user-7',
+      'bonuses': <Object?>[
+        <String, Object?>{
+          'orderId': 'order-1',
+          'campaign': 'welcome',
+          'amount': '5.00',
+          'currency': 'CNY',
+          'grantedAt': '2026-10-01T00:00:00Z',
+          'expiresAt': '2026-11-01T00:00:00Z',
+        },
+      ],
+    };
+    await expectLater(
+      repository.loadUnnotifiedBonuses(client),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('message'),
+        ),
+      ),
+    );
+
+    // A closed currency union decodes to neither member.
+    rpc.accountBonusesValue = <String, Object?>{
+      'accountId': 'user-7',
+      'bonuses': <Object?>[
+        <String, Object?>{
+          'orderId': 'order-1',
+          'campaign': 'welcome',
+          'amount': '5.00',
+          'currency': 'EUR',
+          'grantedAt': '2026-10-01T00:00:00Z',
+          'expiresAt': '2026-11-01T00:00:00Z',
+          'message': 'x',
+        },
+      ],
+    };
+    await expectLater(
+      repository.loadUnnotifiedBonuses(client),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('currency'),
+        ),
+      ),
+    );
+
+    // `attempt` is a required key that may be null; its absence is host
+    // breakage, not "no attempt".
+    expect(
+      () => decodeAccountState(<String, Object?>{
+        'status': 'signed-out',
+        'links': <String, Object?>{
+          'usageUrl': 'https://platform.example/usage',
+          'topUpUrl': 'https://platform.example/top_up',
+        },
+      }),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('attempt'),
+        ),
+      ),
+    );
   });
 
   test('pin mirrors the pin set the Host returns, most recent first', () async {

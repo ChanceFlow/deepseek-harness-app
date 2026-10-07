@@ -3,6 +3,7 @@ library;
 
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -61,6 +62,7 @@ final class ChatUiState {
     this.cordisRunRequests = const <CordisRunRequest>[],
     this.cordisAnswerFailed = false,
     this.commands,
+    this.fileReferences,
     this.sandboxMode,
     this.schedules,
     this.pinnedSessionIds = const <String>[],
@@ -186,6 +188,13 @@ final class ChatUiState {
   /// the host's own roster and overrides the static list.
   final List<CommandDescriptor>? commands;
 
+  /// The `@` mention picker's last resolved query and its candidates, or
+  /// null while no query is open (no live token, an empty draft, or a
+  /// session that just switched). The composer compares
+  /// [FileReferencePickerState.query] with its own live token: a holder for
+  /// an earlier prefix never renders under newer text.
+  final FileReferencePickerState? fileReferences;
+
   /// The selected session's effective sandbox-mode fact, folded from its
   /// `sandbox/mode` events. Null means no such fact has arrived: the
   /// deployment default applies and the client does not know which mode
@@ -203,6 +212,25 @@ final class ChatUiState {
   /// `schedule` projection, so the event stream is the only source); an
   /// empty list is the host's own "no active reminders".
   final List<ScheduleReminder>? schedules;
+}
+
+/// One resolved `@` mention query and the host's candidates for it.
+///
+/// The query travels with the rows: the picker's keystrokes resolve out of
+/// order (one debounced `fileReferences/list` per settled prefix), so only a
+/// holder whose query equals the live token may render.
+final class FileReferencePickerState {
+  const FileReferencePickerState({
+    required this.query,
+    required this.candidates,
+  });
+
+  /// The path text after `@` or `@"` this answer belongs to.
+  final String query;
+
+  /// The host's ranked candidates; empty is the host's own "nothing here",
+  /// which the menu renders as no menu.
+  final List<FileReferenceCandidate> candidates;
 }
 
 /// Where one session-log export stands. Facts only — the UI layer owns the
@@ -647,6 +675,23 @@ final class EditGoal extends ChatAction {
 
   @override
   int get hashCode => Object.hash('edit-goal', objective);
+}
+
+/// The composer's live `@` mention query: the path text the token holds, or
+/// null when the reader left the token (or completed a mention). The
+/// controller debounces the burst and drops an answer a newer query
+/// superseded (`ChatController._updateFileReferences`).
+final class UpdateFileReferences extends ChatAction {
+  const UpdateFileReferences(this.query);
+
+  final String? query;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UpdateFileReferences && other.query == query;
+
+  @override
+  int get hashCode => Object.hash('file-references', query);
 }
 
 /// Picker/read failures surface in the shared error strip.

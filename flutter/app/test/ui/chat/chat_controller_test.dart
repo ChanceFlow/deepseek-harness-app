@@ -10,6 +10,7 @@ import 'package:domain/model/jobs.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/todo.dart';
@@ -315,6 +316,26 @@ class FakeChatRepository extends ChatRepository {
 
   @override
   Stream<void> observeCommandRosterChanges() => commandRosterChanges.stream;
+
+  /// Rows served by `listFileReferences`, keyed by the `@` query; an absent
+  /// query throws (a host refusal, which the picker degrades to no menu).
+  Map<String, List<FileReferenceCandidate>> fileReferenceRoster =
+      <String, List<FileReferenceCandidate>>{};
+
+  /// `(sessionId, query)` pairs the picker pulled, in order — the debounce's
+  /// witness.
+  final List<(String, String)> fileReferenceCalls = <(String, String)>[];
+
+  @override
+  Future<List<FileReferenceCandidate>> listFileReferences(
+    String sessionId,
+    String query,
+  ) async {
+    fileReferenceCalls.add((sessionId, query));
+    final rows = fileReferenceRoster[query];
+    if (rows == null) throw UnsupportedError('fileReferences/list unavailable');
+    return rows;
+  }
 
   /// Pending Cordis activation requests the fake publishes.
   final AppStateStream<List<CordisRunRequest>> cordisRequests =

@@ -14,6 +14,7 @@ import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -40,6 +41,7 @@ import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
 import 'command_roster.dart';
+import 'file_reference_picker.dart';
 import 'host_unreachable_banner.dart';
 import 'file_preview_sheet.dart';
 import 'markdown/markdown_text.dart';
@@ -2236,6 +2238,7 @@ class _ChatPanelState extends State<ChatPanel> {
                             imageLimits: uiState.imageLimits,
                             skills: uiState.skills,
                             commands: uiState.commands,
+                            fileReferences: uiState.fileReferences,
                             contextPressure: uiState.contextPressure,
                             contextBreakdown: uiState.contextBreakdown,
                             onAction: widget.onAction,
@@ -5655,6 +5658,7 @@ class ComposerBar extends ConsumerStatefulWidget {
     required this.onSend,
     super.key,
     this.commands,
+    this.fileReferences,
     this.onStop,
     this.plan,
     this.models,
@@ -5680,6 +5684,12 @@ class ComposerBar extends ConsumerStatefulWidget {
   /// The selected session's live host-command roster (`commands/list`);
   /// null keeps the static built-ins standing in (see [command_roster]).
   final List<CommandDescriptor>? commands;
+
+  /// The selected session's last resolved `@` mention query and its
+  /// candidates (`fileReferences/list`); null while no token is open. The
+  /// composer renders only the holder whose query equals the live token
+  /// (see [FileReferenceCandidates]).
+  final FileReferencePickerState? fileReferences;
 
   /// Submit [text] and resolve with the host's acceptance: the composer
   /// keeps the draft (and its persisted value) until this future settles
@@ -5743,6 +5753,11 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   /// — see [_restoreDraft].
   int _draftEdits = 0;
 
+  /// The `@` query this composer last asked the controller for; null while
+  /// no token is live. One dispatch per distinct query: the controller
+  /// debounces and drops superseded answers itself.
+  String? _fileReferenceQuery;
+
   @override
   void initState() {
     super.initState();
@@ -5777,6 +5792,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     final sessionId = widget.sessionId;
     if (sessionState == null || sessionId == null) {
       _draftController.clear();
+      _syncFileReferences();
       setState(() {});
       return;
     }
@@ -5793,6 +5809,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           ..selection = TextSelection.collapsed(
             offset: _draftController.text.length,
           );
+        _syncFileReferences();
         setState(() {});
       }),
     );
@@ -5823,12 +5840,63 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     );
     _draftEdits++;
     _persistDraft();
+    _syncFileReferences();
     _focusNode.requestFocus();
     setState(() {});
   }
 
   void _persistDraft() {
     unawaited(widget.sessionState?.writeDraft(_draftController.text));
+  }
+
+  /// The caret the draft's `@` token is read at: the field's own selection
+  /// when it is valid, else the text end (a programmatic write can leave the
+  /// selection stale for one frame).
+  int _draftCaret() {
+    final text = _draftController.text;
+    final offset = _draftController.selection.isValid
+        ? _draftController.selection.baseOffset
+        : -1;
+    if (offset >= 0 && offset <= text.length) return offset;
+    return text.length;
+  }
+
+  /// Tell the controller which `@` token the draft now holds (null closes the
+  /// picker). Every path that writes the draft calls this, because a
+  /// programmatic write never fires the field's `onChanged`.
+  void _syncFileReferences() {
+    final token = activeFileReferenceToken(
+      _draftController.text,
+      _draftCaret(),
+    );
+    final query = token?.query;
+    if (query == _fileReferenceQuery) return;
+    _fileReferenceQuery = query;
+    widget.onAction(UpdateFileReferences(query));
+  }
+
+  /// Insert one picked candidate over the live token: a file completes the
+  /// mention, a directory leaves it open on the level just entered.
+  void _applyFileReference(FileReferenceCandidate candidate) {
+    final draft = _draftController.text;
+    final cursor = _draftCaret();
+    final token = activeFileReferenceToken(draft, cursor);
+    if (token == null) return;
+    final applied = applyFileReferencePick(
+      draft: draft,
+      cursor: cursor,
+      token: token,
+      candidate: candidate,
+    );
+    if (applied == null) return;
+    _draftController
+      ..text = applied.text
+      ..selection = TextSelection.collapsed(offset: applied.caret);
+    _draftEdits++;
+    _persistDraft();
+    _focusNode.requestFocus();
+    _syncFileReferences();
+    setState(() {});
   }
 
   /// Swaps the draft field for the hold-to-talk bar, and back.
@@ -5907,6 +5975,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
           offset: _draftController.text.length,
         );
         _persistDraft();
+        _syncFileReferences();
         setState(() {});
       }
       final error = next.value?.errorMessage;
@@ -6035,6 +6104,20 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
             enabled: widget.enabled,
             onPick: _applyCommandToDraft,
           ),
+          // The `@` mention menu. A live slash token owns the band above the
+          // draft, so the two composer sources never stack.
+          FileReferenceCandidates(
+            token: activeFileReferenceToken(
+              _draftController.text,
+              _draftCaret(),
+            ),
+            picker: widget.fileReferences,
+            enabled:
+                widget.enabled &&
+                !(_draftController.text.startsWith('/') &&
+                    !_draftController.text.contains(' ')),
+            onPick: _applyFileReference,
+          ),
           // Band 1 — the draft, edge to edge, or the hold-to-talk bar that
           // stands in for it while the dock is in voice mode. Which one it is
           // is the mode seat's state, never a surprise: the band does not
@@ -6058,6 +6141,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                         offset: _draftController.text.length,
                       );
                       _persistDraft();
+                      _syncFileReferences();
                       setState(() {});
                     },
                     onOpenSettings: () {
@@ -6078,6 +6162,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                     onChanged: (_) {
                       _draftEdits++;
                       _persistDraft();
+                      _syncFileReferences();
                       setState(() {});
                     },
                     decoration: InputDecoration(
@@ -6271,6 +6356,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
       if (_draftController.text != submitted) return;
       _draftController.clear();
       _persistDraft();
+      _syncFileReferences();
       setState(() {});
     }());
   }

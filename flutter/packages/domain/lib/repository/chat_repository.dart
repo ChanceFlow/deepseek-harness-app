@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 
+import '../model/account.dart';
 import '../model/agent_preset.dart';
 import '../model/agent_team.dart';
 import '../model/attachment.dart';
@@ -15,6 +16,7 @@ import '../model/context_pressure.dart';
 import '../model/cordis.dart';
 import '../model/session_window_stats.dart';
 import '../model/directory.dart';
+import '../model/file_reference.dart';
 import '../model/permission_select.dart';
 import '../model/goal.dart';
 import '../model/jobs.dart';
@@ -141,6 +143,52 @@ abstract class ChatRepository {
   /// Clear one stored credential; loopback-trusted connections only.
   Future<void> unsetCredential(String ref) => _unsupported('unsetCredential');
 
+  /// The host's safe account projection (`account/getState`): whether a
+  /// credential is stored, the Platform destinations the host derives, and
+  /// its latest local sign-in attempt.
+  ///
+  /// This is the one account read that is never null; a host that composes no
+  /// account plane answers an RPC failure instead, which the caller reads as
+  /// "this deployment has no account".
+  Future<AccountState> loadAccountState() => _unsupported('loadAccountState');
+
+  /// The stored account's Platform profile (`account/getProfile`), or null
+  /// when the host holds no grant for it.
+  ///
+  /// A host that could not reach Platform answers
+  /// [AccountProfileFailed]; that is a different fact from null and from an
+  /// empty profile.
+  Future<AccountProfileResult?> loadAccountProfile(
+    AccountClientIdentity client,
+  ) => _unsupported('loadAccountProfile');
+
+  /// The stored account's recharge and granted wallet balances
+  /// (`account/getBalance`), or null when the host holds no grant for it.
+  Future<AccountBalanceResult?> loadAccountBalance(
+    AccountClientIdentity client,
+  ) => _unsupported('loadAccountBalance');
+
+  /// The grant bonuses Platform has not yet recorded as displayed
+  /// (`account/getUnnotifiedBonuses`), or null when the host holds no grant.
+  ///
+  /// [client]'s language is what selects the server-authored bonus copy, so it
+  /// is read at call time rather than cached.
+  Future<AccountBonusBatch?> loadUnnotifiedBonuses(
+    AccountClientIdentity client,
+  ) => _unsupported('loadUnnotifiedBonuses');
+
+  /// Record one displayed bonus as notified for the account it belongs to
+  /// (`account/ackBonusNotified`).
+  ///
+  /// False means the host could not settle it — no grant, or the account
+  /// changed since the read — not a transport or business failure, which
+  /// throws.
+  Future<bool> ackBonusNotified(
+    AccountClientIdentity client, {
+    required String accountId,
+    required String orderId,
+  }) => _unsupported('ackBonusNotified');
+
   /// Every provider route the harness currently serves
   /// (`llm/listProviders`). The list is the live half of the provider
   /// directory a configuration surface renders; a route the configurable
@@ -214,6 +262,17 @@ abstract class ChatRepository {
   /// attachment flag the composer's admission uses.
   Future<List<CommandDescriptor>> listCommands(String sessionId) =>
       _unsupported('listCommands');
+
+  /// Path-only `@` mention candidates inside one agent's working directory
+  /// (`fileReferences/list`). [sessionId] addresses the agent the way
+  /// [listCommands] does; [query] is the path text following `@` or `@"` —
+  /// empty lists the working-directory root, a `segment/` prefix lists that
+  /// directory. The host answers ranked candidates, directories first on a
+  /// tie, and never a file's contents.
+  Future<List<FileReferenceCandidate>> listFileReferences(
+    String sessionId,
+    String query,
+  ) => _unsupported('listFileReferences');
 
   /// A tick whenever the host's command registry changed
   /// (`commands/change`): a surface re-pulls [listCommands] for every open

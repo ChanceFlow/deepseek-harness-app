@@ -18,6 +18,7 @@ import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/permission_select.dart';
@@ -71,6 +72,11 @@ const Duration _searchDebounceDelay = Duration(milliseconds: 250);
 /// `session.search` wire bound, measured in JavaScript UTF-16 code units
 /// (matches reference `WorkspaceBrowser.tsx` line 37 `SEARCH_QUERY_MAX_CODE_UNITS`).
 const int _searchQueryMaxCodeUnits = 500;
+
+/// Pause between the latest `@` keystroke and the `fileReferences/list`
+/// query. Each query walks the host's workspace index, so a burst of
+/// keystrokes inside one path prefix must collapse into one request.
+const Duration kFileReferenceDebounce = Duration(milliseconds: 180);
 
 class ChatController {
   ChatController(
@@ -209,6 +215,18 @@ class ChatController {
   final Map<String, List<CommandDescriptor>> _commandsBySession =
       <String, List<CommandDescriptor>>{};
 
+  /// The `@` mention picker's last resolved query, or null while no token is
+  /// open. Never cached across sessions: the rows name one agent's working
+  /// directory, so a session switch drops them.
+  FileReferencePickerState? _fileReferencePicker;
+
+  /// Pending `@` query debounce; null once the newest query launched.
+  Timer? _fileReferenceTimer;
+
+  /// Monotonic `@` query counter: only the newest launched query may
+  /// publish, so an answer to an abandoned prefix never stands.
+  int _fileReferenceSeq = 0;
+
   /// One session.models load per session (composer model seat); the seat
   /// refreshes on open like the web ModelSelect.
   final Map<String, SessionModels> _modelsBySession = <String, SessionModels>{};
@@ -317,6 +335,8 @@ class ChatController {
     _disposed = true;
     _searchTimer?.cancel();
     _searchTimer = null;
+    _fileReferenceTimer?.cancel();
+    _fileReferenceTimer = null;
     _upstreamPublish?.cancel();
     _upstreamPublish = null;
     for (final sub in _subs) {
@@ -367,6 +387,7 @@ class ChatController {
       cordisRunRequests: _cordisRunRequests,
       cordisAnswerFailed: _cordisAnswerFailed,
       commands: _commands,
+      fileReferences: _fileReferencePicker,
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
       pendingUserQuestions: _pendingUserQuestions,
@@ -562,6 +583,8 @@ class ChatController {
         _publish();
       case SelectAgentPreset():
         _selectAgentPreset(action);
+      case UpdateFileReferences():
+        _updateFileReferences(action.query);
       case ExportSessionLog():
         unawaited(_exportSessionLog(action.sessionId));
     }
@@ -665,6 +688,12 @@ class ChatController {
   /// Re-subscribes the selected-session timeline and plan streams (the
   /// Kotlin flatMapLatest equivalent).
   void _bindSelected(String? sessionId) {
+    // The `@` picker is one agent's working directory: a rebind cancels any
+    // pending query and drops the leaving session's rows.
+    _fileReferenceTimer?.cancel();
+    _fileReferenceTimer = null;
+    _fileReferenceSeq++;
+    _fileReferencePicker = null;
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
     unawaited(_todosSub?.cancel());
@@ -905,6 +934,52 @@ class ChatController {
   /// roster once a pull settled, the static built-ins before that.
   List<HostCommand> get _commandRoster =>
       _commands == null ? kHostCommandNames : hostCommandFacts(_commands!);
+
+  /// The composer's live `@` mention query: [query] is the path text the
+  /// token holds, null when the reader left the token or completed a mention.
+  ///
+  /// Keystrokes inside one path prefix collapse into one
+  /// `fileReferences/list` call ([kFileReferenceDebounce]) and the sequence
+  /// counter drops an answer a newer query superseded. A failure publishes
+  /// the query with no candidates — the reference client reads a failed file
+  /// lookup as an empty one — so the menu closes rather than offering rows
+  /// the reader's text no longer matches.
+  void _updateFileReferences(String? query) {
+    _fileReferenceTimer?.cancel();
+    _fileReferenceTimer = null;
+    final seq = ++_fileReferenceSeq;
+    if (query == null) {
+      if (_fileReferencePicker != null) {
+        _fileReferencePicker = null;
+        _publish();
+      }
+      return;
+    }
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    _fileReferenceTimer = Timer(kFileReferenceDebounce, () {
+      _fileReferenceTimer = null;
+      unawaited(() async {
+        List<FileReferenceCandidate> candidates;
+        try {
+          candidates = await _repository.listFileReferences(sessionId, query);
+        } catch (error) {
+          ErrorLogCollector.instance.addBreadcrumb(
+            'Failed to list file references for $sessionId: $error',
+            level: 'warn',
+          );
+          candidates = const <FileReferenceCandidate>[];
+        }
+        if (_disposed || seq != _fileReferenceSeq) return;
+        if (_selectedSessionId != sessionId) return;
+        _fileReferencePicker = FileReferencePickerState(
+          query: query,
+          candidates: candidates,
+        );
+        _publish();
+      }());
+    });
+  }
 
   void _loadOlderHistory() {
     final sessionId = _selectedSessionId;
