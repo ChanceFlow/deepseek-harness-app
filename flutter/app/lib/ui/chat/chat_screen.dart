@@ -15,6 +15,7 @@ import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
@@ -36,6 +37,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
+import '../../platform/document_picker.dart';
 import '../shared/error_banner.dart';
 import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
@@ -47,6 +49,7 @@ import 'file_preview_sheet.dart';
 import 'markdown/markdown_text.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
+import 'message_feedback_actions.dart';
 import 'message_run_metrics.dart';
 import 'model_select.dart';
 import 'permission_select.dart';
@@ -1917,6 +1920,7 @@ class _ChatPanelState extends State<ChatPanel> {
           onAction: widget.onAction,
           loadAttachment: widget.loadAttachment,
           sessionId: uiState.selectedSessionId,
+          backendId: widget.backendId,
           onPreviewFile: _openFilePreview,
           expansion: _sessionState,
           onOpenChild: _openWorkflowMember,
@@ -2236,6 +2240,7 @@ class _ChatPanelState extends State<ChatPanel> {
                             modelPrefs: uiState.modelPrefs,
                             pendingImages: uiState.pendingImages,
                             imageLimits: uiState.imageLimits,
+                            pendingFiles: uiState.pendingFiles,
                             skills: uiState.skills,
                             commands: uiState.commands,
                             fileReferences: uiState.fileReferences,
@@ -2493,6 +2498,7 @@ class TimelineRow extends StatelessWidget {
     required this.loadAttachment,
     super.key,
     this.sessionId,
+    this.backendId,
     this.onPreviewFile,
     this.expansion,
     this.producedPaths,
@@ -2507,6 +2513,11 @@ class TimelineRow extends StatelessWidget {
 
   /// Session a tool row's durable result images are read against.
   final String? sessionId;
+
+  /// The backend presenting this transcript; null (a bare pump, or a
+  /// read-only child record) leaves the reply footer without its feedback
+  /// pair, which can only address a live backend.
+  final String? backendId;
 
   /// File-preview action for a tool row's generated/edited path.
   final void Function(String path, {EditDiffModel? diff})? onPreviewFile;
@@ -2540,6 +2551,7 @@ class TimelineRow extends StatelessWidget {
       TimelineMessage(:final value) => MessageRow(
         message: value,
         loadAttachment: loadAttachment,
+        backendId: backendId,
         // `session/fork`'s `atSeq` is an exact inclusive event seq, so the
         // seat cuts the completed turn the message sits in.
         onFork: forkAtSeq == null
@@ -2603,6 +2615,7 @@ class MessageRow extends StatelessWidget {
     required this.message,
     required this.loadAttachment,
     super.key,
+    this.backendId,
     this.onFork,
     this.usage,
     this.firstTokenAtEpochMs,
@@ -2613,6 +2626,10 @@ class MessageRow extends StatelessWidget {
 
   final ChatMessage message;
   final AttachmentLoader loadAttachment;
+
+  /// The backend presenting this transcript; null hides the reply footer's
+  /// feedback pair (a bare pump, or a read-only child record).
+  final String? backendId;
 
   /// Cuts a new session at this message (host: the end of the turn that
   /// contains it). Null while the message carries no logged position —
@@ -2712,12 +2729,19 @@ class MessageRow extends StatelessWidget {
           // line at the timeline tail — not a loader here too.
           if (message.text.isNotEmpty)
             const _StreamingCaret(key: ValueKey('streaming-caret')),
-        ] else if (message.text.isNotEmpty)
+        ] else if (message.text.isNotEmpty) ...[
           MessageIconActions(
             text: message.text,
             timeEpochMs: message.createdAtEpochMs,
             clockAtStart: false,
             onFork: onFork,
+            feedback: backendId == null
+                ? null
+                : MessageFeedbackActions(
+                    backendId: backendId!,
+                    sessionId: message.sessionId,
+                    messageId: message.id,
+                  ),
             metrics: messageRunMetricsText(
               usage: usage,
               firstTokenAtEpochMs: firstTokenAtEpochMs,
@@ -2725,6 +2749,15 @@ class MessageRow extends StatelessWidget {
               l10n: l10n,
             ),
           ),
+          // A write the host refused, or a load that failed, is stated on
+          // its own line so the footer stays a caption on the message.
+          if (backendId case final String backend)
+            MessageFeedbackNotice(
+              backendId: backend,
+              sessionId: message.sessionId,
+              messageId: message.id,
+            ),
+        ],
       ],
     );
   }
@@ -5646,6 +5679,126 @@ const double kReadingMeasure = 760;
 const double _kComposerRowWidth = 280;
 const double _kComposerQueuedRowWidth = 330;
 
+/// One attached file in the composer strip: its name, size, and Host upload
+/// state.
+///
+/// The unary upload reports no byte progress, so the in-flight state is the
+/// indeterminate bar; a failure replaces it with the Host's reason, which is
+/// the fact the reader needs before deciding to remove the row or send
+/// without it. The remove seat is always present — a failed attachment must
+/// be able to leave.
+class PendingFileChip extends StatelessWidget {
+  const PendingFileChip({
+    required this.file,
+    required this.onRemove,
+    super.key,
+  });
+
+  final PendingFile file;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final failed = file.status == PendingFileStatus.failed;
+    final ready = file.status == PendingFileStatus.ready;
+    final size = _formatFileSize(file.byteSize);
+    final stateLabel = switch (file.status) {
+      PendingFileStatus.uploading => l10n.fileUploading(size),
+      PendingFileStatus.ready => l10n.fileUploaded(size),
+      PendingFileStatus.failed => l10n.fileUploadFailed,
+    };
+    final foreground = failed ? scheme.onErrorContainer : scheme.onSurface;
+    final secondary = failed
+        ? scheme.onErrorContainer
+        : scheme.onSurfaceVariant;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 240),
+      padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: failed ? scheme.errorContainer : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(kShapeChip),
+        border: Border.all(
+          color: failed ? scheme.error : scheme.outlineVariant,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ready ? Icons.description_outlined : Icons.upload_file_outlined,
+            size: 16,
+            color: secondary,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  file.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  stateLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(color: secondary),
+                ),
+                if (file.status == PendingFileStatus.uploading) ...[
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: 120,
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      borderRadius: BorderRadius.circular(kShapePill),
+                    ),
+                  ),
+                ],
+                if (failed)
+                  if (file.failureReason case final reason?) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      reason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: secondary,
+                      ),
+                    ),
+                  ],
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onRemove,
+            icon: const Icon(Icons.close, size: 16),
+            tooltip: l10n.removeFile(file.name),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One file size as the strip states it: whole bytes under a kibibyte, then
+/// one decimal on the binary scale.
+String _formatFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kib = bytes / 1024;
+  if (kib < 1024) return '${kib.toStringAsFixed(1)} KB';
+  return '${(kib / 1024).toStringAsFixed(1)} MB';
+}
+
 class ComposerBar extends ConsumerStatefulWidget {
   const ComposerBar({
     required this.enabled,
@@ -5653,11 +5806,13 @@ class ComposerBar extends ConsumerStatefulWidget {
     required this.running,
     required this.pendingImages,
     required this.imageLimits,
+    required this.pendingFiles,
     required this.skills,
     required this.onAction,
     required this.onSend,
     super.key,
     this.commands,
+    this.onPickFile,
     this.fileReferences,
     this.onStop,
     this.plan,
@@ -5678,6 +5833,15 @@ class ComposerBar extends ConsumerStatefulWidget {
   final bool running;
   final List<PendingImage> pendingImages;
   final ImageLimits imageLimits;
+
+  /// Composer files attached for the next send, each with its Host upload
+  /// state ([PendingFile.status]); a failed row keeps its reason.
+  final List<PendingFile> pendingFiles;
+
+  /// The document pick the attach-file affordance performs; null uses the
+  /// platform's system picker ([pickDocument]). Injected so widget tests
+  /// drive the outcome without a platform channel.
+  final DocumentPicker? onPickFile;
   final List<SkillEntry> skills;
   final void Function(ChatAction) onAction;
 
@@ -5947,12 +6111,48 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     if (failure != null) widget.onAction(ImagePickError(failure));
   }
 
+  /// Opens the system document picker and hands the chosen file to the
+  /// controller for upload.
+  ///
+  /// The pick carries the phone's upload cap so an oversized document fails
+  /// before its bytes are read. A cancelled pick does nothing; a pick failure
+  /// lands on the shared error strip, while an upload failure stays on the
+  /// attachment's own row with the Host's reason.
+  Future<void> _pickFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picker = widget.onPickFile ?? pickDocument;
+    try {
+      final picked = await picker(maxBytes: FileUploadLimits.maxFileBytes);
+      if (picked == null || !mounted) return;
+      widget.onAction(FilePicked(name: picked.name, bytes: picked.bytes));
+    } on DocumentPickException catch (error) {
+      if (!mounted) return;
+      widget.onAction(
+        FilePickError(
+          error.code == 'too_large'
+              ? l10n.fileTooLarge(
+                  FileUploadLimits.maxFileBytes ~/ (1024 * 1024),
+                )
+              : error.message,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final attachAllowed =
         widget.enabled &&
         widget.pendingImages.length < widget.imageLimits.maxImagesPerMessage;
+    // Files have no count limit on the Host; the composer admits one document
+    // per pick and refuses while an earlier upload has not settled, so a
+    // half-uploaded row cannot be buried under a newer one.
+    final attachFileAllowed =
+        widget.enabled &&
+        !widget.pendingFiles.any(
+          (file) => file.status == PendingFileStatus.uploading,
+        );
 
     // Display roster: the host's live names with the localized static
     // descriptions wherever this client knows the name.
@@ -6047,7 +6247,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (widget.pendingImages.isNotEmpty)
+          if (widget.pendingImages.isNotEmpty || widget.pendingFiles.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: SizedBox(
@@ -6076,6 +6276,15 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                    for (final file in widget.pendingFiles)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: PendingFileChip(
+                          file: file,
+                          onRemove: () =>
+                              widget.onAction(RemovePendingFile(file.id)),
                         ),
                       ),
                   ],
@@ -6218,6 +6427,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                     _PlusButton(
                       enabled: widget.enabled,
                       onPickImages: attachAllowed ? _pickImages : null,
+                      onPickFile: attachFileAllowed ? _pickFile : null,
                       skills: widget.skills,
                       commands: displayCommands,
                       onPickCommand: _handlePlusCommand,
@@ -6322,26 +6532,47 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
 
   bool _canSend() =>
       _draftController.text.trim().isNotEmpty ||
-      widget.pendingImages.isNotEmpty;
+      widget.pendingImages.isNotEmpty ||
+      widget.pendingFiles.any((file) => file.status == PendingFileStatus.ready);
 
   void _send([String? text]) {
-    // Web envelope policy: an enter submission carrying images resolves
-    // only through a command declaring image acceptance. Refuse before
-    // anything is consumed — the draft and the images stay in place and
-    // nothing executes.
-    if (widget.pendingImages.isNotEmpty) {
+    // Web envelope policy: an enter submission carrying attachments resolves
+    // only through a command declaring attachment acceptance (the Host's one
+    // flag governs images and staged files alike). Refuse before anything is
+    // consumed — the draft and the attachments stay in place and nothing
+    // executes.
+    if (widget.pendingImages.isNotEmpty || widget.pendingFiles.isNotEmpty) {
       final refused = hostCommandImageRefusal(
         _draftController.text.trim(),
         _commandRoster,
       );
       if (refused != null) {
+        final l10n = AppLocalizations.of(context)!;
         widget.onAction(
           CommandImageRefusal(
-            AppLocalizations.of(context)!.commandImagesUnsupported(refused),
+            // The row's copy names the kind the reader actually attached; the
+            // Host's acceptance flag is the same for both kinds.
+            widget.pendingImages.isEmpty
+                ? l10n.commandFilesUnsupported(refused)
+                : l10n.commandImagesUnsupported(refused),
           ),
         );
         return;
       }
+    }
+    // A file whose upload has not settled ready would be dropped from the
+    // submission, and its receipt would never reach the Host. Say so and keep
+    // the draft; the row itself already states a failure's reason.
+    final unsettled = widget.pendingFiles
+        .where((file) => file.status != PendingFileStatus.ready)
+        .firstOrNull;
+    if (unsettled != null) {
+      widget.onAction(
+        FilePickError(
+          AppLocalizations.of(context)!.fileAttachmentNotReady(unsettled.name),
+        ),
+      );
+      return;
     }
     final submitted = _draftController.text;
     unawaited(() async {
@@ -6771,6 +7002,7 @@ class _PlusButton extends StatelessWidget {
   const _PlusButton({
     required this.enabled,
     required this.onPickImages,
+    required this.onPickFile,
     required this.skills,
     required this.commands,
     required this.onPickCommand,
@@ -6778,6 +7010,7 @@ class _PlusButton extends StatelessWidget {
 
   final bool enabled;
   final VoidCallback? onPickImages;
+  final VoidCallback? onPickFile;
   final List<SkillEntry> skills;
   final List<HostCommand> commands;
   final void Function(String name) onPickCommand;
@@ -6819,6 +7052,7 @@ class _PlusButton extends StatelessWidget {
       maxHeight: 440,
       builder: (sheetContext) => _CommandSheet(
         canPickImages: onPickImages != null,
+        canPickFile: onPickFile != null,
         skills: skills,
         commands: commands,
         onPickCommand: (name) {
@@ -6828,6 +7062,10 @@ class _PlusButton extends StatelessWidget {
         onPickImagesNow: () {
           Navigator.of(sheetContext).pop();
           onPickImages?.call();
+        },
+        onPickFileNow: () {
+          Navigator.of(sheetContext).pop();
+          onPickFile?.call();
         },
       ),
     );
@@ -6927,23 +7165,27 @@ class _CommandRow extends StatelessWidget {
 class _CommandSheet extends StatelessWidget {
   const _CommandSheet({
     required this.canPickImages,
+    required this.canPickFile,
     required this.skills,
     required this.commands,
     required this.onPickCommand,
     required this.onPickImagesNow,
+    required this.onPickFileNow,
   });
 
   final bool canPickImages;
+  final bool canPickFile;
   final List<SkillEntry> skills;
   final List<HostCommand> commands;
   final void Function(String name) onPickCommand;
   final VoidCallback onPickImagesNow;
+  final VoidCallback onPickFileNow;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final int visibleCount = commands.length + skills.length + 1;
+    final int visibleCount = commands.length + skills.length + 2;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -7003,14 +7245,24 @@ class _CommandSheet extends StatelessWidget {
                   detail: skill.description.isEmpty ? null : skill.description,
                   onTap: () => onPickCommand(skill.name),
                 ),
-              // Mobile-only tail row: image intake (web uses paste/drop)
-              // — demoted below the command roster.
+              // Mobile-only tail rows: attachment intake (web uses paste/drop
+              // and its own attach control) — demoted below the command
+              // roster. Images and files are separate picks because the
+              // gallery picker and the document picker are different system
+              // surfaces.
               _CommandRow(
                 icon: Icons.image_outlined,
                 label: l10n.attachImages,
                 detail: l10n.pickFromGallery,
                 enabled: canPickImages,
                 onTap: onPickImagesNow,
+              ),
+              _CommandRow(
+                icon: Icons.attach_file,
+                label: l10n.attachFile,
+                detail: l10n.pickFileFromDevice,
+                enabled: canPickFile,
+                onTap: onPickFileNow,
               ),
             ],
           ),

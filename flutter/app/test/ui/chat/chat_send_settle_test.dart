@@ -10,6 +10,7 @@ import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/cordis.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
@@ -155,6 +156,7 @@ class _SettleRepository extends Fake implements ChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   }) async {
     if (failSend) throw StateError('transport aborted');

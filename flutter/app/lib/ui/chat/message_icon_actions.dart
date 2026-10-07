@@ -17,6 +17,7 @@ class MessageIconActions extends StatefulWidget {
     required this.clockAtStart,
     super.key,
     this.onFork,
+    this.feedback,
     this.metrics,
   });
 
@@ -29,6 +30,11 @@ class MessageIconActions extends StatefulWidget {
   /// Cuts a new session at this message; null hides the seat, which is
   /// what a message with no logged position gets.
   final VoidCallback? onFork;
+
+  /// The reply's feedback pair, seated between copy and fork the way the
+  /// reference assistant-actions strip places it; null (a read-only or
+  /// backend-less transcript) leaves the footer without one.
+  final Widget? feedback;
 
   /// Real per-message figures (decode throughput, token total) between the
   /// icons and the clock; null when the host reported none.
@@ -107,6 +113,7 @@ class _MessageIconActionsState extends State<MessageIconActions> {
         children: [
           if (widget.clockAtStart) ...[clock, const SizedBox(width: 4)],
           copy,
+          if (widget.feedback case final Widget feedback) feedback,
           if (fork != null) fork,
           if (widget.metrics case final String metrics) ...[
             const SizedBox(width: 4),

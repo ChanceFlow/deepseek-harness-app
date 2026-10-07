@@ -1228,6 +1228,68 @@
   "commandsTooltip": "Commands",
   "attachImages": "Attach images",
   "pickFromGallery": "Pick from gallery",
+  "attachFile": "Attach a file",
+  "@attachFile": {
+    "description": "Composer command-sheet row that opens the system document picker."
+  },
+  "pickFileFromDevice": "Pick from device storage",
+  "@pickFileFromDevice": {
+    "description": "Detail line under the attach-file row naming where the picker looks."
+  },
+  "fileUploading": "Uploading · {size}",
+  "@fileUploading": {
+    "description": "Composer attachment strip state while the host staged file upload is in flight.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 MB"
+      }
+    }
+  },
+  "fileUploaded": "Uploaded · {size}",
+  "@fileUploaded": {
+    "description": "Composer attachment strip state once the host staged the file upload.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.2 MB"
+      }
+    }
+  },
+  "fileUploadFailed": "Upload failed",
+  "@fileUploadFailed": {
+    "description": "Composer attachment strip state after a file upload failed; the host reason renders below it."
+  },
+  "removeFile": "Remove {name}",
+  "@removeFile": {
+    "description": "Accessibility label of the remove seat on a composer file attachment.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "notes.pdf"
+      }
+    }
+  },
+  "fileAttachmentNotReady": "{name} has not finished uploading",
+  "@fileAttachmentNotReady": {
+    "description": "Refusal when a send is attempted while an attached file upload is still in flight or failed.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "notes.pdf"
+      }
+    }
+  },
+  "fileTooLarge": "That file is larger than the {limit} MB upload limit",
+  "@fileTooLarge": {
+    "description": "Refusal when a picked document exceeds the phone's unary upload cap.",
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "example": "8"
+      }
+    }
+  },
   "unknownImageType": "unknown image type for {name}",
   "beforeFirstTurnHeader": "Before first turn · {count, plural, =1{1 message} other{{count} messages}}",
   "turnHeader": "Turn {turn} · {count, plural, =1{1 message} other{{count} messages}} · {toolCount, plural, =1{1 tool} other{{toolCount} tools}}",
@@ -1284,6 +1346,16 @@
   "commandImagesUnsupported": "/{command} does not accept image attachments; remove them first",
   "@commandImagesUnsupported": {
     "description": "Composer refusal for a submission carrying images bound for a host command that does not accept them.",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "compact"
+      }
+    }
+  },
+  "commandFilesUnsupported": "/{command} does not accept attachments; remove them first",
+  "@commandFilesUnsupported": {
+    "description": "Composer refusal for a submission carrying a staged file bound for a host command that does not accept attachments.",
     "placeholders": {
       "command": {
         "type": "String",
@@ -3374,5 +3446,29 @@
   "fileReferenceSectionTitle": "Files & folders",
   "@fileReferenceSectionTitle": {
     "description": "Group label above the composer @ file-reference candidates."
+  },
+  "feedbackRateUp": "Good response",
+  "@feedbackRateUp": {
+    "description": "Accessible name of the thumbs-up control on an unrated assistant reply."
+  },
+  "feedbackRateDown": "Bad response",
+  "@feedbackRateDown": {
+    "description": "Accessible name of the thumbs-down control on an unrated assistant reply."
+  },
+  "feedbackRetract": "Remove rating",
+  "@feedbackRetract": {
+    "description": "Accessible name of a thumb whose judgment is the recorded one; pressing it deletes the record."
+  },
+  "feedbackSaveFailed": "Could not save feedback",
+  "@feedbackSaveFailed": {
+    "description": "Stated on the reply footer when the host refused the write or the write never reached it."
+  },
+  "feedbackChangedElsewhere": "This feedback changed elsewhere; the latest state is shown",
+  "@feedbackChangedElsewhere": {
+    "description": "Stated on the reply footer when a version conflict was reconciled from the host's authoritative record."
+  },
+  "feedbackLoadFailed": "Could not load feedback",
+  "@feedbackLoadFailed": {
+    "description": "Stated on the reply footer when the session's stored judgments could not be read."
   }
 }

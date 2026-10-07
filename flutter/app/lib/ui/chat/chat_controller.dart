@@ -19,6 +19,7 @@ import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/permission_select.dart';
@@ -156,6 +157,11 @@ class ChatController {
   /// only responses from the newest dispatched query may assign [_searchResults].
   int _searchSeq = 0;
   List<PendingImage> _pendingImages = const <PendingImage>[];
+  List<PendingFile> _pendingFiles = const <PendingFile>[];
+
+  /// Mints the draft id of one attach-file row; the id only has to be unique
+  /// within the composer's lifetime.
+  int _pendingFileSeq = 0;
   PlanState? _plan;
   List<TodoItem>? _todos;
   List<SkillEntry> _skills = const <SkillEntry>[];
@@ -381,6 +387,7 @@ class ChatController {
       imageRejections: _imageRejections,
       pendingImages: _pendingImages,
       imageLimits: _imageLimits,
+      pendingFiles: _pendingFiles,
       plan: _plan,
       todos: _todos,
       skills: _skills,
@@ -559,6 +566,13 @@ class ChatController {
             .where((image) => image.id != action.id)
             .toList();
         _publish();
+      case FilePicked():
+        _uploadFile(action);
+      case RemovePendingFile():
+        _pendingFiles = _pendingFiles
+            .where((file) => file.id != action.id)
+            .toList();
+        _publish();
       case SelectModelSeat():
         _selectModel(action.selection);
       case ToggleGoalPause():
@@ -571,6 +585,13 @@ class ChatController {
         _errorMessage = action.message;
         ErrorLogCollector.instance.addBreadcrumb(
           'Image pick error: ${action.message}',
+          level: 'warning',
+        );
+        _publish();
+      case FilePickError():
+        _errorMessage = action.message;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'File pick error: ${action.message}',
           level: 'warning',
         );
         _publish();
@@ -694,6 +715,11 @@ class ChatController {
     _fileReferenceTimer = null;
     _fileReferenceSeq++;
     _fileReferencePicker = null;
+    // Staged file receipts belong to the session that uploaded them, so the
+    // attachment rows go with the switch — a receipt cited in another
+    // session's prompt is refused (`FILE_NOT_STAGED`). Inline images carry
+    // their own bytes and stay.
+    _pendingFiles = const <PendingFile>[];
     unawaited(_timelineSub?.cancel());
     unawaited(_planSub?.cancel());
     unawaited(_todosSub?.cancel());
@@ -1003,7 +1029,20 @@ class ChatController {
       return;
     }
     final images = _pendingImages;
-    if (action.text.trim().isEmpty && images.isEmpty) {
+    // Web submission parity: an attachment whose upload has not settled ready
+    // — still in flight, or failed — refuses the send rather than dropping the
+    // receipt (`conversation.sendSession` throws "one or more files have not
+    // finished uploading"). The draft and the rows stay in the composer.
+    final files = <UploadedFile>[];
+    for (final file in _pendingFiles) {
+      final upload = file.upload;
+      if (file.status != PendingFileStatus.ready || upload == null) {
+        action.onSettled?.call(false);
+        return;
+      }
+      files.add(upload);
+    }
+    if (action.text.trim().isEmpty && images.isEmpty && files.isEmpty) {
       action.onSettled?.call(false);
       return;
     }
@@ -1032,6 +1071,7 @@ class ChatController {
           sessionId,
           commandLine,
           images,
+          files: files,
           detached: hostCommandIsBare(action.text.trim(), _commandRoster),
         );
         action.onSettled?.call(accepted);
@@ -1047,6 +1087,7 @@ class ChatController {
         'mode': action.mode.name,
         'textLength': prompt.length,
         'images': images.length,
+        'files': files.length,
       },
     );
     // Optimistic user message for immediate visual feedback before network roundtrip
@@ -1096,6 +1137,7 @@ class ChatController {
                   text: prompt,
                   mode: action.mode,
                   images: images,
+                  files: files,
                 ),
               );
               return true;
@@ -1107,6 +1149,7 @@ class ChatController {
         // untouched" on a failed submit.
         if (sent) {
           _pendingImages = const <PendingImage>[];
+          _pendingFiles = const <PendingFile>[];
         } else {
           // The host never accepted the prompt: the local echo was a
           // prediction, and a prediction that failed must not keep reading as
@@ -1186,6 +1229,7 @@ class ChatController {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool detached = false,
   }) async {
     if (!detached) {
@@ -1206,6 +1250,7 @@ class ChatController {
           sessionId,
           line,
           images,
+          files: files,
           retryOnTransportAbort: detached,
         );
       } catch (error, stackTrace) {
@@ -1244,12 +1289,14 @@ class ChatController {
                   sessionId: sessionId,
                   text: line,
                   mode: PromptMode.queue,
+                  files: files,
                 ),
               );
               return true;
             }) !=
             null;
         _pendingImages = const <PendingImage>[];
+        _pendingFiles = const <PendingFile>[];
         return sent;
       }
       if (execution.kind == CommandOutcomeKind.error) {
@@ -1270,6 +1317,7 @@ class ChatController {
         return false;
       }
       _pendingImages = const <PendingImage>[];
+      _pendingFiles = const <PendingFile>[];
       return true;
     } finally {
       if (!detached) {
@@ -1309,6 +1357,79 @@ class ChatController {
     // they clear on the next pass (an empty list reads as "no new
     // rejections", distinct from the shared error strip).
     _imageRejections = rejected;
+    _publish();
+  }
+
+  /// Upload one picked document for the selected session (`fileUploads/upload`)
+  /// and publish its row.
+  ///
+  /// The draft row exists before the call so the composer shows the attachment
+  /// while it runs; the answer replaces the row in place. A failure keeps the
+  /// row with the Host's reason — a vanished attachment would hide the one fact
+  /// the reader needs — and only an explicit remove clears it. The bytes are
+  /// not retained after settlement; a retry means picking again.
+  void _uploadFile(FilePicked action) {
+    final sessionId = _selectedSessionId;
+    if (sessionId == null) return;
+    final id = 'file-${++_pendingFileSeq}';
+    _pendingFiles = List<PendingFile>.of(_pendingFiles)
+      ..add(
+        PendingFile(id: id, name: action.name, byteSize: action.bytes.length),
+      );
+    _publish();
+    unawaited(() async {
+      try {
+        final uploaded = await _repository.uploadFile(
+          sessionId: sessionId,
+          name: action.name,
+          bytes: action.bytes,
+        );
+        _replacePendingFile(
+          id,
+          PendingFile(
+            id: id,
+            name: uploaded.name,
+            byteSize: uploaded.byteSize,
+            status: PendingFileStatus.ready,
+            upload: uploaded,
+          ),
+        );
+        _telemetry?.count('chat.file.upload');
+      } catch (error, stackTrace) {
+        _replacePendingFile(
+          id,
+          PendingFile(
+            id: id,
+            name: action.name,
+            byteSize: action.bytes.length,
+            status: PendingFileStatus.failed,
+            failureReason: _formatUiError(error),
+          ),
+        );
+        ErrorLogCollector.instance.captureError(
+          error,
+          stackTrace: stackTrace,
+          context: <String, Object?>{
+            'controller': 'ChatController',
+            'action': 'uploadFile',
+            'sessionId': sessionId,
+          },
+        );
+        _telemetry?.count('chat.file.upload_failed');
+        _telemetry?.event(
+          'chat.file.upload_failed',
+          attributes: {'sessionId': sessionId, 'error': error.toString()},
+        );
+      }
+    }());
+  }
+
+  /// Replaces one pending attachment row and republishes; a row the reader
+  /// removed while the upload ran stays removed.
+  void _replacePendingFile(String id, PendingFile next) {
+    final index = _pendingFiles.indexWhere((file) => file.id == id);
+    if (index < 0) return;
+    _pendingFiles = List<PendingFile>.of(_pendingFiles)..[index] = next;
     _publish();
   }
 

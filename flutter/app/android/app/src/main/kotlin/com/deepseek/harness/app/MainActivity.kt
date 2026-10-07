@@ -2,16 +2,19 @@ package com.deepseek.harness.app
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.Process
 import android.os.StatFs
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -26,7 +29,13 @@ import kotlin.math.abs
 
 class MainActivity : FlutterActivity() {
     private val RECORD_PERMISSION_CODE = 1001
+    private val PICK_DOCUMENT_REQUEST_CODE = 1002
     private var pendingPermissionResult: MethodChannel.Result? = null
+
+    // The document picker's pending answer: the Storage Access Framework owns
+    // the choice, so the Dart caller waits for the activity result.
+    private var pendingDocumentPickResult: MethodChannel.Result? = null
+    private var pendingDocumentPickMaxBytes = 0L
 
     private var audioRecord: AudioRecord? = null
     private val isRecording = AtomicBoolean(false)
@@ -114,6 +123,37 @@ class MainActivity : FlutterActivity() {
                                     }
                                 }
                             }.start()
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Document picking for the composer's file attachment: the Storage
+        // Access Framework returns a content:// handle (no storage
+        // permission exists for that path any more), and the bytes are read
+        // on a worker thread with the caller's size bound applied first so an
+        // oversized pick is refused instead of buffered.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/document_picker")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pick" -> {
+                        if (pendingDocumentPickResult != null) {
+                            result.error("busy", "a document pick is already open", null)
+                        } else {
+                            pendingDocumentPickResult = result
+                            pendingDocumentPickMaxBytes = call.argument<Number>("maxBytes")?.toLong() ?: 0L
+                            try {
+                                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    type = "*/*"
+                                }
+                                @Suppress("DEPRECATION")
+                                startActivityForResult(intent, PICK_DOCUMENT_REQUEST_CODE)
+                            } catch (e: Exception) {
+                                pendingDocumentPickResult = null
+                                result.error("pick_unavailable", e.message, null)
+                            }
                         }
                     }
                     else -> result.notImplemented()
@@ -287,6 +327,79 @@ class MainActivity : FlutterActivity() {
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
         }
+    }
+
+    /**
+     * Answers the composer's document pick. A cancelled pick is a null
+     * success — the reader declining is not an error — and the chosen
+     * document's bytes are read off the platform thread because a file can be
+     * large. The size bound the caller passed is applied before the read, so
+     * an oversized document is refused rather than buffered.
+     */
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_DOCUMENT_REQUEST_CODE) return
+        val result = pendingDocumentPickResult ?: return
+        pendingDocumentPickResult = null
+        val maxBytes = pendingDocumentPickMaxBytes
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            result.success(null)
+            return
+        }
+        Thread {
+            try {
+                val size = documentSize(uri)
+                if (size != null && size > maxBytes) {
+                    runOnUiThread {
+                        result.error("too_large", "document is $size bytes; the limit is $maxBytes", null)
+                    }
+                    return@Thread
+                }
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw IOException("could not open the picked document")
+                if (bytes.size.toLong() > maxBytes) {
+                    runOnUiThread {
+                        result.error("too_large", "document is ${bytes.size} bytes; the limit is $maxBytes", null)
+                    }
+                    return@Thread
+                }
+                val name = documentDisplayName(uri)
+                runOnUiThread {
+                    result.success(mapOf("name" to name, "bytes" to bytes))
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    result.error("read_failed", e.message, null)
+                }
+            }
+        }.start()
+    }
+
+    /** The provider-declared byte length, or null when it declares none. */
+    private fun documentSize(uri: Uri): Long? {
+        contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (index >= 0 && !cursor.isNull(index)) return cursor.getLong(index)
+            }
+        }
+        return null
+    }
+
+    /** The provider-declared display name, falling back to the URI's last segment. */
+    private fun documentDisplayName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) {
+                    val value = cursor.getString(index)
+                    if (!value.isNullOrBlank()) return value
+                }
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
     }
 
     /**

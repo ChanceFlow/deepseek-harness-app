@@ -124,6 +124,33 @@ abstract final class DshRpcEndpoints {
   // field is `agentId`, plus the `@` path query.
   static const String fileReferencesList = 'fileReferences/list';
 
+  // File uploads (DSH 0.2.0 `fileUploads` service —
+  // reference/deepseek-harness/packages/client/file-upload/src/index.ts,
+  // `super(ctx, 'fileUploads')`, `@Remote('upload')`). The unary method takes
+  // the Agent lookup (wire field `agentId`) plus the `EncodedFileUploadRequest`
+  // fields flattened by Typert (`data` base64, optional `name`) and answers a
+  // `FileUploadValue` — the staged `receiptId` a prompt cites plus the durable
+  // `file` reference. The same package registers a raw-byte route
+  // (`/api/session/uploadFileBinary`, http-route.ts) for streamed bodies;
+  // this client sends one picked file through the base64 method instead (see
+  // the file-upload decision note).
+  static const String fileUploadsUpload = 'fileUploads/upload';
+
+  // Human feedback (DSH 0.2.0; two Host services — `messageFeedback`
+  // (reference/deepseek-harness/packages/feedback/message-feedback/src/
+  // index.ts, `@Remote('list')` / `'put'` / `'delete'`) and `sessionFeedback`
+  // (packages/feedback/command-feedback/src/index.ts, `@Remote('record')`).
+  // All four take one `MessageFeedback*Request` /
+  // `SessionFeedbackRecordRequest` object. The message trio works off the
+  // canonical Session log rather than a live Agent, and answers the Host's own
+  // `{ok, value|error}` business result inside the transport's success branch.
+  // `/feedback <text>` additionally rides the ordinary command roster through
+  // `commands/execute`.
+  static const String messageFeedbackList = 'messageFeedback/list';
+  static const String messageFeedbackPut = 'messageFeedback/put';
+  static const String messageFeedbackDelete = 'messageFeedback/delete';
+  static const String sessionFeedbackRecord = 'sessionFeedback/record';
+
   static const String settingsDescribe = 'settings/describe';
   static const String settingsUpdate = 'settings/update';
   static const String settingsReplace = 'settings/replace';

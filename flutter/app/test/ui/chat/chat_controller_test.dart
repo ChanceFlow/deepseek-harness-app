@@ -11,6 +11,7 @@ import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/todo.dart';
@@ -285,6 +286,7 @@ class FakeChatRepository extends ChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   }) {
     commandDispatchImages[line] = images;
@@ -2558,6 +2560,7 @@ class _GoalRecordingRepository extends FakeChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   }) {
     executedCommands.add(line);
@@ -2589,6 +2592,7 @@ class _DetachedDispatchRepository extends FakeChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   }) {
     dispatched.add(line);

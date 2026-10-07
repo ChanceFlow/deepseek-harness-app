@@ -16,8 +16,10 @@ import 'package:domain/model/cordis.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
+import 'package:domain/model/message_feedback.dart';
 import 'package:domain/model/llm_provider.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
@@ -1398,6 +1400,119 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Human feedback (`messageFeedback/{list,put,delete}`,
+  // `sessionFeedback/record` — packages/feedback/*/src/index.ts)
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<List<MessageFeedbackItem>> listMessageFeedback(
+    String sessionId,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.messageFeedbackList,
+      DshRpcEndpoints.messageFeedbackList,
+      <String, Object?>{'sessionId': sessionId},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final result = MessageFeedbackResultWire.fromJson(value);
+    final error = result.error;
+    if (error != null) {
+      // The read's only refusal is `session-not-found`: the Host holds no
+      // persisted header for the id, so there is nothing to seed from.
+      throw RepositoryFailure(
+        wireRequiredString(error, 'code'),
+        'the Host refused ${DshRpcEndpoints.messageFeedbackList}',
+      );
+    }
+    return decodeMessageFeedbackListValue(result.value!);
+  }
+
+  @override
+  Future<MessageFeedbackWrite> putMessageFeedback(
+    String sessionId, {
+    required String messageId,
+    required MessageFeedbackRating rating,
+    required String? ifVersion,
+    String? note,
+    MessageFeedbackCategory? category,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.messageFeedbackPut,
+      DshRpcEndpoints.messageFeedbackPut,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'messageId': messageId,
+        'rating': encodeMessageFeedbackRating(rating),
+        // The Host stores exactly the entry it is given, so an omitted note or
+        // category stays absent rather than keeping the stored one.
+        if (note != null) 'note': note,
+        if (category != null)
+          'category': encodeMessageFeedbackCategory(category),
+        // Required on the wire even when null: null demands that the message
+        // carries no item yet (`MessageFeedbackPutRequest.ifVersion`).
+        'ifVersion': ifVersion,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeMessageFeedbackPutResult(value);
+  }
+
+  @override
+  Future<MessageFeedbackWrite> deleteMessageFeedback(
+    String sessionId, {
+    required String messageId,
+    required String ifVersion,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.messageFeedbackDelete,
+      DshRpcEndpoints.messageFeedbackDelete,
+      <String, Object?>{
+        'sessionId': sessionId,
+        'messageId': messageId,
+        'ifVersion': ifVersion,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeMessageFeedbackDeleteResult(value);
+  }
+
+  @override
+  Future<void> recordSessionFeedback(
+    String sessionId, {
+    String? text,
+    MessageFeedbackCategory? category,
+  }) async {
+    final value = await _call(
+      DshRpcEndpoints.sessionFeedbackRecord,
+      DshRpcEndpoints.sessionFeedbackRecord,
+      <String, Object?>{
+        'sessionId': sessionId,
+        if (text != null) 'text': text,
+        if (category != null)
+          'category': encodeMessageFeedbackCategory(category),
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final result = MessageFeedbackResultWire.fromJson(value);
+    final error = result.error;
+    if (error != null) {
+      // `record` appends to a live Session only, so a departed id is a refusal
+      // rather than a transport failure.
+      throw RepositoryFailure(
+        wireRequiredString(error, 'code'),
+        'the Host refused ${DshRpcEndpoints.sessionFeedbackRecord}',
+      );
+    }
+    final recorded = result.value!;
+    if (!wireRequiredBool(recorded, 'recorded')) {
+      throw FormatException(
+        'sessionFeedback/record "recorded" must be true in '
+        '${recorded.keys.toList()}',
+      );
+    }
+  }
+
   @override
   Future<SettingsSnapshot> describeSettings() async {
     final value = await _call(
@@ -1830,6 +1945,11 @@ class HarnessRepositoryImpl implements ChatRepository {
           'data': image.base64Data,
           if (image.name != null) 'name': image.name,
         },
+      // Staged file receipts, after every image part: the host resolves each
+      // receipt inside this agent's scope and rejects one it did not stage
+      // (`session/attachment-invalid`, reason `FILE_NOT_STAGED`).
+      for (final file in request.files)
+        <String, Object?>{'type': 'file', 'receiptId': file.receiptId},
     ];
     final value = await _call(
       DshRpcEndpoints.sessionPrompt,
@@ -1848,6 +1968,48 @@ class HarnessRepositoryImpl implements ChatRepository {
       // waiting for the next list pull.
       _markSessionNoLongerBlank(request.sessionId);
     }
+  }
+
+  @override
+  Future<UploadedFile> uploadFile({
+    required String sessionId,
+    required String name,
+    required Uint8List bytes,
+  }) async {
+    // The phone's own bound, not the Host's: files carry no admission limit
+    // there, but this call holds the base64 body, its decoded copy, and the
+    // JSON envelope at once (see FileUploadLimits).
+    if (bytes.length > FileUploadLimits.maxFileBytes) {
+      throw RepositoryFailure(
+        'session/attachment-invalid',
+        'file is ${bytes.length} bytes; the phone upload limit is '
+            '${FileUploadLimits.maxFileBytes} bytes',
+      );
+    }
+    // The typert envelope: the Agent lookup rides `agentId` and the
+    // `EncodedFileUploadRequest` rides `request` — the same shape
+    // `terminal/create` and `goals/create` use for `(agent, request)` Remote
+    // methods (packages/typert/generator remote-model: `(agentId, request,
+    // signal)`). `data` is the canonical base64 of the exact bytes; the host
+    // re-encodes and rejects a non-canonical payload.
+    final JsonMap value;
+    try {
+      value = await _call(
+        DshRpcEndpoints.fileUploadsUpload,
+        DshRpcEndpoints.fileUploadsUpload,
+        <String, Object?>{
+          'agentId': sessionId,
+          'request': <String, Object?>{
+            'data': base64Encode(bytes),
+            if (name.isNotEmpty) 'name': name,
+          },
+        },
+        _noCallDeadline,
+      ).valueOrThrow();
+    } on DshBusinessException catch (error) {
+      throw RepositoryFailure(error.code, error.message);
+    }
+    return decodeFileUploadValue(value);
   }
 
   /// Retry budget for a detached command whose first dispatch died on the
@@ -1873,11 +2035,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images, {
+    List<UploadedFile> files = const <UploadedFile>[],
     bool retryOnTransportAbort = false,
   }) async {
     for (var attempt = 1; ; attempt++) {
       try {
-        return await _executeCommandOnce(sessionId, line, images);
+        return await _executeCommandOnce(sessionId, line, images, files);
       } catch (error) {
         if (attempt >= _commandMaxAttempts ||
             !retryOnTransportAbort ||
@@ -1893,12 +2056,14 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     String line,
     List<PendingImage> images,
+    List<UploadedFile> files,
   ) async {
     // The typert remote envelope: the args carry the addressed agent (a
     // session id — sessions are agent-backed), the complete line, and
-    // `submittedAttachments` — base64-encoded composer images in
-    // submission order, each tagged `type: 'image'` (the host admission
-    // enforces the command's attachment-acceptance flag). The descriptor
+    // `submittedAttachments` — base64-encoded composer images plus staged
+    // file receipts in submission order, each tagged by kind (the host
+    // admission enforces the command's attachment-acceptance flag and
+    // resolves every receipt inside this agent's scope). The descriptor
     // is strict about both the key and the tag.
     final result = await _call(
       DshRpcEndpoints.commandsExecute,
@@ -1914,6 +2079,8 @@ class HarnessRepositoryImpl implements ChatRepository {
               'data': image.base64Data,
               if (image.name != null) 'name': image.name,
             },
+          for (final file in files)
+            <String, Object?>{'type': 'file', 'receiptId': file.receiptId},
         ],
       },
       _noCallDeadline,

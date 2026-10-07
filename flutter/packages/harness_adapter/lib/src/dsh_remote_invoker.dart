@@ -48,6 +48,13 @@ final class DshRemoteInvoker {
     DshRpcEndpoints.scheduleHistory,
     DshRpcEndpoints.scheduleUpdate,
     DshRpcEndpoints.scheduleDelete,
+    // `messageFeedback/{list,put,delete}` take one `MessageFeedback*Request`
+    // and `sessionFeedback/record` one `SessionFeedbackRecordRequest`
+    // (`packages/feedback/*/src/index.ts`).
+    DshRpcEndpoints.messageFeedbackList,
+    DshRpcEndpoints.messageFeedbackPut,
+    DshRpcEndpoints.messageFeedbackDelete,
+    DshRpcEndpoints.sessionFeedbackRecord,
   };
 
   /// Endpoints whose host signature takes `agent: Agent`: the lookup's wire
