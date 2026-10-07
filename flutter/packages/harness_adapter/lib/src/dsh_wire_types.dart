@@ -809,6 +809,28 @@ final class PermissionSelectWire {
   final String currentValue;
 }
 
+/// `permissionPresets/catalog` value
+/// (`packages/interaction/permission-presets/src/types.ts`
+/// `PermissionCatalog`): the whole composed table, the subset a new session
+/// may default to, and the effective default key.
+final class PermissionCatalogWire {
+  PermissionCatalogWire.fromJson(JsonMap json)
+    : options = _permissionOptions(json['options']),
+      defaultOptions = _permissionOptions(json['defaultOptions']),
+      defaultPreset = _reqString(json, 'defaultPreset');
+
+  static List<PermissionPresetOptionWire> _permissionOptions(Object? json) =>
+      (asJsonArray(json) ?? const <Object?>[])
+          .map(asJsonObject)
+          .whereType<JsonMap>()
+          .map(PermissionPresetOptionWire.fromJson)
+          .toList();
+
+  final List<PermissionPresetOptionWire> options;
+  final List<PermissionPresetOptionWire> defaultOptions;
+  final String defaultPreset;
+}
+
 // ---------------------------------------------------------------------------
 // Command execution (commands/execute value)
 // ---------------------------------------------------------------------------

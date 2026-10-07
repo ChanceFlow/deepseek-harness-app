@@ -245,10 +245,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 84
+declared = 85
 upstream = 128
-identical = 82
-missing = 46
+identical = 83
+missing = 45
 client-only = 2
 out-of-scope = agentPresets/read, productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->

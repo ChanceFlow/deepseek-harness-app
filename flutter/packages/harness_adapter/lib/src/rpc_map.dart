@@ -119,6 +119,7 @@ abstract final class DshRpcEndpoints {
   static const String settingsUpdate = 'settings/update';
   static const String settingsReplace = 'settings/replace';
   static const String settingsMutate = 'settings/mutate';
+  static const String permissionPresetsCatalog = 'permissionPresets/catalog';
   static const String credentialsDescribe = 'credentials/describe';
   static const String credentialsSet = 'credentials/set';
   static const String credentialsUnset = 'credentials/unset';

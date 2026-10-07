@@ -1180,6 +1180,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readOnlyValue => '只读';
 
   @override
+  String get settingsNavPermissionDefaults => '默认权限预设';
+
+  @override
+  String get permissionDefaultsIntro =>
+      '新会话开始时用哪个预设。当前会话要在 composer 的权限芯片里切换；这里只改默认值。';
+
+  @override
+  String get permissionDefaultsLoading => '正在读取权限表…';
+
+  @override
+  String get permissionDefaultsUnavailable => '该部署没有组合权限预设目录，因此没有可设的默认值。';
+
+  @override
+  String get permissionDefaultsReadOnly => '该部署的设置是只读的。';
+
+  @override
   String get settingsDocumentLabel => '设置文档';
 
   @override

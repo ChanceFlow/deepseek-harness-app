@@ -71,3 +71,44 @@ bool _listEquals<T>(List<T> a, List<T> b) {
   }
   return true;
 }
+
+/// The deployment's permission-preset catalog (`permissionPresets/catalog`).
+///
+/// Distinct from [PermissionSelect], which is one *session's* projection: the
+/// catalog is the deployment-wide table — every preset the host composes
+/// ([options]), the subset a new session may be defaulted to
+/// ([defaultOptions] — a host may compose a preset that is switchable but not
+/// acceptable as a default), and the effective [defaultPreset]. A settings
+/// row offers exactly [defaultOptions] and writes [defaultPreset].
+final class PermissionPresetCatalog {
+  const PermissionPresetCatalog({
+    required this.options,
+    required this.defaultOptions,
+    required this.defaultPreset,
+  });
+
+  /// Every preset the host composes, in its table order.
+  final List<PermissionPresetOption> options;
+
+  /// The presets a new session may default to, in the host's order. The
+  /// effective [defaultPreset] is always one of these.
+  final List<PermissionPresetOption> defaultOptions;
+
+  /// The deployment's effective default preset key.
+  final String defaultPreset;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PermissionPresetCatalog &&
+          other.defaultPreset == defaultPreset &&
+          _listEquals(other.options, options) &&
+          _listEquals(other.defaultOptions, defaultOptions));
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAll(options),
+    Object.hashAll(defaultOptions),
+    defaultPreset,
+  );
+}

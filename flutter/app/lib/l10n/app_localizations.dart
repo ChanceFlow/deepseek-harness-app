@@ -2096,6 +2096,36 @@ abstract class AppLocalizations {
   /// **'Read-only'**
   String get readOnlyValue;
 
+  /// Settings row and page title for the deployment's default permission preset.
+  ///
+  /// In en, this message translates to:
+  /// **'Default permission preset'**
+  String get settingsNavPermissionDefaults;
+
+  /// Intro line on the default-permission-preset page.
+  ///
+  /// In en, this message translates to:
+  /// **'Which preset a new session starts on. The current session switches from the access chip in the composer; this row only changes the default.'**
+  String get permissionDefaultsIntro;
+
+  /// Loading state while the permission catalog is read.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the permission table…'**
+  String get permissionDefaultsLoading;
+
+  /// Shown when the host has no permission preset catalog.
+  ///
+  /// In en, this message translates to:
+  /// **'This deployment composes no permission preset catalog, so there is no default to set.'**
+  String get permissionDefaultsUnavailable;
+
+  /// Shown when the host's settings document is not writable.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings are read-only on this deployment.'**
+  String get permissionDefaultsReadOnly;
+
   /// No description provided for @settingsDocumentLabel.
   ///
   /// In en, this message translates to:

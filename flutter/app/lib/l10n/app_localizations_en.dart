@@ -1224,6 +1224,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readOnlyValue => 'Read-only';
 
   @override
+  String get settingsNavPermissionDefaults => 'Default permission preset';
+
+  @override
+  String get permissionDefaultsIntro =>
+      'Which preset a new session starts on. The current session switches from the access chip in the composer; this row only changes the default.';
+
+  @override
+  String get permissionDefaultsLoading => 'Reading the permission table…';
+
+  @override
+  String get permissionDefaultsUnavailable =>
+      'This deployment composes no permission preset catalog, so there is no default to set.';
+
+  @override
+  String get permissionDefaultsReadOnly =>
+      'Settings are read-only on this deployment.';
+
+  @override
   String get settingsDocumentLabel => 'Settings document';
 
   @override

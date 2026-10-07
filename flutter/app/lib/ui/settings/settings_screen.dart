@@ -39,6 +39,7 @@ import 'schedule_manager.dart';
 import 'settings_backend_scope.dart';
 import 'settings_chrome.dart';
 import 'settings_controller.dart';
+import 'permission_defaults.dart';
 import 'settings_pages.dart';
 import 'settings_ui_state.dart';
 import 'theme_preference.dart';
@@ -433,6 +434,8 @@ class _ChatSection extends StatelessWidget {
             const _EnterBehaviorEntryRow(),
             const SettingsCardDivider(),
             _AgentPresetEntryRow(channel: channel),
+            const SettingsCardDivider(),
+            _PermissionDefaultsEntryRow(channel: channel),
           ],
         ),
       ],
@@ -790,6 +793,28 @@ class _AgentPresetEntryRow extends StatelessWidget {
               ),
             );
           },
+    );
+  }
+}
+
+/// The deployment default a new session starts on. Always navigable: a host
+/// without a permission catalog gets a page that says so rather than a dead
+/// row.
+class _PermissionDefaultsEntryRow extends StatelessWidget {
+  const _PermissionDefaultsEntryRow({required this.channel});
+
+  final SettingsChannel channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return SettingsNavRow(
+      title: l10n.settingsNavPermissionDefaults,
+      leading: const Icon(Icons.shield_outlined),
+      onTap: () => _pushSettingsPage(
+        context,
+        SettingsPermissionDefaultsPage(channel: channel),
+      ),
     );
   }
 }

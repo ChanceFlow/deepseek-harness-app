@@ -339,6 +339,7 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.settingsUpdate,
     DshRpcEndpoints.settingsReplace,
     DshRpcEndpoints.settingsMutate,
+    DshRpcEndpoints.permissionPresetsCatalog,
     DshRpcEndpoints.credentialsDescribe,
     DshRpcEndpoints.credentialsSet,
     DshRpcEndpoints.credentialsUnset,
@@ -474,6 +475,27 @@ class HarnessFakeRpc implements DshRpcClient {
     'id': 'schedule-1',
     'updated': false,
     'code': 'schedule_conflict',
+  };
+
+  /// Scripted `permissionPresets/catalog` value.
+  JsonMap permissionCatalogValue = <String, Object?>{
+    'options': <Object?>[
+      <String, Object?>{
+        'value': 'workspace-write',
+        'name': 'Workspace write',
+        'description': 'Write inside the workspace.',
+      },
+      <String, Object?>{
+        'value': 'danger-full-access',
+        'name': 'Full access',
+        'description': 'Full file access without approval prompts.',
+      },
+    ],
+    'defaultOptions': <Object?>[
+      <String, Object?>{'value': 'workspace-write', 'name': 'Workspace write'},
+      <String, Object?>{'value': 'danger-full-access', 'name': 'Full access'},
+    ],
+    'defaultPreset': 'workspace-write',
   };
 
   /// Scripted `workspace/pinSession` and `workspace/unpinSession` reply: the
@@ -870,6 +892,8 @@ class HarnessFakeRpc implements DshRpcClient {
         };
       case DshRpcEndpoints.directoryPickerCreate:
         return <String, Object?>{'path': '/tmp/chosen/new-folder'};
+      case DshRpcEndpoints.permissionPresetsCatalog:
+        return permissionCatalogValue;
       case DshRpcEndpoints.settingsDescribe:
         return <String, Object?>{
           'writable': true,
@@ -4087,6 +4111,28 @@ void main() {
           .single['sessionId'],
       's-archived',
     );
+  });
+
+  test('permission catalog decodes both tables and the default', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+
+    final catalog = await repository.loadPermissionPresetCatalog();
+
+    expect(rpc.callCountFor(DshRpcEndpoints.permissionPresetsCatalog), 1);
+    expect(catalog.defaultPreset, 'workspace-write');
+    expect(catalog.options.map((option) => option.value).toList(), <String>[
+      'workspace-write',
+      'danger-full-access',
+    ]);
+    expect(
+      catalog.defaultOptions.map((option) => option.value).toList(),
+      <String>['workspace-write', 'danger-full-access'],
+    );
+    expect(catalog.options.first.description, 'Write inside the workspace.');
+    expect(catalog.defaultOptions.first.description, isNull);
   });
 
   test('pin mirrors the pin set the Host returns, most recent first', () async {
