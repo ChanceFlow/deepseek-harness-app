@@ -193,6 +193,18 @@ void main() {
     expect(actions, contains(const OpenDirectoryBrowser()));
   });
 
+  testWidgets('the empty tree registers the deployment default workspace', (
+    tester,
+  ) async {
+    final actions = <WorkspaceAction>[];
+    await _pump(tester, const WorkspaceUiState(), actions);
+
+    expect(find.text('No workspaces yet'), findsOneWidget);
+    await tester.tap(find.text('Use the default workspace'));
+    await tester.pump();
+    expect(actions, contains(const InitializeDefaultWorkspaceAction()));
+  });
+
   testWidgets('rename dialog guards duplicates and dispatches', (tester) async {
     final actions = <WorkspaceAction>[];
     await _pump(

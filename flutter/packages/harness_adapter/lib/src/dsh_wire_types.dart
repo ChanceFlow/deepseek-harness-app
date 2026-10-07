@@ -16,9 +16,11 @@ import 'package:domain/model/file_reference.dart';
 import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/message_feedback.dart';
+import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/plugin_inventory.dart';
 import 'package:domain/model/plugin_management.dart';
 import 'package:domain/model/schedule.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/terminal.dart';
 import 'package:domain/model/token_usage.dart';
@@ -1027,6 +1029,69 @@ List<FileReferenceCandidate> decodeFileReferenceCandidateList(JsonMap value) {
     }
     final wire = FileReferenceCandidateWire.fromJson(obj);
     return FileReferenceCandidate(path: wire.path, kind: wire.kind);
+  }).toList();
+}
+
+// ---------------------------------------------------------------------------
+// Cross-session `@` discovery (sessionReferenceResolver/candidates value — a
+// bare JSON array, so it rides the envelope's `value` slot exactly like the
+// file-reference list). Reference:
+// reference/deepseek-harness/packages/context/session-reference/src/types.ts
+// `SessionReferenceMentionCandidate`: `sessionId`, `label`, `sameWorkspace`,
+// `createdAt` and `mention` are required; `displayTitle` and `cwd` are
+// optional (`SessionReferenceCandidate` at types.ts:59-73 marks exactly those
+// two optional).
+// ---------------------------------------------------------------------------
+
+final class SessionReferenceMentionCandidateWire {
+  SessionReferenceMentionCandidateWire.fromJson(JsonMap json)
+    : sessionId = _reqString(json, 'sessionId'),
+      label = _reqString(json, 'label'),
+      mention = _reqString(json, 'mention'),
+      sameWorkspace = _reqBool(json, 'sameWorkspace'),
+      createdAtEpochMs = _reqLong(json, 'createdAt'),
+      displayTitle = wireString(json, 'displayTitle'),
+      cwd = wireString(json, 'cwd');
+
+  final String sessionId;
+  final String label;
+  final String mention;
+  final bool sameWorkspace;
+  final int createdAtEpochMs;
+  final String? displayTitle;
+  final String? cwd;
+}
+
+/// Decodes the `sessionReferenceResolver/candidates` result: the addressed
+/// agent's ranked session mentions, in host order.
+List<SessionReferenceCandidate> decodeSessionReferenceCandidateList(
+  JsonMap value,
+) {
+  final raw = value['value'];
+  if (raw is! List) {
+    throw FormatException(
+      '${DshRpcEndpoints.sessionReferenceResolverCandidates} "value" must be '
+      'a JSON array, got: ${value.keys.toList()}',
+    );
+  }
+  return raw.map((Object? entry) {
+    final obj = asJsonObject(entry);
+    if (obj == null) {
+      throw const FormatException(
+        '${DshRpcEndpoints.sessionReferenceResolverCandidates} entry is not '
+        'an object',
+      );
+    }
+    final wire = SessionReferenceMentionCandidateWire.fromJson(obj);
+    return SessionReferenceCandidate(
+      sessionId: wire.sessionId,
+      label: wire.label,
+      displayTitle: wire.displayTitle,
+      cwd: wire.cwd,
+      sameWorkspace: wire.sameWorkspace,
+      createdAtEpochMs: wire.createdAtEpochMs,
+      mention: wire.mention,
+    );
   }).toList();
 }
 
@@ -2437,3 +2502,66 @@ String encodeMessageFeedbackCategory(MessageFeedbackCategory category) =>
         'security-privacy-permission',
       MessageFeedbackCategory.other => 'other',
     };
+
+// ---------------------------------------------------------------------------
+// Open in app (`session/canOpenWorkspacePath`, `session/openWorkspacePath`,
+// `session/workspacePathApplications` —
+// reference/deepseek-harness/packages/api/session-controller/src/{index,types}
+// .ts:318-395; the application row is
+// packages/util/native-command/src/types.ts `NativeFileApplication`)
+// ---------------------------------------------------------------------------
+
+/// Decodes the `session/canOpenWorkspacePath` result: the bare boolean
+/// response, parked under the envelope's `value` key by
+/// `RpcResult.fromJson` (`packages/network/lib/rpc_envelope.dart`).
+bool decodeCanOpenWorkspacePath(JsonMap result) => _reqBool(result, 'value');
+
+/// One OS-registered application (`NativeFileApplication`): its id, display
+/// name, whether the desktop would open with it by default, and the icon data
+/// URL the desktop supplied (`null` when it supplied none).
+///
+/// All four keys are required by the reference's parser — absence of `icon`
+/// is host breakage, while `icon: null` is the stated "no icon" fact.
+final class WorkspacePathApplicationWire {
+  WorkspacePathApplicationWire.fromJson(JsonMap json)
+    : id = _reqString(json, 'id'),
+      name = _reqString(json, 'name'),
+      isDefault = _reqBool(json, 'default'),
+      icon = _reqNullableString(json, 'icon');
+
+  final String id;
+  final String name;
+  final bool isDefault;
+  final String? icon;
+}
+
+/// Decodes the `session/workspacePathApplications` result: the bare array of
+/// registered applications, parked under the envelope's `value` key. An
+/// absent or non-array `value` — or a member that is not an object — throws
+/// naming `value`.
+List<WorkspacePathApplication> decodeWorkspacePathApplications(
+  JsonMap result,
+) => _reqObjectArray(result, 'value')
+    .map((JsonMap json) => WorkspacePathApplicationWire.fromJson(json))
+    .map(
+      (WorkspacePathApplicationWire wire) => WorkspacePathApplication(
+        id: wire.id,
+        name: wire.name,
+        isDefault: wire.isDefault,
+        icon: wire.icon,
+      ),
+    )
+    .toList();
+
+/// Decodes the `session/openWorkspacePath` result
+/// (`SessionOpenWorkspacePathValue`): the host confirms it handed the path to
+/// its native opener. `opened` is required, and any value but `true` is host
+/// breakage — the Host has no failure branch inside a success envelope here.
+void decodeOpenWorkspacePathValue(JsonMap value) {
+  if (!_reqBool(value, 'opened')) {
+    throw FormatException(
+      'session/openWorkspacePath "opened" must be true in '
+      '${value.keys.toList()}',
+    );
+  }
+}

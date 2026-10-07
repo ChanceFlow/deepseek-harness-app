@@ -1012,6 +1012,10 @@
   "searchWorkspacesHint": "Search workspaces...",
   "noMatchingWorkspaces": "No matches",
   "noWorkspacesYet": "No workspaces yet",
+  "useDefaultWorkspace": "Use the default workspace",
+  "@useDefaultWorkspace": {
+    "description": "Empty workspace tree action that registers the host's own default workspace folder."
+  },
   "moveUp": "Move up",
   "moveDown": "Move down",
   "deleteWorkspace": "Delete workspace",
@@ -1076,6 +1080,10 @@
   "renameSession": "Rename session",
   "forkSession": "Fork session",
   "archiveSession": "Archive session",
+  "openWorkspace": "Open workspace",
+  "@openWorkspace": {
+    "description": "Session verb and sheet title that hands the session workspace directory to the serving desktop native opener."
+  },
   "unarchiveSession": "Unarchive session",
   "archivedBadge": "Archived",
   "pinSession": "Pin session",
@@ -3446,6 +3454,10 @@
   "fileReferenceSectionTitle": "Files & folders",
   "@fileReferenceSectionTitle": {
     "description": "Group label above the composer @ file-reference candidates."
+  },
+  "sessionReferenceSectionTitle": "Sessions",
+  "@sessionReferenceSectionTitle": {
+    "description": "Group label above the composer @ session-reference candidates."
   },
   "feedbackRateUp": "Good response",
   "@feedbackRateUp": {

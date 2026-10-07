@@ -596,6 +596,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       pinnedSessionIds: uiState.pinnedSessionIds,
       archivedFilter: _archivedFilter(),
       onViewOtherSessions: _viewOtherSessions,
+      onInitializeDefault: () =>
+          widget.onAction(const InitializeDefaultWorkspaceAction()),
       shrinkWrap: widget.embedded,
     );
     final results = hasQuery ? _searchResults(context, uiState) : tree;
@@ -907,6 +909,7 @@ class _WorkspaceTree extends StatelessWidget {
     this.pinnedSessionIds = const <String>[],
     this.archivedFilter = ArchivedFilter.hide,
     this.onViewOtherSessions,
+    this.onInitializeDefault,
     this.shrinkWrap = false,
   });
 
@@ -941,6 +944,11 @@ class _WorkspaceTree extends StatelessWidget {
   /// The archived-only empty state's way back to the ordinary view.
   final VoidCallback? onViewOtherSessions;
 
+  /// The ordinary empty state's way in without naming a folder: register the
+  /// deployment's own default workspace
+  /// (`workspace/initializeDefault`).
+  final VoidCallback? onInitializeDefault;
+
   /// Aggregate form: the tree rides the section's outer scroll view.
   final bool shrinkWrap;
 
@@ -960,7 +968,8 @@ class _WorkspaceTree extends StatelessWidget {
     );
     if (groups.isEmpty) {
       // Web `EmptySessions`: the archived-only view names its filter and
-      // offers the way back; every other view keeps the plain line.
+      // offers the way back; the ordinary view offers the deployment's
+      // default workspace instead of making the reader find a folder.
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Column(
@@ -977,6 +986,11 @@ class _WorkspaceTree extends StatelessWidget {
               TextButton(
                 onPressed: onViewOtherSessions,
                 child: Text(l10n.viewOtherSessions),
+              )
+            else
+              TextButton(
+                onPressed: onInitializeDefault,
+                child: Text(l10n.useDefaultWorkspace),
               ),
           ],
         ),

@@ -19,6 +19,7 @@ import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
 import 'package:domain/model/permission_select.dart';
@@ -26,6 +27,7 @@ import 'package:domain/model/prompt.dart';
 import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/token_usage.dart';
@@ -107,6 +109,20 @@ typedef AttachmentLoader = Future<Uint8List?> Function(
   AttachmentRef ref,
 );
 
+/// The serving desktop's registered applications for one workspace path
+/// (dsh `session/workspacePathApplications`), read when the Open workspace
+/// verb is used. A failure propagates: the verb then falls back to the
+/// operating system's own default association.
+typedef WorkspacePathApplicationsLoader =
+    Future<List<WorkspacePathApplication>> Function(String path);
+
+/// Bare pumps own no host: with no registered applications the verb still
+/// opens through the operating system default, which is what a bare pump
+/// asserting the verb's presence needs.
+Future<List<WorkspacePathApplication>> _noWorkspacePathApplications(
+  String path,
+) async => const <WorkspacePathApplication>[];
+
 /// Bare pumps own no repository: a durable image stays a placeholder frame.
 Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
     Future<Uint8List?>.value();
@@ -186,6 +202,8 @@ class ChatRoute extends ConsumerWidget {
                   ),
                   readWorkspaceFile: controller.readWorkspaceFile,
                   readWorkspaceFileBytes: controller.readWorkspaceFileBytes,
+                  loadWorkspacePathApplications:
+                      controller.workspacePathApplications,
                   backendId: resolved,
                   backendSlices: slices,
                   onRefreshModels: controller.refreshModels,
@@ -274,6 +292,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenTeamMember = _noTeamMember,
     this.readWorkspaceFile = _noWorkspaceFileRead,
     this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
+    this.loadWorkspacePathApplications = _noWorkspacePathApplications,
     this.onRefreshModels,
     this.backendId,
     this.localState,
@@ -308,6 +327,10 @@ class ChatScreen extends StatefulWidget {
   /// Repository seam for the file-preview sheet's byte reads
   /// (`workspaceFiles/readBytes`).
   final WorkspaceFileBytesReader readWorkspaceFileBytes;
+
+  /// Repository seam for the Open workspace verb's application query
+  /// (`session/workspacePathApplications`).
+  final WorkspacePathApplicationsLoader loadWorkspacePathApplications;
 
   /// The backend this surface presents (drives pushed session-tool
   /// pages); null falls back to the active backend at push time.
@@ -612,6 +635,7 @@ class _ChatScreenState extends State<ChatScreen> {
           onOpenTeamMember: _openTeamMember,
           onOpenSubagents: _openSubagents,
           compact: compact,
+          loadWorkspaceApplications: widget.loadWorkspacePathApplications,
         ),
       ],
     );
@@ -822,6 +846,7 @@ class ChatHeaderActions extends StatelessWidget {
     super.key,
     this.backendId,
     this.onOpenSubagents,
+    this.loadWorkspaceApplications = _noWorkspacePathApplications,
     this.compact = false,
   });
 
@@ -851,12 +876,108 @@ class ChatHeaderActions extends StatelessWidget {
   /// session.
   final VoidCallback? onOpenSubagents;
 
+  /// The serving desktop's registered openers for one workspace path
+  /// (`session/workspacePathApplications`); read when the Open workspace
+  /// verb runs.
+  final WorkspacePathApplicationsLoader loadWorkspaceApplications;
+
   Future<void> _rename(BuildContext context, String sessionId) {
     return showDialog<void>(
       context: context,
       builder: (context) => _RenameSessionDialog(
         onSave: (title) => onAction(RenameSession(sessionId, title)),
       ),
+    );
+  }
+
+  /// Hand the session's workspace directory to the serving desktop's native
+  /// opener (dsh `session/openWorkspacePath`).
+  ///
+  /// The host's registered applications decide the gesture: exactly one opens
+  /// directly through it, none opens through the operating system's own
+  /// default association, and more than one lists them in the house menu
+  /// sheet. A failed association query falls back to the default open — the
+  /// query is an optimization over the OS default, so a host that answers the
+  /// availability probe but not the query still opens. The open's own failure
+  /// reaches the shared error strip through [onAction]'s controller.
+  Future<void> _openWorkspace(BuildContext context, String path) async {
+    var applications = const <WorkspacePathApplication>[];
+    try {
+      applications = await loadWorkspaceApplications(path);
+    } catch (_) {
+      // Read above: the association query failing leaves the default open.
+    }
+    if (!context.mounted) return;
+    if (applications.length <= 1) {
+      onAction(
+        OpenWorkspacePath(path, application: applications.firstOrNull?.id),
+      );
+      return;
+    }
+    await showMenuSheet<void>(
+      context,
+      maxHeight: 280,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
+        final l10n = AppLocalizations.of(sheetContext)!;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+              child: Text(
+                l10n.openWorkspace,
+                style: theme.textTheme.titleSmall,
+              ),
+            ),
+            for (final application in applications)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(kShapeChip),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onAction(
+                      OpenWorkspacePath(path, application: application.id),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.open_in_new,
+                          size: 18,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            application.name,
+                            style: theme.textTheme.bodyMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (application.isDefault)
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: scheme.primary,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -871,6 +992,11 @@ class ChatHeaderActions extends StatelessWidget {
         .where((session) => session.id == sessionId)
         .firstOrNull;
     final archivable = selectedSession?.blank != true;
+    // The Open workspace verb needs both facts the host supplies separately:
+    // its availability answer and the session's workspace path.
+    final openableWorkspacePath = uiState.canOpenWorkspace
+        ? selectedSession?.cwd
+        : null;
     final hasActiveJobs = uiState.jobs.any(
       (j) => j.status == JobStatus.running,
     );
@@ -892,6 +1018,12 @@ class ChatHeaderActions extends StatelessWidget {
             onOpenMember: onOpenTeamMember,
           ),
         if (!compact) ...[
+          if (openableWorkspacePath case final path?)
+            IconButton(
+              tooltip: l10n.openWorkspace,
+              onPressed: () => unawaited(_openWorkspace(context, path)),
+              icon: const Icon(Icons.open_in_new),
+            ),
           SessionLogExportAction(uiState: uiState, onAction: onAction),
           if (uiState.selectedSessionId case final sessionId?)
             if (backendId case final host?)
@@ -932,6 +1064,10 @@ class ChatHeaderActions extends StatelessWidget {
                   onAction(ForkSession(sessionId));
                 case _SessionVerb.archive:
                   onAction(ArchiveSession(sessionId));
+                case _SessionVerb.openWorkspace:
+                  if (openableWorkspacePath case final path?) {
+                    unawaited(_openWorkspace(context, path));
+                  }
               }
             },
             itemBuilder: (context) => [
@@ -997,6 +1133,15 @@ class ChatHeaderActions extends StatelessWidget {
                   title: Text(l10n.archiveSession),
                 ),
               ),
+              if (openableWorkspacePath != null)
+                PopupMenuItem(
+                  value: _SessionVerb.openWorkspace,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.open_in_new),
+                    title: Text(l10n.openWorkspace),
+                  ),
+                ),
             ],
           )
         else ...[
@@ -1038,6 +1183,7 @@ enum _SessionVerb {
   rename,
   fork,
   archive,
+  openWorkspace,
 }
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
@@ -5850,9 +5996,10 @@ class ComposerBar extends ConsumerStatefulWidget {
   final List<CommandDescriptor>? commands;
 
   /// The selected session's last resolved `@` mention query and its
-  /// candidates (`fileReferences/list`); null while no token is open. The
-  /// composer renders only the holder whose query equals the live token
-  /// (see [FileReferenceCandidates]).
+  /// candidates from both families — paths (`fileReferences/list`) and
+  /// sessions (`sessionReferenceResolver/candidates`); null while no token is
+  /// open. The composer renders only the holder whose query equals the live
+  /// token (see [FileReferenceCandidates]).
   final FileReferencePickerState? fileReferences;
 
   /// Submit [text] and resolve with the host's acceptance: the composer
@@ -6046,12 +6193,39 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     final cursor = _draftCaret();
     final token = activeFileReferenceToken(draft, cursor);
     if (token == null) return;
-    final applied = applyFileReferencePick(
-      draft: draft,
-      cursor: cursor,
-      token: token,
-      candidate: candidate,
+    _commitReferencePick(
+      applyFileReferencePick(
+        draft: draft,
+        cursor: cursor,
+        token: token,
+        candidate: candidate,
+      ),
     );
+  }
+
+  /// Insert one picked session over the live token: the host's canonical
+  /// `@[label](dsh-session:…)` mention replaces the `@` token — the exact
+  /// text the host parses back out of the prompt
+  /// (`reference/deepseek-harness/packages/context/session-reference/src/
+  /// uri.ts` `formatSessionReferenceMention`).
+  void _applySessionReference(SessionReferenceCandidate candidate) {
+    final draft = _draftController.text;
+    final cursor = _draftCaret();
+    final token = activeFileReferenceToken(draft, cursor);
+    if (token == null) return;
+    _commitReferencePick(
+      applySessionReferencePick(
+        draft: draft,
+        cursor: cursor,
+        token: token,
+        candidate: candidate,
+      ),
+    );
+  }
+
+  /// Write one accepted `@` candidate into the draft and re-sync the token,
+  /// so the menu follows the text it was inserted into.
+  void _commitReferencePick(({String text, int caret})? applied) {
     if (applied == null) return;
     _draftController
       ..text = applied.text
@@ -6326,6 +6500,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 !(_draftController.text.startsWith('/') &&
                     !_draftController.text.contains(' ')),
             onPick: _applyFileReference,
+            onPickSession: _applySessionReference,
           ),
           // Band 1 — the draft, edge to edge, or the hold-to-talk bar that
           // stands in for it while the dock is in voice mode. Which one it is

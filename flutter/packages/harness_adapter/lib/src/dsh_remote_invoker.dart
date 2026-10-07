@@ -55,6 +55,12 @@ final class DshRemoteInvoker {
     DshRpcEndpoints.messageFeedbackPut,
     DshRpcEndpoints.messageFeedbackDelete,
     DshRpcEndpoints.sessionFeedbackRecord,
+    // `openWorkspacePath(request: SessionOpenWorkspacePathRequest)` and
+    // `workspacePathApplications(request: { path })` each take one request
+    // object; `canOpenWorkspacePath()` takes none and is absent here
+    // (`packages/api/session-controller/src/index.ts`:339, :369).
+    DshRpcEndpoints.sessionOpenWorkspacePath,
+    DshRpcEndpoints.sessionWorkspacePathApplications,
   };
 
   /// Endpoints whose host signature takes `agent: Agent`: the lookup's wire

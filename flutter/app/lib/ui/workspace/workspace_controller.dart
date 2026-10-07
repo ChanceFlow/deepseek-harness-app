@@ -150,6 +150,8 @@ class WorkspaceController {
         _searchSessions(action.query);
       case RefreshWorkspacesAction():
         _refresh();
+      case InitializeDefaultWorkspaceAction():
+        _initializeDefault();
       case DismissWorkspaceError():
         _errorMessage = null;
         _publish();
@@ -299,6 +301,24 @@ class WorkspaceController {
 
   void _refresh() {
     unawaited(_runCatchingForUi(_repository.refreshWorkspaces));
+  }
+
+  /// Register the deployment's default workspace without the reader naming a
+  /// path (web `initializeDefaultWorkspace`). An ineligible first use answers
+  /// no workspace at all, and that is not a failure: the empty tree stays and
+  /// the folder browser is one tap away. The registered row arrives through
+  /// the same `workspace/follow` stream every other row does.
+  void _initializeDefault() {
+    unawaited(() async {
+      _isLoading = true;
+      _publish();
+      try {
+        await _runCatchingForUi(_repository.initializeDefaultWorkspace);
+      } finally {
+        _isLoading = false;
+        _publish();
+      }
+    }());
   }
 
   void _create(String path) {

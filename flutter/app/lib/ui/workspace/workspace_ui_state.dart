@@ -240,6 +240,19 @@ final class RefreshWorkspacesAction extends WorkspaceAction {
   int get hashCode => 'refresh-workspaces'.hashCode;
 }
 
+/// Register the deployment's default workspace (`workspace/initializeDefault`)
+/// — the web client's first-use bootstrap, offered here as the empty tree's
+/// own way in rather than a startup side effect the reader cannot see.
+final class InitializeDefaultWorkspaceAction extends WorkspaceAction {
+  const InitializeDefaultWorkspaceAction();
+
+  @override
+  bool operator ==(Object other) => other is InitializeDefaultWorkspaceAction;
+
+  @override
+  int get hashCode => 'initialize-default-workspace'.hashCode;
+}
+
 final class DismissWorkspaceError extends WorkspaceAction {
   const DismissWorkspaceError();
 

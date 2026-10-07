@@ -20,6 +20,7 @@ import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/message_feedback.dart';
+import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/llm_provider.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/model/permission_select.dart';
@@ -33,6 +34,7 @@ import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/session_archive.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/skills.dart';
@@ -1401,6 +1403,53 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
+  // Open in app (`session/canOpenWorkspacePath`,
+  // `session/workspacePathApplications`, `session/openWorkspacePath` —
+  // reference/deepseek-harness/packages/api/session-controller/src/index.ts
+  // :318-382)
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<bool> canOpenWorkspacePath() async {
+    final value = await _call(
+      DshRpcEndpoints.sessionCanOpenWorkspacePath,
+      DshRpcEndpoints.sessionCanOpenWorkspacePath,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeCanOpenWorkspacePath(value);
+  }
+
+  @override
+  Future<List<WorkspacePathApplication>> workspacePathApplications(
+    String path,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.sessionWorkspacePathApplications,
+      DshRpcEndpoints.sessionWorkspacePathApplications,
+      <String, Object?>{'path': path},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeWorkspacePathApplications(value);
+  }
+
+  @override
+  Future<void> openWorkspacePath(String path, {String? application}) async {
+    final value = await _call(
+      DshRpcEndpoints.sessionOpenWorkspacePath,
+      DshRpcEndpoints.sessionOpenWorkspacePath,
+      <String, Object?>{
+        'path': path,
+        // Omitted keeps the operating system's own default association
+        // (`SessionOpenWorkspacePathRequest.application`).
+        if (application != null) 'application': application,
+      },
+      _shortCallTimeout,
+    ).valueOrThrow();
+    decodeOpenWorkspacePathValue(value);
+  }
+
+  // ---------------------------------------------------------------------------
   // Human feedback (`messageFeedback/{list,put,delete}`,
   // `sessionFeedback/record` — packages/feedback/*/src/index.ts)
   // ---------------------------------------------------------------------------
@@ -2134,6 +2183,20 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     return decodeFileReferenceCandidateList(value);
+  }
+
+  @override
+  Future<List<SessionReferenceCandidate>> listSessionReferences(
+    String sessionId,
+    String query,
+  ) async {
+    final value = await _call(
+      DshRpcEndpoints.sessionReferenceResolverCandidates,
+      DshRpcEndpoints.sessionReferenceResolverCandidates,
+      {'agentId': sessionId, 'query': query},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    return decodeSessionReferenceCandidateList(value);
   }
 
   @override
@@ -3074,6 +3137,44 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     final created = _toDomainWorkspace(_workspaceFromJson(result, 'workspace'));
+    final current = _workspaces.value;
+    final index = current.indexWhere(
+      (item) => item.workspaceId == created.workspaceId,
+    );
+    if (index < 0) {
+      _workspaces.value = List.of(current)..add(created);
+    } else {
+      _workspaces.value = List.of(current)..[index] = created;
+    }
+    return created;
+  }
+
+  @override
+  Future<WorkspaceSummary?> initializeDefaultWorkspace() async {
+    // The handler takes only the transport's injected `signal`, so the call
+    // carries no request object. Its value is nullable — `undefined` is the
+    // host's "first-use initialization is ineligible"
+    // (`packages/api/workspace-controller/src/index.ts:99`, :106) — so this
+    // reads the raw result instead of `invoke`, which rejects a null value.
+    final result = await _call(
+      DshRpcEndpoints.workspaceInitializeDefault,
+      DshRpcEndpoints.workspaceInitializeDefault,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    );
+    if (!result.ok) {
+      final failure = result.error;
+      throw DshBusinessException(
+        code: failure?.code ?? 'internal',
+        message: failure?.message ?? 'workspace/initializeDefault failed',
+        details: failure?.details,
+      );
+    }
+    final value = asJsonObject(result.value);
+    if (value == null) return null;
+    final created = _toDomainWorkspace(_workspaceFromJson(value, 'workspace'));
+    // The registered row is the deployment's durable workspace; publishing it
+    // here matches `workspace/create`, and the roster's own stream confirms it.
     final current = _workspaces.value;
     final index = current.indexWhere(
       (item) => item.workspaceId == created.workspaceId,

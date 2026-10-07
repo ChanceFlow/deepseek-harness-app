@@ -1542,6 +1542,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noWorkspacesYet => 'No workspaces yet';
 
   @override
+  String get useDefaultWorkspace => 'Use the default workspace';
+
+  @override
   String get moveUp => 'Move up';
 
   @override
@@ -1751,6 +1754,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get archiveSession => 'Archive session';
+
+  @override
+  String get openWorkspace => 'Open workspace';
 
   @override
   String get unarchiveSession => 'Unarchive session';
@@ -3728,6 +3734,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fileReferenceSectionTitle => 'Files & folders';
+
+  @override
+  String get sessionReferenceSectionTitle => 'Sessions';
 
   @override
   String get feedbackRateUp => 'Good response';

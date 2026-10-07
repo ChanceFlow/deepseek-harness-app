@@ -29,6 +29,7 @@ import 'package:domain/model/prompt.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:domain/model/terminal.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/subagent.dart';
@@ -36,6 +37,7 @@ import 'package:domain/model/todo.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/message_feedback.dart';
+import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/user_question.dart';
@@ -311,6 +313,9 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.sessionHistory,
     DshRpcEndpoints.sessionPage,
     DshRpcEndpoints.sessionProjections,
+    DshRpcEndpoints.sessionCanOpenWorkspacePath,
+    DshRpcEndpoints.sessionWorkspacePathApplications,
+    DshRpcEndpoints.sessionOpenWorkspacePath,
     DshRpcEndpoints.userQuestionsAnswer,
     DshRpcEndpoints.skillsList,
     DshRpcEndpoints.subagentsPrompt,
@@ -336,11 +341,13 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.workspaceUnarchiveSession,
     DshRpcEndpoints.workspacePinSession,
     DshRpcEndpoints.workspaceUnpinSession,
+    DshRpcEndpoints.workspaceInitializeDefault,
     DshRpcEndpoints.workspaceFilesStat,
     DshRpcEndpoints.workspaceFilesRead,
     DshRpcEndpoints.workspaceFilesList,
     DshRpcEndpoints.commandsExecute,
     DshRpcEndpoints.fileReferencesList,
+    DshRpcEndpoints.sessionReferenceResolverCandidates,
     DshRpcEndpoints.fileUploadsUpload,
     DshRpcEndpoints.settingsDescribe,
     DshRpcEndpoints.settingsUpdate,
@@ -633,6 +640,43 @@ class HarnessFakeRpc implements DshRpcClient {
     <String, Object?>{'path': 'src/main.dart', 'kind': 'file'},
   ];
 
+  /// Scripted `sessionReferenceResolver/candidates` rows. The result is a
+  /// bare JSON array, so [_valueFor] hands it over under the envelope's
+  /// `value` key, exactly as `RpcResult.fromJson` parks a non-object result.
+  /// Shapes transcribe
+  /// `reference/deepseek-harness/packages/context/session-reference/src/
+  /// types.ts` `SessionReferenceMentionCandidate` (`sessionId`, `label`,
+  /// optional `displayTitle`/`cwd`, `sameWorkspace`, `createdAt`, `mention`).
+  List<Object?> sessionReferenceRowsValue = <Object?>[
+    <String, Object?>{
+      'sessionId': 'session-2',
+      'label': 'Release notes',
+      'displayTitle': 'Release notes',
+      'cwd': '/home/tester/project',
+      'sameWorkspace': true,
+      'createdAt': 1700000000000,
+      'mention': '@[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ)',
+    },
+    <String, Object?>{
+      'sessionId': 'session-3',
+      'label': 'session-3',
+      'cwd': '/tmp/other',
+      'sameWorkspace': false,
+      'createdAt': 1700000000001,
+      'mention': '@[session-3](dsh-session:eyJzZXNzaW9uLTMifQ)',
+    },
+  ];
+
+  /// Scripted `workspace/initializeDefault` answer. A null answers the host's
+  /// first-use-ineligible result — a null value, never an error
+  /// (`reference/deepseek-harness/packages/api/workspace-controller/src/
+  /// index.ts:98-107` returns `WorkspaceValue | undefined`).
+  JsonMap? initializeDefaultWorkspaceValue = _workspaceJson(
+    'ws-default',
+    '/home/tester/Documents',
+    'Documents',
+  );
+
   /// Scripted `fileUploads/upload` receipt. Shapes transcribe
   /// `reference/deepseek-harness/packages/client/file-upload/src/types.ts`
   /// (`FileUploadValue` = `{receiptId, file: FileAttachmentRef}`) over
@@ -666,6 +710,20 @@ class HarnessFakeRpc implements DshRpcClient {
   /// Scripted `sessionFeedback/record` result; null answers
   /// `{ok: true, value: {recorded: true}}`.
   JsonMap? sessionFeedbackRecordValue;
+
+  /// Scripted `session/canOpenWorkspacePath` answer; null answers the host
+  /// answering no `value` at all, which is host breakage rather than a no.
+  bool? canOpenWorkspacePathValue = true;
+
+  /// Scripted `session/workspacePathApplications` rows
+  /// (`packages/util/native-command/src/types.ts` `NativeFileApplication`:
+  /// `id`, `name`, `default`, `icon`). They ride the envelope's `value` slot
+  /// as a bare array.
+  List<Object?> workspacePathApplicationsValue = <Object?>[];
+
+  /// Scripted `session/openWorkspacePath` result; null answers
+  /// `{opened: true}`.
+  JsonMap? openWorkspacePathValue;
 
   /// Scripted `session/projections` roster slot: the parent Session's
   /// `subagentCatalog` projection value
@@ -823,6 +881,19 @@ class HarnessFakeRpc implements DshRpcClient {
         value: <String, Object?>{'value': fileReferenceRowsValue},
       );
     }
+    if (endpoint == DshRpcEndpoints.sessionReferenceResolverCandidates) {
+      // The same bare-array carrier for the session-mention candidates.
+      return RpcResult(
+        ok: true,
+        value: <String, Object?>{'value': sessionReferenceRowsValue},
+      );
+    }
+    if (endpoint == DshRpcEndpoints.workspaceInitializeDefault &&
+        initializeDefaultWorkspaceValue == null) {
+      // The host's "first-use initialization is ineligible" is a null
+      // result, not an error and not an empty object.
+      return RpcResult(ok: true, value: null);
+    }
     if (endpoint == DshRpcEndpoints.pluginManagerWaitForInstall &&
         waitForInstallValue == null) {
       // The host's "no record of that request" is a null result, not an
@@ -955,6 +1026,8 @@ class HarnessFakeRpc implements DshRpcClient {
       case DshRpcEndpoints.workspacePinSession:
       case DshRpcEndpoints.workspaceUnpinSession:
         return pinValue;
+      case DshRpcEndpoints.workspaceInitializeDefault:
+        return <String, Object?>{'workspace': initializeDefaultWorkspaceValue!};
       case DshRpcEndpoints.workspaceInsertBefore:
         return <String, Object?>{
           'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
@@ -1193,6 +1266,18 @@ class HarnessFakeRpc implements DshRpcClient {
               'ok': true,
               'value': <String, Object?>{'recorded': true},
             };
+      case DshRpcEndpoints.sessionCanOpenWorkspacePath:
+        // A bare boolean result rides the envelope's `value` slot, the shape
+        // `RpcResult.fromJson` produces for a non-object result.
+        final available = canOpenWorkspacePathValue;
+        if (available == null) return <String, Object?>{};
+        return <String, Object?>{'value': available};
+      case DshRpcEndpoints.sessionWorkspacePathApplications:
+        return <String, Object?>{'value': workspacePathApplicationsValue};
+      case DshRpcEndpoints.sessionOpenWorkspacePath:
+        // The result is an object (`SessionOpenWorkspacePathValue`), so it is
+        // the value itself rather than a parked scalar.
+        return openWorkspacePathValue ?? <String, Object?>{'opened': true};
       default:
         return <String, Object?>{};
     }
@@ -4167,6 +4252,165 @@ void main() {
     );
     expect(diag.error, isA<DshBusinessException>());
     expect(diag.stackTrace, isNotNull);
+  });
+
+  test(
+    'sessionReferenceResolver/candidates carries the Agent lookup and query',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      final candidates = await repository.listSessionReferences('s-1', 'rel');
+
+      expect(
+        rpc.callCountFor(DshRpcEndpoints.sessionReferenceResolverCandidates),
+        1,
+      );
+      // `@Remote('candidates')` takes `(agent, query, signal)`
+      // (reference/deepseek-harness/packages/context/session-reference/src/
+      // index.ts:271-283), so the addressed agent rides `agentId` exactly as
+      // `fileReferences/list` does.
+      final payload = rpc
+          .rawPayloads(DshRpcEndpoints.sessionReferenceResolverCandidates)
+          .single;
+      expect(payload, <String, Object?>{'agentId': 's-1', 'query': 'rel'});
+      // The optional display title and cwd default to absent; the required
+      // mention crosses verbatim.
+      expect(candidates, <SessionReferenceCandidate>[
+        const SessionReferenceCandidate(
+          sessionId: 'session-2',
+          label: 'Release notes',
+          displayTitle: 'Release notes',
+          cwd: '/home/tester/project',
+          sameWorkspace: true,
+          createdAtEpochMs: 1700000000000,
+          mention: '@[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ)',
+        ),
+        const SessionReferenceCandidate(
+          sessionId: 'session-3',
+          label: 'session-3',
+          cwd: '/tmp/other',
+          sameWorkspace: false,
+          createdAtEpochMs: 1700000000001,
+          mention: '@[session-3](dsh-session:eyJzZXNzaW9uLTMifQ)',
+        ),
+      ]);
+    },
+  );
+
+  test(
+    'sessionReferenceResolver/candidates missing the mention throws naming it',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      rpc.sessionReferenceRowsValue = <Object?>[
+        <String, Object?>{
+          'sessionId': 'session-2',
+          'label': 'Release notes',
+          'sameWorkspace': true,
+          'createdAt': 1700000000000,
+        },
+      ];
+
+      await expectLater(
+        repository.listSessionReferences('s-1', ''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('mention'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'sessionReferenceResolver/candidates missing a required field throws',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+      rpc.sessionReferenceRowsValue = <Object?>[
+        <String, Object?>{'sessionId': 'session-2'},
+      ];
+
+      // `label`, `mention`, `sameWorkspace` and `createdAt` are required, so
+      // a row that omits them fails loud naming the first missing field.
+      await expectLater(
+        repository.listSessionReferences('s-1', ''),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('label'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'workspace/initializeDefault takes no request and merges the workspace',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      final workspace = await repository.initializeDefaultWorkspace();
+
+      expect(rpc.callCountFor(DshRpcEndpoints.workspaceInitializeDefault), 1);
+      // The verb takes only the injected `signal`, so the client sends no
+      // request object and no name.
+      expect(
+        rpc.rawPayloads(DshRpcEndpoints.workspaceInitializeDefault).single,
+        isEmpty,
+      );
+      expect(workspace?.workspaceId, 'ws-default');
+      expect(workspace?.path, '/home/tester/Documents');
+      expect(
+        (await repository.observeWorkspaces().first)
+            .map((item) => item.workspaceId)
+            .toList(),
+        <String>['ws-default'],
+      );
+    },
+  );
+
+  test('an ineligible first use answers no workspace, not a failure', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    rpc.initializeDefaultWorkspaceValue = null;
+
+    expect(await repository.initializeDefaultWorkspace(), isNull);
+    expect(await repository.observeWorkspaces().first, isEmpty);
+  });
+
+  test('a refused default workspace surfaces the Host error', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    rpc.failNextCall(DshRpcEndpoints.workspaceInitializeDefault, 'permission');
+
+    await expectLater(
+      repository.initializeDefaultWorkspace(),
+      throwsA(
+        isA<DshBusinessException>().having(
+          (error) => error.code,
+          'code',
+          'permission',
+        ),
+      ),
+    );
   });
 
   test(
@@ -8617,4 +8861,193 @@ void main() {
       );
     },
   );
+
+  test('canOpenWorkspacePath reads the host desktop answer', () async {
+    final rpc = HarnessFakeRpc(<Object?>[]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    expect(await repository.canOpenWorkspacePath(), isTrue);
+    // The probe takes no request object: `args` stays empty rather than
+    // carrying an empty `request` wrapper.
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.sessionCanOpenWorkspacePath).single,
+      isEmpty,
+    );
+
+    rpc.canOpenWorkspacePathValue = false;
+    expect(await repository.canOpenWorkspacePath(), isFalse);
+  });
+
+  test(
+    'canOpenWorkspacePath fails loud when the host answers no value',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[])..canOpenWorkspacePathValue = null;
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.canOpenWorkspacePath(),
+        throwsA(
+          isA<FormatException>().having(
+            (FormatException error) => error.message,
+            'message',
+            contains('value'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'workspacePathApplications wraps its request and decodes every row',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[])
+        ..workspacePathApplicationsValue = <Object?>[
+          <String, Object?>{
+            'id': 'org.gnome.Nautilus.desktop',
+            'name': 'Files',
+            'default': true,
+            'icon': 'data:image/png;base64,AAAA',
+          },
+          <String, Object?>{
+            'id': 'code.desktop',
+            'name': 'Code',
+            'default': false,
+            'icon': null,
+          },
+        ];
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      final applications = await repository.workspacePathApplications(
+        '/w/project',
+      );
+      expect(
+        rpc
+            .rawPayloads(DshRpcEndpoints.sessionWorkspacePathApplications)
+            .single,
+        <String, Object?>{
+          'request': <String, Object?>{'path': '/w/project'},
+        },
+      );
+      expect(applications, <WorkspacePathApplication>[
+        const WorkspacePathApplication(
+          id: 'org.gnome.Nautilus.desktop',
+          name: 'Files',
+          isDefault: true,
+          icon: 'data:image/png;base64,AAAA',
+        ),
+        const WorkspacePathApplication(
+          id: 'code.desktop',
+          name: 'Code',
+          isDefault: false,
+          icon: null,
+        ),
+      ]);
+    },
+  );
+
+  test(
+    'an application row missing a required field fails loud naming it',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[])
+        ..workspacePathApplicationsValue = <Object?>[
+          <String, Object?>{'id': 'code.desktop', 'name': 'Code', 'icon': null},
+        ];
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await expectLater(
+        repository.workspacePathApplications('/w/project'),
+        throwsA(
+          isA<FormatException>().having(
+            (FormatException error) => error.message,
+            'message',
+            contains('default'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'openWorkspacePath names the application, then keeps the OS default',
+    () async {
+      final rpc = HarnessFakeRpc(<Object?>[]);
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      await pumpEventQueue();
+
+      await repository.openWorkspacePath(
+        '/w/project',
+        application: 'code.desktop',
+      );
+      expect(
+        rpc.rawPayloads(DshRpcEndpoints.sessionOpenWorkspacePath).single,
+        <String, Object?>{
+          'request': <String, Object?>{
+            'path': '/w/project',
+            'application': 'code.desktop',
+          },
+        },
+      );
+
+      // An omitted application must leave the field off the request rather
+      // than sending null: the host reads absence as the operating system
+      // default.
+      await repository.openWorkspacePath('/w/project');
+      expect(
+        rpc.rawPayloads(DshRpcEndpoints.sessionOpenWorkspacePath)[1],
+        <String, Object?>{
+          'request': <String, Object?>{'path': '/w/project'},
+        },
+      );
+    },
+  );
+
+  test('openWorkspacePath reports a host that answered opened false', () async {
+    final rpc = HarnessFakeRpc(<Object?>[])
+      ..openWorkspacePathValue = <String, Object?>{'opened': false};
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    await expectLater(
+      repository.openWorkspacePath('/w/project'),
+      throwsA(
+        isA<FormatException>().having(
+          (FormatException error) => error.message,
+          'message',
+          contains('opened'),
+        ),
+      ),
+    );
+  });
+
+  test('a refused open surfaces the host code and message', () async {
+    final rpc = HarnessFakeRpc(<Object?>[]);
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    rpc.failNextCall(
+      DshRpcEndpoints.sessionOpenWorkspacePath,
+      'gateway/bad-request',
+    );
+    await expectLater(
+      repository.openWorkspacePath('/report.html'),
+      throwsA(
+        isA<DshBusinessException>().having(
+          (DshBusinessException failure) => failure.code,
+          'code',
+          'gateway/bad-request',
+        ),
+      ),
+    );
+  });
 }

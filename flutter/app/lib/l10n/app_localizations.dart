@@ -2672,6 +2672,12 @@ abstract class AppLocalizations {
   /// **'No workspaces yet'**
   String get noWorkspacesYet;
 
+  /// Empty workspace tree action that registers the host's own default workspace folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the default workspace'**
+  String get useDefaultWorkspace;
+
   /// No description provided for @moveUp.
   ///
   /// In en, this message translates to:
@@ -3037,6 +3043,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Archive session'**
   String get archiveSession;
+
+  /// Session verb and sheet title that hands the session workspace directory to the serving desktop native opener.
+  ///
+  /// In en, this message translates to:
+  /// **'Open workspace'**
+  String get openWorkspace;
 
   /// No description provided for @unarchiveSession.
   ///
@@ -6306,6 +6318,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Files & folders'**
   String get fileReferenceSectionTitle;
+
+  /// Group label above the composer @ session-reference candidates.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get sessionReferenceSectionTitle;
 
   /// Accessible name of the thumbs-up control on an unrated assistant reply.
   ///
