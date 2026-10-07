@@ -74,6 +74,14 @@ abstract class ChatRepository {
   Future<String> selectAgentPreset(String sessionId, String agentPreset) =>
       _unsupported('selectAgentPreset');
 
+  /// Read one preset's declared composition (dsh `agentPresets/read`).
+  ///
+  /// A view, not a write: the content is the declaration rendered as YAML.
+  /// An unknown preset is a Host refusal ([RepositoryFailure], code
+  /// `agent-preset/not-found`).
+  Future<AgentPresetDocument> readAgentPreset(String agentPreset) =>
+      _unsupported('readAgentPreset');
+
   /// List one host-directory level; a null path lists the host home.
   Future<DirectoryListing> listDirectory(String? path) =>
       _unsupported('listDirectory');

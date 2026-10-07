@@ -43,6 +43,7 @@ import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_archive.dart';
+import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/workspace.dart';
@@ -562,6 +563,14 @@ final List<DesignShot> shots = <DesignShot>[
     act: _openPermissionDefaultsPage,
     dark: false,
   ),
+  // One preset's declared composition: the YAML the host renders, viewed
+  // from the roster card's read-only affordance.
+  const DesignShot(
+    name: 'settings-agent-preset-declaration',
+    host: _settingsAgentPresetHost,
+    act: _openAgentPresetDeclaration,
+    dark: false,
+  ),
   const DesignShot(
     name: 'settings-credentials',
     host: _settingsHost,
@@ -975,6 +984,37 @@ const List<WorkspaceSummary> _archivedWorkspaces = <WorkspaceSummary>[
 /// reviews.
 Widget _settingsAppearanceHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale, repository: _FakeThemeNamespaceRepository());
+
+Widget _settingsAgentPresetHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(
+      theme,
+      locale,
+      repository: _FakeAgentPresetDocumentRepository(),
+    );
+
+/// One scoped repository method: the declaration the preset page reads.
+class _FakeAgentPresetDocumentRepository implements ChatRepository {
+  @override
+  Future<AgentPresetDocument> readAgentPreset(String agentPreset) async =>
+      AgentPresetDocument(
+        agentPreset: agentPreset,
+        name: 'Standard',
+        description: 'The default toolchain.',
+        content:
+            '- id: tool-bash\n'
+            '  name: \'@deepseek-ai/dsh-tool-bash\'\n'
+            '- id: tool-read\n'
+            '  name: \'@deepseek-ai/dsh-tool-read\'\n'
+            '- id: session-title\n'
+            '  name: \'@deepseek-ai/dsh-session-title\'\n'
+            '  config:\n'
+            '    enabled: !!js ctx.get(\'profileContext\') !== undefined\n',
+      );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
 
 Widget _settingsPermissionHost(ThemeData theme, Locale? locale) =>
     _settingsTree(
@@ -1618,6 +1658,12 @@ Future<void> _tapSettingsRow(WidgetTester tester, String title) async {
 
 Future<void> _openAgentPresetsPage(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Agent preset');
+
+Future<void> _openAgentPresetDeclaration(WidgetTester tester) async {
+  await _tapSettingsRow(tester, 'Agent preset');
+  await tester.tap(find.text('View').first);
+  await settle(tester);
+}
 
 Future<void> _openPermissionDefaultsPage(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Default permission preset');

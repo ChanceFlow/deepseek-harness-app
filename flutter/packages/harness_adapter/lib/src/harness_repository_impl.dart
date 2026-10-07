@@ -1211,6 +1211,23 @@ class HarnessRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<AgentPresetDocument> readAgentPreset(String agentPreset) async {
+    final value = await _call(
+      DshRpcEndpoints.agentPresetsRead,
+      DshRpcEndpoints.agentPresetsRead,
+      {'agentPreset': agentPreset},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final wire = AgentPresetDocumentWire.fromJson(value);
+    return AgentPresetDocument(
+      agentPreset: wire.agentPreset,
+      content: wire.content,
+      name: wire.name,
+      description: wire.description,
+    );
+  }
+
+  @override
   Future<String> selectAgentPreset(String sessionId, String agentPreset) async {
     final value = await _call(
       DshRpcEndpoints.agentPresetsSelect,

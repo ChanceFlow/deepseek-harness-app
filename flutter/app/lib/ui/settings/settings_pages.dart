@@ -8,6 +8,8 @@
 /// [SettingsChannel] so a write they trigger lands without going back.
 library;
 
+import 'dart:async';
+
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/settings.dart';
@@ -17,6 +19,7 @@ import '../shared/agent_preset_display.dart';
 import '../theme/theme.dart';
 import 'about_section.dart';
 import 'llm_providers.dart';
+import 'agent_preset_document.dart';
 import 'plugin_inventory_section.dart';
 import 'settings_chrome.dart';
 import 'settings_ui_state.dart';
@@ -71,6 +74,19 @@ class SettingsAgentPresetsPage extends StatelessWidget {
                       writable: writable,
                       busy: state.isLoading,
                       onAction: onAction,
+                      // Pushed on the navigator the settings index uses, so
+                      // the system back gesture returns to the roster.
+                      onViewDeclaration: () => unawaited(
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (BuildContext _) =>
+                                SettingsAgentPresetDocumentPage(
+                                  agentPreset: entry.id,
+                                  label: agentPresetDisplayName(entry, l10n),
+                                ),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                   ],
@@ -891,6 +907,7 @@ class _PresetCard extends StatelessWidget {
     required this.writable,
     required this.busy,
     required this.onAction,
+    required this.onViewDeclaration,
     super.key,
   });
 
@@ -898,6 +915,11 @@ class _PresetCard extends StatelessWidget {
   final bool writable;
   final bool busy;
   final void Function(SettingsAction) onAction;
+
+  /// Opens the preset's declared composition. Read-only and always offered —
+  /// a broken preset's declaration is exactly what a reader wants to see, and
+  /// the roster's own row already says it cannot be selected.
+  final VoidCallback onViewDeclaration;
 
   @override
   Widget build(BuildContext context) {
@@ -944,6 +966,10 @@ class _PresetCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                    ),
+                    TextButton(
+                      onPressed: onViewDeclaration,
+                      child: Text(l10n.agentPresetViewDeclaration),
                     ),
                     if (broken) ...<Widget>[
                       const SizedBox(width: 8),

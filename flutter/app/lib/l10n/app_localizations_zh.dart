@@ -1196,6 +1196,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get permissionDefaultsReadOnly => '该部署的设置是只读的。';
 
   @override
+  String get agentPresetViewDeclaration => '查看';
+
+  @override
+  String get agentPresetDocumentTitle => '声明的组成';
+
+  @override
+  String get agentPresetDocumentIntro => '该预设声明的子插件列表（YAML）。只读视图：预设由 host 组合。';
+
+  @override
+  String get agentPresetDocumentUnavailable => '无法从该 host 读取声明。';
+
+  @override
   String get settingsDocumentLabel => '设置文档';
 
   @override

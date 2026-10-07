@@ -1242,6 +1242,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'Settings are read-only on this deployment.';
 
   @override
+  String get agentPresetViewDeclaration => 'View';
+
+  @override
+  String get agentPresetDocumentTitle => 'Declared composition';
+
+  @override
+  String get agentPresetDocumentIntro =>
+      'The child plugin list this preset declares, as YAML. A view: presets are composed on the host.';
+
+  @override
+  String get agentPresetDocumentUnavailable =>
+      'The declaration could not be read from this host.';
+
+  @override
   String get settingsDocumentLabel => 'Settings document';
 
   @override

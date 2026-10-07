@@ -65,6 +65,7 @@ abstract final class DshRpcEndpoints {
 
   // Agent Presets (DSH 0.1.2 plural namespace)
   static const String agentPresetsList = 'agentPresets/list';
+  static const String agentPresetsRead = 'agentPresets/read';
   static const String agentPresetsSelect = 'agentPresets/select';
 
   // Directory Picker (DSH 0.1.2 directoryPickerController)
