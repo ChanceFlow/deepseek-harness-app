@@ -1,4 +1,5 @@
-/// The composer's `@` mention picker, backed by `fileReferences/list`.
+/// The composer's `@` mention picker, backed by `fileReferences/list` and
+/// `sessionReferenceResolver/candidates`.
 ///
 /// The grammar group mirrors the shared browser-safe token grammar
 /// (`reference/deepseek-harness/packages/context/file-reference/src/
@@ -14,6 +15,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_reference_picker.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +31,27 @@ const FileReferenceCandidate _srcDirectory = FileReferenceCandidate(
 const FileReferenceCandidate _mainFile = FileReferenceCandidate(
   path: 'src/main.dart',
   kind: FileReferenceKind.file,
+);
+
+/// One citable session in the addressed session's own workspace: its row
+/// carries no location.
+const SessionReferenceCandidate _releaseSession = SessionReferenceCandidate(
+  sessionId: 'session-2',
+  label: 'Release notes',
+  mention: '@[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ)',
+  sameWorkspace: true,
+  createdAtEpochMs: 1700000000000,
+);
+
+/// One citable session elsewhere: its row names the directory it lives in.
+const SessionReferenceCandidate _elsewhereSession = SessionReferenceCandidate(
+  sessionId: 'session-3',
+  label: 'session-3',
+  displayTitle: 'parser child',
+  cwd: '/tmp/other',
+  sameWorkspace: false,
+  createdAtEpochMs: 1700000000001,
+  mention: '@[parser child](dsh-session:eyJzZXNzaW9uLTMifQ)',
 );
 
 /// [FakeChatRepository] whose `fileReferences/list` answers can be delayed per
@@ -155,6 +178,58 @@ void main() {
     });
   });
 
+  group('session mention text', () {
+    test('the host mention is inserted verbatim and separated', () {
+      final token = activeFileReferenceToken('see @rel', 8)!;
+      final applied = applySessionReferencePick(
+        draft: 'see @rel',
+        cursor: 8,
+        token: token,
+        candidate: _releaseSession,
+      );
+      expect(applied, isNotNull);
+      expect(
+        applied!.text,
+        'see @[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ) ',
+      );
+      expect(applied.caret, applied.text.length);
+    });
+
+    test('an existing separator is not doubled', () {
+      final token = activeFileReferenceToken('@rel next', 4)!;
+      final applied = applySessionReferencePick(
+        draft: '@rel next',
+        cursor: 4,
+        token: token,
+        candidate: _releaseSession,
+      );
+      expect(
+        applied!.text,
+        '@[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ) next',
+      );
+    });
+
+    test('a mention the draft cannot hold has no text', () {
+      const unsafe = SessionReferenceCandidate(
+        sessionId: 'session-4',
+        label: 'unsafe',
+        mention: '@[bad\u0000label](dsh-session:eyJzZXNzaW9uLTQifQ)',
+        sameWorkspace: true,
+        createdAtEpochMs: 0,
+      );
+      expect(sessionReferenceMention(unsafe), isNull);
+      expect(
+        applySessionReferencePick(
+          draft: '@x',
+          cursor: 2,
+          token: activeFileReferenceToken('@x', 2)!,
+          candidate: unsafe,
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('controller @ queries', () {
     test('a keystroke burst collapses into one pull', () async {
       final repository = FakeChatRepository()
@@ -250,6 +325,86 @@ void main() {
       expect(controller.state.fileReferences?.candidates, isEmpty);
       expect(controller.state.errorMessage, isNull);
     });
+    test('both @ families resolve into one holder', () async {
+      final repository = FakeChatRepository()
+        ..fileReferenceRoster = <String, List<FileReferenceCandidate>>{
+          'src': const <FileReferenceCandidate>[_mainFile],
+        }
+        ..sessionReferenceRoster = <String, List<SessionReferenceCandidate>>{
+          'src': const <SessionReferenceCandidate>[_releaseSession],
+        };
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await pumpEventQueue();
+      controller.onAction(const SelectSession('session-1'));
+      await pumpEventQueue();
+
+      controller.onAction(const UpdateFileReferences('src'));
+      await Future<void>.delayed(
+        kFileReferenceDebounce + const Duration(milliseconds: 40),
+      );
+
+      expect(repository.sessionReferenceCalls, <(String, String)>[
+        ('session-1', 'src'),
+      ]);
+      expect(
+        controller.state.fileReferences?.candidates,
+        const <FileReferenceCandidate>[_mainFile],
+      );
+      expect(
+        controller.state.fileReferences?.sessionCandidates,
+        const <SessionReferenceCandidate>[_releaseSession],
+      );
+    });
+
+    test('a refused session lookup still serves the path rows', () async {
+      final repository = FakeChatRepository()
+        ..fileReferenceRoster = <String, List<FileReferenceCandidate>>{
+          'src': const <FileReferenceCandidate>[_mainFile],
+        }
+        ..refuseSessionReferences = true;
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await pumpEventQueue();
+      controller.onAction(const SelectSession('session-1'));
+      await pumpEventQueue();
+
+      controller.onAction(const UpdateFileReferences('src'));
+      await Future<void>.delayed(
+        kFileReferenceDebounce + const Duration(milliseconds: 40),
+      );
+
+      expect(
+        controller.state.fileReferences?.candidates,
+        const <FileReferenceCandidate>[_mainFile],
+      );
+      expect(controller.state.fileReferences?.sessionCandidates, isEmpty);
+      expect(controller.state.errorMessage, isNull);
+    });
+
+    test('a refused path lookup still serves the session rows', () async {
+      // An empty path roster: `src` answers `fileReferences/list unavailable`.
+      final repository = FakeChatRepository()
+        ..sessionReferenceRoster = <String, List<SessionReferenceCandidate>>{
+          'src': const <SessionReferenceCandidate>[_releaseSession],
+        };
+      final controller = ChatController(repository);
+      addTearDown(controller.dispose);
+      await pumpEventQueue();
+      controller.onAction(const SelectSession('session-1'));
+      await pumpEventQueue();
+
+      controller.onAction(const UpdateFileReferences('src'));
+      await Future<void>.delayed(
+        kFileReferenceDebounce + const Duration(milliseconds: 40),
+      );
+
+      expect(controller.state.fileReferences?.candidates, isEmpty);
+      expect(
+        controller.state.fileReferences?.sessionCandidates,
+        const <SessionReferenceCandidate>[_releaseSession],
+      );
+    });
   });
 
   group('composer picker', () {
@@ -261,8 +416,16 @@ void main() {
         ..fileReferenceRoster = <String, List<FileReferenceCandidate>>{
           '': const <FileReferenceCandidate>[_srcDirectory],
           's': const <FileReferenceCandidate>[_srcDirectory],
+          'rel': const <FileReferenceCandidate>[_srcDirectory],
           'src/': const <FileReferenceCandidate>[_mainFile],
           'src/ma': const <FileReferenceCandidate>[_mainFile],
+        }
+        ..sessionReferenceRoster = <String, List<SessionReferenceCandidate>>{
+          '': const <SessionReferenceCandidate>[
+            _releaseSession,
+            _elsewhereSession,
+          ],
+          'rel': const <SessionReferenceCandidate>[_releaseSession],
         };
       controller = ChatController(repository);
       addTearDown(controller.dispose);
@@ -370,6 +533,50 @@ void main() {
 
       expect(repository.fileReferenceCalls, isEmpty);
       expect(find.text('src/'), findsNothing);
+    });
+
+    testWidgets('the menu groups paths and sessions and inserts the mention', (
+      tester,
+    ) async {
+      await pump(tester);
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      await type(tester, '@');
+
+      // One menu, two labelled families (the reference source's combined
+      // `@` list).
+      expect(find.text(l10n.fileReferenceSectionTitle), findsOneWidget);
+      expect(find.text(l10n.sessionReferenceSectionTitle), findsOneWidget);
+      expect(find.text('src/'), findsOneWidget);
+      // A session in this workspace names no location; the other one does,
+      // and a display title wins over the id-backed label.
+      expect(find.text('Release notes'), findsOneWidget);
+      expect(find.text('parser child'), findsOneWidget);
+      expect(find.text('/tmp/other'), findsOneWidget);
+
+      await tester.tap(find.text('Release notes'));
+      await tester.pump();
+
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).controller.text,
+        '@[Release notes](dsh-session:eyJzZXNzaW9uLTIifQ) ',
+      );
+      // The completed mention closes the menu.
+      expect(find.text('Release notes'), findsNothing);
+    });
+
+    testWidgets('an open quote hides the sessions family', (tester) async {
+      await pump(tester);
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      await type(tester, '@"rel');
+
+      // The quoted path keeps its own rows; the reference source asks for
+      // sessions only while the path is unquoted.
+      expect(find.text(l10n.fileReferenceSectionTitle), findsOneWidget);
+      expect(find.text('src/'), findsOneWidget);
+      expect(find.text(l10n.sessionReferenceSectionTitle), findsNothing);
+      expect(find.text('Release notes'), findsNothing);
     });
   });
 }

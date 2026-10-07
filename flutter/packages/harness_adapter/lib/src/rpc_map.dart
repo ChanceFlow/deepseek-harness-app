@@ -33,6 +33,20 @@ abstract final class DshRpcEndpoints {
   static const String sessionHistory = 'session/history';
   static const String sessionPage = 'session/page';
 
+  // Open in app (DSH 0.1.7 `sessionController` service —
+  // reference/deepseek-harness/packages/api/session-controller/src/index.ts
+  // :318 `@Remote canOpenWorkspacePath()`, :339 `@Remote('openWorkspacePath')`
+  // and :369 `@Remote('workspacePathApplications')`). The three hand a
+  // Session workspace path to the serving desktop's native opener:
+  // availability, the file associations registered for one path, and the
+  // gesture itself. The web driver is
+  // packages/client/ui-open-in-app/src/client/open-path.ts.
+  static const String sessionCanOpenWorkspacePath =
+      'session/canOpenWorkspacePath';
+  static const String sessionOpenWorkspacePath = 'session/openWorkspacePath';
+  static const String sessionWorkspacePathApplications =
+      'session/workspacePathApplications';
+
   /// Non-activating read of every registered projection for one Session
   /// (`packages/api/session-controller/src/index.ts` `@Remote('projections')`).
   /// It replaced `subagents/list`: the subagent roster is the parent's
@@ -84,6 +98,16 @@ abstract final class DshRpcEndpoints {
   static const String workspacePinSession = 'workspace/pinSession';
   static const String workspaceUnpinSession = 'workspace/unpinSession';
 
+  // First-use default Workspace (DSH 0.1.2 `workspaceController` service —
+  // reference/deepseek-harness/packages/api/workspace-controller/src/
+  // index.ts:98 `@Remote('initializeDefault')`). The handler takes only the
+  // transport's injected `signal`, so the client sends no request object, and
+  // it answers `WorkspaceValue | undefined` (`:99`, `:106`) where `undefined`
+  // is the host's own "first-use initialization is ineligible" — a null
+  // result, never an error.
+  static const String workspaceInitializeDefault =
+      'workspace/initializeDefault';
+
   // Workspace Files. `read` pages decoded UTF-8 text; `readBytes` returns
   // native bytes — the whole file when `options.range` is absent, one window
   // otherwise. Both scope the file through the `workspaceFileScope` lookup.
@@ -123,6 +147,18 @@ abstract final class DshRpcEndpoints {
   // 'fileReferences' })`). Its one method takes the Agent lookup, whose wire
   // field is `agentId`, plus the `@` path query.
   static const String fileReferencesList = 'fileReferences/list';
+
+  // Cross-session `@` discovery (DSH 0.2.0 `sessionReferenceResolver` service
+  // — reference/deepseek-harness/packages/context/session-reference/src/
+  // index.ts:98 `super(ctx, 'sessionReferenceResolver')`, :271
+  // `@Remote('candidates')`). A distinct provider from [fileReferencesList],
+  // not the same lookup through another resolver: it answers
+  // `SessionReferenceMentionCandidate[]` (session identity, projected labels,
+  // working-directory affinity and the canonical mention) where the file
+  // namespace answers path/kind candidates. Its arguments mirror the file
+  // lookup — the Agent lookup's wire field `agentId` plus the query.
+  static const String sessionReferenceResolverCandidates =
+      'sessionReferenceResolver/candidates';
 
   // File uploads (DSH 0.2.0 `fileUploads` service —
   // reference/deepseek-harness/packages/client/file-upload/src/index.ts,

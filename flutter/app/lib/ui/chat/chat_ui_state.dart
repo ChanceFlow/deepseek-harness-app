@@ -18,6 +18,7 @@ import 'package:domain/model/schedule.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -61,6 +62,7 @@ final class ChatUiState {
     this.modelPrefs,
     this.sessionLogExport,
     this.canExportSessionLog = false,
+    this.canOpenWorkspace = false,
     this.cordisRunRequests = const <CordisRunRequest>[],
     this.cordisAnswerFailed = false,
     this.commands,
@@ -175,6 +177,13 @@ final class ChatUiState {
   /// only fail.
   final bool canExportSessionLog;
 
+  /// Whether the host can hand a workspace path to a native desktop (dsh
+  /// `session/canOpenWorkspacePath`). False until the host says yes — which
+  /// is also the state after an unreachable-host read, exactly as the
+  /// reference reads it — so the Open workspace verb never appears on a
+  /// deployment that cannot serve it.
+  final bool canOpenWorkspace;
+
   /// Pending dynamic-Cordis plugin activation requests the host forwarded
   /// (`cordis/request-run`). A request stays here until a client answers it
   /// or `cordis/request-run-resolved` reports it settled; an empty list is
@@ -223,20 +232,30 @@ final class ChatUiState {
 /// One resolved `@` mention query and the host's candidates for it.
 ///
 /// The query travels with the rows: the picker's keystrokes resolve out of
-/// order (one debounced `fileReferences/list` per settled prefix), so only a
-/// holder whose query equals the live token may render.
+/// order (one debounced lookup per settled prefix), so only a holder whose
+/// query equals the live token may render. Both `@` families ride one holder
+/// because the reference client runs them in parallel and shows one menu:
+/// [candidates] are the path candidates (`fileReferences/list`),
+/// [sessionCandidates] the cross-session mentions
+/// (`sessionReferenceResolver/candidates`).
 final class FileReferencePickerState {
   const FileReferencePickerState({
     required this.query,
     required this.candidates,
+    this.sessionCandidates = const <SessionReferenceCandidate>[],
   });
 
   /// The path text after `@` or `@"` this answer belongs to.
   final String query;
 
-  /// The host's ranked candidates; empty is the host's own "nothing here",
-  /// which the menu renders as no menu.
+  /// The host's ranked path candidates; empty is the host's own "nothing
+  /// here", which the menu renders as no menu.
   final List<FileReferenceCandidate> candidates;
+
+  /// The host's ranked session-mention candidates for the same query. A
+  /// failed or empty lookup leaves this empty without hiding the path rows:
+  /// the two sources answer independently.
+  final List<SessionReferenceCandidate> sessionCandidates;
 }
 
 /// Where one session-log export stands. Facts only — the UI layer owns the
@@ -870,4 +889,26 @@ final class RejectCordisRun extends ChatAction {
 
   @override
   int get hashCode => Object.hash('reject-cordis-run', requestId);
+}
+
+/// Hand one workspace path to the host's native opener
+/// (dsh `session/openWorkspacePath`).
+///
+/// [application] names one of the ids the host registered for the path;
+/// omitting it keeps the operating system's own default. A host refusal
+/// surfaces through the shared error strip carrying the host's reason.
+final class OpenWorkspacePath extends ChatAction {
+  const OpenWorkspacePath(this.path, {this.application});
+
+  final String path;
+  final String? application;
+
+  @override
+  bool operator ==(Object other) =>
+      other is OpenWorkspacePath &&
+      other.path == path &&
+      other.application == application;
+
+  @override
+  int get hashCode => Object.hash(path, application);
 }

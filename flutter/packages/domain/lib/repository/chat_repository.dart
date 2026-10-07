@@ -25,6 +25,7 @@ import '../model/jobs.dart';
 import '../model/message_feedback.dart';
 import '../model/llm_provider.dart';
 import '../model/model_catalog.dart';
+import '../model/open_in_app.dart';
 import '../model/plan.dart';
 import '../model/plugin_inventory.dart';
 import '../model/plugin_management.dart';
@@ -33,6 +34,7 @@ import '../model/repository_failure.dart';
 import '../model/sandbox.dart';
 import '../model/schedule.dart';
 import '../model/session.dart';
+import '../model/session_reference.dart';
 import '../model/session_archive.dart';
 import '../model/settings.dart';
 import '../model/terminal.dart';
@@ -296,6 +298,21 @@ abstract class ChatRepository {
     String sessionId,
     String query,
   ) => _unsupported('listFileReferences');
+
+  /// Cross-session `@` mention candidates for one agent
+  /// (`sessionReferenceResolver/candidates`). A distinct provider from
+  /// [listFileReferences], not the same lookup through another resolver: each
+  /// row names another session (identity, projected labels, whether it shares
+  /// the addressed workspace) and carries the host's own canonical
+  /// `dsh-session:` mention, which the composer inserts verbatim and the host
+  /// parses back out of the prompt. [sessionId] addresses the agent the way
+  /// [listCommands] does; [query] is the text following `@` — empty lists the
+  /// host's ranked candidates, a prefix filters them by session id, working
+  /// directory, title or subagent label.
+  Future<List<SessionReferenceCandidate>> listSessionReferences(
+    String sessionId,
+    String query,
+  ) => _unsupported('listSessionReferences');
 
   /// A tick whenever the host's command registry changed
   /// (`commands/change`): a surface re-pulls [listCommands] for every open
@@ -693,6 +710,16 @@ abstract class ChatRepository {
 
   Future<WorkspaceSummary> createWorkspace(String path);
 
+  /// Register the deployment's default workspace
+  /// (`workspace/initializeDefault`) — the host's own first-use directory
+  /// choice, with no name and no path in the request. Null is the host's
+  /// "first-use initialization is ineligible" (`WorkspaceValue | undefined`),
+  /// a normal outcome rather than a failure: the caller keeps its empty state.
+  /// A registered workspace is the durable row the workspace roster then
+  /// publishes, and the call creates no session and no message.
+  Future<WorkspaceSummary?> initializeDefaultWorkspace() =>
+      _unsupported('initializeDefaultWorkspace');
+
   /// Rename a registered workspace. Production adapters override this with
   /// the dsh `workspace.rename` call. Test doubles may leave the default
   /// implementation and only stub the operations their scenario exercises.
@@ -912,6 +939,38 @@ abstract class ChatRepository {
     String? text,
     MessageFeedbackCategory? category,
   }) => _unsupported('recordSessionFeedback');
+
+  // -------------------------------------------------------------------------
+  // Open in app (`session/canOpenWorkspacePath`,
+  // `session/workspacePathApplications`, `session/openWorkspacePath`)
+  // -------------------------------------------------------------------------
+
+  /// Whether this deployment can hand a workspace path to a native desktop
+  /// (`session/canOpenWorkspacePath`). The reference reads this once per page
+  /// and treats an unreachable host as "no desktop", so a failed read is a
+  /// false answer rather than a surfaced error.
+  Future<bool> canOpenWorkspacePath() => _unsupported('canOpenWorkspacePath');
+
+  /// The OS applications registered to open [path] on the serving desktop
+  /// (`session/workspacePathApplications`), in the desktop's own preference
+  /// order and with the OS default marked. Empty when the deployment has no
+  /// native opener; an invalid [path] is a Host refusal carrying its
+  /// `gateway/bad-request` code.
+  Future<List<WorkspacePathApplication>> workspacePathApplications(
+    String path,
+  ) => _unsupported('workspacePathApplications');
+
+  /// Hand [path] to the serving desktop's native opener
+  /// (`session/openWorkspacePath`).
+  ///
+  /// [application] names one of the ids [workspacePathApplications] reported;
+  /// omitting it keeps the operating system's own default. [path] is the host
+  /// path the session's workspace resolves to — the Host verifies it against
+  /// the composed filesystem and refuses one with no verified mapping. A
+  /// refusal is the Host's own business failure (its stable code and message),
+  /// which the surface states instead of looking like the tap did nothing.
+  Future<void> openWorkspacePath(String path, {String? application}) =>
+      _unsupported('openWorkspacePath');
 }
 
 final class QuestionEvidence {

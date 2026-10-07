@@ -245,10 +245,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 97
+declared = 102
 upstream = 128
-identical = 95
-missing = 33
+identical = 100
+missing = 28
 client-only = 2
 out-of-scope = productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
@@ -271,6 +271,21 @@ The comparison is by **name only**. A payload or result shape that changes
 under a stable name — a renamed argument, a codec swap such as base64 to
 multipart — is invisible here, so a shape claim rests on the reference citation
 in the client code, not on this block.
+
+The 28 unwired methods are accounted for by kind: 11 `dynamicCordisRunner/*`
+render a live component in a browser or desktop surface this client does not
+have; 5 `speech/*` describe the host speech plane, which the phone replaces
+with on-device ASR; 4 `account/startSignIn|cancelSignIn|signOut|
+hasRunningAccountTasks` need a browser OAuth / platform callback a phone
+surface cannot complete; 2 `officeToPdf/*` back desktop document preview; 1
+`directoryPicker/pick` and 1 `settings/openSettingsDocument` open host-side
+desktop dialogs and editors, while the phone lists directories over its own
+workspace picker; the 2 `productAnalytics/*` are this block's `out-of-scope`
+pair (the reference web client never calls them either); and the last 2 are
+recorded overlaps with their `path:line` evidence in the decision notes —
+`session/initializeDefaultModel` (a created session already inherits the host
+default) and `goals/get` (carries only activation, which this client never
+renders).
 
 A stream the client opens with a literal string rather than through
 `DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,

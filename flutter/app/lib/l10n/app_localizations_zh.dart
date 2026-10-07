@@ -1475,6 +1475,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noWorkspacesYet => '暂无工作区';
 
   @override
+  String get useDefaultWorkspace => '使用默认工作区';
+
+  @override
   String get moveUp => '上移';
 
   @override
@@ -1678,6 +1681,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get archiveSession => '归档会话';
+
+  @override
+  String get openWorkspace => '打开工作区';
 
   @override
   String get unarchiveSession => '取消归档会话';
@@ -3571,6 +3577,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fileReferenceSectionTitle => '文件与文件夹';
+
+  @override
+  String get sessionReferenceSectionTitle => '会话';
 
   @override
   String get feedbackRateUp => '回答不错';

@@ -11,6 +11,7 @@ import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/file_reference.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/file_upload.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/plan.dart';
@@ -337,6 +338,33 @@ class FakeChatRepository extends ChatRepository {
     final rows = fileReferenceRoster[query];
     if (rows == null) throw UnsupportedError('fileReferences/list unavailable');
     return rows;
+  }
+
+  /// Rows served by `listSessionReferences`, keyed by the `@` query. Unlike
+  /// the file roster an absent query answers empty — a deployment with no
+  /// other session to cite is ordinary, not a refusal.
+  Map<String, List<SessionReferenceCandidate>> sessionReferenceRoster =
+      <String, List<SessionReferenceCandidate>>{};
+
+  /// When true the session lookup refuses outright (a host that cannot read
+  /// the session query), which the picker must degrade to that family's
+  /// empty rows.
+  bool refuseSessionReferences = false;
+
+  /// `(sessionId, query)` pairs the session picker pulled, in order — the
+  /// parallel half of the debounce's witness.
+  final List<(String, String)> sessionReferenceCalls = <(String, String)>[];
+
+  @override
+  Future<List<SessionReferenceCandidate>> listSessionReferences(
+    String sessionId,
+    String query,
+  ) async {
+    sessionReferenceCalls.add((sessionId, query));
+    if (refuseSessionReferences) {
+      throw UnsupportedError('sessionReferenceResolver/candidates unavailable');
+    }
+    return sessionReferenceRoster[query] ?? const <SessionReferenceCandidate>[];
   }
 
   /// Pending Cordis activation requests the fake publishes.

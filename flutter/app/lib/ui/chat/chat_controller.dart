@@ -16,6 +16,7 @@ import 'package:domain/model/cordis.dart';
 import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/model_catalog.dart';
+import 'package:domain/model/open_in_app.dart';
 import 'package:domain/model/todo.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/file_reference.dart';
@@ -29,6 +30,7 @@ import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/sandbox.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session.dart';
+import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -95,6 +97,7 @@ class ChatController {
     _refresh();
     _subscribeBaselines();
     _loadAgentPresets();
+    _loadWorkspaceDesktop();
     _loadModelPreferences(modelPreferences);
     _loadSessionSelection(sessionSelection);
   }
@@ -196,6 +199,10 @@ class ChatController {
   SessionWindowStats _sessionStats = const SessionWindowStats();
   PermissionSelect? _permissions;
   AgentPresetRoster? _agentPresets;
+
+  /// Whether the serving desktop can open workspace paths
+  /// (`session/canOpenWorkspacePath`); false until the host says otherwise.
+  bool _canOpenWorkspace = false;
 
   /// The selected session's durable sandbox-mode fact; null until a
   /// `sandbox/mode` event folds for it (the deployment default applies and
@@ -407,6 +414,7 @@ class ChatController {
       modelPrefs: _prefsLoaded ? _modelPrefs : null,
       sessionLogExport: _sessionLogExportState,
       canExportSessionLog: _sessionLogExport != null,
+      canOpenWorkspace: _canOpenWorkspace,
       sandboxMode: _sandboxMode,
       schedules: _schedules,
     );
@@ -608,8 +616,32 @@ class ChatController {
         _updateFileReferences(action.query);
       case ExportSessionLog():
         unawaited(_exportSessionLog(action.sessionId));
+      case OpenWorkspacePath():
+        _openWorkspacePath(action);
     }
   }
+
+  /// One Open workspace gesture (dsh `session/openWorkspacePath`). A host
+  /// refusal lands in the shared error strip with the host's own reason, so a
+  /// failed open is stated rather than looking like the tap did nothing.
+  void _openWorkspacePath(OpenWorkspacePath action) {
+    unawaited(
+      _runCatchingForUi(
+        () => _repository.openWorkspacePath(
+          action.path,
+          application: action.application,
+        ),
+      ),
+    );
+  }
+
+  /// The applications the serving desktop registered for one workspace path
+  /// (dsh `session/workspacePathApplications`), for the Open workspace sheet.
+  /// The controller stays locale-free: a failure propagates to the sheet's
+  /// caller, which then opens through the operating system default instead.
+  Future<List<WorkspacePathApplication>> workspacePathApplications(
+    String path,
+  ) => _repository.workspacePathApplications(path);
 
   /// Downloads one session's log archive and writes it through the platform
   /// save step, publishing progress for the header action.
@@ -870,6 +902,26 @@ class ChatController {
     }());
   }
 
+  /// Whether the deployment can hand a workspace path to a native desktop
+  /// (dsh `session/canOpenWorkspacePath`): one read for the controller's
+  /// lifetime, mirroring the reference web client's once-per-page read. A
+  /// failed read keeps the verb hidden — an unreachable host has no desktop
+  /// to open through, and the reference reads a failed probe the same way.
+  void _loadWorkspaceDesktop() {
+    unawaited(() async {
+      try {
+        _canOpenWorkspace = await _repository.canOpenWorkspacePath();
+      } catch (e) {
+        _canOpenWorkspace = false;
+        ErrorLogCollector.instance.addBreadcrumb(
+          'Failed to read workspace desktop availability: $e',
+          level: 'warn',
+        );
+      }
+      _publish();
+    }());
+  }
+
   /// Blank-session preset switch (web AgentPresetSeat select); host
   /// refusals (`agent-preset-locked`) surface through the error strip.
   ///
@@ -964,12 +1016,15 @@ class ChatController {
   /// The composer's live `@` mention query: [query] is the path text the
   /// token holds, null when the reader left the token or completed a mention.
   ///
-  /// Keystrokes inside one path prefix collapse into one
-  /// `fileReferences/list` call ([kFileReferenceDebounce]) and the sequence
-  /// counter drops an answer a newer query superseded. A failure publishes
-  /// the query with no candidates — the reference client reads a failed file
-  /// lookup as an empty one — so the menu closes rather than offering rows
-  /// the reader's text no longer matches.
+  /// Keystrokes inside one path prefix collapse into one debounced lookup
+  /// ([kFileReferenceDebounce]) and the sequence counter drops an answer a
+  /// newer query superseded. Both `@` families are asked in parallel — the
+  /// reference source runs `fileReferences.list` and
+  /// `sessionReferenceResolver.candidates` together and merges them into one
+  /// menu. A failure answers empty for its own family only; the reference
+  /// client reads a failed lookup as an empty one, so a family that refuses
+  /// takes its rows with it rather than the whole menu, and a query whose
+  /// families both answer nothing closes the menu.
   void _updateFileReferences(String? query) {
     _fileReferenceTimer?.cancel();
     _fileReferenceTimer = null;
@@ -986,25 +1041,57 @@ class ChatController {
     _fileReferenceTimer = Timer(kFileReferenceDebounce, () {
       _fileReferenceTimer = null;
       unawaited(() async {
-        List<FileReferenceCandidate> candidates;
-        try {
-          candidates = await _repository.listFileReferences(sessionId, query);
-        } catch (error) {
-          ErrorLogCollector.instance.addBreadcrumb(
-            'Failed to list file references for $sessionId: $error',
-            level: 'warn',
-          );
-          candidates = const <FileReferenceCandidate>[];
-        }
+        final answers = await Future.wait(<Future<List<Object>>>[
+          _fileReferenceLookup(sessionId, query),
+          _sessionReferenceLookup(sessionId, query),
+        ]);
         if (_disposed || seq != _fileReferenceSeq) return;
         if (_selectedSessionId != sessionId) return;
         _fileReferencePicker = FileReferencePickerState(
           query: query,
-          candidates: candidates,
+          candidates: answers[0].cast<FileReferenceCandidate>(),
+          sessionCandidates: answers[1].cast<SessionReferenceCandidate>(),
         );
         _publish();
       }());
     });
+  }
+
+  /// The path candidates one `@` prefix resolved to (`fileReferences/list`).
+  /// A refusal answers empty: the reference client reads a failed file lookup
+  /// as an empty one, so the menu closes rather than offering stale rows.
+  Future<List<Object>> _fileReferenceLookup(
+    String sessionId,
+    String query,
+  ) async {
+    try {
+      return await _repository.listFileReferences(sessionId, query);
+    } catch (error) {
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to list file references for $sessionId: $error',
+        level: 'warn',
+      );
+      return const <FileReferenceCandidate>[];
+    }
+  }
+
+  /// The session-mention candidates one `@` prefix resolved to
+  /// (`sessionReferenceResolver/candidates`). The reference source treats a
+  /// failed session lookup exactly like a failed file lookup: empty rows for
+  /// that family, never a failed whole query.
+  Future<List<Object>> _sessionReferenceLookup(
+    String sessionId,
+    String query,
+  ) async {
+    try {
+      return await _repository.listSessionReferences(sessionId, query);
+    } catch (error) {
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to list session references for $sessionId: $error',
+        level: 'warn',
+      );
+      return const <SessionReferenceCandidate>[];
+    }
   }
 
   void _loadOlderHistory() {
