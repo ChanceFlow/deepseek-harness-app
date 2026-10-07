@@ -28,6 +28,7 @@ import 'package:domain/model/session.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:domain/model/skills.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/timeline_window.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
@@ -160,6 +161,8 @@ class ChatController {
   bool _sessionsRefreshed = false;
   ContextPressure? _contextPressure;
   ContextBreakdown? _contextBreakdown;
+  List<PendingUserQuestion> _pendingUserQuestions =
+      const <PendingUserQuestion>[];
   GoalProjection? _goal;
   SessionWindowStats _sessionStats = const SessionWindowStats();
   PermissionSelect? _permissions;
@@ -213,6 +216,7 @@ class ChatController {
   StreamSubscription<void>? _todosSub;
   StreamSubscription<void>? _contextSub;
   StreamSubscription<void>? _breakdownSub;
+  StreamSubscription<void>? _userQuestionsSub;
   StreamSubscription<void>? _statsSub;
   StreamSubscription<void>? _goalSub;
   StreamSubscription<void>? _permissionsSub;
@@ -258,6 +262,7 @@ class ChatController {
     unawaited(_todosSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
+    unawaited(_userQuestionsSub?.cancel());
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
     unawaited(_permissionsSub?.cancel());
@@ -298,6 +303,7 @@ class ChatController {
       commands: _commands,
       contextPressure: _contextPressure,
       contextBreakdown: _contextBreakdown,
+      pendingUserQuestions: _pendingUserQuestions,
       sessionStats: _sessionStats,
       goal: _goal,
       models: _models,
@@ -552,6 +558,7 @@ class ChatController {
     unawaited(_todosSub?.cancel());
     unawaited(_contextSub?.cancel());
     unawaited(_breakdownSub?.cancel());
+    unawaited(_userQuestionsSub?.cancel());
     unawaited(_statsSub?.cancel());
     unawaited(_goalSub?.cancel());
     unawaited(_permissionsSub?.cancel());
@@ -563,6 +570,7 @@ class ChatController {
       _plan = null;
       _contextPressure = null;
       _contextBreakdown = null;
+      _pendingUserQuestions = const <PendingUserQuestion>[];
       _sessionStats = const SessionWindowStats();
       _goal = null;
       _models = null;
@@ -576,6 +584,7 @@ class ChatController {
       _todosSub = null;
       _contextSub = null;
       _breakdownSub = null;
+      _userQuestionsSub = null;
       _statsSub = null;
       _goalSub = null;
       _permissionsSub = null;
@@ -593,6 +602,7 @@ class ChatController {
     _todos = null;
     _contextPressure = null;
     _contextBreakdown = null;
+    _pendingUserQuestions = const <PendingUserQuestion>[];
     _sessionStats = const SessionWindowStats();
     _goal = null;
     _models = null;
@@ -628,6 +638,12 @@ class ChatController {
       _contextBreakdown = breakdown;
       _publishUpstream();
     });
+    _userQuestionsSub = _repository
+        .observePendingUserQuestions(sessionId)
+        .listen((questions) {
+          _pendingUserQuestions = questions;
+          _publishUpstream();
+        });
     _statsSub = _repository.observeSessionStats(sessionId).listen((stats) {
       _sessionStats = stats;
       _publishUpstream();
@@ -1585,12 +1601,27 @@ class ChatController {
       'chat.question.answer',
       attributes: {'sessionId': sessionId, 'answers': action.answers.length},
     );
+    final evidence = QuestionEvidence(
+      sessionId: sessionId,
+      answers: action.answers,
+    );
+    // A timed call whose foreground wait already ended cannot be settled by
+    // the waterfall any more: the host takes the reply only through
+    // `userQuestions/answer`, which steers it into the agent as a new turn.
+    final continued = _pendingUserQuestions.any(
+      (row) =>
+          row.callId == action.requestId &&
+          row.state == UserQuestionState.continued,
+    );
     unawaited(
       _runCatchingForUi(
-        () => _repository.answerQuestions(
-          action.requestId,
-          QuestionEvidence(sessionId: sessionId, answers: action.answers),
-        ),
+        () => continued
+            ? _repository.answerContinuedQuestion(
+                sessionId,
+                action.requestId,
+                evidence,
+              )
+            : _repository.answerQuestions(action.requestId, evidence),
       ),
     );
   }
@@ -1598,6 +1629,20 @@ class ChatController {
   void _dismissQuestion(DismissQuestionAction action) {
     final sessionId = _selectedSessionId;
     if (sessionId == null) return;
+    // A continued question has no pending waterfall to refuse: the host keeps
+    // holding it, and ignoring it is allowed, so dismissal only drops the card
+    // until the host next publishes the projection.
+    if (_pendingUserQuestions.any(
+      (row) =>
+          row.callId == action.requestId &&
+          row.state == UserQuestionState.continued,
+    )) {
+      _pendingUserQuestions = _pendingUserQuestions
+          .where((row) => row.callId != action.requestId)
+          .toList();
+      _publishUpstream();
+      return;
+    }
     unawaited(
       _runCatchingForUi(
         () => _repository.cancelQuestions(action.requestId, sessionId),

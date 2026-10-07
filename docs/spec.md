@@ -127,6 +127,23 @@ The 0.1.1 mux frames (`question/requested`, `approval/requested` and their
 receipt) stay supported as the legacy path, and the adapter folds both
 transports into one pipeline.
 
+A **timed** `ask_user_question` (0.2.0) outlives that waterfall. The host row
+`tool-ask-user` may run `mode: timed`, where the call carries a foreground wait;
+when the wait ends the host continues the turn, and the call's own result
+records the timeout. The still-answerable calls are then published as the
+`userQuestions` session projection
+(`{active: [{callId, questions, state: open | continued}], settled}`), and a
+reply travels as `userQuestions/answer {agentId, callId, answer}` — the agent
+address is the same `agentId` every other agent-scoped verb takes. An accepted
+reply is steered into the agent as a user message whose source is
+`user-question-reply`, so it appears as a new turn rather than as the original
+call's result. This client folds the projection into one card that takes the
+composer seat, routes its answer through `userQuestions/answer` whenever the
+row is `continued`, and drops the card on dismissal without calling the host.
+The reference's countdown (the `userQuestions/attachWait` stream, which holds
+the claim and reports the remaining milliseconds) and its `settled` transcript
+row are not mirrored (§10).
+
 ### 4.4 Registry-level pending interactions
 
 Both transports feed a registry-global pending map, independent of any open
@@ -228,10 +245,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 53
+declared = 54
 upstream = 128
-identical = 51
-missing = 77
+identical = 52
+missing = 76
 client-only = 2
 out-of-scope = agentPresets/read, productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
@@ -504,15 +521,16 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   text, and per-question skip are supported; the plan-review intent renders
   its own decision card (below), and any other presentation intent falls back
   to the generic editor.
-- **A timed `ask_user_question` is not mirrored.** 0.2.0 can ask through a
-  foreground wait (`tool-ask-user` row `mode: timed`, default `legacy`) that the
-  reference Web client holds open over the `userQuestions/attachWait` stream and
-  answers after continuation through `userQuestions/answer`; the shipped bundle
-  leaves the blocking legacy tool in place. This client keeps answering the
-  waterfall through `$events/result`, so a question a timed host still holds
-  open works, but no countdown is rendered, and a question the host has already
-  continued can only be answered from the Web client — the late reply arrives as
-  a `user-question-reply` user message and the phone shows its payload as text.
+- **A timed `ask_user_question` is answered late, without its countdown.** 0.2.0
+  can ask through a foreground wait (`tool-ask-user` row `mode: timed`, default
+  `legacy`; the shipped bundle leaves the blocking tool in place). The
+  `userQuestions` projection (§4.3) carries every call the host can still take
+  an answer for, and a `continued` row answers through `userQuestions/answer`.
+  Not mirrored: the countdown itself (`userQuestions/attachWait` holds the claim
+  and reports the remaining milliseconds, so this client never releases a wait
+  early) and the reference's `settled` transcript row, which renders a late
+  reply's question/answer pairs from the projection rather than from the
+  message.
 - **Queue editing is text-only.** Queued text items can be edited into a
   single text content block; non-text queued items disable the edit action,
   matching the Web client.

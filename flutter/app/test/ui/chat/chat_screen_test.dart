@@ -16,6 +16,7 @@ import 'package:domain/model/prompt.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/todo.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -152,6 +153,8 @@ ChatUiState _state({
   String? selectedSessionId,
   List<PendingImage> pendingImages = const <PendingImage>[],
   List<SkillEntry> skills = const <SkillEntry>[],
+  List<PendingUserQuestion> pendingUserQuestions =
+      const <PendingUserQuestion>[],
   bool isSending = false,
   String? errorMessage,
 }) {
@@ -164,6 +167,7 @@ ChatUiState _state({
     jobs: jobs,
     pendingImages: pendingImages,
     skills: skills,
+    pendingUserQuestions: pendingUserQuestions,
     isSending: isSending,
     errorMessage: errorMessage,
   );
@@ -1867,6 +1871,56 @@ void main() {
     await tester.pump();
     expect(actions, contains(const DismissQuestionAction(requestId: 'rpc-5')));
   });
+
+  testWidgets(
+    'a continued timed question takes the seat and answers through its call id',
+    (tester) async {
+      final actions = <ChatAction>[];
+      await _pump(
+        tester,
+        _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha', blank: false),
+          ],
+          selectedSessionId: 's1',
+          // No timeline row: the card comes from the `userQuestions`
+          // projection, which is the only source left once the host
+          // continued the call.
+          pendingUserQuestions: const [
+            PendingUserQuestion(
+              callId: 'call-7',
+              state: UserQuestionState.continued,
+              questions: [
+                QuestionItem(
+                  id: 'q1',
+                  question: 'Which registry?',
+                  options: ['internal'],
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions,
+      );
+
+      expect(find.text('Which registry?'), findsOneWidget);
+      await tester.tap(find.text('internal'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit').first);
+      await tester.pump();
+      expect(
+        actions,
+        contains(
+          const AnswerQuestionAction(
+            requestId: 'call-7',
+            answers: [
+              QuestionAnswer(questionId: 'q1', selectedOptions: ['internal']),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'plan review renders a decision card with approve/decline/discuss',

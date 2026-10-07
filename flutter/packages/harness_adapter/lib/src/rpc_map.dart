@@ -39,6 +39,12 @@ abstract final class DshRpcEndpoints {
   /// `subagentCatalog` projection value, not a dedicated method.
   static const String sessionProjections = 'session/projections';
 
+  // User questions. The blocking answer rides the `$events` waterfall
+  // (`$events/result`); a timed ask the host has already continued is answered
+  // here instead (`packages/interaction/user-questions/src/index.ts`
+  // `@Remote answer`).
+  static const String userQuestionsAnswer = 'userQuestions/answer';
+
   // Skills (DSH 0.1.2 plural namespace)
   static const String skillsList = 'skills/list';
 

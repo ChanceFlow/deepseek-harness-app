@@ -29,6 +29,7 @@ import 'package:domain/model/goal.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
+import 'package:domain/model/user_question.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:domain/repository/chat_repository.dart' show QuestionEvidence;
 import 'package:network/dsh_event_socket.dart';
@@ -216,6 +217,7 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.sessionHistory,
     DshRpcEndpoints.sessionPage,
     DshRpcEndpoints.sessionProjections,
+    DshRpcEndpoints.userQuestionsAnswer,
     DshRpcEndpoints.skillsList,
     DshRpcEndpoints.subagentsPrompt,
     DshRpcEndpoints.subagentsInterrupt,
@@ -2189,6 +2191,160 @@ void main() {
           .firstWhere((p) => p?.pressureTokens == 3000);
       expect(pressure?.pressureTokens, 3000);
       expect(pressure?.projectedTokens, 3200);
+    },
+  );
+
+  test('the userQuestions projection folds a continued call, and a late answer '
+      'rides userQuestions/answer', () async {
+    // Wire truth: `packages/interaction/user-questions/src/types.ts`
+    // (`UserQuestionProjectionView = {active, settled}`,
+    // `PendingUserQuestion = {callId, questions, state}`) and
+    // `.../src/index.ts` `@Remote answer(agent, callId, answer)`.
+    final rpc = HarnessFakeRpc(<Object?>[
+      <String, Object?>{
+        'sessionId': 'session-timed',
+        'updatedAt': 1,
+        'running': false,
+        'blank': false,
+      },
+    ]);
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'session-control',
+          method: 'session/control',
+          payload: <String, Object?>{
+            'type': 'projection',
+            'sessionId': 'session-timed',
+            'key': 'userQuestions',
+            'seq': 1,
+            'value': <String, Object?>{
+              'active': <Object?>[
+                <String, Object?>{
+                  'callId': 'call-1',
+                  'state': 'continued',
+                  'questions': <Object?>[
+                    <String, Object?>{
+                      'id': 'q1',
+                      'question': 'Which registry?',
+                      'options': <Object?>[
+                        <String, Object?>{'label': 'internal'},
+                        <String, Object?>{'label': 'public'},
+                      ],
+                      'multiSelect': false,
+                    },
+                  ],
+                },
+              ],
+              'settled': const <Object?>[],
+            },
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final rows = await repository
+        .observePendingUserQuestions('session-timed')
+        .firstWhere((list) => list.isNotEmpty);
+    expect(rows, hasLength(1));
+    expect(rows.single.callId, 'call-1');
+    expect(rows.single.state, UserQuestionState.continued);
+    expect(rows.single.questions.single.id, 'q1');
+    expect(rows.single.questions.single.options, <String>[
+      'internal',
+      'public',
+    ]);
+    expect(rows.single.questions.single.multiSelect, isFalse);
+
+    await repository.answerContinuedQuestion(
+      'session-timed',
+      'call-1',
+      const QuestionEvidence(
+        sessionId: 'session-timed',
+        answers: <QuestionAnswer>[
+          QuestionAnswer(
+            questionId: 'q1',
+            selectedOptions: <String>['internal'],
+          ),
+        ],
+      ),
+    );
+
+    expect(rpc.callCountFor(DshRpcEndpoints.userQuestionsAnswer), 1);
+    final payload = rpc.payloads(DshRpcEndpoints.userQuestionsAnswer).single;
+    expect(payload['agentId'], 'session-timed');
+    expect(payload['callId'], 'call-1');
+    expect(payload['answer'], <String, Object?>{
+      'answers': <Object?>[
+        <String, Object?>{
+          'id': 'q1',
+          'selected': <String>['internal'],
+        },
+      ],
+    });
+  });
+
+  test(
+    'a userQuestions row without a callId is dropped loudly, not defaulted',
+    () async {
+      final diagnostics = <AdapterDiagnostic>[];
+      final rpc = HarnessFakeRpc(<Object?>[
+        <String, Object?>{
+          'sessionId': 'session-bad-timed',
+          'updatedAt': 1,
+          'running': false,
+          'blank': false,
+        },
+      ]);
+      final socket = ScriptedHarnessSocket(
+        muxFrames: <ServerRequest>[
+          ServerRequest(
+            rpcId: 'session-control',
+            method: 'session/control',
+            payload: <String, Object?>{
+              'type': 'projection',
+              'sessionId': 'session-bad-timed',
+              'key': 'userQuestions',
+              'seq': 1,
+              'value': <String, Object?>{
+                'active': <Object?>[
+                  <String, Object?>{
+                    'state': 'continued',
+                    'questions': <Object?>[
+                      <String, Object?>{'id': 'q1', 'question': 'no call id'},
+                    ],
+                  },
+                ],
+                'settled': const <Object?>[],
+              },
+            },
+          ),
+        ],
+      );
+      final repository = HarnessRepositoryImpl(
+        rpc,
+        DshConnectionManager(socket, exponentialDshBackoffDelay),
+        onDiagnostic: diagnostics.add,
+      );
+      await pumpEventQueue();
+      socket.releaseMuxFrames();
+      await pumpEventQueue();
+
+      final rows = await repository
+          .observePendingUserQuestions('session-bad-timed')
+          .first;
+      expect(rows, isEmpty);
+      expect(
+        diagnostics.any(
+          (d) => d.message.contains('userQuestions: callId is absent'),
+        ),
+        isTrue,
+      );
     },
   );
 
