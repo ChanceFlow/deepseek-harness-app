@@ -43,6 +43,7 @@ import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_archive.dart';
+import 'package:domain/model/permission_select.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
@@ -552,6 +553,15 @@ final List<DesignShot> shots = <DesignShot>[
     host: _settingsHost,
     act: _openAgentPresetsPage,
   ),
+  // The deployment default a new session starts from: the catalog's
+  // defaultOptions, with the namespace's own value as the selection. The
+  // current session's picker stays the composer's access chip.
+  const DesignShot(
+    name: 'settings-permission-defaults',
+    host: _settingsPermissionHost,
+    act: _openPermissionDefaultsPage,
+    dark: false,
+  ),
   const DesignShot(
     name: 'settings-credentials',
     host: _settingsHost,
@@ -965,6 +975,56 @@ const List<WorkspaceSummary> _archivedWorkspaces = <WorkspaceSummary>[
 /// reviews.
 Widget _settingsAppearanceHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale, repository: _FakeThemeNamespaceRepository());
+
+Widget _settingsPermissionHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(
+      theme,
+      locale,
+      repository: _FakePermissionCatalogRepository(),
+    );
+
+/// One scoped repository method: the permission catalog the page offers. The
+/// effective default it marks comes from the settings channel, which this
+/// fixture's screen state carries.
+class _FakePermissionCatalogRepository implements ChatRepository {
+  @override
+  Future<PermissionPresetCatalog> loadPermissionPresetCatalog() async =>
+      const PermissionPresetCatalog(
+        options: <PermissionPresetOption>[
+          PermissionPresetOption(
+            value: 'workspace-write',
+            name: 'Workspace write',
+            description:
+                'Write inside the workspace and permitted temporary '
+                'directories; wider retries require approval.',
+          ),
+          PermissionPresetOption(
+            value: 'danger-full-access',
+            name: 'danger-full-access',
+            description: 'Full file access without approval prompts.',
+          ),
+        ],
+        defaultOptions: <PermissionPresetOption>[
+          PermissionPresetOption(
+            value: 'workspace-write',
+            name: 'Workspace write',
+            description:
+                'Write inside the workspace and permitted temporary '
+                'directories; wider retries require approval.',
+          ),
+          PermissionPresetOption(
+            value: 'danger-full-access',
+            name: 'danger-full-access',
+            description: 'Full file access without approval prompts.',
+          ),
+        ],
+        defaultPreset: 'workspace-write',
+      );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
 
 /// One scoped repository method: the `ui-theme` namespace the appearance row
 /// reads. Nothing else in these fixtures calls the settings plane.
@@ -1541,7 +1601,16 @@ Future<void> _openHostsPage(WidgetTester tester) async {
 /// row into frame, tap it".
 Future<void> _tapSettingsRow(WidgetTester tester, String title) async {
   await _loadRegistry(tester);
-  await tester.ensureVisible(find.text(title));
+  // The index is a lazy ListView: a row below the viewport has not been
+  // built yet, so the scroll has to hunt for it rather than measure a
+  // finder that cannot resolve. Every settings row this pass added hangs
+  // off the index, and one row added above another pushes it out of the
+  // first screenful.
+  await tester.scrollUntilVisible(
+    find.text(title),
+    200,
+    scrollable: find.byType(Scrollable).first,
+  );
   await settle(tester);
   await tester.tap(find.text(title).hitTestable());
   await settle(tester);
@@ -1549,6 +1618,9 @@ Future<void> _tapSettingsRow(WidgetTester tester, String title) async {
 
 Future<void> _openAgentPresetsPage(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Agent preset');
+
+Future<void> _openPermissionDefaultsPage(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Default permission preset');
 
 Future<void> _openCredentialsPage(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Credentials');

@@ -111,6 +111,16 @@ abstract class ChatRepository {
     int? expectedRevision,
   }) => _unsupported('mutateSetting');
 
+  /// The deployment's permission-preset catalog (dsh
+  /// `permissionPresets/catalog`): every preset the host composes, the subset
+  /// a new session may default to, and the effective default.
+  ///
+  /// A host that composes no permission service answers with an error rather
+  /// than an empty catalog; the caller hides the row instead of offering a
+  /// choice that cannot land.
+  Future<PermissionPresetCatalog> loadPermissionPresetCatalog() =>
+      _unsupported('loadPermissionPresetCatalog');
+
   /// Read-only probe of credential references. Like settings describe, the
   /// host only serves it to loopback-trusted callers.
   Future<List<CredentialStatus>> describeCredentials(List<String> refs) =>

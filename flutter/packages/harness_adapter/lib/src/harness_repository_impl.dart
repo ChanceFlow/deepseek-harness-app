@@ -4049,6 +4049,32 @@ class HarnessRepositoryImpl implements ChatRepository {
     );
   }
 
+  @override
+  Future<PermissionPresetCatalog> loadPermissionPresetCatalog() async {
+    final result = await _call(
+      DshRpcEndpoints.permissionPresetsCatalog,
+      DshRpcEndpoints.permissionPresetsCatalog,
+      const <String, Object?>{},
+      _shortCallTimeout,
+    ).valueOrThrow();
+    final wire = PermissionCatalogWire.fromJson(result);
+    return PermissionPresetCatalog(
+      options: wire.options.map(_toDomainPermissionOption).toList(),
+      defaultOptions: wire.defaultOptions
+          .map(_toDomainPermissionOption)
+          .toList(),
+      defaultPreset: wire.defaultPreset,
+    );
+  }
+
+  PermissionPresetOption _toDomainPermissionOption(
+    PermissionPresetOptionWire option,
+  ) => PermissionPresetOption(
+    value: option.value,
+    name: option.name,
+    description: option.description,
+  );
+
   /// Wire roster row (`packages/preset/agent-preset-registry/src/types.ts`
   /// `AgentPresetRow`): identity, published display copy, whether it is the
   /// default, and why it cannot compose a session. 0.1.7 carries no trust

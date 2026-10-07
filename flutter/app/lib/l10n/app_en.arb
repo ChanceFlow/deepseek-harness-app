@@ -795,6 +795,26 @@
   "hostWritesDescription": "Whether the host accepts settings and credential writes.",
   "writableValue": "Writable",
   "readOnlyValue": "Read-only",
+  "settingsNavPermissionDefaults": "Default permission preset",
+  "@settingsNavPermissionDefaults": {
+    "description": "Settings row and page title for the deployment's default permission preset."
+  },
+  "permissionDefaultsIntro": "Which preset a new session starts on. The current session switches from the access chip in the composer; this row only changes the default.",
+  "@permissionDefaultsIntro": {
+    "description": "Intro line on the default-permission-preset page."
+  },
+  "permissionDefaultsLoading": "Reading the permission table…",
+  "@permissionDefaultsLoading": {
+    "description": "Loading state while the permission catalog is read."
+  },
+  "permissionDefaultsUnavailable": "This deployment composes no permission preset catalog, so there is no default to set.",
+  "@permissionDefaultsUnavailable": {
+    "description": "Shown when the host has no permission preset catalog."
+  },
+  "permissionDefaultsReadOnly": "Settings are read-only on this deployment.",
+  "@permissionDefaultsReadOnly": {
+    "description": "Shown when the host's settings document is not writable."
+  },
   "settingsDocumentLabel": "Settings document",
   "settingsDocumentDescription": "Whether a user settings document backs the namespaces.",
   "presentValue": "Present",
