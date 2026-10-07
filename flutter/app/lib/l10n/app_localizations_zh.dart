@@ -1658,6 +1658,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get archivedBadge => '已归档';
 
   @override
+  String get pinSession => '固定会话';
+
+  @override
+  String get unpinSession => '取消固定';
+
+  @override
   String get filterSessionsTooltip => '筛选会话';
 
   @override

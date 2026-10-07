@@ -80,6 +80,8 @@ abstract final class DshRpcEndpoints {
       'workspace/insertSessionBefore';
   static const String workspaceArchiveSession = 'workspace/archiveSession';
   static const String workspaceUnarchiveSession = 'workspace/unarchiveSession';
+  static const String workspacePinSession = 'workspace/pinSession';
+  static const String workspaceUnpinSession = 'workspace/unpinSession';
 
   // Workspace Files. `read` pages decoded UTF-8 text; `readBytes` returns
   // native bytes — the whole file when `options.range` is absent, one window

@@ -118,6 +118,13 @@ class HarnessRepositoryImpl implements ChatRepository {
     <String>{},
   );
 
+  /// Registry-global pin set, most recently pinned first — the order pinned
+  /// rows lead their group in. Mirrored from the same `workspace/follow`
+  /// stream as the archive set, and replaced whole by every mutation reply.
+  final StateStream<List<String>> _pinnedSessionIds = StateStream<List<String>>(
+    const <String>[],
+  );
+
   /// Registry-global pending-interaction mirror: session id -> the
   /// outstanding user-wait status (approval / plan-review / question).
   /// Fed from the raw approval/question frame stream BEFORE the per-session
@@ -1670,6 +1677,9 @@ class HarnessRepositoryImpl implements ChatRepository {
   Stream<Set<String>> observeArchivedSessionIds() => _archivedSessionIds.stream;
 
   @override
+  Stream<List<String>> observePinnedSessionIds() => _pinnedSessionIds.stream;
+
+  @override
   Stream<TimelineWindow> observeTimelineWindow(String sessionId) =>
       _sessionStateFor(sessionId).window.stream;
 
@@ -2760,6 +2770,7 @@ class HarnessRepositoryImpl implements ChatRepository {
   void _applyWorkspaceListing(WorkspaceListValueWire listing) {
     _workspaces.value = listing.items.map(_toDomainWorkspace).toList();
     _archivedSessionIds.value = listing.archivedSessionIds.toSet();
+    _pinnedSessionIds.value = listing.pinnedSessionIds;
   }
 
   @override
@@ -2842,6 +2853,43 @@ class HarnessRepositoryImpl implements ChatRepository {
       _shortCallTimeout,
     ).valueOrThrow();
     _archivedSessionIds.value = _stringSet(result['archivedSessionIds']);
+  }
+
+  @override
+  Future<void> pinSession(String sessionId) async {
+    final result = await _pinMutation(
+      DshRpcEndpoints.workspacePinSession,
+      sessionId,
+    );
+    _pinnedSessionIds.value = result;
+  }
+
+  @override
+  Future<void> unpinSession(String sessionId) async {
+    final result = await _pinMutation(
+      DshRpcEndpoints.workspaceUnpinSession,
+      sessionId,
+    );
+    _pinnedSessionIds.value = result;
+  }
+
+  /// One pin-set mutation; its reply is the complete resulting set, most
+  /// recently pinned first, which replaces the mirror whole.
+  ///
+  /// Both verbs refuse an archived session and a pin names an unknown
+  /// session: the Host answers `session/not-found`, or `gateway/bad-request`
+  /// for the archive. Neither is notice-worthy on its own — the caller's row
+  /// simply did not move — but both surface as [RepositoryFailure] so a
+  /// caller can say why.
+  Future<List<String>> _pinMutation(String endpoint, String sessionId) async {
+    try {
+      final result = await _call(endpoint, endpoint, {
+        'sessionId': sessionId,
+      }, _shortCallTimeout).valueOrThrow();
+      return _stringList(result['pinnedSessionIds']);
+    } on DshBusinessException catch (error) {
+      throw RepositoryFailure(error.code, error.message);
+    }
   }
 
   /// The running work a `workspace/session-active` refusal named in
@@ -3082,7 +3130,8 @@ class HarnessRepositoryImpl implements ChatRepository {
               type == 'upsert' ||
               type == 'remove' ||
               type == 'order' ||
-              type == 'archived') {
+              type == 'archived' ||
+              type == 'pinned') {
             _handleWorkspaceFollowFrame(frame);
             return;
           }
@@ -4081,6 +4130,9 @@ class HarnessRepositoryImpl implements ChatRepository {
       case 'archived':
         final archived = _stringSet(frame.payload['archivedSessionIds']);
         _archivedSessionIds.value = archived;
+      case 'pinned':
+        final pinned = _stringList(frame.payload['pinnedSessionIds']);
+        _pinnedSessionIds.value = pinned;
     }
   }
 

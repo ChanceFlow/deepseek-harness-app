@@ -108,6 +108,9 @@ class SessionPanel extends ConsumerStatefulWidget {
     this.onForkSession,
     this.onArchiveSession,
     this.onUnarchiveSession,
+    this.onPinSession,
+    this.onUnpinSession,
+    this.pinnedSessionIds = const <String>[],
     this.onCreateSessionInWorkspace,
   });
 
@@ -151,6 +154,12 @@ class SessionPanel extends ConsumerStatefulWidget {
   final void Function(String backendId, String sessionId)? onForkSession;
   final void Function(String backendId, String sessionId)? onArchiveSession;
   final void Function(String backendId, String sessionId)? onUnarchiveSession;
+
+  /// The pin verbs, per backend like every other row verb; the leading block
+  /// and the row glyph read [pinnedSessionIds].
+  final void Function(String backendId, String sessionId)? onPinSession;
+  final void Function(String backendId, String sessionId)? onUnpinSession;
+  final List<String> pinnedSessionIds;
 
   /// Web ProjectRowItem's new-session seat as a sidebar project-header
   /// long-press: creates a session in that workspace on the backend that
@@ -598,6 +607,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       includeEmptyGroups: false,
       priorityOrder: true,
       archivedFilter: archivedFilter,
+      pinnedSessionIds: widget.pinnedSessionIds,
     );
     if (groups.isEmpty) {
       // Web `EmptySessions`: the archived-only view names its filter and
@@ -657,6 +667,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
                 _sessionVerb(null, sessionId, widget.onArchiveSession),
             onUnarchiveSession: (sessionId) =>
                 _sessionVerb(null, sessionId, widget.onUnarchiveSession),
+            onPinSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onPinSession),
+            onUnpinSession: (sessionId) =>
+                _sessionVerb(null, sessionId, widget.onUnpinSession),
+            pinnedSessionIds: widget.pinnedSessionIds,
           ),
         ],
       ],
@@ -753,6 +768,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               _sessionVerb(slice, sessionId, widget.onArchiveSession),
           onUnarchiveSession: (sessionId) =>
               _sessionVerb(slice, sessionId, widget.onUnarchiveSession),
+          onPinSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onPinSession),
+          onUnpinSession: (sessionId) =>
+              _sessionVerb(slice, sessionId, widget.onUnpinSession),
+          pinnedSessionIds: widget.pinnedSessionIds,
         ),
       ],
     ];
@@ -1134,6 +1154,9 @@ class _GroupSection extends StatefulWidget {
     this.onForkSession,
     this.onArchiveSession,
     this.onUnarchiveSession,
+    this.onPinSession,
+    this.onUnpinSession,
+    this.pinnedSessionIds = const <String>[],
   });
 
   final SessionGroupData group;
@@ -1159,6 +1182,9 @@ class _GroupSection extends StatefulWidget {
 
   /// The restore verb an archived row shows in place of archive.
   final void Function(String sessionId)? onUnarchiveSession;
+  final void Function(String sessionId)? onPinSession;
+  final void Function(String sessionId)? onUnpinSession;
+  final List<String> pinnedSessionIds;
 
   @override
   State<_GroupSection> createState() => _GroupSectionState();
@@ -1278,6 +1304,13 @@ class _GroupSectionState extends State<_GroupSection> {
               onUnarchive: widget.onUnarchiveSession == null
                   ? null
                   : () => widget.onUnarchiveSession!(sessions[i].id),
+              onPin: widget.onPinSession == null
+                  ? null
+                  : () => widget.onPinSession!(sessions[i].id),
+              onUnpin: widget.onUnpinSession == null
+                  ? null
+                  : () => widget.onUnpinSession!(sessions[i].id),
+              pinned: widget.pinnedSessionIds.contains(sessions[i].id),
             ),
           ],
           if (sessions.length > kCollapsedSessionLimit) ...[

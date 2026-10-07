@@ -212,6 +212,19 @@ ChatUiState busyState({
 /// action rows happen to fit a 360dp phone.
 ChatUiState composerCrowdedState() => busyState(permissions: kDockAccess);
 
+/// The browsing sidebar with a pin block: 's3' pinned last, so it leads,
+/// 's2' after it — the Host's own "most recently pinned first" order.
+ChatUiState pinnedSidebarState() {
+  final base = busyState();
+  return ChatUiState(
+    sessions: base.sessions,
+    workspaces: base.workspaces,
+    selectedSessionId: base.selectedSessionId,
+    timeline: base.timeline,
+    pinnedSessionIds: const <String>['s3', 's2'],
+  );
+}
+
 /// The preset table a live host publishes: three switchable presets.
 const PermissionSelect kDockAccess = PermissionSelect(
   currentValue: 'workspace-write',

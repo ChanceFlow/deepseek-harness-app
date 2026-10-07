@@ -27,6 +27,13 @@ class WorkspaceController {
         _publish();
       }),
     );
+    // The pin set orders rows within each group on this surface too.
+    _subs.add(
+      _repository.observePinnedSessionIds().listen((pinned) {
+        _pinnedSessionIds = pinned;
+        _publish();
+      }),
+    );
     // Session summaries feed the blank-session reuse rule behind
     // StartSessionInWorkspace and the browsing tree's session rows (web
     // WorkspaceBrowser renders the session tree under each group).
@@ -47,6 +54,7 @@ class WorkspaceController {
   final List<StreamSubscription<void>> _subs = <StreamSubscription<void>>[];
 
   List<WorkspaceSummary> _workspaces = const <WorkspaceSummary>[];
+  List<String> _pinnedSessionIds = const <String>[];
   List<SessionSearchResult> _searchResults = const <SessionSearchResult>[];
   List<SessionSummary> _sessions = const <SessionSummary>[];
   bool _isLoading = false;
@@ -69,6 +77,7 @@ class WorkspaceController {
     _state.value = WorkspaceUiState(
       workspaces: _workspaces,
       sessions: _sessions,
+      pinnedSessionIds: _pinnedSessionIds,
       searchResults: _searchResults,
       isLoading: _isLoading,
       errorMessage: _errorMessage,
@@ -108,6 +117,14 @@ class WorkspaceController {
         );
       case UnarchiveSessionAction():
         unawaited(_archiveFlow.unarchive(action.sessionId));
+      case PinSessionAction():
+        unawaited(
+          _runCatchingForUi(() => _repository.pinSession(action.sessionId)),
+        );
+      case UnpinSessionAction():
+        unawaited(
+          _runCatchingForUi(() => _repository.unpinSession(action.sessionId)),
+        );
       case RenameSessionAction():
         if (action.title.trim().isNotEmpty) {
           unawaited(

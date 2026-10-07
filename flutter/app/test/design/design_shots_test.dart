@@ -405,6 +405,16 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The pin block: pinned rows lead their group in the user's own order and
+  // wear the glyph; the unpinned rows keep the activity priority.
+  DesignShot(
+    name: 'sidebar-pinned',
+    state: pinnedSidebarState(),
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+    },
+  ),
   DesignShot(
     name: 'sidebar-scroll-bleed',
     host: (theme, locale) => _sidebarMultiBackendHost(theme, locale),

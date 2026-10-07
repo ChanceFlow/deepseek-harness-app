@@ -495,6 +495,17 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.dispatchSessionAction?.call(backendId, UnarchiveSession(sessionId));
   }
 
+  /// Web PinSessionMenuItem: lifts the row into its group's pin block, or
+  /// drops it back to its own order. Both run on the backend that owns the
+  /// row, like every other session verb.
+  void _dispatchPinSession(String backendId, String sessionId) {
+    widget.dispatchSessionAction?.call(backendId, PinSession(sessionId));
+  }
+
+  void _dispatchUnpinSession(String backendId, String sessionId) {
+    widget.dispatchSessionAction?.call(backendId, UnpinSession(sessionId));
+  }
+
   /// One create from the drawer's New session bar — its dialog's Default
   /// seat mints an unaccounted session, so the workspace id may be null. The
   /// session is minted behind the drawer, so the drawer closes and the reader
@@ -656,6 +667,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             onForkSession: _dispatchForkSession,
                             onArchiveSession: _dispatchArchiveSession,
                             onUnarchiveSession: _dispatchUnarchiveSession,
+                            onPinSession: _dispatchPinSession,
+                            onUnpinSession: _dispatchUnpinSession,
+                            pinnedSessionIds: uiState.pinnedSessionIds,
                             onCreateSessionInWorkspace:
                                 widget.onCreateSessionInWorkspace,
                           ),
@@ -729,6 +743,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   onForkSession: _dispatchForkSession,
                   onArchiveSession: _dispatchArchiveSession,
                   onUnarchiveSession: _dispatchUnarchiveSession,
+                  onPinSession: _dispatchPinSession,
+                  onUnpinSession: _dispatchUnpinSession,
+                  pinnedSessionIds: uiState.pinnedSessionIds,
                   onCreateSessionInWorkspace: (backendId, workspaceId) =>
                       _createSessionInWorkspaceFromDrawer(
                         drawerContext,

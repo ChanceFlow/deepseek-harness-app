@@ -166,6 +166,7 @@ List<SessionGroupData> deriveSessionGroups(
   bool includeEmptyGroups = true,
   bool priorityOrder = false,
   ArchivedFilter archivedFilter = ArchivedFilter.hide,
+  List<String> pinnedSessionIds = const <String>[],
 }) {
   final sessionsById = <String, SessionSummary>{
     for (final session in sessions) session.id: session,
@@ -194,9 +195,13 @@ List<SessionGroupData> deriveSessionGroups(
       SessionGroupData(
         key: workspace.workspaceId,
         label: workspace.title,
-        sessions: priorityOrder
-            ? priorityOrderedMembers(members, selectedSessionId, nowEpochMs)
-            : withActiveSessionPinned(members, selectedSessionId),
+        sessions: withPinsLeading(
+          priorityOrder
+              ? priorityOrderedMembers(members, selectedSessionId, nowEpochMs)
+              : withActiveSessionPinned(members, selectedSessionId),
+          pinnedSessionIds,
+          activeSessionId: selectedSessionId,
+        ),
       ),
     );
   }
@@ -216,13 +221,51 @@ List<SessionGroupData> deriveSessionGroups(
       SessionGroupData(
         key: kUngroupedKey,
         label: l10n.ungroupedLabel,
-        sessions: priorityOrder
-            ? priorityOrderedMembers(ungrouped, selectedSessionId, nowEpochMs)
-            : withActiveSessionPinned(ungrouped, selectedSessionId),
+        sessions: withPinsLeading(
+          priorityOrder
+              ? priorityOrderedMembers(ungrouped, selectedSessionId, nowEpochMs)
+              : withActiveSessionPinned(ungrouped, selectedSessionId),
+          pinnedSessionIds,
+          activeSessionId: selectedSessionId,
+        ),
       ),
     );
   }
   return groups;
+}
+
+/// Lifts the group's pinned rows into one leading block, in the user's own
+/// pin order — most recently pinned first, which is the Host's order (web
+/// `WorkspaceBrowser`'s leading pinned block; pinned rows reorder only among
+/// themselves).
+///
+/// [activeSessionId] keeps its own lead above the block: the row the reader
+/// is in must never hide behind a pin (the same invariant
+/// [withActiveSessionPinned] protects). The unpinned remainder keeps
+/// [ordered]'s arrangement untouched.
+List<SessionSummary> withPinsLeading(
+  List<SessionSummary> ordered,
+  List<String> pinnedSessionIds, {
+  String? activeSessionId,
+}) {
+  if (pinnedSessionIds.isEmpty) return ordered;
+  final rank = <String, int>{
+    for (var i = 0; i < pinnedSessionIds.length; i++) pinnedSessionIds[i]: i,
+  };
+  final lead =
+      ordered.isNotEmpty &&
+          activeSessionId != null &&
+          ordered.first.id == activeSessionId
+      ? ordered.first
+      : null;
+  final pinned = <SessionSummary>[];
+  final rest = <SessionSummary>[];
+  for (final member in ordered) {
+    if (identical(member, lead)) continue;
+    (rank.containsKey(member.id) ? pinned : rest).add(member);
+  }
+  pinned.sort((a, b) => rank[a.id]!.compareTo(rank[b.id]!));
+  return <SessionSummary>[if (lead != null) lead, ...pinned, ...rest];
 }
 
 /// The group key holding the selected session (the current group), or
@@ -304,6 +347,9 @@ class SessionTreeRow extends StatelessWidget {
     this.onFork,
     this.onArchive,
     this.onUnarchive,
+    this.onPin,
+    this.onUnpin,
+    this.pinned = false,
     this.showVerbButton = false,
   });
 
@@ -322,6 +368,12 @@ class SessionTreeRow extends StatelessWidget {
   /// reads [SessionSummary.archived] to decide which of the two it shows.
   final VoidCallback? onUnarchive;
 
+  /// The pin verbs. [pinned] decides which of the two the menu offers; the
+  /// row also wears the pin glyph while set.
+  final VoidCallback? onPin;
+  final VoidCallback? onUnpin;
+  final bool pinned;
+
   /// Renders the always-visible ellipsis seat beside the timestamp when
   /// the row carries verbs (the Workspaces tab's touch idiom; the
   /// switching sidebar keeps the long-press-only form).
@@ -331,7 +383,9 @@ class SessionTreeRow extends StatelessWidget {
       onRename != null ||
       onFork != null ||
       onArchive != null ||
-      onUnarchive != null;
+      onUnarchive != null ||
+      onPin != null ||
+      onUnpin != null;
 
   void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -341,6 +395,13 @@ class SessionTreeRow extends StatelessWidget {
         (Icons.edit_outlined, l10n.renameSession, onRename!),
       if (onFork != null)
         (Icons.call_split_outlined, l10n.forkSession, onFork!),
+      // Web PinSessionMenuItem: one entry whose label and icon flip on the
+      // pin fact. An archived row cannot be pinned (the Host refuses it), so
+      // the verb hides there instead of failing on tap.
+      if (pinned && onUnpin != null)
+        (Icons.push_pin_outlined, l10n.unpinSession, onUnpin!)
+      else if (!pinned && !archived && onPin != null)
+        (Icons.push_pin_outlined, l10n.pinSession, onPin!),
       // Web ArchiveSessionMenuItem: the same entry restores an archived row
       // (label, icon and action all flip on the archived fact).
       if (archived && onUnarchive != null)
@@ -408,6 +469,17 @@ class SessionTreeRow extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // The pin glyph is the row's own mark: the block order says
+                // which rows the user lifted, the glyph says why they lead.
+                if (pinned) ...<Widget>[
+                  Icon(
+                    Icons.push_pin,
+                    size: 12,
+                    color: scheme.onSurfaceVariant,
+                    semanticLabel: l10n.pinSession,
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 if (archived) ...<Widget>[
                   Text(
                     l10n.archivedBadge,

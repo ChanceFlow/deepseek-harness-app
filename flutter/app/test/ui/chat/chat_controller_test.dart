@@ -236,6 +236,28 @@ class FakeChatRepository extends ChatRepository {
 
   final List<String> unarchivedSessionIds = <String>[];
 
+  /// Scripted pin refusal (an archived session, or one the Host dropped).
+  String? pinFailureCode;
+
+  @override
+  Future<void> pinSession(String sessionId) async {
+    final code = pinFailureCode;
+    if (code != null) throw RepositoryFailure(code, 'refused');
+    pinnedSessionIds.add(sessionId);
+  }
+
+  @override
+  Future<void> unpinSession(String sessionId) async {
+    unpinnedSessionIds.add(sessionId);
+  }
+
+  final List<String> pinnedSessionIds = <String>[];
+  final List<String> unpinnedSessionIds = <String>[];
+
+  @override
+  Stream<List<String>> observePinnedSessionIds() =>
+      const Stream<List<String>>.empty();
+
   @override
   Future<void> sendMessage(SendMessageRequest request) async {
     sentMessages.add(request);
@@ -1379,6 +1401,43 @@ void main() {
       expect(seat.notices, isEmpty);
     },
   );
+
+  test(
+    'pin and unpin delegate silently (the row moving is the feedback)',
+    () async {
+      final repository = FakeChatRepository(
+        initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+      );
+      final seat = _NoticeSeat();
+      addTearDown(seat.dispose);
+      final controller = ChatController(repository, notices: seat.sink);
+      await pumpEventQueue();
+
+      controller.onAction(const PinSession('session-1'));
+      controller.onAction(const UnpinSession('session-1'));
+      await pumpEventQueue();
+
+      expect(repository.pinnedSessionIds, <String>['session-1']);
+      expect(repository.unpinnedSessionIds, <String>['session-1']);
+      expect(seat.notices, isEmpty);
+    },
+  );
+
+  test('a refused pin is logged, not raised at the reader', () async {
+    final repository = FakeChatRepository(
+      initialSessions: <SessionSummary>[FakeChatRepository.initialSession],
+    )..pinFailureCode = 'gateway/bad-request';
+    final seat = _NoticeSeat();
+    addTearDown(seat.dispose);
+    final controller = ChatController(repository, notices: seat.sink);
+    await pumpEventQueue();
+
+    controller.onAction(const PinSession('session-archived'));
+    await pumpEventQueue();
+
+    expect(repository.pinnedSessionIds, isEmpty);
+    expect(seat.notices, isEmpty);
+  });
 
   test(
     'selecting an archived session explains instead of opening it',

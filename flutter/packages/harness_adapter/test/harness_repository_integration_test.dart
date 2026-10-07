@@ -20,6 +20,7 @@ import 'package:domain/model/command.dart';
 import 'package:domain/model/connection_state.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:domain/model/plan.dart';
+import 'package:domain/model/repository_failure.dart';
 import 'package:domain/model/plugin_management.dart';
 import 'package:domain/model/prompt.dart';
 import 'package:domain/model/schedule.dart';
@@ -328,6 +329,8 @@ class HarnessFakeRpc implements DshRpcClient {
     DshRpcEndpoints.workspaceInsertSessionBefore,
     DshRpcEndpoints.workspaceArchiveSession,
     DshRpcEndpoints.workspaceUnarchiveSession,
+    DshRpcEndpoints.workspacePinSession,
+    DshRpcEndpoints.workspaceUnpinSession,
     DshRpcEndpoints.workspaceFilesStat,
     DshRpcEndpoints.workspaceFilesRead,
     DshRpcEndpoints.workspaceFilesList,
@@ -472,6 +475,10 @@ class HarnessFakeRpc implements DshRpcClient {
     'updated': false,
     'code': 'schedule_conflict',
   };
+
+  /// Scripted `workspace/pinSession` and `workspace/unpinSession` reply: the
+  /// complete resulting pin set, most recently pinned first.
+  JsonMap pinValue = <String, Object?>{'pinnedSessionIds': <String>[]};
 
   /// Scripted `pluginManager/listBundles` rows.
   List<Object?> pluginBundlesValue = <Object?>[];
@@ -774,6 +781,9 @@ class HarnessFakeRpc implements DshRpcClient {
         // `JobKillValue` (`packages/api/job-controller/src/types.ts`): an
         // already-finished job is a success, not an error.
         return <String, Object?>{'outcome': 'requested'};
+      case DshRpcEndpoints.workspacePinSession:
+      case DshRpcEndpoints.workspaceUnpinSession:
+        return pinValue;
       case DshRpcEndpoints.workspaceInsertBefore:
         return <String, Object?>{
           'workspaceIds': <Object?>['ws-b', 'ws-a', 'ws-c'],
@@ -4079,6 +4089,74 @@ void main() {
     );
   });
 
+  test('pin mirrors the pin set the Host returns, most recent first', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    rpc.pinValue = <String, Object?>{
+      'pinnedSessionIds': <String>['s-pinned', 's-older'],
+    };
+
+    final seen = <List<String>>[];
+    final sub = repository.observePinnedSessionIds().listen(seen.add);
+    addTearDown(sub.cancel);
+
+    await repository.pinSession('s-pinned');
+
+    expect(rpc.callCountFor(DshRpcEndpoints.workspacePinSession), 1);
+    expect(
+      rpc.rawPayloads(DshRpcEndpoints.workspacePinSession).single['sessionId'],
+      's-pinned',
+    );
+    await pumpEventQueue();
+    expect(seen.last, <String>['s-pinned', 's-older']);
+  });
+
+  test('unpin is a wire call even when the session was never pinned', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket();
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    rpc.pinValue = <String, Object?>{'pinnedSessionIds': <String>[]};
+
+    await repository.unpinSession('s-not-pinned');
+
+    expect(rpc.callCountFor(DshRpcEndpoints.workspaceUnpinSession), 1);
+    expect(
+      rpc
+          .rawPayloads(DshRpcEndpoints.workspaceUnpinSession)
+          .single['sessionId'],
+      's-not-pinned',
+    );
+  });
+
+  test(
+    'a refused pin surfaces the Host code as a repository failure',
+    () async {
+      final rpc = HarnessFakeRpc();
+      final socket = ScriptedHarnessSocket();
+      final repository = await harnessRepository(rpc, socket);
+      addTearDown(repository.dispose);
+
+      rpc.failNextCall(
+        DshRpcEndpoints.workspacePinSession,
+        'gateway/bad-request',
+      );
+
+      await expectLater(
+        repository.pinSession('s-archived'),
+        throwsA(
+          isA<RepositoryFailure>().having(
+            (failure) => failure.code,
+            'code',
+            'gateway/bad-request',
+          ),
+        ),
+      );
+    },
+  );
+
   test('archived sessions stay in the roster, marked archived', () async {
     final rpc = HarnessFakeRpc(<Object?>[
       <String, Object?>{
@@ -4129,6 +4207,32 @@ void main() {
       sessions.firstWhere((session) => session.id == 's-quiet').archived,
       isFalse,
     );
+  });
+
+  test('a pinned frame replaces the pin mirror in the Host order', () async {
+    final rpc = HarnessFakeRpc();
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'workspace-follow',
+          method: 'workspace/follow',
+          payload: <String, Object?>{
+            'type': 'pinned',
+            'pinnedSessionIds': <Object?>['s-b', 's-a'],
+          },
+        ),
+      ],
+    );
+    final repository = await harnessRepository(rpc, socket);
+    addTearDown(repository.dispose);
+    await pumpEventQueue();
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    expect(await repository.observePinnedSessionIds().first, <String>[
+      's-b',
+      's-a',
+    ], reason: 'the pin order is the user\'s, not the session list\'s');
   });
 
   test('mux session event reaches an opened session timeline', () async {

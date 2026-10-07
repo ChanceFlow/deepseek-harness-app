@@ -1727,6 +1727,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get archivedBadge => 'Archived';
 
   @override
+  String get pinSession => 'Pin session';
+
+  @override
+  String get unpinSession => 'Unpin session';
+
+  @override
   String get filterSessionsTooltip => 'Filter sessions';
 
   @override

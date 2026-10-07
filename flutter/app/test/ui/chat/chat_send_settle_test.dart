@@ -72,6 +72,10 @@ class _SettleRepository extends Fake implements ChatRepository {
       Stream.value(const <WorkspaceSummary>[]);
 
   @override
+  Stream<List<String>> observePinnedSessionIds() =>
+      const Stream<List<String>>.empty();
+
+  @override
   Stream<ImageLimits?> observeImageLimits() => Stream.value(null);
 
   @override
