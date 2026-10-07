@@ -24,6 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../chat/chat_ui_state.dart';
 import '../../di/providers.dart';
 import '../root/app_destination.dart';
+import '../shared/archived_filter.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/backend_error_text.dart';
 import '../shared/edge_fade.dart';
@@ -299,7 +300,7 @@ class _BackendWorkspaceSection extends ConsumerWidget {
 /// The browsing surface: renders the workspace tree and the embedded
 /// directory browser. The aggregate form (embedded) drops the Scaffold —
 /// the backend section owns the surface.
-class WorkspaceScreen extends StatefulWidget {
+class WorkspaceScreen extends ConsumerStatefulWidget {
   const WorkspaceScreen({
     required this.uiState,
     required this.onAction,
@@ -330,14 +331,24 @@ class WorkspaceScreen extends StatefulWidget {
   final String? titleOverride;
 
   @override
-  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
+  ConsumerState<WorkspaceScreen> createState() => _WorkspaceScreenState();
 }
 
-class _WorkspaceScreenState extends State<WorkspaceScreen> {
+class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedGroups = <String>{};
   final Set<String> _overflowExpandedGroups = <String>{};
   bool _searchActive = false;
+
+  /// The live archived-visibility choice, defaulting to hide until the store
+  /// seeds it. Both this surface's tree and its search results read it, so
+  /// they agree.
+  ArchivedFilter _archivedFilter() => ref.watch(archivedFilterProvider);
+
+  /// The archived-only empty state's way back to the ordinary view.
+  void _viewOtherSessions() => unawaited(
+    ref.read(archivedFilterProvider.notifier).select(ArchivedFilter.hide),
+  );
 
   @override
   void dispose() {
@@ -443,10 +454,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Widget _searchResults(BuildContext context, WorkspaceUiState uiState) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
+    final archivedFilter = _archivedFilter();
     final sessionsById = <String, SessionSummary>{
       for (final session in uiState.sessions.where(
         (session) =>
-            !session.blank && sessionVisible(session, widget.selectedSessionId),
+            !session.blank &&
+            sessionVisible(
+              session,
+              widget.selectedSessionId,
+              archivedFilter: archivedFilter,
+            ),
       ))
         session.id: session,
     };
@@ -571,6 +588,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           widget.onAction(ForkSessionAction(sessionId)),
       onArchiveSession: (sessionId) =>
           widget.onAction(ArchiveSessionAction(sessionId)),
+      onUnarchiveSession: (sessionId) =>
+          widget.onAction(UnarchiveSessionAction(sessionId)),
+      archivedFilter: _archivedFilter(),
+      onViewOtherSessions: _viewOtherSessions,
       shrinkWrap: widget.embedded,
     );
     final results = hasQuery ? _searchResults(context, uiState) : tree;
@@ -667,6 +688,10 @@ class _SectionHeader extends StatelessWidget {
               active: searchActive,
               onTap: onToggleSearch,
             ),
+            const SizedBox(width: 4),
+            // Web `ViewOptionsMenu`: the archived-visibility control, shared
+            // with the chat sidebar through one filter provider.
+            const ArchivedFilterMenu(),
             const SizedBox(width: 4),
             _HeaderIconButton(
               tooltip: l10n.addWorkspace,
@@ -872,6 +897,9 @@ class _WorkspaceTree extends StatelessWidget {
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
+    this.onUnarchiveSession,
+    this.archivedFilter = ArchivedFilter.hide,
+    this.onViewOtherSessions,
     this.shrinkWrap = false,
   });
 
@@ -888,10 +916,18 @@ class _WorkspaceTree extends StatelessWidget {
 
   /// Web SessionNodeItem session verbs (long-press): rename / fork /
   /// archive one session — the per-row verbs that also reach ungrouped
-  /// sessions.
+  /// sessions. An archived row shows unarchive in place of archive.
   final void Function(String sessionId)? onRenameSession;
   final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
+  final void Function(String sessionId)? onUnarchiveSession;
+
+  /// Which archived rows this tree shows (the same filter the sidebar
+  /// uses; both surfaces read one provider).
+  final ArchivedFilter archivedFilter;
+
+  /// The archived-only empty state's way back to the ordinary view.
+  final VoidCallback? onViewOtherSessions;
 
   /// Aggregate form: the tree rides the section's outer scroll view.
   final bool shrinkWrap;
@@ -907,15 +943,29 @@ class _WorkspaceTree extends StatelessWidget {
       selectedSessionId,
       l10n,
       nowEpochMs: nowEpochMs,
+      archivedFilter: archivedFilter,
     );
     if (groups.isEmpty) {
-      // Web `.empty` (aligned with the row grid).
+      // Web `EmptySessions`: the archived-only view names its filter and
+      // offers the way back; every other view keeps the plain line.
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Text(
-          l10n.noWorkspacesYet,
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              archivedFilter == ArchivedFilter.only
+                  ? l10n.noArchivedSessions
+                  : l10n.noWorkspacesYet,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontSize: 13, color: scheme.onSurfaceVariant),
+            ),
+            if (archivedFilter == ArchivedFilter.only)
+              TextButton(
+                onPressed: onViewOtherSessions,
+                child: Text(l10n.viewOtherSessions),
+              ),
+          ],
         ),
       );
     }
@@ -951,6 +1001,7 @@ class _WorkspaceTree extends StatelessWidget {
             onRenameSession: onRenameSession,
             onForkSession: onForkSession,
             onArchiveSession: onArchiveSession,
+            onUnarchiveSession: onUnarchiveSession,
           ),
         ],
       ],
@@ -978,6 +1029,7 @@ class _WorkspaceGroup extends StatelessWidget {
     this.onRenameSession,
     this.onForkSession,
     this.onArchiveSession,
+    this.onUnarchiveSession,
   });
 
   final SessionGroupData group;
@@ -996,6 +1048,7 @@ class _WorkspaceGroup extends StatelessWidget {
   final void Function(String sessionId)? onRenameSession;
   final void Function(String sessionId)? onForkSession;
   final void Function(String sessionId)? onArchiveSession;
+  final void Function(String sessionId)? onUnarchiveSession;
 
   @override
   Widget build(BuildContext context) {
@@ -1042,6 +1095,9 @@ class _WorkspaceGroup extends StatelessWidget {
               onArchive: onArchiveSession == null
                   ? null
                   : () => onArchiveSession!(sessions[i].id),
+              onUnarchive: onUnarchiveSession == null
+                  ? null
+                  : () => onUnarchiveSession!(sessions[i].id),
               // The management surface keeps the verbs discoverable for
               // touch: always-visible ellipsis seat beside the timestamp
               // (the long-press stays active too).

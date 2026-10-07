@@ -84,12 +84,13 @@ sessions.
 ## Consequences
 
 The sidebar leads with running and needs-your-attention sessions
-(yellow dot), then recent activity, matching the user's "focus on what
-is active" direction while the Workspaces tab owns management
-(rename/delete/archive/move). Long-press verbs on session rows reach
-both surfaces; archive stays per-session. The pending status is only as
-current as the last frame — a cold session shows no pending until its
-frames replay; unarchive remains unexposed. The completed bit is
+(yellow dot), then recent activity, while the Workspaces tab owns
+management (rename/delete/archive/move). Long-press verbs on session
+rows reach both surfaces; archive stays per-session. Restore, the
+archived-rows filter and the archive notices live in [the
+archive-prompts note](2026-10-07-archive-prompts-and-action-notices.md).
+The pending status is only as current as the last frame — a cold
+session shows no pending until its frames replay. The completed bit is
 client-derived: it survives refreshes and reconnect pulls;
 idle-at-first-observation never arms.
 

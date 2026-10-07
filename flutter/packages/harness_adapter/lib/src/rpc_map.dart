@@ -79,6 +79,7 @@ abstract final class DshRpcEndpoints {
   static const String workspaceInsertSessionBefore =
       'workspace/insertSessionBefore';
   static const String workspaceArchiveSession = 'workspace/archiveSession';
+  static const String workspaceUnarchiveSession = 'workspace/unarchiveSession';
 
   // Workspace Files. `read` pages decoded UTF-8 text; `readBytes` returns
   // native bytes — the whole file when `options.range` is absent, one window
@@ -138,6 +139,71 @@ abstract final class DshRpcEndpoints {
   // reference/deepseek-harness/packages/host/plugin-inventory/src/index.ts,
   // `@Remote('list')`).
   static const String pluginInventoryList = 'pluginInventory/list';
+
+  // Background jobs (DSH 0.1.2 `job` namespace —
+  // reference/deepseek-harness/packages/api/job-controller/src/index.ts,
+  // `super(ctx, 'jobController', { namespace: 'job' })`). `job/list` and
+  // `job/follow` are streams and are opened by literal: the wire-pin gate
+  // compares unary registrations only, so a stream constant would read as a
+  // client-only name (docs/spec.md §4.6).
+  static const String jobKill = 'job/kill';
+
+  // Plugin manager (DSH 0.1.2 `pluginManager` service —
+  // reference/deepseek-harness/packages/boot/plugin-manager/src/index.ts,
+  // `super(ctx, 'pluginManager')`). Every method is unary; installation
+  // progress travels as the forwarded `plugin-manager/*` events, never as a
+  // stream. `pluginInventory/list`'s `managementAvailable` is the gate.
+  static const String pluginManagerListBundles = 'pluginManager/listBundles';
+  static const String pluginManagerListPlugins = 'pluginManager/listPlugins';
+  static const String pluginManagerRegistries = 'pluginManager/registries';
+  static const String pluginManagerInspect = 'pluginManager/inspect';
+  static const String pluginManagerInstallBundle =
+      'pluginManager/installBundle';
+  static const String pluginManagerWaitForInstall =
+      'pluginManager/waitForInstall';
+  static const String pluginManagerCancelInstall =
+      'pluginManager/cancelInstall';
+  static const String pluginManagerSetBundleEnabled =
+      'pluginManager/setBundleEnabled';
+  static const String pluginManagerSetPluginEnabled =
+      'pluginManager/setPluginEnabled';
+  static const String pluginManagerRemoveBundle = 'pluginManager/removeBundle';
+  static const String pluginManagerListVersionExemptions =
+      'pluginManager/listVersionExemptions';
+  static const String pluginManagerSetVersionExemption =
+      'pluginManager/setVersionExemption';
+
+  /// Registry speed probe, registered by the Web client package
+  /// (`packages/client/ui-plugin-manager/src/index.ts`,
+  /// `super(ctx, 'pluginRegistryProbe')`).
+  static const String pluginRegistryProbeFastest =
+      'pluginRegistryProbe/fastest';
+
+  // Scheduled tasks (DSH 0.1.2 `schedule` service —
+  // reference/deepseek-harness/packages/schedule/schedule/src/index.ts,
+  // `super(ctx, 'schedule')`). `create` is not a Remote: a reminder is
+  // created by the model's own tool, and the shipped Web bundle mounts this
+  // service disabled, so a surface must probe `schedule/catalog` rather than
+  // assume it.
+  static const String scheduleList = 'schedule/list';
+  static const String scheduleCatalog = 'schedule/catalog';
+  static const String scheduleHistory = 'schedule/history';
+  static const String scheduleUpdate = 'schedule/update';
+  static const String scheduleDelete = 'schedule/delete';
+
+  // Terminals (DSH 0.1.2 `terminal` namespace —
+  // reference/deepseek-harness/packages/api/terminal-controller/src/index.ts,
+  // `super(ctx, 'terminalController', { namespace: 'terminal' })`). Every
+  // method but `list` takes the Agent lookup, whose wire field is `agentId`;
+  // `follow` and `retain` are streams and stay literals (docs/spec.md §4.6).
+  static const String terminalEnvironment = 'terminal/environment';
+  static const String terminalShells = 'terminal/shells';
+  static const String terminalList = 'terminal/list';
+  static const String terminalCreate = 'terminal/create';
+  static const String terminalWrite = 'terminal/write';
+  static const String terminalResize = 'terminal/resize';
+  static const String terminalRename = 'terminal/rename';
+  static const String terminalClose = 'terminal/close';
 
   // Remote Events (DSH 0.1.2)
   static const String eventsResult = r'$events/result';

@@ -110,6 +110,21 @@ final class ArchiveSessionAction extends WorkspaceAction {
   int get hashCode => Object.hash('archive-session', sessionId);
 }
 
+/// Restore an archived session (web SessionNodeItem "Unarchive session" —
+/// the same row entry an archived row shows in place of archive).
+final class UnarchiveSessionAction extends WorkspaceAction {
+  const UnarchiveSessionAction(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnarchiveSessionAction && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => Object.hash('unarchive-session', sessionId);
+}
+
 /// Rename one session (web SessionNodeItem "Rename session" — the
 /// long-press session verb).
 final class RenameSessionAction extends WorkspaceAction {

@@ -23,6 +23,7 @@ final class SessionSummary {
     this.parentSessionId,
     this.pendingInteraction,
     this.completed = false,
+    this.archived = false,
     this.agentError,
     this.agentAvailable,
   });
@@ -58,6 +59,16 @@ final class SessionSummary {
   /// Also derived — the wire summary has no such field (see the harness
   /// adapter).
   final bool completed;
+
+  /// Whether the registry-global archive set holds this session. A derived
+  /// fact like [completed]: the wire summary has no such field, so the
+  /// adapter folds the `workspace/follow` baseline and the archive RPC
+  /// replies into it. Archived sessions stay in every roster — the browsing
+  /// surfaces decide visibility from their own archived filter, and the
+  /// notification folds skip them the way the reference's list-level
+  /// filtering does. Archiving is not deletion: the log and the workspace
+  /// accounting slot survive, and unarchiving restores the row in place.
+  final bool archived;
 
   /// The most recent Agent-level failure with no turn position (web
   /// `SessionSnapshot.lastAgentError`): the host's `api-session/error`
@@ -125,6 +136,7 @@ final class SessionSummary {
           other.parentSessionId == parentSessionId &&
           other.pendingInteraction == pendingInteraction &&
           other.completed == completed &&
+          other.archived == archived &&
           other.agentError == agentError &&
           other.agentAvailable == agentAvailable);
 
@@ -141,6 +153,7 @@ final class SessionSummary {
     parentSessionId,
     pendingInteraction,
     completed,
+    archived,
     agentError,
     agentAvailable,
   );

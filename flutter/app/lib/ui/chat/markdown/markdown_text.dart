@@ -534,9 +534,7 @@ class _MarkdownTextState extends State<MarkdownText> {
                   decorationColor: theme.colorScheme.primary,
                 ),
                 recognizer: TapGestureRecognizer()
-                  ..onTap = () {
-                    unawaited(launchUrl(Uri.parse(inline.url)));
-                  },
+                  ..onTap = () => _openLink(context, inline.url),
               ),
             );
         }
@@ -545,5 +543,29 @@ class _MarkdownTextState extends State<MarkdownText> {
 
     render(inlines, spans);
     return TextSpan(children: spans);
+  }
+
+  /// Opens one inline link through the platform.
+  ///
+  /// A tap that opens nothing must say so: an unparseable URL, a scheme the
+  /// device has no handler for, or a launcher that refuses all leave the
+  /// reader with a dead span otherwise. The locale seat and the messenger are
+  /// captured while this run of spans is built — a `TapGestureRecognizer`
+  /// fires long after the build, so nothing may read `context` then.
+  void _openLink(BuildContext context, String url) {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    unawaited(() async {
+      var opened = false;
+      try {
+        opened = await launchUrl(Uri.parse(url));
+      } catch (_) {
+        opened = false;
+      }
+      if (opened || l10n == null || messenger == null) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.linkOpenFailedNotice)),
+      );
+    }());
   }
 }

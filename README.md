@@ -126,6 +126,49 @@ box, a tunneled remote dsh.
   questions, plan-review cards, background jobs, image attachments, skill
   candidates, and session-log export (the open session's ZIP archive saved
   into Downloads from the composer's `/export` or the session header).
+- **Archive prompts and session notices** — archiving a session that still
+  runs work raises the Host's refusal as a "stop and archive" confirmation
+  naming the turn, subagents, background jobs and scheduled reminders that
+  will stop; a successful archive raises a notice with an undo, and a refused
+  New Session, a failed plugin refresh, or an inline link that opens nothing
+  says so the same way. Restoring a row, the archived-rows filter (hide /
+  show / archived only), and the `Archived` row marking keep an archived
+  session reachable instead of a one-way door.
+- **Background jobs** — the session header's job pill opens the ordered
+  roster: live rows lead with a ticking duration, the settled tail folds
+  behind its count, and an expandable row streams that job's retained output
+  (`job/follow`) with its retention gaps named. A running row stops on two
+  presses, and the row settles through the roster rather than a local guess.
+- **Agent teams** — a session whose Lead runs an Agent Team grows a members
+  action in the header: the panel shows the durable roster with each member's
+  live activity, the read-only shared task board (owner, readiness, blockers,
+  write scopes, overlap warnings), and opens any member's conversation. A team
+  whose persisted record the host rejected shows that failure above the last
+  valid roster, and the action stays hidden on sessions with no team.
+- **Plugin management** — Settings → Plugins → Plugin manager drives the
+  host's bundle roster: install a bundle from a registry (progress and the
+  package log stream in while it runs), switch bundles and the plugin rows
+  they compose on or off, remove what you added behind a confirmation, and
+  revoke the saved version exemptions. The page appears only when the host
+  composes a manager, and a locked row says why it cannot be changed.
+- **Automation tasks** — Settings → Automation tasks lists every reminder the
+  host schedules, with a status filter and a search over the stored name and
+  instruction. Opening one shows its rule, the next run, and its saved
+  delivery records (paged newest-first, with the legacy and pruned cases named);
+  an active task's name, instruction, and repeat can be edited under a
+  compare-and-update that reports a conflict instead of overwriting, and a
+  delete is confirmed. Reminders are still created by asking the agent, and a
+  host that composes no scheduler says so instead of showing an empty board.
+- **Terminals** — the session menu opens the agent's persistent shells: pick
+  one, and the host's screen renders as text (escape sequences that change the
+  text are honored; colors and cursor addressing are stated as not rendered)
+  with keystrokes going back as UTF-8 input. Terminals outlive the panel, so closing
+  the page detaches rather than kills; reconnecting re-attaches and replays a
+  fresh snapshot, a terminal owned by another window is read-only until you
+  take control, the size is clamped to the host's maximum, and a shell that
+  exits offers a new one. `terminal/create` spawns with the host's own
+  system-user permissions, outside the agent's sandbox, and the surface says
+  so.
 - **File inspection** — a file the agent wrote opens in place: tap the preview
   action on a file tool row, a chip in the produced-files row that closes a
   finished turn, or a card in the `交付文件` row a turn's successful `present`
@@ -184,7 +227,7 @@ currently **`dsh-v0.2.0-rc.2`**
 ([pin and contract map](reference/README.md)). dsh is under active
 development with breaking changes: this client tracks that one pinned
 contract, so do not assume wire compatibility with any other dsh
-version. Coverage today is 52 of 128 Remote methods registered by the pinned
+version. Coverage today is 80 of 128 Remote methods registered by the pinned
 tree — [docs/spec.md §4.6](docs/spec.md#46-wire-coverage) has the exact counts,
 the unwired remainder, and the reviewed names the client deliberately leaves
 unwired or declares only; the

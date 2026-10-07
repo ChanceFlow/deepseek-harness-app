@@ -239,6 +239,17 @@ final class SessionLogExportState {
 
 /// Base intent type; subclasses carry value equality like the Kotlin
 /// data classes they replace.
+/// One background job's retained output (`job/follow`); [resumeFrom]
+/// continues a previous generation at the last published offset.
+typedef JobOutputObserver = Stream<JobOutputFrame> Function(
+  String sessionId,
+  String jobId, {
+  int? resumeFrom,
+});
+
+/// Stops one background job (`job/kill`); false when the host refused.
+typedef JobKiller = Future<bool> Function(String sessionId, String jobId);
+
 sealed class ChatAction {
   const ChatAction();
 }
@@ -463,6 +474,19 @@ final class ArchiveSession extends ChatAction {
   @override
   bool operator ==(Object other) =>
       other is ArchiveSession && other.sessionId == sessionId;
+
+  @override
+  int get hashCode => sessionId.hashCode;
+}
+
+final class UnarchiveSession extends ChatAction {
+  const UnarchiveSession(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is UnarchiveSession && other.sessionId == sessionId;
 
   @override
   int get hashCode => sessionId.hashCode;

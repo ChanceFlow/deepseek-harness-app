@@ -1,17 +1,31 @@
 /// WorkspaceScreen widget parity tests — the web WorkspaceBrowser port.
 library;
 
+import 'dart:io';
+
 import 'package:domain/model/directory.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/local_state/local_state_providers.dart';
+import 'package:app/local_state/local_state_store.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:app/ui/workspace/workspace_screen.dart';
 import 'package:app/ui/workspace/workspace_ui_state.dart';
 
 import '../../l10n_app.dart';
+
+/// A fresh temp-file-backed store: the browsing surface reads its
+/// archived-visibility filter from it, and the real path provider is not
+/// available in a widget test.
+LocalStateStore _store() {
+  final dir = Directory.systemTemp.createTempSync('workspace_screen_state');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  return LocalStateStore(File('${dir.path}/local_state.json'));
+}
 
 const _homeListing = DirectoryListing(
   path: '/home/user',
@@ -72,14 +86,21 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  final container = ProviderContainer(
+    overrides: [localStateStoreProvider.overrideWith((ref) async => _store())],
+  );
+  addTearDown(container.dispose);
   return tester.pumpWidget(
-    l10nApp(
-      theme: theme,
-      home: WorkspaceScreen(
-        uiState: uiState,
-        onAction: actions.add,
-        selectedSessionId: selectedSessionId,
-        onSelectSession: openedSessions?.add,
+    UncontrolledProviderScope(
+      container: container,
+      child: l10nApp(
+        theme: theme,
+        home: WorkspaceScreen(
+          uiState: uiState,
+          onAction: actions.add,
+          selectedSessionId: selectedSessionId,
+          onSelectSession: openedSessions?.add,
+        ),
       ),
     ),
   );

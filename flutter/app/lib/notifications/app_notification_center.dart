@@ -121,9 +121,14 @@ class AppNotificationCenter {
     // notice, no ongoing row. Filtering here means their ids also leave
     // `live` in the reconcile below, so an ongoing row a pre-filter build
     // left posted is cancelled on the next snapshot.
+    //
+    // Archived sessions are the same: they stay in the roster so the
+    // browsing surfaces can show them under their own filter, but they are
+    // not notification subjects — the behavior the adapter's own filtering
+    // produced before the archive fact reached this fold.
     _lastSessions = <SessionSummary>[
       for (final session in sessions)
-        if (session.parentSessionId == null) session,
+        if (session.parentSessionId == null && !session.archived) session,
     ];
     // The connection fact, emitted on its own edges: the keep-alive service
     // is a process-lifetime decision, so it must not re-run on every

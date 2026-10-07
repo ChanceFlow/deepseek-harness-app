@@ -1801,23 +1801,22 @@ class TimelineReducer {
   }
 
   JobView? _toJobView(JsonMap obj) {
-    final id = wireString(obj, 'id');
-    if (id == null) return null;
-    return JobView(
-      id: id,
-      kind: wireString(obj, 'kind') ?? 'unknown',
-      label: wireString(obj, 'label') ?? '',
-      status: switch (wireString(obj, 'status')) {
-        'stopping' => JobStatus.stopping,
-        'completed' => JobStatus.completed,
-        'killed' => JobStatus.killed,
-        'failed' => JobStatus.failed,
-        _ => JobStatus.running,
-      },
-      detail: wireString(obj, 'detail'),
-      startedAt: wireLong(obj, 'startedAt'),
-      finishedAt: wireLongOrNull(obj, 'finishedAt'),
-    );
+    // A row without an id names no job, so it is dropped rather than folded.
+    // Every other malformed row is reported and dropped too: one bad row must
+    // never take the whole roster frame down with it.
+    if (wireString(obj, 'id') == null) return null;
+    try {
+      return decodeJobView(obj);
+    } on FormatException catch (error) {
+      onDiagnostic?.call(
+        AdapterDiagnostic(
+          message: 'session/jobs dropped a malformed row: ${error.message}',
+          level: AdapterDiagnosticLevel.debug,
+          context: 'session.jobs',
+        ),
+      );
+      return null;
+    }
   }
 
   JsonMap _eventData(JsonMap event) =>

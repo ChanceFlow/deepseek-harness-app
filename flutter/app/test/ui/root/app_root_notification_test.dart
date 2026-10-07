@@ -12,14 +12,20 @@ import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/main.dart';
 import 'package:app/notifications/notification_events.dart';
+import 'package:app/notifications/session_notice.dart';
 import 'package:app/notifications/system_notifier.dart';
 import 'package:app/ui/root/app_destination.dart';
 import 'package:app/ui/root/app_root.dart';
+import 'package:domain/model/session_archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeRpc implements DshRpcClient {
+  /// Every call the app made, in order, with the payload it sent — the
+  /// session-notice tests read the archive/unarchive calls here.
+  final List<(String, JsonMap)> calls = <(String, JsonMap)>[];
+
   @override
   Future<RpcResult> call(
     String endpoint,
@@ -27,6 +33,7 @@ class _FakeRpc implements DshRpcClient {
     JsonMap payload, {
     Duration? timeout,
   }) async {
+    calls.add((endpoint, payload));
     if (endpoint == 'session/list' || endpoint == 'session.list') {
       return RpcResult(
         ok: true,
@@ -97,10 +104,12 @@ const _event = AppNotificationEvent(
 void main() {
   late StreamController<AppNotificationEvent> foreground;
   late StreamController<NotificationTarget> targets;
+  late _FakeRpc fakeRpc;
 
   setUp(() {
     foreground = StreamController<AppNotificationEvent>.broadcast();
     targets = StreamController<NotificationTarget>.broadcast();
+    fakeRpc = _FakeRpc();
   });
 
   tearDown(() async {
@@ -114,7 +123,7 @@ void main() {
         overrides: [
           backendStoreProvider.overrideWith((ref) async => _testStore()),
           dshRpcClientProvider(Uri.parse(kDshBaseUrl))
-              .overrideWithValue(_FakeRpc()),
+              .overrideWithValue(fakeRpc),
           dshEventSocketProvider(Uri.parse(kDshBaseUrl))
               .overrideWithValue(_NeverSocket()),
           foregroundNotificationEventsProvider.overrideWith(
@@ -306,4 +315,86 @@ void main() {
       );
     }
   });
+
+  testWidgets('an archived notice renders at the root with a working undo', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppRoot)),
+    );
+
+    container
+        .read(sessionNoticeCenterProvider)
+        .show(
+          const SessionNotice(
+            kind: SessionNoticeKind.archived,
+            backendId: 'default',
+            sessionId: 's1',
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session archived'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+
+    expect(
+      fakeRpc.calls.map((call) => call.$1),
+      contains('workspace/unarchiveSession'),
+      reason: 'the undo restores the session on the backend that archived it',
+    );
+  });
+
+  testWidgets('a refused archive opens the confirmation and stops first', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppRoot)),
+    );
+
+    container
+        .read(sessionNoticeCenterProvider)
+        .requestArchiveConfirmation(
+          const SessionArchiveRequest(
+            backendId: 'default',
+            sessionId: 's1',
+            displayTitle: 'proj',
+            activity: <SessionActivityEntry>[
+              SessionActivityEntry(
+                kind: SessionActivityKind.turn,
+                rawKind: 'turn',
+              ),
+            ],
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stop and archive this session?'), findsOneWidget);
+    expect(find.text('The turn in progress'), findsOneWidget);
+
+    await tester.tap(find.text('Stop and archive'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session stopped and archived'), findsOneWidget);
+    final archiveCall = fakeRpc.calls.firstWhere(
+      (call) => call.$1 == 'workspace/archiveSession',
+    );
+    expect(
+      _requestOf(archiveCall.$2)['stopActivity'],
+      isTrue,
+      reason: 'the confirmation archives with the stop in one call',
+    );
+  });
+}
+
+/// The request object of one RPC payload, whichever envelope shape the
+/// transport used (`{'args': {'request': …}}` or a bare request).
+Map<String, Object?> _requestOf(JsonMap payload) {
+  final args = payload['args'];
+  final node = args is Map ? args : payload;
+  final request = node['request'];
+  return (request is Map ? request : node).cast<String, Object?>();
 }

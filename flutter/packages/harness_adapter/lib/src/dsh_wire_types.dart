@@ -7,11 +7,16 @@ library;
 
 import 'dart:typed_data';
 
+import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/context_pressure.dart';
+import 'package:domain/model/jobs.dart';
 import 'package:domain/model/plugin_inventory.dart';
+import 'package:domain/model/plugin_management.dart';
+import 'package:domain/model/schedule.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/terminal.dart';
 import 'package:domain/model/token_usage.dart';
 
 import 'rpc_map.dart';
@@ -949,6 +954,7 @@ AgentPresetPluginGroup _presetGroupFromJson(JsonMap json) =>
 /// `agentPresets` is present only when a roster is composed.
 PluginInventorySnapshot decodePluginInventorySnapshot(JsonMap value) =>
     PluginInventorySnapshot(
+      managementAvailable: value['managementAvailable'] == true,
       entries: wireRequiredObjectArray(
         value,
         'entries',
@@ -1185,4 +1191,790 @@ List<String> _stringList(Object? json) =>
 T? _nullable<T>(Object? json, T Function(JsonMap) decode) {
   final obj = asJsonObject(json);
   return obj == null ? null : decode(obj);
+}
+
+// ---------------------------------------------------------------------------
+// Background jobs — the `JobView` roster row and the `job/follow` frame
+// vocabulary. Reference:
+// packages/api/job-controller/src/types.ts (`JobFollowFrame`, `JobListFrame`)
+// and packages/jobs/jobs/src/view.ts (`JobView`, `JobChunk`).
+// ---------------------------------------------------------------------------
+
+JobStatus _jobStatus(Object? value) => switch (value) {
+  'running' => JobStatus.running,
+  'stopping' => JobStatus.stopping,
+  'completed' => JobStatus.completed,
+  'killed' => JobStatus.killed,
+  'failed' => JobStatus.failed,
+  final other => throw FormatException(
+    'job "status" has unknown value "$other"',
+  ),
+};
+
+JobChannel? _jobChannel(Object? value) {
+  if (value == null) return null;
+  return switch (value) {
+    'stdout' => JobChannel.stdout,
+    'stderr' => JobChannel.stderr,
+    'log' => JobChannel.log,
+    final other => throw FormatException(
+      'job chunk "channel" has unknown value "$other"',
+    ),
+  };
+}
+
+/// One `JobView` row: the `job/list` roster member and the `job` field of both
+/// `opened` and `status` follow frames.
+///
+/// `kind` stays an open string — the wire type is `string`, not the closed
+/// producer union. `output` is the retained ring's bounds; a host that omits
+/// it reports nothing retained.
+JobView decodeJobView(JsonMap json) {
+  final output = asJsonObject(json['output']);
+  final spillPaths = output == null ? null : asJsonArray(output['spillPaths']);
+  return JobView(
+    id: _reqString(json, 'id'),
+    kind: _reqString(json, 'kind'),
+    label: _reqString(json, 'label'),
+    owner: wireString(json, 'owner'),
+    status: _jobStatus(json['status']),
+    progress: wireString(json, 'progress'),
+    detail: wireString(json, 'detail'),
+    startedAt: _reqLong(json, 'startedAt'),
+    finishedAt: wireLongOrNull(json, 'finishedAt'),
+    output: output == null
+        ? null
+        : JobOutputWindow(
+            total: _reqLong(output, 'total'),
+            earliest: _reqLong(output, 'earliest'),
+            spillPaths:
+                spillPaths?.map((Object? path) {
+                  if (path is! String) _missing(output, 'spillPaths');
+                  return path;
+                }).toList() ??
+                const <String>[],
+          ),
+  );
+}
+
+JobOutputChunk _jobChunkFromJson(JsonMap json) => JobOutputChunk(
+  at: _reqLong(json, 'at'),
+  text: _reqString(json, 'text'),
+  channel: _jobChannel(json['channel']),
+  // `gapBefore` is only ever present as `true`; absence means no gap.
+  gapBefore: json['gapBefore'] == true,
+);
+
+/// One `job/follow` frame (`JobFollowFrame`).
+///
+/// The discriminant is closed: an unknown `type` throws rather than being
+/// skipped, so a host that adds a frame kind fails compilation-adjacent
+/// decoding instead of silently truncating a job's output.
+JobOutputFrame decodeJobFollowFrame(JsonMap frame) {
+  final type = _reqString(frame, 'type');
+  switch (type) {
+    case 'opened':
+      return JobOutputOpened(
+        job: decodeJobView(wireRequiredObject(frame, 'job')),
+        from: _reqLong(frame, 'from'),
+      );
+    case 'output':
+      return JobOutputChunks(
+        chunks: wireRequiredArray(frame, 'chunks').map((Object? chunk) {
+          final object = asJsonObject(chunk);
+          if (object == null) _missing(frame, 'chunks');
+          return _jobChunkFromJson(object);
+        }).toList(),
+        next: _reqLong(frame, 'next'),
+        lossy: frame['lossy'] == true,
+      );
+    case 'status':
+      return JobOutputStatus(
+        job: decodeJobView(wireRequiredObject(frame, 'job')),
+      );
+    default:
+      throw FormatException('job/follow "type" has unknown value "$type"');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Agent teams — the Lead Session's `agentTeam` projection value. Reference:
+// packages/experimental/agent-team/src/types.ts (`TeamProjection`,
+// `TeamMemberProjection`, `TeamTaskView`).
+// ---------------------------------------------------------------------------
+
+TeamMemberPhase _teamMemberPhase(Object? value) => switch (value) {
+  'provisioning' => TeamMemberPhase.provisioning,
+  'active' => TeamMemberPhase.active,
+  'failed' => TeamMemberPhase.failed,
+  final other => throw FormatException(
+    'agentTeam member "phase" has unknown value "$other"',
+  ),
+};
+
+String _teamRole(Object? value) => switch (value) {
+  'lead' => 'lead',
+  'teammate' => 'teammate',
+  final other => throw FormatException(
+    'agentTeam member "role" has unknown value "$other"',
+  ),
+};
+
+TeamTaskStatus _teamTaskStatus(Object? value) => switch (value) {
+  'pending' => TeamTaskStatus.pending,
+  'in_progress' => TeamTaskStatus.inProgress,
+  'completed' => TeamTaskStatus.completed,
+  'deleted' => TeamTaskStatus.deleted,
+  final other => throw FormatException(
+    'agentTeam task "status" has unknown value "$other"',
+  ),
+};
+
+List<String> _teamStringList(JsonMap json, String key) {
+  final raw = asJsonArray(json[key]);
+  if (raw == null) return const <String>[];
+  return raw.map((Object? entry) {
+    if (entry is! String) _missing(json, key);
+    return entry;
+  }).toList();
+}
+
+/// One `TeamMemberProjection`: the durable roster row. A member's live
+/// running bit is not here — it comes from Session status.
+TeamMember _teamMemberFromJson(JsonMap json) => TeamMember(
+  id: _reqString(json, 'id'),
+  name: _reqString(json, 'name'),
+  isLead: _teamRole(json['role']) == 'lead',
+  phase: _teamMemberPhase(json['phase']),
+  error: wireString(json, 'error'),
+);
+
+/// One `TeamTaskView`; `deleted` tombstones never reach this decoder because
+/// the host filters them before publishing.
+TeamTask _teamTaskFromJson(JsonMap json) => TeamTask(
+  id: _reqString(json, 'id'),
+  revision: _reqLong(json, 'revision'),
+  subject: _reqString(json, 'subject'),
+  description: _reqString(json, 'description'),
+  status: _teamTaskStatus(json['status']),
+  blockedBy: _teamStringList(json, 'blockedBy'),
+  writeScopes: _teamStringList(json, 'writeScopes'),
+  ownerName: wireString(json, 'ownerName'),
+  ready: _reqBool(json, 'ready'),
+  writeScopeWarnings: _teamStringList(json, 'writeScopeWarnings'),
+);
+
+/// Decodes one `agentTeam` projection value. `members` and `tasks` are
+/// required; `failure` is present only once the host rejected a persisted
+/// Team record, after which it stops applying further ones.
+AgentTeam decodeAgentTeamProjection(Object? value) {
+  final json = asJsonObject(value);
+  if (json == null) {
+    throw const FormatException('agentTeam projection value must be an object');
+  }
+  return AgentTeam(
+    members: wireRequiredObjectArray(
+      json,
+      'members',
+    ).map(_teamMemberFromJson).toList(),
+    tasks: wireRequiredObjectArray(
+      json,
+      'tasks',
+    ).map(_teamTaskFromJson).toList(),
+    failure: wireString(json, 'failure'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plugin management — the `pluginManager` Remote surface. Reference:
+// packages/boot/plugin-manager/src/types.ts.
+// ---------------------------------------------------------------------------
+
+PluginReadOnlyReason _readOnlyReason(Object? value) => switch (value) {
+  'management-required' => PluginReadOnlyReason.managementRequired,
+  'unaddressable' => PluginReadOnlyReason.unaddressable,
+  final other => throw FormatException(
+    'plugin "readOnlyReason" has unknown value "$other"',
+  ),
+};
+
+PluginLocalizedText? _localizedText(Object? value) {
+  if (value is String) {
+    return value.isEmpty
+        ? null
+        : PluginLocalizedText(<String, String>{'en': value});
+  }
+  final json = asJsonObject(value);
+  if (json == null) return null;
+  final values = <String, String>{};
+  for (final entry in json.entries) {
+    final text = entry.value;
+    if (text is String && text.isNotEmpty) values[entry.key] = text;
+  }
+  return values.isEmpty ? null : PluginLocalizedText(values);
+}
+
+PluginManagementErrorCode _managementErrorCode(Object? value) =>
+    switch (value) {
+      'management-required' => PluginManagementErrorCode.managementRequired,
+      'unaddressable' => PluginManagementErrorCode.unaddressable,
+      'unknown-plugin' => PluginManagementErrorCode.unknownPlugin,
+      'invalid-spec' => PluginManagementErrorCode.invalidSpec,
+      'ambiguous-install' => PluginManagementErrorCode.ambiguousInstall,
+      'not-bundle' => PluginManagementErrorCode.notBundle,
+      'not-removable' => PluginManagementErrorCode.notRemovable,
+      'stop-profile' => PluginManagementErrorCode.stopProfile,
+      'bundle-in-use' => PluginManagementErrorCode.bundleInUse,
+      'stale-approval' => PluginManagementErrorCode.staleApproval,
+      'incompatible-version' => PluginManagementErrorCode.incompatibleVersion,
+      'operation-error' => PluginManagementErrorCode.operationError,
+      final other => throw FormatException(
+        'plugin management error has unknown code "$other"',
+      ),
+    };
+
+IncompatiblePlugin _incompatiblePluginFromJson(JsonMap json) {
+  final peers = <String, String>{};
+  final raw = asJsonObject(json['peers']);
+  if (raw != null) {
+    for (final entry in raw.entries) {
+      if (entry.value is String) peers[entry.key] = entry.value! as String;
+    }
+  }
+  return IncompatiblePlugin(
+    name: _reqString(json, 'name'),
+    version: _reqString(json, 'version'),
+    runtimeVersion: _reqString(json, 'runtimeVersion'),
+    peers: peers,
+  );
+}
+
+PluginManagementError _managementErrorFromJson(JsonMap json) =>
+    PluginManagementError(
+      code: _managementErrorCode(json['code']),
+      diagnostic: wireString(json, 'diagnostic'),
+      incompatible:
+          asJsonArray(json['incompatible'])?.map((Object? entry) {
+            final object = asJsonObject(entry);
+            if (object == null) _missing(json, 'incompatible');
+            return _incompatiblePluginFromJson(object);
+          }).toList() ??
+          const <IncompatiblePlugin>[],
+    );
+
+List<String> _pluginStringList(JsonMap json, String key) {
+  final raw = asJsonArray(json[key]);
+  if (raw == null) return const <String>[];
+  return raw.map((Object? entry) {
+    if (entry is! String) _missing(json, key);
+    return entry;
+  }).toList();
+}
+
+/// One `BundleRowInfo`: a switchable row inside a bundle.
+PluginBundleRow _bundleRowFromJson(JsonMap json) {
+  final meta = asJsonObject(json['meta']);
+  return PluginBundleRow(
+    rowId: _reqString(json, 'rowId'),
+    moduleName: _reqString(json, 'moduleName'),
+    entryId: wireString(json, 'entryId'),
+    title: _localizedText(meta?['title']),
+    description: _localizedText(meta?['description']),
+    icon: wireString(meta ?? const <String, Object?>{}, 'icon'),
+    metaError: wireString(meta ?? const <String, Object?>{}, 'error'),
+  );
+}
+
+/// Decodes one `pluginManager/listBundles` row (`BundleInfo`).
+PluginBundle decodePluginBundle(JsonMap json) {
+  final meta = asJsonObject(json['meta']);
+  return PluginBundle(
+    name: _reqString(json, 'name'),
+    version: wireString(json, 'version'),
+    title: _localizedText(meta?['title']),
+    description: wireString(json, 'description'),
+    metaDescription: _localizedText(meta?['description']),
+    icon: wireString(meta ?? const <String, Object?>{}, 'icon'),
+    metaError: wireString(meta ?? const <String, Object?>{}, 'error'),
+    enabled: _reqBool(json, 'enabled'),
+    installed: _reqBool(json, 'installed'),
+    optional: _reqBool(json, 'optional'),
+    removable: _reqBool(json, 'removable'),
+    readOnlyReason: json.containsKey('readOnlyReason')
+        ? _readOnlyReason(json['readOnlyReason'])
+        : null,
+    error: json.containsKey('error')
+        ? _managementErrorFromJson(wireRequiredObject(json, 'error'))
+        : null,
+    rows: wireRequiredObjectArray(
+      json,
+      'rows',
+    ).map(_bundleRowFromJson).toList(),
+    overrides: _pluginStringList(json, 'overrides'),
+  );
+}
+
+/// Decodes one `pluginManager/listPlugins` row (`PluginInfo`): an inventory
+/// entry plus exactly one of `patchId` (addressable) or `readOnlyReason`.
+PluginInfo decodeManagedPlugin(JsonMap json) {
+  final meta = asJsonObject(json['meta']);
+  return PluginInfo(
+    entryId: _reqString(json, 'entryId'),
+    moduleName: _reqString(json, 'moduleName'),
+    enabled: _reqBool(json, 'enabled'),
+    patchId: wireString(json, 'patchId'),
+    readOnlyReason: json.containsKey('readOnlyReason')
+        ? _readOnlyReason(json['readOnlyReason'])
+        : null,
+    title: _localizedText(meta?['title']),
+    description: _localizedText(meta?['description']),
+    icon: wireString(meta ?? const <String, Object?>{}, 'icon'),
+    metaError: wireString(meta ?? const <String, Object?>{}, 'error'),
+  );
+}
+
+/// Decodes `pluginManager/registries` (`PluginRegistries`).
+PluginRegistries decodePluginRegistries(JsonMap json) => PluginRegistries(
+  registry: wireString(json, 'registry'),
+  fallbackRegistries: _pluginStringList(json, 'fallbackRegistries'),
+  resolved: wireString(json, 'resolved'),
+);
+
+/// Decodes `pluginManager/listVersionExemptions`.
+PluginVersionExemptions decodePluginVersionExemptions(JsonMap json) {
+  final exemptions = <String, List<String>>{};
+  final raw = asJsonObject(json['exemptions']);
+  if (raw != null) {
+    for (final entry in raw.entries) {
+      final versions = asJsonArray(entry.value);
+      exemptions[entry.key] =
+          versions?.map((Object? version) {
+            if (version is! String) _missing(json, 'exemptions');
+            return version;
+          }).toList() ??
+          const <String>[];
+    }
+  }
+  return PluginVersionExemptions(
+    exemptions: exemptions,
+    warnings: _pluginStringList(json, 'warnings'),
+  );
+}
+
+PluginPackageResult _packageResultFromJson(JsonMap json) => PluginPackageResult(
+  exitCode: _reqLong(json, 'exitCode'),
+  output: _reqString(json, 'output'),
+  truncated: _reqBool(json, 'truncated'),
+  logPath: _reqString(json, 'logPath'),
+  kind: json.containsKey('kind')
+      ? switch (json['kind']) {
+          'pnpm-missing' => PluginInstallFailureKind.pnpmMissing,
+          'timeout' => PluginInstallFailureKind.timeout,
+          'not-found' => PluginInstallFailureKind.notFound,
+          'no-matching-version' => PluginInstallFailureKind.noMatchingVersion,
+          'network' => PluginInstallFailureKind.network,
+          'disk-full' => PluginInstallFailureKind.diskFull,
+          'permission' => PluginInstallFailureKind.permission,
+          'build-blocked' => PluginInstallFailureKind.buildBlocked,
+          'integrity' => PluginInstallFailureKind.integrity,
+          'unknown' => PluginInstallFailureKind.unknown,
+          final other => throw FormatException(
+            'package result "kind" has unknown value "$other"',
+          ),
+        }
+      : null,
+  timedOut: json['timedOut'] == true,
+  incompatible:
+      asJsonArray(json['incompatible'])?.map((Object? entry) {
+        final object = asJsonObject(entry);
+        if (object == null) _missing(json, 'incompatible');
+        return _incompatiblePluginFromJson(object);
+      }).toList() ??
+      const <IncompatiblePlugin>[],
+);
+
+/// Decodes one `ChangeResult` — the answer every mutating manager method
+/// gives. Expected refusals ride [PluginChangeResult.error] rather than the
+/// transport error branch.
+PluginChangeResult decodePluginChangeResult(JsonMap json) => PluginChangeResult(
+  changed: _reqBool(json, 'changed'),
+  application: switch (_reqString(json, 'application')) {
+    'applied' => PluginChangeApplication.applied,
+    'restart-required' => PluginChangeApplication.restartRequired,
+    'overridden' => PluginChangeApplication.overridden,
+    'failed' => PluginChangeApplication.failed,
+    'cancelled' => PluginChangeApplication.cancelled,
+    final other => throw FormatException(
+      'change result "application" has unknown value "$other"',
+    ),
+  },
+  stage: switch (_reqString(json, 'stage')) {
+    'install' => PluginChangeStage.install,
+    'enable' => PluginChangeStage.enable,
+    'remove' => PluginChangeStage.remove,
+    final other => throw FormatException(
+      'change result "stage" has unknown value "$other"',
+    ),
+  },
+  target: _reqString(json, 'target'),
+  enabled: json.containsKey('enabled') ? wireBool(json, 'enabled') : null,
+  error: json.containsKey('error')
+      ? _managementErrorFromJson(wireRequiredObject(json, 'error'))
+      : null,
+  warnings: _pluginStringList(json, 'warnings'),
+  packageResult: json.containsKey('packageResult')
+      ? _packageResultFromJson(wireRequiredObject(json, 'packageResult'))
+      : null,
+  bundle: wireString(json, 'bundle'),
+  pendingBuilds: _pluginStringList(json, 'pendingBuilds'),
+  approvedBuilds: _pluginStringList(json, 'approvedBuilds'),
+  registries: _pluginStringList(json, 'registries'),
+  failedAt: wireString(json, 'failedAt'),
+);
+
+/// Decodes `pluginManager/inspect`'s `PluginSpecInspection`.
+PluginSpecInspection decodePluginSpecInspection(JsonMap json) {
+  final status = _reqString(json, 'status');
+  if (status == 'refused') {
+    return PluginSpecRefused(
+      problem: switch (_reqString(json, 'problem')) {
+        'invalid-spec' => PluginInspectProblem.invalidSpec,
+        'already-installed' => PluginInspectProblem.alreadyInstalled,
+        'not-found' => PluginInspectProblem.notFound,
+        'not-a-package' => PluginInspectProblem.notAPackage,
+        'not-a-bundle' => PluginInspectProblem.notABundle,
+        'network' => PluginInspectProblem.network,
+        'unknown' => PluginInspectProblem.unknown,
+        final other => throw FormatException(
+          'inspection "problem" has unknown value "$other"',
+        ),
+      },
+      reason: _reqString(json, 'reason'),
+      registries: _pluginStringList(json, 'registries'),
+    );
+  }
+  if (status != 'accepted') {
+    throw FormatException('inspection "status" has unknown value "$status"');
+  }
+  return PluginSpecAccepted(
+    kind: switch (_reqString(json, 'kind')) {
+      'registry' => PluginSpecKind.registry,
+      'path' => PluginSpecKind.path,
+      'git' => PluginSpecKind.git,
+      'tarball' => PluginSpecKind.tarball,
+      final other => throw FormatException(
+        'inspection "kind" has unknown value "$other"',
+      ),
+    },
+    name: wireString(json, 'name'),
+    version: wireString(json, 'version'),
+    description: wireString(json, 'description'),
+    // `bundle` is `boolean | null`: null is "not yet knowable", which is not
+    // the same answer as false.
+    bundle: json['bundle'] is bool ? json['bundle']! as bool : null,
+    registry: wireString(json, 'registry'),
+    host: wireString(json, 'host'),
+  );
+}
+
+/// Decodes one `plugin-manager/install-state` event (`PluginInstallProgress`).
+PluginInstallProgress decodePluginInstallProgress(JsonMap json) {
+  final attempt = asJsonObject(json['attempt']);
+  return PluginInstallProgress(
+    requestId: _reqString(json, 'requestId'),
+    phase: switch (_reqString(json, 'phase')) {
+      'installing' => PluginInstallPhase.installing,
+      'cancelling' => PluginInstallPhase.cancelling,
+      'applying' => PluginInstallPhase.applying,
+      final other => throw FormatException(
+        'install progress "phase" has unknown value "$other"',
+      ),
+    },
+    registry: wireString(attempt ?? const <String, Object?>{}, 'registry'),
+    attemptIndex: attempt == null ? null : _reqLong(attempt, 'index'),
+    attemptTotal: attempt == null ? null : _reqLong(attempt, 'total'),
+  );
+}
+
+/// Decodes one `plugin-manager/install-log` event
+/// (`PluginInstallLogChunk`).
+PluginInstallLogChunk decodePluginInstallLogChunk(JsonMap json) =>
+    PluginInstallLogChunk(
+      requestId: wireString(json, 'requestId'),
+      jobId: _reqString(json, 'jobId'),
+      argv: _pluginStringList(json, 'argv'),
+      cwd: _reqString(json, 'cwd'),
+      isStderr: _reqString(json, 'stream') == 'stderr',
+      text: _reqString(json, 'text'),
+      exitCode: wireLongOrNull(json, 'exitCode'),
+    );
+
+// ---------------------------------------------------------------------------
+// Scheduled tasks — the `schedule` Remote surface. Reference:
+// packages/schedule/schedule/src/types.ts.
+// ---------------------------------------------------------------------------
+
+ScheduleKind _scheduleKind(Object? value) => switch (value) {
+  'after' => ScheduleKind.after,
+  'at' => ScheduleKind.at,
+  'every' => ScheduleKind.every,
+  'daily' => ScheduleKind.daily,
+  'weekly' => ScheduleKind.weekly,
+  'cron' => ScheduleKind.cron,
+  final other => throw FormatException(
+    'schedule record "kind" has unknown value "$other"',
+  ),
+};
+
+/// A `weekly` record's ISO weekdays: required, and every member an integer —
+/// a week with no days is not a rule the host stores.
+List<int> _requiredScheduleWeekdays(JsonMap json) {
+  final raw = asJsonArray(json['weekdays']);
+  if (raw == null) _missing(json, 'weekdays');
+  return raw.map((Object? entry) {
+    if (entry is! int) _missing(json, 'weekdays');
+    return entry;
+  }).toList();
+}
+
+/// Decodes one `ScheduleRecord`. The union is keyed by `kind`, and each
+/// variant's own required fields are enforced here — a `weekly` record
+/// without its weekdays fails loud rather than rendering as an every-week
+/// rule.
+ScheduleRecord decodeScheduleRecordWire(JsonMap json) {
+  final kind = _scheduleKind(json['kind']);
+  return ScheduleRecord(
+    id: _reqString(json, 'id'),
+    kind: kind,
+    title: _reqString(json, 'title'),
+    prompt: _reqString(json, 'prompt'),
+    scheduledAt: _reqString(json, 'scheduledAt'),
+    afterSeconds: kind == ScheduleKind.after
+        ? _reqLong(json, 'afterSeconds')
+        : wireLongOrNull(json, 'afterSeconds'),
+    everySeconds: kind == ScheduleKind.every
+        ? _reqLong(json, 'everySeconds')
+        : wireLongOrNull(json, 'everySeconds'),
+    time: switch (kind) {
+      ScheduleKind.daily || ScheduleKind.weekly => _reqString(json, 'time'),
+      _ => wireString(json, 'time'),
+    },
+    timeZone: switch (kind) {
+      ScheduleKind.daily ||
+      ScheduleKind.weekly ||
+      ScheduleKind.cron => _reqString(json, 'timeZone'),
+      _ => wireString(json, 'timeZone'),
+    },
+    weekdays: kind == ScheduleKind.weekly
+        ? _requiredScheduleWeekdays(json)
+        : const <int>[],
+    expression: kind == ScheduleKind.cron
+        ? _reqString(json, 'expression')
+        : wireString(json, 'expression'),
+  );
+}
+
+ScheduleStatus _scheduleStatus(Object? value) => switch (value) {
+  'active' => ScheduleStatus.active,
+  'inactive' => ScheduleStatus.inactive,
+  final other => throw FormatException(
+    'schedule status has unknown value "$other"',
+  ),
+};
+
+ScheduleDeliveryReceipt _scheduleReceipt(JsonMap json) =>
+    ScheduleDeliveryReceipt(
+      scheduledAt: _reqString(json, 'scheduledAt'),
+      deliveredAt: _reqString(json, 'deliveredAt'),
+      messageId: _reqString(json, 'messageId'),
+    );
+
+ScheduleDeliveryRecord _scheduleDelivery(JsonMap json) =>
+    ScheduleDeliveryRecord(
+      scheduledAt: _reqString(json, 'scheduledAt'),
+      deliveredAt: _reqString(json, 'deliveredAt'),
+      messageId: _reqString(json, 'messageId'),
+      prompt: wireString(json, 'prompt'),
+    );
+
+/// Decodes one `schedule/catalog` row: the record plus its session binding,
+/// status, and latest delivery.
+ScheduleCatalogEntry decodeScheduleCatalogEntry(JsonMap json) =>
+    ScheduleCatalogEntry(
+      record: decodeScheduleRecordWire(json),
+      sessionId: _reqString(json, 'sessionId'),
+      status: _scheduleStatus(json['status']),
+      lastDelivery: json.containsKey('lastDelivery')
+          ? _scheduleReceipt(wireRequiredObject(json, 'lastDelivery'))
+          : null,
+    );
+
+/// Decodes `schedule/history` (`ScheduleDeliveryHistoryResult`): a page, or
+/// the non-mutating miss the host answers inside the value.
+ScheduleHistoryResult decodeScheduleHistoryResult(JsonMap json) {
+  final id = _reqString(json, 'id');
+  if (json.containsKey('code')) {
+    return ScheduleHistoryMiss(id: id, code: _reqString(json, 'code'));
+  }
+  final retention = wireRequiredObject(json, 'retention');
+  return ScheduleHistoryPage(
+    id: id,
+    records: wireRequiredObjectArray(
+      json,
+      'records',
+    ).map(_scheduleDelivery).toList(),
+    earlierRecordsUnavailable: wireRequiredBool(
+      json,
+      'earlierRecordsUnavailable',
+    ),
+    earlierRecordsPruned: wireRequiredBool(json, 'earlierRecordsPruned'),
+    retention: ScheduleRetentionBounds(
+      days: _reqLong(retention, 'days'),
+      records: _reqLong(retention, 'records'),
+    ),
+    nextBefore: wireString(json, 'nextBefore'),
+  );
+}
+
+/// Decodes `schedule/update` (`ScheduleUpdateResult`): the committed record,
+/// a non-mutating miss, or a tool-level refusal. All three ride the success
+/// branch; only a storage failure is a transport error.
+ScheduleUpdateResult decodeScheduleUpdateResult(JsonMap json) {
+  final id = _reqString(json, 'id');
+  if (json['updated'] == true) {
+    return ScheduleUpdateCommitted(
+      record: decodeScheduleRecordWire(wireRequiredObject(json, 'record')),
+    );
+  }
+  final code = _reqString(json, 'code');
+  return ScheduleUpdateMiss(
+    id: id,
+    code: code,
+    message: wireString(json, 'message') ?? code,
+  );
+}
+
+/// Decodes `schedule/delete` (`ScheduleDeleteResult`).
+ScheduleDeleteResult decodeScheduleDeleteResult(JsonMap json) =>
+    ScheduleDeleteResult(
+      id: _reqString(json, 'id'),
+      deleted: _reqBool(json, 'deleted'),
+      code: wireString(json, 'code'),
+    );
+
+/// Encodes one `ScheduleTimingChange` into its wire record.
+JsonMap encodeScheduleTimingChange(
+  ScheduleTimingChange change,
+) => switch (change) {
+  ScheduleAtChange(:final at) => <String, Object?>{'kind': 'at', 'at': at},
+  ScheduleEveryChange(:final everySeconds) => <String, Object?>{
+    'kind': 'every',
+    'every_seconds': everySeconds,
+  },
+  ScheduleDailyChange(:final time, :final timeZone) => <String, Object?>{
+    'kind': 'daily',
+    'daily': <String, Object?>{'time': time, 'time_zone': timeZone},
+  },
+  ScheduleWeeklyChange(:final time, :final timeZone, :final weekdays) =>
+    <String, Object?>{
+      'kind': 'weekly',
+      'weekly': <String, Object?>{
+        'time': time,
+        'time_zone': timeZone,
+        'weekdays': weekdays,
+      },
+    },
+  ScheduleCronChange(:final expression, :final timeZone) => <String, Object?>{
+    'kind': 'cron',
+    'cron': <String, Object?>{'expression': expression, 'time_zone': timeZone},
+  },
+};
+
+/// Encodes one observed record as the `expected` value `schedule/update`
+/// compares against: only the persisted rule fields, never the catalog's
+/// binding or status (`task-timing.ts` `timingSnapshot`).
+JsonMap encodeScheduleRecordSnapshot(ScheduleRecord record) =>
+    <String, Object?>{
+      'id': record.id,
+      'kind': record.kind.name,
+      'title': record.title,
+      'prompt': record.prompt,
+      'scheduledAt': record.scheduledAt,
+      if (record.afterSeconds != null) 'afterSeconds': record.afterSeconds,
+      if (record.everySeconds != null) 'everySeconds': record.everySeconds,
+      if (record.time != null) 'time': record.time,
+      if (record.timeZone != null) 'timeZone': record.timeZone,
+      if (record.weekdays.isNotEmpty) 'weekdays': record.weekdays,
+      if (record.expression != null) 'expression': record.expression,
+    };
+
+// ---------------------------------------------------------------------------
+// Terminals — the `terminal` namespace. Reference:
+// packages/api/terminal-controller/src/types.ts.
+// ---------------------------------------------------------------------------
+
+TerminalState _terminalState(Object? value) => switch (value) {
+  'running' => TerminalState.running,
+  'exited' => TerminalState.exited,
+  'failed' => TerminalState.failed,
+  final other => throw FormatException(
+    'terminal info "state" has unknown value "$other"',
+  ),
+};
+
+/// One `TerminalShell` from `terminal/shells`.
+TerminalShell decodeTerminalShell(JsonMap json) => TerminalShell(
+  path: _reqString(json, 'path'),
+  name: _reqString(json, 'name'),
+  args: _pluginStringList(json, 'args'),
+);
+
+/// Decodes one `WebTerminalInfo`.
+TerminalInfo decodeTerminalInfo(JsonMap json) => TerminalInfo(
+  id: _reqString(json, 'id'),
+  title: _reqString(json, 'title'),
+  shell: decodeTerminalShell(wireRequiredObject(json, 'shell')),
+  cwd: _reqString(json, 'cwd'),
+  cols: _reqLong(json, 'cols'),
+  rows: _reqLong(json, 'rows'),
+  state: _terminalState(json['state']),
+  // `exitCode` is `number | null`: null is "still running", not zero.
+  exitCode: json['exitCode'] is int ? json['exitCode']! as int : null,
+  error: wireString(json, 'error'),
+  controllerId: wireString(json, 'controllerId'),
+);
+
+/// Decodes `terminal/environment`.
+TerminalEnvironment decodeTerminalEnvironment(JsonMap json) =>
+    TerminalEnvironment(
+      cwd: _reqString(json, 'cwd'),
+      maxInputBytes: _reqLong(json, 'maxInputBytes'),
+      maxCols: _reqLong(json, 'maxCols'),
+      maxRows: _reqLong(json, 'maxRows'),
+      scrollback: _reqLong(json, 'scrollback'),
+    );
+
+/// Decodes one `TerminalFrame`. The discriminant is closed: `snapshot`,
+/// `output`, `state`.
+TerminalFrame decodeTerminalFrame(JsonMap frame) {
+  final type = _reqString(frame, 'type');
+  switch (type) {
+    case 'snapshot':
+      return TerminalSnapshot(
+        sequence: _reqLong(frame, 'sequence'),
+        screen: _reqString(frame, 'screen'),
+        info: decodeTerminalInfo(wireRequiredObject(frame, 'info')),
+      );
+    case 'output':
+      return TerminalOutput(
+        sequence: _reqLong(frame, 'sequence'),
+        data: _reqString(frame, 'data'),
+      );
+    case 'state':
+      return TerminalStateChange(
+        info: decodeTerminalInfo(wireRequiredObject(frame, 'info')),
+      );
+    default:
+      throw FormatException('terminal frame "type" has unknown value "$type"');
+  }
 }

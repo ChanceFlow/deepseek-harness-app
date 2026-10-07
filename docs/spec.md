@@ -245,10 +245,10 @@ also fails a declared-only allowlist name that the wire layer actually
 invokes.
 
 <!-- wire-pin:coverage:begin -->
-declared = 54
+declared = 82
 upstream = 128
-identical = 52
-missing = 76
+identical = 80
+missing = 48
 client-only = 2
 out-of-scope = agentPresets/read, productAnalytics/enabled, productAnalytics/report
 <!-- wire-pin:coverage:end -->
@@ -274,12 +274,15 @@ in the client code, not on this block.
 
 A stream the client opens with a literal string rather than through
 `DshRpcEndpoints` — `workspace/follow`, `session/control`, `session/follow`,
-`$events`, and the per-session `job/list` — is outside this block's
-comparison entirely, so a renamed or withdrawn stream route has to be caught
-by hand or by the opt-in real-host tier. The same blindness covers a unary
-endpoint called by a literal: this gate reads the `DshRpcEndpoints` registry,
-so a call site that bypasses the registry is invisible to it. Routing every
-call through `DshRpcEndpoints` is what keeps the block meaningful.
+`$events`, the per-session `job/list`, and the per-job `job/follow` and
+per-terminal `terminal/follow` / `terminal/retain` — is outside this block's
+comparison entirely, so a renamed or withdrawn stream route has to
+be caught by hand or by the opt-in real-host tier. The same blindness covers a
+unary endpoint called by a literal: this gate reads the `DshRpcEndpoints`
+registry, so a call site that bypasses the registry is invisible to it. Routing
+every unary call through `DshRpcEndpoints` is what keeps the block meaningful; a
+stream name stays a literal because the block compares unary registrations, and
+a constant for one would read as a client-only name.
 
 ### 4.7 Non-RPC routes
 
@@ -480,6 +483,50 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
 
 ## 10. Known Limitations and Deferred Work
 
+- **A scheduled task cannot be created from the phone.** `schedule/create` is
+  not a Remote (docs/spec.md §19): creation is model-mediated through the
+  `schedule_create` tool, and the reference Web page works the same way. The
+  page reviews, edits, and deletes.
+- **The shipped web-app bundle carries no Schedule rows.** A stock host answers
+  `gateway/invocation-unavailable`, which this client renders as "this host
+  composes no scheduler" rather than offering controls that cannot work; the
+  optional `experimental/schedule-bundle` switches the service back on
+  (docs/spec.md §19).
+- **A timed `ask_user_question` is not mirrored.** 0.2.0 can ask through a
+  foreground wait (`tool-ask-user` row `mode: timed`, default `legacy`) that the
+  reference Web client holds open over the `userQuestions/attachWait` stream and
+  answers after continuation through `userQuestions/answer`; the shipped bundle
+  leaves the blocking legacy tool in place. This client keeps answering the
+  waterfall through `$events/result`, so a question a timed host still holds
+  open works, but no countdown is rendered, and a question the host has already
+  continued can only be answered from the Web client — the late reply arrives as
+  a `user-question-reply` user message and the phone shows its payload as text.
+- **A terminal runs outside the Agent's sandbox.** `terminal/create` spawns a
+  shell with the host's system-user permissions, so what runs there is not
+  subject to the Agent's approval policy (docs/spec.md §20). The surface states
+  this where a terminal is started.
+- **A detached terminal's missed output may be gone.** There is no resume
+  offset; a reconnect replays the host's bounded scrollback, and the client
+  does not reconstruct what the host no longer holds (docs/spec.md §20).
+- **Terminal window management is client-side in the reference.** Multi-pane
+  holds, drag-resize layout, and terminal-pool prewarming are
+  `ui-sidebar-terminal` behavior with no wire representation, so they are not
+  mirrored.
+- **A terminal's colors and cursor addressing are not rendered.** The client
+  consumes the escape sequences that change which text exists and drops the
+  rest, so a full-screen TUI reads as text rather than as a grid
+  (docs/spec.md §20). The host's screen stream is unchanged; only the client's
+  renderer is bounded.
+- **A plugin version exemption cannot be granted from the phone.** Revoking
+  one is offered; granting needs the exact current runtime version and an
+  explicit `acceptRisk`, which the wire only supplies with a
+  `incompatible-version` refusal (docs/spec.md §18). The capability stays
+  reachable from the agent tool and the CLI.
+- **Plugin configuration slots are not mirrored.** The Web page renders
+  arbitrary React components other client plugins contribute
+  (`plugins.item`, `plugins.row.config`, `plugins.detail.*`); the wire
+  describes none of them, so a phone lists, switches, installs, and removes
+  only.
 - **Streaming is chunk-oriented, not final-block-oriented.** The reducer favors
   `text-delta`/`reasoning-delta`; provider adapters that emit only block events
   will still display finalized blocks from `assistant/message`.
@@ -559,14 +606,17 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   response carries the complete order and the adapter re-sorts the local list
   with it (the same path `host/workspace-order-changed` frames take, unknown
   ids keep relative order at the end). Drag-and-drop stays out of scope.
-- **Plugin management is read-only over the wire.** `pluginInventory/list`
+- **Plugin inventory is read-only; the plugin manager is not.**
+  `pluginInventory/list`
   (`packages/host/plugin-inventory/`) returns the Cordis Loader's current
   non-group entries and, when a roster is composed, each agent preset's
-  plugin composition; `ChatRepository.listPluginInventory` decodes it. The
-  earlier "no plugin RPC" claim was false — the host composes plugins
-  host-side, but it does publish this read-only inventory. Mutating verbs
-  (mount/unmount, preset authoring) stay host-side. Skill authoring likewise
-  stays host/filesystem-side; the client surface is the `/` candidate source.
+  plugin composition; `ChatRepository.listPluginInventory` decodes it. Plugin
+  lifecycle rides the `pluginManager/*` verbs — install a bundle, watch or
+  cancel that install, switch a bundle or a plugin row on and off, remove a
+  bundle, and revoke a saved version exemption (docs/spec.md §18). What stays
+  host-side is preset authoring, the configuration slots the previous bullet
+  names, granting a version exemption, and skill authoring; the client's skill
+  surface is the `/` candidate source.
 - **Markdown rendering is a minimal in-app slice.** Message bodies parse into
   blocks (fenced code with language label, headings 1-6, bullet and ordered
   lists nested to two rendered levels, block quotes, GFM pipe tables,
@@ -637,6 +687,28 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `JobView` is a superset of the deleted `SessionJob`, so an added field is
   ignored rather than decoded.
 - Jobs are live snapshots, not durable session events; history replay does not reconstruct them.
+- `job/follow` is the per-job retained-output observation, opened by literal for
+  one `(session, job)` pair while a row is expanded. Its frame union is closed:
+  `opened {job, from}` (always first — `from` is the anchor the next `output`
+  continues at), `output {chunks, next, lossy?}`, and the terminal
+  `status {job}`, which ends the stream. Omitting `from` anchors at the job's
+  oldest retained byte, never at zero, so a re-expansion resumes from the last
+  published `next` instead of replaying the retained head. A frame or chunk
+  flagged `lossy`/`gapBefore` is a retention gap the surface reports above the
+  output rather than gluing non-adjacent text together.
+- `job/kill` (unary, `request`-wrapped) stops a job on a human's behalf. Its only
+  business code is `job/not-found` — the session's list no longer carries a
+  killable row, covering both an unknown id and another session's job — and
+  `outcome: 'already-finished'` is a success. The kill is not the model's own, so
+  the owning agent still receives the standard completion notice.
+- The client's stop affordance is two-press: the first press arms for three
+  seconds, the second calls `job/kill`. An admitted kill stays pending until the
+  roster stream moves the row off `running`, because the unary reply and the
+  roster frames have no cross-carrier order — re-enabling early would offer a
+  duplicate kill.
+- The jobs sheet mirrors the reference's sections: live rows lead in start order,
+  the settled tail folds behind its count while live work exists, and only a row
+  that is live or still holds retained output expands.
 
 ## 15. Agent Presets & Permissions
 
@@ -729,6 +801,202 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `command_roster.dart` is only the pre-first-pull fallback, which also
   carries a failed pull (`session/agent-busy`). `commands/change`
   invalidates every cached roster and re-pulls the selected session.
+
+## 17. Agent Teams
+
+- Agent Teams reach this client as a **Session projection**, never an RPC
+  namespace. The host publishes `agentTeam` on the control stream
+  (`{type: 'projection', sessionId, key, value, seq}`), and it also rides the
+  `session/control` baseline, the `session/follow` snapshot, `session/list`
+  hints, and the `session/projections` read — the same four-carrier path every
+  other projection takes (`packages/experimental/agent-team/src/projection.ts`
+  `key: 'agentTeam'`).
+- The value is the Lead Session's `TeamProjection`: `members` (durable roster
+  rows with `phase` `provisioning`/`active`/`failed` and an optional `error`),
+  `tasks` (the non-deleted board, each row carrying `revision`, `subject`,
+  `description`, `status`, `blockedBy`, `writeScopes`, optional `ownerName`,
+  `ready`, and `writeScopeWarnings`), and an optional `failure`.
+- Absence is null, never an empty team: a host that mounts no Agent Teams
+  package simply never carries the key, and the header action stays hidden. An
+  empty team and an unmounted one must not look the same.
+- `failure` is terminal on the host: it keeps the last valid roster and board
+  and stops applying records, so the panel shows that failure above them rather
+  than presenting stale rows as current.
+- Activity is derived, because `phase` is durable only: an `active` member reads
+  running from live Session status with the roster as the fallback, and a
+  Session the roster does not know reads inactive. Provisioning and failed
+  members keep their durable phase.
+- The Lead of a conversation is the subagent address's parent when the session
+  is a teammate, else the session itself. Selecting the Lead opens that
+  Session; selecting a teammate opens its addressed child through the same
+  route the subagent catalog uses (`session/page` with the child address).
+- The board is read-only: team agents create and update tasks through their own
+  tools, and no client mutation control exists on the wire. Deliberately not
+  mirrored: the web panel's per-member model label (it reads another session's
+  `modelSelection` projection, which a phone panel has no second live seat for).
+
+## 18. Plugin Management
+
+- `pluginInventory/list`'s `managementAvailable` is the gate: false means the
+  host composes no plugin manager, so the surface offers no roster and no
+  install action rather than calling methods the deployment does not register
+  (`packages/host/plugin-inventory/src/index.ts` sets it from
+  `ctx.get('pluginManager') !== undefined`).
+- The roster is two reads: `pluginManager/listBundles` (installed and optional
+  bundles with their switchable rows) and `pluginManager/listPlugins` (loaded
+  entries with their patch targets). A row or bundle is switchable only when
+  the host addressed it; `readOnlyReason` (`management-required` |
+  `unaddressable`) is why a roster row cannot be changed, and it renders as a
+  reason rather than a disabled control with no explanation.
+- Every mutating method answers a `ChangeResult`, and expected refusals are
+  *values* inside it (`error.code`), never transport errors: `changed`,
+  `application` (`applied` | `restart-required` | `overridden` | `failed` |
+  `cancelled`), `stage`, `target`, optional `error`, `packageResult`,
+  `pendingBuilds`, `bundle`, and `failedAt`.
+- Installation is inspect → install → enable, three separate steps:
+  `pluginManager/inspect` resolves the spec (a refusal is a value with its
+  `problem`, and a network refusal names every registry asked);
+  `pluginManager/installBundle` runs pnpm **with `enabled: false`** so
+  activation is always deferred; `pluginManager/setBundleEnabled` activates.
+  Progress is pushed, not polled: `plugin-manager/install-state` carries the
+  phase (`installing` | `cancelling` | `applying`) with the registry attempt
+  being asked, and `plugin-manager/install-log` carries the package run's
+  output chunks.
+- A client-minted `requestId` is what makes the host emit those events, and
+  `pluginManager/waitForInstall` reconciles a lost unary reply: null means the
+  host has no record of that request, which the surface reports as
+  *unconfirmed* rather than guessing an outcome. `pluginManager/cancelInstall`
+  answers `cancelled` | `too-late` | `not-running`; `too-late` means the host is
+  already applying, so the pushed phase must not regress.
+- A failure carrying `pendingBuilds` is the host refusing to run package build
+  scripts: retrying with those names in `approvedBuilds` is the human's
+  explicit acceptance, and the surface offers exactly that.
+- `pluginManager/removeBundle` is the only destructive operation and the only
+  confirmed one. `plugin-manager/changed` (a reason: `plugin` | `bundle` |
+  `install` | `remove`) means the profile's composition moved, so every roster
+  read is stale and the page re-reads rather than assuming.
+- `pluginManager/listVersionExemptions` / `setVersionExemption` carry the saved
+  `name@version` → runtime-version ledger. A grant needs the exact *current*
+  runtime version and `acceptRisk: true`, so this client lists and revokes and
+  leaves granting to a flow that has just been refused for a version mismatch.
+  The reference Web page has no exemption UI at all; this surface is a
+  deliberate, wire-only addition (decision note:
+  [Plugin management](../.agents/notes/implemented/feature/2026-09-29-plugin-management.md)).
+- Deliberately not mirrored, because the wire does not describe them: the Web
+  page's `plugins.*` configuration slots (arbitrary React components other
+  client plugins contribute), the `configForms` settings surface, and
+  `ctx.pluginNavigation`. A phone lists, switches, installs, and removes; it
+  cannot host another plugin's form.
+
+## 19. Scheduled Tasks
+
+- The `schedule` namespace is **five unary methods**, and their arguments are
+  request records: `schedule/list` and `schedule/catalog` read tasks,
+  `schedule/history` one task's saved deliveries, `schedule/update` and
+  `schedule/delete` mutate. `schedule/catalog` takes no arguments.
+- **`schedule/create` is not a Remote.** A reminder is created by the model's
+  own `schedule_create` tool, and the reference Web page has no creation form
+  either (its New action starts a session). This client therefore offers no
+  create control; a reminder is asked for, not typed into a settings page.
+- The `schedule` service is **not mounted by the shipped web-app bundle**: that
+  composition carries none of the three Schedule rows, and the optional
+  `experimental/schedule-bundle` (shipped switched off, offered in the plugin
+  manager's Official group) inserts `time-context`, `schedule`, and
+  `ui-schedule`. On a stock profile every one of these methods therefore answers
+  `gateway/invocation-unavailable` — the service is not mounted, and no
+  generated client namespace exists for it on that host. The surface probes
+  `schedule/catalog` and renders that absence as a stated condition rather than
+  a broken board.
+- The record union is keyed by `kind` (`after`, `at`, `every`, `daily`,
+  `weekly`, `cron`) and the decoder enforces each variant's own required
+  fields: a `weekly` row without weekdays, a `daily` row without its time or
+  zone, or a `cron` row without its expression fails loud rather than rendering
+  as some other rule. Instant-based kinds (`after`, `at`, `every`) store only
+  the UTC instant and carry no zone; the wall-clock kinds always carry one.
+- Every mutation is a **compare-and-update**: `schedule/update` carries the
+  complete record the caller observed as `expected`, plus only the name,
+  instruction, or timing that actually changed. A stale `expected` answers
+  `schedule_conflict`, an ended task `schedule_ended`, a task the session no
+  longer owns `schedule_not_found` — all as values inside the result, with no
+  write performed. An omitted `change` keeps the committed target, so editing a
+  name alone never resets when the task runs.
+- Business failures travel **inside the value**, not the error branch, for
+  `history`, `update`, and `delete`; the package merges no
+  `RemoteErrorDetailsMap` entries, so a thrown input or storage error collapses
+  to `gateway/internal`. `schedule/list` and `schedule/catalog` have no failure
+  union at all.
+- `schedule/history` pages newest-first by exclusive message-id cursor
+  (`before` → `nextBefore`) with a required limit of 1…100; a missing task or
+  an evicted cursor answers a code. `earlierRecordsUnavailable` and
+  `earlierRecordsPruned` are separate facts and are reported separately: the
+  first says records may be missing, the second says an append removed them.
+  A legacy receipt carries no prompt, and the surface never substitutes the
+  task's current instruction for it.
+- A deleted task takes its saved deliveries with it. Archiving a session with
+  active reminders is refused host-side unless the caller stops that activity,
+  and unarchiving does not restore them; workspace deletion does not touch
+  schedules at all.
+- The page's list is the cross-session catalog with a status filter and a
+  search over the stored name, the instruction, and the internal session id —
+  never a resolved session title, which is the reference's own limit.
+
+## 20. Terminals
+
+- The `terminal` namespace is **eight unary methods plus two streams**:
+  `environment`, `shells`, `list`, `create`, `write`, `resize`, `rename`,
+  `close`, and the `follow` / `retain` streams. Every method but `list` takes
+  the Agent lookup, whose wire field is **`agentId`** — never `sessionId`
+  (`TypertLookupMap.agent = TypertLookup<Agent, SessionId>` names the field
+  `${key}Id`, and the host refuses an unknown argument outright).
+  `terminal/list` and `terminal/retain` take the bare `sessionId`, which is
+  what lets them serve a dormant session.
+- A terminal **outlives its attachment**. Detaching — collapsing the panel,
+  switching tabs, losing the transport — never ends the process; only `close`
+  (or host disposal, or unattended reclamation) does. Reconnecting therefore
+  mints a *fresh* attachment id, and the previous attachment keeps neither
+  input control nor its sequence anchor.
+- **There is no resume offset.** `terminal/follow` is attachment-scoped: a
+  generation opens with `snapshot` and continues with `output` frames numbering
+  strictly `sequence + 1`. A gap cannot be patched, so it is recovered by
+  re-attaching and replaying a new snapshot. Output missed while detached is
+  visible only if the host's bounded scrollback still holds it; the client
+  never claims otherwise.
+- `snapshot` carries the complete bounded screen plus the terminal's metadata;
+  `output` carries a chunk and its sequence; `state` carries metadata only
+  (title, dimensions, process state, and the current `controllerId`). Only one
+  attachment holds input control, and `state.controllerId` is how the others
+  learn they are read-only. Taking control is a new attachment, not a method.
+- `retain` is the one hold a **dormant** session can take, and its single frame
+  (`retained`) is the acknowledgement; the stream stays open while the hold
+  lives. It is not a window manager: the reference's multi-pane, drag-resize
+  window layout is client-side and has no wire representation.
+- `terminal/create` is **idempotent for an open identity**: the id is minted by
+  the client and stable across reconnects. Sizes are clamped host-side to
+  `maxCols` / `maxRows` from `environment`. The client clamps its own proposal
+  to those maxima before sending and never proposes a degenerate size.
+- **The sandbox is not extended to a terminal.**
+  `terminal/create` allocates a shell with the host's own system-user
+  permissions, independent of the Agent's sandbox and approval policy; this
+  client says so where a terminal is started and never implies the agent's
+  restrictions apply.
+- Business failures are `terminal/unavailable`, `terminal/control-unavailable`
+  (with `reason: unknown-attachment` | `not-controller` |
+  `controller-dead-<code>` | `write-failed-<code>`), and
+  `terminal/limit-reached` (with `limit`). Losing control is not a transport
+  failure: the terminal stays attached and read-only. A failed cleanup keeps
+  the terminal for a retry rather than reporting a close that did not happen.
+- Rendering is a **bounded plain-text screen**: the client owns a line buffer
+  with a cursor column, so a carriage return rewrites its line instead of
+  duplicating it, a line feed commits, a backspace steps over a character, and
+  an erase-display clears. Colors, attributes, cursor addressing, and
+  alternate-screen switching are consumed and dropped, and the surface states
+  that limit where the screen is drawn. The reference lazy-loads
+  `@xterm/xterm` for a full grid; a new pub dependency cannot be verified by
+  this repository's gates while the CI image's pub cache is per-container, which
+  is why this client renders text instead (decision note:
+  [Terminals](../.agents/notes/implemented/feature/2026-09-29-terminals.md)).
+- ZMODEM, `ui-sidebar-terminal`'s window holds, and the browser's
+  terminal-pool prewarming have no wire surface and are not mirrored.
 
 ### 4.8 Session-event folds
 

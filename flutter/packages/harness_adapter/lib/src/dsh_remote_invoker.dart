@@ -38,9 +38,42 @@ final class DshRemoteInvoker {
     // than `invoke` (which rejects a null value).
     DshRpcEndpoints.sessionProjections,
     DshRpcEndpoints.subagentsPrompt,
+    // `job/kill(request: JobKillRequest)` — the owner fence reads the
+    // session from inside the request (`packages/api/job-controller/src/
+    // types.ts` `JobKillRequest`).
+    DshRpcEndpoints.jobKill,
+    // `schedule/{list,history,update,delete}` each take one
+    // `Schedule*Request`; `schedule/catalog` takes none and is absent here.
+    DshRpcEndpoints.scheduleList,
+    DshRpcEndpoints.scheduleHistory,
+    DshRpcEndpoints.scheduleUpdate,
+    DshRpcEndpoints.scheduleDelete,
+  };
+
+  /// Endpoints whose host signature takes `agent: Agent`: the lookup's wire
+  /// field is `agentId`, never `sessionId`
+  /// (`TypertLookupMap.agent = TypertLookup<Agent, SessionId>`, so the field
+  /// is `${lookup.key}Id`). The host refuses an unknown argument outright, so
+  /// sending the wrong name is a hard failure rather than a fallback.
+  static const Set<String> _agentScopedEndpoints = <String>{
+    DshRpcEndpoints.terminalEnvironment,
+    DshRpcEndpoints.terminalShells,
+    DshRpcEndpoints.terminalCreate,
+    DshRpcEndpoints.terminalWrite,
+    DshRpcEndpoints.terminalResize,
+    DshRpcEndpoints.terminalRename,
+    DshRpcEndpoints.terminalClose,
   };
 
   static JsonMap _prepareArgs(String endpoint, JsonMap payload) {
+    if (_agentScopedEndpoints.contains(endpoint)) {
+      return <String, Object?>{
+        'agentId': payload['agentId'] ?? payload['sessionId'],
+        for (final entry in payload.entries)
+          if (entry.key != 'sessionId' && entry.key != 'agentId')
+            entry.key: entry.value,
+      };
+    }
     if (endpoint == DshRpcEndpoints.sessionModelCatalog ||
         endpoint == DshRpcEndpoints.agentPresetsList ||
         endpoint == DshRpcEndpoints.settingsDescribe) {

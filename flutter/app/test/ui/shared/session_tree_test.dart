@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/shared/archived_filter.dart';
 import 'package:app/ui/shared/session_tree.dart';
 import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/theme/theme.dart';
@@ -23,6 +24,7 @@ SessionSummary _session(
   String id, {
   bool running = false,
   bool completed = false,
+  bool archived = false,
   SessionPendingInteraction? pendingInteraction,
   int updatedAtEpochMs = 0,
 }) => SessionSummary(
@@ -31,6 +33,7 @@ SessionSummary _session(
   blank: false,
   running: running,
   completed: completed,
+  archived: archived,
   pendingInteraction: pendingInteraction,
   updatedAtEpochMs: updatedAtEpochMs,
 );
@@ -128,6 +131,156 @@ void main() {
       expect(groups, hasLength(2));
       expect(groups[0].sessions.map((s) => s.id), <String>['r', 'p', 'x']);
       expect(groups[1].key, 'w2');
+    });
+  });
+
+  group('archived visibility', () {
+    test('sessionVisible follows the filter: hide / show / only', () {
+      final archived = _session('a', archived: true);
+      final quiet = _session('q');
+      // hide (the default): archived rows are gone.
+      expect(sessionVisible(archived, null), isFalse);
+      expect(sessionVisible(quiet, null), isTrue);
+      // show: both, the archived one marked by its own fact.
+      expect(
+        sessionVisible(archived, null, archivedFilter: ArchivedFilter.show),
+        isTrue,
+      );
+      expect(
+        sessionVisible(quiet, null, archivedFilter: ArchivedFilter.show),
+        isTrue,
+      );
+      // only: the archived row alone.
+      expect(
+        sessionVisible(archived, null, archivedFilter: ArchivedFilter.only),
+        isTrue,
+      );
+      expect(
+        sessionVisible(quiet, null, archivedFilter: ArchivedFilter.only),
+        isFalse,
+      );
+    });
+
+    test('subagent children and unselected blanks stay hidden under every '
+        'filter', () {
+      const child = SessionSummary(
+        id: 'c',
+        blank: false,
+        origin: 'subagent',
+        archived: true,
+      );
+      const blank = SessionSummary(id: 'b', archived: true);
+      for (final filter in ArchivedFilter.values) {
+        expect(
+          sessionVisible(child, null, archivedFilter: filter),
+          isFalse,
+          reason: 'subagent child under $filter',
+        );
+        expect(
+          sessionVisible(blank, null, archivedFilter: filter),
+          isFalse,
+          reason: 'unselected blank under $filter',
+        );
+      }
+    });
+
+    test('deriveSessionGroups carries the filter into every group', () {
+      final sessions = <SessionSummary>[
+        _session('live'),
+        _session('gone', archived: true),
+      ];
+      const workspaces = <WorkspaceSummary>[
+        WorkspaceSummary(
+          workspaceId: 'w1',
+          path: '/a',
+          title: 'A',
+          sessionIds: <String>['live', 'gone'],
+        ),
+      ];
+      final hidden = deriveSessionGroups(
+        sessions,
+        workspaces,
+        null,
+        _en,
+        includeEmptyGroups: false,
+      );
+      expect(hidden.single.sessions.map((s) => s.id), <String>['live']);
+
+      final shown = deriveSessionGroups(
+        sessions,
+        workspaces,
+        null,
+        _en,
+        includeEmptyGroups: false,
+        archivedFilter: ArchivedFilter.show,
+      );
+      expect(
+        shown.single.sessions.map((s) => s.id),
+        containsAll(<String>['live', 'gone']),
+      );
+
+      final only = deriveSessionGroups(
+        sessions,
+        workspaces,
+        null,
+        _en,
+        includeEmptyGroups: false,
+        archivedFilter: ArchivedFilter.only,
+      );
+      expect(only.single.sessions.map((s) => s.id), <String>['gone']);
+    });
+
+    testWidgets('an archived row carries the badge and no status dot', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          home: Scaffold(
+            body: SessionTreeRow(
+              session: _session('gone', archived: true, completed: true),
+              selected: false,
+              nowEpochMs: 1000,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Archived'), findsOneWidget);
+      expect(
+        find.byType(StateDot),
+        findsNothing,
+        reason: 'the grayed row and its label carry the state, not a dot',
+      );
+    });
+
+    testWidgets('an archived row offers unarchive in place of archive', (
+      tester,
+    ) async {
+      var archived = 0;
+      var unarchived = 0;
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: SessionTreeRow(
+              session: _session('gone', archived: true),
+              selected: false,
+              nowEpochMs: 1000,
+              onArchive: () => archived++,
+              onUnarchive: () => unarchived++,
+            ),
+          ),
+        ),
+      );
+
+      await tester.longPress(find.text('session gone'));
+      await tester.pumpAndSettle();
+      expect(find.text('Unarchive session'), findsOneWidget);
+      expect(find.text('Archive session'), findsNothing);
+
+      await tester.tap(find.text('Unarchive session'));
+      await tester.pumpAndSettle();
+      expect(unarchived, 1);
+      expect(archived, 0);
     });
   });
 

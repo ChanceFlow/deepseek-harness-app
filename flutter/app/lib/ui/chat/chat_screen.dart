@@ -10,6 +10,7 @@ import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/agent_team.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/command.dart';
 import 'package:domain/model/cordis.dart';
@@ -75,6 +76,8 @@ import 'empty_hero.dart';
 import 'preset_seat.dart';
 import 'reasoning_row.dart';
 import 'sweep_highlight.dart';
+import '../teams/team_action.dart';
+import '../terminal/terminal_screen.dart';
 import '../trajectory/trajectory_entry.dart';
 import 'timeline_folding.dart';
 import 'timeline_grouping.dart';
@@ -102,6 +105,19 @@ typedef AttachmentLoader = Future<Uint8List?> Function(
 /// Bare pumps own no repository: a durable image stays a placeholder frame.
 Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
     Future<Uint8List?>.value();
+
+/// Bare pumps own no jobs: an expanded row reports no output rather than
+/// reaching for a connection the test never wired.
+Stream<JobOutputFrame> _noJobOutput(
+  String sessionId,
+  String jobId, {
+  int? resumeFrom,
+}) => const Stream<JobOutputFrame>.empty();
+
+Future<bool> _noJobKill(String sessionId, String jobId) async => false;
+
+/// Bare pumps own no team: a member row is inert.
+void _noTeamMember(String leadSessionId, TeamMember member) {}
 
 class ChatRoute extends ConsumerWidget {
   const ChatRoute({super.key, this.backendId});
@@ -158,6 +174,11 @@ class ChatRoute extends ConsumerWidget {
                   uiState: uiState,
                   onAction: controller.onAction,
                   loadAttachment: controller.loadAttachmentBytes,
+                  observeJobOutput: controller.observeJobOutput,
+                  killJob: controller.killJob,
+                  jobRoster: controller.uiState.map(
+                    (ChatUiState state) => state.jobs,
+                  ),
                   readWorkspaceFile: controller.readWorkspaceFile,
                   readWorkspaceFileBytes: controller.readWorkspaceFileBytes,
                   backendId: resolved,
@@ -242,6 +263,10 @@ class ChatScreen extends StatefulWidget {
     required this.onAction,
     super.key,
     this.loadAttachment = _noAttachment,
+    this.observeJobOutput = _noJobOutput,
+    this.killJob = _noJobKill,
+    this.jobRoster = const Stream<List<JobView>>.empty(),
+    this.onOpenTeamMember = _noTeamMember,
     this.readWorkspaceFile = _noWorkspaceFileRead,
     this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
     this.onRefreshModels,
@@ -257,6 +282,20 @@ class ChatScreen extends StatefulWidget {
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// Repository seam for the background-jobs sheet's observation stream
+  /// (`job/follow`) and its stop (`job/kill`); the sheet owns the stream's
+  /// lifetime, opening it on expand and cancelling on collapse.
+  final JobOutputObserver observeJobOutput;
+  final JobKiller killJob;
+
+  /// The live job roster the sheet follows; a bare pump leaves it empty and
+  /// the sheet renders the `uiState` snapshot it was opened with.
+  final Stream<List<JobView>> jobRoster;
+
+  /// Opens one Agent-Team member's conversation (the Lead session, or a
+  /// teammate's addressed child).
+  final void Function(String leadSessionId, TeamMember member) onOpenTeamMember;
 
   /// Repository seam for the file-preview sheet (`workspaceFiles/read`).
   final WorkspaceFileReader readWorkspaceFile;
@@ -370,6 +409,28 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Subagent tool page (web embeds it into conversation context;
   /// mobile pushes it as a route with the current session preloaded).
+  /// One team member's conversation, on the same surface the subagent
+  /// catalog pushes: the Lead is this conversation's own session (or its
+  /// parent), and a teammate is its addressed child. Without a backend (a
+  /// bare pump) there is no repository to address, so the row stays read-only.
+  void _openTeamMember(String leadSessionId, TeamMember member) {
+    final backendId = widget.backendId;
+    if (backendId == null) return;
+    if (member.isLead) {
+      widget.onAction(SelectSession(leadSessionId));
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SubagentRecordRoute(
+          backendId: backendId,
+          initialSessionId: leadSessionId,
+          initialChildId: member.id,
+        ),
+      ),
+    );
+  }
+
   void _openSubagents() {
     final sessionId = widget.uiState.selectedSessionId;
     Navigator.of(context).push(
@@ -420,10 +481,18 @@ class _ChatScreenState extends State<ChatScreen> {
     widget.dispatchSessionAction?.call(backendId, ForkSession(sessionId));
   }
 
-  /// Web SessionNodeItem "Archive session" (sidebar long-press verb):
-  /// commits directly (reference archive is non-destructive).
+  /// Web SessionNodeItem "Archive session" (sidebar long-press verb): the
+  /// reference archives a quiet session outright — the undo notice is the
+  /// safety net, and only the Host's running-work refusal asks first (raised
+  /// by the app root from the refusal itself).
   void _dispatchArchiveSession(String backendId, String sessionId) {
     widget.dispatchSessionAction?.call(backendId, ArchiveSession(sessionId));
+  }
+
+  /// Web SessionNodeItem "Unarchive session" (an archived row's own verb):
+  /// restores it on whichever backend owns the row.
+  void _dispatchUnarchiveSession(String backendId, String sessionId) {
+    widget.dispatchSessionAction?.call(backendId, UnarchiveSession(sessionId));
   }
 
   /// One create from the drawer's New session bar — its dialog's Default
@@ -521,6 +590,10 @@ class _ChatScreenState extends State<ChatScreen> {
           uiState: uiState,
           onAction: onAction,
           backendId: widget.backendId,
+          observeJobOutput: widget.observeJobOutput,
+          killJob: widget.killJob,
+          jobRoster: widget.jobRoster,
+          onOpenTeamMember: _openTeamMember,
           onOpenSubagents: _openSubagents,
           compact: compact,
         ),
@@ -582,6 +655,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             onRenameSession: _dispatchRenameSession,
                             onForkSession: _dispatchForkSession,
                             onArchiveSession: _dispatchArchiveSession,
+                            onUnarchiveSession: _dispatchUnarchiveSession,
                             onCreateSessionInWorkspace:
                                 widget.onCreateSessionInWorkspace,
                           ),
@@ -654,6 +728,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   onRenameSession: _dispatchRenameSession,
                   onForkSession: _dispatchForkSession,
                   onArchiveSession: _dispatchArchiveSession,
+                  onUnarchiveSession: _dispatchUnarchiveSession,
                   onCreateSessionInWorkspace: (backendId, workspaceId) =>
                       _createSessionInWorkspaceFromDrawer(
                         drawerContext,
@@ -718,6 +793,10 @@ class ChatHeaderActions extends StatelessWidget {
   const ChatHeaderActions({
     required this.uiState,
     required this.onAction,
+    required this.observeJobOutput,
+    required this.killJob,
+    required this.jobRoster,
+    required this.onOpenTeamMember,
     super.key,
     this.backendId,
     this.onOpenSubagents,
@@ -726,6 +805,15 @@ class ChatHeaderActions extends StatelessWidget {
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
+
+  /// The background-jobs sheet's repository seams (`job/follow`, `job/kill`)
+  /// and the live roster it follows.
+  final JobOutputObserver observeJobOutput;
+  final JobKiller killJob;
+  final Stream<List<JobView>> jobRoster;
+
+  /// Opens one Agent-Team member's conversation.
+  final void Function(String leadSessionId, TeamMember member) onOpenTeamMember;
 
   /// The host this bar belongs to; the trajectory ledger needs it to scope
   /// its controller. Null while no host is resolved, which also hides the
@@ -750,32 +838,6 @@ class ChatHeaderActions extends StatelessWidget {
     );
   }
 
-  Future<void> _archive(BuildContext context, String sessionId) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) {
-        final l10n = AppLocalizations.of(context)!;
-        return AlertDialog(
-          title: Text(l10n.archiveSession),
-          content: Text(l10n.archiveSessionBody),
-          actions: [
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () {
-                onAction(ArchiveSession(sessionId));
-                Navigator.of(context).pop();
-              },
-              child: Text(l10n.archive),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -793,7 +855,20 @@ class ChatHeaderActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (hasActiveJobs || !compact) JobListAction(jobs: uiState.jobs),
+        if (hasActiveJobs || !compact)
+          JobListAction(
+            jobs: uiState.jobs,
+            sessionId: sessionId,
+            observeJobOutput: observeJobOutput,
+            killJob: killJob,
+            jobRoster: jobRoster,
+          ),
+        if (backendId case final host?)
+          TeamAction(
+            backendId: host,
+            sessionId: sessionId,
+            onOpenMember: onOpenTeamMember,
+          ),
         if (!compact) ...[
           SessionLogExportAction(uiState: uiState, onAction: onAction),
           if (uiState.selectedSessionId case final sessionId?)
@@ -814,6 +889,17 @@ class ChatHeaderActions extends StatelessWidget {
                       sessionId: sessionId,
                     );
                   }
+                case _SessionVerb.terminal:
+                  if (backendId case final host?) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TerminalRoute(
+                          backendId: host,
+                          sessionId: sessionId,
+                        ),
+                      ),
+                    );
+                  }
                 case _SessionVerb.export:
                   onAction(ExportSessionLog(sessionId));
                 case _SessionVerb.subagents:
@@ -823,7 +909,7 @@ class ChatHeaderActions extends StatelessWidget {
                 case _SessionVerb.fork:
                   onAction(ForkSession(sessionId));
                 case _SessionVerb.archive:
-                  unawaited(_archive(context, sessionId));
+                  onAction(ArchiveSession(sessionId));
               }
             },
             itemBuilder: (context) => [
@@ -834,6 +920,15 @@ class ChatHeaderActions extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.route_outlined),
                     title: Text(l10n.trajectoryEntryTooltip),
+                  ),
+                ),
+              if (backendId != null)
+                PopupMenuItem(
+                  value: _SessionVerb.terminal,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.terminal),
+                    title: Text(l10n.terminalEntryTooltip),
                   ),
                 ),
               if (uiState.canExportSessionLog)
@@ -901,7 +996,9 @@ class ChatHeaderActions extends StatelessWidget {
           ),
           IconButton(
             tooltip: l10n.archiveSession,
-            onPressed: archivable ? () => _archive(context, sessionId) : null,
+            onPressed: archivable
+                ? () => onAction(ArchiveSession(sessionId))
+                : null,
             icon: const Icon(Icons.archive_outlined),
           ),
         ],
@@ -911,7 +1008,15 @@ class ChatHeaderActions extends StatelessWidget {
 }
 
 /// Session verbs the phone bar keeps behind its overflow menu.
-enum _SessionVerb { trajectory, export, subagents, rename, fork, archive }
+enum _SessionVerb {
+  trajectory,
+  terminal,
+  export,
+  subagents,
+  rename,
+  fork,
+  archive,
+}
 
 /// Sentinel for the turn-status row in the transcript's row list: not a
 /// timeline item, only a row the gap math and the builder dispatch on.

@@ -27,18 +27,24 @@ import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
+import 'package:app/notifications/session_notice.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
+import 'package:app/ui/shared/archived_filter.dart';
+import 'package:app/ui/shared/session_archive_confirm_dialog.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
+import 'package:domain/model/session.dart';
+import 'package:domain/model/session_archive.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
@@ -433,6 +439,25 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The archive prompt family: the Host's running-work refusal as the
+  // confirmation that names the work, and the browsing sidebar under the
+  // archived filter with one archived row.
+  DesignShot(
+    name: 'archive-stop-confirm',
+    host: _archiveConfirmHost,
+    act: (tester) async {
+      await tester.tap(find.text('open'));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'archived-sidebar-filter',
+    host: _archivedSidebarHost,
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.filter_list));
+      await settle(tester);
+    },
+  ),
   DesignShot(
     name: 'message-menu',
     state: busyState(),
@@ -790,6 +815,127 @@ ThemeData _withRealFonts(ThemeData base) {
 /// the document names.
 Widget _settingsHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale);
+
+/// The stop-and-archive confirmation over its dim backdrop: the work list the
+/// Host named and the destructive commit are what this shot reviews. The
+/// dialog opens from a real press so it rides a route the way the app root
+/// mounts it.
+Widget _archiveConfirmHost(ThemeData theme, Locale? locale) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  locale: locale,
+  theme: _withRealFonts(theme),
+  home: Scaffold(
+    body: Center(
+      child: Builder(
+        builder: (context) => TextButton(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (_) => SessionArchiveConfirmDialog(
+              request: const SessionArchiveRequest(
+                backendId: 'default',
+                sessionId: 's-archived-run',
+                displayTitle: 'Refactor the timeline fold',
+                activity: <SessionActivityEntry>[
+                  SessionActivityEntry(
+                    kind: SessionActivityKind.turn,
+                    rawKind: 'turn',
+                  ),
+                  SessionActivityEntry(
+                    kind: SessionActivityKind.job,
+                    rawKind: 'job',
+                    items: <SessionActivityItem>[
+                      SessionActivityItem(id: 'job-1', label: 'cargo test'),
+                      SessionActivityItem(id: 'job-2', label: 'flutter build'),
+                    ],
+                  ),
+                  SessionActivityEntry(
+                    kind: SessionActivityKind.schedule,
+                    rawKind: 'schedule',
+                    items: <SessionActivityItem>[
+                      SessionActivityItem(id: 'sch-1', label: 'nightly build'),
+                    ],
+                  ),
+                ],
+              ),
+              onConfirm: () async {},
+              onArchived: () {},
+            ),
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ),
+  ),
+);
+
+/// The browsing sidebar under "show archived", with one archived row: the
+/// grayed row, its badge, its unarchive verb, and the filter menu are the
+/// surface.
+Widget _archivedSidebarHost(ThemeData theme, Locale? locale) {
+  final dir = Directory.systemTemp.createTempSync('dsh-design-archive');
+  addTearDown(() => dir.deleteSync(recursive: true));
+  final store = LocalStateStore(File('${dir.path}/local_state.json'));
+  // The controller reads the stored choice on construction; seeding the cache
+  // is what makes the shot render the "show archived" view.
+  store.write(kArchivedFilterKey, ArchivedFilter.show.storedName);
+  return ProviderScope(
+    overrides: [localStateStoreProvider.overrideWith((ref) async => store)],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: _withRealFonts(theme),
+      home: Scaffold(
+        body: SizedBox(
+          width: 320,
+          child: SessionPanel(
+            sessions: _archivedSessions,
+            workspaces: _archivedWorkspaces,
+            searchResults: const <SessionSearchResult>[],
+            selectedSessionId: 's-live',
+            onSelectSession: (_) {},
+            onCreateSession: (_) {},
+            onSearchSessions: (_) {},
+            backendId: 'default',
+            onRenameSession: (_, _) {},
+            onForkSession: (_, _) {},
+            onArchiveSession: (_, _) {},
+            onUnarchiveSession: (_, _) {},
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// The sidebar fixture: one live row and one archived row in one workspace.
+const List<SessionSummary> _archivedSessions = <SessionSummary>[
+  SessionSummary(
+    id: 's-live',
+    title: 'Timeline folding',
+    blank: false,
+    updatedAtEpochMs: 1700000000000,
+  ),
+  SessionSummary(
+    id: 's-archived',
+    title: 'Old parser sweep',
+    blank: false,
+    archived: true,
+    updatedAtEpochMs: 1699000000000,
+  ),
+];
+
+const List<WorkspaceSummary> _archivedWorkspaces = <WorkspaceSummary>[
+  WorkspaceSummary(
+    workspaceId: 'w1',
+    path: '/tmp/deepseek-harness-android',
+    title: 'deepseek-harness-android',
+    sessionIds: <String>['s-live', 's-archived'],
+  ),
+];
 
 /// The same tree with the scoped host answering `settings.describe` for the
 /// `ui-theme` namespace. Without it the appearance row can only ever state
