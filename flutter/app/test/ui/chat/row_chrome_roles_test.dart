@@ -278,5 +278,78 @@ void main() {
         _scheme.onSurface,
       );
     });
+
+    testWidgets('an open body carries the reference indent and no rule', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          home: const Scaffold(
+            body: ReasoningRow(text: 'first line\nsecond line', running: false),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Think'));
+      await tester.pumpAndSettle();
+
+      // `.thinkBody` is an indent and nothing else
+      // (`ReasoningRow.module.css:74-78`): no border, and the 22px left is the
+      // body's own padding rather than a `childrenPadding` plus a margin.
+      final body = find.ancestor(
+        of: find.text('first line\nsecond line'),
+        matching: find.byType(Container),
+      );
+      expect(body, findsWidgets);
+      final padded = tester
+          .widgetList<Container>(body)
+          .map((container) => container.padding)
+          .whereType<EdgeInsets>()
+          .toList();
+      expect(padded, contains(const EdgeInsets.fromLTRB(22, 4, 0, 4)));
+      for (final container in tester.widgetList<Container>(body)) {
+        expect(container.decoration, isNull);
+      }
+    });
+  });
+
+  group('ProcessGroupBody', () {
+    testWidgets('keeps its edge mask in the tree when nothing scrolls', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          home: const Scaffold(
+            body: SizedBox(
+              height: 120,
+              child: ProcessGroupBody(
+                child: Column(
+                  children: <Widget>[
+                    SizedBox(height: 20, child: Text('member 1')),
+                    SizedBox(height: 20, child: Text('member 2')),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // A body that fits still carries the mask, opaque at both ends. The mask
+      // is the scroller's own widget from the first frame: inserting it only
+      // once an edge opens changes the scroller's position in the tree,
+      // rebuilds it and drops the offset the group is holding.
+      final ShaderMask mask = tester.widget<ShaderMask>(
+        find.ancestor(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(ShaderMask),
+        ),
+      );
+      expect(mask.blendMode, BlendMode.dstIn);
+      expect(find.byType(ShaderMask), findsOneWidget);
+    });
   });
 }

@@ -3832,11 +3832,14 @@ class _ToolCallRowState extends State<ToolCallRow>
               ] else if (hasDetails)
                 Container(
                   width: double.infinity,
-                  margin: const EdgeInsets.only(top: 4),
+                  // The reference's expanded IO card (`ToolRow.module.css`
+                  // `.ioCard`, :181-189): `margin: 4px 0 4px 4px`, a half-pixel
+                  // `border-l1` hairline, the code-block radius and surface.
+                  margin: const EdgeInsets.fromLTRB(4, 4, 0, 4),
                   decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(kShapeCard),
-                    border: Border.all(color: scheme.outlineVariant),
+                    color: scheme.markdownCodeBlock,
+                    borderRadius: BorderRadius.circular(kRadiusLg),
+                    border: Border.all(color: scheme.borderL1, width: 0.5),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

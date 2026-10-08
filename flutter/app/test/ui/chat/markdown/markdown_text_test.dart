@@ -285,4 +285,25 @@ void main() {
       expect(horizontalScroll, findsOneWidget);
     },
   );
+
+  testWidgets('a fence wears the reference code-block surface and radius', (
+    tester,
+  ) async {
+    await _pump(tester, '```dart\nfinal a = 1;\n```');
+
+    // `markdown/CodeBlock.module.css` `.block` (:14-18): the code-block alias
+    // on the radius-lg step, with no rule of its own.
+    final Finder block = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration! as BoxDecoration).color ==
+              DshTheme.light().colorScheme.markdownCodeBlock,
+    );
+    expect(block, findsOneWidget);
+    final BoxDecoration decoration =
+        tester.widget<Container>(block).decoration! as BoxDecoration;
+    expect(decoration.borderRadius, BorderRadius.circular(kRadiusLg));
+    expect(decoration.border, isNull);
+  });
 }

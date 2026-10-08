@@ -3997,6 +3997,24 @@ void main() {
       final copyButtons = find.byIcon(Icons.copy_outlined);
       expect(copyButtons, findsWidgets);
 
+      // The expanded body is the reference's IO card: the code-block surface,
+      // the radius-lg step and a half-pixel `border-l1` hairline
+      // (`ToolRow.module.css` `.ioCard`, :181-189).
+      final Color cardFill = Theme.of(
+        tester.element(find.byType(ToolCallRow).first),
+      ).colorScheme.markdownCodeBlock;
+      final Finder card = find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).color == cardFill,
+      );
+      expect(card, findsOneWidget);
+      final BoxDecoration cardDecoration =
+          tester.widget<Container>(card).decoration! as BoxDecoration;
+      expect(cardDecoration.borderRadius, BorderRadius.circular(kRadiusLg));
+      expect((cardDecoration.border! as Border).top.width, 0.5);
+
       await tester.tap(copyButtons.first);
       await tester.pumpAndSettle();
       expect(copied, isNotEmpty);

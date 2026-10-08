@@ -237,20 +237,17 @@ class _ReasoningRowState extends State<ReasoningRow>
     );
   }
 
-  /// The reasoning text: a hairline-ruled block, the same shape whether the
-  /// row owns a disclosure or the activity card opened for the phase.
+  /// The reasoning text: the reference's `.thinkBody` — an indent to the row's
+  /// own content edge and nothing else (`ReasoningRow.module.css:74-78`:
+  /// `padding: 4px 0 4px calc(22px + delta)`, no rule, no fill). The same shape
+  /// serves the row's own disclosure and the activity card that opened for the
+  /// phase.
   Widget _body(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(left: 6, top: 4, bottom: 6),
-      padding: const EdgeInsets.only(left: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: scheme.outlineVariant, width: 1.5),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(22, 4, 0, 4),
       child: Text(
         widget.text,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -303,7 +300,9 @@ class _ReasoningRowState extends State<ReasoningRow>
                     shape: const Border(),
                     collapsedShape: const Border(),
                     tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-                    childrenPadding: const EdgeInsets.only(left: 22),
+                    // No `childrenPadding`: the body carries the reference's
+                    // own 22px indent, so the standalone disclosure and the
+                    // inline card lay the text out the same way.
                     title: _labelRow(context, showPreview: true, color: color),
                     children: [_body(context)],
                   ),

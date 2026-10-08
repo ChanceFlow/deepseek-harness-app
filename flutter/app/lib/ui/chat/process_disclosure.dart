@@ -471,14 +471,14 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
     final maxHeight = math.min(400.0, MediaQuery.sizeOf(context).height * 0.5);
     // Under `dstIn` only the shader's alpha ramp reads through, so the surface
     // role is the ramp's opaque end — the `EdgeFade` convention, which keeps a
-    // mask value out of the palette and the gate's way.
+    // mask value out of the palette and the gate's way. The mask is always in
+    // the tree, even with both edges opaque: inserting it when an edge opens
+    // would change the scroller's position in the tree and rebuild it, dropping
+    // the scroll the group is holding.
     final surface = Theme.of(context).colorScheme.surface;
-    Widget body = SingleChildScrollView(
-      controller: _controller,
-      child: widget.child,
-    );
-    if (_canScrollUp || _canScrollDown) {
-      body = ShaderMask(
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: ShaderMask(
         blendMode: BlendMode.dstIn,
         shaderCallback: (Rect rect) {
           // A fixed ramp, not a share of the box: the reference's mask is
@@ -497,12 +497,11 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
             stops: <double>[0, ramp, 1 - ramp, 1],
           ).createShader(rect);
         },
-        child: body,
-      );
-    }
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
-      child: body,
+        child: SingleChildScrollView(
+          controller: _controller,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

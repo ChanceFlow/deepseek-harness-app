@@ -141,7 +141,9 @@ class _MarkdownTextState extends State<MarkdownText> {
         // A reply is not a web page: headings stay inside the reading
         // scale and separate by weight and space. None of them drops below
         // the body size — a section title smaller than its own paragraph
-        // inverts the hierarchy it is there to state.
+        // inverts the hierarchy it is there to state. The weights are the
+        // reference's own markdown steps: h3 `700`
+        // (`gradient-shadow-text.css:77`), h4 and below `600` (`:84`).
         final style = switch (block.level) {
           1 => theme.textTheme.titleMedium?.copyWith(
             fontSize: 17,
@@ -149,6 +151,10 @@ class _MarkdownTextState extends State<MarkdownText> {
           ),
           2 => theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,
+          ),
+          3 => theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           _ => theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
@@ -348,10 +354,11 @@ class _MarkdownTextState extends State<MarkdownText> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 6, 6, 10),
+      // The reference's code block (`markdown/CodeBlock.module.css` `.block`,
+      // :14-18): the code-block surface and the radius-lg step, no rule.
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(kShapeCard),
-        border: Border.all(color: scheme.outlineVariant),
+        color: scheme.markdownCodeBlock,
+        borderRadius: BorderRadius.circular(kRadiusLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
