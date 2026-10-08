@@ -6103,17 +6103,11 @@ abstract class AppLocalizations {
   /// **'{title}, etc.'**
   String stepProcessMore(String title);
 
-  /// No description provided for @turnProcessDeepDiving.
+  /// The running row's label; the app's own wording, not the reference's sentence. The elapsed clock renders beside it as its own element.
   ///
   /// In en, this message translates to:
-  /// **'Deep diving'**
+  /// **'Deep diving…'**
   String get turnProcessDeepDiving;
-
-  /// Localized chat process copy.
-  ///
-  /// In en, this message translates to:
-  /// **'Deep diving for {duration} ···'**
-  String turnProcessDeepDivingFor(String duration);
 
   /// Settled Turn duration prefix; the localized duration parts are appended after it.
   ///

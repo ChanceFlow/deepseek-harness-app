@@ -1,12 +1,17 @@
-/// The running Turn's status line.
+/// The running Turn's status line: one line at the transcript tail while the
+/// Session runs.
 ///
-/// Port of the reference's `chat/RunningStatus.tsx` with the `ChatView.module.css`
-/// `.running*` chrome: one line at the transcript tail while the Session runs —
-/// the brand tail, then the deep-diving label carrying the Turn's elapsed clock
-/// from its first second. The reference isolates the clock in a memoized
-/// component so the ticking text never re-renders the transcript, and announces
-/// only the static state in a visually hidden live region, so assistive
-/// technology is not interrupted once a second.
+/// The chrome follows the reference's `chat/RunningStatus.tsx` and the
+/// `ChatView.module.css` `.running*` rules — the brand tail, the optional
+/// hairline above it, the 12px/22px line, and the reduced-motion behaviour.
+/// The words are this app's own: the label is the static
+/// [AppLocalizations.turnProcessDeepDiving] (`Deep diving…` / `正在深入研究…`),
+/// with the Turn's elapsed clock beside it as a second, dimmer element — not
+/// the reference's single `Deep diving for {duration} ···` sentence.
+///
+/// Like the reference, the ticking text is isolated from the rest of the
+/// transcript and only the static state is announced, in one live region, so
+/// assistive technology is not interrupted once a second.
 ///
 /// The label wears the palette's own deep-diving alias ([DshSchemeColors.labelDeepDiving])
 /// and its sweep the deep-diving shimmer alias, through the shared
@@ -115,17 +120,15 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     super.dispose();
   }
 
-  /// The elapsed clock from its first second: the reference floors the label at
-  /// `Math.max(1000, now - startTime)` so a fresh Turn reads `1s`, never `0s`.
-  String _label(AppLocalizations l10n) {
+  /// The elapsed clock, or null while the Turn's start is unknown.
+  ///
+  /// Floored at one second — the reference's `Math.max(1000, now - startTime)`
+  /// — so a fresh Turn reads `1s`, never `0s`.
+  String? _clock(AppLocalizations l10n) {
     final start = widget.startedAtEpochMs;
-    if (start == null) return l10n.turnProcessDeepDiving;
+    if (start == null) return null;
     final elapsed = math.max(1000, _nowMs - start);
-    final duration = runDurationParts(
-      elapsed,
-      l10n,
-    ).map((part) => part.text).join();
-    return l10n.turnProcessDeepDivingFor(duration);
+    return runDurationParts(elapsed, l10n).map((part) => part.text).join();
   }
 
   @override
@@ -133,22 +136,24 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    // One label line shared by the sweep and the clock: 12px on a 22px line.
+    final line = theme.textTheme.bodySmall?.copyWith(
+      fontSize: 12,
+      height: 22 / 12,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
     final label = Text(
-      _label(l10n),
+      l10n.turnProcessDeepDiving,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: scheme.labelDeepDiving,
-        fontSize: 12,
-        height: 22 / 12,
-        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-      ),
+      style: line?.copyWith(color: scheme.labelDeepDiving),
     );
+    final clock = _clock(l10n);
     return Semantics(
       container: true,
       liveRegion: true,
-      // The reference announces the static state once, never the ticking
-      // clock, so the visible text stays out of the semantics tree.
+      // The static state is announced once, never the ticking clock, so no
+      // visible text enters the semantics tree.
       label: l10n.turnProcessDeepDiving,
       child: ExcludeSemantics(
         child: Column(
@@ -172,6 +177,17 @@ class _RunningStatusRowState extends State<RunningStatusRow>
                     child: label,
                   ),
                 ),
+                // The clock is its own element, dimmer than the label and
+                // outside its sweep; the reference folds it into the sentence
+                // instead, which this app does not do.
+                if (clock != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    clock,
+                    maxLines: 1,
+                    style: line?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
               ],
             ),
           ],

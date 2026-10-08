@@ -3282,15 +3282,9 @@
       }
     }
   },
-  "turnProcessDeepDiving": "Deep diving",
-  "turnProcessDeepDivingFor": "Deep diving for {duration} ···",
-  "@turnProcessDeepDivingFor": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "duration": {
-        "type": "String"
-      }
-    }
+  "turnProcessDeepDiving": "Deep diving…",
+  "@turnProcessDeepDiving": {
+    "description": "The running row's label; the app's own wording, not the reference's sentence. The elapsed clock renders beside it as its own element."
   },
   "turnProcessTook": "Completed in ",
   "@turnProcessTook": {

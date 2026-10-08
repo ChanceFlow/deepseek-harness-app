@@ -862,9 +862,9 @@ void main() {
       ),
     ]);
     expect(find.byType(RunningStatusRow), findsOneWidget);
-    // One visible running label. This window's Turn boundary carries no clock,
-    // so the row reads the bare state.
-    expect(find.text('Deep diving'), findsOneWidget);
+    // One visible running label, in this app's own wording. This window's Turn
+    // boundary carries no clock, so the row shows the label alone.
+    expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     // The row's sweep rides the shared primitive while the run is live.

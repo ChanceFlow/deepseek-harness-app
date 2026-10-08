@@ -19,14 +19,14 @@ duration.
 ## Decision
 
 Port the pin's facts. The running state leaves the turn control for its own
-row: a 14px whale tail, a stepped text shimmer, `Deep diving for 9s ···` from
-the first second, and `Deep diving` only while the turn's start is unknown; the
-row is 12px on a 22px line — the reference's own values at its 14px base —
-digits in `tabular-nums`, and a 0.5px divider with 8/10px margins that appears
-only when the visible row above carries output. The control keeps its fold toggle, loses
-its ticker, and renders `Stopped`, `Failed`, `Completed`, or `Completed in `
-followed by duration parts whose numerals take the code family
-(`flutter/app/lib/ui/chat/run_duration.dart`).
+row: a 14px whale tail, a stepped text shimmer, the label `Deep diving…`
+(`正在深入研究…`) with the elapsed clock as its own dimmer element — our copy,
+not the reference's sentence, which named a vendor phrase. The row is 12px on a
+22px line — the reference's own values at its 14px base — with `tabular-nums`
+digits and a 0.5px divider with 8/10px margins, shown only after an output row.
+The control keeps its fold toggle, loses its ticker, and renders `Stopped`,
+`Failed`, `Completed`, or `Completed in ` followed by duration parts whose
+numerals take the code family (`flutter/app/lib/ui/chat/run_duration.dart`).
 
 One duration format replaces two: hours when hours exist, minutes from a
 minute, seconds always, never padded. The two durations that read

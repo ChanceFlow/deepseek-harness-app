@@ -3457,12 +3457,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get turnProcessDeepDiving => '深度求索中';
-
-  @override
-  String turnProcessDeepDivingFor(String duration) {
-    return '深度求索中，用时 $duration ···';
-  }
+  String get turnProcessDeepDiving => '正在深入研究…';
 
   @override
   String get turnProcessTook => '已完成，用时 ';
