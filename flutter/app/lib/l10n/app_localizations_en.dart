@@ -3606,7 +3606,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get turnProcessDeepDiving => 'Deep diving…';
+  String get turnProcessDeepDiving => 'Deep diving';
+
+  @override
+  String turnProcessDeepDivingFor(String duration) {
+    return 'Deep diving for $duration ···';
+  }
 
   @override
   String get turnProcessTook => 'Completed in ';

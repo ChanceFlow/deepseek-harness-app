@@ -120,15 +120,18 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     super.dispose();
   }
 
-  /// The elapsed clock, or null while the Turn's start is unknown.
-  ///
-  /// Floored at one second — the reference's `Math.max(1000, now - startTime)`
-  /// — so a fresh Turn reads `1s`, never `0s`.
-  String? _clock(AppLocalizations l10n) {
+  /// The reference's own running sentence: the state with the elapsed clock,
+  /// floored at one second (`Math.max(1000, now - startTime)`), or the bare
+  /// state while the Turn's start is unknown.
+  String _label(AppLocalizations l10n) {
     final start = widget.startedAtEpochMs;
-    if (start == null) return null;
+    if (start == null) return l10n.turnProcessDeepDiving;
     final elapsed = math.max(1000, _nowMs - start);
-    return runDurationParts(elapsed, l10n).map((part) => part.text).join();
+    final duration = runDurationParts(
+      elapsed,
+      l10n,
+    ).map((part) => part.text).join();
+    return l10n.turnProcessDeepDivingFor(duration);
   }
 
   @override
@@ -136,19 +139,19 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    // One label line shared by the sweep and the clock: 12px on a 22px line.
-    final line = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12,
-      height: 22 / 12,
-      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-    );
+    // The reference's own line: 12px on a 22px line, the sentence under the
+    // stepped sweep.
     final label = Text(
-      l10n.turnProcessDeepDiving,
+      _label(l10n),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: line?.copyWith(color: scheme.labelDeepDiving),
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: scheme.labelDeepDiving,
+        fontSize: 12,
+        height: 22 / 12,
+        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+      ),
     );
-    final clock = _clock(l10n);
     return Semantics(
       container: true,
       liveRegion: true,
@@ -177,17 +180,6 @@ class _RunningStatusRowState extends State<RunningStatusRow>
                     child: label,
                   ),
                 ),
-                // The clock is its own element, dimmer than the label and
-                // outside its sweep; the reference folds it into the sentence
-                // instead, which this app does not do.
-                if (clock != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    clock,
-                    maxLines: 1,
-                    style: line?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
               ],
             ),
           ],
