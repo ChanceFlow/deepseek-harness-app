@@ -1178,7 +1178,8 @@ class _InstallCard extends StatelessWidget {
                 child: Text(
                   install.log,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
+                    fontFamily: kCodeFontFamily,
+                    fontFamilyFallback: kCodeFontFamilyFallback,
                   ),
                 ),
               ),

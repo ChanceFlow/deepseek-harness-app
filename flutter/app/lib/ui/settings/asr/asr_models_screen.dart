@@ -513,7 +513,8 @@ class _ModelCard extends StatelessWidget {
                         child: Text(
                           info.repoFor(entry.source),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            fontFamily: 'monospace',
+                            fontFamily: kCodeFontFamily,
+                            fontFamilyFallback: kCodeFontFamilyFallback,
                             fontSize: 11,
                             color: scheme.onSurfaceVariant,
                           ),

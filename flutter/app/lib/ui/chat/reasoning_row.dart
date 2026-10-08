@@ -17,6 +17,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import 'process_disclosure.dart';
 import 'sweep_highlight.dart';
 
 /// The label a thought row carries: a live "Thinking 4s" while it streams, a
@@ -141,15 +142,17 @@ class _ReasoningRowState extends State<ReasoningRow>
     return newline == -1 ? visible : visible.substring(newline + 1);
   }
 
-  /// The thought's label line: glyph, weighted label, and — only in the
-  /// standalone disclosure — a one-line preview of the text.
+  /// The thought's label line: glyph, label, and — only in the standalone
+  /// disclosure — a one-line preview of the text.
   ///
   /// The sweep wraps the row's text only: the reference keeps its leading
   /// glyph outside the `TextShimmer` (its `DisclosureRow` shimmers the title
   /// and collapsed content, never the icon), and one controller drives both
   /// the label and the preview. Both texts take [color] rather than a role of
   /// their own — the reference's `.summaryText` inherits the disclosure row's
-  /// tone.
+  /// tone. The title carries no weight of its own: the reference's disclosure
+  /// title is regular (`.title { font-weight: 400 }`, ReasoningRow.module.css
+  /// :28-30).
   Widget _labelRow(
     BuildContext context, {
     required bool showPreview,
@@ -168,29 +171,21 @@ class _ReasoningRowState extends State<ReasoningRow>
               controller: widget.running && !reduced ? _sweep : null,
               child: Row(
                 children: [
-                  // Same grid as a tool row — glyph, weighted label, then the
-                  // payload — so a step reads as a step whether the agent was
-                  // thinking or calling.
+                  // Same grid as a tool row — glyph, label, then the payload —
+                  // so a step reads as a step whether the agent was thinking or
+                  // calling.
                   Text(
                     _thinkTitle(l10n),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(color: color),
                   ),
                   if (showPreview &&
                       !_expanded &&
                       _effectiveElapsed == null) ...[
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        _summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: color,
-                        ),
-                      ),
+                      child: widget.running
+                          ? _streamingFade(_preview(context, color))
+                          : _preview(context, color),
                     ),
                   ],
                 ],
@@ -199,6 +194,46 @@ class _ReasoningRowState extends State<ReasoningRow>
           ),
         ),
       ],
+    );
+  }
+
+  /// The collapsed preview's one line: the newest words while the thought
+  /// streams, its first line once it settles. A streaming preview is hard-cut
+  /// at the box edge and left to [_streamingFade]; a settled one ends in an
+  /// ellipsis, the way the reference's `.summaryText` does outside streaming.
+  Widget _preview(BuildContext context, Color color) => Text(
+    _summary,
+    maxLines: 1,
+    overflow: widget.running ? TextOverflow.clip : TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+  );
+
+  /// The streaming preview's right-edge mask: the reference fades the summary's
+  /// last [kReasoningSummaryFade] px while it streams
+  /// (`ReasoningRow.module.css:60`), so the newest words dissolve rather than
+  /// ending in an ellipsis mid-thought. Under `dstIn` only the shader's alpha
+  /// reads through, so the opaque end is the surface role.
+  Widget _streamingFade(Widget child) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (Rect rect) {
+        final double fade = (kReasoningSummaryFade / rect.width).clamp(
+          0.0,
+          0.5,
+        );
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: <Color>[
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 0),
+          ],
+          stops: <double>[0, 1 - fade, 1],
+        ).createShader(rect);
+      },
+      child: child,
     );
   }
 
@@ -254,21 +289,24 @@ class _ReasoningRowState extends State<ReasoningRow>
                     _body(context),
                   ],
                 )
-              : ExpansionTile(
-                  // Native expansion mirrors into _expanded so the collapsed
-                  // summary hides once the body opens (web disclosure
-                  // contract).
-                  onExpansionChanged: (expanded) =>
-                      setState(() => _expanded = expanded),
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                  minTileHeight: 30,
-                  shape: const Border(),
-                  collapsedShape: const Border(),
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-                  childrenPadding: const EdgeInsets.only(left: 22),
-                  title: _labelRow(context, showPreview: true, color: color),
-                  children: [_body(context)],
+              : flatInkOverlay(
+                  context,
+                  ExpansionTile(
+                    // Native expansion mirrors into _expanded so the collapsed
+                    // summary hides once the body opens (web disclosure
+                    // contract).
+                    onExpansionChanged: (expanded) =>
+                        setState(() => _expanded = expanded),
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    minTileHeight: 30,
+                    shape: const Border(),
+                    collapsedShape: const Border(),
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+                    childrenPadding: const EdgeInsets.only(left: 22),
+                    title: _labelRow(context, showPreview: true, color: color),
+                    children: [_body(context)],
+                  ),
                 ),
         ),
       ),

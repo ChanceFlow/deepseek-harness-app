@@ -1041,7 +1041,7 @@ void main() {
       final selectable = tester.widget<SelectableText>(
         find.widgetWithText(SelectableText, 'rm -rf build'),
       );
-      expect(selectable.style?.fontFamily, 'monospace');
+      expect(selectable.style?.fontFamily, kCodeFontFamily);
     },
   );
 
@@ -4950,6 +4950,43 @@ void main() {
 
         expect(find.byType(OlderHistoryRow), findsNothing);
       },
+    );
+  });
+
+  testWidgets('the transcript masks its scrollable ends', (tester) async {
+    final actions = <ChatAction>[];
+    await _pump(
+      tester,
+      _state(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: [
+          for (var i = 1; i <= 40; i++)
+            TimelineMessage(
+              ChatMessage(
+                id: 'm$i',
+                sessionId: 's1',
+                role: i.isOdd ? MessageRole.user : MessageRole.assistant,
+                text: 'Message $i with enough content to overflow the viewport',
+              ),
+            ),
+        ],
+      ),
+      actions,
+    );
+    await tester.pumpAndSettle();
+
+    // The reference's `fadeTop`/`fadeBottom` ride the scroller
+    // (`ChatGroupSeat.module.css:102-110`): a transcript taller than its
+    // viewport is masked at the edge the reader can still scroll towards.
+    expect(
+      find.ancestor(
+        of: find.byType(ListView).last,
+        matching: find.byType(ShaderMask),
+      ),
+      findsOneWidget,
     );
   });
 }

@@ -114,7 +114,7 @@ void main() {
       final selectable = tester.widget<SelectableText>(
         find.widgetWithText(SelectableText, 'rm -rf build'),
       );
-      expect(selectable.style?.fontFamily, 'monospace');
+      expect(selectable.style?.fontFamily, kCodeFontFamily);
     });
 
     testWidgets('renders without command when command is null or empty', (

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../di/providers.dart';
+import '../theme/theme.dart';
 import 'settings_backend_scope.dart';
 import 'settings_chrome.dart';
 
@@ -133,7 +134,8 @@ class _SettingsAgentPresetDocumentPageState
                       child: SelectableText(
                         document.content,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
                           fontSize: 12.5,
                           height: 1.5,
                           color: scheme.onSurface,

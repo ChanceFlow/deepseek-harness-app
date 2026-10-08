@@ -154,6 +154,31 @@ void main() {
       );
       expect(padding.padding, const EdgeInsets.only(bottom: 8));
     });
+
+    testWidgets('paints no tile in any state', (tester) async {
+      await pump(tester);
+
+      // The reference's group title is a flat button — `background: none`,
+      // `padding: 0` (`ChatGroupSeat.module.css:12`, :10) — so a press changes
+      // only the label's tone. Material's ink overlay would paint a fill
+      // across the row, so every overlay colour is off.
+      final ThemeData inner = Theme.of(
+        tester.element(find.byType(SweepHighlight)),
+      );
+      expect(inner.highlightColor, Colors.transparent);
+      expect(inner.splashColor, Colors.transparent);
+      expect(inner.hoverColor, Colors.transparent);
+
+      // Nothing in the row carries a surface of its own.
+      for (final Material material in tester.widgetList<Material>(
+        find.descendant(
+          of: find.byType(ProcessGroupHeader),
+          matching: find.byType(Material),
+        ),
+      )) {
+        expect(material.color, isNull);
+      }
+    });
   });
 
   group('CommandRow', () {

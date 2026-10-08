@@ -1011,7 +1011,8 @@ class _PresetCard extends StatelessWidget {
                   entry.id,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: scheme.outline,
-                    fontFamily: 'monospace',
+                    fontFamily: kCodeFontFamily,
+                    fontFamilyFallback: kCodeFontFamilyFallback,
                   ),
                 ),
               ],

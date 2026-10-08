@@ -1,10 +1,13 @@
 /// App theme — native Material 3, seeded from the DeepSeek brand violet.
 ///
-/// Components ride stock M3 roles ([ColorScheme] from [ColorScheme.fromSeed]);
-/// no dsh-web design-platform tokens are ported. What this file adds beyond
-/// the scheme is the part M3 leaves to the product: a reading-first type
-/// scale, one shape language, and the component defaults that keep chrome
-/// from competing with the transcript.
+/// Components ride stock M3 roles ([ColorScheme] from [ColorScheme.fromSeed]).
+/// What this file adds beyond the scheme is the part M3 leaves to the product:
+/// the reading-first type scale, one shape language, the transcript's rhythm
+/// and code face, and the component defaults that keep chrome from competing
+/// with the transcript. The values the reference's design platform pins and M3
+/// has no role for (the deep-diving aliases, the user bubble's fill, the
+/// content type scale) are ported here by name and cited to their home, so a
+/// call site never invents one.
 library;
 
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
@@ -93,6 +96,16 @@ extension DshSchemeColors on ColorScheme {
   Color get syntaxNumber => brightness == Brightness.light
       ? const Color(0xFFA0430A)
       : const Color(0xFFFFB74D);
+
+  /// The reader's own message container — the reference's dedicated
+  /// `--dsw-specific-bubble` alias (design-platform.css:268 light, :386 dark),
+  /// which is `--dsw-static-deepseek-50` in light (rgb(237, 243, 254), :29)
+  /// and `--dsw-static-neutral-bluish-850` in dark (rgb(44, 44, 46), :71).
+  /// Both are opaque sRGB; the dark value is the same on the OLED appearance,
+  /// which moves only the surface family.
+  Color get bubble => brightness == Brightness.light
+      ? const Color(0xFFEDF3FE)
+      : const Color(0xFF2C2C2E);
 }
 
 /// Material 3 floating-surface shadow at elevation 1 (cards, chips).
@@ -121,13 +134,20 @@ const Color _blue950 = Color(0xFF172554);
 const Color _neutralBloish400 = Color(0xFFADB2B8);
 
 /// Corner radii for the app's surfaces: sheets and dialogs, the composer
-/// dock, cards, menu sheets, chips and rows, and the stadium pill. A
-/// surface takes a step from this scale; `verify_theme_native` rejects a
-/// numeric radius at every other call site.
+/// dock, the user bubble, cards, menu sheets, chips and rows, and the
+/// stadium pill. A surface takes a step from this scale; `verify_theme_native`
+/// rejects a numeric radius at every other call site.
 const double kShapeSheet = 28;
 const double kShapeDock = 20;
 const double kShapeCard = 14;
 const double kShapeChip = 8;
+
+/// The reader's message container radius: the reference's `--dsw-radius-xl`
+/// (base.css:20), the one step it gives the bubble on every corner
+/// (`MessageItem.module.css` `.bubble`, :28). It shares the 20 of [kShapeDock]
+/// but stays its own name: the dock's step and the bubble's are different
+/// tokens and must be free to move apart.
+const double kShapeBubble = 20;
 
 /// The stadium step: a full pill. Error and status badges read as pills,
 /// not as the rounded rectangles `kShapeChip` draws, and Material 3
@@ -165,6 +185,52 @@ const double kSidebarWidth = 320;
 /// control rhythm (`margin-bottom: 12px` on the rail controls in
 /// `WorkspaceBrowser.module.css`).
 const double kRailControlGap = 12;
+
+/// The transcript's vertical rhythm between rows — the reference's
+/// `--dsh-chat-flow-gap` (`ChatView.module.css:70-95`). Process steps sit
+/// `6px` apart (the property's `6px` fallback, :71); a message/response block
+/// is separated from its neighbours by `12px`
+/// (`.flowItem[data-chat-group-part="response"]`, :76); a Turn's process header
+/// opens its own block with `16px` clearance (:93).
+const double kChatFlowGapStep = 6;
+const double kChatFlowGap = 12;
+const double kChatFlowGapAfterTurnHeader = 16;
+
+/// The transcript's end fade: a scroll region ramps its content out over this
+/// many pixels on an edge that still has content behind it — the reference's
+/// `fadeTop`/`fadeBottom` 24px mask (`ChatGroupSeat.module.css:102-110`, and
+/// the same rule in `TurnNavigator.module.css:61-63`).
+const double kEdgeFade = 24;
+
+/// The streaming reasoning summary's right-edge fade: the reference dissolves
+/// the summary's last 48px while the thought streams
+/// (`ReasoningRow.module.css:60`). It is wider than [kEdgeFade] because it
+/// closes a line of moving text, not a scroll region.
+const double kReasoningSummaryFade = 48;
+
+/// The reference's code face (`base.css:10`):
+/// `'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono',
+/// Menlo, Courier, 'PingFang SC', 'Microsoft YaHei'`.
+///
+/// No face in that stack ships with the app and `pubspec.yaml` bundles none,
+/// so the names are a request the platform resolves, not a guarantee: on
+/// Android none of the Latin faces exist and the stack lands on the platform's
+/// own mono. `monospace` closes the list because it is the one mono family
+/// Android resolves by name; the reference omits it (its comment: a bare
+/// `monospace` tail makes Windows CJK fall back to SimSun), and this app pays
+/// that trade for a resolved code face on its only shipping platform.
+const String kCodeFontFamily = 'SF Mono';
+const List<String> kCodeFontFamilyFallback = <String>[
+  'JetBrains Mono',
+  'Fira Code',
+  'Consolas',
+  'Liberation Mono',
+  'Menlo',
+  'Courier',
+  'PingFang SC',
+  'Microsoft YaHei',
+  'monospace',
+];
 
 /// Global unified motion design tokens: durations, easing curves, and
 /// accessibility helpers for all animations across the app.
@@ -369,23 +435,27 @@ class DshTheme {
     surfaceContainerHighest: const Color(0xFF2F2F36),
   );
 
-  /// Reading-first scale: a taller body measure for transcript prose,
-  /// quieter labels for chrome, and titles that carry weight rather than
-  /// size — a phone bar has no room to grow a headline.
+  /// Reading-first scale, taken from the reference's own type sheet.
+  ///
+  /// The content tier is the reference's `--dsh-content-font-size`, 14px, on
+  /// its body line of 24px (`gradient-shadow-text.css:89-92`); the secondary
+  /// tier is 13px on a 20px line (`--dsw-font-xs-13`, :230-235). Titles wear
+  /// the reference's one strong weight: its Figma 510 renders as 500
+  /// (design-platform.css:1-3, `--dsw-font-s-strong-14-font-weight`, :225).
   static TextTheme _typography(TextTheme base) => base.copyWith(
     titleLarge: base.titleLarge?.copyWith(
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       letterSpacing: -0.2,
     ),
     titleMedium: base.titleMedium?.copyWith(
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       letterSpacing: -0.1,
       height: 1.25,
     ),
     bodyLarge: base.bodyLarge?.copyWith(height: 1.5),
-    bodyMedium: base.bodyMedium?.copyWith(fontSize: 15, height: 1.55),
-    bodySmall: base.bodySmall?.copyWith(fontSize: 12.5, height: 1.45),
-    labelLarge: base.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+    bodyMedium: base.bodyMedium?.copyWith(fontSize: 14, height: 24 / 14),
+    bodySmall: base.bodySmall?.copyWith(fontSize: 13, height: 20 / 13),
+    labelLarge: base.labelLarge?.copyWith(fontWeight: FontWeight.w500),
     labelSmall: base.labelSmall?.copyWith(letterSpacing: 0.4),
   );
 }

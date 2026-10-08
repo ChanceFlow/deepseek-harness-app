@@ -237,7 +237,8 @@ class _TerminalPageState extends State<TerminalPage> {
                       child: SelectableText(
                         attachment.text,
                         style: TextStyle(
-                          fontFamily: 'monospace',
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
                           fontSize: 12,
                           height: 1.25,
                           color: scheme.terminalForeground,

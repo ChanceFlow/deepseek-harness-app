@@ -203,7 +203,8 @@ class _DetailLine extends StatelessWidget {
             value,
             maxLines: 2,
             style: theme.textTheme.bodySmall?.copyWith(
-              fontFamily: 'monospace',
+              fontFamily: kCodeFontFamily,
+              fontFamilyFallback: kCodeFontFamilyFallback,
               color: scheme.onSurfaceVariant,
             ),
           ),

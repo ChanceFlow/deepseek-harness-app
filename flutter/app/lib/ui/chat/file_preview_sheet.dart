@@ -377,7 +377,8 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    fontFamily: 'monospace',
+                    fontFamily: kCodeFontFamily,
+                    fontFamilyFallback: kCodeFontFamilyFallback,
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
@@ -466,7 +467,8 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
                             DiffLineKind.equal => ' ',
                           },
                           style: TextStyle(
-                            fontFamily: 'monospace',
+                            fontFamily: kCodeFontFamily,
+                            fontFamilyFallback: kCodeFontFamilyFallback,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                             color: switch (line.kind) {
@@ -480,7 +482,8 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
                       Text(
                         line.text,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
                           color: scheme.onSurface,
                         ),
                       ),

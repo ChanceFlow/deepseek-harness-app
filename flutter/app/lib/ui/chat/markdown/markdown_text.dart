@@ -407,7 +407,8 @@ class _MarkdownTextState extends State<MarkdownText> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final base = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: 'monospace',
+      fontFamily: kCodeFontFamily,
+      fontFamilyFallback: kCodeFontFamilyFallback,
       height: 1.45,
       color: scheme.onSurface,
     );
@@ -492,7 +493,8 @@ class _MarkdownTextState extends State<MarkdownText> {
     // band with no padding, which on a wrapped path reads as a highlighter
     // stroke across the paragraph.
     final code = TextStyle(
-      fontFamily: 'monospace',
+      fontFamily: kCodeFontFamily,
+      fontFamilyFallback: kCodeFontFamilyFallback,
       fontSize: (body?.fontSize ?? 15) * 0.92,
       color: theme.colorScheme.onSurface,
     );

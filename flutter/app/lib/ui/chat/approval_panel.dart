@@ -113,7 +113,8 @@ class ApprovalPanel extends StatelessWidget {
                       cmd,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
-                        fontFamily: 'monospace',
+                        fontFamily: kCodeFontFamily,
+                        fontFamilyFallback: kCodeFontFamilyFallback,
                       ),
                     ),
                   ],

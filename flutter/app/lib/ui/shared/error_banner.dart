@@ -72,7 +72,8 @@ class ErrorBanner extends StatelessWidget {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      fontFamily: 'monospace',
+                      fontFamily: kCodeFontFamily,
+                      fontFamilyFallback: kCodeFontFamilyFallback,
                       color: scheme.onErrorContainer,
                     ),
                   ),

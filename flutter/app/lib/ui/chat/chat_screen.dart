@@ -2129,47 +2129,105 @@ class _ChatPanelState extends State<ChatPanel> {
     // and the scroll it holds.
     final Map<Key, int> rowIndexByKey = indexRowsByKey(rows);
 
+    final Widget transcript = ListView.separated(
+      controller: _timelineScroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: rows.length,
+      findItemIndexCallback: (Key key) => rowIndexByKey[key],
+      separatorBuilder: (_, index) => SizedBox(
+        height: _gapAfter(
+          rows[index],
+          index + 1 < rows.length ? rows[index + 1] : null,
+        ),
+      ),
+      itemBuilder: (context, index) => buildRow(rows[index]),
+    );
+
+    // The end fades follow the scroll position itself. The controller is the
+    // animation, so only the mask rebuilds as the reader moves: the list keeps
+    // its element — and the reader's offset — while the ramp tracks the edges.
+    // The mask stays in the tree even with both edges opaque, because removing
+    // it would change the list's position in the tree and rebuild the scroller.
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kReadingMeasure),
-        child: ListView.separated(
-          controller: _timelineScroll,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          itemCount: rows.length,
-          findItemIndexCallback: (Key key) => rowIndexByKey[key],
-          separatorBuilder: (_, index) => SizedBox(
-            height: _gapAfter(
-              rows[index],
-              index + 1 < rows.length ? rows[index + 1] : null,
-            ),
-          ),
-          itemBuilder: (context, index) => buildRow(rows[index]),
+        child: AnimatedBuilder(
+          animation: _timelineScroll,
+          builder: (BuildContext context, Widget? child) {
+            final ScrollPosition? position = _timelineScroll.hasClients
+                ? _timelineScroll.position
+                : null;
+            return _edgeFade(
+              child!,
+              fadeTop:
+                  position != null &&
+                  position.hasContentDimensions &&
+                  position.pixels > 0,
+              fadeBottom:
+                  position != null &&
+                  position.hasContentDimensions &&
+                  position.pixels < position.maxScrollExtent,
+            );
+          },
+          child: transcript,
         ),
       ),
     );
   }
 
-  /// Vertical rhythm between two transcript rows. A run of steps is one
-  /// paragraph and closes up; a message opens a new one. Equal gaps
-  /// everywhere read as a list of unrelated lines, which is what the
-  /// transcript stopped looking like a conversation. The tail signals —
-  /// the turn-status line and a pending steering row — open their own
-  /// block like a message does (steering is the reader's own words). A
-  /// null `below` is the tail: block.
+  /// The transcript's end fade: a [kEdgeFade] ramp on an edge that still has
+  /// content behind it — the reference's `fadeTop`/`fadeBottom`
+  /// (`ChatGroupSeat.module.css:102-110`). An edge with nothing behind it stays
+  /// opaque, so the ramp exists only where the content can still move. Under
+  /// `dstIn` only the shader's alpha reads through, so the opaque end is the
+  /// surface role: the mask carries no palette value of its own.
+  Widget _edgeFade(
+    Widget child, {
+    required bool fadeTop,
+    required bool fadeBottom,
+  }) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (Rect rect) {
+        final double ramp = (kEdgeFade / rect.height).clamp(0.0, 0.5);
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            surface.withValues(alpha: fadeTop ? 0 : 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: fadeBottom ? 0 : 1),
+          ],
+          stops: <double>[0, ramp, 1 - ramp, 1],
+        ).createShader(rect);
+      },
+      child: child,
+    );
+  }
+
+  /// Vertical rhythm between two transcript rows — the reference's
+  /// `--dsh-chat-flow-gap` (`ChatView.module.css:70-95`). A run of steps sits
+  /// [kChatFlowGapStep] apart and closes up; a message opens a new paragraph
+  /// at [kChatFlowGap]; a Turn's process control opens its own block at
+  /// [kChatFlowGapAfterTurnHeader]. Equal gaps everywhere read as a list of
+  /// unrelated lines, which is what the transcript stopped looking like a
+  /// conversation. The tail signals — the turn-status line and a pending
+  /// steering row — open their own block like a message does (steering is the
+  /// reader's own words). A null `below` is the tail: block.
   ///
   /// A Turn's `turn/start` boundary no longer reaches here: the Turn's process
   /// control takes its place in the list, and its hairline rule carries the
   /// break the boundary used to.
   static double _gapAfter(Object above, Object? below) {
-    const double step = 6;
-    const double block = 16;
-    if (below == null) return block;
+    if (below == null) return kChatFlowGap;
     // A Turn's process control opens the Turn's own block: its border and its
-    // label carry the break, so the gap stays the paragraph gap.
-    if (below is TurnProcessSection) return block;
+    // label carry the break, so it takes the header clearance.
+    if (below is TurnProcessSection) return kChatFlowGapAfterTurnHeader;
     final bool aboveIsStep = !_opensBlock(above);
     final bool belowIsStep = !_opensBlock(below);
-    return aboveIsStep && belowIsStep ? step : block;
+    return aboveIsStep && belowIsStep ? kChatFlowGapStep : kChatFlowGap;
   }
 
   static bool _opensBlock(Object row) {
@@ -2855,10 +2913,9 @@ class MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.role == MessageRole.user) {
-      // The reader's own words: a quiet container, right-aligned,
-      // with maxWidth capped at 82% (up to 525dp) so short messages fit
-      // their content while long runs wrap cleanly, with the tail corner
-      // tightened so the bubble points at its author.
+      // The reader's own words: the reference's bubble, right-aligned, with
+      // maxWidth capped at 82% (up to 525dp) so short messages fit their
+      // content while long runs wrap cleanly.
       // No action row rides under it — long-press copies, and the reply's
       // row already dates the turn.
       return Column(
@@ -2961,10 +3018,11 @@ class MessageRow extends StatelessWidget {
   }
 }
 
-/// The reader's message container: a neutral fill (the transcript's one
-/// saturated seat is the send button), the shape scale's card radius, and
-/// a tightened tail corner. Long-press copies the text — the gesture every
-/// mobile transcript carries — so the bubble needs no chrome of its own.
+/// The reader's message container: the reference's `--dsw-specific-bubble`
+/// fill ([DshSchemeColors.bubble]) on the one `--dsw-radius-xl` step
+/// ([kShapeBubble]), every corner alike. Long-press copies the text — the
+/// gesture every mobile transcript carries — so the bubble needs no chrome of
+/// its own.
 class _UserBubble extends StatefulWidget {
   const _UserBubble({required this.text, this.onFork});
 
@@ -3047,14 +3105,9 @@ class _UserBubbleState extends State<_UserBubble> {
     final theme = Theme.of(context);
     if (text.isEmpty) return const SizedBox.shrink();
     return Material(
-      color: theme.colorScheme.secondaryContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(kShapeDock),
-          topRight: Radius.circular(kShapeDock),
-          bottomLeft: Radius.circular(kShapeDock),
-          bottomRight: Radius.circular(kShapeChip),
-        ),
+      color: theme.colorScheme.bubble,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kShapeBubble),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -3062,8 +3115,14 @@ class _UserBubbleState extends State<_UserBubble> {
             _pressed = details.globalPosition,
         onLongPress: () => _openMenu(context, _pressed),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Text(text, style: theme.textTheme.bodyMedium),
+          // The reference's 42px single-line bubble: a 22px line plus 10px of
+          // vertical padding, 16px at the sides (`MessageItem.module.css`
+          // .bubble, :24-33).
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Text(
+            text,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 22 / 14),
+          ),
         ),
       ),
     );
@@ -3440,7 +3499,6 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final entries = widget.group.entries;
     final calls = widget.group.calls;
     final thought = widget.group.thought;
@@ -3475,56 +3533,47 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
         // The phase divides from what follows with the header's own 8px
         // gap; the transcript's rows carry no rules of their own.
         if (_expanded) ...[
-          // Web ToolCallTree `.subCalls`: 22px indent, 8px padding, one
-          // hairline guide — the nesting the reference gives a call's own
-          // sub-calls, borrowed for a batch group's members.
+          // The reference's group body is a flat scroller: no indent, no
+          // gutter rule — its members are the same seats the transcript lays
+          // out (`ChatGroupSeat.module.css` `.body`, :87-93, carries only the
+          // cap, the scroll and the fade). The members keep the transcript's
+          // own step rhythm.
           ProcessGroupBody(
             startAtBottom: !widget.group.closed,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 4, 0, 2),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: scheme.outlineVariant, width: 0.5),
-                  ),
-                ),
-                padding: const EdgeInsets.only(left: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < entries.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 4),
-                      switch (entries[i]) {
-                        final TimelineToolCall call => ToolCallRow(
-                          key: transcriptRowKey(call),
-                          call: call,
-                          sessionId: widget.sessionId,
-                          loadAttachment: widget.loadAttachment,
-                          onPreviewFile: widget.onPreviewFile,
-                          expansion: widget.expansion,
-                        ),
-                        final TimelineContextInjection injection => Material(
-                          type: MaterialType.transparency,
-                          child: ContextInjectionRow(
-                            key: transcriptRowKey(injection),
-                            injection: injection,
-                          ),
-                        ),
-                        TimelineMessage(:final value) => Material(
-                          type: MaterialType.transparency,
-                          child: ReasoningRow(
-                            key: transcriptRowKey(entries[i]),
-                            text: value.reasoning ?? '',
-                            running: value.streaming,
-                            elapsedDuration: value.reasoningDuration,
-                          ),
-                        ),
-                        _ => const SizedBox.shrink(),
-                      },
-                    ],
-                  ],
-                ),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < entries.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 4),
+                  switch (entries[i]) {
+                    final TimelineToolCall call => ToolCallRow(
+                      key: transcriptRowKey(call),
+                      call: call,
+                      sessionId: widget.sessionId,
+                      loadAttachment: widget.loadAttachment,
+                      onPreviewFile: widget.onPreviewFile,
+                      expansion: widget.expansion,
+                    ),
+                    final TimelineContextInjection injection => Material(
+                      type: MaterialType.transparency,
+                      child: ContextInjectionRow(
+                        key: transcriptRowKey(injection),
+                        injection: injection,
+                      ),
+                    ),
+                    TimelineMessage(:final value) => Material(
+                      type: MaterialType.transparency,
+                      child: ReasoningRow(
+                        key: transcriptRowKey(entries[i]),
+                        text: value.reasoning ?? '',
+                        running: value.streaming,
+                        elapsedDuration: value.reasoningDuration,
+                      ),
+                    ),
+                    _ => const SizedBox.shrink(),
+                  },
+                ],
+              ],
             ),
           ),
         ] else
@@ -3662,158 +3711,166 @@ class _ToolCallRowState extends State<ToolCallRow>
       // in scale with the 14px status glyph and keeps the rotation.
       child: IconTheme.merge(
         data: const IconThemeData(size: 18),
-        child: ExpansionTile(
-          controller: _tileController,
-          // No payload means a non-interactive row: the native tile drops
-          // its ripple and trailing arrow the same way the web row is inert.
-          enabled: hasDetails,
-          showTrailingIcon: hasDetails,
-          dense: true,
-          visualDensity: VisualDensity.compact,
-          minTileHeight: 30,
-          // An expanded tile rules itself off top and bottom by default;
-          // the transcript's steps divide with space.
-          shape: const Border(),
-          collapsedShape: const Border(),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-          onExpansionChanged: (expanded) {
-            if (hasDetails) {
-              unawaited(
-                widget.expansion?.setExpanded(
-                  timelineKey(widget.call),
-                  expanded,
-                ),
-              );
-            }
-          },
-          title: ClipRect(
-            child: SweepHighlight(
-              controller: running && !DshMotion.isReducedMotion(context)
-                  ? _sweep
-                  : null,
-              child: Padding(
-                padding: EdgeInsets.zero,
-                child: Row(
-                  children: [
-                    // A product row may carry its own glyph (the todo
-                    // checklist); otherwise the state-colored variant
-                    // chrome.
-                    model.leading != null
-                        ? Icon(
-                            model.leading,
-                            size: 14,
+        child: flatInkOverlay(
+          context,
+          ExpansionTile(
+            controller: _tileController,
+            // No payload means a non-interactive row: the native tile drops
+            // its ripple and trailing arrow the same way the web row is inert.
+            enabled: hasDetails,
+            showTrailingIcon: hasDetails,
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            minTileHeight: 30,
+            // An expanded tile rules itself off top and bottom by default;
+            // the transcript's steps divide with space.
+            shape: const Border(),
+            collapsedShape: const Border(),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+            onExpansionChanged: (expanded) {
+              if (hasDetails) {
+                unawaited(
+                  widget.expansion?.setExpanded(
+                    timelineKey(widget.call),
+                    expanded,
+                  ),
+                );
+              }
+            },
+            title: ClipRect(
+              child: SweepHighlight(
+                controller: running && !DshMotion.isReducedMotion(context)
+                    ? _sweep
+                    : null,
+                child: Padding(
+                  padding: EdgeInsets.zero,
+                  child: Row(
+                    children: [
+                      // A product row may carry its own glyph (the todo
+                      // checklist); otherwise the state-colored variant
+                      // chrome.
+                      model.leading != null
+                          ? Icon(
+                              model.leading,
+                              size: 14,
+                              color: scheme.onSurfaceVariant,
+                            )
+                          : _leading(context, model.state),
+                      // Web DisclosureRow / ToolRow header: `[16 leading] gap6
+                      // [title 13] gap8 [2x2 dot] gap8 [summary FILL
+                      // truncate]` — the verb is a label, the payload is data,
+                      // and neither is bold or monospace.
+                      const SizedBox(width: 6),
+                      Text(
+                        model.title,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Container(
+                        width: 2,
+                        height: 2,
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: scheme.outline,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          // Web ToolRow: the summary is args-derived; the
+                          // settled result text never reaches this slot.
+                          failed && model.errorSummary != null
+                              ? model.errorSummary!
+                              : model.summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: failed
+                                ? theme.colorScheme.error
+                                : scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      // The todo parallel-active count rides a
+                      // non-shrinking suffix beside the truncatable text.
+                      if (model.summarySuffix case final suffix?) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          suffix,
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: scheme.onSurfaceVariant,
-                          )
-                        : _leading(context, model.state),
-                    // Web DisclosureRow / ToolRow header: `[16 leading] gap6
-                    // [title 13] gap8 [2x2 dot] gap8 [summary FILL
-                    // truncate]` — the verb is a label, the payload is data,
-                    // and neither is bold or monospace.
-                    const SizedBox(width: 6),
-                    Text(
-                      model.title,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // The theme's childrenPadding (left 20) carries the web IN/OUT
+            // card's inset; the card keeps only its top gap.
+            children: [
+              if (images.isNotEmpty) ...[
+                // The reference image card: the gallery, then the model-facing
+                // envelope (path, media type, pixel size) as its meta line.
+                ToolImageGallery(
+                  sessionId: widget.sessionId!,
+                  images: images,
+                  loadAttachment: widget.loadAttachment,
+                ),
+                if (model.output case final output?)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
+                    child: Text(
+                      output,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
-                    Container(
-                      width: 2,
-                      height: 2,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: scheme.outline,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        // Web ToolRow: the summary is args-derived; the
-                        // settled result text never reaches this slot.
-                        failed && model.errorSummary != null
-                            ? model.errorSummary!
-                            : model.summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: failed
-                              ? theme.colorScheme.error
-                              : scheme.onSurfaceVariant,
+                  ),
+              ] else if (hasDetails)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 4),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(kShapeCard),
+                    border: Border.all(color: scheme.outlineVariant),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (model.diff case final diff?)
+                        _diffSection(context, diff)
+                      else if (model.body case final body?)
+                        _ioSection(
+                          context,
+                          l10n.inputLabel,
+                          body,
+                          failed: false,
                         ),
-                      ),
-                    ),
-                    // The todo parallel-active count rides a
-                    // non-shrinking suffix beside the truncatable text.
-                    if (model.summarySuffix case final suffix?) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        suffix,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                      if ((model.diff != null || model.body != null) &&
+                          model.output != null)
+                        Container(
+                          height: 1,
+                          color: scheme.outlineVariant,
+                          margin: const EdgeInsets.symmetric(horizontal: 14),
                         ),
-                      ),
+                      if (model.output case final output?)
+                        _ioSection(
+                          context,
+                          l10n.outputLabel,
+                          output,
+                          failed: failed,
+                        ),
+                      if (model.filePath case final filePath?)
+                        _fileActionBar(context, filePath, diff: model.diff),
                     ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // The theme's childrenPadding (left 20) carries the web IN/OUT
-          // card's inset; the card keeps only its top gap.
-          children: [
-            if (images.isNotEmpty) ...[
-              // The reference image card: the gallery, then the model-facing
-              // envelope (path, media type, pixel size) as its meta line.
-              ToolImageGallery(
-                sessionId: widget.sessionId!,
-                images: images,
-                loadAttachment: widget.loadAttachment,
-              ),
-              if (model.output case final output?)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
-                  child: Text(
-                    output,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
                   ),
                 ),
-            ] else if (hasDetails)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(kShapeCard),
-                  border: Border.all(color: scheme.outlineVariant),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (model.diff case final diff?)
-                      _diffSection(context, diff)
-                    else if (model.body case final body?)
-                      _ioSection(context, l10n.inputLabel, body, failed: false),
-                    if ((model.diff != null || model.body != null) &&
-                        model.output != null)
-                      Container(
-                        height: 1,
-                        color: scheme.outlineVariant,
-                        margin: const EdgeInsets.symmetric(horizontal: 14),
-                      ),
-                    if (model.output case final output?)
-                      _ioSection(
-                        context,
-                        l10n.outputLabel,
-                        output,
-                        failed: failed,
-                      ),
-                    if (model.filePath case final filePath?)
-                      _fileActionBar(context, filePath, diff: model.diff),
-                  ],
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3918,7 +3975,8 @@ class _ToolCallRowState extends State<ToolCallRow>
                     color: failed
                         ? theme.colorScheme.error
                         : scheme.onSurfaceVariant,
-                    fontFamily: 'monospace',
+                    fontFamily: kCodeFontFamily,
+                    fontFamilyFallback: kCodeFontFamilyFallback,
                   ),
                 ),
               ),
@@ -4011,7 +4069,8 @@ class _ToolCallRowState extends State<ToolCallRow>
                                     DiffLineKind.equal => ' ',
                                   },
                                   style: TextStyle(
-                                    fontFamily: 'monospace',
+                                    fontFamily: kCodeFontFamily,
+                                    fontFamilyFallback: kCodeFontFamilyFallback,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                     color: switch (line.kind) {
@@ -4026,7 +4085,8 @@ class _ToolCallRowState extends State<ToolCallRow>
                               Text(
                                 line.text,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFamily: 'monospace',
+                                  fontFamily: kCodeFontFamily,
+                                  fontFamilyFallback: kCodeFontFamilyFallback,
                                   color: scheme.onSurface,
                                 ),
                               ),

@@ -225,7 +225,8 @@ class _Bubble extends StatelessWidget {
                     formatVoiceDuration(uiState.duration),
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
+                      fontFamily: kCodeFontFamily,
+                      fontFamilyFallback: kCodeFontFamilyFallback,
                       color: armed ? scheme.onErrorContainer : scheme.onSurface,
                       // The clock steps once a second; fixed-width digits
                       // stop the row shuffling under it.
@@ -295,7 +296,8 @@ class _Bubble extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      fontFamily: 'monospace',
+                      fontFamily: kCodeFontFamily,
+                      fontFamilyFallback: kCodeFontFamilyFallback,
                       color: scheme.primary,
                     ),
                   ),

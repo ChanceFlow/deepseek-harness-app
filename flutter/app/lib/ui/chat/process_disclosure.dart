@@ -53,6 +53,24 @@ double processActivityIconSize(ProcessActivity activity) => switch (activity) {
   _ => 14,
 };
 
+/// Runs a disclosure row with Material's ink overlays switched off.
+///
+/// The reference's disclosure rows carry no fill in any state — its
+/// `DisclosureRow` row and the `ChatGroupSeat` title are `background: none`
+/// (`DisclosureRow.module.css:46`, `ChatGroupSeat.module.css:12`) and a press
+/// changes only the label's tone. Material's `InkWell` would paint a highlight
+/// tile across the row on press, so every overlay colour is off and the row
+/// keeps the reference's flat surface.
+Widget flatInkOverlay(BuildContext context, Widget child) => Theme(
+  data: Theme.of(context).copyWith(
+    splashColor: Colors.transparent,
+    highlightColor: Colors.transparent,
+    hoverColor: Colors.transparent,
+    focusColor: Colors.transparent,
+  ),
+  child: child,
+);
+
 /// One Turn's process control, wrapping the rows it owns.
 ///
 /// The reference's `TurnProcessNodeView` is a full-width row under a hairline
@@ -133,7 +151,8 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
   /// The reference's `.durationNumber`: the code family with tabular figures,
   /// so the clock does not shift the label's width as its digits change.
   static const TextStyle _durationNumber = TextStyle(
-    fontFamily: 'monospace',
+    fontFamily: kCodeFontFamily,
+    fontFamilyFallback: kCodeFontFamilyFallback,
     fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
   );
 
@@ -170,55 +189,57 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
           child: Semantics(
             button: canCollapse,
             expanded: canCollapse ? open : null,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: canCollapse ? _toggle : null,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: scheme.outlineVariant,
-                        width: 0.5,
+            child: flatInkOverlay(
+              context,
+              Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: canCollapse ? _toggle : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: scheme.outlineVariant,
+                          width: 0.5,
+                        ),
                       ),
                     ),
-                  ),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      if (label != null)
-                        Flexible(
-                          child: Text.rich(
-                            _labelSpan(label),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: color,
-                              height: 24 / 14,
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        if (label != null)
+                          Flexible(
+                            child: Text.rich(
+                              _labelSpan(label),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: color,
+                                height: 24 / 14,
+                              ),
                             ),
                           ),
-                        ),
-                      if (canCollapse) ...[
-                        const SizedBox(width: 4),
-                        AnimatedRotation(
-                          turns: open ? 0.5 : 0,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 14,
-                            color: color,
+                        if (canCollapse) ...[
+                          const SizedBox(width: 4),
+                          AnimatedRotation(
+                            turns: open ? 0.5 : 0,
+                            duration: DshMotion.durationMicro,
+                            curve: DshMotion.curveStandard,
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 14,
+                              color: color,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-        if (open) const SizedBox(height: 8),
         // Transcript order, with the folded rows dropped rather than moved: a
         // collapsed Turn hides what the agent did, and never relocates the
         // reader's own message or the answer that followed the work.
@@ -299,68 +320,72 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
       child: Semantics(
         button: true,
         expanded: widget.open,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: widget.open ? 8 : 0),
-              child: Row(
-                children: [
-                  // The reference stacks the icon and the chevron in one 16px
-                  // box and cross-fades them; an open or hovered header shows
-                  // the chevron.
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AnimatedOpacity(
-                          opacity: showChevron ? 0 : 1,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: Icon(
-                            processActivityIcon(activity),
-                            size: processActivityIconSize(activity),
-                            color: color,
-                          ),
-                        ),
-                        AnimatedOpacity(
-                          opacity: showChevron ? 1 : 0,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: AnimatedRotation(
-                            turns: widget.open ? 0.5 : 0,
+        child: flatInkOverlay(
+          context,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: widget.open ? 8 : 0),
+                child: Row(
+                  children: [
+                    // The reference stacks the icon and the chevron in one
+                    // 16px box and cross-fades them; an open or hovered header
+                    // shows the chevron.
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AnimatedOpacity(
+                            opacity: showChevron ? 0 : 1,
                             duration: DshMotion.durationMicro,
                             curve: DshMotion.curveStandard,
                             child: Icon(
-                              Icons.keyboard_arrow_down,
-                              size: 14,
+                              processActivityIcon(activity),
+                              size: processActivityIconSize(activity),
                               color: color,
                             ),
                           ),
-                        ),
-                      ],
+                          AnimatedOpacity(
+                            opacity: showChevron ? 1 : 0,
+                            duration: DshMotion.durationMicro,
+                            curve: DshMotion.curveStandard,
+                            child: AnimatedRotation(
+                              turns: widget.open ? 0.5 : 0,
+                              duration: DshMotion.durationMicro,
+                              curve: DshMotion.curveStandard,
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 14,
+                                color: color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: SweepHighlight(
-                      controller: widget.sweep,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        // The reference's group title is 14px, one step above
-                        // its 13px Turn-control label; Material has both roles.
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: color,
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: SweepHighlight(
+                        controller: widget.sweep,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          // The reference's group title is 14px, one step above
+                          // its 13px Turn-control label; Material has both
+                          // roles.
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: color,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -455,17 +480,23 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
     if (_canScrollUp || _canScrollDown) {
       body = ShaderMask(
         blendMode: BlendMode.dstIn,
-        shaderCallback: (rect) => LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            surface.withValues(alpha: _canScrollUp ? 0 : 1),
-            surface.withValues(alpha: 1),
-            surface.withValues(alpha: 1),
-            surface.withValues(alpha: _canScrollDown ? 0 : 1),
-          ],
-          stops: const <double>[0, 0.06, 0.94, 1],
-        ).createShader(rect),
+        shaderCallback: (Rect rect) {
+          // A fixed ramp, not a share of the box: the reference's mask is
+          // `transparent 0, #000 24px` (`ChatGroupSeat.module.css:102-110`), so
+          // the fade stays 24px whatever height the body resolves to.
+          final double ramp = (kEdgeFade / rect.height).clamp(0.0, 0.5);
+          return LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              surface.withValues(alpha: _canScrollUp ? 0 : 1),
+              surface.withValues(alpha: 1),
+              surface.withValues(alpha: 1),
+              surface.withValues(alpha: _canScrollDown ? 0 : 1),
+            ],
+            stops: <double>[0, ramp, 1 - ramp, 1],
+          ).createShader(rect);
+        },
         child: body,
       );
     }

@@ -11,6 +11,7 @@ import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/run_duration.dart';
 import 'package:app/ui/chat/timeline_folding.dart';
 import 'package:app/ui/chat/turn_process.dart';
+import 'package:app/ui/theme/theme.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/hook.dart';
 import 'package:domain/model/timeline_item.dart';
@@ -515,7 +516,7 @@ void main() {
         expect(spans[index].text, part.text);
         expect(
           spans[index].style?.fontFamily,
-          part.numeric ? 'monospace' : null,
+          part.numeric ? kCodeFontFamily : null,
         );
         expect(
           spans[index].style?.fontFeatures,

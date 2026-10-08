@@ -490,7 +490,8 @@ class _JobsSheetState extends State<_JobsSheet> {
   ) {
     final buffer = _buffers[job.id] ?? (_buffers[job.id] = _JobOutputBuffer());
     final mono = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: 'monospace',
+      fontFamily: kCodeFontFamily,
+      fontFamilyFallback: kCodeFontFamilyFallback,
       height: 1.2,
     );
     return Container(

@@ -634,7 +634,8 @@ class _PluginTile extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: theme.textTheme.bodySmall?.copyWith(
         color: scheme.onSurfaceVariant,
-        fontFamily: 'monospace',
+        fontFamily: kCodeFontFamily,
+        fontFamilyFallback: kCodeFontFamilyFallback,
       ),
     );
     return _Disclosure(
@@ -730,7 +731,8 @@ class _DetailFact extends StatelessWidget {
               value,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.onSurface,
-                fontFamily: monospace ? 'monospace' : null,
+                fontFamily: monospace ? kCodeFontFamily : null,
+                fontFamilyFallback: monospace ? kCodeFontFamilyFallback : null,
               ),
             ),
           ),

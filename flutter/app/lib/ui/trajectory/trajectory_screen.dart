@@ -519,7 +519,8 @@ class _RecordRow extends StatelessWidget {
               text: record.label,
               style: style?.copyWith(
                 fontWeight: FontWeight.w600,
-                fontFamily: 'monospace',
+                fontFamily: kCodeFontFamily,
+                fontFamilyFallback: kCodeFontFamilyFallback,
               ),
             ),
             if (record.text.isNotEmpty)
@@ -740,7 +741,8 @@ class _Fact extends StatelessWidget {
                   value,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurface,
-                    fontFamily: mono ? 'monospace' : null,
+                    fontFamily: mono ? kCodeFontFamily : null,
+                    fontFamilyFallback: mono ? kCodeFontFamilyFallback : null,
                   ),
                 ),
                 if (note != null)
@@ -782,7 +784,8 @@ class _Payload extends StatelessWidget {
         SelectableText(
           text.isEmpty ? '—' : text,
           style: theme.textTheme.bodySmall?.copyWith(
-            fontFamily: 'monospace',
+            fontFamily: kCodeFontFamily,
+            fontFamilyFallback: kCodeFontFamilyFallback,
             color: scheme.onSurface,
           ),
         ),

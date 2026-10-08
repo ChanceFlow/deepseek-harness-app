@@ -796,13 +796,22 @@ Future<void> _loadFonts() async {
     '$assets/Roboto-Bold.ttf',
   ]);
   await _load('MaterialIcons', <String>['$assets/MaterialIcons-Regular.otf']);
-  // Payload type asks for a monospace family by name; any installed face
-  // renders the same shape decision, so the first hit wins.
-  await _load('monospace', <String>[
+  // The app's code face is the reference's stack (`kCodeFontFamily` and its
+  // fallbacks); no face in it ships with the app, so the harness registers the
+  // first installed mono face under each name in the stack — the same "first
+  // hit wins" rule the app asks the platform for, resolved here rather than
+  // left to whichever family the engine settles on.
+  const List<String> monoPaths = <String>[
     '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
     '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
-  ], first: true);
+  ];
+  for (final String family in <String>[
+    kCodeFontFamily,
+    ...kCodeFontFamilyFallback,
+  ]) {
+    await _load(family, monoPaths, first: true);
+  }
   final home = Platform.environment['HOME'] ?? '';
   _cjkLoaded = await _load('NotoSansCJK', <String>[
     // The path the script resolved on the host travels as a define: the
