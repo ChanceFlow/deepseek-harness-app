@@ -2,12 +2,16 @@
 /// one animation the design page can only show as stills — the tail's sway
 /// under the label's stepped sweep — can be reviewed as motion.
 ///
-/// Same gate as the design shots: tagged `design` and skipped unless the
-/// runner passes `--dart-define=DSH_DESIGN_SHOTS=true`, because the frames
-/// need host fonts and are gitignored artifacts, never a baseline. They land
-/// under `test/design/shots/motion/<mode>/`, a subdirectory of the ignored
-/// `shots/` tree, so the published page's non-recursive glob never picks them
-/// up.
+/// The capture carries the `design` tag and its own switch on top of the
+/// design gate: it runs only when the runner passes both
+/// `--dart-define=DSH_DESIGN_SHOTS=true` and
+/// `--dart-define=DSH_MOTION_CAPTURE=true`. The second switch keeps a full
+/// `render_design.py --publish` from spending ~25s and 200 frames on every
+/// page publish, and keeps the capture unreachable from CI even if the shots
+/// gate ever moves. The frames need host fonts and are gitignored artifacts,
+/// never a baseline; they land under `test/design/shots/motion/<mode>/`, a
+/// subdirectory of the ignored `shots/` tree, so the published page's
+/// non-recursive glob never picks them up.
 ///
 /// One seamless loop is the least common multiple of the row's two clocks —
 /// the tail's 1.0s sway and [kSweepCycle]'s 1.5s sweep — so 3.0s, cut as 100
@@ -19,6 +23,8 @@
 ///
 /// Reproduce (from `flutter/`):
 ///   flutter test -t design --dart-define=DSH_DESIGN_SHOTS=true \
+///     --dart-define=DSH_MOTION_CAPTURE=true \
+///     --dart-define=DSH_DESIGN_CJK_FONT=/abs/path/NotoSansSC.ttf \
 ///     --plain-name 'motion capture' app/test/design/motion_capture_test.dart
 ///   ffmpeg -framerate 100/3 -i .../motion/motion/frame_%03d.png -loop 0 out.gif
 ///
@@ -59,10 +65,14 @@ const double _kDevicePixelRatio = 2.0;
 const int _kFrames = 100;
 const Duration _kStep = Duration(milliseconds: 30);
 
-/// Set by the runner; unset in a plain `flutter test` and in CI.
-const String? _skip = bool.fromEnvironment('DSH_DESIGN_SHOTS')
+/// Both switches, so a page publish and CI both skip the capture; the message
+/// names the command that runs it.
+const String? _skip =
+    bool.fromEnvironment('DSH_DESIGN_SHOTS') &&
+        bool.fromEnvironment('DSH_MOTION_CAPTURE')
     ? null
-    : 'motion capture: flutter test -t design --dart-define=DSH_DESIGN_SHOTS=true';
+    : 'motion capture: flutter test -t design --dart-define=DSH_DESIGN_SHOTS=true '
+          '--dart-define=DSH_MOTION_CAPTURE=true';
 
 /// The Han face the runner resolved on the host, as an absolute path.
 const String _cjkFontPath = String.fromEnvironment('DSH_DESIGN_CJK_FONT');
