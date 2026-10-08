@@ -9,6 +9,8 @@
 /// colour the pin's `var()`/`color-mix()` chain resolves to.
 library;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -483,4 +485,116 @@ void main() {
       expect(DshMotion.easeInOut.transform(t), reference.transform(t));
     }
   });
+
+  group('elevation', () {
+    // gradient-shadow-text.css:12-39.
+    test('the stroke colour is the pin\'s border alias', () {
+      // :17 default, :24 the menu material's rebind.
+      expect(DshElevation.strokeColor(_light), _light.borderL4);
+      expect(DshElevation.strokeColor(_dark), _dark.borderL4);
+      expect(DshElevation.menuStrokeColor(_light), _light.borderL3);
+      expect(DshElevation.menuStrokeColor(_dark), _dark.borderL3);
+    });
+
+    test('the stroke is a half-pixel ring, not a blur', () {
+      // :33 `0 0 0 0.5px var(--dsw-elevation-stroke-color)`.
+      final ring = DshElevation.strokeRing(_light.borderL4);
+      expect(ring, hasLength(1));
+      expect(ring.single.color, _light.borderL4);
+      expect(ring.single.offset, Offset.zero);
+      expect(ring.single.blurRadius, 0);
+      expect(ring.single.spreadRadius, 0.5);
+    });
+
+    test('the three lifts carry the pin\'s layers', () {
+      // :34-39, each leading with the stroke.
+      final panel = DshElevation.panel(_light);
+      expect(panel.first, DshElevation.strokeRing(_light.borderL4).single);
+      expect(_shadow(panel[1]), (
+        offset: const Offset(0, 3),
+        blur: 8.0,
+        alpha: 0.03,
+      ));
+      expect(_shadow(panel[2]), (offset: Offset.zero, blur: 16.0, alpha: 0.02));
+
+      final prominent = DshElevation.prominent(_dark);
+      expect(prominent.first, DshElevation.strokeRing(_dark.borderL4).single);
+      expect(_shadow(prominent[1]), (
+        offset: const Offset(0, 3),
+        blur: 8.0,
+        alpha: 0.04,
+      ));
+      expect(_shadow(prominent[2]), (
+        offset: Offset.zero,
+        blur: 20.0,
+        alpha: 0.05,
+      ));
+
+      final soft = DshElevation.soft(_light);
+      expect(soft.first, DshElevation.strokeRing(_light.borderL4).single);
+      expect(_shadow(soft[1]), (
+        offset: const Offset(0, 4),
+        blur: 16.0,
+        alpha: 0.03,
+      ));
+      expect(_shadow(soft[2]), (offset: Offset.zero, blur: 24.0, alpha: 0.03));
+    });
+
+    test('a surface may rebind the stroke colour', () {
+      // The pin declares the values per element for exactly this.
+      final lifted = DshElevation.panel(_dark, stroke: _dark.borderL3);
+      expect(lifted.first.color, _dark.borderL3);
+      expect(lifted.first.spreadRadius, 0.5);
+    });
+  });
+
+  group('menu backdrop', () {
+    // gradient-shadow-text.css:20 `blur(40px) saturate(150%)`.
+    test('carries the pin\'s blur and saturation', () {
+      expect(kMenuBackdropSigma, 40);
+      expect(kMenuBackdropSaturation, 1.5);
+      expect(menuBackdropBlur(), ImageFilter.blur(sigmaX: 40, sigmaY: 40));
+    });
+
+    test('the saturation matrix is the standard one at 150%', () {
+      // Each row's colour coefficients sum to 1: the matrix preserves
+      // luminance, which is what `saturate()` does.
+      expect(kMenuBackdropSaturationMatrix, hasLength(20));
+      for (var row = 0; row < 3; row++) {
+        final sum = kMenuBackdropSaturationMatrix
+            .sublist(row * 5, row * 5 + 3)
+            .reduce((a, b) => a + b);
+        expect(sum, closeTo(1, 1e-12));
+      }
+      // The diagonal is `s + (1 - s)·luminance`, the off-diagonal its negative.
+      expect(kMenuBackdropSaturationMatrix[0], closeTo(1.3935, 1e-12));
+      expect(kMenuBackdropSaturationMatrix[1], closeTo(-0.3575, 1e-12));
+      expect(kMenuBackdropSaturationMatrix[2], closeTo(-0.036, 1e-12));
+      expect(kMenuBackdropSaturationMatrix[5], closeTo(-0.1065, 1e-12));
+      expect(kMenuBackdropSaturationMatrix[6], closeTo(1.1425, 1e-12));
+      expect(kMenuBackdropSaturationMatrix[12], closeTo(1.464, 1e-12));
+      // Alpha passes through untouched.
+      expect(kMenuBackdropSaturationMatrix.sublist(15), <double>[
+        0,
+        0,
+        0,
+        1,
+        0,
+      ]);
+    });
+
+    test('the filter saturates after the blur, as the CSS list reads', () {
+      expect(
+        menuBackdropFilter(),
+        ImageFilter.compose(
+          outer: const ColorFilter.matrix(kMenuBackdropSaturationMatrix),
+          inner: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        ),
+      );
+    });
+  });
 }
+
+/// One elevation layer's geometry and alpha, for the table above.
+({Offset offset, double blur, double alpha}) _shadow(BoxShadow shadow) =>
+    (offset: shadow.offset, blur: shadow.blurRadius, alpha: shadow.color.a);

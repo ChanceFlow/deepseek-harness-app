@@ -145,12 +145,14 @@ class _RunningStatusRowState extends State<RunningStatusRow>
       _label(l10n),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall?.copyWith(
-        color: scheme.labelDeepDiving,
-        fontSize: 12,
-        height: 22 / 12,
-        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-      ),
+      // The reference's running line: two steps under the content size on its
+      // own 22px line (`ChatView.module.css:122-123`), tabular so the clock
+      // does not move the row.
+      style: DshType.chatRunningLabel
+          .style(color: scheme.labelDeepDiving)
+          .copyWith(
+            fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+          ),
     );
     return Semantics(
       container: true,
@@ -166,7 +168,10 @@ class _RunningStatusRowState extends State<RunningStatusRow>
               Container(
                 height: 0.5,
                 margin: const EdgeInsets.only(top: 8, bottom: 10),
-                color: scheme.outlineVariant,
+                // The reference's hairline is its own derived alias —
+                // `color-mix(border-l1 75%, border-l2)`
+                // (`ChatView.module.css:141`).
+                color: scheme.runningDivider,
               ),
             Row(
               mainAxisSize: MainAxisSize.min,

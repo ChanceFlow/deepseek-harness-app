@@ -21,6 +21,8 @@
 ///   `--ds-transition-*` / `--ds-ease-in-out`.
 library;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
@@ -658,6 +660,135 @@ abstract final class DshMotion {
   static bool isReducedMotion(BuildContext context) =>
       MediaQuery.disableAnimationsOf(context);
 }
+
+/// The reference's elevation family: a half-pixel stroke plus one or two very
+/// soft black layers (`gradient-shadow-text.css:12-39`).
+///
+/// Material 3's [kM3ShadowElevation1]/[kM3ShadowElevation3] are opaque black
+/// shadows with no stroke; a surface drawn with them reads heavier than the
+/// pin's, which separates a floating surface with a hairline and lifts it with
+/// almost no shadow. The pin declares the values per element, so a component may
+/// rebind the stroke colour — [menuStrokeColor] is the one rebind it ships
+/// (`:24`).
+abstract final class DshElevation {
+  /// The default stroke colour, `--dsw-elevation-stroke-color` bound to
+  /// `--dsw-alias-border-l4` (`gradient-shadow-text.css:17`).
+  static Color strokeColor(ColorScheme scheme) => scheme.borderL4;
+
+  /// The menu material's stroke colour, rebound to `--dsw-alias-border-l3`
+  /// (`gradient-shadow-text.css:24`).
+  static Color menuStrokeColor(ColorScheme scheme) => scheme.borderL3;
+
+  /// `--dsw-elevation-stroke` (`:33`): `0 0 0 0.5px <stroke>` — a half-pixel
+  /// ring drawn inside `box-shadow`, so the surface keeps `border: 0` and the
+  /// ring costs no layout.
+  static List<BoxShadow> strokeRing(Color stroke) => <BoxShadow>[
+    BoxShadow(color: stroke, spreadRadius: 0.5),
+  ];
+
+  /// `--dsw-elevation-panel` (`:34-35`): the stroke, `0 3px 8px rgba(0,0,0,.03)`
+  /// and `0 0 16px rgba(0,0,0,.02)`. [stroke] overrides the ring colour for a
+  /// surface that rebinds it, as the menu material does.
+  static List<BoxShadow> panel(ColorScheme scheme, {Color? stroke}) =>
+      <BoxShadow>[
+        ...strokeRing(stroke ?? strokeColor(scheme)),
+        BoxShadow(
+          offset: const Offset(0, 3),
+          blurRadius: 8,
+          color: _shadowBlack(0.03),
+        ),
+        BoxShadow(blurRadius: 16, color: _shadowBlack(0.02)),
+      ];
+
+  /// `--dsw-elevation-prominent` (`:36-37`): the stroke,
+  /// `0 3px 8px rgba(0,0,0,.04)` and `0 0 20px rgba(0,0,0,.05)`.
+  static List<BoxShadow> prominent(ColorScheme scheme, {Color? stroke}) =>
+      <BoxShadow>[
+        ...strokeRing(stroke ?? strokeColor(scheme)),
+        BoxShadow(
+          offset: const Offset(0, 3),
+          blurRadius: 8,
+          color: _shadowBlack(0.04),
+        ),
+        BoxShadow(blurRadius: 20, color: _shadowBlack(0.05)),
+      ];
+
+  /// `--dsw-elevation-soft` (`:38-39`): the stroke,
+  /// `0 4px 16px rgba(0,0,0,.03)` and `0 0 24px rgba(0,0,0,.03)` — the input
+  /// field's wider, fainter lift.
+  static List<BoxShadow> soft(ColorScheme scheme, {Color? stroke}) =>
+      <BoxShadow>[
+        ...strokeRing(stroke ?? strokeColor(scheme)),
+        BoxShadow(
+          offset: const Offset(0, 4),
+          blurRadius: 16,
+          color: _shadowBlack(0.03),
+        ),
+        BoxShadow(blurRadius: 24, color: _shadowBlack(0.03)),
+      ];
+}
+
+/// `rgba(0, 0, 0, alpha)` as the pin writes its elevation layers.
+Color _shadowBlack(double alpha) =>
+    Color.from(alpha: alpha, red: 0, green: 0, blue: 0);
+
+/// The reference's `--dsw-menu-backdrop-filter` (`gradient-shadow-text.css:20`):
+/// `blur(40px) saturate(150%)`, worn by every floating surface it draws. It is
+/// why [DshSchemeColors.menuSurfaceFill] is 58% / 45% alpha — the fill has a
+/// blurred, saturated page behind it, and on its own it reads as a flat
+/// translucent panel.
+const double kMenuBackdropSigma = 40;
+
+/// The saturation half of [kMenuBackdropSigma]'s filter.
+const double kMenuBackdropSaturation = 1.5;
+
+/// The luminance weights the saturation matrix is built from, the sRGB
+/// constants CSS's `saturate()` uses.
+const double _saturationLr = 0.213;
+const double _saturationLg = 0.715;
+const double _saturationLb = 0.072;
+const double _saturationSr = (1 - kMenuBackdropSaturation) * _saturationLr;
+const double _saturationSg = (1 - kMenuBackdropSaturation) * _saturationLg;
+const double _saturationSb = (1 - kMenuBackdropSaturation) * _saturationLb;
+
+/// The saturation half of the menu backdrop as a colour matrix: `s + (1 - s)`
+/// of each luminance weight on the diagonal, `(1 - s)` of it off the diagonal,
+/// so a fully desaturated pixel takes the luminance and the identity survives at
+/// `s = 1`.
+const List<double> kMenuBackdropSaturationMatrix = <double>[
+  _saturationSr + kMenuBackdropSaturation,
+  _saturationSg,
+  _saturationSb,
+  0,
+  0, //
+  _saturationSr,
+  _saturationSg + kMenuBackdropSaturation,
+  _saturationSb,
+  0,
+  0, //
+  _saturationSr,
+  _saturationSg,
+  _saturationSb + kMenuBackdropSaturation,
+  0,
+  0, //
+  0, 0, 0, 1, 0, //
+];
+
+/// The blur half of the menu backdrop, the Flutter form of `blur(40px)`.
+ImageFilter menuBackdropBlur() =>
+    ImageFilter.blur(sigmaX: kMenuBackdropSigma, sigmaY: kMenuBackdropSigma);
+
+/// The saturation half of the menu backdrop, the Flutter form of
+/// `saturate(150%)`.
+ColorFilter menuBackdropSaturation() =>
+    const ColorFilter.matrix(kMenuBackdropSaturationMatrix);
+
+/// The whole menu backdrop filter: `blur(40px) saturate(150%)`, saturated after
+/// the blur, which is the order the CSS filter list applies.
+ImageFilter menuBackdropFilter() => ImageFilter.compose(
+  outer: menuBackdropSaturation(),
+  inner: menuBackdropBlur(),
+);
 
 class DshTheme {
   const DshTheme._();

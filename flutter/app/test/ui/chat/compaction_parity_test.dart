@@ -250,9 +250,9 @@ void main() {
 
       // At rest: the tertiary label tone on the glyph, the title, and the
       // caption the reference lets inherit it.
-      expect(titleColor(), scheme.onSurfaceVariant);
-      expect(captionColor(), scheme.onSurfaceVariant);
-      expect(iconColor(), scheme.onSurfaceVariant);
+      expect(titleColor(), scheme.labelTertiary);
+      expect(captionColor(), scheme.labelTertiary);
+      expect(iconColor(), scheme.labelTertiary);
 
       // Hover: the secondary tone.
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -260,17 +260,17 @@ void main() {
       addTearDown(mouse.removePointer);
       await mouse.moveTo(tester.getCenter(find.text('Context compacted')));
       await tester.pumpAndSettle();
-      expect(titleColor(), scheme.onSurface);
-      expect(captionColor(), scheme.onSurface);
-      expect(iconColor(), scheme.onSurface);
+      expect(titleColor(), scheme.labelSecondary);
+      expect(captionColor(), scheme.labelSecondary);
+      expect(iconColor(), scheme.labelSecondary);
 
       // Press keeps the same stepped tone.
       final press = await tester.startGesture(
         tester.getCenter(find.text('Context compacted')),
       );
       await tester.pump();
-      expect(titleColor(), scheme.onSurface);
-      expect(iconColor(), scheme.onSurface);
+      expect(titleColor(), scheme.labelSecondary);
+      expect(iconColor(), scheme.labelSecondary);
       await press.up();
       await tester.pumpAndSettle();
     });

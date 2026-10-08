@@ -3121,7 +3121,9 @@ class _UserBubbleState extends State<_UserBubble> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Text(
             text,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 22 / 14),
+            // The reference's bubble reads the content size on its 22px line
+            // in `label-primary` (`MessageItem.module.css:24-33`).
+            style: DshType.s14.style(color: theme.colorScheme.labelPrimary),
           ),
         ),
       ),
@@ -3544,7 +3546,9 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < entries.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 4),
+                  // The reference's group body steps its members at the
+                  // flow gap's 6px (`ChatGroupSeat.module.css` `.body`, :87-88).
+                  if (i > 0) const SizedBox(height: 6),
                   switch (entries[i]) {
                     final TimelineToolCall call => ToolCallRow(
                       key: transcriptRowKey(call),
@@ -3626,6 +3630,11 @@ class _ToolCallRowState extends State<ToolCallRow>
     with SingleTickerProviderStateMixin {
   late final ExpansibleController _tileController = ExpansibleController();
 
+  /// The reference's tool row steps its tone on hover
+  /// (`DisclosureRow.module.css` `.row:hover`, :26-28); the glyph, title and
+  /// summary all inherit it.
+  bool _hovered = false;
+
   /// The row's activity clock. [SweepHighlight] reads the pinned
   /// [kSweepCycle] off this clock's elapsed time, so the controller only has to
   /// repeat.
@@ -3699,6 +3708,10 @@ class _ToolCallRowState extends State<ToolCallRow>
         : call.images;
     final hasDetails =
         model.body != null || model.output != null || images.isNotEmpty;
+    // The row's tone at rest and on hover: the reference's disclosure rows wear
+    // `label-tertiary` and step to `label-secondary`
+    // (`DisclosureRow.module.css:20-28`).
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return Semantics(
       label: running
           ? l10n.semanticsRunning
@@ -3709,170 +3722,164 @@ class _ToolCallRowState extends State<ToolCallRow>
       // tile's stock trailing chevron is a 24px glyph that sets the row
       // height on its own; shrinking the ambient icon size brings it back
       // in scale with the 14px status glyph and keeps the rotation.
-      child: IconTheme.merge(
-        data: const IconThemeData(size: 18),
-        child: flatInkOverlay(
-          context,
-          ExpansionTile(
-            controller: _tileController,
-            // No payload means a non-interactive row: the native tile drops
-            // its ripple and trailing arrow the same way the web row is inert.
-            enabled: hasDetails,
-            showTrailingIcon: hasDetails,
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            minTileHeight: 30,
-            // An expanded tile rules itself off top and bottom by default;
-            // the transcript's steps divide with space.
-            shape: const Border(),
-            collapsedShape: const Border(),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-            onExpansionChanged: (expanded) {
-              if (hasDetails) {
-                unawaited(
-                  widget.expansion?.setExpanded(
-                    timelineKey(widget.call),
-                    expanded,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: IconTheme.merge(
+          data: const IconThemeData(size: 18),
+          child: flatInkOverlay(
+            context,
+            ExpansionTile(
+              controller: _tileController,
+              // No payload means a non-interactive row: the native tile drops
+              // its ripple and trailing arrow the same way the web row is inert.
+              enabled: hasDetails,
+              showTrailingIcon: hasDetails,
+              dense: true,
+              visualDensity: VisualDensity.compact,
+              minTileHeight: 30,
+              // An expanded tile rules itself off top and bottom by default;
+              // the transcript's steps divide with space.
+              shape: const Border(),
+              collapsedShape: const Border(),
+              tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+              onExpansionChanged: (expanded) {
+                if (hasDetails) {
+                  unawaited(
+                    widget.expansion?.setExpanded(
+                      timelineKey(widget.call),
+                      expanded,
+                    ),
+                  );
+                }
+              },
+              title: ClipRect(
+                child: SweepHighlight(
+                  controller: running && !DshMotion.isReducedMotion(context)
+                      ? _sweep
+                      : null,
+                  child: Padding(
+                    padding: EdgeInsets.zero,
+                    child: Row(
+                      children: [
+                        // A product row may carry its own glyph (the todo
+                        // checklist); otherwise the state-colored variant
+                        // chrome.
+                        model.leading != null
+                            ? Icon(model.leading, size: 14, color: color)
+                            : _leading(context, model.state),
+                        // Web DisclosureRow / ToolRow header: `[16 leading] gap6
+                        // [title 13] gap8 [2x2 dot] gap8 [summary FILL
+                        // truncate]` — the verb is a label, the payload is data,
+                        // and neither is bold or monospace.
+                        const SizedBox(width: 6),
+                        Text(
+                          model.title,
+                          style: DshType.chatRowTitle.style(color: color),
+                        ),
+                        Container(
+                          width: 2,
+                          height: 2,
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: scheme.labelCaption,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            // Web ToolRow: the summary is args-derived; the
+                            // settled result text never reaches this slot.
+                            failed && model.errorSummary != null
+                                ? model.errorSummary!
+                                : model.summary,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DshType.chatRowTitle.style(
+                              color: failed ? scheme.error : color,
+                            ),
+                          ),
+                        ),
+                        // The todo parallel-active count rides a
+                        // non-shrinking suffix beside the truncatable text.
+                        if (model.summarySuffix case final suffix?) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            suffix,
+                            style: DshType.chatRowTitle.style(color: color),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                );
-              }
-            },
-            title: ClipRect(
-              child: SweepHighlight(
-                controller: running && !DshMotion.isReducedMotion(context)
-                    ? _sweep
-                    : null,
-                child: Padding(
-                  padding: EdgeInsets.zero,
-                  child: Row(
-                    children: [
-                      // A product row may carry its own glyph (the todo
-                      // checklist); otherwise the state-colored variant
-                      // chrome.
-                      model.leading != null
-                          ? Icon(
-                              model.leading,
-                              size: 14,
-                              color: scheme.onSurfaceVariant,
-                            )
-                          : _leading(context, model.state),
-                      // Web DisclosureRow / ToolRow header: `[16 leading] gap6
-                      // [title 13] gap8 [2x2 dot] gap8 [summary FILL
-                      // truncate]` — the verb is a label, the payload is data,
-                      // and neither is bold or monospace.
-                      const SizedBox(width: 6),
-                      Text(
-                        model.title,
+                ),
+              ),
+              // The theme's childrenPadding (left 20) carries the web IN/OUT
+              // card's inset; the card keeps only its top gap.
+              children: [
+                if (images.isNotEmpty) ...[
+                  // The reference image card: the gallery, then the model-facing
+                  // envelope (path, media type, pixel size) as its meta line.
+                  ToolImageGallery(
+                    sessionId: widget.sessionId!,
+                    images: images,
+                    loadAttachment: widget.loadAttachment,
+                  ),
+                  if (model.output case final output?)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
+                      child: Text(
+                        output,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
-                      Container(
-                        width: 2,
-                        height: 2,
-                        margin: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: scheme.outline,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          // Web ToolRow: the summary is args-derived; the
-                          // settled result text never reaches this slot.
-                          failed && model.errorSummary != null
-                              ? model.errorSummary!
-                              : model.summary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: failed
-                                ? theme.colorScheme.error
-                                : scheme.onSurfaceVariant,
+                    ),
+                ] else if (hasDetails)
+                  Container(
+                    width: double.infinity,
+                    // The reference's expanded IO card (`ToolRow.module.css`
+                    // `.ioCard`, :181-189): `margin: 4px 0 4px 4px`, a half-pixel
+                    // `border-l1` hairline, the code-block radius and surface.
+                    margin: const EdgeInsets.fromLTRB(4, 4, 0, 4),
+                    decoration: BoxDecoration(
+                      color: scheme.markdownCodeBlock,
+                      borderRadius: BorderRadius.circular(kRadiusLg),
+                      border: Border.all(color: scheme.borderL1, width: 0.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (model.diff case final diff?)
+                          _diffSection(context, diff)
+                        else if (model.body case final body?)
+                          _ioSection(
+                            context,
+                            l10n.inputLabel,
+                            body,
+                            failed: false,
                           ),
-                        ),
-                      ),
-                      // The todo parallel-active count rides a
-                      // non-shrinking suffix beside the truncatable text.
-                      if (model.summarySuffix case final suffix?) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          suffix,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                        if ((model.diff != null || model.body != null) &&
+                            model.output != null)
+                          Container(
+                            height: 1,
+                            color: scheme.outlineVariant,
+                            margin: const EdgeInsets.symmetric(horizontal: 14),
                           ),
-                        ),
+                        if (model.output case final output?)
+                          _ioSection(
+                            context,
+                            l10n.outputLabel,
+                            output,
+                            failed: failed,
+                          ),
+                        if (model.filePath case final filePath?)
+                          _fileActionBar(context, filePath, diff: model.diff),
                       ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // The theme's childrenPadding (left 20) carries the web IN/OUT
-            // card's inset; the card keeps only its top gap.
-            children: [
-              if (images.isNotEmpty) ...[
-                // The reference image card: the gallery, then the model-facing
-                // envelope (path, media type, pixel size) as its meta line.
-                ToolImageGallery(
-                  sessionId: widget.sessionId!,
-                  images: images,
-                  loadAttachment: widget.loadAttachment,
-                ),
-                if (model.output case final output?)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
-                    child: Text(
-                      output,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
                     ),
                   ),
-              ] else if (hasDetails)
-                Container(
-                  width: double.infinity,
-                  // The reference's expanded IO card (`ToolRow.module.css`
-                  // `.ioCard`, :181-189): `margin: 4px 0 4px 4px`, a half-pixel
-                  // `border-l1` hairline, the code-block radius and surface.
-                  margin: const EdgeInsets.fromLTRB(4, 4, 0, 4),
-                  decoration: BoxDecoration(
-                    color: scheme.markdownCodeBlock,
-                    borderRadius: BorderRadius.circular(kRadiusLg),
-                    border: Border.all(color: scheme.borderL1, width: 0.5),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (model.diff case final diff?)
-                        _diffSection(context, diff)
-                      else if (model.body case final body?)
-                        _ioSection(
-                          context,
-                          l10n.inputLabel,
-                          body,
-                          failed: false,
-                        ),
-                      if ((model.diff != null || model.body != null) &&
-                          model.output != null)
-                        Container(
-                          height: 1,
-                          color: scheme.outlineVariant,
-                          margin: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                      if (model.output case final output?)
-                        _ioSection(
-                          context,
-                          l10n.outputLabel,
-                          output,
-                          failed: failed,
-                        ),
-                      if (model.filePath case final filePath?)
-                        _fileActionBar(context, filePath, diff: model.diff),
-                    ],
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -7876,8 +7883,8 @@ class _CompactionRowState extends State<CompactionRow> {
     // steps to the secondary one on hover; its leading icon, title, and
     // summary all inherit that colour.
     final color = _hovered || _pressed
-        ? scheme.onSurface
-        : scheme.onSurfaceVariant;
+        ? scheme.labelSecondary
+        : scheme.labelTertiary;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -7899,18 +7906,24 @@ class _CompactionRowState extends State<CompactionRow> {
             tilePadding: const EdgeInsets.symmetric(horizontal: 2),
             title: Row(
               children: [
-                Icon(Icons.layers_outlined, size: 14, color: color),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: Center(
+                    child: Icon(Icons.layers_outlined, size: 14, color: color),
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Text(
                   l10n.contextCompacted,
-                  style: theme.textTheme.bodySmall?.copyWith(color: color),
+                  style: DshType.chatRowTitle.style(color: color),
                 ),
                 Container(
                   width: 2,
                   height: 2,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
-                    color: scheme.outline,
+                    color: scheme.labelCaption,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -7919,7 +7932,7 @@ class _CompactionRowState extends State<CompactionRow> {
                     caption,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: color),
+                    style: DshType.chatRowTitle.style(color: color),
                   ),
                 ),
               ],
@@ -8017,8 +8030,8 @@ class _CommandRowState extends State<CommandRow>
     final color = failed
         ? scheme.error
         : _hovered
-        ? scheme.onSurface
-        : scheme.onSurfaceVariant;
+        ? scheme.labelSecondary
+        : scheme.labelTertiary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -8050,7 +8063,7 @@ class _CommandRowState extends State<CommandRow>
                     height: 2,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
-                      color: scheme.outline,
+                      color: scheme.labelCaption,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -8102,13 +8115,24 @@ class ContextInjectionRow extends StatelessWidget {
     final injection = this.injection;
     return Row(
       children: [
-        Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant),
+        // The reference's disclosure header: a 16px leading box holding the
+        // 14px glyph, then a 6px gap (`DisclosureRow.module.css:47-69`), with
+        // the role title on the row's own 13/24 step in `label-tertiary`.
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: Center(
+            child: Icon(
+              Icons.travel_explore,
+              size: 14,
+              color: scheme.labelTertiary,
+            ),
+          ),
+        ),
         const SizedBox(width: 6),
         Text(
           injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
+          style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
         ),
         if (injection.producerLabel case final label?) ...[
           Container(
@@ -8116,7 +8140,7 @@ class ContextInjectionRow extends StatelessWidget {
             height: 2,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: scheme.outline,
+              color: scheme.labelCaption,
               shape: BoxShape.circle,
             ),
           ),
@@ -8125,9 +8149,10 @@ class ContextInjectionRow extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              // The producer name is the reference's `.source`: the secondary
+              // size on the 24px line, `label-tertiary`
+              // (`ContextInjectionRow.module.css:27-34`).
+              style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
             ),
           ),
         ],
@@ -8138,9 +8163,7 @@ class ContextInjectionRow extends StatelessWidget {
               summary,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
             ),
           ),
         ],
@@ -8148,11 +8171,24 @@ class ContextInjectionRow extends StatelessWidget {
     );
   }
 
-  /// The injected content.
-  Widget _body(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 2, bottom: 4),
-    child: MarkdownText(text: injection.text),
-  );
+  /// The injected content: the reference's capped code panel
+  /// (`ContextInjectionRow.module.css` `.body`, :44-58) — the indent under the
+  /// title, the code-block surface on the `radius-md` step, a 141px cap and
+  /// its own scroll.
+  Widget _body(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(left: 22, top: 4),
+      constraints: const BoxConstraints(maxHeight: 141),
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: scheme.markdownCodeBlock,
+        borderRadius: BorderRadius.circular(kRadiusMd),
+      ),
+      child: SingleChildScrollView(child: MarkdownText(text: injection.text)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

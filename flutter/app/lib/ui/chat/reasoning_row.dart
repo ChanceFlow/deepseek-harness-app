@@ -158,30 +158,51 @@ class _ReasoningRowState extends State<ReasoningRow>
     required bool showPreview,
     required Color color,
   }) {
-    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final reduced = DshMotion.isReducedMotion(context);
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Icon(Icons.psychology_outlined, size: 14, color: color),
-        const SizedBox(width: 8),
+        // The reference's leading box: a 16px square holding the 14px glyph,
+        // then a 6px gap to the title (`DisclosureRow.module.css:47-69`).
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: Center(
+            child: Icon(Icons.psychology_outlined, size: 14, color: color),
+          ),
+        ),
+        const SizedBox(width: 6),
         Flexible(
           child: ClipRect(
             child: SweepHighlight(
               controller: widget.running && !reduced ? _sweep : null,
               child: Row(
                 children: [
-                  // Same grid as a tool row — glyph, label, then the payload —
-                  // so a step reads as a step whether the agent was thinking or
-                  // calling.
+                  // Same grid as a tool row — glyph, title, separator dot, then
+                  // the payload — so a step reads as a step whether the agent
+                  // was thinking or calling. The title is the disclosure row's
+                  // own step, the secondary size on the body line
+                  // (`DisclosureRow.module.css:85-90`).
                   Text(
                     _thinkTitle(l10n),
-                    style: theme.textTheme.bodySmall?.copyWith(color: color),
+                    style: DshType.chatRowTitle.style(color: color),
                   ),
                   if (showPreview &&
                       !_expanded &&
                       _effectiveElapsed == null) ...[
-                    const SizedBox(width: 8),
+                    // The reference separates the title from the summary with a
+                    // 2×2 dot in `label-caption`, not with a gap
+                    // (`ReasoningRow.module.css:32-39`).
+                    Container(
+                      width: 2,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: scheme.labelCaption,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     Expanded(
                       child: widget.running
                           ? _streamingFade(_preview(context, color))
@@ -201,11 +222,13 @@ class _ReasoningRowState extends State<ReasoningRow>
   /// streams, its first line once it settles. A streaming preview is hard-cut
   /// at the box edge and left to [_streamingFade]; a settled one ends in an
   /// ellipsis, the way the reference's `.summaryText` does outside streaming.
+  /// It reads the secondary size on the summary line
+  /// (`ReasoningRow.module.css:53-59`).
   Widget _preview(BuildContext context, Color color) => Text(
     _summary,
     maxLines: 1,
     overflow: widget.running ? TextOverflow.clip : TextOverflow.ellipsis,
-    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+    style: DshType.chatRowSummary.style(color: color),
   );
 
   /// The streaming preview's right-edge mask: the reference fades the summary's
@@ -248,12 +271,12 @@ class _ReasoningRowState extends State<ReasoningRow>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 4, 0, 4),
+      // The reference renders the opened thought as compact markdown: the
+      // secondary size on the 20px line, in `label-tertiary`
+      // (`MarkdownText.module.css` `.compact`, :331-335).
       child: Text(
         widget.text,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-          height: 1.45,
-        ),
+        style: DshType.xs13.style(color: scheme.labelTertiary),
       ),
     );
   }
@@ -265,7 +288,7 @@ class _ReasoningRowState extends State<ReasoningRow>
     // The reference's disclosure row wears the tertiary label tone at rest and
     // steps to the secondary one on hover; its leading glyph, title, summary
     // and chevron all inherit whichever tone the row wears.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),

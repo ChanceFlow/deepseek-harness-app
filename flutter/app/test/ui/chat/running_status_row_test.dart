@@ -220,7 +220,7 @@ void main() {
 
     await _pump(tester, showDivider: true);
     final divider = tester.widget<Container>(find.byType(Container));
-    expect(divider.color, DshTheme.light().colorScheme.outlineVariant);
+    expect(divider.color, DshTheme.light().colorScheme.runningDivider);
     expect(divider.margin, const EdgeInsets.only(top: 8, bottom: 10));
     expect(divider.constraints?.minHeight, 0.5);
     expect(divider.constraints?.maxHeight, 0.5);

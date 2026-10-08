@@ -166,8 +166,7 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final facts = widget.section.facts;
     // The reference's `canCollapse`: a Turn that is still running, stopped or
@@ -179,7 +178,7 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
     final label = turnProcessLabel(facts, l10n);
     // The reference's `.root:hover` steps the tertiary label tone to the
     // secondary one; the chevron inherits whichever the label wears.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -197,11 +196,11 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
                   onTap: canCollapse ? _toggle : null,
                   child: Container(
                     decoration: BoxDecoration(
+                      // The reference rules the control off from what follows
+                      // with `border-l2` at half a pixel
+                      // (`TurnProcessNodeView.module.css:13`).
                       border: Border(
-                        bottom: BorderSide(
-                          color: scheme.outlineVariant,
-                          width: 0.5,
-                        ),
+                        bottom: BorderSide(color: scheme.borderL2, width: 0.5),
                       ),
                     ),
                     padding: const EdgeInsets.only(bottom: 8),
@@ -213,10 +212,12 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
                               _labelSpan(label),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: color,
-                                height: 24 / 14,
-                              ),
+                              // The control reads the content size on its own
+                              // 24px line (`TurnProcessNodeView.module.css:12`
+                              // and :44).
+                              style: DshType.s14
+                                  .style(color: color)
+                                  .copyWith(height: 24 / 14),
                             ),
                           ),
                         if (canCollapse) ...[
@@ -294,8 +295,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final summary = widget.summary;
     final activity = widget.closed
@@ -313,7 +313,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
     final showChevron = _hovered || widget.open;
     // The reference's `.title:hover` steps the tertiary tone to the secondary
     // one; the leading box inherits it rather than naming a role of its own.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -378,9 +378,12 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
                           // The reference's group title is 14px, one step above
                           // its 13px Turn-control label; Material has both
                           // roles.
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: color,
-                          ),
+                          // The group title is the content size on the
+                          // disclosure row's 24px box
+                          // (`ChatGroupSeat.module.css:14`, `.row` :22).
+                          style: DshType.s14
+                              .style(color: color)
+                              .copyWith(height: 24 / 14),
                         ),
                       ),
                     ),

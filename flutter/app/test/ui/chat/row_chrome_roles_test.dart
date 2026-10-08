@@ -78,19 +78,19 @@ void main() {
     ) async {
       await pump(tester);
       final label = tester.widget<Text>(find.byType(Text));
-      expect(label.style?.color, _scheme.onSurfaceVariant);
+      expect(label.style?.color, _scheme.labelTertiary);
       // The leading box inherits the row's tone instead of naming a role.
       for (final icon in tester.widgetList<Icon>(find.byType(Icon))) {
-        expect(icon.color, _scheme.onSurfaceVariant);
+        expect(icon.color, _scheme.labelTertiary);
       }
 
       await _hover(tester, find.byType(ProcessGroupHeader));
       expect(
         tester.widget<Text>(find.byType(Text)).style?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
       for (final icon in tester.widgetList<Icon>(find.byType(Icon))) {
-        expect(icon.color, _scheme.onSurface);
+        expect(icon.color, _scheme.labelSecondary);
       }
     });
 
@@ -205,23 +205,23 @@ void main() {
       );
       Color? titleColor() =>
           tester.widget<Text>(find.text('/goal')).style?.color;
-      expect(titleColor(), _scheme.onSurfaceVariant);
+      expect(titleColor(), _scheme.labelTertiary);
       expect(
         tester
             .widget<Text>(find.text('Compacted 120 history items.'))
             .style
             ?.color,
-        _scheme.onSurfaceVariant,
+        _scheme.labelTertiary,
       );
 
       await _hover(tester, find.byType(CommandRow));
-      expect(titleColor(), _scheme.onSurface);
+      expect(titleColor(), _scheme.labelSecondary);
       expect(
         tester
             .widget<Text>(find.text('Compacted 120 history items.'))
             .style
             ?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
     });
 
@@ -265,17 +265,17 @@ void main() {
 
       Color? summaryColor() =>
           tester.widget<Text>(find.text('first line')).style?.color;
-      expect(summaryColor(), _scheme.onSurfaceVariant);
+      expect(summaryColor(), _scheme.labelTertiary);
       expect(
         tester.widget<Text>(find.text('Think')).style?.color,
-        _scheme.onSurfaceVariant,
+        _scheme.labelTertiary,
       );
 
       await _hover(tester, find.byType(ReasoningRow));
-      expect(summaryColor(), _scheme.onSurface);
+      expect(summaryColor(), _scheme.labelSecondary);
       expect(
         tester.widget<Text>(find.text('Think')).style?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
     });
 
