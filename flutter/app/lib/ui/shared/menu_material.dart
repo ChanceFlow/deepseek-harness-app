@@ -15,8 +15,6 @@
 /// inside a `ClipRRect` and a shadow drawn there would be clipped away.
 library;
 
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
@@ -73,9 +71,18 @@ class MenuMaterial extends StatelessWidget {
                   )
                 : null,
           ),
-          child: padding == null
-              ? child
-              : Padding(padding: padding!, child: child),
+          child: Material(
+            // A `ListTile` row paints its background and ink splashes on the
+            // nearest `Material` ancestor. The panel's own fill is a
+            // `DecoratedBox`, which would hide them, and the framework asserts on
+            // that combination; a transparent Material between the fill and the
+            // rows keeps the panel's colour and gives the rows their ink
+            // surface.
+            type: MaterialType.transparency,
+            child: padding == null
+                ? child
+                : Padding(padding: padding!, child: child),
+          ),
         ),
       ),
     );
@@ -86,7 +93,3 @@ class MenuMaterial extends StatelessWidget {
     );
   }
 }
-
-/// The composed menu backdrop, in the pin's order: saturated after the blur
-/// (`gradient-shadow-text.css:20`, `menuBackdropFilter` in the theme layer).
-ImageFilter menuPanelBackdrop() => menuBackdropFilter();

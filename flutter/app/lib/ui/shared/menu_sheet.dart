@@ -23,7 +23,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../chat/menu_material.dart';
+import 'menu_material.dart';
 import '../theme/theme.dart';
 import 'dock_anchor.dart';
 

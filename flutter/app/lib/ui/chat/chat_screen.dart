@@ -91,7 +91,7 @@ import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'process_activity.dart';
 import 'disclosure_row.dart';
-import 'menu_material.dart';
+import '../shared/menu_material.dart';
 import 'process_disclosure.dart';
 import 'turn_process.dart';
 import 'tool_row_model.dart';
@@ -3052,11 +3052,6 @@ class _UserBubble extends StatefulWidget {
 }
 
 class _UserBubbleState extends State<_UserBubble> {
-  /// Where the finger went down: [InkWell] reports the position on tap-down
-  /// and the long press that follows carries none, so the menu anchors to
-  /// the remembered point.
-  Offset _pressed = Offset.zero;
-
   String get text => widget.text;
   VoidCallback? get onFork => widget.onFork;
 
@@ -3075,37 +3070,41 @@ class _UserBubbleState extends State<_UserBubble> {
 
   /// The bubble's verbs, at the press point: copy always, fork when the
   /// message has a logged position to cut at.
-  Future<void> _openMenu(BuildContext context, Offset globalPosition) async {
+  /// The bubble's verbs, in the house menu sheet: the pin's menu material
+  /// (fill over the backdrop, the half-pixel ring, `kRadiusLg` and
+  /// `DshElevation.prominent`) rather than the framework `showMenu`, whose
+  /// `MenuStyle` can carry only the fill composite and a corner.
+  Future<void> _openMenu(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final verb = await showMenu<_BubbleVerb>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem<_BubbleVerb>(
-          value: _BubbleVerb.copy,
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.copy_outlined, size: 18),
-            title: Text(l10n.copyTooltip),
-          ),
-        ),
-        if (onFork != null)
-          PopupMenuItem<_BubbleVerb>(
-            value: _BubbleVerb.fork,
-            child: ListTile(
+    final verb = await showMenuSheet<_BubbleVerb>(
+      context,
+      // The pins the tiles' Material directly above them: the menu material's
+      // translucent fill is a decoration between the sheet's Material and the
+      // ListTiles, and a ListTile needs an undecorated Material parent.
+      builder: (sheetContext) => Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.alt_route, size: 18),
-              title: Text(l10n.forkFromHere),
+              leading: const Icon(Icons.copy_outlined, size: 18),
+              title: Text(l10n.copyTooltip),
+              onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.copy),
             ),
-          ),
-      ],
+            if (onFork != null)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.alt_route, size: 18),
+                title: Text(l10n.forkFromHere),
+                onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.fork),
+              ),
+          ],
+        ),
+      ),
     );
     if (!context.mounted) return;
     switch (verb) {
@@ -3129,9 +3128,7 @@ class _UserBubbleState extends State<_UserBubble> {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTapDown: (TapDownDetails details) =>
-            _pressed = details.globalPosition,
-        onLongPress: () => _openMenu(context, _pressed),
+        onLongPress: () => _openMenu(context),
         child: Padding(
           // The reference's 42px single-line bubble: a 22px line plus 10px of
           // vertical padding, 16px at the sides (`MessageItem.module.css`

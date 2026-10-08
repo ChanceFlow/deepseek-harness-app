@@ -12,7 +12,7 @@
 /// rendering as a flat see-through panel.
 library;
 
-import 'package:app/ui/chat/menu_material.dart';
+import 'package:app/ui/shared/menu_material.dart';
 import 'package:app/ui/shared/menu_sheet.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
@@ -104,6 +104,44 @@ void main() {
       DshElevation.prominent(scheme, stroke: scheme.borderL1),
     );
     expect(lift.borderRadius, BorderRadius.circular(kRadiusLg));
+  });
+
+  testWidgets('a ListTile row keeps an ink surface inside the panel', (
+    tester,
+  ) async {
+    // A `ListTile` paints its ink on the nearest `Material`, and the panel's
+    // fill is a coloured `DecoratedBox`: without a Material between them the
+    // framework asserts that the row's background and splashes may be
+    // invisible, which is how the message menu's rows first failed.
+    await tester.pumpWidget(
+      l10nApp(
+        theme: DshTheme.light(),
+        home: Builder(
+          builder: (context) => Center(
+            child: ElevatedButton(
+              onPressed: () => showMenuSheet<void>(
+                context,
+                builder: (_) => ListTile(
+                  dense: true,
+                  title: const Text('row'),
+                  onTap: () {},
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('row'), findsOneWidget);
+    // The row's ink surface sits above the panel's fill, not below it.
+    expect(
+      find.ancestor(of: find.byType(ListTile), matching: find.byType(Material)),
+      findsWidgets,
+    );
   });
 
   testWidgets('the sheet keeps its own 4px card padding', (tester) async {
