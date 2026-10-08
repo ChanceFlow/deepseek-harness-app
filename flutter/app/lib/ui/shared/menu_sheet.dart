@@ -50,6 +50,13 @@ Future<T?> showMenuSheet<T>(
       reverseCurve: DshMotion.curveExit,
     ),
     backgroundColor: Colors.transparent,
+    // A transparent background hides Material's sheet surface but not its
+    // elevation: the modal route still paints `modalElevation`'s shadow (level 1
+    // in M3) under the whole sheet, so the card's `DshElevation` ring would sit
+    // on a second, heavier shadow. `elevation: 0` is the whole fix on this
+    // Flutter version — `showModalBottomSheet` takes no `shadowColor`, and a
+    // zero elevation paints none.
+    elevation: 0,
     builder: (sheetContext) {
       final scheme = Theme.of(sheetContext).colorScheme;
       return Padding(

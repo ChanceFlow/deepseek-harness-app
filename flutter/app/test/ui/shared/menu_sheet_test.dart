@@ -106,6 +106,16 @@ void main() {
     expect(lift.borderRadius, BorderRadius.circular(kRadiusLg));
   });
 
+  testWidgets('the modal sheet paints no shadow of its own', (tester) async {
+    await _openMenu(tester);
+    // The transparent sheet still carries the framework's modal elevation unless
+    // it is zeroed, and that shadow lands under the card's `DshElevation` ring —
+    // a second, heavier lift than the pin's. `showModalBottomSheet` takes no
+    // `shadowColor` on this Flutter version, so a zero elevation is the whole
+    // guard.
+    expect(tester.widget<BottomSheet>(find.byType(BottomSheet)).elevation, 0);
+  });
+
   testWidgets('a ListTile row keeps an ink surface inside the panel', (
     tester,
   ) async {

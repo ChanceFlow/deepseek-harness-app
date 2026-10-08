@@ -41,14 +41,19 @@ import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
 import '../../platform/document_picker.dart';
 import '../shared/error_banner.dart';
+import 'card_detail.dart';
 import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
 import 'command_roster.dart';
+import 'diff_line_list.dart';
 import 'file_reference_picker.dart';
 import 'host_unreachable_banner.dart';
 import 'file_preview_sheet.dart';
 import 'markdown/markdown_text.dart';
+import 'markdown/plain_text.dart';
+import 'plan_detail_surface.dart';
+import 'tool_detail_surface.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'message_feedback_actions.dart';
@@ -1209,26 +1214,13 @@ const double _dockBudgetShare = 0.62;
 
 /// Share the dock may occupy while a decision waits. Answering is the only
 /// thing the reader can do with that session, so the decision seat keeps more
-/// room than the composer ever needs — enough that its action row stays at the
-/// dock's bottom edge on a short phone instead of scrolling out of sight.
+/// room than the composer ever needs — enough that its prompt row and its
+/// primary action stay on screen on a short phone instead of scrolling out of
+/// sight. The detail itself no longer lives here: it opens one surface deeper
+/// ([showCardDetailSheet], [showPlanDetail]).
 const double _dockDecisionShare = 0.78;
 const double _dockMinHeight = 200;
 const double _dockMaxHeight = 520;
-
-/// Cap for a decision card's scrollable body when no dock publishes a budget
-/// (a bare pump of the card outside its host). Inside the dock the body takes
-/// what is left of the budget instead (see [_decisionBody]).
-const double _decisionBodyShare = 0.45;
-
-/// The plan-review card's own fixed chrome — its warn header and its action
-/// row, which wraps to two lines on a phone. The scrollable plan body takes
-/// what is left of the dock's budget, so the action row lands at the dock's
-/// bottom edge instead of below it.
-const double _planReviewChrome = 200;
-
-/// The question card's fixed chrome — its header, the custom-answer row and
-/// the footer that carries Submit.
-const double _questionChrome = 240;
 
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
@@ -2469,7 +2461,7 @@ class _ChatPanelState extends State<ChatPanel> {
                       onAction: widget.onAction,
                     )
                   else if (_pendingApproval case final approval?)
-                    ApprovalPanel(
+                    ApprovalRow(
                       request: approval,
                       command: _commandForApproval(approval),
                       onAction: widget.onAction,
@@ -3875,7 +3867,15 @@ class _ToolCallRowState extends State<ToolCallRow>
                       failed: failed,
                     ),
                   if (model.filePath case final filePath?)
-                    _fileActionBar(context, filePath, diff: model.diff),
+                    _fileActionBar(
+                      context,
+                      filePath,
+                      title: model.title,
+                      diff: model.diff,
+                      input: model.body,
+                      output: model.output,
+                      failed: failed,
+                    ),
                 ],
               ),
             ),
@@ -3887,7 +3887,11 @@ class _ToolCallRowState extends State<ToolCallRow>
   Widget _fileActionBar(
     BuildContext context,
     String path, {
+    required String title,
     EditDiffModel? diff,
+    String? input,
+    String? output,
+    bool failed = false,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -3898,6 +3902,34 @@ class _ToolCallRowState extends State<ToolCallRow>
         spacing: 8,
         runSpacing: 4,
         children: [
+          // The peek is bounded, so the whole payload gets its own surface: the
+          // row keeps one line and the content opens one level deeper.
+          OutlinedButton.icon(
+            onPressed: () => showToolDetail(
+              context,
+              args: ToolDetailArgs(
+                title: title,
+                diff: diff,
+                input: input,
+                output: output,
+                failed: failed,
+                path: path,
+              ),
+              onPreviewFile: widget.onPreviewFile,
+            ),
+            icon: const Icon(Icons.open_in_full, size: 14),
+            label: Text(
+              l10n.open,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
           if (widget.onPreviewFile != null)
             OutlinedButton.icon(
               onPressed: () => widget.onPreviewFile!(path, diff: diff),
@@ -4018,14 +4050,7 @@ class _ToolCallRowState extends State<ToolCallRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final fullDiffText = [
-      for (final line in diff.lines)
-        '${line.kind == DiffLineKind.delete
-            ? '-'
-            : line.kind == DiffLineKind.insert
-            ? '+'
-            : ' '} ${line.text}',
-    ].join('\n');
+    final fullDiffText = diffPlainText(diff);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -4041,70 +4066,12 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
           const SizedBox(width: 14),
           Expanded(
+            // The peek is bounded: the transcript is the surface the reader is
+            // reading, and the whole diff opens one level deeper
+            // ([showToolDetail]).
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
-              child: SingleChildScrollView(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final line in diff.lines)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: switch (line.kind) {
-                              DiffLineKind.delete =>
-                                scheme.errorContainer.withValues(alpha: 0.35),
-                              DiffLineKind.insert =>
-                                scheme.primaryContainer.withValues(alpha: 0.35),
-                              DiffLineKind.equal => Colors.transparent,
-                            },
-                            borderRadius: BorderRadius.circular(kShapeChip),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                child: Text(
-                                  switch (line.kind) {
-                                    DiffLineKind.delete => '-',
-                                    DiffLineKind.insert => '+',
-                                    DiffLineKind.equal => ' ',
-                                  },
-                                  style: TextStyle(
-                                    fontFamily: kCodeFontFamily,
-                                    fontFamilyFallback: kCodeFontFamilyFallback,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: switch (line.kind) {
-                                      DiffLineKind.delete => scheme.error,
-                                      DiffLineKind.insert => scheme.primary,
-                                      DiffLineKind.equal =>
-                                        scheme.onSurfaceVariant,
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                line.text,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFamily: kCodeFontFamily,
-                                  fontFamilyFallback: kCodeFontFamilyFallback,
-                                  color: scheme.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+              child: SingleChildScrollView(child: DiffLineList(diff: diff)),
             ),
           ),
           IconButton(
@@ -4725,66 +4692,6 @@ class _QueueAction extends StatelessWidget {
   }
 }
 
-class ApprovalRow extends StatelessWidget {
-  const ApprovalRow({
-    required this.requestId,
-    required this.approvalId,
-    required this.toolName,
-    required this.reason,
-    required this.onAction,
-    super.key,
-  });
-
-  final String requestId;
-  final String approvalId;
-  final String toolName;
-  final String? reason;
-  final void Function(ChatAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.approveTool(toolName),
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        if (reason case final String because)
-          Text(because, style: Theme.of(context).textTheme.bodySmall),
-        Row(
-          children: [
-            FilledButton(
-              onPressed: () => onAction(
-                RespondApproval(
-                  requestId: requestId,
-                  approvalId: approvalId,
-                  allowed: true,
-                ),
-              ),
-              child: Text(l10n.allow),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: OutlinedButton(
-                onPressed: () => onAction(
-                  RespondApproval(
-                    requestId: requestId,
-                    approvalId: approvalId,
-                    allowed: false,
-                  ),
-                ),
-                child: Text(l10n.reject),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class QuestionRow extends StatefulWidget {
   const QuestionRow({required this.request, required this.onAction, super.key});
 
@@ -4799,10 +4706,11 @@ class _QuestionRowState extends State<QuestionRow> {
   Map<String, QuestionDraft> _drafts = const <String, QuestionDraft>{};
   int _index = 0;
   String? _error;
-  // Collapsed to the header strip so the conversation above stays readable
-  // while the user decides (the reference `QuestionFlow`'s `minimized`).
-  // Component state, not a draft: it resets with the request.
-  bool _minimized = false;
+
+  /// Whether the flow has dispatched its answer. The sheet closes on it: the
+  /// request it was opened for is settled, so leaving the sheet up would leave
+  /// the reader on a card the session no longer has.
+  bool _settled = false;
 
   @override
   void didUpdateWidget(covariant QuestionRow oldWidget) {
@@ -4812,7 +4720,7 @@ class _QuestionRowState extends State<QuestionRow> {
       _drafts = const <String, QuestionDraft>{};
       _index = 0;
       _error = null;
-      _minimized = false;
+      _settled = false;
     }
   }
 
@@ -4821,32 +4729,73 @@ class _QuestionRowState extends State<QuestionRow> {
     final request = widget.request;
     final review = _planReviewOf(request.questions);
     if (review != null) {
-      return _PlanReviewCard(
+      return _PlanReviewRow(
         requestId: request.requestId,
         review: review,
         onAction: widget.onAction,
       );
     }
     if (request.questions.isEmpty) return const SizedBox.shrink();
-    final index = _index.clamp(0, request.questions.length - 1);
-    return _QuestionCard(
-      questions: request.questions,
-      index: index,
-      drafts: _drafts,
-      error: _error,
-      minimized: _minimized,
-      onToggleMinimized: () => setState(() => _minimized = !_minimized),
-      onChoose: _choose,
-      onDraftChange: (id, draft) =>
-          setState(() => _drafts = {..._drafts, id: draft}),
-      onBack: () => setState(() {
-        if (_index > 0) _index -= 1;
-        _error = null;
-      }),
-      onNext: _continue,
-      onSkip: _skip,
-      onDismiss: () =>
-          widget.onAction(DismissQuestionAction(requestId: request.requestId)),
+    final question =
+        request.questions[_index.clamp(0, request.questions.length - 1)];
+    // The card's line: the asker's own question, with the detail's first line
+    // as its one-line summary. The answer seats do not live on this row — they
+    // belong to the decision surface ([_openSheet]), the way the reference
+    // moves a card's content out of the transcript and into its own pane.
+    final detail = question.detail;
+    return CardDetailRow(
+      icon: Icons.help_outline,
+      title: question.question,
+      summary: detail == null
+          ? null
+          : extractMarkdownPlainText(
+              detail,
+              mode: MarkdownPlainTextMode.firstLine,
+            ),
+      openLabel: AppLocalizations.of(context)!.answer,
+      onOpen: _openSheet,
+    );
+  }
+
+  /// Opens the decision surface: the question's detail scrolls above, its
+  /// options sit at the bottom of the sheet, and every draft stays on this row
+  /// — a dismiss returns the reader to the same card with the answer in
+  /// progress intact.
+  void _openSheet() {
+    final request = widget.request;
+    unawaited(
+      showCardDetailSheet<void>(
+        context,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (context, setSheetState) => _AskDecisionSheet(
+            questions: request.questions,
+            index: _index.clamp(0, request.questions.length - 1),
+            drafts: _drafts,
+            error: _error,
+            onChoose: (id, option) => setSheetState(() => _choose(id, option)),
+            onDraftChange: (id, draft) =>
+                setSheetState(() => _drafts = {..._drafts, id: draft}),
+            onBack: () => setSheetState(() {
+              if (_index > 0) _index -= 1;
+              _error = null;
+            }),
+            onNext: () => setSheetState(() {
+              _continue();
+              if (_settled) Navigator.of(sheetContext).pop();
+            }),
+            onSkip: () => setSheetState(() {
+              _skip();
+              if (_settled) Navigator.of(sheetContext).pop();
+            }),
+            onDismiss: () {
+              Navigator.of(sheetContext).pop();
+              widget.onAction(
+                DismissQuestionAction(requestId: request.requestId),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -4939,6 +4888,8 @@ class _QuestionRowState extends State<QuestionRow> {
         ],
       ),
     );
+    // The request is answered: the decision surface closes with it.
+    _settled = true;
   }
 
   bool _completed(QuestionItem question, QuestionDraft draft) =>
@@ -5005,19 +4956,21 @@ _planReviewOf(List<QuestionItem> questions) {
   return (label: label, recommended: false);
 }
 
-/// Generic question flow card (the web QuestionComposer port): header with
-/// eyebrow/title and a dismiss button, body with the markdown detail, option
-/// rows (numbered single-select or checkbox multi-select with the
-/// recommended badge), a custom-answer row or optionless textarea, and a
-/// footer with the pager, validation feedback, and skip / next / submit.
-class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({
+/// The ask card's decision surface — the web `QuestionComposer` port, hosted
+/// in a large sheet instead of in the composer seat.
+///
+/// The card that opens it is one line (`CardDetailRow`); this is the surface
+/// the reference gives the question's own pane. The question's detail scrolls
+/// in the upper half and every answer seat sits at the bottom of the sheet —
+/// the option rows, the custom-answer row or the optionless textarea, and the
+/// pager with skip / next / submit — so the thumb never has to travel past a
+/// long detail to decide.
+class _AskDecisionSheet extends StatelessWidget {
+  const _AskDecisionSheet({
     required this.questions,
     required this.index,
     required this.drafts,
     required this.error,
-    required this.minimized,
-    required this.onToggleMinimized,
     required this.onChoose,
     required this.onDraftChange,
     required this.onBack,
@@ -5030,11 +4983,6 @@ class _QuestionCard extends StatelessWidget {
   final int index;
   final Map<String, QuestionDraft> drafts;
   final String? error;
-
-  /// Folded down to the header strip, so the conversation above stays
-  /// readable while the user decides (the reference `cardMinimized`).
-  final bool minimized;
-  final VoidCallback onToggleMinimized;
   final void Function(String questionId, String option) onChoose;
   final void Function(String questionId, QuestionDraft draft) onDraftChange;
   final VoidCallback onBack;
@@ -5044,106 +4992,93 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final question = questions[index];
     final draft = drafts[question.id] ?? const QuestionDraft();
     final hasOptions = question.options.isNotEmpty;
     final answered =
         draft.selected.isNotEmpty || draft.customText.trim().isNotEmpty;
     final isLast = index == questions.length - 1;
-    final dockBudget = DockBudget.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(kShapeCard),
-        boxShadow: kM3ShadowElevation1,
-      ),
-      clipBehavior: Clip.antiAlias,
+    final detail = question.detail;
+    // The sheet's own panel is the surface (see [showCardDetailSheet]); this
+    // builds the content on it, not a card of its own.
+    return SafeArea(
+      top: false,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _QuestionCardHeader(
-            question: question,
-            minimized: minimized,
-            onToggleMinimized: onToggleMinimized,
-            onDismiss: onDismiss,
-          ),
-          if (!minimized) ...[
-            _decisionBody(
-              context,
-              dockBudget,
-              _questionChrome,
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (question.detail case final String detail)
-                      MarkdownText(text: detail),
-                    if (hasOptions) ...[
-                      const SizedBox(height: 8),
-                      if (question.multiSelect)
-                        for (final option in question.options)
-                          _QuestionOptionTile(
-                            question: question,
-                            option: option,
-                            selected: draft.selected.contains(option),
-                            onChanged: () => onChoose(question.id, option),
-                          )
-                      else
-                        RadioGroup<String>(
-                          groupValue: draft.selected.isEmpty
-                              ? null
-                              : draft.selected.first,
-                          onChanged: (value) {
-                            if (value != null) onChoose(question.id, value);
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final option in question.options)
-                                _QuestionOptionTile(
-                                  question: question,
-                                  option: option,
-                                  selected: draft.selected.contains(option),
-                                  onChanged: () =>
-                                      onChoose(question.id, option),
-                                ),
-                            ],
-                          ),
+        children: <Widget>[
+          _QuestionCardHeader(question: question, onDismiss: onDismiss),
+          // The reading half: the detail and the option rows travel together,
+          // because an option is chosen against the text above it.
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  if (detail != null) MarkdownText(text: detail),
+                  if (hasOptions)
+                    if (question.multiSelect)
+                      for (final option in question.options)
+                        _QuestionOptionTile(
+                          question: question,
+                          option: option,
+                          selected: draft.selected.contains(option),
+                          onChanged: () => onChoose(question.id, option),
+                        )
+                    else
+                      RadioGroup<String>(
+                        groupValue: draft.selected.isEmpty
+                            ? null
+                            : draft.selected.first,
+                        onChanged: (value) {
+                          if (value != null) onChoose(question.id, value);
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            for (final option in question.options)
+                              _QuestionOptionTile(
+                                question: question,
+                                option: option,
+                                selected: draft.selected.contains(option),
+                                onChanged: () => onChoose(question.id, option),
+                              ),
+                          ],
                         ),
-                    ],
-                  ],
-                ),
+                      ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-              child: hasOptions
-                  ? _CustomAnswerRow(
-                      question: question,
-                      draft: draft,
-                      onDraftChange: (d) => onDraftChange(question.id, d),
-                    )
-                  : _CustomAnswerField(
-                      question: question,
-                      draft: draft,
-                      onDraftChange: (d) => onDraftChange(question.id, d),
-                    ),
-            ),
-            _QuestionCardFooter(
-              total: questions.length,
-              index: index,
-              error: error,
-              answered: answered,
-              isLast: isLast,
-              onBack: onBack,
-              onNext: onNext,
-              onSkip: onSkip,
-            ),
-          ],
+          ),
+          // The answering half, pinned at the bottom of the sheet where the
+          // thumb already is: the free-form seat when the asker offered no
+          // options, the pager and Submit either way. The sheet's height is a
+          // share of the screen, so these never scroll out of reach.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+            child: hasOptions
+                ? _CustomAnswerRow(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  )
+                : _CustomAnswerField(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  ),
+          ),
+          _QuestionCardFooter(
+            total: questions.length,
+            index: index,
+            error: error,
+            answered: answered,
+            isLast: isLast,
+            onBack: onBack,
+            onNext: onNext,
+            onSkip: onSkip,
+          ),
         ],
       ),
     );
@@ -5151,16 +5086,9 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _QuestionCardHeader extends StatelessWidget {
-  const _QuestionCardHeader({
-    required this.question,
-    required this.minimized,
-    required this.onToggleMinimized,
-    required this.onDismiss,
-  });
+  const _QuestionCardHeader({required this.question, required this.onDismiss});
 
   final QuestionItem question;
-  final bool minimized;
-  final VoidCallback onToggleMinimized;
   final VoidCallback onDismiss;
 
   @override
@@ -5198,13 +5126,8 @@ class _QuestionCardHeader extends StatelessWidget {
               ],
             ),
           ),
-          _RoundIconButton(
-            tooltip: minimized
-                ? AppLocalizations.of(context)!.questionMaximize
-                : AppLocalizations.of(context)!.questionMinimize,
-            icon: minimized ? Icons.expand_less : Icons.expand_more,
-            onPressed: onToggleMinimized,
-          ),
+          // No fold seat: the card itself is the fold now — dismissing the
+          // sheet is what returns the reader to the one-line card.
           _RoundIconButton(
             tooltip: AppLocalizations.of(context)!.questionCancel,
             icon: Icons.close,
@@ -5722,45 +5645,19 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
   }
 }
 
-/// One decision card's scrollable body, sized against the dock's budget.
+/// Plan-review decision row (the web `PlanReviewPanel` port, folded to its
+/// own summary).
 ///
-/// [chrome] is the card's own fixed height (header, answer field or action
-/// row). Inside a sized dock the body takes the budget minus that chrome, so
-/// the card as a whole fits the dock and its actions — the only way to answer
-/// — land at the dock's bottom edge instead of below it, where the tab bar
-/// swallows the taps. Without a dock (a bare pump of the card) the historical
-/// fixed cap applies, which is all that is needed when nothing sits below it.
-Widget _decisionBody(
-  BuildContext context,
-  double? dockBudget,
-  double chrome,
-  Widget body,
-) {
-  if (dockBudget == null) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * _decisionBodyShare,
-      ),
-      child: body,
-    );
-  }
-  return ConstrainedBox(
-    constraints: BoxConstraints(
-      maxHeight: (dockBudget - chrome).clamp(0.0, dockBudget),
-    ),
-    child: body,
-  );
-}
-
-/// Plan-review decision card (the web PlanReviewPanel port): a warn-tinted
-/// strip with a dot, the plan as the whole body (markdown), and a
-/// right-aligned action row — discuss (dismiss), decline, and approve.
-///
-/// The reference panel has no fold control; this one carries the same
-/// minimize toggle its sibling question card does, because a long plan is
-/// exactly the card that covers the conversation it is about.
-class _PlanReviewCard extends StatefulWidget {
-  const _PlanReviewCard({
+/// The reference keeps the document out of the card: the panel's body is the
+/// plan's first line as a title and its first paragraph as a description
+/// (`PlanReviewPanel.tsx:52-58`), and a `preview.full` link
+/// (`PlanCard.tsx:81-82`) opens the whole document in the right sidebar. A
+/// phone has no sidebar, so this row is those two lines — title, summary — with
+/// the primary action still on it, and tapping it pushes the document as a
+/// full-screen route ([showPlanDetail]) whose bottom bar pins the whole
+/// decision. Opening the document answers nothing; only the actions do.
+class _PlanReviewRow extends StatelessWidget {
+  const _PlanReviewRow({
     required this.requestId,
     required this.review,
     required this.onAction,
@@ -5778,124 +5675,45 @@ class _PlanReviewCard extends StatefulWidget {
   final void Function(ChatAction) onAction;
 
   @override
-  State<_PlanReviewCard> createState() => _PlanReviewCardState();
-}
-
-class _PlanReviewCardState extends State<_PlanReviewCard> {
-  bool _minimized = false;
-
-  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final review = widget.review;
-    final dockBudget = DockBudget.of(context);
-    void decide(String label) {
-      widget.onAction(
-        AnswerQuestionAction(
-          requestId: widget.requestId,
-          answers: [
-            QuestionAnswer(questionId: review.id, selectedOptions: [label]),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(kShapeCard),
-        boxShadow: kM3ShadowElevation1,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            color: scheme.warning.withValues(alpha: 0.12),
-            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: scheme.warning,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.planReview,
-                    style: TextStyle(
-                      color: scheme.warning,
-                      fontSize: 13,
-                      height: 18 / 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                _RoundIconButton(
-                  tooltip: _minimized
-                      ? l10n.questionMaximize
-                      : l10n.questionMinimize,
-                  icon: _minimized ? Icons.expand_less : Icons.expand_more,
-                  onPressed: () => setState(() => _minimized = !_minimized),
-                ),
-              ],
-            ),
+    final review = this.review;
+    final summary = planSummary(review.plan);
+    final args = PlanDetailArgs(
+      requestId: requestId,
+      questionId: review.id,
+      title: summary.title.isEmpty ? l10n.planReview : summary.title,
+      description: summary.description,
+      plan: review.plan,
+    );
+    return CardDetailRow(
+      icon: Icons.checklist_outlined,
+      title: l10n.planReviewRequestedTitle,
+      summary: args.title,
+      trailing: FilledButton(
+        onPressed: () => onAction(
+          AnswerQuestionAction(
+            requestId: requestId,
+            answers: [
+              QuestionAnswer(
+                questionId: review.id,
+                selectedOptions: [review.approve],
+              ),
+            ],
           ),
-          if (!_minimized) ...[
-            _decisionBody(
-              context,
-              dockBudget,
-              _planReviewChrome,
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: MarkdownText(text: review.plan),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  TextButton(
-                    onPressed: () => widget.onAction(
-                      DismissQuestionAction(requestId: widget.requestId),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: scheme.onSurfaceVariant,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.edit_outlined, size: 14),
-                        const SizedBox(width: 6),
-                        Text(l10n.planDiscuss),
-                      ],
-                    ),
-                  ),
-                  if (review.decline case final String decline)
-                    OutlinedButton(
-                      onPressed: () => decide(decline),
-                      child: Text(l10n.planDecline),
-                    ),
-                  FilledButton(
-                    onPressed: () => decide(review.approve),
-                    child: Text(l10n.planApprove),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+        ),
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: Text(l10n.planApprove),
+      ),
+      onOpen: () => showPlanDetail(
+        context,
+        args: args,
+        approveLabel: review.approve,
+        declineLabel: review.decline,
+        onAction: onAction,
       ),
     );
   }

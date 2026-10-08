@@ -1,5 +1,5 @@
-/// ApprovalPanel widget & command extraction tests — port of web
-/// `ApprovalPanel.tsx` / `commandOf()`.
+/// Approval card tests — the one-line row, its decision sheet, and
+/// `commandOf()` (port of web `ApprovalPanel.tsx`).
 library;
 
 import 'package:app/l10n/app_localizations.dart';
@@ -77,8 +77,8 @@ void main() {
     });
   });
 
-  group('ApprovalPanel widget', () {
-    const request = TimelineApprovalRequest(
+  group('ApprovalRow and its decision sheet', () {
+    const baseRequest = TimelineApprovalRequest(
       requestId: 'rpc-100',
       sessionId: 's-1',
       approvalId: 'ap-1',
@@ -87,76 +87,106 @@ void main() {
       callId: 'call-100',
     );
 
-    testWidgets('renders command in monospace SelectableText when provided', (
-      tester,
-    ) async {
-      final actions = <ChatAction>[];
+    Future<void> pumpRow(
+      WidgetTester tester, {
+      TimelineApprovalRequest request = baseRequest,
+      String? command,
+      List<ChatAction>? actions,
+      Locale? locale,
+      ThemeData? theme,
+    }) async {
       await tester.pumpWidget(
         l10nApp(
+          locale: locale,
+          theme: theme,
           home: Scaffold(
-            body: ApprovalPanel(
+            body: ApprovalRow(
               request: request,
-              command: 'rm -rf build',
-              onAction: actions.add,
+              command: command,
+              onAction: (action) => actions?.add(action),
             ),
           ),
         ),
       );
+      await tester.pump();
+    }
 
+    /// Opens the request's own surface: the card row is one line, the body is
+    /// one surface deeper. [title] is the locale's own `waitingForApproval`.
+    Future<void> openSheet(
+      WidgetTester tester, {
+      String title = 'Waiting for approval',
+    }) async {
+      await tester.tap(find.text(title));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    /// Takes the open sheet down: the next pump may reuse the same Navigator,
+    /// and a sheet left up would answer the next iteration's finders.
+    Future<void> closeSheet(WidgetTester tester) async {
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('the card is one line and the command opens deeper', (
+      tester,
+    ) async {
+      final actions = <ChatAction>[];
+      await pumpRow(tester, command: 'rm -rf build', actions: actions);
+
+      // The row: the wait, the justification's own line, and the primary
+      // answer. Neither the command nor Reject is on the transcript.
       expect(find.text('Waiting for approval'), findsOneWidget);
       expect(find.text('Delete build artifacts'), findsOneWidget);
+      expect(find.text('Allow once'), findsOneWidget);
+      expect(find.byType(SelectableText), findsNothing);
+      expect(find.text('Reject'), findsNothing);
+      expect(
+        find.text('Tool bash requests privileged execution'),
+        findsNothing,
+      );
+
+      await openSheet(tester);
+      expect(find.text('rm -rf build'), findsOneWidget);
       expect(
         find.text('Tool bash requests privileged execution'),
         findsOneWidget,
       );
-      expect(find.text('rm -rf build'), findsOneWidget);
+      expect(find.text('Reject'), findsOneWidget);
+      expect(actions, isEmpty, reason: 'opening the request answers nothing');
 
       final selectable = tester.widget<SelectableText>(
         find.widgetWithText(SelectableText, 'rm -rf build'),
       );
       expect(selectable.style?.fontFamily, kCodeFontFamily);
+      await closeSheet(tester);
     });
 
     testWidgets('renders without command when command is null or empty', (
       tester,
     ) async {
-      final actions = <ChatAction>[];
-      await tester.pumpWidget(
-        l10nApp(
-          home: Scaffold(
-            body: ApprovalPanel(
-              request: request,
-              command: null,
-              onAction: actions.add,
-            ),
-          ),
-        ),
-      );
+      await pumpRow(tester, command: null);
 
       expect(find.text('Waiting for approval'), findsOneWidget);
       expect(find.text('Delete build artifacts'), findsOneWidget);
+      expect(find.byType(SelectableText), findsNothing);
+
+      await openSheet(tester);
       expect(
         find.text('Tool bash requests privileged execution'),
         findsOneWidget,
       );
       expect(find.byType(SelectableText), findsNothing);
+      await closeSheet(tester);
     });
 
     testWidgets('dispatches RespondApproval with allowed true on Allow once', (
       tester,
     ) async {
       final actions = <ChatAction>[];
-      await tester.pumpWidget(
-        l10nApp(
-          home: Scaffold(
-            body: ApprovalPanel(
-              request: request,
-              command: 'cargo build',
-              onAction: actions.add,
-            ),
-          ),
-        ),
-      );
+      await pumpRow(tester, command: 'cargo build', actions: actions);
 
       await tester.tap(find.text('Allow once'));
       expect(actions, hasLength(1));
@@ -174,19 +204,11 @@ void main() {
       tester,
     ) async {
       final actions = <ChatAction>[];
-      await tester.pumpWidget(
-        l10nApp(
-          home: Scaffold(
-            body: ApprovalPanel(
-              request: request,
-              command: 'cargo build',
-              onAction: actions.add,
-            ),
-          ),
-        ),
-      );
+      await pumpRow(tester, command: 'cargo build', actions: actions);
+      await openSheet(tester);
 
       await tester.tap(find.text('Reject'));
+      await tester.pump();
       expect(actions, hasLength(1));
       expect(
         actions.single,
@@ -197,34 +219,32 @@ void main() {
         ),
       );
     });
-
     testWidgets('renders correctly under Chinese locale', (tester) async {
-      final actions = <ChatAction>[];
-      await tester.pumpWidget(
-        l10nApp(
-          locale: const Locale('zh'),
-          home: Scaffold(
-            body: ApprovalPanel(
-              request: const TimelineApprovalRequest(
-                requestId: 'rpc-zh',
-                sessionId: 's-zh',
-                approvalId: 'ap-zh',
-                toolName: 'bash',
-                callId: 'call-zh',
-              ),
-              command: 'pnpm test',
-              onAction: actions.add,
-            ),
-          ),
-        ),
+      final l10nZh = lookupAppLocalizations(const Locale('zh'));
+      // No reason: the row's summary is the fallback ticket the host's missing
+      // reason renders through.
+      const reasonless = TimelineApprovalRequest(
+        requestId: 'rpc-zh',
+        sessionId: 's-zh',
+        approvalId: 'ap-zh',
+        toolName: 'bash',
+        callId: 'call-zh',
+      );
+      await pumpRow(
+        tester,
+        request: reasonless,
+        command: 'pnpm test',
+        locale: const Locale('zh'),
       );
 
-      final l10nZh = lookupAppLocalizations(const Locale('zh'));
-      expect(find.text(l10nZh.waitingForApproval), findsOneWidget);
       expect(find.text(l10nZh.approveToolFallback('bash')), findsOneWidget);
+      expect(find.text(l10nZh.waitingForApproval), findsOneWidget);
+
+      await openSheet(tester, title: l10nZh.waitingForApproval);
+      expect(find.text(l10nZh.waitingForApproval), findsWidgets);
       expect(find.text(l10nZh.toolRequestsPrivileged('bash')), findsOneWidget);
       expect(find.text('pnpm test'), findsOneWidget);
-      expect(find.text(l10nZh.allowOnce), findsOneWidget);
+      expect(find.text(l10nZh.allowOnce), findsWidgets);
       expect(find.text(l10nZh.reject), findsOneWidget);
     });
 
@@ -232,20 +252,16 @@ void main() {
       tester,
     ) async {
       for (final theme in [DshTheme.light(), DshTheme.dark()]) {
-        await tester.pumpWidget(
-          l10nApp(
-            theme: theme,
-            home: Scaffold(
-              body: ApprovalPanel(
-                request: request,
-                command: 'git status',
-                onAction: (_) {},
-              ),
-            ),
-          ),
-        );
-        expect(find.text('git status'), findsOneWidget);
+        await pumpRow(tester, command: 'git status', theme: theme);
+        expect(find.text('git status'), findsNothing);
         expect(find.text('Waiting for approval'), findsOneWidget);
+
+        await openSheet(tester);
+        expect(find.text('git status'), findsOneWidget);
+        expect(find.text('Waiting for approval'), findsWidgets);
+
+        // The next iteration mounts its tree over the same Navigator.
+        await closeSheet(tester);
       }
     });
   });

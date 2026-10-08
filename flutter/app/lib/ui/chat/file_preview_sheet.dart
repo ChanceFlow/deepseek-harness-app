@@ -61,7 +61,10 @@ Future<void> showFilePreviewSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    // The card is the surface: Material's own sheet fill and elevation would
+    // otherwise paint a second shadow behind the card's `prominent` ring.
     backgroundColor: Colors.transparent,
+    elevation: 0,
     sheetAnimationStyle: const AnimationStyle(
       duration: DshMotion.durationMedium,
       curve: DshMotion.curveEmphasized,
@@ -320,10 +323,14 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: Container(
         decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(kShapeSheet),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: kM3ShadowElevation3,
+          // The pin's modal (`ui-primitives/Modal.module.css` `.dialog`,
+          // :33-46): the panel radius, `bg-layer-2`, `border: 0` and
+          // `--dsw-elevation-prominent`. The half-pixel ring rides the shadow,
+          // so the old 1px `outlineVariant` border and the M3 elevation-3
+          // shadow both go — that is the weight difference on every sheet.
+          color: scheme.bgLayer2,
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+          boxShadow: DshElevation.prominent(scheme),
         ),
         child: SafeArea(
           top: false,
@@ -660,8 +667,17 @@ class _FilePreviewSheetState extends State<FilePreviewSheet> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(kShapeChip),
+                // The pin's in-preview notice panel
+                // (`ui-sidebar-documentpreview/.../office/FontNotice.module.css`
+                // `.panel`, :14-31): `bg-layer-2`, `border: 0`,
+                // `--dsw-radius-lg` and `--dsw-elevation-prominent`; the pdf
+                // page surface takes the same shadow
+                // (`.../pdf/PdfBody.module.css` `.surface`, :43-48). The
+                // half-pixel ring rides the shadow, so the old flat
+                // `surfaceContainerHigh` chip goes.
+                color: scheme.bgLayer2,
+                borderRadius: BorderRadius.circular(kRadiusLg),
+                boxShadow: DshElevation.prominent(scheme),
               ),
               child: Row(
                 children: [

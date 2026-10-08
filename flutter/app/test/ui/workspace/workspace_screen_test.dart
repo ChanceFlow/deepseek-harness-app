@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
+import 'package:app/ui/shared/menu_material.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:app/ui/workspace/workspace_screen.dart';
 import 'package:app/ui/workspace/workspace_ui_state.dart';
@@ -140,6 +141,13 @@ void main() {
     expect(find.text('Delete workspace'), findsOneWidget);
     expect(find.text('Move up'), findsOneWidget);
     expect(find.text('Move down'), findsOneWidget);
+
+    // The row's ⋮ verbs are the pin's Menu, so they open on the shared menu
+    // material (`ui-primitives/Menu.module.css` `.list`, :15-31) rather than a
+    // Material sheet carrying its own fill and elevation.
+    final card = find.byKey(const ValueKey('menu-sheet-card'));
+    expect(card, findsOneWidget);
+    expect(tester.widget(card), isA<MenuMaterial>());
 
     await tester.tap(find.text('Move down'));
     await tester.pumpAndSettle();

@@ -26,6 +26,7 @@ import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/tool_row_model.dart'
     show DiffLineKind, EditDiffModel, ToolDiffLine;
+import 'package:app/ui/theme/theme.dart';
 
 import '../../l10n_app.dart';
 
@@ -535,6 +536,25 @@ void main() {
     await _openPreview(tester);
 
     expect(find.text('Previewing first 40 lines'), findsOneWidget);
+
+    // The notice is the pin's in-preview panel, not a Material chip:
+    // `bg-layer-2`, `border: 0`, `--dsw-radius-lg` and
+    // `--dsw-elevation-prominent` (`office/FontNotice.module.css` `.panel`,
+    // :14-31).
+    final scheme = Theme.of(tester.element(find.byType(FilePreviewSheet)))
+        .colorScheme;
+    final notice = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Previewing first 40 lines'),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final decoration = notice.decoration! as BoxDecoration;
+    expect(decoration.color, scheme.bgLayer2);
+    expect(decoration.borderRadius, BorderRadius.circular(kRadiusLg));
+    expect(decoration.boxShadow, DshElevation.prominent(scheme));
   });
 
   testWidgets('a binary file is announced instead of rendered', (tester) async {

@@ -30,6 +30,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/chat/activity_dot.dart';
 import 'package:app/ui/chat/approval_panel.dart';
+import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/reasoning_row.dart';
@@ -221,6 +222,33 @@ Future<void> _pump(
       ),
     ),
   );
+}
+
+/// Opens the detail surface a one-line card holds, by tapping its title line
+/// rather than its trailing action.
+///
+/// The card keeps one line in the dock and its detail opens one surface
+/// deeper (a route for content, a large sheet for a decision), so a test that
+/// wants the detail has to open it. The entrance is animation-driven: pump it
+/// out rather than settling, because the chat surface has animations of its
+/// own that never settle.
+Future<void> _openCardDetail(WidgetTester tester, String title) async {
+  await tester.tap(find.text(title));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+/// Pops the open card-detail route or sheet without answering anything.
+Future<void> _closeCardDetail(WidgetTester tester) async {
+  final finder = find.byType(CardDetailScaffold);
+  if (finder.evaluate().isNotEmpty) {
+    Navigator.of(tester.element(finder)).pop();
+  } else {
+    // A modal sheet dismisses from its barrier.
+    await tester.tapAt(const Offset(10, 10));
+  }
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 void main() {
@@ -658,14 +686,18 @@ void main() {
     // arguments and the settled result.
     expect(find.text('Input'), findsOneWidget);
     expect(find.text('Output'), findsOneWidget);
-    // Approval takes over the composer seat: web takeover card.
+    // Approval takes over the composer seat as one line; the privileged-tool
+    // line and the command are one surface deeper.
     expect(find.text('Waiting for approval'), findsOneWidget);
     expect(find.text('Would run a command'), findsOneWidget);
+    expect(find.text('Tool bash requests privileged execution'), findsNothing);
+    expect(find.text('Message the agent'), findsNothing);
+
+    await _openCardDetail(tester, 'Waiting for approval');
     expect(
       find.text('Tool bash requests privileged execution'),
       findsOneWidget,
     );
-    expect(find.text('Message the agent'), findsNothing);
     // Web compaction row: dim title + count fragment.
     expect(find.text('Context compacted'), findsOneWidget);
     expect(
@@ -677,6 +709,8 @@ void main() {
     expect(find.text('Background jobs'), findsNothing);
     expect(find.text('1 background job running'), findsOneWidget);
 
+    // Allow once answers from the row's own primary action.
+    await _closeCardDetail(tester);
     await tester.tap(find.text('Allow once'));
     await tester.pump();
     expect(
@@ -689,6 +723,8 @@ void main() {
         ),
       ),
     );
+    // Reject lives on the request's surface.
+    await _openCardDetail(tester, 'Waiting for approval');
     await tester.tap(find.text('Reject'));
     await tester.pump();
     expect(
@@ -989,6 +1025,8 @@ void main() {
     // Composer seat stays taken until answered.
     expect(find.byTooltip('Send'), findsNothing);
 
+    // Reject is one surface deeper, on the request's own sheet.
+    await _openCardDetail(tester, 'Waiting for approval');
     await tester.tap(find.text('Reject'));
     await tester.pump();
     expect(
@@ -1040,15 +1078,19 @@ void main() {
       );
       await tester.pump();
 
+      // The card is one line; the paired command opens one surface deeper.
       expect(find.text('Waiting for approval'), findsOneWidget);
       expect(find.text('Clean workspace'), findsOneWidget);
+      expect(find.byType(SelectableText), findsNothing);
+
+      await _openCardDetail(tester, 'Waiting for approval');
       expect(
         find.text('Tool bash requests privileged execution'),
         findsOneWidget,
       );
       expect(
         find.descendant(
-          of: find.byType(ApprovalPanel),
+          of: find.byType(ApprovalDecisionSheet),
           matching: find.text('rm -rf build'),
         ),
         findsOneWidget,
@@ -1058,6 +1100,7 @@ void main() {
         find.widgetWithText(SelectableText, 'rm -rf build'),
       );
       expect(selectable.style?.fontFamily, kCodeFontFamily);
+      await _closeCardDetail(tester);
     },
   );
 
@@ -1100,11 +1143,14 @@ void main() {
 
       expect(find.text('Waiting for approval'), findsOneWidget);
       expect(find.text('Write config'), findsOneWidget);
+
+      await _openCardDetail(tester, 'Waiting for approval');
       expect(
         find.text('Tool write requests privileged execution'),
         findsOneWidget,
       );
       expect(find.byType(SelectableText), findsNothing);
+      await _closeCardDetail(tester);
     },
   );
 
@@ -1624,6 +1670,15 @@ void main() {
       actions,
     );
 
+    // The card's one line: the question, and the chip that opens its answer
+    // surface. No answer seat is on the transcript itself.
+    expect(find.byType(CardDetailRow), findsOneWidget);
+    expect(find.text('Continue?'), findsOneWidget);
+    expect(find.text('Answer'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Submit'), findsNothing);
+
+    await _openCardDetail(tester, 'Continue?');
+
     // Nothing drafted yet: Submit stays disabled.
     final submitButton = find.widgetWithText(FilledButton, 'Submit').first;
     expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
@@ -1637,6 +1692,7 @@ void main() {
 
     await tester.tap(submitButton);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(
       actions,
       contains(
@@ -1648,9 +1704,13 @@ void main() {
         ),
       ),
     );
+    // Answering settles the request, so the surface closes with it and the
+    // reader lands back on the card they opened it from.
+    expect(find.byType(CardDetailRow), findsOneWidget);
 
     // Skip on the last question answers with empty selections.
     actions.clear();
+    await _openCardDetail(tester, 'Continue?');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Skip'));
     await tester.pump();
     expect(
@@ -1699,8 +1759,11 @@ void main() {
     );
 
     // First page: the recommended suffix renders as a badge, the option
-    // number chip leads, and the pager reads 1 / 2.
+    // number chip leads, and the pager reads 1 / 2. All of it is one surface
+    // deeper than the card, which shows only the question.
     expect(find.text('Pick a target'), findsOneWidget);
+    expect(find.text('1 / 2'), findsNothing);
+    await _openCardDetail(tester, 'Pick a target');
     expect(find.text('1 / 2'), findsOneWidget);
     expect(find.text('Recommended'), findsOneWidget);
     expect(find.text('documentation'), findsOneWidget);
@@ -1711,18 +1774,14 @@ void main() {
     await tester.tap(find.text('Code'));
     await tester.pump();
     expect(find.text('2 / 2'), findsOneWidget);
-    expect(find.text('Anything else?'), findsOneWidget);
+    expect(find.text('Anything else?'), findsWidgets);
 
     // Multi-select keeps both options; custom text preserves selections.
     await tester.tap(find.text('a'));
     await tester.pump();
     await tester.tap(find.text('b'));
     await tester.pump();
-    final customField = find.descendant(
-      of: find.byType(QuestionRow),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(customField, 'extra');
+    await tester.enterText(find.byType(TextField).first, 'extra');
     await tester.pump();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
@@ -1787,6 +1846,9 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 400));
+      // The badge rides the recommended option row, which lives on the
+      // decision surface one level under the card.
+      await _openCardDetail(tester, 'Pick a target');
 
       final badge = find.text('Recommended');
       expect(badge, findsOneWidget);
@@ -1800,6 +1862,10 @@ void main() {
       );
       final decoration = container.decoration as BoxDecoration;
       expect(decoration.color, scheme.primaryContainer);
+
+      // The next iteration pumps a fresh tree over the same Navigator, so the
+      // sheet has to come down first.
+      await _closeCardDetail(tester);
     }
   });
 
@@ -1831,15 +1897,15 @@ void main() {
     );
 
     expect(find.text('Describe it'), findsOneWidget);
+    // The card's one summary line is the detail's first line; the rest of the
+    // detail only exists one surface deeper.
     expect(find.text('details here'), findsOneWidget);
+    await _openCardDetail(tester, 'Describe it');
+    expect(find.text('details here'), findsWidgets);
     final submitButton = find.widgetWithText(FilledButton, 'Submit');
     expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
 
-    final field = find.descendant(
-      of: find.byType(QuestionRow),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(field, 'my answer');
+    await tester.enterText(find.byType(TextField).first, 'my answer');
     await tester.pump();
     await tester.tap(submitButton);
     await tester.pump();
@@ -1881,6 +1947,7 @@ void main() {
       actions,
     );
 
+    await _openCardDetail(tester, 'Pick');
     await tester.tap(find.byTooltip('Dismiss all questions'));
     await tester.pump();
     expect(actions, contains(const DismissQuestionAction(requestId: 'rpc-5')));
@@ -1918,6 +1985,7 @@ void main() {
       );
 
       expect(find.text('Which registry?'), findsOneWidget);
+      await _openCardDetail(tester, 'Which registry?');
       await tester.tap(find.text('internal'));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Submit').first);
@@ -1937,7 +2005,7 @@ void main() {
   );
 
   testWidgets(
-    'plan review renders a decision card with approve/decline/discuss',
+    'the plan row opens the document with approve/decline/discuss pinned',
     (tester) async {
       final actions = <ChatAction>[];
       await _pump(
@@ -1954,7 +2022,7 @@ void main() {
                 QuestionItem(
                   id: 'plan-1',
                   question: 'Approve this plan?',
-                  detail: '## Plan\n\nStep one.',
+                  detail: '## Plan\n\nStep one.\n\nStep two.',
                   options: ['Approve', 'Keep planning'],
                   intent: QuestionIntent(
                     kind: 'plan-review',
@@ -1968,19 +2036,33 @@ void main() {
         actions,
       );
 
-      // The strip header reads "Plan review"; the plan renders as markdown.
-      expect(find.text('Plan review'), findsOneWidget);
-      expect(find.textContaining('Step one'), findsOneWidget);
+      // The card is one line: the review's name and the document's first
+      // section as its summary. The document is not on the transcript — that
+      // is the whole point of the pattern — and the primary action stays on
+      // the row so the decision is a thumb away.
+      expect(find.text('Plan ready for review'), findsOneWidget);
+      expect(find.text('Plan'), findsOneWidget);
+      expect(find.text('Step two.'), findsNothing);
       expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
-      expect(find.widgetWithText(OutlinedButton, 'Refuse'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Chat about it'), findsOneWidget);
-      // ComposerBar and StatsLine are suppressed by the plan review takeover
+      // ComposerBar and StatsLine are suppressed by the decision card.
       expect(find.byType(ComposerBar), findsNothing);
       expect(find.byType(StatsLine), findsNothing);
 
-      // Approve answers with the asker's approve label.
+      // Opening the row pushes the document; the whole decision is pinned in
+      // the bottom bar, and opening answers nothing.
+      await _openCardDetail(tester, 'Plan ready for review');
+      expect(find.byType(CardDetailScaffold), findsOneWidget);
+      expect(find.text('Step two.'), findsOneWidget);
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.widgetWithText(OutlinedButton, 'Refuse'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Chat about it'), findsOneWidget);
+      expect(actions, isEmpty);
+
+      // Approve answers with the asker's approve label, and the route returns
+      // to the transcript.
       await tester.tap(find.widgetWithText(FilledButton, 'Approve'));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(
         actions,
         contains(
@@ -1995,11 +2077,14 @@ void main() {
           ),
         ),
       );
+      expect(find.byType(CardDetailScaffold), findsNothing);
 
       // Decline answers with the other option label.
       actions.clear();
+      await _openCardDetail(tester, 'Plan ready for review');
       await tester.tap(find.widgetWithText(OutlinedButton, 'Refuse'));
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
       expect(
         actions,
         contains(
@@ -2017,6 +2102,7 @@ void main() {
 
       // Discuss dismisses the request without answering.
       actions.clear();
+      await _openCardDetail(tester, 'Plan ready for review');
       await tester.tap(find.widgetWithText(TextButton, 'Chat about it'));
       await tester.pump();
       expect(
@@ -2026,7 +2112,7 @@ void main() {
     },
   );
 
-  testWidgets('question card folds to its header strip and back', (
+  testWidgets('the ask card stays one line and opens its decision surface', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -2044,7 +2130,7 @@ void main() {
               QuestionItem(
                 id: 'q1',
                 question: 'Pick',
-                detail: 'Body text',
+                detail: 'Body text\n\nSecond paragraph',
                 options: ['a', 'b'],
               ),
             ],
@@ -2054,26 +2140,32 @@ void main() {
       actions,
     );
 
-    expect(find.textContaining('Body text'), findsOneWidget);
-    expect(find.text('a'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Collapse the card'));
-    await tester.pump();
-
-    // The question stays readable; the detail, the options, and the action
-    // row fold away behind the header strip.
+    // The card is the row: the question and the chip that opens it. Its
+    // summary is the detail's first line and nothing more — the rest of the
+    // detail is one surface deeper, so the transcript never grows a block
+    // that pushes the reader's own reading away.
+    expect(find.byType(CardDetailRow), findsOneWidget);
     expect(find.text('Pick'), findsOneWidget);
-    expect(find.textContaining('Body text'), findsNothing);
+    expect(find.text('Body text'), findsOneWidget);
+    expect(find.text('Second paragraph'), findsNothing);
     expect(find.text('a'), findsNothing);
-    expect(find.byTooltip('Expand the card'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Expand the card'));
-    await tester.pump();
-    expect(find.textContaining('Body text'), findsOneWidget);
+    await _openCardDetail(tester, 'Pick');
+    expect(find.text('Body text'), findsWidgets);
+    expect(find.text('Second paragraph'), findsOneWidget);
     expect(find.text('a'), findsOneWidget);
+
+    // Dismissing returns to the same card, with nothing reset.
+    await _closeCardDetail(tester);
+    expect(find.byType(CardDetailRow), findsOneWidget);
+    expect(find.text('Second paragraph'), findsNothing);
+    expect(find.text('a'), findsNothing);
+    expect(actions, isEmpty);
   });
 
-  testWidgets('plan review folds to its strip and back', (tester) async {
+  testWidgets('the plan row keeps the document off the transcript', (
+    tester,
+  ) async {
     final actions = <ChatAction>[];
     await _pump(
       tester,
@@ -2089,7 +2181,7 @@ void main() {
               QuestionItem(
                 id: 'plan-fold',
                 question: 'Approve this plan?',
-                detail: '## Plan\n\nStep one.',
+                detail: '## Plan\n\nStep one.\n\nStep two.',
                 options: ['Approve', 'Keep planning'],
                 intent: QuestionIntent(kind: 'plan-review', approve: 'Approve'),
               ),
@@ -2100,21 +2192,21 @@ void main() {
       actions,
     );
 
-    expect(find.textContaining('Step one'), findsOneWidget);
+    // The card is the review's name and the document's first line; the
+    // document body is not on the transcript.
+    expect(find.text('Step two.'), findsNothing);
+    expect(find.text('Plan ready for review'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Collapse the card'));
-    await tester.pump();
+    await _openCardDetail(tester, 'Plan ready for review');
+    expect(find.text('Step two.'), findsOneWidget);
 
-    expect(find.text('Plan review'), findsOneWidget);
-    expect(find.textContaining('Step one'), findsNothing);
-    expect(find.widgetWithText(FilledButton, 'Approve'), findsNothing);
-    expect(find.byTooltip('Expand the card'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Expand the card'));
-    await tester.pump();
-    expect(find.textContaining('Step one'), findsOneWidget);
+    // Back returns to the transcript with the card where it was.
+    await _closeCardDetail(tester);
+    expect(find.text('Step two.'), findsNothing);
+    expect(find.text('Plan ready for review'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Approve'), findsOneWidget);
+    expect(actions, isEmpty);
   });
 
   testWidgets('plan review takes precedence over approval in composer dock', (
@@ -2154,8 +2246,8 @@ void main() {
     );
 
     // Precedence 2 (Plan review) wins over Precedence 0 (Approval):
-    expect(find.text('Plan review'), findsOneWidget);
-    expect(find.byType(ApprovalPanel), findsNothing);
+    expect(find.text('Plan ready for review'), findsOneWidget);
+    expect(find.byType(ApprovalRow), findsNothing);
     expect(find.byType(ComposerBar), findsNothing);
   });
 
@@ -2188,10 +2280,16 @@ void main() {
     );
 
     // Three options: the plan-review card cannot express them, so the
-    // generic card owns the request.
-    expect(find.text('Plan review'), findsNothing);
+    // generic card owns the request. Its three options are one surface
+    // deeper, on the decision sheet.
+    expect(find.text('Plan ready for review'), findsNothing);
     expect(find.text('Pick one'), findsOneWidget);
+    expect(find.text('Approve'), findsNothing);
+
+    await _openCardDetail(tester, 'Pick one');
     expect(find.text('Approve'), findsOneWidget);
+    expect(find.text('Maybe'), findsOneWidget);
+    expect(find.text('No'), findsOneWidget);
   });
 
   testWidgets('idle composer sends queue; plan pill stays hidden while off', (

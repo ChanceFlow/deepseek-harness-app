@@ -6,9 +6,11 @@
 /// Mobile adaptations of the web design language: the browsing column
 /// fills the tab on the sidebar fill token, rows grow to 44px touch
 /// targets, hover-revealed row actions stay visible, drag reorder becomes
-/// the row menu's move actions, hover popovers become menu-surface bottom
-/// sheets, and the web dialogs keep their modal-card shape (r24,
-/// bgLayer2, lv3 shadow) as bottom-docked cards and dialogs.
+/// the row menu's move actions, hover popovers become the house menu
+/// surface ([showMenuSheet]), and the web's modal cards keep the pin's
+/// modal chrome (`--dsw-radius-panel`, `--dsw-alias-bg-layer-2`,
+/// `border: 0`, `--dsw-elevation-prominent`) as bottom-docked cards and
+/// dialogs.
 library;
 
 import 'dart:async';
@@ -29,6 +31,7 @@ import '../shared/backend_connection_dot.dart';
 import '../shared/backend_error_text.dart';
 import '../shared/edge_fade.dart';
 import '../shared/error_view.dart';
+import '../shared/menu_sheet.dart';
 import '../shared/session_tree.dart';
 import '../theme/theme.dart';
 import 'workspace_ui_state.dart';
@@ -393,9 +396,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         break;
       }
     }
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
+    return showMenuSheet<void>(
+      context,
       builder: (_) => _WorkspaceActionSheet(
         canMoveUp: position > 0,
         canMoveDown: position < workspaces.length - 1,
@@ -1335,9 +1337,13 @@ class _RowIconButton extends StatelessWidget {
   }
 }
 
-/// Web Menu (figma MenuDropdown) as a bottom sheet: menu surface fill,
-/// r12 card, inverted hairline, lv3 shadow, 4px inner padding; rows are
-/// 44px (web 40px dense) r10 cells with a 16px leading glyph.
+/// Web Menu (figma MenuDropdown) as a bottom sheet: the pin's menu card —
+/// `border: 0`, the `--dsw-alias-border-l1` stroke rebound into
+/// `--dsw-elevation-stroke-color` and `--dsw-elevation-prominent`
+/// (`ui-primitives/Menu.module.css` `.list`, :15-31) at the
+/// `--dsw-radius-lg` corner (`MenuSurface.module.css:3-5`) — which
+/// `showMenuSheet` draws for every menu. Rows are 44px (web 40px dense) r10
+/// cells with a 16px leading glyph.
 class _WorkspaceActionSheet extends StatelessWidget {
   const _WorkspaceActionSheet({
     required this.canMoveUp,
@@ -1357,62 +1363,49 @@ class _WorkspaceActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(kShapeMenuSheet),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: kM3ShadowElevation3,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _MenuRow(
+          icon: Icons.edit_outlined,
+          label: l10n.rename,
+          onTap: () {
+            Navigator.of(context).pop();
+            onRename();
+          },
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _MenuRow(
-              icon: Icons.edit_outlined,
-              label: l10n.rename,
-              onTap: () {
-                Navigator.of(context).pop();
-                onRename();
-              },
-            ),
-            _MenuRow(
-              icon: Icons.delete_outline,
-              label: l10n.deleteWorkspace,
-              isDanger: true,
-              onTap: () {
-                Navigator.of(context).pop();
-                onDelete();
-              },
-            ),
-            const _MenuSeparator(),
-            // Web reorders by drag; touch keeps the move verbs here.
-            _MenuRow(
-              icon: Icons.arrow_upward,
-              label: l10n.moveUp,
-              enabled: canMoveUp,
-              onTap: () {
-                Navigator.of(context).pop();
-                onMoveUp();
-              },
-            ),
-            _MenuRow(
-              icon: Icons.arrow_downward,
-              label: l10n.moveDown,
-              enabled: canMoveDown,
-              onTap: () {
-                Navigator.of(context).pop();
-                onMoveDown();
-              },
-            ),
-          ],
+        _MenuRow(
+          icon: Icons.delete_outline,
+          label: l10n.deleteWorkspace,
+          isDanger: true,
+          onTap: () {
+            Navigator.of(context).pop();
+            onDelete();
+          },
         ),
-      ),
+        const _MenuSeparator(),
+        // Web reorders by drag; touch keeps the move verbs here.
+        _MenuRow(
+          icon: Icons.arrow_upward,
+          label: l10n.moveUp,
+          enabled: canMoveUp,
+          onTap: () {
+            Navigator.of(context).pop();
+            onMoveUp();
+          },
+        ),
+        _MenuRow(
+          icon: Icons.arrow_downward,
+          label: l10n.moveDown,
+          enabled: canMoveDown,
+          onTap: () {
+            Navigator.of(context).pop();
+            onMoveDown();
+          },
+        ),
+      ],
     );
   }
 }
@@ -1495,9 +1488,11 @@ class _MenuSeparator extends StatelessWidget {
   }
 }
 
-/// Web Modal card (figma Dialog 451:18655): r24, bgLayer2 fill, inverted
-/// hairline, lv3 shadow, 24px column, 16px/500 title, trailing capsule
-/// actions.
+/// The pin's modal card (`ui-primitives/Modal.module.css` `.dialog` :33-46):
+/// `--dsw-radius-panel`, `--dsw-alias-bg-layer-2`, `border: 0` and
+/// `--dsw-elevation-prominent` on an outer box, so the half-pixel `border-l4`
+/// ring rides the shadow instead of a layout-consuming border. The column
+/// inside is ours: 24px pads, a title and trailing capsule actions.
 class _DsModalCard extends StatelessWidget {
   const _DsModalCard({
     required this.title,
@@ -1520,10 +1515,9 @@ class _DsModalCard extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 380),
         padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(kShapeSheet),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: kM3ShadowElevation3,
+          color: scheme.bgLayer2,
+          borderRadius: BorderRadius.circular(kRadiusPanel),
+          boxShadow: DshElevation.prominent(scheme),
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -2060,13 +2054,16 @@ class _DirectoryBrowserDialogState extends State<DirectoryBrowserDialog> {
       margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       constraints: BoxConstraints(maxHeight: media.size.height * 0.85),
       decoration: BoxDecoration(
-        // Web Modal card family: layer-2 fill, r24, lv3 shadow.
-        color: scheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(kShapeSheet),
-        ),
-        border: Border.all(color: scheme.outlineVariant),
-        boxShadow: kM3ShadowElevation3,
+        // The pin's modal card, whose chrome this docked phone form keeps:
+        // `--dsw-radius-panel`, `--dsw-alias-bg-layer-2`, `border: 0` and
+        // `--dsw-elevation-prominent` (`ui-primitives/Modal.module.css`
+        // `.dialog`, :33-46), which the directory browser's own card only
+        // narrows (`ui-directory-picker-browse/.../DirectoryBrowser.module.css`
+        // `.dialog.dialog`, :1-14). The 0.5px ring rides the shadow, so the
+        // old `outlineVariant` border and `kM3ShadowElevation3` are gone.
+        color: scheme.bgLayer2,
+        borderRadius: BorderRadius.circular(kRadiusPanel),
+        boxShadow: DshElevation.prominent(scheme),
       ),
       child: Material(
         color: Colors.transparent,

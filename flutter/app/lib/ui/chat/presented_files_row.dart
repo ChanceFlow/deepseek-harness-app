@@ -20,7 +20,7 @@ import 'package:domain/model/timeline_item.dart';
 import 'package:flutter/material.dart';
 
 import 'produced_files.dart';
-import '../theme/theme.dart';
+import 'card_detail.dart';
 
 class PresentedFilesRow extends StatefulWidget {
   const PresentedFilesRow({
@@ -99,9 +99,17 @@ class _PresentedFilesRowState extends State<PresentedFilesRow> {
   }
 }
 
-/// One declared file: a file-type seat, the name over its description, and a
-/// trailing open seat. The whole card is tappable, which is the phone's
-/// equivalent of the reference's full-card preview overlay.
+/// One declared file, as the card → detail pattern's one-line row: the file's
+/// own seat, its name, the model's description under it, and the open chip that
+/// hands the content to the preview surface.
+///
+/// The reference's `PresentedFileCard` keeps a full-body card because its
+/// sidebar is the thing that opens; on a phone the row is the card, and the
+/// file's content belongs to the surface the chip opens —
+/// [showFilePreviewSheet], whose own header records why it is a sheet rather
+/// than a route ("the content opens as a modal surface over the same context
+/// instead of a route push that hides the conversation"). The sheet is owned by
+/// the modal-surface pass and is not edited here.
 class _PresentedFileCard extends StatelessWidget {
   const _PresentedFileCard({required this.file, required this.onOpen});
 
@@ -110,62 +118,19 @@ class _PresentedFileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final name = producedFileBasename(file.path);
     final description = file.description?.trim();
-    final subtitle = description == null || description.isEmpty
+    final summary = description == null || description.isEmpty
         ? _extensionLabel(name, l10n)
         : description;
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kShapeCard),
-        side: BorderSide(color: scheme.outlineVariant, width: 0.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        onTap: onOpen,
-        leading: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(kShapeChip),
-            border: Border.all(color: scheme.outlineVariant, width: 0.5),
-          ),
-          child: Icon(
-            Icons.description_outlined,
-            size: 20,
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        title: Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        trailing: Tooltip(
-          message: l10n.presentedFilesOpenName(file.path),
-          child: TextButton(
-            onPressed: onOpen,
-            child: Text(l10n.presentedFilesOpen),
-          ),
-        ),
-      ),
+    return CardDetailRow(
+      icon: Icons.description_outlined,
+      title: name,
+      summary: summary,
+      openLabel: l10n.presentedFilesOpen,
+      semanticLabel: l10n.presentedFilesOpenName(file.path),
+      onOpen: onOpen,
     );
   }
 
