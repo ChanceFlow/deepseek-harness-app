@@ -1185,7 +1185,6 @@
   "viewFullFile": "Full file",
   "outputLabel": "Output",
   "runStatusRunning": "Running…",
-  "turnStatusWorking": "Deep diving…",
   "runStatusDone": "Done",
   "runStatusFailed": "Failed",
   "pauseGoal": "Pause goal",
@@ -3283,64 +3282,29 @@
       }
     }
   },
-  "turnProcessDeepDiving": "Deep diving",
-  "turnProcessDeepDivingFor": "Deep diving for {duration}",
-  "@turnProcessDeepDivingFor": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "duration": {
-        "type": "String"
-      }
-    }
+  "turnProcessDeepDiving": "Deep diving…",
+  "@turnProcessDeepDiving": {
+    "description": "The running row's label; the app's own wording, not the reference's sentence. The elapsed clock renders beside it as its own element."
   },
-  "turnProcessTook": "Took {duration}",
+  "turnProcessTook": "Completed in ",
   "@turnProcessTook": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "duration": {
-        "type": "String"
-      }
-    }
+    "description": "Settled Turn duration prefix; the localized duration parts are appended after it."
   },
-  "turnProcessWorked": "Worked",
+  "turnProcessWorked": "Completed",
   "turnProcessFailed": "Failed",
   "turnProcessStopped": "Stopped",
   "turnProcessSeparator": " \u00b7 ",
-  "runDurationSeconds": "{seconds}s",
-  "@runDurationSeconds": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "seconds": {
-        "type": "String"
-      }
-    }
+  "runDurationHourUnit": "h ",
+  "@runDurationHourUnit": {
+    "description": "Hours unit of a run duration, including the space that separates it from the next part."
   },
-  "runDurationMinutes": "{minutes}m {seconds}s",
-  "@runDurationMinutes": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "minutes": {
-        "type": "String"
-      },
-      "seconds": {
-        "type": "String"
-      }
-    }
+  "runDurationMinuteUnit": "m ",
+  "@runDurationMinuteUnit": {
+    "description": "Minutes unit of a run duration, including the space that separates it from the next part."
   },
-  "runDurationHours": "{hours}h {minutes}m {seconds}s",
-  "@runDurationHours": {
-    "description": "Localized chat process copy.",
-    "placeholders": {
-      "hours": {
-        "type": "int"
-      },
-      "minutes": {
-        "type": "String"
-      },
-      "seconds": {
-        "type": "String"
-      }
-    }
+  "runDurationSecondUnit": "s",
+  "@runDurationSecondUnit": {
+    "description": "Seconds unit of a run duration."
   },
   "settingsNavAccount": "Account",
   "@settingsNavAccount": {

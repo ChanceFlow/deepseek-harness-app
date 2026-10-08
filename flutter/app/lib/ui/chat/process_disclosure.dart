@@ -7,11 +7,11 @@
 /// [ColorScheme] roles, and its 100ms cross-fades onto [DshMotion].
 library;
 
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/chat/process_activity.dart';
+import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/turn_process.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter/material.dart';
@@ -54,11 +54,12 @@ double processActivityIconSize(ProcessActivity activity) => switch (activity) {
 /// One Turn's process control, wrapping the rows it owns.
 ///
 /// The reference's `TurnProcessNodeView` is a full-width row under a hairline
-/// rule whose label reports the run — `Deep diving for 8s` while it runs,
-/// `Took 2m 03s` / `Stopped` / `Process failed` once it ends — and whose body
-/// holds the Turn's work. A Turn that is still running, was stopped or failed,
-/// or had a human speak inside it keeps its body: the reference's
-/// `turnProcessAlwaysOpen` plus its interleaved-input rule.
+/// rule whose label reports only a settled Turn — `Completed in 2m 3s` /
+/// `Stopped` / `Failed` — and whose body holds the Turn's work; while the Turn
+/// runs there is no control label, because the running row carries the live
+/// state. A Turn that is still running, was stopped or failed, or had a human
+/// speak inside it keeps its body: the reference's `turnProcessAlwaysOpen` plus
+/// its interleaved-input rule.
 class TurnProcessRow extends StatefulWidget {
   const TurnProcessRow({
     required this.section,
@@ -77,13 +78,7 @@ class TurnProcessRow extends StatefulWidget {
 
 class _TurnProcessRowState extends State<TurnProcessRow> {
   late bool _open = widget.section.defaultOpen;
-  Timer? _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncTicker();
-  }
+  bool _hovered = false;
 
   @override
   void didUpdateWidget(covariant TurnProcessRow oldWidget) {
@@ -94,30 +89,22 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
       // folded: the reader has to see what is happening.
       _open = true;
     }
-    _syncTicker();
   }
 
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
+  /// The reference's `.durationNumber`: the code family with tabular figures,
+  /// so the clock does not shift the label's width as its digits change.
+  static const TextStyle _durationNumber = TextStyle(
+    fontFamily: 'monospace',
+    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+  );
 
-  /// The label counts elapsed seconds, so an open Turn re-reads the clock once
-  /// a second — the reference's `LIVE_RUN_CLOCK_INTERVAL_MS`.
-  void _syncTicker() {
-    final ticking =
-        widget.section.facts.alwaysOpen && !widget.section.facts.closed;
-    if (!ticking && _ticker == null) return;
-    if (!ticking) {
-      _ticker?.cancel();
-      _ticker = null;
-      return;
-    }
-    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
+  static TextSpan _labelSpan(TurnProcessLabel label) => TextSpan(
+    children: <InlineSpan>[
+      TextSpan(text: label.prefix),
+      for (final part in label.duration)
+        TextSpan(text: part.text, style: part.numeric ? _durationNumber : null),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -129,58 +116,66 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
     // failed never folds, and neither does one with nothing to reveal.
     final canCollapse = !facts.alwaysOpen && widget.section.hasContent;
     final open = !canCollapse || _open;
-    final label = turnProcessLabel(
-      facts,
-      l10n,
-      nowMs: DateTime.now().millisecondsSinceEpoch,
-    );
+    // Null while the Turn is open: the reference renders no control label
+    // before `turn/end` folds, because the running row carries the live state.
+    final label = turnProcessLabel(facts, l10n);
+    // The reference's `.root:hover` steps the tertiary label tone to the
+    // secondary one; the chevron inherits whichever the label wears.
+    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          button: canCollapse,
-          expanded: canCollapse ? open : null,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: canCollapse ? () => setState(() => _open = !_open) : null,
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: scheme.outlineVariant,
-                      width: 0.5,
+        MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: Semantics(
+            button: canCollapse,
+            expanded: canCollapse ? open : null,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: canCollapse
+                    ? () => setState(() => _open = !_open)
+                    : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: scheme.outlineVariant,
+                        width: 0.5,
+                      ),
                     ),
                   ),
-                ),
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.outline,
-                          height: 24 / 12,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      if (label != null)
+                        Flexible(
+                          child: Text.rich(
+                            _labelSpan(label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: color,
+                              height: 24 / 14,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    if (canCollapse) ...[
-                      const SizedBox(width: 4),
-                      AnimatedRotation(
-                        turns: open ? 0.5 : 0,
-                        duration: DshMotion.durationMicro,
-                        curve: DshMotion.curveStandard,
-                        child: Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 14,
-                          color: scheme.outline,
+                      if (canCollapse) ...[
+                        const SizedBox(width: 4),
+                        AnimatedRotation(
+                          turns: open ? 0.5 : 0,
+                          duration: DshMotion.durationMicro,
+                          curve: DshMotion.curveStandard,
+                          child: Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 14,
+                            color: color,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -204,12 +199,19 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
 /// One process group's header: the category icon, a chevron that fades in over
 /// it on hover or while open, the live or settled label, and — while the group
 /// runs and no detail-free policy is in force — the running one-liner.
+///
+/// The row wears the reference's disclosure chrome: the tertiary label tone at
+/// rest, the secondary one on hover, and a leading box whose glyph and chevron
+/// inherit whichever tone the row wears. The label alone carries the group's
+/// sweep, so the icon stays outside the highlight the way the reference's
+/// `ChatGroupSeat` header keeps its leading box out of the `TextShimmer`.
 class ProcessGroupHeader extends StatefulWidget {
   const ProcessGroupHeader({
     required this.summary,
     required this.closed,
     required this.open,
     required this.onTap,
+    this.sweep,
     super.key,
   });
 
@@ -220,6 +222,10 @@ class ProcessGroupHeader extends StatefulWidget {
   final bool closed;
   final bool open;
   final VoidCallback onTap;
+
+  /// The group's activity clock, or null while the group is settled or motion
+  /// is off. The label is the only thing it sweeps.
+  final AnimationController? sweep;
 
   @override
   State<ProcessGroupHeader> createState() => _ProcessGroupHeaderState();
@@ -247,6 +253,9 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
         ? label
         : '$label${l10n.turnProcessSeparator}$detail';
     final showChevron = _hovered || widget.open;
+    // The reference's `.title:hover` steps the tertiary tone to the secondary
+    // one; the leading box inherits it rather than naming a role of its own.
+    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -258,7 +267,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
           child: InkWell(
             onTap: widget.onTap,
             child: Padding(
-              padding: EdgeInsets.only(bottom: widget.open ? 16 : 0),
+              padding: EdgeInsets.only(bottom: widget.open ? 8 : 0),
               child: Row(
                 children: [
                   // The reference stacks the icon and the chevron in one 16px
@@ -277,7 +286,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
                           child: Icon(
                             processActivityIcon(activity),
                             size: processActivityIconSize(activity),
-                            color: scheme.outline,
+                            color: color,
                           ),
                         ),
                         AnimatedOpacity(
@@ -291,7 +300,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
                             child: Icon(
                               Icons.keyboard_arrow_down,
                               size: 14,
-                              color: scheme.outline,
+                              color: color,
                             ),
                           ),
                         ),
@@ -300,16 +309,17 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
                   ),
                   const SizedBox(width: 6),
                   Flexible(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      // The reference's group title is 14px, one step above its
-                      // 13px Turn-control label; Material has both roles.
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: _hovered
-                            ? scheme.onSurface
-                            : scheme.onSurfaceVariant,
+                    child: SweepHighlight(
+                      controller: widget.sweep,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        // The reference's group title is 14px, one step above
+                        // its 13px Turn-control label; Material has both roles.
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: color,
+                        ),
                       ),
                     ),
                   ),

@@ -14,7 +14,7 @@ derive the next one: [docs/design-standard.md](../../docs/design-standard.md).
   `RadioListTile`/`CheckboxListTile`, `FloatingActionButton`,
   `OutlinedButton`, `IconButton`, `Dialog`. Hand-built chrome or a
   `CustomPainter` carries its reason in a decision note; standing
-  exceptions are markdown, turn folding, and the brand fish logo.
+  exceptions are markdown, turn folding, and the brand marks.
 - **Colors come from `ColorScheme` roles.**
   `Theme.of(context).colorScheme` is the source:
 

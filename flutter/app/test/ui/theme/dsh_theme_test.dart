@@ -175,6 +175,32 @@ void main() {
     );
   });
 
+  test('the deep-diving roles mix the pin palette in both brightnesses', () {
+    final light = DshTheme.light().colorScheme;
+    final dark = DshTheme.dark().colorScheme;
+
+    // The reference's own `color-mix` results, from its static palette steps
+    // (design-platform.css:11-62): light mixes deepseek-500 into blue-950,
+    // dark mixes deepseek-450 into neutral-bluish-400 and blue-300 into
+    // deepseek-400.
+    expect(light.labelDeepDiving.toARGB32(), 0xFF345EBA);
+    expect(light.labelDeepDivingShimmer.toARGB32(), 0xFF243D80);
+    expect(dark.labelDeepDiving.toARGB32(), 0xFF7D9ADF);
+    expect(dark.labelDeepDivingShimmer.toARGB32(), 0xFF8ABCFE);
+
+    // Two brightnesses, two values, and neither is an accent or the old
+    // turn-status glint.
+    expect(light.labelDeepDiving, isNot(equals(dark.labelDeepDiving)));
+    expect(
+      light.labelDeepDivingShimmer,
+      isNot(equals(dark.labelDeepDivingShimmer)),
+    );
+    for (final scheme in <ColorScheme>[light, dark]) {
+      expect(scheme.labelDeepDiving, isNot(equals(scheme.primary)));
+      expect(scheme.labelDeepDivingShimmer, isNot(equals(scheme.onSurface)));
+    }
+  });
+
   test('no deepsuite theme extension is attached', () {
     expect(DshTheme.light().extensions, isEmpty);
     expect(DshTheme.dark().extensions, isEmpty);

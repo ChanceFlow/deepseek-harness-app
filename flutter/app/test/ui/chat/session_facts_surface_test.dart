@@ -481,6 +481,9 @@ void main() {
       expect(find.byType(ScheduleReminderStrip), findsOneWidget);
       expect(find.text('Reminders'), findsOneWidget);
       expect(find.textContaining('2 reminders'), findsOneWidget);
+      // The schedule trigger glyph is the pin's plain clock, not an alarm.
+      expect(find.byIcon(Icons.schedule), findsOneWidget);
+      expect(find.byIcon(Icons.alarm), findsNothing);
 
       await tester.tap(find.text('Reminders'));
       await tester.pumpAndSettle();
@@ -488,6 +491,9 @@ void main() {
       // The fixed-rate record names its interval without rounding.
       expect(find.textContaining('Every 1 hour'), findsOneWidget);
       expect(find.text('Check the build'), findsOneWidget);
+      // Every row wears the same clock, due or not.
+      expect(find.byIcon(Icons.schedule), findsNWidgets(3));
+      expect(find.byIcon(Icons.alarm), findsNothing);
     });
 
     testWidgets('an unreported set renders nothing at all', (tester) async {

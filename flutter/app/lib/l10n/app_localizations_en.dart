@@ -1928,9 +1928,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runStatusRunning => 'Running…';
 
   @override
-  String get turnStatusWorking => 'Deep diving…';
-
-  @override
   String get runStatusDone => 'Done';
 
   @override
@@ -3609,20 +3606,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get turnProcessDeepDiving => 'Deep diving';
+  String get turnProcessDeepDiving => 'Deep diving…';
 
   @override
-  String turnProcessDeepDivingFor(String duration) {
-    return 'Deep diving for $duration';
-  }
+  String get turnProcessTook => 'Completed in ';
 
   @override
-  String turnProcessTook(String duration) {
-    return 'Took $duration';
-  }
-
-  @override
-  String get turnProcessWorked => 'Worked';
+  String get turnProcessWorked => 'Completed';
 
   @override
   String get turnProcessFailed => 'Failed';
@@ -3634,19 +3624,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get turnProcessSeparator => ' · ';
 
   @override
-  String runDurationSeconds(String seconds) {
-    return '${seconds}s';
-  }
+  String get runDurationHourUnit => 'h ';
 
   @override
-  String runDurationMinutes(String minutes, String seconds) {
-    return '${minutes}m ${seconds}s';
-  }
+  String get runDurationMinuteUnit => 'm ';
 
   @override
-  String runDurationHours(int hours, String minutes, String seconds) {
-    return '${hours}h ${minutes}m ${seconds}s';
-  }
+  String get runDurationSecondUnit => 's';
 
   @override
   String get settingsNavAccount => 'Account';

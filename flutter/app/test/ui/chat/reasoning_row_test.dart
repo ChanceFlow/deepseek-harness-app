@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/reasoning_row.dart';
+import 'package:app/ui/chat/sweep_highlight.dart';
 
 import '../../l10n_app.dart';
 
@@ -175,5 +176,86 @@ void main() {
     await tester.tap(find.text('Thought 10s'));
     await tester.pumpAndSettle();
     expect(find.text('my deep thought'), findsOneWidget);
+  });
+
+  testWidgets('the running summary sweeps with the glyph outside it', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      ChatUiState(
+        sessions: const [
+          SessionSummary(id: 's1', title: 'Alpha', blank: false),
+        ],
+        selectedSessionId: 's1',
+        timeline: [
+          TimelineMessage(
+            _message(reasoning: 'weigh the options', streaming: true),
+          ),
+        ],
+      ),
+      [],
+    );
+
+    // One shared sweep over the row's text.
+    final sweep = find.byType(SweepHighlight);
+    expect(sweep, findsOneWidget);
+    expect(tester.widget<SweepHighlight>(sweep).controller, isNotNull);
+
+    // The leading glyph leads the row, outside the sweep; the label and the
+    // summary ride inside it.
+    expect(
+      find.descendant(
+        of: sweep,
+        matching: find.byIcon(Icons.psychology_outlined),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: sweep, matching: find.textContaining('Thinking')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sweep, matching: find.text('weigh the options')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('reduced motion stops the running summary sweep', (tester) async {
+    tester.view.physicalSize = const Size(800, 1280);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: l10nApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: ChatScreen(
+                uiState: ChatUiState(
+                  sessions: const [
+                    SessionSummary(id: 's1', title: 'Alpha', blank: false),
+                  ],
+                  selectedSessionId: 's1',
+                  timeline: [
+                    TimelineMessage(
+                      _message(reasoning: 'weigh the options', streaming: true),
+                    ),
+                  ],
+                ),
+                onAction: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.widget<SweepHighlight>(find.byType(SweepHighlight)).controller,
+      isNull,
+    );
   });
 }

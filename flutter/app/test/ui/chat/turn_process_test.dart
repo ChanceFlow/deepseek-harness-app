@@ -6,16 +6,18 @@
 /// answer, and reports what the Turn is doing or how it ended.
 library;
 
-import 'dart:ui';
-
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/run_duration.dart';
 import 'package:app/ui/chat/timeline_folding.dart';
 import 'package:app/ui/chat/turn_process.dart';
 import 'package:domain/model/chat_message.dart';
 import 'package:domain/model/hook.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../l10n_app.dart';
 
 final AppLocalizations _en = lookupAppLocalizations(const Locale('en'));
 
@@ -63,73 +65,81 @@ TurnProcessFacts _facts({
 
 void main() {
   group('turnProcessLabel', () {
-    // Fixture: TurnProcessNodeView's running state — the reference's
-    // `turnProcess.deepDiving` with no clock yet.
-    test('an open Turn with no clock reads Deep diving', () {
+    // Fixture: TurnProcessNodeView returns null while the Turn's status is not
+    // `closed` — the running row is the live status, so the control carries no
+    // label of its own while the Turn runs.
+    test('an open Turn renders no control label', () {
+      expect(turnProcessLabel(_facts(closed: false), _en), isNull);
       expect(
-        turnProcessLabel(_facts(closed: false), _en, nowMs: null),
-        _en.turnProcessDeepDiving,
+        turnProcessLabel(
+          _facts(closed: false, startedAtEpochMs: 1000, endedAtEpochMs: 9000),
+          _en,
+        ),
+        isNull,
       );
     });
 
-    // Fixture: the live label carries the reference's `formatLiveRunDuration`,
-    // which leaves the trailing unit unpadded.
-    test('an open Turn names how long it has been running', () {
+    // Fixture: `turnProcess.took` with the settled `formatRunDuration` parts —
+    // whole numerals, never zero-padded.
+    test('a finished Turn reads Completed in with unpadded parts', () {
+      final label = turnProcessLabel(
+        _facts(startedAtEpochMs: 1000, endedAtEpochMs: 124000),
+        _en,
+      )!;
+      expect(label.prefix, _en.turnProcessTook);
+      expect(label.duration.map((part) => part.text).join(), '2m 3s');
       expect(
         turnProcessLabel(
-          _facts(closed: false, startedAtEpochMs: 1000),
+          _facts(startedAtEpochMs: 1000, endedAtEpochMs: 3904000),
           _en,
-          nowMs: 9000,
-        ),
-        _en.turnProcessDeepDivingFor(formatLiveRunDuration(8000, _en)),
-      );
-    });
-
-    // Fixture: `turnProcess.took` with the settled `formatRunDuration`.
-    test('a finished Turn reads Took with padded units', () {
-      expect(
-        turnProcessLabel(
-          _facts(startedAtEpochMs: 1000, endedAtEpochMs: 124000),
-          _en,
-          nowMs: null,
-        ),
-        _en.turnProcessTook(formatRunDuration(123000, _en)),
+        )!.duration.map((part) => part.text).join(),
+        '1h 5m 3s',
       );
     });
 
     // Fixture: the reference floors elapsed time at one second, so a Turn that
     // finished in milliseconds still reports a duration rather than 0s.
     test('a sub-second Turn floors to one second', () {
-      expect(
-        turnProcessLabel(
-          _facts(startedAtEpochMs: 1000, endedAtEpochMs: 1200),
-          _en,
-          nowMs: null,
-        ),
-        _en.turnProcessTook(formatRunDuration(1000, _en)),
-      );
+      final label = turnProcessLabel(
+        _facts(startedAtEpochMs: 1000, endedAtEpochMs: 1200),
+        _en,
+      )!;
+      expect(label.duration.map((part) => part.text).join(), '1s');
     });
 
     // Fixture: TurnProcessNodeView with no clock on either side — the settled
-    // fallback is the reference's `turnProcess.worked`.
-    test('a finished Turn with no clock reads Worked', () {
-      expect(
-        turnProcessLabel(_facts(), _en, nowMs: null),
-        _en.turnProcessWorked,
-      );
+    // fallback is the reference's `turnProcess.worked`, with no duration.
+    test('a finished Turn with no clock reads Completed', () {
+      final label = turnProcessLabel(_facts(), _en)!;
+      expect(label.prefix, _en.turnProcessWorked);
+      expect(label.duration, isEmpty);
     });
 
     // Fixture: the reference maps the `turn/end` reason kinds onto
-    // `turnProcess.stopped` and `turnProcess.failed`.
-    test('a stopped Turn reads Stopped and a failed one Process failed', () {
-      expect(
-        turnProcessLabel(_facts(endReason: 'aborted'), _en, nowMs: null),
-        _en.turnProcessStopped,
-      );
-      expect(
-        turnProcessLabel(_facts(endReason: 'error'), _en, nowMs: null),
-        _en.turnProcessFailed,
-      );
+    // `turnProcess.stopped` and `turnProcess.failed`, each replacing the
+    // duration rather than following it.
+    test('a stopped Turn reads Stopped and a failed one Failed', () {
+      final stopped = turnProcessLabel(
+        _facts(
+          endReason: 'aborted',
+          startedAtEpochMs: 1000,
+          endedAtEpochMs: 124000,
+        ),
+        _en,
+      )!;
+      expect(stopped.prefix, _en.turnProcessStopped);
+      expect(stopped.duration, isEmpty);
+
+      final failed = turnProcessLabel(
+        _facts(
+          endReason: 'error',
+          startedAtEpochMs: 1000,
+          endedAtEpochMs: 124000,
+        ),
+        _en,
+      )!;
+      expect(failed.prefix, _en.turnProcessFailed);
+      expect(failed.duration, isEmpty);
     });
   });
 
@@ -462,6 +472,80 @@ void main() {
 
       expect(folded.first, preTurn);
       expect(folded.last, isA<TurnProcessSection>());
+    });
+  });
+
+  group('TurnProcessRow', () {
+    Future<void> pump(WidgetTester tester, TurnProcessFacts facts) async {
+      await tester.pumpWidget(
+        l10nApp(
+          home: Scaffold(
+            body: TurnProcessRow(
+              section: TurnProcessSection(
+                facts: facts,
+                members: const <TurnProcessMember>[],
+              ),
+              buildRow: (row) => const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('a settled control renders the unpadded duration in mono', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        _facts(startedAtEpochMs: 1000, endedAtEpochMs: 124000),
+      );
+
+      // The reference's own prefix, then whole numerals: `2m 3s`, never
+      // `2m 03s`.
+      expect(find.text('Completed in 2m 3s'), findsOneWidget);
+      final rich = tester.widget<Text>(find.text('Completed in 2m 3s'));
+      final spans = (rich.textSpan! as TextSpan).children!.cast<TextSpan>();
+      expect(spans.map((span) => span.text).join(), 'Completed in 2m 3s');
+      // The prefix keeps the label's own type; every numeral wears the code
+      // family with tabular figures, and every localized unit does not.
+      expect(spans.first.style, isNull);
+      var index = 1;
+      for (final part in runDurationParts(123000, _en)) {
+        expect(spans[index].text, part.text);
+        expect(
+          spans[index].style?.fontFamily,
+          part.numeric ? 'monospace' : null,
+        );
+        expect(
+          spans[index].style?.fontFeatures,
+          part.numeric
+              ? const <FontFeature>[FontFeature.tabularFigures()]
+              : null,
+        );
+        index += 1;
+      }
+      expect(index, spans.length);
+    });
+
+    testWidgets('an hours-long settled control stays unpadded', (tester) async {
+      await pump(
+        tester,
+        _facts(startedAtEpochMs: 1000, endedAtEpochMs: 3904000),
+      );
+      expect(find.text('Completed in 1h 5m 3s'), findsOneWidget);
+    });
+
+    testWidgets('an open Turn renders the control with no label', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        _facts(closed: false, startedAtEpochMs: 1000, endedAtEpochMs: 9000),
+      );
+      expect(find.byType(TurnProcessRow), findsOneWidget);
+      expect(find.textContaining('Deep diving'), findsNothing);
+      expect(find.textContaining('Completed'), findsNothing);
     });
   });
 }

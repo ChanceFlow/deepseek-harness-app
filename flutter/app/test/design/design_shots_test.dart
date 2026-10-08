@@ -219,6 +219,15 @@ final List<DesignShot> shots = <DesignShot>[
   // header carries the live label plus the running call's first readable
   // argument — the one line the reference adds over a bare tool name.
   DesignShot(name: 'turn-process-live', state: turnProcessLiveState()),
+  // The same running line in Chinese: the localized label carries its own
+  // spacing around the duration and the same trailing marks — a static fact a
+  // shot can show, unlike reduced motion or an hours-scale duration, which the
+  // widget tests own.
+  DesignShot(
+    name: 'turn-process-live-zh',
+    state: turnProcessLiveState(),
+    locale: const Locale('zh'),
+  ),
   DesignShot(name: 'transcript', state: busyState()),
   // The transcript's one-line marker rows in one column: the context
   // injection, the compaction marker, the slash command and a tool row.

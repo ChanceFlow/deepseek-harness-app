@@ -1854,9 +1854,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get runStatusRunning => '运行中…';
 
   @override
-  String get turnStatusWorking => '正在深入研究…';
-
-  @override
   String get runStatusDone => '已完成';
 
   @override
@@ -3460,20 +3457,13 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get turnProcessDeepDiving => '深度求索中';
+  String get turnProcessDeepDiving => '正在深入研究…';
 
   @override
-  String turnProcessDeepDivingFor(String duration) {
-    return '深度求索中，用时$duration';
-  }
+  String get turnProcessTook => '已完成，用时 ';
 
   @override
-  String turnProcessTook(String duration) {
-    return '用时 $duration';
-  }
-
-  @override
-  String get turnProcessWorked => '已完成工作';
+  String get turnProcessWorked => '已完成';
 
   @override
   String get turnProcessFailed => '处理失败';
@@ -3485,19 +3475,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get turnProcessSeparator => ' · ';
 
   @override
-  String runDurationSeconds(String seconds) {
-    return '$seconds秒';
-  }
+  String get runDurationHourUnit => '小时';
 
   @override
-  String runDurationMinutes(String minutes, String seconds) {
-    return '$minutes分$seconds秒';
-  }
+  String get runDurationMinuteUnit => '分';
 
   @override
-  String runDurationHours(int hours, String minutes, String seconds) {
-    return '$hours小时$minutes分$seconds秒';
-  }
+  String get runDurationSecondUnit => '秒';
 
   @override
   String get settingsNavAccount => '账号';
