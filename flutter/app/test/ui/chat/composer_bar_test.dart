@@ -429,7 +429,9 @@ void main() {
     expect(find.text('result-marker-789'), findsOneWidget);
     expect(
       localState.values[chatExpandedToolsKey('s1')],
-      contains('tool:t1:ToolRunStatus.completed'),
+      // The key is the call's durable identity; its status is not part of it,
+      // so a call that settles keeps the fold it was restored with.
+      contains('tool:t1'),
     );
 
     // A remount with the saved key restores the expansion.

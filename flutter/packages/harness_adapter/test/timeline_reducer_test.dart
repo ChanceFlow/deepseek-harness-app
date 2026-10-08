@@ -21,6 +21,45 @@ JsonMap textBlock(String text) => <String, Object?>{
 };
 
 void main() {
+  group('hook audit pairing', () {
+    JsonMap invoked(int seq, String handlerId) =>
+        event(seq, 'hook/invoked', <String, Object?>{
+          'turn': 1,
+          'point': 'PreToolUse',
+          'dialect': 'claude-code',
+          'handlerId': handlerId,
+        });
+
+    JsonMap result(int seq, String handlerId, String decision) =>
+        event(seq, 'hook/result', <String, Object?>{
+          'turn': 1,
+          'point': 'PreToolUse',
+          'handlerId': handlerId,
+          'decision': decision,
+          'durationMs': 5,
+        });
+
+    test('two invocations of one handler settle in order', () {
+      // One `PreToolUse` handler fires per tool call, so a window can hold two
+      // invocations of it; each result settles the earliest still-open one.
+      final reducer = TimelineReducer('s1')
+        ..reset(<JsonMap>[
+          invoked(1, 'h1'),
+          result(2, 'h1', 'allow'),
+          invoked(3, 'h1'),
+          result(4, 'h1', 'deny'),
+        ]);
+
+      final audits = reducer.snapshot().whereType<TimelineHookAudit>().toList();
+      expect(audits, hasLength(2));
+      expect(
+        audits.map((TimelineHookAudit audit) => audit.audit.decision),
+        <String?>['allow', 'deny'],
+      );
+      expect(audits.map((TimelineHookAudit audit) => audit.seq), <int>[1, 3]);
+    });
+  });
+
   group('live assistant stream (session/follow assistantStream)', () {
     JsonMap chunk(
       int index,

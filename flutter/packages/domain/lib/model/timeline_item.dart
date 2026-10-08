@@ -405,17 +405,22 @@ final class TimelineToolCall extends TimelineItem {
 /// refusal has an audit trail in transcript order instead of reading as an
 /// ordinary tool failure.
 final class TimelineHookAudit extends TimelineItem {
-  const TimelineHookAudit(this.audit);
+  const TimelineHookAudit(this.audit, {this.seq = -1});
 
   final HookAudit audit;
+
+  /// The `hook/invoked` event's own log seq, which is what tells two
+  /// invocations of one handler apart; -1 on a hand-built item that carries
+  /// none (the wire payload has only `handlerId`).
+  final int seq;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is TimelineHookAudit && other.audit == audit);
+      (other is TimelineHookAudit && other.audit == audit && other.seq == seq);
 
   @override
-  int get hashCode => Object.hash('hook', audit);
+  int get hashCode => Object.hash('hook', audit, seq);
 }
 
 /// One member of a durable workflow run.

@@ -1460,7 +1460,20 @@ class _ChatPanelState extends State<ChatPanel> {
       final growth = last is TimelineMessage
           ? ':${last.value.text.length}:${last.value.reasoning?.length ?? 0}'
           : '';
-      buffer.write('${items.length}:${timelineKey(last)}$growth');
+      // Row identity deliberately ignores the tail's transient state, so the
+      // follow signal names it here: a message that stops streaming and a call
+      // that settles are still content changes worth following. The hook audit
+      // is the one place the old key saw more than this: it also carried the
+      // audit's `point`, which no settled `hook/result` ever rewrites, so no
+      // reachable follow changed.
+      final transient = switch (last) {
+        TimelineMessage(:final value) => ':${value.streaming}',
+        TimelineCommand(:final status) => ':$status',
+        TimelineToolCall(:final status) => ':$status',
+        TimelineWorkflowRun(:final status) => ':$status',
+        _ => '',
+      };
+      buffer.write('${items.length}:${timelineKey(last)}$transient$growth');
     }
     if (steering.isNotEmpty) {
       buffer.write('|steered:${steering.length}:${steering.last.itemId}');
@@ -2038,8 +2051,10 @@ class _ChatPanelState extends State<ChatPanel> {
     // disclosure, which renders the rows it owns through the same path a
     // top-level row takes.
     Widget buildRow(Object row) {
+      final Key key = transcriptRowKey(row);
       if (identical(row, _olderHistorySlot)) {
         return OlderHistoryRow(
+          key: key,
           isLoading: uiState.isLoadingOlder,
           onLoadOlder: () {
             _recordScrollAnchor();
@@ -2050,14 +2065,15 @@ class _ChatPanelState extends State<ChatPanel> {
       }
       if (row is TurnProcessSection) {
         return TurnProcessRow(
-          key: ValueKey('turn-process:${row.facts.turn}'),
+          key: key,
           section: row,
           buildRow: buildRow,
+          expansion: _sessionState,
         );
       }
       if (row is TimelineActivityGroup) {
         return ActivityGroupRow(
-          key: ValueKey('activity-group:${row.id}:${row.entries.length}'),
+          key: key,
           group: row,
           onAction: widget.onAction,
           loadAttachment: widget.loadAttachment,
@@ -2069,7 +2085,7 @@ class _ChatPanelState extends State<ChatPanel> {
       }
       if (row is TimelineItem) {
         return TimelineRow(
-          key: ValueKey(timelineKey(row)),
+          key: key,
           item: row,
           onAction: widget.onAction,
           loadAttachment: widget.loadAttachment,
@@ -2097,7 +2113,7 @@ class _ChatPanelState extends State<ChatPanel> {
       }
       if (identical(row, _turnStatusSlot)) {
         return RunningStatusRow(
-          key: const ValueKey('turn-status'),
+          key: key,
           startedAtEpochMs: runningTurnStart,
           showDivider: _carriesOutput(groupedItems.lastOrNull),
         );
@@ -2107,6 +2123,12 @@ class _ChatPanelState extends State<ChatPanel> {
       return const SizedBox.shrink();
     }
 
+    // The list matches its children by row identity, not by index: a history
+    // page prepended above, or any row inserted anywhere, moves the rows below
+    // it without recycling their elements — so each keeps the fold, the clock
+    // and the scroll it holds.
+    final Map<Key, int> rowIndexByKey = indexRowsByKey(rows);
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kReadingMeasure),
@@ -2114,6 +2136,7 @@ class _ChatPanelState extends State<ChatPanel> {
           controller: _timelineScroll,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           itemCount: rows.length,
+          findItemIndexCallback: (Key key) => rowIndexByKey[key],
           separatorBuilder: (_, index) => SizedBox(
             height: _gapAfter(
               rows[index],
@@ -3363,11 +3386,32 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
   bool get _hasFailure =>
       widget.group.calls.any((call) => call.status == ToolRunStatus.failed);
 
+  /// Whether the reader has toggled this fold, so a restore landing late cannot
+  /// undo the tap that came after it.
+  bool _toggled = false;
+
+  String get _expansionKey => 'activity-group:${widget.group.id}';
+
   @override
   void initState() {
     super.initState();
     if (_hasFailure && !_isRunning) _expanded = true;
     if (_isRunning) _sweep.repeat();
+    final expansion = widget.expansion;
+    if (expansion != null) {
+      unawaited(
+        expansion.expanded(_expansionKey).then((restored) {
+          if (!mounted || _toggled || restored == _expanded) return;
+          setState(() => _expanded = restored);
+        }),
+      );
+    }
+  }
+
+  void _toggle() {
+    _toggled = true;
+    setState(() => _expanded = !_expanded);
+    unawaited(widget.expansion?.setExpanded(_expansionKey, _expanded));
   }
 
   @override
@@ -3400,6 +3444,9 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
     final entries = widget.group.entries;
     final calls = widget.group.calls;
     final thought = widget.group.thought;
+    // The member list is a second row list, and a duplicate identity inside it
+    // bleeds state exactly as one at the top level does.
+    indexRowsByKey(entries);
 
     // The group's ranked work and the one line it is doing now: the reference
     // grouping's own `processActivity` model drives both the settled title
@@ -3423,7 +3470,7 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
           closed: widget.group.closed,
           open: _expanded,
           sweep: running && !DshMotion.isReducedMotion(context) ? _sweep : null,
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: _toggle,
         ),
         // The phase divides from what follows with the header's own 8px
         // gap; the transcript's rows carry no rules of their own.
@@ -3449,7 +3496,7 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
                       if (i > 0) const SizedBox(height: 4),
                       switch (entries[i]) {
                         final TimelineToolCall call => ToolCallRow(
-                          key: ValueKey(timelineKey(call)),
+                          key: transcriptRowKey(call),
                           call: call,
                           sessionId: widget.sessionId,
                           loadAttachment: widget.loadAttachment,
@@ -3459,14 +3506,14 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
                         final TimelineContextInjection injection => Material(
                           type: MaterialType.transparency,
                           child: ContextInjectionRow(
-                            key: ValueKey(timelineKey(injection)),
+                            key: transcriptRowKey(injection),
                             injection: injection,
                           ),
                         ),
                         TimelineMessage(:final value) => Material(
                           type: MaterialType.transparency,
                           child: ReasoningRow(
-                            key: ValueKey(timelineKey(entries[i])),
+                            key: transcriptRowKey(entries[i]),
                             text: value.reasoning ?? '',
                             running: value.streaming,
                             elapsedDuration: value.reasoningDuration,
@@ -7603,22 +7650,96 @@ class ModeChip extends StatelessWidget {
   }
 }
 
+/// One timeline item's durable identity: its kind and its own id.
+///
+/// Never its position, and never its transient state: a message that stops
+/// streaming and a call that settles are the same row, and an element keyed on
+/// the status would be recycled — losing the fold, the scroll or the clock it
+/// holds — every time the status moved.
 String timelineKey(TimelineItem item) => switch (item) {
-  TimelineMessage(:final value) => 'message:${value.id}:${value.streaming}',
+  // One wire step renders as two rows when it reasoned and answered: the
+  // thought (empty text) and the reply. They share the step's id, so the row
+  // kind is part of the identity — otherwise the two rows collide, and the
+  // second would take the first's element.
+  TimelineMessage(:final value)
+      when value.text.trim().isEmpty &&
+          (value.reasoning?.trim().isNotEmpty ?? false) =>
+    'reasoning:${value.id}',
+  TimelineMessage(:final value) => 'message:${value.id}',
   TimelineTurnBoundary(:final turn) => 'turn:$turn',
   TimelineCompaction(:final id) => 'compaction:$id',
-  TimelineCommand(:final commandId, :final status) =>
-    'command:$commandId:$status',
+  TimelineCommand(:final commandId) => 'command:$commandId',
   TimelineContextInjection(:final id) => 'context:$id',
-  TimelineToolCall(:final id, :final status) => 'tool:$id:$status',
+  TimelineToolCall(:final id) => 'tool:$id',
   TimelineApprovalRequest(:final requestId) => 'approval:$requestId',
   TimelineQuestionRequest(:final requestId) => 'question:$requestId',
   TimelineQueue() => 'queue',
   TimelineJobs() => 'jobs',
-  TimelineHookAudit(:final audit) => 'hook:${audit.handlerId}:${audit.point}',
-  TimelineWorkflowRun(:final runId, :final status) => 'workflow:$runId:$status',
+  // The envelope seq of the `hook/invoked` event is the one per-invocation
+  // discriminator the wire carries: the payload has only `handlerId`, which two
+  // invocations of one handler inside a window would share, and the result path
+  // settles the earliest still-unsettled invocation rather than the first by
+  // `handlerId`. A hand-built item without a seq falls back to the id.
+  TimelineHookAudit(:final audit, :final seq) =>
+    seq >= 0 ? 'hook:$seq' : 'hook:${audit.handlerId}',
+  TimelineWorkflowRun(:final runId) => 'workflow:$runId',
   TimelineError(:final id) => 'error:$id',
 };
+
+/// The element key of one rendered transcript row.
+///
+/// The list matches children by this key rather than by index, so an insert
+/// above keeps every element below — and the fold, the clock and the timer each
+/// of those elements holds — instead of recycling them.
+Key transcriptRowKey(Object row) {
+  if (identical(row, _olderHistorySlot)) {
+    return const ValueKey<String>('older-history');
+  }
+  if (identical(row, _turnStatusSlot)) {
+    return const ValueKey<String>('turn-status');
+  }
+  if (row is TurnProcessSection) {
+    // The block's ordinal in the window, not its Turn number: a page that
+    // reaches the boundary turns an implicit block into turn 1 without adding
+    // one, and a key that followed the number would remount the block and every
+    // fold inside it.
+    return ValueKey<String>('turn-process:${row.windowOrdinal}');
+  }
+  // The phase's own id (its first member's), never its entry count: a phase
+  // that gains a member is the same fold.
+  if (row is TimelineActivityGroup) {
+    return ValueKey<String>('activity-group:${row.id}');
+  }
+  if (row is TimelineItem) return ValueKey<String>('item:${timelineKey(row)}');
+  if (row is SessionQueueItem) {
+    return ValueKey<String>('steering:${row.itemId}');
+  }
+  return ValueKey<String>('row:${row.runtimeType}');
+}
+
+/// Indexes rendered rows by their identity key, failing loud when two rows
+/// share one.
+///
+/// A shared identity means the list hands the second row the first row's
+/// element, so its fold, its clock or its scroll bleeds across the pair; a
+/// silent mismatch is worse than a loud one, and this is the one place both the
+/// transcript and a group's member list can notice it.
+Map<Key, int> indexRowsByKey(List<Object> rows) {
+  final Map<Key, int> index = <Key, int>{};
+  for (var i = 0; i < rows.length; i++) {
+    final Key key = transcriptRowKey(rows[i]);
+    final int? seenAt = index[key];
+    if (seenAt != null) {
+      throw FlutterError(
+        'Two transcript rows share the identity $key:\n'
+        '  row $seenAt: ${rows[seenAt]}\n'
+        '  row $i: ${rows[i]}',
+      );
+    }
+    index[key] = i;
+  }
+  return index;
+}
 
 /// Ledger-style turn divider: a left-aligned micro label (14px hairline
 /// tick + letterspaced caption text) marking where a turn begins — quiet

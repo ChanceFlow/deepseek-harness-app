@@ -78,9 +78,21 @@ final class TurnProcessMember {
 /// where it was logged. Collapsing drops the rows marked [TurnProcessMember.folds]
 /// and keeps the rest, so the reader's own words and the answer never move.
 final class TurnProcessSection {
-  const TurnProcessSection({required this.facts, required this.members});
+  const TurnProcessSection({
+    required this.facts,
+    required this.members,
+    this.windowOrdinal = 0,
+  });
 
   final TurnProcessFacts facts;
+
+  /// The Turn block's ordinal from the top of the loaded window.
+  ///
+  /// The row key uses this rather than [TurnProcessFacts.turn]: a page that
+  /// reaches the Turn's boundary turns an implicit block into turn 1 without
+  /// adding a block, and a key that followed the number would remount the whole
+  /// block — and every fold inside it.
+  final int windowOrdinal;
 
   final List<TurnProcessMember> members;
 
@@ -137,12 +149,14 @@ bool isFoldableProcessRow(Object row) => switch (row) {
 /// could not place) pass through untouched.
 List<Object> foldTurnProcesses(List<Object> rows) {
   final out = <Object>[];
+  var sections = 0;
   var section = <Object>[];
   var turnStart = <TimelineItem>[];
 
   void flush() {
     if (section.isNotEmpty) {
-      out.add(_sectionFor(turnStart, section));
+      out.add(_sectionFor(turnStart, section, sections));
+      sections += 1;
       section = <Object>[];
       turnStart = <TimelineItem>[];
     }
@@ -168,6 +182,7 @@ List<Object> foldTurnProcesses(List<Object> rows) {
 TurnProcessSection _sectionFor(
   List<TimelineItem> boundaries,
   List<Object> rows,
+  int windowOrdinal,
 ) {
   final boundary = boundaries.first as TimelineTurnBoundary;
   // A phase card hides its members behind its own fold, but the members are
@@ -206,6 +221,7 @@ TurnProcessSection _sectionFor(
   return TurnProcessSection(
     facts: facts,
     members: List<TurnProcessMember>.unmodifiable(members),
+    windowOrdinal: windowOrdinal,
   );
 }
 
