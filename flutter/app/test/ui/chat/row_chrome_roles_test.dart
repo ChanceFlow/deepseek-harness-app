@@ -271,7 +271,9 @@ void main() {
         _scheme.labelTertiary,
       );
 
-      await _hover(tester, find.byType(ReasoningRow));
+      // The row's hover area is its 24px line, so hover the title inside it:
+      // the disclosure's root box stretches to the route.
+      await _hover(tester, find.text('Think'));
       expect(summaryColor(), _scheme.labelSecondary);
       expect(
         tester.widget<Text>(find.text('Think')).style?.color,

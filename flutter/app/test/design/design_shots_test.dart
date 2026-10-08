@@ -31,6 +31,7 @@ import 'package:app/notifications/session_notice.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
+import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
@@ -722,6 +723,26 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'subagents-child',
     host: (theme, locale) =>
         _subagentsHost(theme, locale, subagentsChildState()),
+  ),
+  // The house menu material over the transcript. The pin draws a menu as a
+  // translucent fill on a `blur(40px) saturate(150%)` backdrop
+  // (`MenuSurface.module.css:25-31`), and the fill's 58% / 45% alpha is what
+  // makes the blur load-bearing: the transcript behind the panel has to read
+  // through it. The shot exists for that read-through — without the backdrop
+  // the fill is a flat see-through panel.
+  // The stats sheet is the tall one — it reaches up over the transcript's own
+  // lines, which is the only way a blur can be judged: the shot has to show
+  // text reading through the panel, not a card floating over empty page.
+  DesignShot(
+    name: 'menu-material',
+    state: busyState(),
+    act: (tester) async {
+      // The composer's stats line opens the house sheet (`stats_line.dart`);
+      // the model seat (`model_select.dart`) opens the same material at its
+      // content height.
+      await tester.tap(find.byType(StatsLine));
+      await settle(tester);
+    },
   ),
 ];
 

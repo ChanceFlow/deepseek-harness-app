@@ -113,8 +113,15 @@ void main() {
         expect(find.text('Context compacted'), findsOneWidget);
         expect(find.text('Compaction summary unavailable'), findsOneWidget);
 
-        final tile = tester.widget<ExpansionTile>(find.byType(ExpansionTile));
-        expect(tile.enabled, isFalse);
+        // A marker with nothing to open carries no chevron and no toggle
+        // (`DisclosureRow`'s `expandable` controls both, :41-58).
+        expect(
+          find.descendant(
+            of: find.byType(CompactionRow),
+            matching: find.byIcon(Icons.keyboard_arrow_down),
+          ),
+          findsNothing,
+        );
 
         // ZH
         await tester.pumpWidget(

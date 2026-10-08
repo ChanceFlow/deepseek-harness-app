@@ -17,7 +17,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
-import 'process_disclosure.dart';
+import 'disclosure_row.dart';
 import 'sweep_highlight.dart';
 
 /// The label a thought row carries: a live "Thinking 4s" while it streams, a
@@ -66,7 +66,6 @@ class ReasoningRow extends StatefulWidget {
 class _ReasoningRowState extends State<ReasoningRow>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
-  bool _hovered = false;
 
   /// The row's activity clock. [SweepHighlight] reads the pinned
   /// [kSweepCycle] off this clock's elapsed time, so the controller only has
@@ -284,54 +283,32 @@ class _ReasoningRowState extends State<ReasoningRow>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-    // The reference's disclosure row wears the tertiary label tone at rest and
-    // steps to the secondary one on hover; its leading glyph, title, summary
-    // and chevron all inherit whichever tone the row wears.
-    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Semantics(
-        label: widget.running ? l10n.semanticsRunning : null,
-        // One line of text, one line of row — the stock 24px chevron would
-        // otherwise set the height (see the tool row). The icon theme carries
-        // the row's tone to that chevron, which sits outside the label line.
-        child: IconTheme.merge(
-          data: IconThemeData(size: 18, color: color),
-          child: widget.inline
-              // The activity card already opened for this phase: the thought
-              // shows its label and text with no disclosure of its own.
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _labelRow(context, showPreview: false, color: color),
-                    _body(context),
-                  ],
-                )
-              : flatInkOverlay(
-                  context,
-                  ExpansionTile(
-                    // Native expansion mirrors into _expanded so the collapsed
-                    // summary hides once the body opens (web disclosure
-                    // contract).
-                    onExpansionChanged: (expanded) =>
-                        setState(() => _expanded = expanded),
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    minTileHeight: 30,
-                    shape: const Border(),
-                    collapsedShape: const Border(),
-                    tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-                    // No `childrenPadding`: the body carries the reference's
-                    // own 22px indent, so the standalone disclosure and the
-                    // inline card lay the text out the same way.
-                    title: _labelRow(context, showPreview: true, color: color),
-                    children: [_body(context)],
-                  ),
-                ),
-        ),
-      ),
+    if (widget.inline) {
+      // The activity card already opened for this phase: the thought shows its
+      // label and text with no disclosure of its own, in the row's resting
+      // tone.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _labelRow(
+            context,
+            showPreview: false,
+            color: Theme.of(context).colorScheme.labelTertiary,
+          ),
+          _body(context),
+        ],
+      );
+    }
+    // The pin's disclosure chrome: a 24px line whose tone steps on hover, with
+    // the chevron only while the row can open (`DisclosureRow.module.css`
+    // :19-28, :47-58).
+    return DisclosureRow(
+      open: _expanded,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      semanticLabel: widget.running ? l10n.semanticsRunning : null,
+      header: (BuildContext context, Color tone) =>
+          _labelRow(context, showPreview: true, color: tone),
+      body: _body(context),
     );
   }
 }

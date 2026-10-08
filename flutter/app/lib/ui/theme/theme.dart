@@ -320,6 +320,15 @@ extension DshSchemeColors on ColorScheme {
           blue: 74 / 255,
         );
 
+  /// [menuSurfaceFill] over the page it would have blurred: the fill
+  /// alpha-composited onto [bgBase].
+  ///
+  /// The pin only ever paints the fill over `--dsw-menu-backdrop-filter`
+  /// (`MenuSurface.module.css:27`), so its 58% / 45% alpha assumes a blur behind
+  /// it. A surface that cannot blur — Material's `PopupMenuRoute` takes no
+  /// backdrop hook — wears this composite instead of a see-through panel.
+  Color get menuSurfaceOpaque => Color.alphaBlend(menuSurfaceFill, bgBase);
+
   /// `--dsw-alias-button-floating-fill` (:196 / :314): the scroll-to-bottom
   /// pill's fill — the page in light, bluish-850 (:71) in dark.
   Color get buttonFloatingFill =>
@@ -856,16 +865,50 @@ class DshTheme {
         thickness: 1,
         space: 1,
       ),
+      // Material's `PopupMenuRoute` takes a single elevation and no backdrop
+      // hook, so it cannot carry the pin's `--dsw-elevation-prominent` (a
+      // stroke plus two soft layers, `Menu.module.css:16-18`) or the menu
+      // blur. What it can carry is the material: the fill over the page
+      // ([DshSchemeColors.menuSurfaceOpaque], since a route that cannot blur
+      // cannot use the translucent fill), the `border-l1` hairline the menu
+      // rebinds its elevation stroke to (`Menu.module.css:17`) through the
+      // shape's side, the pin's `--dsw-radius-lg` menu corner
+      // (`MenuSurface.module.css:3-5`), and no Material shadow at all —
+      // `elevation: 0` with a transparent `shadowColor`, so nothing stacks
+      // under a surface that has none. A menu that needs the three layers goes
+      // through `showMenuSheet`, which draws them.
       popupMenuTheme: PopupMenuThemeData(
-        elevation: 3,
-        // The framework's stock shadow is opaque black at full strength,
-        // which reads as a hard outline around a small menu; the panel
-        // lifts on the same soft shadow the dock uses.
-        shadowColor: scheme.shadow.withValues(alpha: 0.28),
-        color: scheme.surfaceContainerHigh,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        color: scheme.menuSurfaceOpaque,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(kShapeCard),
+          borderRadius: BorderRadius.circular(kRadiusLg),
+          side: BorderSide(color: scheme.borderL1, width: 0.5),
+        ),
+      ),
+      // The Material 3 menu family (`MenuAnchor`) reads `MenuStyle`, not
+      // `PopupMenuThemeData`, and shares the popup's limit: a single elevation
+      // and no backdrop hook. This is the same partial material for a call site
+      // that does not pass its own `style:` — a call site that does (the
+      // context ring, `context_ring.dart`) still wins, and only the house
+      // sheet carries the blur and the soft layers.
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(
+            scheme.menuSurfaceOpaque,
+          ),
+          elevation: const WidgetStatePropertyAll<double>(0),
+          shadowColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+            Colors.transparent,
+          ),
+          shape: WidgetStatePropertyAll<OutlinedBorder>(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(kRadiusLg),
+              side: BorderSide(color: scheme.borderL1, width: 0.5),
+            ),
+          ),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(

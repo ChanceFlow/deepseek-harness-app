@@ -329,6 +329,15 @@ final List<_Alias> _aliases = <_Alias>[
     dark: _rgba(67, 69, 74, 0.45),
   ),
   (
+    // The fill over the page it would have blurred: a surface that cannot
+    // carry `menuBackdropFilter()` (Material's popup route) wears this.
+    name: 'menuSurfaceOpaque',
+    pin: 'design-platform.css:271 / :389 over :167 / :285',
+    read: (scheme) => scheme.menuSurfaceOpaque,
+    light: Color.alphaBlend(_rgba(248, 249, 250, 0.58), _bluish00),
+    dark: Color.alphaBlend(_rgba(67, 69, 74, 0.45), _bluish950),
+  ),
+  (
     name: 'buttonFloatingFill',
     pin: 'design-platform.css:196 / :314',
     read: (scheme) => scheme.buttonFloatingFill,

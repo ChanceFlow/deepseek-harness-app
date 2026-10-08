@@ -756,7 +756,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('a running tool row carries the sweep and the activity dot', (
+  testWidgets('a running tool row carries the sweep and its business glyph', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -805,10 +805,26 @@ void main() {
     // settles: expand with one frame.
     await tester.pump();
 
-    // Running and settled share the one 14px leading geometry — dot, then
-    // check — and the timeline body wears no spinner anywhere.
-    expect(find.byType(ActivityDot), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    // The pin's tool rows carry no status mark: each leads with its own
+    // business glyph (`GenericToolCard.tsx:17-25`) and the run state is
+    // colour-only (`ToolRow.tsx:104-113`), so no dot and no check ride the
+    // leading slot and the body wears no spinner anywhere.
+    expect(find.byType(ActivityDot), findsNothing);
+    expect(find.byIcon(Icons.check), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(ToolCallRow),
+        matching: find.byIcon(Icons.terminal),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(ToolCallRow),
+        matching: find.byIcon(Icons.description_outlined),
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(CircularProgressIndicator), findsNothing);
     // The sweep is the only running motion: the card's own header glares while
     // a call is in flight, and so does the running call's row.

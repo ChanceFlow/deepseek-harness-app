@@ -299,4 +299,43 @@ void main() {
     );
     expect(builder, isA<MaterialApp>());
   });
+
+  group('menu chrome', () {
+    // The pin's menu material is a translucent fill on a blurred page plus
+    // `--dsw-elevation-prominent` (`Menu.module.css:16-18`,
+    // `MenuSurface.module.css:25-31`). The popup and Material 3 menu families
+    // have neither a backdrop hook nor a layered shadow, so they carry the
+    // material's fill composite, its `border-l1` stroke and the pin's radius,
+    // and drop Material's own shadow — the house `showMenuSheet` carries the
+    // rest.
+    test('the popup family wears the material, not a Material shadow', () {
+      final scheme = DshTheme.light().colorScheme;
+      final popup = DshTheme.light().popupMenuTheme;
+      expect(popup.elevation, 0);
+      expect(popup.shadowColor, Colors.transparent);
+      expect(popup.surfaceTintColor, Colors.transparent);
+      expect(popup.color, scheme.menuSurfaceOpaque);
+      final shape = popup.shape! as RoundedRectangleBorder;
+      expect(shape.borderRadius, BorderRadius.circular(kRadiusLg));
+      expect(shape.side, BorderSide(color: scheme.borderL1, width: 0.5));
+    });
+
+    test('the Material 3 menu family gets the same default', () {
+      final scheme = DshTheme.dark().colorScheme;
+      final style = DshTheme.dark().menuTheme.style!;
+      expect(style.elevation?.resolve(const <WidgetState>{}), 0);
+      expect(
+        style.shadowColor?.resolve(const <WidgetState>{}),
+        Colors.transparent,
+      );
+      expect(
+        style.backgroundColor?.resolve(const <WidgetState>{}),
+        scheme.menuSurfaceOpaque,
+      );
+      final shape =
+          style.shape?.resolve(const <WidgetState>{}) as RoundedRectangleBorder;
+      expect(shape.borderRadius, BorderRadius.circular(kRadiusLg));
+      expect(shape.side, BorderSide(color: scheme.borderL1, width: 0.5));
+    });
+  });
 }
