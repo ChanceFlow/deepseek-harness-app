@@ -237,7 +237,11 @@ def page(www: Path, notes: Path | None) -> str:
             f"<figure><figcaption><span class='tag now'>this pass</span>"
             f"</figcaption><img src='{now}' alt='{safe} now'></figure></div>"
         )
-    return TEMPLATE.format(notes=notes_html(notes), figures="\n".join(figures))
+    return TEMPLATE.format(
+        notes=notes_html(notes),
+        motion=motion_html(www),
+        figures="\n".join(figures),
+    )
 
 
 TEMPLATE = """<!doctype html>
@@ -297,11 +301,37 @@ TEMPLATE = """<!doctype html>
 <main>
   <h1>DSH Mobile · design review</h1>
   {notes}
+  {motion}
   {figures}
 </main>
 </body>
 </html>
 """
+
+
+def motion_html(www: Path) -> str:
+    """Links the captured motion, when a capture has been published.
+
+    A still cannot show a sway or a sweep, so the running row's motion is
+    captured as frames and assembled outside this script. Without this section
+    the captures exist but nothing on the page can reach them.
+    """
+    candidates = (
+        ("running row, moving", "motion/running-row.gif"),
+        ("running row, reduced motion (must be still)", "motion/running-row-still.gif"),
+        ("tail at 8x, moving", "motion/running-tail-zoom.gif"),
+        ("tail at 8x, reduced motion", "motion/running-tail-zoom-still.gif"),
+    )
+    links = [(name, rel) for name, rel in candidates if (www / rel).exists()]
+    if not links:
+        return ""
+    items = "\n".join(f"    <li><a href='{rel}'>{name}</a></li>" for name, rel in links)
+    return (
+        "  <h2>Motion</h2>\n"
+        "  <p>A still cannot show the sway or the sweep; "
+        "<a href='motion/'>all captures</a>.</p>\n"
+        f"  <ul class='rest'>\n{items}\n  </ul>"
+    )
 
 
 def main() -> int:
