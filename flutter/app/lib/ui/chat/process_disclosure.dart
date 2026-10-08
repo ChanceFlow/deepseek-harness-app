@@ -104,8 +104,17 @@ class TurnProcessRow extends StatefulWidget {
 }
 
 class _TurnProcessRowState extends State<TurnProcessRow> {
-  late bool _open = widget.section.defaultOpen;
+  /// The reader's own choice for this Turn, or null while the transcript view
+  /// still decides. Keeping it null is what lets a mode change re-fold the
+  /// Turns the reader never touched while every override stands.
+  bool? _override;
   bool _hovered = false;
+
+  /// The state the body renders in: a Turn that must stay visible never folds,
+  /// the reader's override outranks the mode, and the mode decides the rest.
+  bool get _open =>
+      widget.section.facts.alwaysOpen ||
+      (_override ?? widget.section.defaultOpen);
 
   /// Set once the reader toggles, so a restore that lands late cannot undo the
   /// tap that came after it.
@@ -119,21 +128,21 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
     _restoreExpansion();
   }
 
-  /// Reads the stored fold once per mount; no entry leaves [defaultOpen].
+  /// Reads the stored fold once per mount; no entry leaves the mode's default.
   void _restoreExpansion() {
     final expansion = widget.expansion;
     if (expansion == null) return;
     unawaited(
       expansion.expanded(_expansionKey).then((restored) {
         if (!mounted || _toggled || restored == _open) return;
-        setState(() => _open = restored);
+        setState(() => _override = restored);
       }),
     );
   }
 
   void _toggle() {
     _toggled = true;
-    setState(() => _open = !_open);
+    setState(() => _override = !_open);
     unawaited(widget.expansion?.setExpanded(_expansionKey, _open));
   }
 
@@ -143,8 +152,9 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
     if (!oldWidget.section.facts.alwaysOpen &&
         widget.section.facts.alwaysOpen) {
       // A Turn that starts running again — or was stopped — cannot stay
-      // folded: the reader has to see what is happening.
-      _open = true;
+      // folded: the reader has to see what is happening. The opening is the
+      // reader's state from here, the way a manual open would be.
+      _override = true;
     }
   }
 

@@ -98,6 +98,7 @@ import 'process_activity.dart';
 import 'disclosure_row.dart';
 import '../shared/menu_material.dart';
 import 'process_disclosure.dart';
+import 'transcript_view_mode.dart';
 import 'turn_process.dart';
 import 'tool_row_model.dart';
 import 'running_status_row.dart';
@@ -182,6 +183,12 @@ class ChatRoute extends ConsumerWidget {
       return backend?.baseUri.authority ?? resolved;
     }();
     final reconnectUri = backend?.baseUri;
+    // The Host's transcript view mode, and the policy it selects. A Host that
+    // has not answered yet reads as the client default, so the transcript
+    // keeps today's fold until the document says otherwise.
+    final transcriptView =
+        ref.watch(transcriptViewModeProvider(resolved)).value ??
+        kDefaultTranscriptViewMode;
     return ref
         .watch(chatUiStateProvider(resolved))
         .when(
@@ -200,6 +207,7 @@ class ChatRoute extends ConsumerWidget {
               Expanded(
                 child: ChatScreen(
                   uiState: uiState,
+                  presentation: presentationPolicyFor(transcriptView),
                   onAction: controller.onAction,
                   loadAttachment: controller.loadAttachmentBytes,
                   observeJobOutput: controller.observeJobOutput,
@@ -308,11 +316,18 @@ class ChatScreen extends StatefulWidget {
     this.onSelectBackendSession,
     this.dispatchSessionAction,
     this.onCreateSessionInWorkspace,
+    this.presentation = kDefaultChatPresentationPolicy,
   });
 
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// The transcript view policy this screen folds by: a completed Turn folds
+  /// unless the Host's mode disables folding (only `verbose` does). The route
+  /// resolves the mode and passes the policy; no widget below reads the
+  /// settings surface directly.
+  final ChatPresentationPolicy presentation;
 
   /// Repository seam for the background-jobs sheet's observation stream
   /// (`job/follow`) and its stop (`job/kill`); the sheet owns the stream's
@@ -713,6 +728,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         Expanded(
                           child: ChatPanel(
                             uiState: uiState,
+                            presentation: widget.presentation,
                             onAction: onAction,
                             loadAttachment: widget.loadAttachment,
                             readWorkspaceFile: widget.readWorkspaceFile,
@@ -798,6 +814,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: ChatPanel(
                     uiState: uiState,
+                    presentation: widget.presentation,
                     onAction: onAction,
                     loadAttachment: widget.loadAttachment,
                     readWorkspaceFile: widget.readWorkspaceFile,
@@ -1227,6 +1244,7 @@ class ChatPanel extends StatefulWidget {
     required this.uiState,
     required this.onAction,
     required this.loadAttachment,
+    required this.presentation,
     required this.readWorkspaceFile,
     required this.readWorkspaceFileBytes,
     super.key,
@@ -1241,6 +1259,9 @@ class ChatPanel extends StatefulWidget {
   final ChatUiState uiState;
   final void Function(ChatAction) onAction;
   final AttachmentLoader loadAttachment;
+
+  /// The transcript view policy the Turn fold selects from.
+  final ChatPresentationPolicy presentation;
 
   /// Repository seam the file-preview sheet reads through.
   final WorkspaceFileReader readWorkspaceFile;
@@ -1999,7 +2020,13 @@ class _ChatPanelState extends State<ChatPanel> {
       );
     }
     final items = _timelineItems;
-    final groupedItems = foldTurnProcesses(foldTimelineActivities(items));
+    // The transcript view decides whether a completed Turn folds; the route
+    // passes the Host's mode down as this policy, so nothing below reads the
+    // settings surface itself.
+    final groupedItems = foldTurnProcesses(
+      foldTimelineActivities(items),
+      foldCompletedTurns: widget.presentation.foldCompletedTurns,
+    );
     final steering = _pendingSteering;
     // The produced-files row closes a finished turn. The newest turn only
     // counts as finished once the session stops running, so its row appears

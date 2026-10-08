@@ -2823,6 +2823,32 @@
   "@settingsAppearanceSaveFailed": {
     "description": "Stated when the host refused the appearance write."
   },
+  "settingsTranscriptViewTitle": "Work details",
+  "@settingsTranscriptViewTitle": {
+    "description": "Settings row naming the transcript view mode (the reference's settings.transcript.title)."
+  },
+  "settingsTranscriptViewDescription": "Choose how much detail to show for tool calls",
+  "@settingsTranscriptViewDescription": {
+    "description": "The transcript view sheet's one-line explanation (the reference's settings.transcript.description)."
+  },
+  "settingsTranscriptViewCompact": "Compact",
+  "settingsTranscriptViewStandard": "Standard",
+  "settingsTranscriptViewDetailed": "Detailed",
+  "settingsTranscriptViewVerbose": "Verbose",
+  "@settingsTranscriptViewCompact": {
+    "description": "The most folded transcript view: group headers collapse and no live call detail shows."
+  },
+  "@settingsTranscriptViewVerbose": {
+    "description": "The only view that does not fold a completed Turn."
+  },
+  "settingsTranscriptViewUnavailable": "Host Chat settings are unavailable.",
+  "@settingsTranscriptViewUnavailable": {
+    "description": "Stated when the host never answered for the ui-chat namespace."
+  },
+  "settingsTranscriptViewSaveFailed": "Couldn''t save the work-details choice.",
+  "@settingsTranscriptViewSaveFailed": {
+    "description": "Stated when the host refused the transcriptView write."
+  },
   "cordisApprovalHeader": "Plugin approval",
   "@cordisApprovalHeader": {
     "description": "Header band of the card shown while a dynamic Cordis plugin activation waits on the reader's decision."

@@ -3172,6 +3172,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAppearanceSaveFailed => 'Couldn\'t save the theme choice.';
 
   @override
+  String get settingsTranscriptViewTitle => 'Work details';
+
+  @override
+  String get settingsTranscriptViewDescription =>
+      'Choose how much detail to show for tool calls';
+
+  @override
+  String get settingsTranscriptViewCompact => 'Compact';
+
+  @override
+  String get settingsTranscriptViewStandard => 'Standard';
+
+  @override
+  String get settingsTranscriptViewDetailed => 'Detailed';
+
+  @override
+  String get settingsTranscriptViewVerbose => 'Verbose';
+
+  @override
+  String get settingsTranscriptViewUnavailable =>
+      'Host Chat settings are unavailable.';
+
+  @override
+  String get settingsTranscriptViewSaveFailed =>
+      'Couldn\'t save the work-details choice.';
+
+  @override
   String get cordisApprovalHeader => 'Plugin approval';
 
   @override

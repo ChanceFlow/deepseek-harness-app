@@ -36,6 +36,7 @@ import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/tool_detail_surface.dart';
 import 'package:app/ui/chat/tool_row_model.dart';
+import 'package:app/ui/chat/transcript_view_mode.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/shared/archived_filter.dart';
@@ -653,6 +654,14 @@ final List<DesignShot> shots = <DesignShot>[
     host: _settingsAppearanceHost,
     act: _openAppearanceSheet,
   ),
+  // The transcript view selector: the Chat section's first row, and the sheet
+  // its four modes live in. The row states the persisted `ui-chat` value, and
+  // the sheet is the only control that governs the transcript's fold.
+  const DesignShot(
+    name: 'settings-transcript-view',
+    host: _settingsTranscriptViewHost,
+    act: _openTranscriptViewSheet,
+  ),
   DesignShot(
     name: 'voice-recording',
     state: busyState(),
@@ -1116,6 +1125,12 @@ const List<WorkspaceSummary> _archivedWorkspaces = <WorkspaceSummary>[
 Widget _settingsAppearanceHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale, repository: _FakeThemeNamespaceRepository());
 
+/// The same tree with the scoped host answering `settings.describe` for the
+/// `ui-chat` namespace, so the transcript view row renders a persisted mode
+/// rather than the unavailable state.
+Widget _settingsTranscriptViewHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(theme, locale, repository: _FakeTranscriptViewRepository());
+
 Widget _settingsAgentPresetHost(ThemeData theme, Locale? locale) =>
     _settingsTree(
       theme,
@@ -1199,6 +1214,39 @@ class _FakePermissionCatalogRepository implements ChatRepository {
 
 /// One scoped repository method: the `ui-theme` namespace the appearance row
 /// reads. Nothing else in these fixtures calls the settings plane.
+/// One scoped repository method pair: the `ui-chat` namespace the transcript
+/// view row reads, and the write its sheet issues.
+class _FakeTranscriptViewRepository implements ChatRepository {
+  @override
+  Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
+    writable: true,
+    hasDocument: true,
+    namespaces: <SettingsNamespace>[
+      SettingsNamespace(
+        ns: kChatSettingsNamespace,
+        applies: SettingsApplies.live,
+        revision: 7,
+        hasUserLayer: true,
+        secretCount: 0,
+        value: <String, Object?>{kTranscriptViewField: 'standard'},
+      ),
+    ],
+    credentialRefs: <String>[],
+  );
+
+  @override
+  Future<SettingsNamespace> updateSetting(
+    String ns,
+    String key,
+    String jsonValue, {
+    int? expectedRevision,
+  }) async => (await describeSettings()).namespaces.first;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
+
 class _FakeThemeNamespaceRepository implements ChatRepository {
   @override
   Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
@@ -1810,6 +1858,9 @@ Future<void> _openLanguageSheet(WidgetTester tester) =>
 
 Future<void> _openAppearanceSheet(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Appearance');
+
+Future<void> _openTranscriptViewSheet(WidgetTester tester) =>
+    _tapSettingsRow(tester, 'Work details');
 
 Future<void> _render(
   WidgetTester tester,

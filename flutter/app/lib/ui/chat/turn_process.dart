@@ -32,6 +32,7 @@ final class TurnProcessFacts {
     this.endedAtEpochMs,
     this.answerSeq,
     this.hasInterleavedInput = false,
+    this.foldCompletedTurns = true,
   });
 
   final int turn;
@@ -50,6 +51,12 @@ final class TurnProcessFacts {
 
   /// Whether a human message landed inside the Turn after its opening one.
   final bool hasInterleavedInput;
+
+  /// Whether a normally completed Turn folds its process behind the control:
+  /// the transcript view's `foldCompletedTurns`, false only in the `verbose`
+  /// mode. A Turn the reader must see regardless stays open through
+  /// [alwaysOpen], which this cannot override.
+  final bool foldCompletedTurns;
 
   /// Whether the Turn refuses to fold: it is still running, it was stopped or
   /// failed, or a human spoke inside it (the reference's
@@ -97,7 +104,9 @@ final class TurnProcessSection {
   final List<TurnProcessMember> members;
 
   /// Whether the control starts open.
-  bool get defaultOpen => facts.alwaysOpen;
+  /// Whether the Turn starts folded: the mode's `foldCompletedTurns` decides
+  /// for a Turn that may fold, and the states that refuse to fold win over it.
+  bool get defaultOpen => facts.alwaysOpen || !facts.foldCompletedTurns;
 
   /// Whether the Turn has work to fold. The reference's `hasContent`: a Turn
   /// with nothing behind the control stays open, because a chevron that
@@ -145,9 +154,16 @@ bool isFoldableProcessRow(Object row) => switch (row) {
 
 /// Split a folded timeline into one [TurnProcessSection] per Turn.
 ///
+/// [foldCompletedTurns] is the transcript view's policy field: a completed
+/// Turn folds unless the mode disables folding, and the states that refuse to
+/// fold are unaffected either way.
+///
 /// Rows outside any Turn (the pre-turn prefix and any trailing row the fold
 /// could not place) pass through untouched.
-List<Object> foldTurnProcesses(List<Object> rows) {
+List<Object> foldTurnProcesses(
+  List<Object> rows, {
+  bool foldCompletedTurns = true,
+}) {
   final out = <Object>[];
   var sections = 0;
   var section = <Object>[];
@@ -155,7 +171,14 @@ List<Object> foldTurnProcesses(List<Object> rows) {
 
   void flush() {
     if (section.isNotEmpty) {
-      out.add(_sectionFor(turnStart, section, sections));
+      out.add(
+        _sectionFor(
+          turnStart,
+          section,
+          sections,
+          foldCompletedTurns: foldCompletedTurns,
+        ),
+      );
       sections += 1;
       section = <Object>[];
       turnStart = <TimelineItem>[];
@@ -182,8 +205,9 @@ List<Object> foldTurnProcesses(List<Object> rows) {
 TurnProcessSection _sectionFor(
   List<TimelineItem> boundaries,
   List<Object> rows,
-  int windowOrdinal,
-) {
+  int windowOrdinal, {
+  bool foldCompletedTurns = true,
+}) {
   final boundary = boundaries.first as TimelineTurnBoundary;
   // A phase card hides its members behind its own fold, but the members are
   // still this Turn's log: the answer is decided over the expanded order, or a
@@ -199,7 +223,11 @@ TurnProcessSection _sectionFor(
         break;
     }
   }
-  final facts = turnProcessFacts(boundary, items);
+  final facts = turnProcessFacts(
+    boundary,
+    items,
+    foldCompletedTurns: foldCompletedTurns,
+  );
   final members = <TurnProcessMember>[];
   // The finalized answer is not process. The reference's `processMember` wants
   // `anchorSeq < answerAnchorSeq`, so the reply the Turn produced stays visible
@@ -228,8 +256,9 @@ TurnProcessSection _sectionFor(
 /// Derive one Turn's process facts from its boundary and its own items.
 TurnProcessFacts turnProcessFacts(
   TimelineTurnBoundary boundary,
-  List<TimelineItem> items,
-) {
+  List<TimelineItem> items, {
+  bool foldCompletedTurns = true,
+}) {
   final closed = boundary.endSeq != null;
   // The opening human message is not interleaved input; anything the reader
   // said after it is.
@@ -271,6 +300,7 @@ TurnProcessFacts turnProcessFacts(
     endedAtEpochMs: boundary.endedAtEpochMs,
     answerSeq: answer?.value.seq,
     hasInterleavedInput: interleaved,
+    foldCompletedTurns: foldCompletedTurns,
   );
 }
 
