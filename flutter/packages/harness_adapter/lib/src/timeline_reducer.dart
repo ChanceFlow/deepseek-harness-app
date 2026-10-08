@@ -82,6 +82,9 @@ class TimelineReducer {
 
   final List<TimelineItem> _items = <TimelineItem>[];
   int _lastSeq = -1;
+
+  /// The seqs of the `hook/invoked` rows a `hook/result` has already settled.
+  final Set<int> _settledHookSeqs = <int>{};
   String? _partialKey;
   int _partialIndex = -1;
   final Set<int> _seenTurns = <int>{};
@@ -273,6 +276,7 @@ class TimelineReducer {
     }
     _items.clear();
     _lastSeq = -1;
+    _settledHookSeqs.clear();
     _clearPartial();
     _seenTurns.clear();
     _stepByTurn.clear();
@@ -1385,12 +1389,20 @@ class TimelineReducer {
   /// Opens one hook audit row. The pair is correlated by `handlerId`, the
   /// same pairing the reference's `appendHookResult` uses.
   void _appendHookInvoked(JsonMap event) {
-    _items.add(TimelineHookAudit(decodeHookInvoked(_eventData(event))));
+    _items.add(
+      TimelineHookAudit(decodeHookInvoked(_eventData(event)), seq: _lastSeq),
+    );
   }
 
   /// Settles the audit row opened by `hook/invoked`. A result whose invoked
   /// half fell outside the folded window is dropped: the pair's dialect is
   /// only on `hook/invoked`, and the reference renders complete pairs.
+  ///
+  /// The match is the *earliest unsettled* audit of that handler, not the first
+  /// one by `handlerId`: one handler can be invoked more than once inside a
+  /// window (a `PreToolUse` hook fires per tool call), and matching the first
+  /// would overwrite an already-settled audit while the later invocation never
+  /// settled.
   void _resolveHookResult(JsonMap event) {
     final data = _eventData(event);
     final handlerId = wireString(data, 'handlerId');
@@ -1399,7 +1411,12 @@ class TimelineReducer {
       final current = _items[i];
       if (current is! TimelineHookAudit) continue;
       if (current.audit.handlerId != handlerId) continue;
-      _items[i] = TimelineHookAudit(applyHookResult(current.audit, data));
+      if (_settledHookSeqs.contains(current.seq)) continue;
+      _settledHookSeqs.add(current.seq);
+      _items[i] = TimelineHookAudit(
+        applyHookResult(current.audit, data),
+        seq: current.seq,
+      );
       return;
     }
   }

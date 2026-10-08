@@ -47,6 +47,99 @@ TimelineToolCall toolCall({
 );
 
 void main() {
+  group('phase identity', () {
+    final anchor = textMessage(id: 'u1', text: 'go');
+    final t1 = toolCall(id: 't1', name: 'bash');
+    final t2 = toolCall(id: 't2', name: 'read');
+    final t3 = toolCall(id: 't3', name: 'edit');
+
+    String idOf(List<TimelineItem> items) {
+      final folded = foldTimelineActivities(items);
+      return folded.whereType<TimelineActivityGroup>().last.id;
+    }
+
+    test('survives every move of its own rows, and a message above', () {
+      final String base = idOf(<TimelineItem>[anchor, t1, t2]);
+      expect(base, 'window:phase:0');
+      // An older history page's tail folds into the phase's head.
+      expect(idOf(<TimelineItem>[anchor, t3, t1, t2]), base);
+      // A live step appends into the phase.
+      expect(idOf(<TimelineItem>[anchor, t1, t2, t3]), base);
+      // The same members, reordered.
+      expect(idOf(<TimelineItem>[anchor, t2, t1]), base);
+      // A prepend that lands a *message* directly above the phase — the window
+      // cut mid-phase case: the older page's tail becomes the new anchor, and
+      // the phase still keeps its identity.
+      expect(
+        idOf(<TimelineItem>[
+          textMessage(id: 'u0', text: 'older'),
+          anchor,
+          t1,
+          t2,
+        ]),
+        base,
+      );
+      // The same move inside a Turn, with the boundary loaded.
+      // The same move inside a Turn, with the boundary loaded.
+      final String turnBase = idOf(<TimelineItem>[
+        const TimelineTurnBoundary(1),
+        anchor,
+        t1,
+        t2,
+      ]);
+      expect(turnBase, 'window:phase:0');
+      expect(
+        idOf(<TimelineItem>[
+          const TimelineTurnBoundary(1),
+          textMessage(id: 'u0', text: 'older'),
+          anchor,
+          t1,
+          t2,
+        ]),
+        turnBase,
+      );
+      // The Turn boundary *arriving*: the page that reaches it brings no new
+      // phase and no new member, so the phase keeps its identity.
+      expect(
+        idOf(<TimelineItem>[
+          const TimelineTurnBoundary(1, endSeq: 9),
+          anchor,
+          t1,
+          t2,
+        ]),
+        base,
+      );
+    });
+
+    test('pins the accepted limit: any prepend that adds a phase above', () {
+      // The identity counts phases from the top of the loaded window, so any
+      // prepend that moves this phase's ordinal — an earlier phase of the same
+      // Turn, a phase of an older Turn, a page that reaches the Turn boundary
+      // *and* adds a phase above this one — re-keys it. Pinned here rather than
+      // left as prose: the card remounts (and a reader's open fold collapses),
+      // which is the price of naming a phase by its own window position instead
+      // of by the row above it.
+      final String base = idOf(<TimelineItem>[
+        const TimelineTurnBoundary(1),
+        anchor,
+        t1,
+        t2,
+      ]);
+      expect(base, 'window:phase:0');
+      expect(
+        idOf(<TimelineItem>[
+          const TimelineTurnBoundary(1),
+          t3,
+          textMessage(id: 'u2', text: 'mid'),
+          anchor,
+          t1,
+          t2,
+        ]),
+        'window:phase:1',
+      );
+    });
+  });
+
   test('interleaved thought + tool + thought + tool + text merges thoughts and groups tools', () {
     final t1 = toolCall(id: 't1', name: 'read');
     final t2 = toolCall(id: 't2', name: 'edit');
@@ -77,7 +170,9 @@ void main() {
 
     expect(folded[1], isA<TimelineActivityGroup>());
     final group = folded[1] as TimelineActivityGroup;
-    expect(group.id, 'm1');
+    // The phase is named by its ordinal in the loaded window, not by any of
+    // its rows: members change, the count of phases above it does not.
+    expect(group.id, 'window:phase:0');
     expect(group.calls, <TimelineToolCall>[t1, t2]);
 
     final mergedThought = group.thought!.value;
@@ -120,7 +215,8 @@ void main() {
 
       expect(folded, hasLength(1));
       final group = folded.single as TimelineActivityGroup;
-      expect(group.id, 'th1');
+      // The window's first phase.
+      expect(group.id, 'window:phase:0');
       // The injection is a step in the run, not a phase boundary: it rides the
       // card with the thought and the calls.
       expect(group.entries, <TimelineItem>[thought, injection, t1, t2]);

@@ -21,7 +21,16 @@ final class TimelineActivityGroup {
     this.closed = true,
   });
 
-  /// Stable identity of the phase: the first member's own id.
+  /// Stable identity of the phase: its ordinal from the top of the loaded
+  /// window, `window:phase:<n>`.
+  ///
+  /// Nothing about the phase's own rows can name it: a history page can fold
+  /// new steps into its head, a live Turn appends steps to its tail, and a
+  /// retry can reorder them. The row *above* it cannot name it either — a
+  /// prepend can put a message there (the window cut mid-phase case: the older
+  /// page's tail becomes the new anchor), and the very same prepend can bring
+  /// the Turn boundary that used to open it. What none of those move is how
+  /// many phases the loaded window shows before this one.
   final String id;
 
   /// Phase members in transcript order: reasoning-only assistant messages,
@@ -92,10 +101,13 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
   final steps = <TimelineItem>[];
   final thoughts = <TimelineMessage>[];
   var thoughtInsertAt = 0;
-  // Identity of the phase's first member. The merged thought borrows the
-  // newest chunk's id while it streams, so keying the card on it would remount
-  // — and collapse — the card on every chunk; the first member's id is stable.
-  String? firstMemberId;
+  // Identity of the phase being collected: how many phases the window has
+  // already shown above it. Counting from the Turn instead would re-key the
+  // phase the moment its Turn boundary entered the loaded window, which a page
+  // that reaches the boundary does without touching a single member.
+  var phasesInWindow = 0;
+
+  String phaseId() => 'window:phase:$phasesInWindow';
   // Whether the Turn the phase belongs to has ended, read off the boundary that
   // opened it. A timeline whose window cut the boundary is read as settled.
   var turnEnded = true;
@@ -121,15 +133,15 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
       entries.length == 1
           ? entries.first
           : TimelineActivityGroup(
-              id: firstMemberId!,
+              id: phaseId(),
               entries: List<TimelineItem>.unmodifiable(entries),
               closed: !tail || turnEnded,
             ),
     );
+    phasesInWindow += 1;
     steps.clear();
     thoughts.clear();
     thoughtInsertAt = 0;
-    firstMemberId = null;
   }
 
   for (final item in items) {
@@ -142,7 +154,6 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
         result.add(item);
       case TimelineToolCall():
       case TimelineContextInjection():
-        firstMemberId ??= _entryId(item);
         steps.add(item);
       case TimelineMessage(:final value):
         if (value.role == MessageRole.assistant) {
@@ -150,7 +161,6 @@ List<Object> foldTimelineActivities(List<TimelineItem> items) {
           final reasoning = value.reasoning;
           final hasReasoning = reasoning != null && reasoning.trim().isNotEmpty;
           if (hasReasoning) {
-            firstMemberId ??= _entryId(item);
             if (thoughts.isEmpty) thoughtInsertAt = steps.length;
             thoughts.add(hasReply ? _reasoningOnly(item, value) : item);
           }
@@ -261,20 +271,3 @@ TimelineMessage _mergeThoughts(List<TimelineMessage> thoughts) {
     ),
   );
 }
-
-/// The phase's identity: its first member's own id.
-String _entryId(TimelineItem item) => switch (item) {
-  TimelineMessage(:final value) => value.id,
-  TimelineContextInjection(:final id) => id,
-  TimelineToolCall(:final id) => id,
-  TimelineTurnBoundary(:final turn) => 'turn:$turn',
-  TimelineCompaction(:final id) => id,
-  TimelineCommand(:final commandId) => commandId,
-  TimelineQuestionRequest(:final requestId) => requestId,
-  TimelineApprovalRequest(:final requestId) => requestId,
-  TimelineError(:final id) => id,
-  TimelineQueue() => 'queue',
-  TimelineJobs() => 'jobs',
-  TimelineHookAudit(:final audit) => audit.handlerId,
-  TimelineWorkflowRun(:final runId) => runId,
-};

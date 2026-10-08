@@ -7,9 +7,11 @@
 /// [ColorScheme] roles, and its 100ms cross-fades onto [DshMotion].
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/chat/chat_local_state.dart';
 import 'package:app/ui/chat/process_activity.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/turn_process.dart';
@@ -65,12 +67,19 @@ class TurnProcessRow extends StatefulWidget {
     required this.section,
     required this.buildRow,
     super.key,
+    this.expansion,
   });
 
   final TurnProcessSection section;
 
   /// Renders one of the section's own rows through the transcript's row path.
   final Widget Function(Object row) buildRow;
+
+  /// The reader's fold, keyed by the block's identity rather than held in the
+  /// element: a remount (an older page arriving, or a Turn boundary entering
+  /// the window and re-parenting the phase) restores what the reader opened
+  /// instead of dropping it. Null keeps the fold in memory for this mount.
+  final ToolExpansionPersistence? expansion;
 
   @override
   State<TurnProcessRow> createState() => _TurnProcessRowState();
@@ -79,6 +88,36 @@ class TurnProcessRow extends StatefulWidget {
 class _TurnProcessRowState extends State<TurnProcessRow> {
   late bool _open = widget.section.defaultOpen;
   bool _hovered = false;
+
+  /// Set once the reader toggles, so a restore that lands late cannot undo the
+  /// tap that came after it.
+  bool _toggled = false;
+
+  String get _expansionKey => 'turn-process:${widget.section.windowOrdinal}';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreExpansion();
+  }
+
+  /// Reads the stored fold once per mount; no entry leaves [defaultOpen].
+  void _restoreExpansion() {
+    final expansion = widget.expansion;
+    if (expansion == null) return;
+    unawaited(
+      expansion.expanded(_expansionKey).then((restored) {
+        if (!mounted || _toggled || restored == _open) return;
+        setState(() => _open = restored);
+      }),
+    );
+  }
+
+  void _toggle() {
+    _toggled = true;
+    setState(() => _open = !_open);
+    unawaited(widget.expansion?.setExpanded(_expansionKey, _open));
+  }
 
   @override
   void didUpdateWidget(covariant TurnProcessRow oldWidget) {
@@ -134,9 +173,7 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
             child: Material(
               type: MaterialType.transparency,
               child: InkWell(
-                onTap: canCollapse
-                    ? () => setState(() => _open = !_open)
-                    : null,
+                onTap: canCollapse ? _toggle : null,
                 child: Container(
                   decoration: BoxDecoration(
                     border: Border(
