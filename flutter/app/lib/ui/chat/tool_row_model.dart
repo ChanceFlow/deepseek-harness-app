@@ -290,6 +290,35 @@ final class ToolRowModel {
 /// Row state semantic (web `ToolRowState`).
 enum ToolRowState { running, ok, error }
 
+/// The **business** glyph the pin's tool row leads with, by row variant.
+///
+/// A tool row carries no status mark in the pin: this slot holds the tool's own
+/// glyph in every state and the run state is colour-only (`ToolRow.tsx:104-113`
+/// documents its state label as visually hidden). The mapping is the pin's
+/// variant table (`ui-tool/src/client/tool/toolviews/GenericToolCard.tsx:17-25`)
+/// plus the family rows that pass their own glyph — read
+/// `read-family-row.tsx:48`, search `search-row.tsx:27`, bash
+/// `bash-sample.tsx:25`, file mutation `file-mutation-row.tsx:12`, present
+/// `ui-deliverables/src/client/PresentRow.tsx:37`, todo
+/// `todo-row.tsx:65`.
+///
+/// Every name [classifyTool] can return is covered: an unmapped tool classifies
+/// as [ToolRowVariant.others], which is the pin's own generic `IconSparkle`
+/// card rather than a glyph invented here. `todo_write` never reaches this
+/// table — the model hands it its checklist glyph in [ToolRowModel.leading].
+/// `present` has no Material twin of `IconDeliverDocRegular`; it takes the
+/// document glyph this app already uses for a delivered file
+/// (`presented_files_row.dart`).
+IconData variantIcon(ToolRowVariant variant) => switch (variant) {
+  ToolRowVariant.search => Icons.search,
+  ToolRowVariant.read => Icons.description_outlined,
+  ToolRowVariant.bash => Icons.terminal,
+  ToolRowVariant.write || ToolRowVariant.edit => Icons.edit_outlined,
+  ToolRowVariant.code => Icons.code,
+  ToolRowVariant.present => Icons.description_outlined,
+  ToolRowVariant.others => Icons.auto_awesome,
+};
+
 /// todo_write plan summary — port of `plan-summary.ts`: counts plus the
 /// first `in_progress` content and the parallel-active remainder.
 ({int done, int total, String? activeContent, int activeExtra}) _planSummary(

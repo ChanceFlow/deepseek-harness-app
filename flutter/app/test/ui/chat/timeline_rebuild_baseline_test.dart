@@ -225,7 +225,7 @@ void main() {
     final Element clockElement = tester.element(
       find.descendant(
         of: find.byType(RunningStatusRow),
-        matching: find.text('5s'),
+        matching: find.textContaining('5s'),
       ),
     );
     expect(clockElement, isNotNull);
@@ -280,7 +280,7 @@ void main() {
           tester.element(
             find.descendant(
               of: find.byType(RunningStatusRow),
-              matching: find.text('5s'),
+              matching: find.textContaining('5s'),
             ),
           ),
           clockElement,

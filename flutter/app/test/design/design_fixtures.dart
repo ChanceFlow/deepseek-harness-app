@@ -649,6 +649,43 @@ ChatUiState planReviewState() {
   );
 }
 
+/// An approval request: the wait as the dock's one line, with the paired
+/// command and both answers one surface deeper.
+ChatUiState approvalState() {
+  return const ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      TimelineMessage(
+        ChatMessage(
+          id: 'ap-u1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: '先把本地构建产物清掉，再从干净状态打一次包。',
+          createdAtEpochMs: kNow,
+          seq: 71,
+        ),
+      ),
+      TimelineToolCall(
+        id: 'call-approval-shot',
+        name: 'bash',
+        arguments:
+            '{"command":"rm -rf build && flutter build apk --debug",'
+            '"description":"Clean and rebuild the debug APK"}',
+        status: ToolRunStatus.running,
+      ),
+      TimelineApprovalRequest(
+        requestId: 'rpc-approval-shot',
+        sessionId: 's1',
+        approvalId: 'ap-shot',
+        toolName: 'bash',
+        callId: 'call-approval-shot',
+        reason: '删除 build/ 目录后重新打包，这会移除本地未提交的构建产物。',
+      ),
+    ],
+  );
+}
+
 /// ── Settings shots ────────────────────────────────────────────────────────
 /// The Settings index and the pages and sheets its rows open, on a two-host
 /// registry: the shots exercise the real screen against the real registry

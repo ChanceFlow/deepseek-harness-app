@@ -28,10 +28,14 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/notifications/session_notice.dart';
+import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
+import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/process_disclosure.dart';
+import 'package:app/ui/chat/tool_detail_surface.dart';
+import 'package:app/ui/chat/tool_row_model.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/shared/archived_filter.dart';
@@ -338,6 +342,29 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The paged window's notice, and the pin's in-preview panel chrome with it:
+  // `bg-layer-2`, the `--dsw-radius-lg` corner and
+  // `--dsw-elevation-prominent` (`ui-sidebar-documentpreview/.../office/
+  // FontNotice.module.css` `.panel`, :14-31) — a regression to the flat
+  // `surfaceContainerHigh` chip is visible here and nowhere else, because the
+  // text baseline's window ends (`eof: true`).
+  DesignShot(
+    name: 'preview-truncated',
+    state: presentedFilesState(),
+    readFile: (sessionId, path) async => WorkspaceFileContent(
+      absolutePath: '/srv/art-pipeline/$path',
+      version: 'v1',
+      text: kDesignLicenceText,
+      offset: 1,
+      lines: 40,
+      eof: false,
+      bytes: kDesignLicenceText.length,
+    ),
+    act: (tester) async {
+      await tester.tap(find.text('Open').at(3));
+      await settle(tester);
+    },
+  ),
   DesignShot(
     name: 'preview-image',
     state: presentedFilesState(),
@@ -488,35 +515,40 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The ask card under the card → detail pattern: the dock keeps one line (the
+  // question, its detail's first line, the Answer chip) and the whole question
+  // — detail and options — opens on a large sheet whose Submit/Skip are pinned
+  // at the bottom. The pair is the whole pattern: what the transcript shows,
+  // and the one surface deeper it opens.
   DesignShot(name: 'question', state: questionState()),
-  // The same card folded to its header strip: the reading position above the
-  // takeover stays visible while the reader decides.
   DesignShot(
-    name: 'question-folded',
+    name: 'question-open',
     state: questionState(),
     act: (tester) async {
-      await tester.tap(find.byTooltip('Collapse the card'));
+      await tester.tap(find.text('Answer'));
       await settle(tester);
     },
   ),
+  // The plan card: same shape, content-shaped detail — the one-line row in the
+  // dock, then the pushed document with the review's actions pinned in the
+  // bottom bar. Opening the document answers nothing.
   DesignShot(name: 'plan-review', state: planReviewState()),
+  DesignShot(
+    name: 'plan-review-open',
+    state: planReviewState(),
+    act: (tester) async {
+      await tester.tap(find.text('Plan ready for review'));
+      await settle(tester);
+    },
+  ),
   // A short phone panel (a 616dp-class device, or one whose keyboard is open):
-  // the decision card must keep its action row above the panel's bottom edge —
-  // where the root tab bar sits and takes no taps — instead of letting it
-  // slide underneath. The plan body gives up the room.
+  // the row and its primary action must stay above the panel's bottom edge —
+  // where the root tab bar sits and takes no taps — instead of sliding under.
   DesignShot(
     name: 'plan-review-short-panel',
     state: planReviewState(),
     act: (tester) async {
       tester.view.physicalSize = const Size(720, 960);
-      await settle(tester);
-    },
-  ),
-  DesignShot(
-    name: 'plan-review-folded',
-    state: planReviewState(),
-    act: (tester) async {
-      await tester.tap(find.byTooltip('Collapse the card'));
       await settle(tester);
     },
   ),
@@ -532,6 +564,22 @@ final List<DesignShot> shots = <DesignShot>[
     state: planReviewState(),
     locale: const Locale('zh'),
   ),
+  // The approval card's pair: the wait as one line with Allow once, then the
+  // request's own sheet carrying the command and both answers.
+  DesignShot(name: 'approval', state: approvalState()),
+  DesignShot(
+    name: 'approval-open',
+    state: approvalState(),
+    act: (tester) async {
+      await tester.tap(find.text('Waiting for approval'));
+      await settle(tester);
+    },
+  ),
+  // The diff / tool-output card's own surface: the row's peek is bounded at
+  // 280px, and the whole payload opens here — every diff line and both IO
+  // sections — with the edited file's preview and the copy seat pinned at the
+  // bottom. The row half of this pair is the tool-row shot above.
+  const DesignShot(name: 'tool-detail', host: _toolDetailHost),
   // Settings shots: the index over a two-host registry fixture, then each
   // surface a row opens. The index and the host sheet pair with the
   // same-named before shots; the pages and the choice sheets are new
@@ -723,6 +771,26 @@ final List<DesignShot> shots = <DesignShot>[
     host: (theme, locale) =>
         _subagentsHost(theme, locale, subagentsChildState()),
   ),
+  // The house menu material over the transcript. The pin draws a menu as a
+  // translucent fill on a `blur(40px) saturate(150%)` backdrop
+  // (`MenuSurface.module.css:25-31`), and the fill's 58% / 45% alpha is what
+  // makes the blur load-bearing: the transcript behind the panel has to read
+  // through it. The shot exists for that read-through — without the backdrop
+  // the fill is a flat see-through panel.
+  // The stats sheet is the tall one — it reaches up over the transcript's own
+  // lines, which is the only way a blur can be judged: the shot has to show
+  // text reading through the panel, not a card floating over empty page.
+  DesignShot(
+    name: 'menu-material',
+    state: busyState(),
+    act: (tester) async {
+      // The composer's stats line opens the house sheet (`stats_line.dart`);
+      // the model seat (`model_select.dart`) opens the same material at its
+      // content height.
+      await tester.tap(find.byType(StatsLine));
+      await settle(tester);
+    },
+  ),
 ];
 
 /// A running session animates forever, so `pumpAndSettle` never returns.
@@ -796,13 +864,22 @@ Future<void> _loadFonts() async {
     '$assets/Roboto-Bold.ttf',
   ]);
   await _load('MaterialIcons', <String>['$assets/MaterialIcons-Regular.otf']);
-  // Payload type asks for a monospace family by name; any installed face
-  // renders the same shape decision, so the first hit wins.
-  await _load('monospace', <String>[
+  // The app's code face is the reference's stack (`kCodeFontFamily` and its
+  // fallbacks); no face in it ships with the app, so the harness registers the
+  // first installed mono face under each name in the stack — the same "first
+  // hit wins" rule the app asks the platform for, resolved here rather than
+  // left to whichever family the engine settles on.
+  const List<String> monoPaths = <String>[
     '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
     '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
-  ], first: true);
+  ];
+  for (final String family in <String>[
+    kCodeFontFamily,
+    ...kCodeFontFamilyFallback,
+  ]) {
+    await _load(family, monoPaths, first: true);
+  }
   final home = Platform.environment['HOME'] ?? '';
   _cjkLoaded = await _load('NotoSansCJK', <String>[
     // The path the script resolved on the host travels as a define: the
@@ -865,6 +942,51 @@ ThemeData _withRealFonts(ThemeData base) {
 /// the document names.
 Widget _settingsHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale);
+
+/// The tool payload's surface, on a real edit: the diff the row peeks at, the
+/// call's arguments, and its settled result.
+Widget _toolDetailHost(ThemeData theme, Locale? locale) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  locale: locale,
+  theme: _withRealFonts(theme),
+  home: ToolDetailSurface(
+    args: const ToolDetailArgs(
+      title: 'Edit chat_screen.dart',
+      path: 'flutter/app/lib/ui/chat/chat_screen.dart',
+      input:
+          '{"path":"flutter/app/lib/ui/chat/chat_screen.dart",'
+          '"old_string":"maxLines: 2","new_string":"maxLines: 4"}',
+      output: 'Updated 1 file: chat_screen.dart (+2 -2)',
+      diff: EditDiffModel(
+        filePath: 'flutter/app/lib/ui/chat/chat_screen.dart',
+        oldString: 'maxLines: 2',
+        newString: 'maxLines: 4',
+        lines: <ToolDiffLine>[
+          ToolDiffLine(kind: DiffLineKind.equal, text: '        child: Text('),
+          ToolDiffLine(
+            kind: DiffLineKind.equal,
+            text: '          widget.draft,',
+          ),
+          ToolDiffLine(
+            kind: DiffLineKind.delete,
+            text: '          maxLines: 2,',
+          ),
+          ToolDiffLine(
+            kind: DiffLineKind.insert,
+            text: '          maxLines: 4,',
+          ),
+          ToolDiffLine(
+            kind: DiffLineKind.equal,
+            text: '          overflow: TextOverflow.ellipsis,',
+          ),
+        ],
+      ),
+    ),
+    onPreviewFile: (path, {diff}) {},
+  ),
+);
 
 /// The stop-and-archive confirmation over its dim backdrop: the work list the
 /// Host named and the destructive commit are what this shot reviews. The

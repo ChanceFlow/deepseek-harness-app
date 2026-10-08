@@ -14,6 +14,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/job_list_action.dart';
+import 'package:app/ui/shared/menu_material.dart';
 import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -152,6 +153,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('build apk'), findsOneWidget);
     expect(find.text('exit code: 0'), findsOneWidget);
+  });
+
+  testWidgets('the roster opens on the house menu card', (tester) async {
+    final seams = _JobSeams();
+    await _openSheet(tester, <JobView>[
+      _job(id: 'bash-1', status: JobStatus.running, progress: '3/10'),
+    ], seams);
+
+    // The pin draws this list as a menu, not as a Material sheet
+    // (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :41-65), so the
+    // opener must seat it on the shared menu material — a `showModalBottomSheet`
+    // here would paint Material's own fill and elevation under the card.
+    final card = find.byKey(const ValueKey('menu-sheet-card'));
+    expect(card, findsOneWidget);
+    expect(tester.widget(card), isA<MenuMaterial>());
   });
 
   testWidgets('an observable row expands into its output panel', (

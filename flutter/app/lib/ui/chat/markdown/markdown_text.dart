@@ -36,10 +36,6 @@ const double _kMarkerColumn = 22;
 /// Indent one nesting level adds.
 const double _kNestIndent = 16;
 
-/// Line count from which a fenced block grows a line-number gutter. Below it
-/// the numbers cost a column and buy nothing.
-const int _kLineNumberFloor = 8;
-
 class MarkdownText extends StatefulWidget {
   const MarkdownText({required this.text, super.key});
 
@@ -141,19 +137,15 @@ class _MarkdownTextState extends State<MarkdownText> {
         // A reply is not a web page: headings stay inside the reading
         // scale and separate by weight and space. None of them drops below
         // the body size — a section title smaller than its own paragraph
-        // inverts the hierarchy it is there to state.
+        // inverts the hierarchy it is there to state. The weights are the
+        // reference's own markdown steps: h3 `700`
+        // (`gradient-shadow-text.css:77`), h4 and below `600` (`:84`).
+        final Color ink = theme.colorScheme.labelPrimary;
         final style = switch (block.level) {
-          1 => theme.textTheme.titleMedium?.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-          ),
-          2 => theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          _ => theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          1 => DshType.markdownH1.style(color: ink),
+          2 => DshType.markdownH2.style(color: ink),
+          3 => DshType.markdownH3.style(color: ink),
+          _ => DshType.markdownH4.style(color: ink),
         };
         return Text.rich(_inlineSpan(context, block.inlines), style: style);
       case BulletListBlock():
@@ -186,20 +178,20 @@ class _MarkdownTextState extends State<MarkdownText> {
           ],
         );
       case BlockQuoteBlock():
+        // The reference's quote: a 2px `label-caption` rule and a 14px pad,
+        // the text keeping the document's own base step and ink
+        // (`MarkdownText.module.css` `blockquote`, :148-152).
         return Container(
           decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(
-                color: theme.colorScheme.outlineVariant,
-                width: 3,
-              ),
+              left: BorderSide(color: theme.colorScheme.labelCaption, width: 2),
             ),
           ),
-          padding: const EdgeInsets.only(left: 12),
+          padding: const EdgeInsets.only(left: 14),
           child: Text.rich(
             _inlineSpan(context, block.inlines),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            style: DshType.markdownBase.style(
+              color: theme.colorScheme.labelPrimary,
             ),
           ),
         );
@@ -208,7 +200,9 @@ class _MarkdownTextState extends State<MarkdownText> {
       case ParagraphBlock():
         return Text.rich(
           _inlineSpan(context, block.inlines),
-          style: theme.textTheme.bodyMedium,
+          style: DshType.markdownBase.style(
+            color: theme.colorScheme.labelPrimary,
+          ),
         );
     }
   }
@@ -235,8 +229,10 @@ class _MarkdownTextState extends State<MarkdownText> {
             child: Text(
               marker,
               textAlign: markerAtEnd ? TextAlign.right : TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              // The reference's list marker is `label-secondary`
+              // (`MarkdownText.module.css` `li::marker`, :125-128).
+              style: DshType.markdownBase.style(
+                color: theme.colorScheme.labelSecondary,
               ),
             ),
           ),
@@ -244,7 +240,9 @@ class _MarkdownTextState extends State<MarkdownText> {
           Expanded(
             child: Text.rich(
               _inlineSpan(context, inlines),
-              style: theme.textTheme.bodyMedium,
+              style: DshType.markdownBase.style(
+                color: theme.colorScheme.labelPrimary,
+              ),
             ),
           ),
         ],
@@ -257,14 +255,14 @@ class _MarkdownTextState extends State<MarkdownText> {
   Widget _tableBlock(BuildContext context, TableBlock block) {
     final theme = Theme.of(context);
     final columns = block.header.length > 1 ? block.header.length : 1;
-    return Container(
+    // The reference's table is not a card: a scroll wrapper and rules only
+    // (`MarkdownText.module.css` `.tableScroll`, :183-247). Its header row
+    // wears the table-head step over a half-pixel `border-l3`; each body row
+    // the table step over `border-l2`, and the first/last cell drop their
+    // outer padding.
+    final Color ink = theme.colorScheme.labelPrimary;
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(kShapeCard),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           const double minCellWidth = 84.0;
@@ -278,59 +276,79 @@ class _MarkdownTextState extends State<MarkdownText> {
               width: tableWidth,
               child: Column(
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final cell in block.header)
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            child: Text.rich(
-                              _inlineSpan(context, cell),
-                              style: theme.textTheme.labelLarge,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
                   Container(
-                    height: 1,
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 6,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: theme.colorScheme.borderL3,
+                          width: 0.5,
+                        ),
+                      ),
                     ),
-                    color: theme.colorScheme.outlineVariant,
-                  ),
-                  for (final row in block.rows)
-                    Row(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (
-                          var columnIndex = 0;
-                          columnIndex < columns;
-                          columnIndex++
-                        )
+                        for (var i = 0; i < block.header.length; i++)
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
+                              padding: EdgeInsets.fromLTRB(
+                                i == 0 ? 0 : 16,
+                                10,
+                                i == block.header.length - 1 ? 0 : 16,
+                                10,
                               ),
                               child: Text.rich(
-                                _inlineSpan(
-                                  context,
-                                  columnIndex < row.length
-                                      ? row[columnIndex]
-                                      : const <MarkdownInline>[],
+                                _inlineSpan(context, block.header[i]),
+                                style: DshType.markdownTableHead.style(
+                                  color: ink,
                                 ),
-                                style: theme.textTheme.bodySmall,
                               ),
                             ),
                           ),
                       ],
+                    ),
+                  ),
+                  for (final row in block.rows)
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: theme.colorScheme.borderL2,
+                            width: 0.5,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (
+                            var columnIndex = 0;
+                            columnIndex < columns;
+                            columnIndex++
+                          )
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  columnIndex == 0 ? 0 : 16,
+                                  10,
+                                  columnIndex == columns - 1 ? 0 : 16,
+                                  10,
+                                ),
+                                child: Text.rich(
+                                  _inlineSpan(
+                                    context,
+                                    columnIndex < row.length
+                                        ? row[columnIndex]
+                                        : const <MarkdownInline>[],
+                                  ),
+                                  style: DshType.markdownTable.style(
+                                    color: ink,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                 ],
               ),
@@ -345,58 +363,79 @@ class _MarkdownTextState extends State<MarkdownText> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final scheme = theme.colorScheme;
+    // The reference's code block (`markdown/CodeBlock.module.css`): the
+    // code-block surface on the radius-lg step, a banner strip carrying the
+    // language in the code face over `markdown-code-block-banner` (:36-46),
+    // and the body padded 16 (:73-78).
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 6, 6, 10),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(kShapeCard),
-        border: Border.all(color: scheme.outlineVariant),
+        color: scheme.markdownCodeBlock,
+        borderRadius: BorderRadius.circular(kRadiusLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  // A fence with no language says nothing worth a line of
-                  // its own; an unclosed one says the body is still coming.
-                  block.open ? l10n.codeStreamingLabel : (block.language ?? ''),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+          Container(
+            width: double.infinity,
+            color: scheme.markdownCodeBlockBanner,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    // A fence with no language says nothing worth a line of
+                    // its own; an unclosed one says the body is still coming.
+                    block.open
+                        ? l10n.codeStreamingLabel
+                        : (block.language ?? ''),
+                    style: DshType.markdownCode
+                        .style(color: scheme.labelPrimary)
+                        .copyWith(
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
+                        ),
                   ),
                 ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 18,
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                tooltip: l10n.copyTooltip,
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  await Clipboard.setData(ClipboardData(text: block.code));
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.copiedTooltip),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(milliseconds: 1400),
-                    ),
-                  );
-                },
-                icon: Icon(Icons.copy_outlined, color: scheme.onSurfaceVariant),
-              ),
-            ],
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(
+                    minWidth: 44,
+                    minHeight: 44,
+                  ),
+                  tooltip: l10n.copyTooltip,
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    await Clipboard.setData(ClipboardData(text: block.code));
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(l10n.copiedTooltip),
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(milliseconds: 1400),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.copy_outlined, color: scheme.labelPrimary),
+                ),
+              ],
+            ),
           ),
-          _codeBody(context, block),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _codeBody(context, block),
+          ),
         ],
       ),
     );
   }
 
-  /// The fence body: a fixed line-number gutter beside a horizontally
-  /// scrolling, token-coloured body.
+  /// The fence body: a horizontally scrolling, token-coloured run in the
+  /// pin's code-block step. The reference's fence shows no number gutter in the
+  /// chat (`CodeBlock.tsx` `lineNumbers` defaults off, :31-32) — it is the
+  /// reader's own copy that carries the line breaks, not the render.
   ///
   /// Highlighting runs only on a closed fence in a language
   /// [codeLanguageIsKnown] accepts. A streaming fence re-lexes on every chunk
@@ -406,22 +445,16 @@ class _MarkdownTextState extends State<MarkdownText> {
   Widget _codeBody(BuildContext context, CodeBlock block) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final base = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: 'monospace',
-      height: 1.45,
-      color: scheme.onSurface,
-    );
+    final base = DshType.markdownCodeBlock
+        .style(color: scheme.labelPrimary)
+        .copyWith(
+          fontFamily: kCodeFontFamily,
+          fontFamilyFallback: kCodeFontFamilyFallback,
+        );
     final highlighted = !block.open && codeLanguageIsKnown(block.language);
     final tokens = highlighted
         ? tokenizeCode(block.code, block.language)
         : <CodeToken>[CodeToken(CodeTokenKind.plain, block.code)];
-    final lineCount = '\n'.allMatches(block.code).length + 1;
-    // A short snippet reads fine without them; the gutter earns its column
-    // once a reader is locating a line rather than reading the whole block.
-    final showNumbers = lineCount >= _kLineNumberFloor;
-    final numbers = [for (var line = 1; line <= lineCount; line++) '$line']
-        .join('\n');
-
     final body = highlighted
         ? Text.rich(
             TextSpan(
@@ -439,30 +472,7 @@ class _MarkdownTextState extends State<MarkdownText> {
           )
         : Text(block.code, style: base, softWrap: false);
 
-    final scroller = SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: body,
-    );
-    if (!showNumbers) return scroller;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: Text(
-            numbers,
-            style: base?.copyWith(
-              color: scheme.outline,
-              // Digits must not shuffle the gutter as the count grows.
-              fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-            ),
-            textAlign: TextAlign.right,
-            softWrap: false,
-          ),
-        ),
-        Expanded(child: scroller),
-      ],
-    );
+    return SingleChildScrollView(scrollDirection: Axis.horizontal, child: body);
   }
 
   /// Paint one token class. `plain` keeps the code body's own ink, so an
@@ -471,7 +481,7 @@ class _MarkdownTextState extends State<MarkdownText> {
       switch (kind) {
         CodeTokenKind.plain => null,
         CodeTokenKind.comment => TextStyle(
-          color: scheme.onSurfaceVariant,
+          color: scheme.labelTertiary,
           fontStyle: FontStyle.italic,
         ),
         CodeTokenKind.string => TextStyle(color: scheme.syntaxString),
@@ -485,17 +495,17 @@ class _MarkdownTextState extends State<MarkdownText> {
   /// Resolve theme styles first, then build spans in a plain builder.
   InlineSpan _inlineSpan(BuildContext context, List<MarkdownInline> inlines) {
     final theme = Theme.of(context);
-    final body = theme.textTheme.bodyMedium;
-    // Monospace runs wider and taller than the prose face at the same
-    // nominal size, so the code run steps down to match its x-height. The
-    // face is the whole signal: a tint behind a span paints a full-height
-    // band with no padding, which on a wrapped path reads as a highlighter
-    // stroke across the paragraph.
-    final code = TextStyle(
-      fontFamily: 'monospace',
-      fontSize: (body?.fontSize ?? 15) * 0.92,
-      color: theme.colorScheme.onSurface,
-    );
+    // The reference's inline code run: the code face on the inline-code step
+    // (`MarkdownText.module.css` `:not(pre) > code`, :155-166). Its chip — the
+    // `markdown-inline-code` fill, the half-pixel `border-l1` and the 5px side
+    // padding — is not portable to a `TextSpan`; the face carries the signal
+    // and the chip is a known gap.
+    final code = DshType.markdownCode
+        .style(color: theme.colorScheme.labelPrimary)
+        .copyWith(
+          fontFamily: kCodeFontFamily,
+          fontFamilyFallback: kCodeFontFamilyFallback,
+        );
     final spans = <InlineSpan>[];
     void render(List<MarkdownInline> runs, List<InlineSpan> out) {
       for (final inline in runs) {
@@ -510,7 +520,9 @@ class _MarkdownTextState extends State<MarkdownText> {
             out.add(
               TextSpan(
                 children: nested,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                // The reference's markdown strong is 600
+                // (`MarkdownText.module.css:15-17`).
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             );
           case ItalicInline():

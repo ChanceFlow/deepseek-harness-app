@@ -142,7 +142,7 @@ void main() {
       );
       expect(
         painted.spans['// note'],
-        scheme.onSurfaceVariant,
+        scheme.labelTertiary,
         reason: 'comment ink for ${theme.brightness}',
       );
       // An identifier overrides nothing and so keeps the body's own ink,
@@ -154,7 +154,7 @@ void main() {
       );
       expect(
         painted.ink,
-        scheme.onSurface,
+        scheme.labelPrimary,
         reason: 'body ink for ${theme.brightness}',
       );
     }
@@ -176,8 +176,8 @@ void main() {
     // No tokenizer means no guessed colour: the body renders as one run on
     // the same ink it had before highlighting existed.
     final painted = _codeColors(tester, '+++[>+<]');
-    expect(painted.spans.values.toSet(), {theme.colorScheme.onSurface});
-    expect(painted.ink, theme.colorScheme.onSurface);
+    expect(painted.spans.values.toSet(), {theme.colorScheme.labelPrimary});
+    expect(painted.ink, theme.colorScheme.labelPrimary);
   });
 
   testWidgets('a streaming fence stays plain until it closes', (tester) async {
@@ -187,32 +187,22 @@ void main() {
     // The tail is exactly the text still moving, so it is not re-lexed on
     // every chunk.
     final painted = _codeColors(tester, 'final n = 42;');
-    expect(painted.spans.values.toSet(), {theme.colorScheme.onSurface});
-    expect(painted.ink, theme.colorScheme.onSurface);
+    expect(painted.spans.values.toSet(), {theme.colorScheme.labelPrimary});
+    expect(painted.ink, theme.colorScheme.labelPrimary);
   });
 
-  testWidgets('a long fence grows a line-number gutter', (tester) async {
+  testWidgets('a long fence spends no column on numbers', (tester) async {
     final lines = [for (var i = 1; i <= 9; i++) 'var v$i = $i;'].join('\n');
     await _pump(tester, '```dart\n$lines\n```');
 
-    final gutter = find.text([for (var i = 1; i <= 9; i++) '$i'].join('\n'));
-    expect(gutter, findsOneWidget);
-
-    // The gutter holds a column of its own, left of the body: a reader
-    // locating a line must not have to scroll it away.
-    final body = tester
-        .widgetList<RichText>(find.byType(RichText))
-        .firstWhere((widget) => widget.text.toPlainText() == lines);
+    // The reference's fence shows no number gutter in the chat
+    // (`CodeBlock.tsx` `lineNumbers` defaults off, :31-32): the source carries
+    // its own line breaks and the reader copies those.
     expect(
-      tester.getRect(gutter).right,
-      lessThanOrEqualTo(tester.getRect(find.byWidget(body)).left),
+      find.text([for (var i = 1; i <= 9; i++) '$i'].join('\n')),
+      findsNothing,
     );
-  });
-
-  testWidgets('a short fence spends no column on numbers', (tester) async {
-    await _pump(tester, '```dart\nvar a = 1;\nvar b = 2;\n```');
-
-    expect(find.text('1\n2'), findsNothing);
+    expect(find.text(lines), findsOneWidget);
   });
 
   testWidgets('the body is selectable', (tester) async {
@@ -285,4 +275,25 @@ void main() {
       expect(horizontalScroll, findsOneWidget);
     },
   );
+
+  testWidgets('a fence wears the reference code-block surface and radius', (
+    tester,
+  ) async {
+    await _pump(tester, '```dart\nfinal a = 1;\n```');
+
+    // `markdown/CodeBlock.module.css` `.block` (:14-18): the code-block alias
+    // on the radius-lg step, with no rule of its own.
+    final Finder block = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration! as BoxDecoration).color ==
+              DshTheme.light().colorScheme.markdownCodeBlock,
+    );
+    expect(block, findsOneWidget);
+    final BoxDecoration decoration =
+        tester.widget<Container>(block).decoration! as BoxDecoration;
+    expect(decoration.borderRadius, BorderRadius.circular(kRadiusLg));
+    expect(decoration.border, isNull);
+  });
 }

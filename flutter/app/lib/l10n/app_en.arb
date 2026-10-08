@@ -3282,9 +3282,18 @@
       }
     }
   },
-  "turnProcessDeepDiving": "Deep diving…",
+  "turnProcessDeepDiving": "Deep diving",
   "@turnProcessDeepDiving": {
-    "description": "The running row's label; the app's own wording, not the reference's sentence. The elapsed clock renders beside it as its own element."
+    "description": "The running row's state, with no clock yet (the Turn's start is unknown)."
+  },
+  "turnProcessDeepDivingFor": "Deep diving for {duration} ···",
+  "@turnProcessDeepDivingFor": {
+    "description": "The reference's running sentence: the state and the elapsed clock in one label.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
   },
   "turnProcessTook": "Completed in ",
   "@turnProcessTook": {

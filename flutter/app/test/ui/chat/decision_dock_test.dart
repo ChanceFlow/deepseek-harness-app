@@ -1,16 +1,22 @@
-/// Decision-seat geometry: the input dock's question and plan-review cards
-/// must keep their own action row on screen.
+/// Decision-seat geometry: the dock's one-line decision cards and the surfaces
+/// their detail moved to.
 ///
-/// The dock sits directly above the root navigation bar, and the panel it
-/// lives in is already shorter than the screen (app bar, tab bar, system
-/// insets). A card that sized itself against the raw screen therefore grew
-/// past the panel's bottom edge, and its actions — the only way to answer —
-/// were painted under the tab bar where no tap lands. These tests pump the
-/// real chat screen at the panel heights that produce that, with and without
-/// the keyboard, and assert both that the actions are inside the viewport and
-/// that pressing them dispatches.
+/// The card → detail pattern takes the whole card out of the composer seat: a
+/// pending plan review and a pending question are each one line
+/// (`CardDetailRow`), the plan keeps its primary action on the row, the ask
+/// keeps its chip, and the answers live on the pushed route or the large sheet
+/// the row opens. What must stay inside the viewport is therefore the row's own
+/// action and the sheet's pinned footer — not the card body, which is the block
+/// this pattern exists to remove.
+///
+/// The history is the point of this file: its first version asserted that the
+/// plan card's warn strip, scrollable plan body and three action buttons all
+/// fitted the dock, and that a long question's own footer stayed on screen.
+/// Those are no longer the surfaces; these tests assert the new contract at the
+/// same panel heights, with and without the keyboard.
 library;
 
+import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
@@ -28,7 +34,7 @@ const SessionSummary _session = SessionSummary(
   blank: false,
 );
 
-/// A long plan: the body must scroll, never push the actions off-panel.
+/// A long plan: the document must open on its own surface, never in the dock.
 const String _longPlan =
     '## 步骤\n\n'
     '1. 把 `deliverables/presented` 折到 `present` 调用自己的行上；\n'
@@ -124,6 +130,13 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+/// Opens the decision surface the card row holds, by tapping its title.
+Future<void> _openCardDetail(WidgetTester tester, String title) async {
+  await tester.tap(find.text(title));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
 /// The action's rect and the space it must stay inside.
 void _expectInsidePanel(WidgetTester tester, String label, double keyboardDp) {
   final rect = tester.getRect(find.text(label));
@@ -137,27 +150,39 @@ void _expectInsidePanel(WidgetTester tester, String label, double keyboardDp) {
 }
 
 void main() {
-  testWidgets('a plan card keeps every action on a short phone panel', (
+  testWidgets('the plan row keeps its action on a short phone panel', (
     tester,
   ) async {
     final actions = <ChatAction>[];
     await _pump(tester, _planReviewState(), actions: actions);
 
     expect(tester.takeException(), isNull);
+    // The card is one line, and the document is not in it.
+    expect(find.byType(CardDetailRow), findsOneWidget);
+    expect(find.textContaining('把 `deliverables'), findsNothing);
+    _expectInsidePanel(tester, 'Plan ready for review', 0);
     _expectInsidePanel(tester, 'Approve', 0);
-    _expectInsidePanel(tester, 'Chat about it', 0);
-    _expectInsidePanel(tester, 'Refuse', 0);
 
+    // The row's action answers without opening anything.
     await tester.tap(find.text('Approve'));
     await tester.pump();
     expect(actions.whereType<AnswerQuestionAction>(), hasLength(1));
+
+    // And the row itself opens the document, whose actions are pinned in the
+    // route's bottom bar rather than in the dock.
+    await _openCardDetail(tester, 'Plan ready for review');
+    expect(tester.takeException(), isNull);
+    expect(find.byType(CardDetailScaffold), findsOneWidget);
+    _expectInsidePanel(tester, 'Chat about it', 0);
+    _expectInsidePanel(tester, 'Refuse', 0);
+    _expectInsidePanel(tester, 'Approve', 0);
   });
 
-  testWidgets('a keyboard-shrunk panel still shows the plan actions', (
+  testWidgets('a keyboard-shrunk panel still shows the plan row and action', (
     tester,
   ) async {
     // A 700dp phone (564dp of panel once the app bar and tab bar are out)
-    // with a 300dp keyboard: the actions must sit above the keyboard.
+    // with a 300dp keyboard: the row must sit above the keyboard.
     await _pump(
       tester,
       _planReviewState(),
@@ -166,25 +191,21 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    _expectInsidePanel(tester, 'Plan ready for review', 300);
     _expectInsidePanel(tester, 'Approve', 300);
-    _expectInsidePanel(tester, 'Chat about it', 300);
   });
 
-  testWidgets('reminder strips above the card do not push its actions out', (
+  testWidgets('reminder strips above the row do not push its action out', (
     tester,
   ) async {
-    await _pump(
-      tester,
-      _planReviewState(schedules: _reminders),
-      view: const Size(360, 400),
-    );
+    await _pump(tester, _planReviewState(schedules: _reminders));
 
     expect(tester.takeException(), isNull);
     _expectInsidePanel(tester, 'Approve', 0);
-    _expectInsidePanel(tester, 'Chat about it', 0);
+    _expectInsidePanel(tester, 'Plan ready for review', 0);
   });
 
-  testWidgets('a long question keeps its footer buttons inside', (
+  testWidgets('the ask row opens a sheet whose footer stays on screen', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -196,6 +217,14 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+    // The question is the card's line; the options are one surface deeper.
+    expect(find.byType(CardDetailRow), findsOneWidget);
+    expect(find.text('侧边栏要哪种归档？'), findsOneWidget);
+    expect(find.text('会话行归档'), findsNothing);
+
+    await _openCardDetail(tester, '侧边栏要哪种归档？');
+    expect(tester.takeException(), isNull);
+    expect(find.text('会话行归档'), findsOneWidget);
     _expectInsidePanel(tester, 'Submit', 0);
     _expectInsidePanel(tester, 'Skip', 0);
 
@@ -204,7 +233,7 @@ void main() {
     expect(
       actions.whereType<AnswerQuestionAction>(),
       hasLength(1),
-      reason: 'the footer button the user pressed is the one that answered',
+      reason: 'the sheet button the user pressed is the one that answered',
     );
   });
 }

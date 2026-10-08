@@ -294,7 +294,8 @@ class AgentPresetHeaderLabel extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelSmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
-          fontFamily: 'monospace',
+          fontFamily: kCodeFontFamily,
+          fontFamilyFallback: kCodeFontFamilyFallback,
         ),
       ),
     );

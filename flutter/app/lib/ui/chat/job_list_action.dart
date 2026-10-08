@@ -17,6 +17,7 @@ import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../shared/menu_sheet.dart';
 import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
@@ -32,6 +33,12 @@ const Duration kJobKillArmWindow = Duration(seconds: 3);
 
 /// How long a refused stop shows its failure hint.
 const Duration kJobKillFailedHold = Duration(seconds: 4);
+
+/// The pin's own ceiling on the list: `max-height: min(480px, …)`
+/// (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :52). The menu
+/// opener also caps the card against the composer dock, and the smaller of
+/// the two wins.
+const double kJobsSheetMaxHeight = 480;
 
 /// Live rows first in start order, then settled rows newest-first.
 List<JobView> orderedJobs(List<JobView> jobs) {
@@ -132,9 +139,15 @@ class JobListAction extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
+    // The pin draws this list as a menu, not as a Material sheet: `border: 0`,
+    // `--dsw-radius-lg`, `--dsw-specific-menu`, `--dsw-menu-backdrop-filter`,
+    // the `border-l1` stroke rebound and `--dsw-elevation-prominent`
+    // (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :41-65) — the
+    // material `showMenuSheet` already draws (`shared/menu_sheet.dart`). The
+    // cap mirrors the pin's `max-height: min(480px, …)`.
+    return showMenuSheet<void>(
+      context,
+      maxHeight: kJobsSheetMaxHeight,
       builder: (sheetContext) => _JobsSheet(
         sessionId: sessionId,
         initialJobs: jobs,
@@ -290,73 +303,65 @@ class _JobsSheetState extends State<_JobsSheet> {
     // opens expanded (web default).
     final settledOpen = _settledOpen ?? liveRows.isEmpty;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 480),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.backgroundJobsTitle,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: l10n.close,
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: kJobsSheetMaxHeight),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.backgroundJobsTitle,
+                    style: theme.textTheme.titleSmall,
+                  ),
                 ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final job in liveRows)
-                      ..._row(job, l10n, scheme, theme),
-                    if (settledRows.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-                        child: Row(
-                          children: [
-                            TextButton(
-                              onPressed: () =>
-                                  setState(() => _settledOpen = !settledOpen),
-                              child: Text(
-                                l10n.jobSettledCount(settledRows.length),
-                              ),
-                            ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => setState(() {
-                                _clearedJobIds.addAll(
-                                  settledRows.map((job) => job.id),
-                                );
-                              }),
-                              child: Text(l10n.jobClearSettled),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (settledOpen)
-                        for (final job in settledRows)
-                          ..._row(job, l10n, scheme, theme),
-                    ],
-                  ],
+                IconButton(
+                  tooltip: l10n.close,
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final job in liveRows) ..._row(job, l10n, scheme, theme),
+                if (settledRows.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _settledOpen = !settledOpen),
+                          child: Text(l10n.jobSettledCount(settledRows.length)),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            _clearedJobIds.addAll(
+                              settledRows.map((job) => job.id),
+                            );
+                          }),
+                          child: Text(l10n.jobClearSettled),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (settledOpen)
+                    for (final job in settledRows)
+                      ..._row(job, l10n, scheme, theme),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -490,7 +495,8 @@ class _JobsSheetState extends State<_JobsSheet> {
   ) {
     final buffer = _buffers[job.id] ?? (_buffers[job.id] = _JobOutputBuffer());
     final mono = theme.textTheme.bodySmall?.copyWith(
-      fontFamily: 'monospace',
+      fontFamily: kCodeFontFamily,
+      fontFamilyFallback: kCodeFontFamilyFallback,
       height: 1.2,
     );
     return Container(

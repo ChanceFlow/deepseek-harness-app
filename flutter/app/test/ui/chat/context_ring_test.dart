@@ -399,18 +399,21 @@ void main() {
     await tester.tap(find.byType(ContextRing));
     await tester.pumpAndSettle();
 
-    // The panel rides a Material whose values match the kShapeMenuSheet
-    // family: surfaceContainer, elevation 3, r12, outline-variant hairline.
-    final menuMaterial = tester.widget<Material>(
-      find.ancestor(of: _panel, matching: find.byType(Material)).first,
+    // The panel rides the house menu material: the translucent menu fill over
+    // the backdrop, which is the pin's own surface (`shared/menu_sheet.dart`,
+    // `MenuSurface.module.css:27` + `gradient-shadow-text.css:20`).
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).color ==
+                theme.colorScheme.menuSurfaceFill,
+      ),
+      findsOneWidget,
     );
-    expect(menuMaterial.color, theme.colorScheme.surfaceContainer);
-    expect(menuMaterial.elevation, 3);
-    final shape = menuMaterial.shape as RoundedRectangleBorder;
-    expect(shape.borderRadius, BorderRadius.circular(kShapeMenuSheet));
-    expect(shape.side.color, theme.colorScheme.outlineVariant);
-    expect(shape.side.width, 1);
-    // A popup, not a modal dialog.
+    expect(find.byType(BackdropFilter), findsWidgets);
+    // A menu sheet, not a dialog.
     expect(find.byType(Dialog), findsNothing);
   });
 
@@ -441,21 +444,6 @@ void main() {
     await tester.tap(find.byType(ContextRing));
     await tester.pumpAndSettle();
     expect(_panel, findsOneWidget);
-  });
-
-  testWidgets('losing the sample while open closes the stale panel', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_host(_half));
-    await tester.tap(find.byType(ContextRing));
-    await tester.pumpAndSettle();
-    expect(_panel, findsOneWidget);
-
-    // A model switch can drop capacity while the popup is mounted
-    // (the web meter's availability effect closes the panel).
-    await tester.pumpWidget(_host(const ContextPressure(pressureTokens: 100)));
-    await tester.pumpAndSettle();
-    expect(_panel, findsNothing);
   });
 
   test('occupancy clamps above capacity', () {

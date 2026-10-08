@@ -17,6 +17,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import 'disclosure_row.dart';
 import 'sweep_highlight.dart';
 
 /// The label a thought row carries: a live "Thinking 4s" while it streams, a
@@ -65,7 +66,6 @@ class ReasoningRow extends StatefulWidget {
 class _ReasoningRowState extends State<ReasoningRow>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
-  bool _hovered = false;
 
   /// The row's activity clock. [SweepHighlight] reads the pinned
   /// [kSweepCycle] off this clock's elapsed time, so the controller only has
@@ -141,56 +141,71 @@ class _ReasoningRowState extends State<ReasoningRow>
     return newline == -1 ? visible : visible.substring(newline + 1);
   }
 
-  /// The thought's label line: glyph, weighted label, and — only in the
-  /// standalone disclosure — a one-line preview of the text.
+  /// The thought's label line: glyph, label, and — only in the standalone
+  /// disclosure — a one-line preview of the text.
   ///
   /// The sweep wraps the row's text only: the reference keeps its leading
   /// glyph outside the `TextShimmer` (its `DisclosureRow` shimmers the title
   /// and collapsed content, never the icon), and one controller drives both
   /// the label and the preview. Both texts take [color] rather than a role of
   /// their own — the reference's `.summaryText` inherits the disclosure row's
-  /// tone.
+  /// tone. The title carries no weight of its own: the reference's disclosure
+  /// title is regular (`.title { font-weight: 400 }`, ReasoningRow.module.css
+  /// :28-30).
   Widget _labelRow(
     BuildContext context, {
     required bool showPreview,
     required Color color,
   }) {
-    final theme = Theme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final reduced = DshMotion.isReducedMotion(context);
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Icon(Icons.psychology_outlined, size: 14, color: color),
-        const SizedBox(width: 8),
+        // The reference's leading box: a 16px square holding the 14px glyph,
+        // then a 6px gap to the title (`DisclosureRow.module.css:47-69`).
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: Center(
+            child: Icon(Icons.psychology_outlined, size: 14, color: color),
+          ),
+        ),
+        const SizedBox(width: 6),
         Flexible(
           child: ClipRect(
             child: SweepHighlight(
               controller: widget.running && !reduced ? _sweep : null,
               child: Row(
                 children: [
-                  // Same grid as a tool row — glyph, weighted label, then the
-                  // payload — so a step reads as a step whether the agent was
-                  // thinking or calling.
+                  // Same grid as a tool row — glyph, title, separator dot, then
+                  // the payload — so a step reads as a step whether the agent
+                  // was thinking or calling. The title is the disclosure row's
+                  // own step, the secondary size on the body line
+                  // (`DisclosureRow.module.css:85-90`).
                   Text(
                     _thinkTitle(l10n),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
+                    style: DshType.chatRowTitle.style(color: color),
                   ),
                   if (showPreview &&
                       !_expanded &&
                       _effectiveElapsed == null) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: color,
-                        ),
+                    // The reference separates the title from the summary with a
+                    // 2×2 dot in `label-caption`, not with a gap
+                    // (`ReasoningRow.module.css:32-39`).
+                    Container(
+                      width: 2,
+                      height: 2,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: scheme.labelCaption,
+                        shape: BoxShape.circle,
                       ),
+                    ),
+                    Expanded(
+                      child: widget.running
+                          ? _streamingFade(_preview(context, color))
+                          : _preview(context, color),
                     ),
                   ],
                 ],
@@ -202,26 +217,65 @@ class _ReasoningRowState extends State<ReasoningRow>
     );
   }
 
-  /// The reasoning text: a hairline-ruled block, the same shape whether the
-  /// row owns a disclosure or the activity card opened for the phase.
+  /// The collapsed preview's one line: the newest words while the thought
+  /// streams, its first line once it settles. A streaming preview is hard-cut
+  /// at the box edge and left to [_streamingFade]; a settled one ends in an
+  /// ellipsis, the way the reference's `.summaryText` does outside streaming.
+  /// It reads the secondary size on the summary line
+  /// (`ReasoningRow.module.css:53-59`).
+  Widget _preview(BuildContext context, Color color) => Text(
+    _summary,
+    maxLines: 1,
+    overflow: widget.running ? TextOverflow.clip : TextOverflow.ellipsis,
+    style: DshType.chatRowSummary.style(color: color),
+  );
+
+  /// The streaming preview's right-edge mask: the reference fades the summary's
+  /// last [kReasoningSummaryFade] px while it streams
+  /// (`ReasoningRow.module.css:60`), so the newest words dissolve rather than
+  /// ending in an ellipsis mid-thought. Under `dstIn` only the shader's alpha
+  /// reads through, so the opaque end is the surface role.
+  Widget _streamingFade(Widget child) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (Rect rect) {
+        final double fade = (kReasoningSummaryFade / rect.width).clamp(
+          0.0,
+          0.5,
+        );
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: <Color>[
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 0),
+          ],
+          stops: <double>[0, 1 - fade, 1],
+        ).createShader(rect);
+      },
+      child: child,
+    );
+  }
+
+  /// The reasoning text: the reference's `.thinkBody` — an indent to the row's
+  /// own content edge and nothing else (`ReasoningRow.module.css:74-78`:
+  /// `padding: 4px 0 4px calc(22px + delta)`, no rule, no fill). The same shape
+  /// serves the row's own disclosure and the activity card that opened for the
+  /// phase.
   Widget _body(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(left: 6, top: 4, bottom: 6),
-      padding: const EdgeInsets.only(left: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: scheme.outlineVariant, width: 1.5),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(22, 4, 0, 4),
+      // The reference renders the opened thought as compact markdown: the
+      // secondary size on the 20px line, in `label-tertiary`
+      // (`MarkdownText.module.css` `.compact`, :331-335).
       child: Text(
         widget.text,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-          height: 1.45,
-        ),
+        style: DshType.xs13.style(color: scheme.labelTertiary),
       ),
     );
   }
@@ -229,49 +283,32 @@ class _ReasoningRowState extends State<ReasoningRow>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-    // The reference's disclosure row wears the tertiary label tone at rest and
-    // steps to the secondary one on hover; its leading glyph, title, summary
-    // and chevron all inherit whichever tone the row wears.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Semantics(
-        label: widget.running ? l10n.semanticsRunning : null,
-        // One line of text, one line of row — the stock 24px chevron would
-        // otherwise set the height (see the tool row). The icon theme carries
-        // the row's tone to that chevron, which sits outside the label line.
-        child: IconTheme.merge(
-          data: IconThemeData(size: 18, color: color),
-          child: widget.inline
-              // The activity card already opened for this phase: the thought
-              // shows its label and text with no disclosure of its own.
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _labelRow(context, showPreview: false, color: color),
-                    _body(context),
-                  ],
-                )
-              : ExpansionTile(
-                  // Native expansion mirrors into _expanded so the collapsed
-                  // summary hides once the body opens (web disclosure
-                  // contract).
-                  onExpansionChanged: (expanded) =>
-                      setState(() => _expanded = expanded),
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                  minTileHeight: 30,
-                  shape: const Border(),
-                  collapsedShape: const Border(),
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-                  childrenPadding: const EdgeInsets.only(left: 22),
-                  title: _labelRow(context, showPreview: true, color: color),
-                  children: [_body(context)],
-                ),
-        ),
-      ),
+    if (widget.inline) {
+      // The activity card already opened for this phase: the thought shows its
+      // label and text with no disclosure of its own, in the row's resting
+      // tone.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _labelRow(
+            context,
+            showPreview: false,
+            color: Theme.of(context).colorScheme.labelTertiary,
+          ),
+          _body(context),
+        ],
+      );
+    }
+    // The pin's disclosure chrome: a 24px line whose tone steps on hover, with
+    // the chevron only while the row can open (`DisclosureRow.module.css`
+    // :19-28, :47-58).
+    return DisclosureRow(
+      open: _expanded,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      semanticLabel: widget.running ? l10n.semanticsRunning : null,
+      header: (BuildContext context, Color tone) =>
+          _labelRow(context, showPreview: true, color: tone),
+      body: _body(context),
     );
   }
 }

@@ -53,6 +53,24 @@ double processActivityIconSize(ProcessActivity activity) => switch (activity) {
   _ => 14,
 };
 
+/// Runs a disclosure row with Material's ink overlays switched off.
+///
+/// The reference's disclosure rows carry no fill in any state — its
+/// `DisclosureRow` row and the `ChatGroupSeat` title are `background: none`
+/// (`DisclosureRow.module.css:46`, `ChatGroupSeat.module.css:12`) and a press
+/// changes only the label's tone. Material's `InkWell` would paint a highlight
+/// tile across the row on press, so every overlay colour is off and the row
+/// keeps the reference's flat surface.
+Widget flatInkOverlay(BuildContext context, Widget child) => Theme(
+  data: Theme.of(context).copyWith(
+    splashColor: Colors.transparent,
+    highlightColor: Colors.transparent,
+    hoverColor: Colors.transparent,
+    focusColor: Colors.transparent,
+  ),
+  child: child,
+);
+
 /// One Turn's process control, wrapping the rows it owns.
 ///
 /// The reference's `TurnProcessNodeView` is a full-width row under a hairline
@@ -133,7 +151,8 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
   /// The reference's `.durationNumber`: the code family with tabular figures,
   /// so the clock does not shift the label's width as its digits change.
   static const TextStyle _durationNumber = TextStyle(
-    fontFamily: 'monospace',
+    fontFamily: kCodeFontFamily,
+    fontFamilyFallback: kCodeFontFamilyFallback,
     fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
   );
 
@@ -147,8 +166,7 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final facts = widget.section.facts;
     // The reference's `canCollapse`: a Turn that is still running, stopped or
@@ -160,7 +178,7 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
     final label = turnProcessLabel(facts, l10n);
     // The reference's `.root:hover` steps the tertiary label tone to the
     // secondary one; the chevron inherits whichever the label wears.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -170,55 +188,59 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
           child: Semantics(
             button: canCollapse,
             expanded: canCollapse ? open : null,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: canCollapse ? _toggle : null,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: scheme.outlineVariant,
-                        width: 0.5,
+            child: flatInkOverlay(
+              context,
+              Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: canCollapse ? _toggle : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      // The reference rules the control off from what follows
+                      // with `border-l2` at half a pixel
+                      // (`TurnProcessNodeView.module.css:13`).
+                      border: Border(
+                        bottom: BorderSide(color: scheme.borderL2, width: 0.5),
                       ),
                     ),
-                  ),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      if (label != null)
-                        Flexible(
-                          child: Text.rich(
-                            _labelSpan(label),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: color,
-                              height: 24 / 14,
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        if (label != null)
+                          Flexible(
+                            child: Text.rich(
+                              _labelSpan(label),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              // The control reads the content size on its own
+                              // 24px line (`TurnProcessNodeView.module.css:12`
+                              // and :44).
+                              style: DshType.s14
+                                  .style(color: color)
+                                  .copyWith(height: 24 / 14),
                             ),
                           ),
-                        ),
-                      if (canCollapse) ...[
-                        const SizedBox(width: 4),
-                        AnimatedRotation(
-                          turns: open ? 0.5 : 0,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 14,
-                            color: color,
+                        if (canCollapse) ...[
+                          const SizedBox(width: 4),
+                          AnimatedRotation(
+                            turns: open ? 0.5 : 0,
+                            duration: DshMotion.durationMicro,
+                            curve: DshMotion.curveStandard,
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              size: 14,
+                              color: color,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-        if (open) const SizedBox(height: 8),
         // Transcript order, with the folded rows dropped rather than moved: a
         // collapsed Turn hides what the agent did, and never relocates the
         // reader's own message or the answer that followed the work.
@@ -273,8 +295,7 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final summary = widget.summary;
     final activity = widget.closed
@@ -292,75 +313,82 @@ class _ProcessGroupHeaderState extends State<ProcessGroupHeader> {
     final showChevron = _hovered || widget.open;
     // The reference's `.title:hover` steps the tertiary tone to the secondary
     // one; the leading box inherits it rather than naming a role of its own.
-    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    final color = _hovered ? scheme.labelSecondary : scheme.labelTertiary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Semantics(
         button: true,
         expanded: widget.open,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: widget.open ? 8 : 0),
-              child: Row(
-                children: [
-                  // The reference stacks the icon and the chevron in one 16px
-                  // box and cross-fades them; an open or hovered header shows
-                  // the chevron.
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AnimatedOpacity(
-                          opacity: showChevron ? 0 : 1,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: Icon(
-                            processActivityIcon(activity),
-                            size: processActivityIconSize(activity),
-                            color: color,
-                          ),
-                        ),
-                        AnimatedOpacity(
-                          opacity: showChevron ? 1 : 0,
-                          duration: DshMotion.durationMicro,
-                          curve: DshMotion.curveStandard,
-                          child: AnimatedRotation(
-                            turns: widget.open ? 0.5 : 0,
+        child: flatInkOverlay(
+          context,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: widget.onTap,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: widget.open ? 8 : 0),
+                child: Row(
+                  children: [
+                    // The reference stacks the icon and the chevron in one
+                    // 16px box and cross-fades them; an open or hovered header
+                    // shows the chevron.
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AnimatedOpacity(
+                            opacity: showChevron ? 0 : 1,
                             duration: DshMotion.durationMicro,
                             curve: DshMotion.curveStandard,
                             child: Icon(
-                              Icons.keyboard_arrow_down,
-                              size: 14,
+                              processActivityIcon(activity),
+                              size: processActivityIconSize(activity),
                               color: color,
                             ),
                           ),
-                        ),
-                      ],
+                          AnimatedOpacity(
+                            opacity: showChevron ? 1 : 0,
+                            duration: DshMotion.durationMicro,
+                            curve: DshMotion.curveStandard,
+                            child: AnimatedRotation(
+                              turns: widget.open ? 0.5 : 0,
+                              duration: DshMotion.durationMicro,
+                              curve: DshMotion.curveStandard,
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 14,
+                                color: color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: SweepHighlight(
-                      controller: widget.sweep,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        // The reference's group title is 14px, one step above
-                        // its 13px Turn-control label; Material has both roles.
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: color,
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: SweepHighlight(
+                        controller: widget.sweep,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          // The reference's group title is 14px, one step above
+                          // its 13px Turn-control label; Material has both
+                          // roles.
+                          // The group title is the content size on the
+                          // disclosure row's 24px box
+                          // (`ChatGroupSeat.module.css:14`, `.row` :22).
+                          style: DshType.s14
+                              .style(color: color)
+                              .copyWith(height: 24 / 14),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -446,32 +474,37 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
     final maxHeight = math.min(400.0, MediaQuery.sizeOf(context).height * 0.5);
     // Under `dstIn` only the shader's alpha ramp reads through, so the surface
     // role is the ramp's opaque end — the `EdgeFade` convention, which keeps a
-    // mask value out of the palette and the gate's way.
+    // mask value out of the palette and the gate's way. The mask is always in
+    // the tree, even with both edges opaque: inserting it when an edge opens
+    // would change the scroller's position in the tree and rebuild it, dropping
+    // the scroll the group is holding.
     final surface = Theme.of(context).colorScheme.surface;
-    Widget body = SingleChildScrollView(
-      controller: _controller,
-      child: widget.child,
-    );
-    if (_canScrollUp || _canScrollDown) {
-      body = ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (rect) => LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            surface.withValues(alpha: _canScrollUp ? 0 : 1),
-            surface.withValues(alpha: 1),
-            surface.withValues(alpha: 1),
-            surface.withValues(alpha: _canScrollDown ? 0 : 1),
-          ],
-          stops: const <double>[0, 0.06, 0.94, 1],
-        ).createShader(rect),
-        child: body,
-      );
-    }
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
-      child: body,
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (Rect rect) {
+          // A fixed ramp, not a share of the box: the reference's mask is
+          // `transparent 0, #000 24px` (`ChatGroupSeat.module.css:102-110`), so
+          // the fade stays 24px whatever height the body resolves to.
+          final double ramp = (kEdgeFade / rect.height).clamp(0.0, 0.5);
+          return LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              surface.withValues(alpha: _canScrollUp ? 0 : 1),
+              surface.withValues(alpha: 1),
+              surface.withValues(alpha: 1),
+              surface.withValues(alpha: _canScrollDown ? 0 : 1),
+            ],
+            stops: <double>[0, ramp, 1 - ramp, 1],
+          ).createShader(rect);
+        },
+        child: SingleChildScrollView(
+          controller: _controller,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

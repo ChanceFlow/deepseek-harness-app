@@ -78,19 +78,19 @@ void main() {
     ) async {
       await pump(tester);
       final label = tester.widget<Text>(find.byType(Text));
-      expect(label.style?.color, _scheme.onSurfaceVariant);
+      expect(label.style?.color, _scheme.labelTertiary);
       // The leading box inherits the row's tone instead of naming a role.
       for (final icon in tester.widgetList<Icon>(find.byType(Icon))) {
-        expect(icon.color, _scheme.onSurfaceVariant);
+        expect(icon.color, _scheme.labelTertiary);
       }
 
       await _hover(tester, find.byType(ProcessGroupHeader));
       expect(
         tester.widget<Text>(find.byType(Text)).style?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
       for (final icon in tester.widgetList<Icon>(find.byType(Icon))) {
-        expect(icon.color, _scheme.onSurface);
+        expect(icon.color, _scheme.labelSecondary);
       }
     });
 
@@ -154,6 +154,31 @@ void main() {
       );
       expect(padding.padding, const EdgeInsets.only(bottom: 8));
     });
+
+    testWidgets('paints no tile in any state', (tester) async {
+      await pump(tester);
+
+      // The reference's group title is a flat button — `background: none`,
+      // `padding: 0` (`ChatGroupSeat.module.css:12`, :10) — so a press changes
+      // only the label's tone. Material's ink overlay would paint a fill
+      // across the row, so every overlay colour is off.
+      final ThemeData inner = Theme.of(
+        tester.element(find.byType(SweepHighlight)),
+      );
+      expect(inner.highlightColor, Colors.transparent);
+      expect(inner.splashColor, Colors.transparent);
+      expect(inner.hoverColor, Colors.transparent);
+
+      // Nothing in the row carries a surface of its own.
+      for (final Material material in tester.widgetList<Material>(
+        find.descendant(
+          of: find.byType(ProcessGroupHeader),
+          matching: find.byType(Material),
+        ),
+      )) {
+        expect(material.color, isNull);
+      }
+    });
   });
 
   group('CommandRow', () {
@@ -180,23 +205,23 @@ void main() {
       );
       Color? titleColor() =>
           tester.widget<Text>(find.text('/goal')).style?.color;
-      expect(titleColor(), _scheme.onSurfaceVariant);
+      expect(titleColor(), _scheme.labelTertiary);
       expect(
         tester
             .widget<Text>(find.text('Compacted 120 history items.'))
             .style
             ?.color,
-        _scheme.onSurfaceVariant,
+        _scheme.labelTertiary,
       );
 
       await _hover(tester, find.byType(CommandRow));
-      expect(titleColor(), _scheme.onSurface);
+      expect(titleColor(), _scheme.labelSecondary);
       expect(
         tester
             .widget<Text>(find.text('Compacted 120 history items.'))
             .style
             ?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
     });
 
@@ -240,18 +265,93 @@ void main() {
 
       Color? summaryColor() =>
           tester.widget<Text>(find.text('first line')).style?.color;
-      expect(summaryColor(), _scheme.onSurfaceVariant);
+      expect(summaryColor(), _scheme.labelTertiary);
       expect(
         tester.widget<Text>(find.text('Think')).style?.color,
-        _scheme.onSurfaceVariant,
+        _scheme.labelTertiary,
       );
 
-      await _hover(tester, find.byType(ReasoningRow));
-      expect(summaryColor(), _scheme.onSurface);
+      // The row's hover area is its 24px line, so hover the title inside it:
+      // the disclosure's root box stretches to the route.
+      await _hover(tester, find.text('Think'));
+      expect(summaryColor(), _scheme.labelSecondary);
       expect(
         tester.widget<Text>(find.text('Think')).style?.color,
-        _scheme.onSurface,
+        _scheme.labelSecondary,
       );
+    });
+
+    testWidgets('an open body carries the reference indent and no rule', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          home: const Scaffold(
+            body: ReasoningRow(text: 'first line\nsecond line', running: false),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Think'));
+      await tester.pumpAndSettle();
+
+      // `.thinkBody` is an indent and nothing else
+      // (`ReasoningRow.module.css:74-78`): no border, and the 22px left is the
+      // body's own padding rather than a `childrenPadding` plus a margin.
+      final body = find.ancestor(
+        of: find.text('first line\nsecond line'),
+        matching: find.byType(Container),
+      );
+      expect(body, findsWidgets);
+      final padded = tester
+          .widgetList<Container>(body)
+          .map((container) => container.padding)
+          .whereType<EdgeInsets>()
+          .toList();
+      expect(padded, contains(const EdgeInsets.fromLTRB(22, 4, 0, 4)));
+      for (final container in tester.widgetList<Container>(body)) {
+        expect(container.decoration, isNull);
+      }
+    });
+  });
+
+  group('ProcessGroupBody', () {
+    testWidgets('keeps its edge mask in the tree when nothing scrolls', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          home: const Scaffold(
+            body: SizedBox(
+              height: 120,
+              child: ProcessGroupBody(
+                child: Column(
+                  children: <Widget>[
+                    SizedBox(height: 20, child: Text('member 1')),
+                    SizedBox(height: 20, child: Text('member 2')),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // A body that fits still carries the mask, opaque at both ends. The mask
+      // is the scroller's own widget from the first frame: inserting it only
+      // once an edge opens changes the scroller's position in the tree,
+      // rebuilds it and drops the offset the group is holding.
+      final ShaderMask mask = tester.widget<ShaderMask>(
+        find.ancestor(
+          of: find.byType(SingleChildScrollView),
+          matching: find.byType(ShaderMask),
+        ),
+      );
+      expect(mask.blendMode, BlendMode.dstIn);
+      expect(find.byType(ShaderMask), findsOneWidget);
     });
   });
 }

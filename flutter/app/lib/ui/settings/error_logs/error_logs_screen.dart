@@ -365,7 +365,8 @@ class _InfoLine extends StatelessWidget {
             value,
             style: theme.textTheme.bodySmall?.copyWith(
               color: scheme.onSurface,
-              fontFamily: 'monospace',
+              fontFamily: kCodeFontFamily,
+              fontFamilyFallback: kCodeFontFamilyFallback,
             ),
           ),
         ),
@@ -592,7 +593,8 @@ class _ErrorLogCard extends StatelessWidget {
                         entry.formattedTimestamp,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
-                          fontFamily: 'monospace',
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
                         ),
                       ),
                     ),
@@ -655,7 +657,8 @@ class _ErrorLogCard extends StatelessWidget {
                         child: Text(
                           '${item.key}: ${item.value}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            fontFamily: 'monospace',
+                            fontFamily: kCodeFontFamily,
+                            fontFamilyFallback: kCodeFontFamilyFallback,
                             color: scheme.onSurfaceVariant,
                           ),
                         ),
@@ -688,7 +691,8 @@ class _ErrorLogCard extends StatelessWidget {
                             Text(
                               line,
                               style: theme.textTheme.labelSmall?.copyWith(
-                                fontFamily: 'monospace',
+                                fontFamily: kCodeFontFamily,
+                                fontFamilyFallback: kCodeFontFamilyFallback,
                                 color: scheme.onSurfaceVariant,
                               ),
                             ),
@@ -720,7 +724,8 @@ class _ErrorLogCard extends StatelessWidget {
                       child: SelectableText(
                         entry.stackTrace!.trim(),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
+                          fontFamily: kCodeFontFamily,
+                          fontFamilyFallback: kCodeFontFamilyFallback,
                           fontSize: 11,
                           color: scheme.onSurface,
                         ),

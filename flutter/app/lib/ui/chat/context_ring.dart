@@ -21,7 +21,8 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/context_pressure.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/theme.dart' show kShapeDock, kShapeMenuSheet;
+import '../shared/menu_sheet.dart';
+import '../theme/theme.dart' show kShapeDock;
 import 'stats_line.dart' show formatTokens;
 
 /// Breakdown bar height: 4px, matching web ContextMeter.module.css .bar.
@@ -47,30 +48,6 @@ class ContextRing extends StatefulWidget {
 }
 
 class _ContextRingState extends State<ContextRing> {
-  final MenuController _menu = MenuController();
-
-  /// Whether the widget carries both the occupancy numerator and the
-  /// route capacity; without them the ring is an empty, inert track.
-  bool get _occupied {
-    final pressure = widget.pressure;
-    final used = pressure?.projectedTokens ?? pressure?.pressureTokens;
-    final window = pressure?.contextWindow;
-    return used != null && window != null && window > 0;
-  }
-
-  @override
-  void didUpdateWidget(ContextRing oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // A model switch or session change can remove capacity while the
-    // panel is open; close the stale panel instead of preserving it
-    // (the web meter's availability effect).
-    if (_menu.isOpen && !_occupied) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _menu.isOpen) _menu.close();
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final pressure = widget.pressure;
@@ -83,79 +60,60 @@ class _ContextRingState extends State<ContextRing> {
     final percent = (occupancy * 100).round();
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return MenuAnchor(
-      // With no sample, menuChildren is empty, so the anchor itself is
-      // inert and the ring below loses its tap handler.
-      controller: _menu,
-      // A dismiss tap closes the popup and never reaches the ring, so
-      // the anchor tap below can only open (the web trigger's toggle
-      // needs no double-fire guard).
-      consumeOutsideTap: true,
-      // House menu surface, the same card family as the picker sheets:
-      // menu-tone background, the outline-variant hairline, and the
-      // menu-sheet radius (elevation 3 rides the framework's shadow).
-      style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll<Color>(scheme.surfaceContainer),
-        elevation: const WidgetStatePropertyAll<double>(3),
-        shape: WidgetStatePropertyAll<OutlinedBorder>(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(kShapeMenuSheet),
-            side: BorderSide(color: scheme.outlineVariant),
-          ),
-        ),
-      ),
-      menuChildren: available
-          ? [_panel(context, percent: percent, used: used, window: window)]
-          : const <Widget>[],
-      builder: (context, controller, child) => Semantics(
-        label: available ? l10n.contextUsedPercent(percent) : l10n.contextLabel,
-        button: available,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kShapeDock),
-          // The web trigger toggles the panel on tap; outside taps and
-          // Escape close through MenuAnchor natively.
-          onTap: available
-              ? () {
-                  if (controller.isOpen) {
-                    controller.close();
-                  } else {
-                    controller.open();
-                  }
-                }
-              : null,
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: Center(
-              child: SizedBox(
-                width: 14,
-                height: 14,
-                // Two states, one footprint. The reading is the native
-                // determinate M3 indicator; the empty seat is a bare
-                // outline-variant circle — the indicator's own track,
-                // drawn as a static placeholder so the always-present ring
-                // never reads as a spinner (activity spinners elsewhere
-                // assert their absence through this same type finder, and
-                // a 0-value indicator animates its track-in).
-                child: available
-                    ? CircularProgressIndicator(
-                        value: occupancy,
-                        strokeWidth: 2,
-                        color: scheme.secondary,
-                        backgroundColor: scheme.outlineVariant,
-                      )
-                    : DecoratedBox(
-                        key: const ValueKey('context-ring-track'),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: scheme.outlineVariant,
-                            width: 2,
-                          ),
+    // The ring opens the house menu sheet, so the panel takes the pin's menu
+    // material — the fill over the backdrop, the half-pixel ring and the
+    // `kRadiusLg` corner with `DshElevation.prominent`
+    // (`shared/menu_sheet.dart`). The framework's `MenuStyle` can carry only
+    // the fill composite, the ring and the corner, never the backdrop or the
+    // soft layers, which is why this is a sheet rather than an anchored menu.
+    return Semantics(
+      label: available ? l10n.contextUsedPercent(percent) : l10n.contextLabel,
+      button: available,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kShapeDock),
+        onTap: available
+            ? () => showMenuSheet<void>(
+                context,
+                builder: (sheetContext) => _panel(
+                  sheetContext,
+                  percent: percent,
+                  used: used,
+                  window: window,
+                ),
+              )
+            : null,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Center(
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              // Two states, one footprint. The reading is the native
+              // determinate M3 indicator; the empty seat is a bare
+              // outline-variant circle — the indicator's own track,
+              // drawn as a static placeholder so the always-present ring
+              // never reads as a spinner (activity spinners elsewhere
+              // assert their absence through this same type finder, and
+              // a 0-value indicator animates its track-in).
+              child: available
+                  ? CircularProgressIndicator(
+                      value: occupancy,
+                      strokeWidth: 2,
+                      color: scheme.secondary,
+                      backgroundColor: scheme.outlineVariant,
+                    )
+                  : DecoratedBox(
+                      key: const ValueKey('context-ring-track'),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: scheme.outlineVariant,
+                          width: 2,
                         ),
-                        child: const SizedBox.expand(),
                       ),
-              ),
+                      child: const SizedBox.expand(),
+                    ),
             ),
           ),
         ),

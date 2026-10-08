@@ -41,14 +41,19 @@ import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
 import '../../platform/document_picker.dart';
 import '../shared/error_banner.dart';
+import 'card_detail.dart';
 import 'chat_error_banner.dart';
 import 'chat_ui_state.dart';
 import 'chat_local_state.dart';
 import 'command_roster.dart';
+import 'diff_line_list.dart';
 import 'file_reference_picker.dart';
 import 'host_unreachable_banner.dart';
 import 'file_preview_sheet.dart';
 import 'markdown/markdown_text.dart';
+import 'markdown/plain_text.dart';
+import 'plan_detail_surface.dart';
+import 'tool_detail_surface.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
 import 'message_feedback_actions.dart';
@@ -90,6 +95,8 @@ import 'timeline_folding.dart';
 import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'process_activity.dart';
+import 'disclosure_row.dart';
+import '../shared/menu_material.dart';
 import 'process_disclosure.dart';
 import 'turn_process.dart';
 import 'tool_row_model.dart';
@@ -1207,26 +1214,13 @@ const double _dockBudgetShare = 0.62;
 
 /// Share the dock may occupy while a decision waits. Answering is the only
 /// thing the reader can do with that session, so the decision seat keeps more
-/// room than the composer ever needs — enough that its action row stays at the
-/// dock's bottom edge on a short phone instead of scrolling out of sight.
+/// room than the composer ever needs — enough that its prompt row and its
+/// primary action stay on screen on a short phone instead of scrolling out of
+/// sight. The detail itself no longer lives here: it opens one surface deeper
+/// ([showCardDetailSheet], [showPlanDetail]).
 const double _dockDecisionShare = 0.78;
 const double _dockMinHeight = 200;
 const double _dockMaxHeight = 520;
-
-/// Cap for a decision card's scrollable body when no dock publishes a budget
-/// (a bare pump of the card outside its host). Inside the dock the body takes
-/// what is left of the budget instead (see [_decisionBody]).
-const double _decisionBodyShare = 0.45;
-
-/// The plan-review card's own fixed chrome — its warn header and its action
-/// row, which wraps to two lines on a phone. The scrollable plan body takes
-/// what is left of the dock's budget, so the action row lands at the dock's
-/// bottom edge instead of below it.
-const double _planReviewChrome = 200;
-
-/// The question card's fixed chrome — its header, the custom-answer row and
-/// the footer that carries Submit.
-const double _questionChrome = 240;
 
 class ChatPanel extends StatefulWidget {
   const ChatPanel({
@@ -2129,47 +2123,105 @@ class _ChatPanelState extends State<ChatPanel> {
     // and the scroll it holds.
     final Map<Key, int> rowIndexByKey = indexRowsByKey(rows);
 
+    final Widget transcript = ListView.separated(
+      controller: _timelineScroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: rows.length,
+      findItemIndexCallback: (Key key) => rowIndexByKey[key],
+      separatorBuilder: (_, index) => SizedBox(
+        height: _gapAfter(
+          rows[index],
+          index + 1 < rows.length ? rows[index + 1] : null,
+        ),
+      ),
+      itemBuilder: (context, index) => buildRow(rows[index]),
+    );
+
+    // The end fades follow the scroll position itself. The controller is the
+    // animation, so only the mask rebuilds as the reader moves: the list keeps
+    // its element — and the reader's offset — while the ramp tracks the edges.
+    // The mask stays in the tree even with both edges opaque, because removing
+    // it would change the list's position in the tree and rebuild the scroller.
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: kReadingMeasure),
-        child: ListView.separated(
-          controller: _timelineScroll,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          itemCount: rows.length,
-          findItemIndexCallback: (Key key) => rowIndexByKey[key],
-          separatorBuilder: (_, index) => SizedBox(
-            height: _gapAfter(
-              rows[index],
-              index + 1 < rows.length ? rows[index + 1] : null,
-            ),
-          ),
-          itemBuilder: (context, index) => buildRow(rows[index]),
+        child: AnimatedBuilder(
+          animation: _timelineScroll,
+          builder: (BuildContext context, Widget? child) {
+            final ScrollPosition? position = _timelineScroll.hasClients
+                ? _timelineScroll.position
+                : null;
+            return _edgeFade(
+              child!,
+              fadeTop:
+                  position != null &&
+                  position.hasContentDimensions &&
+                  position.pixels > 0,
+              fadeBottom:
+                  position != null &&
+                  position.hasContentDimensions &&
+                  position.pixels < position.maxScrollExtent,
+            );
+          },
+          child: transcript,
         ),
       ),
     );
   }
 
-  /// Vertical rhythm between two transcript rows. A run of steps is one
-  /// paragraph and closes up; a message opens a new one. Equal gaps
-  /// everywhere read as a list of unrelated lines, which is what the
-  /// transcript stopped looking like a conversation. The tail signals —
-  /// the turn-status line and a pending steering row — open their own
-  /// block like a message does (steering is the reader's own words). A
-  /// null `below` is the tail: block.
+  /// The transcript's end fade: a [kEdgeFade] ramp on an edge that still has
+  /// content behind it — the reference's `fadeTop`/`fadeBottom`
+  /// (`ChatGroupSeat.module.css:102-110`). An edge with nothing behind it stays
+  /// opaque, so the ramp exists only where the content can still move. Under
+  /// `dstIn` only the shader's alpha reads through, so the opaque end is the
+  /// surface role: the mask carries no palette value of its own.
+  Widget _edgeFade(
+    Widget child, {
+    required bool fadeTop,
+    required bool fadeBottom,
+  }) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (Rect rect) {
+        final double ramp = (kEdgeFade / rect.height).clamp(0.0, 0.5);
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            surface.withValues(alpha: fadeTop ? 0 : 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: 1),
+            surface.withValues(alpha: fadeBottom ? 0 : 1),
+          ],
+          stops: <double>[0, ramp, 1 - ramp, 1],
+        ).createShader(rect);
+      },
+      child: child,
+    );
+  }
+
+  /// Vertical rhythm between two transcript rows — the reference's
+  /// `--dsh-chat-flow-gap` (`ChatView.module.css:70-95`). A run of steps sits
+  /// [kChatFlowGapStep] apart and closes up; a message opens a new paragraph
+  /// at [kChatFlowGap]; a Turn's process control opens its own block at
+  /// [kChatFlowGapAfterTurnHeader]. Equal gaps everywhere read as a list of
+  /// unrelated lines, which is what the transcript stopped looking like a
+  /// conversation. The tail signals — the turn-status line and a pending
+  /// steering row — open their own block like a message does (steering is the
+  /// reader's own words). A null `below` is the tail: block.
   ///
   /// A Turn's `turn/start` boundary no longer reaches here: the Turn's process
   /// control takes its place in the list, and its hairline rule carries the
   /// break the boundary used to.
   static double _gapAfter(Object above, Object? below) {
-    const double step = 6;
-    const double block = 16;
-    if (below == null) return block;
+    if (below == null) return kChatFlowGap;
     // A Turn's process control opens the Turn's own block: its border and its
-    // label carry the break, so the gap stays the paragraph gap.
-    if (below is TurnProcessSection) return block;
+    // label carry the break, so it takes the header clearance.
+    if (below is TurnProcessSection) return kChatFlowGapAfterTurnHeader;
     final bool aboveIsStep = !_opensBlock(above);
     final bool belowIsStep = !_opensBlock(below);
-    return aboveIsStep && belowIsStep ? step : block;
+    return aboveIsStep && belowIsStep ? kChatFlowGapStep : kChatFlowGap;
   }
 
   static bool _opensBlock(Object row) {
@@ -2205,20 +2257,31 @@ class _ChatPanelState extends State<ChatPanel> {
       child: _tactileFab(
         context,
         enabled: true,
-        FloatingActionButton.small(
-          heroTag: null,
-          shape: const CircleBorder(),
-          backgroundColor: scheme.surfaceContainerLow,
-          foregroundColor: scheme.onSurfaceVariant,
-          elevation: 2,
-          highlightElevation: 2,
-          hoverElevation: 3,
-          focusElevation: 3,
-          disabledElevation: 0,
-          splashColor: Colors.transparent,
-          enableFeedback: false,
-          onPressed: _jumpToBottom,
-          child: const Icon(Icons.arrow_downward, size: 22),
+        DecoratedBox(
+          // The reference's to-bottom pill (`ChatView.module.css` `.toBottom`,
+          // :252-268): the panel tier with its ring rebound to `border-l3`
+          // (:260), on the floating-button fill in `label-primary` (:262-263).
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: DshElevation.panel(scheme, stroke: scheme.borderL3),
+          ),
+          child: FloatingActionButton.small(
+            heroTag: null,
+            shape: const CircleBorder(),
+            backgroundColor: scheme.buttonFloatingFill,
+            foregroundColor: scheme.labelPrimary,
+            // The pin's lift is the DecoratedBox ring above; Material's own
+            // shadow would stack a second, heavier one under it.
+            elevation: 0,
+            highlightElevation: 0,
+            hoverElevation: 0,
+            focusElevation: 0,
+            disabledElevation: 0,
+            splashColor: Colors.transparent,
+            enableFeedback: false,
+            onPressed: _jumpToBottom,
+            child: const Icon(Icons.arrow_downward, size: 22),
+          ),
         ),
       ),
     );
@@ -2398,7 +2461,7 @@ class _ChatPanelState extends State<ChatPanel> {
                       onAction: widget.onAction,
                     )
                   else if (_pendingApproval case final approval?)
-                    ApprovalPanel(
+                    ApprovalRow(
                       request: approval,
                       command: _commandForApproval(approval),
                       onAction: widget.onAction,
@@ -2521,12 +2584,17 @@ class _InputDock extends StatelessWidget {
               child: content,
             ),
           );
+    // The reference's input card (`InputBar.module.css` `.card`, :46-63): the
+    // input surface on the panel radius, its edge drawn as the elevation
+    // hairline rebound to `border-l2` (:55-57), under the soft tier (:63).
+    // There is no Material border and no M3 shadow: the pin's soft tier is a
+    // half-pixel ring plus two very light layers, which is why this surface
+    // used to read heavier than the reference's.
     final Widget dock = Container(
       decoration: BoxDecoration(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(kShapeDock),
-        border: Border.all(color: scheme.outlineVariant),
-        boxShadow: kM3ShadowElevation1,
+        color: scheme.inputSurface,
+        borderRadius: BorderRadius.circular(kRadiusPanel),
+        boxShadow: DshElevation.soft(scheme, stroke: scheme.borderL2),
       ),
       clipBehavior: Clip.antiAlias,
       child: body,
@@ -2855,10 +2923,9 @@ class MessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.role == MessageRole.user) {
-      // The reader's own words: a quiet container, right-aligned,
-      // with maxWidth capped at 82% (up to 525dp) so short messages fit
-      // their content while long runs wrap cleanly, with the tail corner
-      // tightened so the bubble points at its author.
+      // The reader's own words: the reference's bubble, right-aligned, with
+      // maxWidth capped at 82% (up to 525dp) so short messages fit their
+      // content while long runs wrap cleanly.
       // No action row rides under it — long-press copies, and the reply's
       // row already dates the turn.
       return Column(
@@ -2961,10 +3028,11 @@ class MessageRow extends StatelessWidget {
   }
 }
 
-/// The reader's message container: a neutral fill (the transcript's one
-/// saturated seat is the send button), the shape scale's card radius, and
-/// a tightened tail corner. Long-press copies the text — the gesture every
-/// mobile transcript carries — so the bubble needs no chrome of its own.
+/// The reader's message container: the reference's `--dsw-specific-bubble`
+/// fill ([DshSchemeColors.bubble]) on the one `--dsw-radius-xl` step
+/// ([kShapeBubble]), every corner alike. Long-press copies the text — the
+/// gesture every mobile transcript carries — so the bubble needs no chrome of
+/// its own.
 class _UserBubble extends StatefulWidget {
   const _UserBubble({required this.text, this.onFork});
 
@@ -2976,11 +3044,6 @@ class _UserBubble extends StatefulWidget {
 }
 
 class _UserBubbleState extends State<_UserBubble> {
-  /// Where the finger went down: [InkWell] reports the position on tap-down
-  /// and the long press that follows carries none, so the menu anchors to
-  /// the remembered point.
-  Offset _pressed = Offset.zero;
-
   String get text => widget.text;
   VoidCallback? get onFork => widget.onFork;
 
@@ -2999,37 +3062,41 @@ class _UserBubbleState extends State<_UserBubble> {
 
   /// The bubble's verbs, at the press point: copy always, fork when the
   /// message has a logged position to cut at.
-  Future<void> _openMenu(BuildContext context, Offset globalPosition) async {
+  /// The bubble's verbs, in the house menu sheet: the pin's menu material
+  /// (fill over the backdrop, the half-pixel ring, `kRadiusLg` and
+  /// `DshElevation.prominent`) rather than the framework `showMenu`, whose
+  /// `MenuStyle` can carry only the fill composite and a corner.
+  Future<void> _openMenu(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final overlay =
-        Overlay.of(context).context.findRenderObject()! as RenderBox;
-    final verb = await showMenu<_BubbleVerb>(
-      context: context,
-      position: RelativeRect.fromRect(
-        globalPosition & Size.zero,
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem<_BubbleVerb>(
-          value: _BubbleVerb.copy,
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.copy_outlined, size: 18),
-            title: Text(l10n.copyTooltip),
-          ),
-        ),
-        if (onFork != null)
-          PopupMenuItem<_BubbleVerb>(
-            value: _BubbleVerb.fork,
-            child: ListTile(
+    final verb = await showMenuSheet<_BubbleVerb>(
+      context,
+      // The pins the tiles' Material directly above them: the menu material's
+      // translucent fill is a decoration between the sheet's Material and the
+      // ListTiles, and a ListTile needs an undecorated Material parent.
+      builder: (sheetContext) => Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.alt_route, size: 18),
-              title: Text(l10n.forkFromHere),
+              leading: const Icon(Icons.copy_outlined, size: 18),
+              title: Text(l10n.copyTooltip),
+              onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.copy),
             ),
-          ),
-      ],
+            if (onFork != null)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.alt_route, size: 18),
+                title: Text(l10n.forkFromHere),
+                onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.fork),
+              ),
+          ],
+        ),
+      ),
     );
     if (!context.mounted) return;
     switch (verb) {
@@ -3047,23 +3114,24 @@ class _UserBubbleState extends State<_UserBubble> {
     final theme = Theme.of(context);
     if (text.isEmpty) return const SizedBox.shrink();
     return Material(
-      color: theme.colorScheme.secondaryContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(kShapeDock),
-          topRight: Radius.circular(kShapeDock),
-          bottomLeft: Radius.circular(kShapeDock),
-          bottomRight: Radius.circular(kShapeChip),
-        ),
+      color: theme.colorScheme.bubble,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kShapeBubble),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTapDown: (TapDownDetails details) =>
-            _pressed = details.globalPosition,
-        onLongPress: () => _openMenu(context, _pressed),
+        onLongPress: () => _openMenu(context),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Text(text, style: theme.textTheme.bodyMedium),
+          // The reference's 42px single-line bubble: a 22px line plus 10px of
+          // vertical padding, 16px at the sides (`MessageItem.module.css`
+          // .bubble, :24-33).
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Text(
+            text,
+            // The reference's bubble reads the content size on its 22px line
+            // in `label-primary` (`MessageItem.module.css:24-33`).
+            style: DshType.s14.style(color: theme.colorScheme.labelPrimary),
+          ),
         ),
       ),
     );
@@ -3440,7 +3508,6 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final entries = widget.group.entries;
     final calls = widget.group.calls;
     final thought = widget.group.thought;
@@ -3475,56 +3542,49 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
         // The phase divides from what follows with the header's own 8px
         // gap; the transcript's rows carry no rules of their own.
         if (_expanded) ...[
-          // Web ToolCallTree `.subCalls`: 22px indent, 8px padding, one
-          // hairline guide — the nesting the reference gives a call's own
-          // sub-calls, borrowed for a batch group's members.
+          // The reference's group body is a flat scroller: no indent, no
+          // gutter rule — its members are the same seats the transcript lays
+          // out (`ChatGroupSeat.module.css` `.body`, :87-93, carries only the
+          // cap, the scroll and the fade). The members keep the transcript's
+          // own step rhythm.
           ProcessGroupBody(
             startAtBottom: !widget.group.closed,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 4, 0, 2),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: scheme.outlineVariant, width: 0.5),
-                  ),
-                ),
-                padding: const EdgeInsets.only(left: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < entries.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 4),
-                      switch (entries[i]) {
-                        final TimelineToolCall call => ToolCallRow(
-                          key: transcriptRowKey(call),
-                          call: call,
-                          sessionId: widget.sessionId,
-                          loadAttachment: widget.loadAttachment,
-                          onPreviewFile: widget.onPreviewFile,
-                          expansion: widget.expansion,
-                        ),
-                        final TimelineContextInjection injection => Material(
-                          type: MaterialType.transparency,
-                          child: ContextInjectionRow(
-                            key: transcriptRowKey(injection),
-                            injection: injection,
-                          ),
-                        ),
-                        TimelineMessage(:final value) => Material(
-                          type: MaterialType.transparency,
-                          child: ReasoningRow(
-                            key: transcriptRowKey(entries[i]),
-                            text: value.reasoning ?? '',
-                            running: value.streaming,
-                            elapsedDuration: value.reasoningDuration,
-                          ),
-                        ),
-                        _ => const SizedBox.shrink(),
-                      },
-                    ],
-                  ],
-                ),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < entries.length; i++) ...[
+                  // The reference's group body steps its members at the
+                  // flow gap's 6px (`ChatGroupSeat.module.css` `.body`, :87-88).
+                  if (i > 0) const SizedBox(height: 6),
+                  switch (entries[i]) {
+                    final TimelineToolCall call => ToolCallRow(
+                      key: transcriptRowKey(call),
+                      call: call,
+                      sessionId: widget.sessionId,
+                      loadAttachment: widget.loadAttachment,
+                      onPreviewFile: widget.onPreviewFile,
+                      expansion: widget.expansion,
+                    ),
+                    final TimelineContextInjection injection => Material(
+                      type: MaterialType.transparency,
+                      child: ContextInjectionRow(
+                        key: transcriptRowKey(injection),
+                        injection: injection,
+                      ),
+                    ),
+                    TimelineMessage(:final value) => Material(
+                      type: MaterialType.transparency,
+                      child: ReasoningRow(
+                        key: transcriptRowKey(entries[i]),
+                        text: value.reasoning ?? '',
+                        running: value.streaming,
+                        elapsedDuration: value.reasoningDuration,
+                      ),
+                    ),
+                    _ => const SizedBox.shrink(),
+                  },
+                ],
+              ],
             ),
           ),
         ] else
@@ -3575,7 +3635,19 @@ class ToolCallRow extends StatefulWidget {
 
 class _ToolCallRowState extends State<ToolCallRow>
     with SingleTickerProviderStateMixin {
-  late final ExpansibleController _tileController = ExpansibleController();
+  /// Whether the row's body is open. The reference's tool row owns its own
+  /// disclosure (`ToolRow.tsx:145`, `DisclosureRow`'s `useDisclosure`), and its
+  /// header is a 24px line, not a Material tile.
+  bool _expanded = false;
+
+  /// Opens or closes the body and records the reader's fold, so a remount
+  /// restores what they opened.
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    unawaited(
+      widget.expansion?.setExpanded(timelineKey(widget.call), _expanded),
+    );
+  }
 
   /// The row's activity clock. [SweepHighlight] reads the pinned
   /// [kSweepCycle] off this clock's elapsed time, so the controller only has to
@@ -3596,15 +3668,14 @@ class _ToolCallRowState extends State<ToolCallRow>
           // Restore through the native controller: the tile reads this same
           // instance at initState, so a restore landing before or after the
           // first build both take effect.
-          if (mounted && restored && !_tileController.isExpanded) {
-            _tileController.expand();
+          if (mounted && restored && !_expanded) {
+            setState(() => _expanded = true);
           }
         }),
       );
     }
-    if (widget.call.status == ToolRunStatus.failed &&
-        !_tileController.isExpanded) {
-      _tileController.expand();
+    if (widget.call.status == ToolRunStatus.failed && !_expanded) {
+      _expanded = true;
     }
     if (widget.call.status == ToolRunStatus.running) _sweep.repeat();
   }
@@ -3618,16 +3689,14 @@ class _ToolCallRowState extends State<ToolCallRow>
     }
     if (!running && oldWidget.call.status == ToolRunStatus.running) {
       _sweep.stop(canceled: true);
-      if (widget.call.status == ToolRunStatus.failed &&
-          !_tileController.isExpanded) {
-        _tileController.expand();
+      if (widget.call.status == ToolRunStatus.failed && !_expanded) {
+        setState(() => _expanded = true);
       }
     }
   }
 
   @override
   void dispose() {
-    _tileController.dispose();
     _sweep.dispose();
     super.dispose();
   }
@@ -3650,171 +3719,167 @@ class _ToolCallRowState extends State<ToolCallRow>
         : call.images;
     final hasDetails =
         model.body != null || model.output != null || images.isNotEmpty;
-    return Semantics(
-      label: running
+    // The row keeps the pin's disclosure chrome: a fixed 24px line whose
+    // leading box holds the tool's business glyph, stepping its tone on hover,
+    // with the chevron only while there is a body to disclose
+    // (`DisclosureRow.module.css:19-28`, :47-69; `ToolRow.tsx:167`). The run
+    // state is colour-only in the pin, so its hidden state label is announced
+    // rather than drawn (`ToolRow.tsx:104-113`).
+    final String summaryText = failed && model.errorSummary != null
+        ? model.errorSummary!
+        : model.summary;
+    return DisclosureRow(
+      open: _expanded,
+      expandable: hasDetails,
+      onToggle: _toggle,
+      semanticLabel: running
           ? l10n.semanticsRunning
           : failed
           ? l10n.semanticsFailed
           : null,
-      // A step is one line of text, so the row is one line tall. The
-      // tile's stock trailing chevron is a 24px glyph that sets the row
-      // height on its own; shrinking the ambient icon size brings it back
-      // in scale with the 14px status glyph and keeps the rotation.
-      child: IconTheme.merge(
-        data: const IconThemeData(size: 18),
-        child: ExpansionTile(
-          controller: _tileController,
-          // No payload means a non-interactive row: the native tile drops
-          // its ripple and trailing arrow the same way the web row is inert.
-          enabled: hasDetails,
-          showTrailingIcon: hasDetails,
-          dense: true,
-          visualDensity: VisualDensity.compact,
-          minTileHeight: 30,
-          // An expanded tile rules itself off top and bottom by default;
-          // the transcript's steps divide with space.
-          shape: const Border(),
-          collapsedShape: const Border(),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-          onExpansionChanged: (expanded) {
-            if (hasDetails) {
-              unawaited(
-                widget.expansion?.setExpanded(
-                  timelineKey(widget.call),
-                  expanded,
-                ),
-              );
-            }
-          },
-          title: ClipRect(
-            child: SweepHighlight(
-              controller: running && !DshMotion.isReducedMotion(context)
-                  ? _sweep
-                  : null,
-              child: Padding(
-                padding: EdgeInsets.zero,
-                child: Row(
-                  children: [
-                    // A product row may carry its own glyph (the todo
-                    // checklist); otherwise the state-colored variant
-                    // chrome.
-                    model.leading != null
-                        ? Icon(
-                            model.leading,
-                            size: 14,
-                            color: scheme.onSurfaceVariant,
-                          )
-                        : _leading(context, model.state),
-                    // Web DisclosureRow / ToolRow header: `[16 leading] gap6
-                    // [title 13] gap8 [2x2 dot] gap8 [summary FILL
-                    // truncate]` — the verb is a label, the payload is data,
-                    // and neither is bold or monospace.
-                    const SizedBox(width: 6),
-                    Text(
-                      model.title,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Container(
-                      width: 2,
-                      height: 2,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: scheme.outline,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        // Web ToolRow: the summary is args-derived; the
-                        // settled result text never reaches this slot.
-                        failed && model.errorSummary != null
-                            ? model.errorSummary!
-                            : model.summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: failed
-                              ? theme.colorScheme.error
-                              : scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    // The todo parallel-active count rides a
-                    // non-shrinking suffix beside the truncatable text.
-                    if (model.summarySuffix case final suffix?) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        suffix,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // The theme's childrenPadding (left 20) carries the web IN/OUT
-          // card's inset; the card keeps only its top gap.
-          children: [
-            if (images.isNotEmpty) ...[
-              // The reference image card: the gallery, then the model-facing
-              // envelope (path, media type, pixel size) as its meta line.
-              ToolImageGallery(
-                sessionId: widget.sessionId!,
-                images: images,
-                loadAttachment: widget.loadAttachment,
-              ),
-              if (model.output case final output?)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
-                  child: Text(
-                    output,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+      stateLabel: running
+          ? l10n.runStatusRunning
+          : failed
+          ? l10n.runStatusFailed
+          : l10n.runStatusDone,
+      header: (BuildContext context, Color color) => ClipRect(
+        child: SweepHighlight(
+          controller: running && !DshMotion.isReducedMotion(context)
+              ? _sweep
+              : null,
+          child: Padding(
+            padding: EdgeInsets.zero,
+            child: Row(
+              children: [
+                // The pin's leading slot holds the tool's **business**
+                // glyph in a 16px box — never a status mark: a product
+                // row supplies its own (the todo checklist,
+                // `todo-row.tsx:65`), every other row its variant glyph
+                // (`GenericToolCard.tsx:17-25`).
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: Center(
+                    child: Icon(
+                      model.leading ?? variantIcon(model.variant),
+                      size: 14,
+                      color: color,
                     ),
                   ),
                 ),
-            ] else if (hasDetails)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(kShapeCard),
-                  border: Border.all(color: scheme.outlineVariant),
+                // Web DisclosureRow / ToolRow header: `[16 leading] gap6
+                // [title 13] gap8 [2x2 dot] gap8 [summary FILL
+                // truncate]` — the verb is a label, the payload is data,
+                // and neither is bold or monospace. An empty summary
+                // drops the dot with it (`ToolRow.tsx:210-213`).
+                const SizedBox(width: 6),
+                Text(
+                  model.title,
+                  style: DshType.chatRowTitle.style(color: color),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (model.diff case final diff?)
-                      _diffSection(context, diff)
-                    else if (model.body case final body?)
-                      _ioSection(context, l10n.inputLabel, body, failed: false),
-                    if ((model.diff != null || model.body != null) &&
-                        model.output != null)
-                      Container(
-                        height: 1,
-                        color: scheme.outlineVariant,
-                        margin: const EdgeInsets.symmetric(horizontal: 14),
-                      ),
-                    if (model.output case final output?)
-                      _ioSection(
-                        context,
-                        l10n.outputLabel,
-                        output,
-                        failed: failed,
-                      ),
-                    if (model.filePath case final filePath?)
-                      _fileActionBar(context, filePath, diff: model.diff),
-                  ],
+                if (summaryText.isNotEmpty)
+                  Container(
+                    width: 2,
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: scheme.labelCaption,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                Expanded(
+                  child: Text(
+                    // Web ToolRow: the summary is args-derived; the
+                    // settled result text never reaches this slot. A
+                    // failure keeps its own tone (`ToolRow.module.css`
+                    // `.errorSummary`, :80-82).
+                    summaryText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DshType.chatRowTitle.style(
+                      color: failed ? scheme.stateErrorPrimary : color,
+                    ),
+                  ),
+                ),
+                // The todo parallel-active count rides a
+                // non-shrinking suffix beside the truncatable text.
+                if (model.summarySuffix case final suffix?) ...[
+                  const SizedBox(width: 4),
+                  Text(suffix, style: DshType.chatRowTitle.style(color: color)),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (images.isNotEmpty) ...[
+            // The reference image card: the gallery, then the model-facing
+            // envelope (path, media type, pixel size) as its meta line.
+            ToolImageGallery(
+              sessionId: widget.sessionId!,
+              images: images,
+              loadAttachment: widget.loadAttachment,
+            ),
+            if (model.output case final output?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 14, 4),
+                child: Text(
+                  output,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-          ],
-        ),
+          ] else if (hasDetails)
+            Container(
+              width: double.infinity,
+              // The reference's expanded IO card (`ToolRow.module.css`
+              // `.ioCard`, :181-189): `margin: 4px 0 4px 4px`, a half-pixel
+              // `border-l1` hairline, the code-block radius and surface.
+              margin: const EdgeInsets.fromLTRB(4, 4, 0, 4),
+              decoration: BoxDecoration(
+                color: scheme.markdownCodeBlock,
+                borderRadius: BorderRadius.circular(kRadiusLg),
+                border: Border.all(color: scheme.borderL1, width: 0.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (model.diff case final diff?)
+                    _diffSection(context, diff)
+                  else if (model.body case final body?)
+                    _ioSection(context, l10n.inputLabel, body, failed: false),
+                  if ((model.diff != null || model.body != null) &&
+                      model.output != null)
+                    Container(
+                      height: 1,
+                      color: scheme.outlineVariant,
+                      margin: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                  if (model.output case final output?)
+                    _ioSection(
+                      context,
+                      l10n.outputLabel,
+                      output,
+                      failed: failed,
+                    ),
+                  if (model.filePath case final filePath?)
+                    _fileActionBar(
+                      context,
+                      filePath,
+                      title: model.title,
+                      diff: model.diff,
+                      input: model.body,
+                      output: model.output,
+                      failed: failed,
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -3822,7 +3887,11 @@ class _ToolCallRowState extends State<ToolCallRow>
   Widget _fileActionBar(
     BuildContext context,
     String path, {
+    required String title,
     EditDiffModel? diff,
+    String? input,
+    String? output,
+    bool failed = false,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -3833,6 +3902,34 @@ class _ToolCallRowState extends State<ToolCallRow>
         spacing: 8,
         runSpacing: 4,
         children: [
+          // The peek is bounded, so the whole payload gets its own surface: the
+          // row keeps one line and the content opens one level deeper.
+          OutlinedButton.icon(
+            onPressed: () => showToolDetail(
+              context,
+              args: ToolDetailArgs(
+                title: title,
+                diff: diff,
+                input: input,
+                output: output,
+                failed: failed,
+                path: path,
+              ),
+              onPreviewFile: widget.onPreviewFile,
+            ),
+            icon: const Icon(Icons.open_in_full, size: 14),
+            label: Text(
+              l10n.open,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+          ),
           if (widget.onPreviewFile != null)
             OutlinedButton.icon(
               onPressed: () => widget.onPreviewFile!(path, diff: diff),
@@ -3918,7 +4015,8 @@ class _ToolCallRowState extends State<ToolCallRow>
                     color: failed
                         ? theme.colorScheme.error
                         : scheme.onSurfaceVariant,
-                    fontFamily: 'monospace',
+                    fontFamily: kCodeFontFamily,
+                    fontFamilyFallback: kCodeFontFamilyFallback,
                   ),
                 ),
               ),
@@ -3952,14 +4050,7 @@ class _ToolCallRowState extends State<ToolCallRow>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final fullDiffText = [
-      for (final line in diff.lines)
-        '${line.kind == DiffLineKind.delete
-            ? '-'
-            : line.kind == DiffLineKind.insert
-            ? '+'
-            : ' '} ${line.text}',
-    ].join('\n');
+    final fullDiffText = diffPlainText(diff);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -3975,68 +4066,12 @@ class _ToolCallRowState extends State<ToolCallRow>
           ),
           const SizedBox(width: 14),
           Expanded(
+            // The peek is bounded: the transcript is the surface the reader is
+            // reading, and the whole diff opens one level deeper
+            // ([showToolDetail]).
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
-              child: SingleChildScrollView(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final line in diff.lines)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: switch (line.kind) {
-                              DiffLineKind.delete =>
-                                scheme.errorContainer.withValues(alpha: 0.35),
-                              DiffLineKind.insert =>
-                                scheme.primaryContainer.withValues(alpha: 0.35),
-                              DiffLineKind.equal => Colors.transparent,
-                            },
-                            borderRadius: BorderRadius.circular(kShapeChip),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                child: Text(
-                                  switch (line.kind) {
-                                    DiffLineKind.delete => '-',
-                                    DiffLineKind.insert => '+',
-                                    DiffLineKind.equal => ' ',
-                                  },
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: switch (line.kind) {
-                                      DiffLineKind.delete => scheme.error,
-                                      DiffLineKind.insert => scheme.primary,
-                                      DiffLineKind.equal =>
-                                        scheme.onSurfaceVariant,
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                line.text,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: scheme.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+              child: SingleChildScrollView(child: DiffLineList(diff: diff)),
             ),
           ),
           IconButton(
@@ -4061,22 +4096,6 @@ class _ToolCallRowState extends State<ToolCallRow>
         ],
       ),
     );
-  }
-
-  Widget _leading(BuildContext context, ToolRowState state) {
-    final scheme = Theme.of(context).colorScheme;
-    switch (state) {
-      case ToolRowState.running:
-        return const ActivityDot();
-      case ToolRowState.ok:
-        return Icon(Icons.check, size: 14, color: scheme.success);
-      case ToolRowState.error:
-        return Icon(
-          Icons.close,
-          size: 14,
-          color: Theme.of(context).colorScheme.error,
-        );
-    }
   }
 }
 
@@ -4372,19 +4391,19 @@ class _QueueDockState extends State<QueueDock> {
     // Interaction reopens the list; an emptied queue recollapses (web
     // effect).
     final expanded = !_collapsed || queue.length == 1;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(kShapeDock),
-        ),
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant),
-          left: BorderSide(color: scheme.outlineVariant),
-          right: BorderSide(color: scheme.outlineVariant),
-        ),
+    // The reference's queue panel (`ui-conversation/src/client/queue/
+    // QueueDock.module.css` `.panel`, :31-58): the menu material on its own
+    // backdrop, the radius-lg step on the top corners only (the panel attaches
+    // under the input card, whose own top border closes the shape), a
+    // half-pixel `border-l1` hairline that stops at the bottom edge (:51-57),
+    // and no shadow. Inside the now-white dock this is what used to read as a
+    // grey stripe.
+    return MenuMaterial(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(kRadiusLg),
       ),
+      borderBottom: false,
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -4673,66 +4692,6 @@ class _QueueAction extends StatelessWidget {
   }
 }
 
-class ApprovalRow extends StatelessWidget {
-  const ApprovalRow({
-    required this.requestId,
-    required this.approvalId,
-    required this.toolName,
-    required this.reason,
-    required this.onAction,
-    super.key,
-  });
-
-  final String requestId;
-  final String approvalId;
-  final String toolName;
-  final String? reason;
-  final void Function(ChatAction) onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.approveTool(toolName),
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        if (reason case final String because)
-          Text(because, style: Theme.of(context).textTheme.bodySmall),
-        Row(
-          children: [
-            FilledButton(
-              onPressed: () => onAction(
-                RespondApproval(
-                  requestId: requestId,
-                  approvalId: approvalId,
-                  allowed: true,
-                ),
-              ),
-              child: Text(l10n.allow),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: OutlinedButton(
-                onPressed: () => onAction(
-                  RespondApproval(
-                    requestId: requestId,
-                    approvalId: approvalId,
-                    allowed: false,
-                  ),
-                ),
-                child: Text(l10n.reject),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class QuestionRow extends StatefulWidget {
   const QuestionRow({required this.request, required this.onAction, super.key});
 
@@ -4747,10 +4706,11 @@ class _QuestionRowState extends State<QuestionRow> {
   Map<String, QuestionDraft> _drafts = const <String, QuestionDraft>{};
   int _index = 0;
   String? _error;
-  // Collapsed to the header strip so the conversation above stays readable
-  // while the user decides (the reference `QuestionFlow`'s `minimized`).
-  // Component state, not a draft: it resets with the request.
-  bool _minimized = false;
+
+  /// Whether the flow has dispatched its answer. The sheet closes on it: the
+  /// request it was opened for is settled, so leaving the sheet up would leave
+  /// the reader on a card the session no longer has.
+  bool _settled = false;
 
   @override
   void didUpdateWidget(covariant QuestionRow oldWidget) {
@@ -4760,7 +4720,7 @@ class _QuestionRowState extends State<QuestionRow> {
       _drafts = const <String, QuestionDraft>{};
       _index = 0;
       _error = null;
-      _minimized = false;
+      _settled = false;
     }
   }
 
@@ -4769,32 +4729,73 @@ class _QuestionRowState extends State<QuestionRow> {
     final request = widget.request;
     final review = _planReviewOf(request.questions);
     if (review != null) {
-      return _PlanReviewCard(
+      return _PlanReviewRow(
         requestId: request.requestId,
         review: review,
         onAction: widget.onAction,
       );
     }
     if (request.questions.isEmpty) return const SizedBox.shrink();
-    final index = _index.clamp(0, request.questions.length - 1);
-    return _QuestionCard(
-      questions: request.questions,
-      index: index,
-      drafts: _drafts,
-      error: _error,
-      minimized: _minimized,
-      onToggleMinimized: () => setState(() => _minimized = !_minimized),
-      onChoose: _choose,
-      onDraftChange: (id, draft) =>
-          setState(() => _drafts = {..._drafts, id: draft}),
-      onBack: () => setState(() {
-        if (_index > 0) _index -= 1;
-        _error = null;
-      }),
-      onNext: _continue,
-      onSkip: _skip,
-      onDismiss: () =>
-          widget.onAction(DismissQuestionAction(requestId: request.requestId)),
+    final question =
+        request.questions[_index.clamp(0, request.questions.length - 1)];
+    // The card's line: the asker's own question, with the detail's first line
+    // as its one-line summary. The answer seats do not live on this row — they
+    // belong to the decision surface ([_openSheet]), the way the reference
+    // moves a card's content out of the transcript and into its own pane.
+    final detail = question.detail;
+    return CardDetailRow(
+      icon: Icons.help_outline,
+      title: question.question,
+      summary: detail == null
+          ? null
+          : extractMarkdownPlainText(
+              detail,
+              mode: MarkdownPlainTextMode.firstLine,
+            ),
+      openLabel: AppLocalizations.of(context)!.answer,
+      onOpen: _openSheet,
+    );
+  }
+
+  /// Opens the decision surface: the question's detail scrolls above, its
+  /// options sit at the bottom of the sheet, and every draft stays on this row
+  /// — a dismiss returns the reader to the same card with the answer in
+  /// progress intact.
+  void _openSheet() {
+    final request = widget.request;
+    unawaited(
+      showCardDetailSheet<void>(
+        context,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (context, setSheetState) => _AskDecisionSheet(
+            questions: request.questions,
+            index: _index.clamp(0, request.questions.length - 1),
+            drafts: _drafts,
+            error: _error,
+            onChoose: (id, option) => setSheetState(() => _choose(id, option)),
+            onDraftChange: (id, draft) =>
+                setSheetState(() => _drafts = {..._drafts, id: draft}),
+            onBack: () => setSheetState(() {
+              if (_index > 0) _index -= 1;
+              _error = null;
+            }),
+            onNext: () => setSheetState(() {
+              _continue();
+              if (_settled) Navigator.of(sheetContext).pop();
+            }),
+            onSkip: () => setSheetState(() {
+              _skip();
+              if (_settled) Navigator.of(sheetContext).pop();
+            }),
+            onDismiss: () {
+              Navigator.of(sheetContext).pop();
+              widget.onAction(
+                DismissQuestionAction(requestId: request.requestId),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -4887,6 +4888,8 @@ class _QuestionRowState extends State<QuestionRow> {
         ],
       ),
     );
+    // The request is answered: the decision surface closes with it.
+    _settled = true;
   }
 
   bool _completed(QuestionItem question, QuestionDraft draft) =>
@@ -4953,19 +4956,21 @@ _planReviewOf(List<QuestionItem> questions) {
   return (label: label, recommended: false);
 }
 
-/// Generic question flow card (the web QuestionComposer port): header with
-/// eyebrow/title and a dismiss button, body with the markdown detail, option
-/// rows (numbered single-select or checkbox multi-select with the
-/// recommended badge), a custom-answer row or optionless textarea, and a
-/// footer with the pager, validation feedback, and skip / next / submit.
-class _QuestionCard extends StatelessWidget {
-  const _QuestionCard({
+/// The ask card's decision surface — the web `QuestionComposer` port, hosted
+/// in a large sheet instead of in the composer seat.
+///
+/// The card that opens it is one line (`CardDetailRow`); this is the surface
+/// the reference gives the question's own pane. The question's detail scrolls
+/// in the upper half and every answer seat sits at the bottom of the sheet —
+/// the option rows, the custom-answer row or the optionless textarea, and the
+/// pager with skip / next / submit — so the thumb never has to travel past a
+/// long detail to decide.
+class _AskDecisionSheet extends StatelessWidget {
+  const _AskDecisionSheet({
     required this.questions,
     required this.index,
     required this.drafts,
     required this.error,
-    required this.minimized,
-    required this.onToggleMinimized,
     required this.onChoose,
     required this.onDraftChange,
     required this.onBack,
@@ -4978,11 +4983,6 @@ class _QuestionCard extends StatelessWidget {
   final int index;
   final Map<String, QuestionDraft> drafts;
   final String? error;
-
-  /// Folded down to the header strip, so the conversation above stays
-  /// readable while the user decides (the reference `cardMinimized`).
-  final bool minimized;
-  final VoidCallback onToggleMinimized;
   final void Function(String questionId, String option) onChoose;
   final void Function(String questionId, QuestionDraft draft) onDraftChange;
   final VoidCallback onBack;
@@ -4992,106 +4992,93 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final question = questions[index];
     final draft = drafts[question.id] ?? const QuestionDraft();
     final hasOptions = question.options.isNotEmpty;
     final answered =
         draft.selected.isNotEmpty || draft.customText.trim().isNotEmpty;
     final isLast = index == questions.length - 1;
-    final dockBudget = DockBudget.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(kShapeCard),
-        boxShadow: kM3ShadowElevation1,
-      ),
-      clipBehavior: Clip.antiAlias,
+    final detail = question.detail;
+    // The sheet's own panel is the surface (see [showCardDetailSheet]); this
+    // builds the content on it, not a card of its own.
+    return SafeArea(
+      top: false,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _QuestionCardHeader(
-            question: question,
-            minimized: minimized,
-            onToggleMinimized: onToggleMinimized,
-            onDismiss: onDismiss,
-          ),
-          if (!minimized) ...[
-            _decisionBody(
-              context,
-              dockBudget,
-              _questionChrome,
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (question.detail case final String detail)
-                      MarkdownText(text: detail),
-                    if (hasOptions) ...[
-                      const SizedBox(height: 8),
-                      if (question.multiSelect)
-                        for (final option in question.options)
-                          _QuestionOptionTile(
-                            question: question,
-                            option: option,
-                            selected: draft.selected.contains(option),
-                            onChanged: () => onChoose(question.id, option),
-                          )
-                      else
-                        RadioGroup<String>(
-                          groupValue: draft.selected.isEmpty
-                              ? null
-                              : draft.selected.first,
-                          onChanged: (value) {
-                            if (value != null) onChoose(question.id, value);
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final option in question.options)
-                                _QuestionOptionTile(
-                                  question: question,
-                                  option: option,
-                                  selected: draft.selected.contains(option),
-                                  onChanged: () =>
-                                      onChoose(question.id, option),
-                                ),
-                            ],
-                          ),
+        children: <Widget>[
+          _QuestionCardHeader(question: question, onDismiss: onDismiss),
+          // The reading half: the detail and the option rows travel together,
+          // because an option is chosen against the text above it.
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  if (detail != null) MarkdownText(text: detail),
+                  if (hasOptions)
+                    if (question.multiSelect)
+                      for (final option in question.options)
+                        _QuestionOptionTile(
+                          question: question,
+                          option: option,
+                          selected: draft.selected.contains(option),
+                          onChanged: () => onChoose(question.id, option),
+                        )
+                    else
+                      RadioGroup<String>(
+                        groupValue: draft.selected.isEmpty
+                            ? null
+                            : draft.selected.first,
+                        onChanged: (value) {
+                          if (value != null) onChoose(question.id, value);
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            for (final option in question.options)
+                              _QuestionOptionTile(
+                                question: question,
+                                option: option,
+                                selected: draft.selected.contains(option),
+                                onChanged: () => onChoose(question.id, option),
+                              ),
+                          ],
                         ),
-                    ],
-                  ],
-                ),
+                      ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-              child: hasOptions
-                  ? _CustomAnswerRow(
-                      question: question,
-                      draft: draft,
-                      onDraftChange: (d) => onDraftChange(question.id, d),
-                    )
-                  : _CustomAnswerField(
-                      question: question,
-                      draft: draft,
-                      onDraftChange: (d) => onDraftChange(question.id, d),
-                    ),
-            ),
-            _QuestionCardFooter(
-              total: questions.length,
-              index: index,
-              error: error,
-              answered: answered,
-              isLast: isLast,
-              onBack: onBack,
-              onNext: onNext,
-              onSkip: onSkip,
-            ),
-          ],
+          ),
+          // The answering half, pinned at the bottom of the sheet where the
+          // thumb already is: the free-form seat when the asker offered no
+          // options, the pager and Submit either way. The sheet's height is a
+          // share of the screen, so these never scroll out of reach.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+            child: hasOptions
+                ? _CustomAnswerRow(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  )
+                : _CustomAnswerField(
+                    question: question,
+                    draft: draft,
+                    onDraftChange: (d) => onDraftChange(question.id, d),
+                  ),
+          ),
+          _QuestionCardFooter(
+            total: questions.length,
+            index: index,
+            error: error,
+            answered: answered,
+            isLast: isLast,
+            onBack: onBack,
+            onNext: onNext,
+            onSkip: onSkip,
+          ),
         ],
       ),
     );
@@ -5099,16 +5086,9 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _QuestionCardHeader extends StatelessWidget {
-  const _QuestionCardHeader({
-    required this.question,
-    required this.minimized,
-    required this.onToggleMinimized,
-    required this.onDismiss,
-  });
+  const _QuestionCardHeader({required this.question, required this.onDismiss});
 
   final QuestionItem question;
-  final bool minimized;
-  final VoidCallback onToggleMinimized;
   final VoidCallback onDismiss;
 
   @override
@@ -5146,13 +5126,8 @@ class _QuestionCardHeader extends StatelessWidget {
               ],
             ),
           ),
-          _RoundIconButton(
-            tooltip: minimized
-                ? AppLocalizations.of(context)!.questionMaximize
-                : AppLocalizations.of(context)!.questionMinimize,
-            icon: minimized ? Icons.expand_less : Icons.expand_more,
-            onPressed: onToggleMinimized,
-          ),
+          // No fold seat: the card itself is the fold now — dismissing the
+          // sheet is what returns the reader to the one-line card.
           _RoundIconButton(
             tooltip: AppLocalizations.of(context)!.questionCancel,
             icon: Icons.close,
@@ -5670,45 +5645,19 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
   }
 }
 
-/// One decision card's scrollable body, sized against the dock's budget.
+/// Plan-review decision row (the web `PlanReviewPanel` port, folded to its
+/// own summary).
 ///
-/// [chrome] is the card's own fixed height (header, answer field or action
-/// row). Inside a sized dock the body takes the budget minus that chrome, so
-/// the card as a whole fits the dock and its actions — the only way to answer
-/// — land at the dock's bottom edge instead of below it, where the tab bar
-/// swallows the taps. Without a dock (a bare pump of the card) the historical
-/// fixed cap applies, which is all that is needed when nothing sits below it.
-Widget _decisionBody(
-  BuildContext context,
-  double? dockBudget,
-  double chrome,
-  Widget body,
-) {
-  if (dockBudget == null) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * _decisionBodyShare,
-      ),
-      child: body,
-    );
-  }
-  return ConstrainedBox(
-    constraints: BoxConstraints(
-      maxHeight: (dockBudget - chrome).clamp(0.0, dockBudget),
-    ),
-    child: body,
-  );
-}
-
-/// Plan-review decision card (the web PlanReviewPanel port): a warn-tinted
-/// strip with a dot, the plan as the whole body (markdown), and a
-/// right-aligned action row — discuss (dismiss), decline, and approve.
-///
-/// The reference panel has no fold control; this one carries the same
-/// minimize toggle its sibling question card does, because a long plan is
-/// exactly the card that covers the conversation it is about.
-class _PlanReviewCard extends StatefulWidget {
-  const _PlanReviewCard({
+/// The reference keeps the document out of the card: the panel's body is the
+/// plan's first line as a title and its first paragraph as a description
+/// (`PlanReviewPanel.tsx:52-58`), and a `preview.full` link
+/// (`PlanCard.tsx:81-82`) opens the whole document in the right sidebar. A
+/// phone has no sidebar, so this row is those two lines — title, summary — with
+/// the primary action still on it, and tapping it pushes the document as a
+/// full-screen route ([showPlanDetail]) whose bottom bar pins the whole
+/// decision. Opening the document answers nothing; only the actions do.
+class _PlanReviewRow extends StatelessWidget {
+  const _PlanReviewRow({
     required this.requestId,
     required this.review,
     required this.onAction,
@@ -5726,124 +5675,45 @@ class _PlanReviewCard extends StatefulWidget {
   final void Function(ChatAction) onAction;
 
   @override
-  State<_PlanReviewCard> createState() => _PlanReviewCardState();
-}
-
-class _PlanReviewCardState extends State<_PlanReviewCard> {
-  bool _minimized = false;
-
-  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final review = widget.review;
-    final dockBudget = DockBudget.of(context);
-    void decide(String label) {
-      widget.onAction(
-        AnswerQuestionAction(
-          requestId: widget.requestId,
-          answers: [
-            QuestionAnswer(questionId: review.id, selectedOptions: [label]),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(kShapeCard),
-        boxShadow: kM3ShadowElevation1,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            color: scheme.warning.withValues(alpha: 0.12),
-            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: scheme.warning,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.planReview,
-                    style: TextStyle(
-                      color: scheme.warning,
-                      fontSize: 13,
-                      height: 18 / 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                _RoundIconButton(
-                  tooltip: _minimized
-                      ? l10n.questionMaximize
-                      : l10n.questionMinimize,
-                  icon: _minimized ? Icons.expand_less : Icons.expand_more,
-                  onPressed: () => setState(() => _minimized = !_minimized),
-                ),
-              ],
-            ),
+    final review = this.review;
+    final summary = planSummary(review.plan);
+    final args = PlanDetailArgs(
+      requestId: requestId,
+      questionId: review.id,
+      title: summary.title.isEmpty ? l10n.planReview : summary.title,
+      description: summary.description,
+      plan: review.plan,
+    );
+    return CardDetailRow(
+      icon: Icons.checklist_outlined,
+      title: l10n.planReviewRequestedTitle,
+      summary: args.title,
+      trailing: FilledButton(
+        onPressed: () => onAction(
+          AnswerQuestionAction(
+            requestId: requestId,
+            answers: [
+              QuestionAnswer(
+                questionId: review.id,
+                selectedOptions: [review.approve],
+              ),
+            ],
           ),
-          if (!_minimized) ...[
-            _decisionBody(
-              context,
-              dockBudget,
-              _planReviewChrome,
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: MarkdownText(text: review.plan),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  TextButton(
-                    onPressed: () => widget.onAction(
-                      DismissQuestionAction(requestId: widget.requestId),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: scheme.onSurfaceVariant,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.edit_outlined, size: 14),
-                        const SizedBox(width: 6),
-                        Text(l10n.planDiscuss),
-                      ],
-                    ),
-                  ),
-                  if (review.decline case final String decline)
-                    OutlinedButton(
-                      onPressed: () => decide(decline),
-                      child: Text(l10n.planDecline),
-                    ),
-                  FilledButton(
-                    onPressed: () => decide(review.approve),
-                    child: Text(l10n.planApprove),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
+        ),
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: Text(l10n.planApprove),
+      ),
+      onOpen: () => showPlanDetail(
+        context,
+        args: args,
+        approveLabel: review.approve,
+        declineLabel: review.decline,
+        onAction: onAction,
       ),
     );
   }
@@ -7786,8 +7656,9 @@ class CompactionRow extends StatefulWidget {
 }
 
 class _CompactionRowState extends State<CompactionRow> {
-  bool _hovered = false;
-  bool _pressed = false;
+  /// The marker opens to its summary on a tap; the reference's compaction row
+  /// starts collapsed.
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -7812,69 +7683,51 @@ class _CompactionRowState extends State<CompactionRow> {
     // The reference's `.compactionButton` wears the tertiary label tone and
     // steps to the secondary one on hover; its leading icon, title, and
     // summary all inherit that colour.
-    final color = _hovered || _pressed
-        ? scheme.onSurface
-        : scheme.onSurfaceVariant;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Listener(
-        onPointerDown: (_) => setState(() => _pressed = true),
-        onPointerUp: (_) => setState(() => _pressed = false),
-        onPointerCancel: (_) => setState(() => _pressed = false),
-        child: IconTheme.merge(
-          data: const IconThemeData(size: 18),
-          child: ExpansionTile(
-            enabled: expandable,
-            showTrailingIcon: expandable,
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            minTileHeight: 30,
-            shape: const Border(),
-            collapsedShape: const Border(),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-            title: Row(
-              children: [
-                Icon(Icons.layers_outlined, size: 14, color: color),
-                const SizedBox(width: 6),
-                Text(
-                  l10n.contextCompacted,
-                  style: theme.textTheme.bodySmall?.copyWith(color: color),
-                ),
-                Container(
-                  width: 2,
-                  height: 2,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: scheme.outline,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Flexible(
-                  child: Text(
-                    caption,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: color),
-                  ),
-                ),
-              ],
+    return DisclosureRow(
+      open: _expanded,
+      expandable: expandable,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      semanticLabel: l10n.contextCompacted,
+      header: (BuildContext context, Color color) => Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: Center(
+              child: Icon(Icons.layers_outlined, size: 14, color: color),
             ),
-            children: [
-              if (expandable && widget.compaction.summary != null)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 8,
-                    top: 2,
-                    bottom: 4,
-                  ),
-                  child: MarkdownText(text: widget.compaction.summary!),
-                ),
-            ],
           ),
-        ),
+          const SizedBox(width: 6),
+          Text(
+            l10n.contextCompacted,
+            style: DshType.chatRowTitle.style(color: color),
+          ),
+          Container(
+            width: 2,
+            height: 2,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: scheme.labelCaption,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Flexible(
+            child: Text(
+              caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: DshType.chatRowTitle.style(color: color),
+            ),
+          ),
+        ],
+      ),
+      // The body takes the reference's own indent under the title
+      // (`DisclosureRow`'s leading box plus its 6px gap).
+      body: Padding(
+        padding: const EdgeInsets.only(left: 22, right: 8, top: 2, bottom: 4),
+        child: widget.compaction.summary == null
+            ? const SizedBox.shrink()
+            : MarkdownText(text: widget.compaction.summary!),
       ),
     );
   }
@@ -7954,8 +7807,8 @@ class _CommandRowState extends State<CommandRow>
     final color = failed
         ? scheme.error
         : _hovered
-        ? scheme.onSurface
-        : scheme.onSurfaceVariant;
+        ? scheme.labelSecondary
+        : scheme.labelTertiary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -7987,7 +7840,7 @@ class _CommandRowState extends State<CommandRow>
                     height: 2,
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
-                      color: scheme.outline,
+                      color: scheme.labelCaption,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -8017,7 +7870,7 @@ class _CommandRowState extends State<CommandRow>
 /// ("Context injection", or "Recall" for cross-session material) beside
 /// the durable producer the source identifies; the expanded body carries
 /// the injected content.
-class ContextInjectionRow extends StatelessWidget {
+class ContextInjectionRow extends StatefulWidget {
   const ContextInjectionRow({
     required this.injection,
     super.key,
@@ -8030,22 +7883,40 @@ class ContextInjectionRow extends StatelessWidget {
   /// the activity card already opened for this phase.
   final bool inline;
 
+  @override
+  State<ContextInjectionRow> createState() => _ContextInjectionRowState();
+}
+
+class _ContextInjectionRowState extends State<ContextInjectionRow> {
+  bool _expanded = false;
+
   /// The row header: glyph, the role this context plays, the durable
-  /// producer, and the optional summary.
-  Widget _headerRow(BuildContext context) {
+  /// producer, and the optional summary, in the tone the row wears.
+  Widget _headerRow(BuildContext context, Color tone) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final injection = this.injection;
+    final injection = widget.injection;
     return Row(
       children: [
-        Icon(Icons.travel_explore, size: 14, color: scheme.onSurfaceVariant),
+        // The reference's disclosure header: a 16px leading box holding the
+        // 14px glyph, then a 6px gap (`DisclosureRow.module.css:47-69`), with
+        // the role title on the row's own 13/24 step in `label-tertiary`.
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: Center(
+            child: Icon(
+              Icons.travel_explore,
+              size: 14,
+              color: scheme.labelTertiary,
+            ),
+          ),
+        ),
         const SizedBox(width: 6),
         Text(
           injection.isRecall ? l10n.recallLabel : l10n.contextInjectionLabel,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
+          style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
         ),
         if (injection.producerLabel case final label?) ...[
           Container(
@@ -8053,7 +7924,7 @@ class ContextInjectionRow extends StatelessWidget {
             height: 2,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: scheme.outline,
+              color: scheme.labelCaption,
               shape: BoxShape.circle,
             ),
           ),
@@ -8062,9 +7933,10 @@ class ContextInjectionRow extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              // The producer name is the reference's `.source`: the secondary
+              // size on the 24px line, `label-tertiary`
+              // (`ContextInjectionRow.module.css:27-34`).
+              style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
             ),
           ),
         ],
@@ -8075,9 +7947,7 @@ class ContextInjectionRow extends StatelessWidget {
               summary,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: DshType.chatRowTitle.style(color: scheme.labelTertiary),
             ),
           ),
         ],
@@ -8085,15 +7955,30 @@ class ContextInjectionRow extends StatelessWidget {
     );
   }
 
-  /// The injected content.
-  Widget _body(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 2, bottom: 4),
-    child: MarkdownText(text: injection.text),
-  );
+  /// The injected content: the reference's capped code panel
+  /// (`ContextInjectionRow.module.css` `.body`, :44-58) — the indent under the
+  /// title, the code-block surface on the `radius-md` step, a 141px cap and
+  /// its own scroll.
+  Widget _body(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(left: 22, top: 4),
+      constraints: const BoxConstraints(maxHeight: 141),
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: scheme.markdownCodeBlock,
+        borderRadius: BorderRadius.circular(kRadiusMd),
+      ),
+      child: SingleChildScrollView(
+        child: MarkdownText(text: widget.injection.text),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (inline) {
+    if (widget.inline) {
       // The activity card already opened for this phase: the injection shows
       // its header and content with no disclosure of its own.
       return Padding(
@@ -8101,33 +7986,26 @@ class ContextInjectionRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _headerRow(context),
-            if (injection.text.trim().isNotEmpty) _body(context),
+            _headerRow(context, Theme.of(context).colorScheme.labelTertiary),
+            if (widget.injection.text.trim().isNotEmpty) _body(context),
           ],
         ),
       );
     }
-    final hasBody = injection.text.trim().isNotEmpty;
-    // The same one-line step chrome as a tool or thought row: the ambient
-    // icon size keeps the stock 24px chevron from setting the row height,
-    // and an expanded row divides with space rather than the tile's own
-    // rules.
-    return IconTheme.merge(
-      data: const IconThemeData(size: 18),
-      child: ExpansionTile(
-        // No body means a non-interactive disclosure: the native tile drops
-        // its ripple and trailing arrow (web rule).
-        enabled: hasBody,
-        showTrailingIcon: hasBody,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 30,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-        title: _headerRow(context),
-        children: [_body(context)],
-      ),
+    final hasBody = widget.injection.text.trim().isNotEmpty;
+    // The same one-line disclosure chrome as a tool or thought row: a 24px
+    // line carrying the role title, with a chevron only while there is
+    // injected content to open (web rule).
+    final l10n = AppLocalizations.of(context)!;
+    return DisclosureRow(
+      open: _expanded,
+      expandable: hasBody,
+      onToggle: () => setState(() => _expanded = !_expanded),
+      semanticLabel: widget.injection.isRecall
+          ? l10n.recallLabel
+          : l10n.contextInjectionLabel,
+      header: _headerRow,
+      body: _body(context),
     );
   }
 }

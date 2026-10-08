@@ -201,6 +201,75 @@ void main() {
     }
   });
 
+  test('the content type scale is the reference\'s 14/24 and 13/20', () {
+    for (final theme in <ThemeData>[
+      DshTheme.light(),
+      DshTheme.dark(),
+      DshTheme.oled(),
+    ]) {
+      final text = theme.textTheme;
+      // `--dsh-content-font-size` 14px on the 24px body line
+      // (gradient-shadow-text.css:89-92), secondary 13px on 20px
+      // (`--dsw-font-xs-13`, :230-235).
+      expect(text.bodyMedium?.fontSize, 14);
+      expect(text.bodyMedium?.height, 24 / 14);
+      expect(text.bodySmall?.fontSize, 13);
+      expect(text.bodySmall?.height, 20 / 13);
+    }
+  });
+
+  test('the strong weight is the reference\'s 500, not an invented 600', () {
+    // The Figma 510 renders as 500 (design-platform.css:1-3); the sheets pin
+    // every `-strong-` step at 500 (gradient-shadow-text.css:225, :239).
+    final text = DshTheme.light().textTheme;
+    expect(text.labelLarge?.fontWeight, FontWeight.w500);
+    expect(text.titleMedium?.fontWeight, FontWeight.w500);
+    expect(text.titleLarge?.fontWeight, FontWeight.w500);
+  });
+
+  test('the user bubble wears the reference fill in both brightnesses', () {
+    // `--dsw-specific-bubble` (design-platform.css:268 light, :386 dark):
+    // deepseek-50 rgb(237, 243, 254) and neutral-bluish-850 rgb(44, 44, 46).
+    expect(DshTheme.light().colorScheme.bubble.toARGB32(), 0xFFEDF3FE);
+    expect(DshTheme.dark().colorScheme.bubble.toARGB32(), 0xFF2C2C2E);
+    // The OLED appearance moves the surface family only.
+    expect(
+      DshTheme.oled().colorScheme.bubble,
+      DshTheme.dark().colorScheme.bubble,
+    );
+  });
+
+  test('the transcript rhythm is the reference\'s 6/12/16', () {
+    // `--dsh-chat-flow-gap` (ChatView.module.css:70-95).
+    expect(kChatFlowGapStep, 6);
+    expect(kChatFlowGap, 12);
+    expect(kChatFlowGapAfterTurnHeader, 16);
+    expect(kEdgeFade, 24);
+    expect(kReasoningSummaryFade, 48);
+    expect(kShapeBubble, 20);
+  });
+
+  test('the code stack is the reference\'s, closed by Android\'s mono', () {
+    // base.css:10.
+    expect(kCodeFontFamily, 'SF Mono');
+    expect(
+      kCodeFontFamilyFallback,
+      containsAllInOrder(<String>[
+        'JetBrains Mono',
+        'Fira Code',
+        'Consolas',
+        'Liberation Mono',
+        'Menlo',
+        'Courier',
+        'PingFang SC',
+        'Microsoft YaHei',
+      ]),
+    );
+    // No reference face ships with the app, so the platform's own mono alias
+    // closes the list — the recorded Android limit.
+    expect(kCodeFontFamilyFallback.last, 'monospace');
+  });
+
   test('no deepsuite theme extension is attached', () {
     expect(DshTheme.light().extensions, isEmpty);
     expect(DshTheme.dark().extensions, isEmpty);
@@ -229,5 +298,44 @@ void main() {
       ),
     );
     expect(builder, isA<MaterialApp>());
+  });
+
+  group('menu chrome', () {
+    // The pin's menu material is a translucent fill on a blurred page plus
+    // `--dsw-elevation-prominent` (`Menu.module.css:16-18`,
+    // `MenuSurface.module.css:25-31`). The popup and Material 3 menu families
+    // have neither a backdrop hook nor a layered shadow, so they carry the
+    // material's fill composite, its `border-l1` stroke and the pin's radius,
+    // and drop Material's own shadow — the house `showMenuSheet` carries the
+    // rest.
+    test('the popup family wears the material, not a Material shadow', () {
+      final scheme = DshTheme.light().colorScheme;
+      final popup = DshTheme.light().popupMenuTheme;
+      expect(popup.elevation, 0);
+      expect(popup.shadowColor, Colors.transparent);
+      expect(popup.surfaceTintColor, Colors.transparent);
+      expect(popup.color, scheme.menuSurfaceOpaque);
+      final shape = popup.shape! as RoundedRectangleBorder;
+      expect(shape.borderRadius, BorderRadius.circular(kRadiusLg));
+      expect(shape.side, BorderSide(color: scheme.borderL1, width: 0.5));
+    });
+
+    test('the Material 3 menu family gets the same default', () {
+      final scheme = DshTheme.dark().colorScheme;
+      final style = DshTheme.dark().menuTheme.style!;
+      expect(style.elevation?.resolve(const <WidgetState>{}), 0);
+      expect(
+        style.shadowColor?.resolve(const <WidgetState>{}),
+        Colors.transparent,
+      );
+      expect(
+        style.backgroundColor?.resolve(const <WidgetState>{}),
+        scheme.menuSurfaceOpaque,
+      );
+      final shape =
+          style.shape?.resolve(const <WidgetState>{}) as RoundedRectangleBorder;
+      expect(shape.borderRadius, BorderRadius.circular(kRadiusLg));
+      expect(shape.side, BorderSide(color: scheme.borderL1, width: 0.5));
+    });
   });
 }
