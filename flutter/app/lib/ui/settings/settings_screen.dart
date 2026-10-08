@@ -44,6 +44,7 @@ import 'permission_defaults.dart';
 import 'settings_pages.dart';
 import 'settings_ui_state.dart';
 import 'theme_preference.dart';
+import 'transcript_view_row.dart';
 
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.backendId});
@@ -434,6 +435,11 @@ class _ChatSection extends StatelessWidget {
         ),
         SettingsSectionCard(
           children: <Widget>[
+            // The reference seats this selector early in the general items
+            // (`apply.ts:157-166`, order 12): how much of a Turn's work the
+            // transcript shows is the section's first question.
+            const SettingsTranscriptViewEntryRow(),
+            const SettingsCardDivider(),
             const _EnterBehaviorEntryRow(),
             const SettingsCardDivider(),
             _AgentPresetEntryRow(channel: channel),

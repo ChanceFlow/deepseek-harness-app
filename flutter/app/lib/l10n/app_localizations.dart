@@ -5365,6 +5365,54 @@ abstract class AppLocalizations {
   /// **'Couldn\'\'t save the theme choice.'**
   String get settingsAppearanceSaveFailed;
 
+  /// Settings row naming the transcript view mode (the reference's settings.transcript.title).
+  ///
+  /// In en, this message translates to:
+  /// **'Work details'**
+  String get settingsTranscriptViewTitle;
+
+  /// The transcript view sheet's one-line explanation (the reference's settings.transcript.description).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose how much detail to show for tool calls'**
+  String get settingsTranscriptViewDescription;
+
+  /// The most folded transcript view: group headers collapse and no live call detail shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get settingsTranscriptViewCompact;
+
+  /// No description provided for @settingsTranscriptViewStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get settingsTranscriptViewStandard;
+
+  /// No description provided for @settingsTranscriptViewDetailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed'**
+  String get settingsTranscriptViewDetailed;
+
+  /// The only view that does not fold a completed Turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Verbose'**
+  String get settingsTranscriptViewVerbose;
+
+  /// Stated when the host never answered for the ui-chat namespace.
+  ///
+  /// In en, this message translates to:
+  /// **'Host Chat settings are unavailable.'**
+  String get settingsTranscriptViewUnavailable;
+
+  /// Stated when the host refused the transcriptView write.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t save the work-details choice.'**
+  String get settingsTranscriptViewSaveFailed;
+
   /// Header band of the card shown while a dynamic Cordis plugin activation waits on the reader's decision.
   ///
   /// In en, this message translates to:

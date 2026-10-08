@@ -3033,6 +3033,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAppearanceSaveFailed => '无法保存主题选择。';
 
   @override
+  String get settingsTranscriptViewTitle => '工作步骤展示';
+
+  @override
+  String get settingsTranscriptViewDescription => '选择希望看到多少工具调用细节';
+
+  @override
+  String get settingsTranscriptViewCompact => '简洁';
+
+  @override
+  String get settingsTranscriptViewStandard => '标准';
+
+  @override
+  String get settingsTranscriptViewDetailed => '详细';
+
+  @override
+  String get settingsTranscriptViewVerbose => '完全展开';
+
+  @override
+  String get settingsTranscriptViewUnavailable => '主机会话设置不可用。';
+
+  @override
+  String get settingsTranscriptViewSaveFailed => '无法保存工作步骤展示选择。';
+
+  @override
   String get cordisApprovalHeader => '插件审批';
 
   @override
