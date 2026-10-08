@@ -42,15 +42,31 @@ extension DshSchemeColors on ColorScheme {
       ? const Color(0xFF8D4F00)
       : const Color(0xFFF7AD31);
 
-  /// Text shimmer glint highlight for the turn status row (port of the web
-  /// chat `turnStatus` linear text gradient in `ChatView.module.css`).
-  /// In light mode, sweeps a bright sky-blue highlight (the web palette's
-  /// `--dsw-static-deepseek-200`, `#D3E2FF`) across the darker primary text;
-  /// in dark mode, sweeps an off-white highlight (`#FFFFFF`) across the pastel
-  /// primary text for clear legibility and high dynamic contrast.
-  Color get statusGlint => brightness == Brightness.light
-      ? const Color(0xFFD3E2FF)
-      : const Color(0xFFFFFFFF);
+  /// The running row's label tone — the reference's dedicated
+  /// `--dsw-alias-label-deep-diving` alias (design-platform.css:215 light,
+  /// :333 dark), which a running Turn's status text wears instead of any
+  /// accent role.
+  ///
+  /// Each value is that alias's own `color-mix`: light is 70% of the palette's
+  /// `--dsw-static-deepseek-500` (rgb(65, 118, 230), :28) over
+  /// `--dsw-static-blue-950` (rgb(23, 37, 84), :21); dark is 55% of
+  /// `--dsw-static-deepseek-450` (rgb(86, 134, 254), :27) over
+  /// `--dsw-static-neutral-bluish-400` (rgb(173, 178, 184), :62). Both stops
+  /// are opaque sRGB, so `color-mix(in srgb, A p%, B)` is the componentwise
+  /// `p·A + (1 - p)·B` that [Color.lerp] computes as `lerp(B, A, p)`.
+  Color get labelDeepDiving => brightness == Brightness.light
+      ? Color.lerp(_blue950, _deepseek500, 0.70)!
+      : Color.lerp(_neutralBloish400, _deepseek450, 0.55)!;
+
+  /// The running row's sweep highlight — the reference's
+  /// `--dsw-alias-label-deep-diving-shimmer` (design-platform.css:216 light,
+  /// :334 dark), mixed the same way: light is 30% `--dsw-static-deepseek-500`
+  /// over `--dsw-static-blue-950`; dark is 65% `--dsw-static-blue-300`
+  /// (rgb(147, 197, 253), :11) over `--dsw-static-deepseek-400`
+  /// (rgb(122, 170, 255), :26).
+  Color get labelDeepDivingShimmer => brightness == Brightness.light
+      ? Color.lerp(_blue950, _deepseek500, 0.30)!
+      : Color.lerp(_deepseek400, _blue300, 0.65)!;
 
   /// Code-token colours for fenced blocks ([code_highlight.dart] classifies
   /// them, the markdown renderer paints them). Material 3 carries no syntax
@@ -93,6 +109,16 @@ const List<BoxShadow> kM3ShadowElevation3 = [
 
 /// DeepSeek's brand violet — the one seed every role derives from.
 const Color kDshBrandSeed = Color(0xFF4D6BFE);
+
+/// The design-platform palette steps the two deep-diving mixes read
+/// (design-platform.css:11-62). They stay private: the mixed aliases on
+/// [DshSchemeColors] are their only consumers.
+const Color _deepseek400 = Color(0xFF7AAAFF);
+const Color _deepseek450 = Color(0xFF5686FE);
+const Color _deepseek500 = Color(0xFF4176E6);
+const Color _blue300 = Color(0xFF93C5FD);
+const Color _blue950 = Color(0xFF172554);
+const Color _neutralBloish400 = Color(0xFFADB2B8);
 
 /// Corner radii for the app's surfaces: sheets and dialogs, the composer
 /// dock, cards, menu sheets, chips and rows, and the stadium pill. A

@@ -37,11 +37,10 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/shared/dock_anchor.dart';
-import 'package:app/ui/chat/run_duration.dart';
 import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/tool_images.dart';
-import 'package:app/ui/chat/turn_status_row.dart';
+import 'package:app/ui/chat/running_status_row.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -631,9 +630,17 @@ void main() {
     );
 
     // The turn boundary is now the Turn's process control, not a `Turn N`
-    // caption: this Turn has no `turn/end` yet, so the control reads its live
-    // label and keeps its body open without a tap.
-    expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
+    // caption: this Turn has no `turn/end` yet, so the control renders no
+    // label of its own — the running row carries the live state — and keeps
+    // its body open without a tap.
+    expect(find.byType(TurnProcessRow), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(TurnProcessRow),
+        matching: find.text(_l10n.turnProcessDeepDiving),
+      ),
+      findsNothing,
+    );
     // User text rides a plain bubble (no speaker label); assistant renders
     // flat markdown.
     expect(find.text('do the thing'), findsOneWidget);
@@ -854,29 +861,20 @@ void main() {
         ),
       ),
     ]);
-    expect(find.byType(TurnStatusRow), findsOneWidget);
-    // The label hops letter by letter; joined, it reads the l10n copy.
-    expect(
-      tester
-          .widgetList<Text>(
-            find.descendant(
-              of: find.byType(TurnStatusRow),
-              matching: find.byType(Text),
-            ),
-          )
-          .map((text) => text.data ?? '')
-          .join(),
-      'Deep diving…',
-    );
-    // The text shimmer ShaderMask glides over the hopping letters.
+    expect(find.byType(RunningStatusRow), findsOneWidget);
+    // One visible running label. This window's Turn boundary carries no clock,
+    // so the row reads the bare state.
+    expect(find.text('Deep diving'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    // The row's sweep rides the shared primitive while the run is live.
     expect(
       find.descendant(
-        of: find.byType(TurnStatusRow),
+        of: find.byType(RunningStatusRow),
         matching: find.byType(ShaderMask),
       ),
       findsOneWidget,
     );
-    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     // Once assistant text flows the caret takes the tail and the status
     // line stands down — one signal per moment.
@@ -892,7 +890,7 @@ void main() {
         ),
       ),
     ]);
-    expect(find.byType(TurnStatusRow), findsNothing);
+    expect(find.byType(RunningStatusRow), findsNothing);
     expect(find.byKey(const ValueKey('streaming-caret')), findsOneWidget);
 
     // A settled turn falls silent.
@@ -907,7 +905,7 @@ void main() {
         ),
       ),
     ], running: false);
-    expect(find.byType(TurnStatusRow), findsNothing);
+    expect(find.byType(RunningStatusRow), findsNothing);
   });
 
   testWidgets('the approval seat holds the wait, not the status line', (
@@ -944,7 +942,7 @@ void main() {
     // The wait belongs to the user now: the approval card speaks, the
     // turn-status line stands down.
     expect(find.text('Approve tool: bash'), findsOneWidget);
-    expect(find.byType(TurnStatusRow), findsNothing);
+    expect(find.byType(RunningStatusRow), findsNothing);
   });
 
   testWidgets('approval without reason falls back to the escalation title', (
@@ -3202,7 +3200,7 @@ void main() {
     // pre-first-token loader: the caret owns the tail, so the turn-status
     // line stands down and no spinner appears anywhere in the body.
     expect(find.byKey(const ValueKey('streaming-caret')), findsOneWidget);
-    expect(find.byType(TurnStatusRow), findsNothing);
+    expect(find.byType(RunningStatusRow), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     // Streaming growth follows while pinned. The driven glide's ticker
@@ -4295,8 +4293,16 @@ void main() {
         );
 
         // The boundary is the Turn's process control: this Turn has no
-        // `turn/end` yet, so it reads its live label and stays open.
-        expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
+        // `turn/end` yet, so the control renders no label of its own and
+        // stays open.
+        expect(find.byType(TurnProcessRow), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(TurnProcessRow),
+            matching: find.text(_l10n.turnProcessDeepDiving),
+          ),
+          findsNothing,
+        );
 
         // One phase, one card. The reply follows the card, so the card is
         // settled even though its Turn is still open (the reference closes a
@@ -4477,7 +4483,7 @@ void main() {
       // The finished Turn's control reports how long it took and owns a
       // chevron; the reader keeps the answer it produced but not the work
       // behind it.
-      final turnLabel = _l10n.turnProcessTook(formatRunDuration(5000, _l10n));
+      final turnLabel = '${_l10n.turnProcessTook}5s';
       expect(find.text(turnLabel), findsOneWidget);
       expect(
         find.descendant(
@@ -4553,10 +4559,15 @@ void main() {
           ],
         );
 
-        // Still running: no `turn/end` yet, and no logged clock, so the control
-        // reads the plain live label.
+        // Still running: no `turn/end` yet, so the control renders no label.
         await _pump(tester, turnState(clock: false), <ChatAction>[]);
-        expect(find.text(_l10n.turnProcessDeepDiving), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(TurnProcessRow),
+            matching: find.text(_l10n.turnProcessDeepDiving),
+          ),
+          findsNothing,
+        );
         expect(find.text('AGENTS.md'), findsOneWidget);
 
         // Stopped by the reader.
@@ -4587,10 +4598,7 @@ void main() {
           <ChatAction>[],
         );
         await tester.pump();
-        expect(
-          find.text(_l10n.turnProcessTook(formatRunDuration(5000, _l10n))),
-          findsOneWidget,
-        );
+        expect(find.text('${_l10n.turnProcessTook}5s'), findsOneWidget);
         expect(find.text('AGENTS.md'), findsOneWidget);
       },
     );

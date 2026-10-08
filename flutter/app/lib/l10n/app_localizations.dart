@@ -3301,12 +3301,6 @@ abstract class AppLocalizations {
   /// **'Running…'**
   String get runStatusRunning;
 
-  /// No description provided for @turnStatusWorking.
-  ///
-  /// In en, this message translates to:
-  /// **'Deep diving…'**
-  String get turnStatusWorking;
-
   /// No description provided for @runStatusDone.
   ///
   /// In en, this message translates to:
@@ -6118,19 +6112,19 @@ abstract class AppLocalizations {
   /// Localized chat process copy.
   ///
   /// In en, this message translates to:
-  /// **'Deep diving for {duration}'**
+  /// **'Deep diving for {duration} ···'**
   String turnProcessDeepDivingFor(String duration);
 
-  /// Localized chat process copy.
+  /// Settled Turn duration prefix; the localized duration parts are appended after it.
   ///
   /// In en, this message translates to:
-  /// **'Took {duration}'**
-  String turnProcessTook(String duration);
+  /// **'Completed in '**
+  String get turnProcessTook;
 
   /// No description provided for @turnProcessWorked.
   ///
   /// In en, this message translates to:
-  /// **'Worked'**
+  /// **'Completed'**
   String get turnProcessWorked;
 
   /// No description provided for @turnProcessFailed.
@@ -6151,23 +6145,23 @@ abstract class AppLocalizations {
   /// **' · '**
   String get turnProcessSeparator;
 
-  /// Localized chat process copy.
+  /// Hours unit of a run duration, including the space that separates it from the next part.
   ///
   /// In en, this message translates to:
-  /// **'{seconds}s'**
-  String runDurationSeconds(String seconds);
+  /// **'h '**
+  String get runDurationHourUnit;
 
-  /// Localized chat process copy.
+  /// Minutes unit of a run duration, including the space that separates it from the next part.
   ///
   /// In en, this message translates to:
-  /// **'{minutes}m {seconds}s'**
-  String runDurationMinutes(String minutes, String seconds);
+  /// **'m '**
+  String get runDurationMinuteUnit;
 
-  /// Localized chat process copy.
+  /// Seconds unit of a run duration.
   ///
   /// In en, this message translates to:
-  /// **'{hours}h {minutes}m {seconds}s'**
-  String runDurationHours(int hours, String minutes, String seconds);
+  /// **'s'**
+  String get runDurationSecondUnit;
 
   /// Settings index row and app-bar title for the account surface.
   ///

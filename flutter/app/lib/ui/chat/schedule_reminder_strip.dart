@@ -8,7 +8,7 @@
 /// the only source and a reminder created before the loaded history page
 /// stays invisible until its create folds.
 ///
-/// The reference renders the catalog as a session-header action (an alarm
+/// The reference renders the catalog as a session-header action (a clock
 /// trigger with the reminder count opening a popup). On a phone the dock
 /// already owns the session's standing strips — the todo panel, the goal
 /// strip, the queue dock — so the catalog ports there as one more strip,
@@ -94,8 +94,12 @@ class _ScheduleReminderStripState extends State<ScheduleReminderStrip> {
               onTap: () => setState(() => _expanded = !_expanded),
               child: Row(
                 children: [
+                  // The reference's schedule trigger glyph is a plain clock
+                  // (`TurnTriggerNodeView.tsx` `TRIGGER_ICONS.schedule` =
+                  // `IconClockOutlineRegular`), and so is the overdue mark
+                  // below: one glyph for the whole strip.
                   Icon(
-                    Icons.alarm_outlined,
+                    Icons.schedule,
                     size: 14,
                     color: scheme.onSurfaceVariant,
                   ),
@@ -184,7 +188,9 @@ class _ReminderRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Icon(
-              overdue ? Icons.schedule : Icons.alarm,
+              // Same plain-clock trigger glyph as the strip's own seat; the
+              // overdue tone alone marks a reminder that is due.
+              Icons.schedule,
               size: 12,
               color: overdue ? scheme.warning : scheme.onSurfaceVariant,
             ),

@@ -65,9 +65,14 @@ class ReasoningRow extends StatefulWidget {
 class _ReasoningRowState extends State<ReasoningRow>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  bool _hovered = false;
+
+  /// The row's activity clock. [SweepHighlight] reads the pinned
+  /// [kSweepCycle] off this clock's elapsed time, so the controller only has
+  /// to repeat.
   late final AnimationController _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: kSweepCycle,
   );
   DateTime? _startedAt;
   Duration? _elapsed;
@@ -138,48 +143,62 @@ class _ReasoningRowState extends State<ReasoningRow>
 
   /// The thought's label line: glyph, weighted label, and — only in the
   /// standalone disclosure — a one-line preview of the text.
-  Widget _labelRow(BuildContext context, {required bool showPreview}) {
+  ///
+  /// The sweep wraps the row's text only: the reference keeps its leading
+  /// glyph outside the `TextShimmer` (its `DisclosureRow` shimmers the title
+  /// and collapsed content, never the icon), and one controller drives both
+  /// the label and the preview. Both texts take [color] rather than a role of
+  /// their own — the reference's `.summaryText` inherits the disclosure row's
+  /// tone.
+  Widget _labelRow(
+    BuildContext context, {
+    required bool showPreview,
+    required Color color,
+  }) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final reduced = DshMotion.isReducedMotion(context);
     final l10n = AppLocalizations.of(context)!;
-    return ClipRect(
-      child: SweepHighlight(
-        controller: widget.running && !reduced ? _sweep : null,
-        child: Row(
-          children: [
-            Icon(
-              Icons.psychology_outlined,
-              size: 14,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            // Same grid as a tool row — glyph, weighted label, then the
-            // payload — so a step reads as a step whether the agent was
-            // thinking or calling.
-            Text(
-              _thinkTitle(l10n),
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface,
-              ),
-            ),
-            if (showPreview && !_expanded && _effectiveElapsed == null) ...[
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _summary,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+    return Row(
+      children: [
+        Icon(Icons.psychology_outlined, size: 14, color: color),
+        const SizedBox(width: 8),
+        Flexible(
+          child: ClipRect(
+            child: SweepHighlight(
+              controller: widget.running && !reduced ? _sweep : null,
+              child: Row(
+                children: [
+                  // Same grid as a tool row — glyph, weighted label, then the
+                  // payload — so a step reads as a step whether the agent was
+                  // thinking or calling.
+                  Text(
+                    _thinkTitle(l10n),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
                   ),
-                ),
+                  if (showPreview &&
+                      !_expanded &&
+                      _effectiveElapsed == null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: color,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -210,40 +229,47 @@ class _ReasoningRowState extends State<ReasoningRow>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    if (widget.inline) {
-      // The activity card already opened for this phase: the thought shows
-      // its label and text with no disclosure of its own.
-      return Semantics(
+    final scheme = Theme.of(context).colorScheme;
+    // The reference's disclosure row wears the tertiary label tone at rest and
+    // steps to the secondary one on hover; its leading glyph, title, summary
+    // and chevron all inherit whichever tone the row wears.
+    final color = _hovered ? scheme.onSurface : scheme.onSurfaceVariant;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Semantics(
         label: widget.running ? l10n.semanticsRunning : null,
+        // One line of text, one line of row — the stock 24px chevron would
+        // otherwise set the height (see the tool row). The icon theme carries
+        // the row's tone to that chevron, which sits outside the label line.
         child: IconTheme.merge(
-          data: const IconThemeData(size: 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [_labelRow(context, showPreview: false), _body(context)],
-          ),
-        ),
-      );
-    }
-    return Semantics(
-      label: widget.running ? l10n.semanticsRunning : null,
-      // One line of text, one line of row — the stock 24px chevron would
-      // otherwise set the height (see the tool row).
-      child: IconTheme.merge(
-        data: const IconThemeData(size: 18),
-        child: ExpansionTile(
-          // Native expansion mirrors into _expanded so the collapsed
-          // summary hides once the body opens (web disclosure contract).
-          onExpansionChanged: (expanded) =>
-              setState(() => _expanded = expanded),
-          dense: true,
-          visualDensity: VisualDensity.compact,
-          minTileHeight: 30,
-          shape: const Border(),
-          collapsedShape: const Border(),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-          childrenPadding: const EdgeInsets.only(left: 22),
-          title: _labelRow(context, showPreview: true),
-          children: [_body(context)],
+          data: IconThemeData(size: 18, color: color),
+          child: widget.inline
+              // The activity card already opened for this phase: the thought
+              // shows its label and text with no disclosure of its own.
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _labelRow(context, showPreview: false, color: color),
+                    _body(context),
+                  ],
+                )
+              : ExpansionTile(
+                  // Native expansion mirrors into _expanded so the collapsed
+                  // summary hides once the body opens (web disclosure
+                  // contract).
+                  onExpansionChanged: (expanded) =>
+                      setState(() => _expanded = expanded),
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  minTileHeight: 30,
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+                  childrenPadding: const EdgeInsets.only(left: 22),
+                  title: _labelRow(context, showPreview: true, color: color),
+                  children: [_body(context)],
+                ),
         ),
       ),
     );

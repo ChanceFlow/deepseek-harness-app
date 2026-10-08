@@ -3,6 +3,7 @@ import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/markdown/markdown_text.dart';
 import 'package:app/ui/theme/theme.dart';
 import 'package:domain/model/timeline_item.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -211,6 +212,67 @@ void main() {
       expect(find.text('/compact'), findsOneWidget);
       expect(find.text('No history to compact'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+    });
+  });
+
+  group('CompactionRow tone', () {
+    const compaction = TimelineCompaction(
+      id: 'c-tone',
+      shadowedCount: 42,
+      shadowedTokens: 1500,
+    );
+
+    Future<void> pump(WidgetTester tester) async {
+      await tester.pumpWidget(
+        l10nApp(
+          theme: DshTheme.light(),
+          locale: const Locale('en'),
+          home: const Scaffold(body: CompactionRow(compaction: compaction)),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the title and its glyph step from tertiary to secondary', (
+      tester,
+    ) async {
+      await pump(tester);
+      final scheme = DshTheme.light().colorScheme;
+
+      Color? titleColor() =>
+          tester.widget<Text>(find.text('Context compacted')).style?.color;
+      Color? captionColor() => tester
+          .widget<Text>(find.text('Compacted 42 history items (~1500 tokens)'))
+          .style
+          ?.color;
+      Color? iconColor() =>
+          tester.widget<Icon>(find.byIcon(Icons.layers_outlined)).color;
+
+      // At rest: the tertiary label tone on the glyph, the title, and the
+      // caption the reference lets inherit it.
+      expect(titleColor(), scheme.onSurfaceVariant);
+      expect(captionColor(), scheme.onSurfaceVariant);
+      expect(iconColor(), scheme.onSurfaceVariant);
+
+      // Hover: the secondary tone.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text('Context compacted')));
+      await tester.pumpAndSettle();
+      expect(titleColor(), scheme.onSurface);
+      expect(captionColor(), scheme.onSurface);
+      expect(iconColor(), scheme.onSurface);
+
+      // Press keeps the same stepped tone.
+      final press = await tester.startGesture(
+        tester.getCenter(find.text('Context compacted')),
+      );
+      await tester.pump();
+      expect(titleColor(), scheme.onSurface);
+      expect(iconColor(), scheme.onSurface);
+      await press.up();
+      await tester.pumpAndSettle();
     });
   });
 }

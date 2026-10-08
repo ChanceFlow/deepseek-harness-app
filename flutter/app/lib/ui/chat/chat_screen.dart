@@ -93,7 +93,7 @@ import 'process_activity.dart';
 import 'process_disclosure.dart';
 import 'turn_process.dart';
 import 'tool_row_model.dart';
-import 'turn_status_row.dart';
+import 'running_status_row.dart';
 import 'workflow_run_row.dart';
 import '../theme/theme.dart';
 
@@ -2013,6 +2013,14 @@ class _ChatPanelState extends State<ChatPanel> {
     // — the queue dock and the composer seat already carry the run.
     final showTurnStatus = _turnStatusVisible(uiState) && items.isNotEmpty;
     final showOlder = uiState.hasMoreOlder || uiState.isLoadingOlder;
+    // The status line names the open Turn's clock; a Turn boundary outside the
+    // loaded window leaves the start unknown and the label clockless.
+    final runningTurnStart = groupedItems
+        .whereType<TurnProcessSection>()
+        .where((section) => !section.facts.closed)
+        .lastOrNull
+        ?.facts
+        .startedAtEpochMs;
     // The web's tail order: flow rows, the turn-status line, then the
     // pending steering bubbles (ChatView.tsx:446-460). Steering rides both
     // render modes the same way.
@@ -2087,7 +2095,16 @@ class _ChatPanelState extends State<ChatPanel> {
           text: row.text,
         );
       }
-      return const TurnStatusRow(key: ValueKey('turn-status'));
+      if (identical(row, _turnStatusSlot)) {
+        return RunningStatusRow(
+          key: const ValueKey('turn-status'),
+          startedAtEpochMs: runningTurnStart,
+          showDivider: _carriesOutput(groupedItems.lastOrNull),
+        );
+      }
+      // The fold produces sections and items only; the tail sentinel above is
+      // the one synthetic row this builder is handed.
+      return const SizedBox.shrink();
     }
 
     return Center(
@@ -2141,6 +2158,18 @@ class _ChatPanelState extends State<ChatPanel> {
         identical(row, _turnStatusSlot) ||
         identical(row, _olderHistorySlot);
   }
+
+  /// Whether the row above the running status carries output, so the status
+  /// line draws its hairline: the reference shows it unless the previous
+  /// visible row is the reader's own message, a steering bubble, or the Turn
+  /// trigger (`ChatView.module.css` `.runningDivider`).
+  static bool _carriesOutput(Object? row) => switch (row) {
+    null => false,
+    TimelineMessage(:final value) => value.role != MessageRole.user,
+    TimelineTurnBoundary() => false,
+    SessionQueueItem() => false,
+    _ => true,
+  };
 
   /// The jump-to-bottom affordance: a native Material small FAB in the
   /// neutral selector fill (the composer's idle circle convention), so it
@@ -3104,7 +3133,7 @@ class _PendingSteeringRowState extends State<PendingSteeringRow>
 
 /// Streaming assistant tail: a 2×18 primary caret blinking at 1s once
 /// text flows. Before the first token the turn's wait belongs to the
-/// [TurnStatusRow] at the timeline tail, so the transcript never carries
+/// [RunningStatusRow] at the timeline tail, so the transcript never carries
 /// two tail signals at once.
 class _StreamingCaret extends StatefulWidget {
   const _StreamingCaret({super.key});
@@ -3318,9 +3347,13 @@ class ActivityGroupRow extends StatefulWidget {
 class _ActivityGroupRowState extends State<ActivityGroupRow>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
+
+  /// The row's activity clock. [SweepHighlight] reads the pinned
+  /// [kSweepCycle] off this clock's elapsed time, so the controller only has to
+  /// repeat.
   late final AnimationController _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: kSweepCycle,
   );
 
   bool get _isRunning =>
@@ -3380,20 +3413,17 @@ class _ActivityGroupRowState extends State<ActivityGroupRow>
     // The group header is the reference's process card: a 16px leading box
     // holding the category icon under a chevron that fades in on hover or
     // while open, then the label — the running detail joins it after the
-    // locale's separator.
+    // locale's separator. Only the label rides the sweep, so the leading box
+    // stays outside the highlight.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SweepHighlight(
-          controller: running && !DshMotion.isReducedMotion(context)
-              ? _sweep
-              : null,
-          child: ProcessGroupHeader(
-            summary: summary,
-            closed: widget.group.closed,
-            open: _expanded,
-            onTap: () => setState(() => _expanded = !_expanded),
-          ),
+        ProcessGroupHeader(
+          summary: summary,
+          closed: widget.group.closed,
+          open: _expanded,
+          sweep: running && !DshMotion.isReducedMotion(context) ? _sweep : null,
+          onTap: () => setState(() => _expanded = !_expanded),
         ),
         // The phase divides from what follows with the header's own 8px
         // gap; the transcript's rows carry no rules of their own.
@@ -3499,9 +3529,13 @@ class ToolCallRow extends StatefulWidget {
 class _ToolCallRowState extends State<ToolCallRow>
     with SingleTickerProviderStateMixin {
   late final ExpansibleController _tileController = ExpansibleController();
+
+  /// The row's activity clock. [SweepHighlight] reads the pinned
+  /// [kSweepCycle] off this clock's elapsed time, so the controller only has to
+  /// repeat.
   late final AnimationController _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: kSweepCycle,
   );
 
   @override
@@ -7621,23 +7655,32 @@ class TurnBoundaryRow extends StatelessWidget {
 /// Context-compaction marker — port of the web CompactionItem: one dim
 /// row (leading context icon + title + count/summary caption), expandable to
 /// markdown body when summary text is present.
-class CompactionRow extends StatelessWidget {
+class CompactionRow extends StatefulWidget {
   const CompactionRow({required this.compaction, super.key});
 
   final TimelineCompaction compaction;
+
+  @override
+  State<CompactionRow> createState() => _CompactionRowState();
+}
+
+class _CompactionRowState extends State<CompactionRow> {
+  bool _hovered = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final expandable = compaction.isExpandable;
+    final expandable = widget.compaction.isExpandable;
 
     final String caption;
-    if (compaction.shadowedCount != null && compaction.shadowedTokens != null) {
+    if (widget.compaction.shadowedCount != null &&
+        widget.compaction.shadowedTokens != null) {
       caption = l10n.compactionCompleted(
-        compaction.shadowedCount!,
-        compaction.shadowedTokens!,
+        widget.compaction.shadowedCount!,
+        widget.compaction.shadowedTokens!,
       );
     } else if (expandable) {
       caption = l10n.compactionViewSummary;
@@ -7645,75 +7688,84 @@ class CompactionRow extends StatelessWidget {
       caption = l10n.compactionSummaryUnavailable;
     }
 
-    return IconTheme.merge(
-      data: const IconThemeData(size: 18),
-      child: ExpansionTile(
-        enabled: expandable,
-        showTrailingIcon: expandable,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        minTileHeight: 30,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 2),
-        title: Row(
-          children: [
-            Icon(
-              Icons.layers_outlined,
-              size: 14,
-              color: scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              l10n.contextCompacted,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            Container(
-              width: 2,
-              height: 2,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: scheme.outline,
-                shape: BoxShape.circle,
-              ),
-            ),
-            Flexible(
-              child: Text(
-                caption,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+    // The reference's `.compactionButton` wears the tertiary label tone and
+    // steps to the secondary one on hover; its leading icon, title, and
+    // summary all inherit that colour.
+    final color = _hovered || _pressed
+        ? scheme.onSurface
+        : scheme.onSurfaceVariant;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: IconTheme.merge(
+          data: const IconThemeData(size: 18),
+          child: ExpansionTile(
+            enabled: expandable,
+            showTrailingIcon: expandable,
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            minTileHeight: 30,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 2),
+            title: Row(
+              children: [
+                Icon(Icons.layers_outlined, size: 14, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.contextCompacted,
+                  style: theme.textTheme.bodySmall?.copyWith(color: color),
                 ),
-              ),
+                Container(
+                  width: 2,
+                  height: 2,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: scheme.outline,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                Flexible(
+                  child: Text(
+                    caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(color: color),
+                  ),
+                ),
+              ],
             ),
-          ],
+            children: [
+              if (expandable && widget.compaction.summary != null)
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                    right: 8,
+                    top: 2,
+                    bottom: 4,
+                  ),
+                  child: MarkdownText(text: widget.compaction.summary!),
+                ),
+            ],
+          ),
         ),
-        children: [
-          if (expandable && compaction.summary != null)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: 20,
-                right: 8,
-                top: 2,
-                bottom: 4,
-              ),
-              child: MarkdownText(text: compaction.summary!),
-            ),
-        ],
       ),
     );
   }
 }
 
-/// Host slash-command card — port of the web command flow node. The run
-/// append renders the command name with the activity dot under the shared
-/// sweep glare (web `dsh-command-row-sweep`); the done event resolves it
-/// with the host's own result text (success in the label tone, an error
-/// like "This operation was aborted" in the error tone). No UI copy is
-/// composed here: the name and text are host facts.
+/// Host slash-command card — port of the reference's `GenericCommandCard`.
+/// A running command shows the activity dot under the shared sweep while the
+/// host text is still pending; a settled one shows the lifecycle glyph and the
+/// host's own result text. The row names no colour of its own: the title and
+/// the summary wear the shared disclosure tones — tertiary at rest, secondary
+/// on hover — and a failed run wears the error role. No UI copy is composed
+/// here: the name and text are host facts.
 class CommandRow extends StatefulWidget {
   const CommandRow({required this.command, super.key});
 
@@ -7725,9 +7777,14 @@ class CommandRow extends StatefulWidget {
 
 class _CommandRowState extends State<CommandRow>
     with SingleTickerProviderStateMixin {
+  bool _hovered = false;
+
+  /// The row's activity clock. [SweepHighlight] reads the pinned
+  /// [kSweepCycle] off this clock's elapsed time, so the controller only has to
+  /// repeat.
   late final AnimationController _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: kSweepCycle,
   );
 
   @override
@@ -7769,65 +7826,69 @@ class _CommandRowState extends State<CommandRow>
         command.name == 'compact' ? l10n.compactionRunning : text,
       CommandRunStatus.success || CommandRunStatus.failed => text,
     };
-    return ClipRect(
-      child: SweepHighlight(
-        controller: running && !DshMotion.isReducedMotion(context)
-            ? _sweep
-            : null,
-        child: SizedBox(
-          height: 24,
-          child: Row(
-            children: [
-              if (running)
-                const ActivityDot()
-              else
-                Icon(
-                  failed ? Icons.error_outline : Icons.check_circle_outline,
-                  size: 14,
-                  color: failed ? scheme.error : scheme.primary,
-                ),
-              const SizedBox(width: 6),
-              Text(
-                '/${command.name}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: failed
-                      ? scheme.error
-                      : running
-                      ? scheme.onSurfaceVariant
-                      : scheme.onSurface,
-                ),
-              ),
-              if (summaryText != null && summaryText.isNotEmpty) ...[
-                Container(
-                  width: 2,
-                  height: 2,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: scheme.outline,
-                    shape: BoxShape.circle,
+    // The reference's `GenericCommandCard` names no colour of its own: the
+    // enclosing disclosure row wears the tertiary tone at rest and the
+    // secondary one on hover, and the title and summary inherit it. Only a
+    // failed run keeps a role of its own — the reference's `[data-error]`.
+    final color = failed
+        ? scheme.error
+        : _hovered
+        ? scheme.onSurface
+        : scheme.onSurfaceVariant;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: ClipRect(
+        child: SweepHighlight(
+          controller: running && !DshMotion.isReducedMotion(context)
+              ? _sweep
+              : null,
+          child: SizedBox(
+            height: 24,
+            child: Row(
+              children: [
+                if (running)
+                  const ActivityDot()
+                else
+                  Icon(
+                    failed ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 14,
+                    color: failed ? scheme.error : scheme.primary,
                   ),
-                ),
-                Flexible(
-                  child: Text(
-                    summaryText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: failed
-                          ? scheme.error
-                          : running
-                          ? scheme.onSurfaceVariant
-                          : scheme.onSurface,
+                const SizedBox(width: 6),
+                Text('/${command.name}', style: _textStyle(theme, color)),
+                if (summaryText != null && summaryText.isNotEmpty) ...[
+                  // Inside the swept child, so the band tints the separator the
+                  // way the reference's `data-shimmer-decoration` makes its
+                  // background follow the highlight.
+                  Container(
+                    width: 2,
+                    height: 2,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: scheme.outline,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                ),
+                  Flexible(
+                    child: Text(
+                      summaryText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _textStyle(theme, color),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  TextStyle? _textStyle(ThemeData theme, Color color) =>
+      theme.textTheme.bodySmall?.copyWith(color: color);
 }
 
 /// Logged non-user context (web ContextInjectionRow): a disclosure row in
@@ -7997,6 +8058,7 @@ class _RenameSessionDialogState extends State<_RenameSessionDialog> {
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+  T? get lastOrNull => isEmpty ? null : last;
 }
 
 /// Web `workspaceLabel`: basename of the cwd, raw path when separator-only.

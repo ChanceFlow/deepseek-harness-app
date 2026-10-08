@@ -258,34 +258,61 @@ TurnProcessFacts turnProcessFacts(
   );
 }
 
-/// The Turn control's label: what the Turn is doing, or how it ended.
-String turnProcessLabel(
+/// The Turn control's settled label: the localized leading copy, and the
+/// duration parts that follow it for a Turn that ended on its own.
+final class TurnProcessLabel {
+  const TurnProcessLabel(this.prefix, this.duration);
+
+  /// The localized leading copy (`Completed in `, `Stopped`, `Failed`).
+  final String prefix;
+
+  /// The elapsed duration's parts; empty when the Turn's clock is unknown, so
+  /// the label reads as its prefix alone (`Completed`).
+  final List<RunDurationPart> duration;
+}
+
+/// The Turn control's label, or null while the Turn is open.
+///
+/// The reference renders no control label until `turn/end` folds
+/// (`chat/TurnProcessNodeView.tsx` returns null while the Turn's status is not
+/// `closed`); the running row is the live status. A stopped or failed Turn
+/// replaces its duration with the reason, and a Turn whose start or end time
+/// never arrived keeps the bare `Completed`.
+TurnProcessLabel? turnProcessLabel(
   TurnProcessFacts facts,
-  AppLocalizations l10n, {
-  required int? nowMs,
-}) {
-  final elapsed = _elapsedMs(facts, nowMs);
-  if (!facts.closed) {
-    return elapsed == null
-        ? l10n.turnProcessDeepDiving
-        : l10n.turnProcessDeepDivingFor(formatLiveRunDuration(elapsed, l10n));
-  }
+  AppLocalizations l10n,
+) {
+  if (!facts.closed) return null;
   return switch (facts.endReason) {
-    'aborted' => l10n.turnProcessStopped,
-    'error' => l10n.turnProcessFailed,
-    _ =>
-      elapsed == null
-          ? l10n.turnProcessWorked
-          : l10n.turnProcessTook(formatRunDuration(elapsed, l10n)),
+    'aborted' => TurnProcessLabel(
+      l10n.turnProcessStopped,
+      const <RunDurationPart>[],
+    ),
+    'error' => TurnProcessLabel(
+      l10n.turnProcessFailed,
+      const <RunDurationPart>[],
+    ),
+    _ => _settledLabel(facts, l10n),
   };
 }
 
-/// The Turn's elapsed time, floored at one second as the reference floors it.
-int? _elapsedMs(TurnProcessFacts facts, int? nowMs) {
+TurnProcessLabel _settledLabel(TurnProcessFacts facts, AppLocalizations l10n) {
+  final elapsed = _elapsedMs(facts);
+  if (elapsed == null) {
+    return TurnProcessLabel(l10n.turnProcessWorked, const <RunDurationPart>[]);
+  }
+  return TurnProcessLabel(
+    l10n.turnProcessTook,
+    runDurationParts(elapsed, l10n),
+  );
+}
+
+/// The Turn's elapsed time: the reference's `Math.max(1000, end - start)` over
+/// the Turn's own timestamps, or null when either never arrived.
+int? _elapsedMs(TurnProcessFacts facts) {
   final start = facts.startedAtEpochMs;
-  if (start == null) return null;
-  final end = facts.closed ? (facts.endedAtEpochMs ?? nowMs) : nowMs;
-  if (end == null) return null;
+  final end = facts.endedAtEpochMs;
+  if (start == null || end == null) return null;
   final elapsed = end - start;
   return elapsed < 1000 ? 1000 : elapsed;
 }
