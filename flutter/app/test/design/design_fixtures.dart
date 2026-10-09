@@ -432,6 +432,49 @@ rule this follows.
 `_InputDock` 里,改完一起量。
 ''';
 
+/// Inline code in both scripts and across a wrap: the chip the user's
+/// screenshot asked for, with Latin context, Han context, and a long line that
+/// carries a chip onto the next line.
+const String _proseCodeReply = '''
+The fix lives in `markdown_text.dart`, where the inline run is built.
+
+中文说明：路径 `root:root` 和它旁边的中文要在同一个段落里读起来是一行，
+所以代码片段后面的汉字必须落在同一个行高上，不能被 chip 顶开。
+
+A long line that has to wrap with a chip in it: the dock keeps one surface, the
+field caps at four lines, and `_InputDock.withChrome(...)` still owns the
+`root:root` path when the reader's viewport is narrow.
+''';
+
+ChatUiState proseCodeState() {
+  return const ChatUiState(
+    sessions: kSessions,
+    selectedSessionId: 's1',
+    timeline: <TimelineItem>[
+      TimelineMessage(
+        ChatMessage(
+          id: 'pc1',
+          sessionId: 's1',
+          role: MessageRole.user,
+          text: 'inline code, both scripts, and a wrapped line please',
+          createdAtEpochMs: kNow,
+          seq: 41,
+        ),
+      ),
+      TimelineMessage(
+        ChatMessage(
+          id: 'pc2',
+          sessionId: 's1',
+          role: MessageRole.assistant,
+          text: _proseCodeReply,
+          createdAtEpochMs: kNow + 1000,
+          seq: 42,
+        ),
+      ),
+    ],
+  );
+}
+
 ChatUiState proseState() {
   return const ChatUiState(
     sessions: kSessions,

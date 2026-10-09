@@ -646,6 +646,14 @@ const List<String> kCodeFontFamilyFallback = <String>[
   'Courier',
   'PingFang SC',
   'Microsoft YaHei',
+  // The pin's code stack ends on its Han faces (PingFang SC, Microsoft YaHei,
+  // `base.css:10`), because a path, flag or identifier can carry a Han
+  // character. Those two are Apple's and Microsoft's; Android's are the Noto
+  // names the UI chain already declares, so a code run mixes scripts at the code
+  // step instead of falling through to tofu.
+  'Noto Sans CJK SC',
+  'Noto Sans SC',
+  'Source Han Sans SC',
   'monospace',
 ];
 

@@ -380,10 +380,13 @@ class _MarkdownTextState extends State<MarkdownText> {
           Container(
             width: double.infinity,
             color: scheme.markdownCodeBlockBanner,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
+            // The strip is as tall as its text: the copy target below overlays
+            // it instead of setting its height (the 44px button that used to
+            // live in this row is what left the language floating in a void).
+            child: Stack(
               children: [
-                Expanded(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 9, 46, 9),
                   child: Text(
                     // A fence with no language says nothing worth a line of
                     // its own; an unclosed one says the body is still coming.
@@ -395,30 +398,49 @@ class _MarkdownTextState extends State<MarkdownText> {
                         .copyWith(
                           fontFamily: kCodeFontFamily,
                           fontFamilyFallback: kCodeFontFamilyFallback,
+                          // The pin's step adds no tracking; null would let an
+                          // ancestor text theme's letterSpacing leak in.
+                          letterSpacing: 0,
                         ),
                   ),
                 ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 18,
-                  padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                  tooltip: l10n.copyTooltip,
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    await Clipboard.setData(ClipboardData(text: block.code));
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.copiedTooltip),
-                        behavior: SnackBarBehavior.floating,
-                        duration: const Duration(milliseconds: 1400),
+                // The pin keeps the copy inside the banner strip
+                // (`CodeBlock.module.css` `.action`/`.copyButton`, :56-66).
+                // Positioned, so its 32px target rides over the strip without
+                // making the strip 32px tall.
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 14,
+                      padding: const EdgeInsets.all(6),
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
                       ),
-                    );
-                  },
-                  icon: Icon(Icons.copy_outlined, color: scheme.labelPrimary),
+                      tooltip: l10n.copyTooltip,
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await Clipboard.setData(
+                          ClipboardData(text: block.code),
+                        );
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.copiedTooltip),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(milliseconds: 1400),
+                          ),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.copy_outlined,
+                        color: scheme.labelPrimary,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -450,6 +472,9 @@ class _MarkdownTextState extends State<MarkdownText> {
         .copyWith(
           fontFamily: kCodeFontFamily,
           fontFamilyFallback: kCodeFontFamilyFallback,
+          // No added tracking, and no inherited tracking: the block's face is
+          // the pin's, not a themed label's.
+          letterSpacing: 0,
         );
     final highlighted = !block.open && codeLanguageIsKnown(block.language);
     final tokens = highlighted
@@ -468,11 +493,10 @@ class _MarkdownTextState extends State<MarkdownText> {
               ],
             ),
             style: base,
-            softWrap: false,
           )
-        : Text(block.code, style: base, softWrap: false);
+        : Text(block.code, style: base);
 
-    return SingleChildScrollView(scrollDirection: Axis.horizontal, child: body);
+    return body;
   }
 
   /// Paint one token class. `plain` keeps the code body's own ink, so an
@@ -496,15 +520,18 @@ class _MarkdownTextState extends State<MarkdownText> {
   InlineSpan _inlineSpan(BuildContext context, List<MarkdownInline> inlines) {
     final theme = Theme.of(context);
     // The reference's inline code run: the code face on the inline-code step
-    // (`MarkdownText.module.css` `:not(pre) > code`, :155-166). Its chip — the
-    // `markdown-inline-code` fill, the half-pixel `border-l1` and the 5px side
-    // padding — is not portable to a `TextSpan`; the face carries the signal
-    // and the chip is a known gap.
+    // (`MarkdownText.module.css` `:not(pre) > code`, :155-166), chipped by the
+    // `CodeInline` case below.
     final code = DshType.markdownCode
         .style(color: theme.colorScheme.labelPrimary)
         .copyWith(
           fontFamily: kCodeFontFamily,
           fontFamilyFallback: kCodeFontFamilyFallback,
+          // The pin's step adds no tracking, and a null here would let the
+          // ambient `DefaultTextStyle`'s tracking (our `labelSmall` carries
+          // 0.4) leak into every inline run — which is what makes `root:root`
+          // and `/data/adb` read as letter-spaced.
+          letterSpacing: 0,
         );
     final spans = <InlineSpan>[];
     void render(List<MarkdownInline> runs, List<InlineSpan> out) {
@@ -513,7 +540,38 @@ class _MarkdownTextState extends State<MarkdownText> {
           case TextInline():
             out.add(TextSpan(text: inline.text));
           case CodeInline():
-            out.add(TextSpan(text: inline.code, style: code));
+            // The pin chips an inline run: `markdown-inline-code` fill, the
+            // half-pixel `border-l1`, `--dsw-radius-sm` and 5px side padding
+            // (`MarkdownText.module.css` `:not(pre) > code`, :155-166) on the
+            // code step. A `TextSpan` carries no fill, so the run is a
+            // placeholder.
+            //
+            // The 1px vertical padding stands in for what CSS gets for free:
+            // an inline background covers the line box, while a `Container`
+            // paints exactly its box. With the chip's text at `height: 1` its
+            // box, border and padding stay inside the body line's descent, so a
+            // paragraph containing a chip keeps the body step's 24px rhythm.
+            out.add(
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.markdownInlineCode,
+                    border: Border.all(
+                      color: theme.colorScheme.borderL1,
+                      width: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(kRadiusSm),
+                  ),
+                  child: Text(inline.code, style: code.copyWith(height: 1)),
+                ),
+              ),
+            );
           case BoldInline():
             final nested = <InlineSpan>[];
             render(inline.inlines, nested);
