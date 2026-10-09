@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/theme.dart';
 import 'archived_filter.dart';
+import 'menu_sheet.dart';
 import 'state_dot.dart';
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
@@ -409,16 +410,15 @@ class SessionTreeRow extends StatelessWidget {
       else if (!archived && onArchive != null)
         (Icons.archive_outlined, l10n.archiveSession, onArchive!),
     ];
+    // The pin ports a `Menu` from the row's ⋮
+    // (`ui-workspace/src/client/rows/Rows.tsx:665-686`), so the panel is the
+    // house menu surface and not a Material card: [showMenuSheet] carries
+    // `menuSurfaceFill` over `menuBackdropFilter`, the `kRadiusLg` corner, the
+    // `borderL1` ring and `DshElevation.prominent` — the material the rest of
+    // the menu family wears.
     unawaited(
-      showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        // The pin's session-row verbs are a `Menu` anchored to the row's ⋮
-        // (`ui-workspace/src/client/rows/Rows.tsx:665-686`: portaled, closed
-        // on an outside click) — a popover with no mask. The route's default
-        // barrier would dim the app behind it, so it is kept for the outside
-        // tap and paints nothing.
-        barrierColor: Colors.transparent,
+      showMenuSheet<void>(
+        context,
         builder: (_) => _SessionVerbsSheet(
           title: session.blank ? l10n.newSession : session.displayTitle,
           items: items,
@@ -550,9 +550,11 @@ class _SessionVerbButton extends StatelessWidget {
 }
 
 /// Web Menu (figma MenuDropdown) as a bottom sheet for the session-verb
-/// menu: the same menu surface as the workspace action sheet — the shared
-/// [kShapeMenuSheet] card, inverted hairline, lv3 shadow — with the row's
-/// title as a caption and one row per provided verb.
+/// menu: the row's title as a caption and one row per provided verb, on the
+/// house menu surface. [showMenuSheet] owns that surface — the
+/// `menuSurfaceFill` over `menuBackdropFilter`, the `kRadiusLg` corner, the
+/// `borderL1` ring and the elevated panel padding — so this body paints no
+/// card of its own.
 class _SessionVerbsSheet extends StatelessWidget {
   const _SessionVerbsSheet({required this.title, required this.items});
 
@@ -563,36 +565,24 @@ class _SessionVerbsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(kShapeMenuSheet),
-          border: Border.all(color: scheme.outlineVariant),
-          boxShadow: kM3ShadowElevation3,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
-            for (final (icon, label, onTap) in items)
-              _VerbRow(icon: icon, label: label, onTap: onTap),
-          ],
+          ),
         ),
-      ),
+        for (final (icon, label, onTap) in items)
+          _VerbRow(icon: icon, label: label, onTap: onTap),
+      ],
     );
   }
 }
