@@ -42,6 +42,7 @@ import '../model/skills.dart';
 import '../model/subagent.dart';
 import '../model/timeline_item.dart';
 import '../model/timeline_window.dart';
+import '../model/turn_outline.dart';
 import '../model/todo.dart';
 import '../model/user_question.dart';
 import '../model/workspace.dart';
@@ -380,6 +381,19 @@ abstract class ChatRepository {
   /// null rather than defaulting to an empty roster.
   Stream<AgentTeam?> observeAgentTeam(String sessionId) =>
       const Stream<AgentTeam?>.empty();
+
+  /// Every started turn's rail facts, from the host's `turnOutline`
+  /// projection. Empty until the host publishes one, and for a host that
+  /// mounts no turn-outline unit.
+  Stream<List<TurnOutlineEntry>> observeTurnOutline(String sessionId) =>
+      const Stream<List<TurnOutlineEntry>>.empty();
+
+  /// A descriptor-backed child's active-turn duration and latest closed-turn
+  /// completion, from the host's `subagentTiming` projection. Null until the
+  /// host publishes one, for a Session that is no subagent, and for a host
+  /// that mounts no subagent timing unit.
+  Stream<SubagentTiming?> observeSubagentTiming(String sessionId) =>
+      const Stream<SubagentTiming?>.empty();
 
   /// Non-activating read of one Session's `agentTeam` projection
   /// (`session/projections`), for the cold seed a stream cannot give.

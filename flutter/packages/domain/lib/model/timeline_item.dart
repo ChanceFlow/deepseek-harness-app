@@ -64,6 +64,19 @@ final class PresentedFile {
 /// time-to-first-token boundary (`firstTokenTime − stepStartTime`,
 /// `client/ui-chat/src/client/contract/turn-metrics.ts`). Either is null
 /// when the folded window did not carry it — never a fabricated value.
+///
+/// [steering] is true when a preceding `agent/inbox/spliced` claimed this
+/// message from the running turn's `next-step` inbox — the reference's
+/// `SteeringHistory` classification
+/// (`client/ui-chat/src/client/model/steering-history.ts`): human input
+/// admitted into a live turn rather than a new user turn.
+///
+/// [stepEndedAtEpochMs] and [stepEndSeq] are the owning step's `step/end`
+/// event, the reference's `stepEnd`
+/// (`client/ui-trajectory/src/client/trajectory-assistant-definition.ts:247`):
+/// they bound the step's rows so a surface can separate a step's process from
+/// its answer. Both are null for a step whose end fell outside the folded
+/// window, and for a step that assembled no message at all.
 final class TimelineMessage extends TimelineItem {
   const TimelineMessage(
     this.value, {
@@ -71,6 +84,9 @@ final class TimelineMessage extends TimelineItem {
     this.usage,
     this.firstTokenAtEpochMs,
     this.stepStartedAtEpochMs,
+    this.steering = false,
+    this.stepEndedAtEpochMs,
+    this.stepEndSeq,
   });
 
   final ChatMessage value;
@@ -82,6 +98,16 @@ final class TimelineMessage extends TimelineItem {
   /// outside the folded window.
   final int? stepStartedAtEpochMs;
 
+  /// Whether a durable inbox splice admitted this message into a running
+  /// turn's next step.
+  final bool steering;
+
+  /// The owning `step/end` event's logged time.
+  final int? stepEndedAtEpochMs;
+
+  /// The owning `step/end` event's seq.
+  final int? stepEndSeq;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -90,7 +116,10 @@ final class TimelineMessage extends TimelineItem {
           other.step == step &&
           other.usage == usage &&
           other.firstTokenAtEpochMs == firstTokenAtEpochMs &&
-          other.stepStartedAtEpochMs == stepStartedAtEpochMs);
+          other.stepStartedAtEpochMs == stepStartedAtEpochMs &&
+          other.steering == steering &&
+          other.stepEndedAtEpochMs == stepEndedAtEpochMs &&
+          other.stepEndSeq == stepEndSeq);
 
   @override
   int get hashCode => Object.hash(
@@ -100,6 +129,9 @@ final class TimelineMessage extends TimelineItem {
     usage,
     firstTokenAtEpochMs,
     stepStartedAtEpochMs,
+    steering,
+    stepEndedAtEpochMs,
+    stepEndSeq,
   );
 }
 
@@ -114,6 +146,13 @@ final class TimelineMessage extends TimelineItem {
 /// `turn/end` events' own logged times, so a surface can show the turn's
 /// wall time. The end stays null until the matching `turn/end` folds, and
 /// either stays null when a window cut removed its event.
+///
+/// [changesSeq] is the seq of the turn's latest `workspace/changes`
+/// announcement — the reference's `deliverables` node state
+/// (`client/ui-deliverables/src/client/turn-deliverables.ts:182`), whose
+/// summary the host keeps and serves for that sequence while the Session
+/// lives. It is null for a turn that announced no change, and the latest
+/// event replaces an earlier one for the same turn.
 final class TimelineTurnBoundary extends TimelineItem {
   const TimelineTurnBoundary(
     this.turn, {
@@ -122,6 +161,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     this.endedAtEpochMs,
     this.endSeq,
     this.endReason,
+    this.changesSeq,
   });
 
   final int turn;
@@ -142,6 +182,9 @@ final class TimelineTurnBoundary extends TimelineItem {
   /// disclosure, which is what a surface reads this for.
   final String? endReason;
 
+  /// The turn's latest `workspace/changes` event seq.
+  final int? changesSeq;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -151,7 +194,8 @@ final class TimelineTurnBoundary extends TimelineItem {
           other.startedAtEpochMs == startedAtEpochMs &&
           other.endedAtEpochMs == endedAtEpochMs &&
           other.endSeq == endSeq &&
-          other.endReason == endReason);
+          other.endReason == endReason &&
+          other.changesSeq == changesSeq);
 
   @override
   int get hashCode => Object.hash(
@@ -162,6 +206,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     endedAtEpochMs,
     endSeq,
     endReason,
+    changesSeq,
   );
 }
 

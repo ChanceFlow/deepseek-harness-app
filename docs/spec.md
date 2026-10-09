@@ -427,6 +427,9 @@ never the payload), so a wire-coverage gap stays measurable.
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
+| `agent/inbox/spliced` | no item — rebuilds the durable pending next-turn/next-step lists; a later `user/message` whose id the `next-step` list claimed carries `steering = true` on its `TimelineMessage`, the reference's `SteeringHistory` classification |
+| `step/end` | no item — bounds the step the rows before it belong to: the step's own assistant `TimelineMessage` carries `stepEndedAtEpochMs`/`stepEndSeq`, the reference's `stepEnd`. The step's *count* stays the stats fold's (`session_stats_fold.dart`), so nothing is counted twice |
+| `workspace/changes` | no item — the turn's `TimelineTurnBoundary` carries `changesSeq`, the latest announcement's seq (the reference's `deliverables` node state). The changed-file summary itself stays on the host and is served for that seq |
 | `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only view the adapter publishes from the session's `inbox` projection: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
 | `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
 | `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
@@ -446,26 +449,31 @@ flight. Neither the frames nor the baseline touches durable history.
 
 ### 6.1 Unwired vocabulary
 
-Nine names the adapter reports as `timeline.event` debug — an unrecognised
-session event type, or a projection value this client never reads — are the
-outstanding coverage against the folded table above. Five are the reference
-client's own folds and this client's ports; the port is scheduled as one
-change and none is folded here. The three `team/*` journal events are not a
-client surface: the reference folds them **host-side** into the `agentTeam`
-projection, which this client already decodes. `sessionListMetadata` needs no
-port at all, because the host folds it into the list row this client reads.
+Four names in the dsh vocabulary stay unfolded, and none is a port. The
+three `team/*` journal events are not a client surface: the reference folds
+them **host-side** into the `agentTeam` projection, which this client already
+decodes. `sessionListMetadata` needs no client fold at all, because the host
+folds it into the list row this client reads.
 
 | name | kind | Reference | Verdict |
 |---|---|---|---|
-| `agent/inbox/spliced` | session event | declared `packages/core/agent/src/types.ts:96`; folded by `packages/client/ui-chat/src/client/conversation-nodes/inbox.ts:119-124`, with steering provenance from `ui-chat/src/client/model/steering-history.ts:47` | **port** — the transcript's steering rows |
-| `step/end` | session event | declared `packages/core/session/src/types.ts:301`; folded by `packages/client/ui-chat/src/client/conversation-nodes/turn-tail.ts:44` and `turn-process.ts:222` | **port, timeline item only** — `session_stats_fold.dart:121` already counts the step |
-| `workspace/changes` | session event | declared `packages/deliverables/workspace-changes/src/types.ts:106`; folded by `packages/client/ui-deliverables/src/client/turn-deliverables.ts:171,182` | **port** — a turn's changed-file deliverable |
 | `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |
 | `team/message/queued` | session event | declared `packages/experimental/agent-team/src/types.ts:236`; the same `agentTeam` fold | **do not port** — same projection surface |
 | `team/message/delivered` | session event | declared `packages/experimental/agent-team/src/types.ts:238-243`; the same `agentTeam` fold | **do not port** — same projection surface |
-| `turnOutline` | projection | registered `packages/session/session-turn-outline/src/projection.ts:86`; read by `packages/client/ui-chat/src/client/chat/ChatView.tsx:124-127` | **port** — the chat turn rail |
-| `subagentTiming` | projection | registered `packages/subagent/subagent/src/projection.ts:69`; read by `packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx:83-84` | **port** — a child's last-turn completion |
 | `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148`), which `SessionWire` decodes |
+
+### 6.2 Projection folds
+
+Session projection values reach the client on four carriers — `session.list`
+and `session.history` baselines, `session/projections`, and live
+`session/projection` frames. The keys below are folded into a per-Session
+stream the UI reads; a malformed value is reported as an adapter diagnostic
+and leaves the last good value standing, never an empty one.
+
+| key | Domain surface | Fold |
+|---|---|---|
+| `turnOutline` | `ChatRepository.observeTurnOutline` → `List<TurnOutlineEntry>` | every started turn's rail facts: `turn`, `turn/start` `seq`, bounded `prompt` and `response` previews, strictly increasing by turn (`packages/session/session-turn-outline/src/projection.ts:61-71`) |
+| `subagentTiming` | `ChatRepository.observeSubagentTiming` → `SubagentTiming?` | a descriptor-backed child's `settledMs`, the open turn's `active` interval, and `lastTurnCompleted` (`packages/subagent/subagent/src/projection.ts:32-42,107-115`) |
 
 ## 7. Android UI Contract
 

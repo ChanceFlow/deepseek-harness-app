@@ -91,7 +91,9 @@ change moves no count and the gate stays clean; the shape claim rests on the
 pin citations in the code, not on that gate
 ([wire-pin gate](../process/2026-09-11-wire-pin-gate.md)).
 
-Two adjacent gaps stay open. `SettingsNamespace.base` is declared in the domain
-but never filled, because `SettingsNamespaceWire` does not decode the
-descriptor's `base` layer; and a secret slot's value still has no write path.
-Neither is needed to render a generated page.
+One adjacent gap stays open: a secret slot's value still has no write path.
+It is not needed to render a generated page. The descriptor's `base` layer is
+decoded too — `SettingsNamespaceWire.base` carries the redacted composition
+base, absent when the registrant declared none
+(`packages/settings/settings/src/index.ts:329-330`,
+`SettingsNamespaceView.base?`).

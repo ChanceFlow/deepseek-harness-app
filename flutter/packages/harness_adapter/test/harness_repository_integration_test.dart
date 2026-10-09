@@ -6056,6 +6056,7 @@ void main() {
     expect(deepseek.hasUserLayer, isTrue);
     expect(deepseek.secretCount, 1);
     expect(deepseek.autoGenerate, isTrue);
+    expect(deepseek.base, <String, Object?>{});
     expect(deepseek.schema.dictOf(deepseek.schema.root).keys, <String>[
       'providers',
     ]);
@@ -6345,6 +6346,117 @@ void main() {
       expect(current.contextWindow, 50000);
     },
   );
+
+  test('turnOutline projection decodes the baseline and live frames', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.historyProjections['session-1'] = <String, Object?>{
+      'asOfSeq': 100,
+      'values': <String, Object?>{
+        'turnOutline': <Object?>[
+          <String, Object?>{
+            'turn': 1,
+            'seq': 4,
+            'prompt': 'first ask',
+            'response': 'first answer',
+          },
+        ],
+      },
+    };
+
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-outline-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'turnOutline',
+            'seq': 110,
+            'value': <Object?>[
+              <String, Object?>{
+                'turn': 1,
+                'seq': 4,
+                'prompt': 'first ask',
+                'response': 'first answer',
+              },
+              <String, Object?>{
+                'turn': 2,
+                'seq': 9,
+                'prompt': 'second ask',
+                'response': 'second answer',
+              },
+            ],
+          },
+        ),
+      ],
+    );
+
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    final baseline = await repository.observeTurnOutline('session-1').first;
+    expect(baseline, hasLength(1));
+    expect(baseline.single.turn, 1);
+    expect(baseline.single.prompt, 'first ask');
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final live = await repository.observeTurnOutline('session-1').first;
+    expect(live.map((entry) => entry.turn), <int>[1, 2]);
+    expect(live.last.response, 'second answer');
+  });
+
+  test('subagentTiming folds the baseline and a live frame', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.historyProjections['session-1'] = <String, Object?>{
+      'asOfSeq': 100,
+      'values': <String, Object?>{
+        'subagentTiming': <String, Object?>{'settledMs': 400},
+      },
+    };
+
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-timing-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'subagentTiming',
+            'seq': 110,
+            'value': <String, Object?>{
+              'settledMs': 1200,
+              'active': <String, Object?>{'since': 5, 'through': 9},
+              'lastTurnCompleted': true,
+            },
+          },
+        ),
+      ],
+    );
+
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    final baseline = await repository.observeSubagentTiming('session-1').first;
+    expect(baseline, isNotNull);
+    expect(baseline!.settledMs, 400);
+    expect(baseline.active, isNull);
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final live = await repository.observeSubagentTiming('session-1').first;
+    expect(live!.settledMs, 1200);
+    expect(live.active!.through, 9);
+    expect(live.lastTurnCompleted, isTrue);
+  });
 
   test(
     'contextBreakdown projection frames update live and drop stale seq frames',

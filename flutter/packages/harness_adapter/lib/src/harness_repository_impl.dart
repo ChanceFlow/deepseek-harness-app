@@ -41,6 +41,7 @@ import 'package:domain/model/skills.dart';
 import 'package:domain/model/subagent.dart';
 import 'package:domain/model/timeline_item.dart';
 import 'package:domain/model/timeline_window.dart';
+import 'package:domain/model/turn_outline.dart';
 import 'package:domain/model/user_question.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
@@ -1061,6 +1062,10 @@ class HarnessRepositoryImpl implements ChatRepository {
       <String, StateStream<GoalProjection?>>{};
   final Map<String, StateStream<AgentTeam?>> _teamProjections =
       <String, StateStream<AgentTeam?>>{};
+  final Map<String, StateStream<List<TurnOutlineEntry>>>
+  _turnOutlineProjections = <String, StateStream<List<TurnOutlineEntry>>>{};
+  final Map<String, StateStream<SubagentTiming?>> _subagentTimingProjections =
+      <String, StateStream<SubagentTiming?>>{};
   final Map<String, StateStream<PlanState?>> _planProjections =
       <String, StateStream<PlanState?>>{};
   final Map<String, StateStream<List<TodoItem>?>> _todoProjections =
@@ -1108,6 +1113,12 @@ class HarnessRepositoryImpl implements ChatRepository {
     'inbox',
     // Timed questions the host can still take an answer for (0.2.0).
     'userQuestions',
+    // Every started turn's rail facts; the host's session composition always
+    // registers the unit, and a slim host that does not leaves it absent.
+    'turnOutline',
+    // A descriptor-backed child's timing; registered by the subagent package,
+    // so a host that mounts none leaves it absent.
+    'subagentTiming',
   };
 
   /// Last `inbox` projection value per session, retained so a session this
@@ -2889,6 +2900,14 @@ class HarnessRepositoryImpl implements ChatRepository {
       _teamProjectionStateFor(sessionId).stream;
 
   @override
+  Stream<List<TurnOutlineEntry>> observeTurnOutline(String sessionId) =>
+      _turnOutlineStateFor(sessionId).stream;
+
+  @override
+  Stream<SubagentTiming?> observeSubagentTiming(String sessionId) =>
+      _subagentTimingStateFor(sessionId).stream;
+
+  @override
   Future<AgentTeam?> loadAgentTeam(String sessionId) async {
     // The `agentTeam` projection is published by the experimental Agent Teams
     // package on the Lead Session; a host that mounts none answers a baseline
@@ -3889,6 +3908,24 @@ class HarnessRepositoryImpl implements ChatRepository {
           });
         }
         _planProjectionStateFor(sessionId).value = projection;
+      case 'subagentTiming':
+        // The decoder fails loud on a malformed value; the frame handler
+        // contains that as a diagnostic and keeps the last good timing.
+        _subagentTimingStateFor(sessionId).value = _tryDecode<SubagentTiming?>(
+          () => decodeSubagentTimingProjection(frame.payload['value']),
+          'subagentTiming',
+        );
+      case 'turnOutline':
+        // The decoder fails loud on a malformed value; the frame handler
+        // contains that as a diagnostic and keeps the last good outline, so a
+        // bad frame never empties the rail.
+        final outline = _tryDecode(
+          () => decodeTurnOutlineProjection(frame.payload['value']),
+          'turnOutline',
+        );
+        if (outline != null) {
+          _turnOutlineStateFor(sessionId).value = outline;
+        }
       case 'todos':
         _todoProjectionStateFor(sessionId).value = _parseTodosProjection(
           frame.payload['value'],
@@ -4132,6 +4169,21 @@ class HarnessRepositoryImpl implements ChatRepository {
           ? null
           : _tryDecode(() => decodeAgentTeamProjection(teamValue), 'agentTeam');
     }
+    if (values.containsKey('subagentTiming') &&
+        _claimProjection(sessionId, 'subagentTiming', seq)) {
+      _subagentTimingStateFor(sessionId).value = _tryDecode<SubagentTiming?>(
+        () => decodeSubagentTimingProjection(values['subagentTiming']),
+        'subagentTiming',
+      );
+    }
+    if (values.containsKey('turnOutline') &&
+        _claimProjection(sessionId, 'turnOutline', seq)) {
+      final outline = _tryDecode(
+        () => decodeTurnOutlineProjection(values['turnOutline']),
+        'turnOutline',
+      );
+      if (outline != null) _turnOutlineStateFor(sessionId).value = outline;
+    }
     if (values.containsKey('goal') &&
         _claimProjection(sessionId, 'goal', seq)) {
       final goalValue = values['goal'];
@@ -4336,6 +4388,10 @@ class HarnessRepositoryImpl implements ChatRepository {
         _goalProjectionStateFor(sessionId).value = null;
       case 'plan':
         _planProjectionStateFor(sessionId).value = null;
+      case 'turnOutline':
+        _turnOutlineStateFor(sessionId).value = const <TurnOutlineEntry>[];
+      case 'subagentTiming':
+        _subagentTimingStateFor(sessionId).value = null;
       case 'todos':
         _todoProjectionStateFor(sessionId).value = const <TodoItem>[];
       case 'permissions':
@@ -4975,6 +5031,19 @@ class HarnessRepositoryImpl implements ChatRepository {
             ? _parseTodosProjection(todosValue)
             : const <TodoItem>[];
       }
+      if (pv.containsKey('subagentTiming')) {
+        _subagentTimingStateFor(sessionId).value = _tryDecode<SubagentTiming?>(
+          () => decodeSubagentTimingProjection(pv['subagentTiming']),
+          'subagentTiming',
+        );
+      }
+      if (pv.containsKey('turnOutline')) {
+        final outline = _tryDecode(
+          () => decodeTurnOutlineProjection(pv['turnOutline']),
+          'turnOutline',
+        );
+        if (outline != null) _turnOutlineStateFor(sessionId).value = outline;
+      }
       final presetValue = wireString(pv, 'agentPreset');
       if (presetValue != null && presetValue != 'null') {
         _sessions.value = _sessions.value
@@ -5083,6 +5152,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         autoGenerate: wire.autoGenerate,
         schema: wire.schema,
         value: wire.value,
+        base: wire.base,
         user: wire.user,
       );
 
@@ -5769,6 +5839,18 @@ class HarnessRepositoryImpl implements ChatRepository {
       _teamProjections.putIfAbsent(
         sessionId,
         () => StateStream<AgentTeam?>(null),
+      );
+
+  StateStream<SubagentTiming?> _subagentTimingStateFor(String sessionId) =>
+      _subagentTimingProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<SubagentTiming?>(null),
+      );
+
+  StateStream<List<TurnOutlineEntry>> _turnOutlineStateFor(String sessionId) =>
+      _turnOutlineProjections.putIfAbsent(
+        sessionId,
+        () => StateStream<List<TurnOutlineEntry>>(const <TurnOutlineEntry>[]),
       );
 
   StateStream<PlanState?> _planProjectionStateFor(String sessionId) =>
