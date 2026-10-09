@@ -590,10 +590,12 @@ class HarnessFakeRpc implements DshRpcClient {
   /// complete resulting pin set, most recently pinned first.
   JsonMap pinValue = <String, Object?>{'pinnedSessionIds': <String>[]};
 
-  /// Scripted `pluginManager/listBundles` rows.
+  /// Scripted `pluginManager/listBundles` rows. The method answers
+  /// `BundleInfo[]`, so the roster is the result itself and rides the
+  /// envelope's `value` slot rather than an object field.
   List<Object?> pluginBundlesValue = <Object?>[];
 
-  /// Scripted `pluginManager/listPlugins` rows.
+  /// Scripted `pluginManager/listPlugins` rows, the same bare-array carrier.
   List<Object?> pluginRowsValue = <Object?>[];
 
   /// Scripted `pluginManager/inspect` result.
@@ -985,9 +987,14 @@ class HarnessFakeRpc implements DshRpcClient {
       case DshRpcEndpoints.scheduleDelete:
         return <String, Object?>{'id': request['id'], 'deleted': true};
       case DshRpcEndpoints.pluginManagerListBundles:
-        return <String, Object?>{'bundles': pluginBundlesValue};
+        // The result is `BundleInfo[]` itself, so a non-object result rides
+        // the envelope's `value` slot (`RpcResult.fromJson`), exactly as the
+        // host's bare array does
+        // (`.../packages/boot/plugin-manager/src/index.ts:279`).
+        return <String, Object?>{'value': pluginBundlesValue};
       case DshRpcEndpoints.pluginManagerListPlugins:
-        return <String, Object?>{'plugins': pluginRowsValue};
+        // `PluginInfo[]` is the result itself, the same carrier.
+        return <String, Object?>{'value': pluginRowsValue};
       case DshRpcEndpoints.pluginManagerRegistries:
         return <String, Object?>{
           'registry': 'https://registry.npmmirror.com/',

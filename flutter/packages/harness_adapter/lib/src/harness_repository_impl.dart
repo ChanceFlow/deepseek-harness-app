@@ -2312,7 +2312,20 @@ class HarnessRepositoryImpl implements ChatRepository {
       const <String, Object?>{},
       _shortCallTimeout,
     ).valueOrThrow();
-    return wireRequiredArray(value, 'bundles').map((Object? row) {
+    // The method answers `BundleInfo[]`: the result is the array itself, not
+    // an object field, so a non-object result rides the envelope's `value`
+    // slot (`RpcResult.fromJson` in package:network;
+    // reference/deepseek-harness/packages/boot/plugin-manager/src/index.ts:279
+    // `@Remote listBundles(): Promise<BundleInfo[]>`). An empty roster is an
+    // empty array, which is why no `bundles` field exists to require.
+    final rows = value['value'];
+    if (rows is! List) {
+      throw FormatException(
+        '${DshRpcEndpoints.pluginManagerListBundles} "value" must be a JSON '
+        'array, got: ${value.keys.toList()}',
+      );
+    }
+    return rows.map((Object? row) {
       final json = asJsonObject(row);
       if (json == null) {
         throw const FormatException(
@@ -2331,7 +2344,18 @@ class HarnessRepositoryImpl implements ChatRepository {
       const <String, Object?>{},
       _shortCallTimeout,
     ).valueOrThrow();
-    return wireRequiredArray(value, 'plugins').map((Object? row) {
+    // `PluginInfo[]` is the result itself, for the same reason as
+    // [listPluginBundles]
+    // (reference/deepseek-harness/packages/boot/plugin-manager/src/index.ts:256
+    // `@Remote async listPlugins(): Promise<PluginInfo[]>`).
+    final rows = value['value'];
+    if (rows is! List) {
+      throw FormatException(
+        '${DshRpcEndpoints.pluginManagerListPlugins} "value" must be a JSON '
+        'array, got: ${value.keys.toList()}',
+      );
+    }
+    return rows.map((Object? row) {
       final json = asJsonObject(row);
       if (json == null) {
         throw const FormatException(
