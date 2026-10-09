@@ -6613,6 +6613,60 @@ abstract class AppLocalizations {
   /// **'Agent loop'**
   String get settingsAgentLoopTitle;
 
+  /// Settings row opening the subagent page (the reference's settings.subagent.title).
+  ///
+  /// In en, this message translates to:
+  /// **'Subagents'**
+  String get settingsSubagentTitle;
+
+  /// The subagent limits card's depth field (the reference's settings.subagent.limits.maxDepth).
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum depth'**
+  String get settingsSubagentMaxDepth;
+
+  /// The subagent limits card's concurrency field (settings.subagent.limits.maxActiveSubagents).
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum active subagents'**
+  String get settingsSubagentMaxActive;
+
+  /// Shown when a limit entry is refused rather than clamped, as the reference's guard does.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number at or above the minimum.'**
+  String get settingsSubagentLimitRejected;
+
+  /// The subagent page's model-selection card title (settings.subagent.modelSelection).
+  ///
+  /// In en, this message translates to:
+  /// **'Model selection'**
+  String get settingsSubagentModelSelection;
+
+  /// The model-selection card's one-line explanation of the enabled field.
+  ///
+  /// In en, this message translates to:
+  /// **'Let new sessions choose a child model route.'**
+  String get settingsSubagentModelSelectionBody;
+
+  /// Marks a stored route the adapter catalog no longer advertises, which still renders.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get settingsSubagentUnavailable;
+
+  /// Writes the subagent page's two namespaces together.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsSubagentSave;
+
+  /// Shown when the Host refuses a subagent write.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t save the subagent settings'**
+  String get settingsSubagentSaveFailed;
+
   /// Agent loop page copy.
   ///
   /// In en, this message translates to:
