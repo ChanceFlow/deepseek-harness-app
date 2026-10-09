@@ -514,6 +514,10 @@
     "description": "Copy-message icon tooltip."
   },
   "copiedTooltip": "Copied",
+  "steeringMessageBadge": "Steering",
+  "@steeringMessageBadge": {
+    "description": "Eyebrow on a user row a running turn's inbox splice admitted mid-step (the model's steering flag)."
+  },
   "@copiedTooltip": {
     "description": "Copy-message icon tooltip after a successful copy."
   },

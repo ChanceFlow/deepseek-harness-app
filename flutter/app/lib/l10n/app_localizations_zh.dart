@@ -739,6 +739,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get copiedTooltip => '已复制';
 
   @override
+  String get steeringMessageBadge => '追加指令';
+
+  @override
   String get waitingForApproval => '等待审批';
 
   @override

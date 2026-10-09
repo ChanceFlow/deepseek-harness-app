@@ -760,6 +760,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copiedTooltip => 'Copied';
 
   @override
+  String get steeringMessageBadge => 'Steering';
+
+  @override
   String get waitingForApproval => 'Waiting for approval';
 
   @override

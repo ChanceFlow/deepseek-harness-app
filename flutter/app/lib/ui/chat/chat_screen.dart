@@ -94,6 +94,7 @@ import 'timeline_folding.dart';
 import 'timeline_grouping.dart';
 import 'todo_panel.dart';
 import 'process_activity.dart';
+import 'run_duration.dart';
 import 'disclosure_row.dart';
 import '../shared/menu_material.dart';
 import 'process_disclosure.dart';
@@ -2868,23 +2869,32 @@ class TimelineRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return switch (item) {
-      TimelineMessage(:final value) => MessageRow(
-        message: value,
-        loadAttachment: loadAttachment,
-        backendId: backendId,
-        // `session/fork`'s `atSeq` is an exact inclusive event seq, so the
-        // seat cuts the completed turn the message sits in.
-        onFork: forkAtSeq == null
-            ? null
-            : () => onAction(ForkSession(value.sessionId, atSeq: forkAtSeq)),
-        usage: (item as TimelineMessage).usage,
-        firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
-        producedPaths: producedPaths,
-        presentedFiles: presentedFiles,
-        onPreviewFile: onPreviewFile == null
-            ? null
-            : (path) => onPreviewFile!(path),
-      ),
+      TimelineMessage(
+        :final value,
+        :final steering,
+        :final stepStartedAtEpochMs,
+        :final stepEndedAtEpochMs,
+      ) =>
+        MessageRow(
+          message: value,
+          steering: steering,
+          stepStartedAtEpochMs: stepStartedAtEpochMs,
+          stepEndedAtEpochMs: stepEndedAtEpochMs,
+          loadAttachment: loadAttachment,
+          backendId: backendId,
+          // `session/fork`'s `atSeq` is an exact inclusive event seq, so the
+          // seat cuts the completed turn the message sits in.
+          onFork: forkAtSeq == null
+              ? null
+              : () => onAction(ForkSession(value.sessionId, atSeq: forkAtSeq)),
+          usage: (item as TimelineMessage).usage,
+          firstTokenAtEpochMs: (item as TimelineMessage).firstTokenAtEpochMs,
+          producedPaths: producedPaths,
+          presentedFiles: presentedFiles,
+          onPreviewFile: onPreviewFile == null
+              ? null
+              : (path) => onPreviewFile!(path),
+        ),
       TimelineTurnBoundary(:final turn) => TurnBoundaryRow(turn: turn),
       TimelineCompaction() => CompactionRow(
         compaction: item as TimelineCompaction,
@@ -2930,11 +2940,51 @@ class TimelineRow extends StatelessWidget {
   }
 }
 
+/// The owning step's measured range, under the answer it produced:
+/// `step/end − step/start` ([TimelineMessage.stepEndedAtEpochMs] /
+/// [TimelineMessage.stepStartedAtEpochMs]), the reference's `stepEnd`
+/// (`client/ui-trajectory/src/client/trajectory-assistant-definition.ts:247`).
+/// The turn control still names the turn's total (`Completed in …`); this
+/// names one step inside it, in the same unit vocabulary, floored at one
+/// second the way the turn's own clock is.
+class _StepDuration extends StatelessWidget {
+  const _StepDuration({
+    required this.startedAtEpochMs,
+    required this.endedAtEpochMs,
+  });
+
+  final int startedAtEpochMs;
+  final int endedAtEpochMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final int elapsed = endedAtEpochMs - startedAtEpochMs;
+    final String text = runDurationParts(
+      elapsed < 1000 ? 1000 : elapsed,
+      AppLocalizations.of(context)!,
+    ).map((part) => part.text).join();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        text,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
 class MessageRow extends StatelessWidget {
   const MessageRow({
     required this.message,
     required this.loadAttachment,
     super.key,
+    this.steering = false,
+    this.stepStartedAtEpochMs,
+    this.stepEndedAtEpochMs,
     this.backendId,
     this.onFork,
     this.usage,
@@ -2945,6 +2995,16 @@ class MessageRow extends StatelessWidget {
   });
 
   final ChatMessage message;
+
+  /// Whether a durable inbox splice admitted this message into a running
+  /// turn's next step ([TimelineMessage.steering]); the user row then wears
+  /// the steering badge.
+  final bool steering;
+
+  /// The owning step's `step/start` and `step/end` logged times, when the
+  /// folded window carried both; the answer row then names the step's range.
+  final int? stepStartedAtEpochMs;
+  final int? stepEndedAtEpochMs;
   final AttachmentLoader loadAttachment;
 
   /// The backend presenting this transcript; null hides the reply footer's
@@ -2985,6 +3045,10 @@ class MessageRow extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // A steering message is human input `agent/inbox/spliced` admitted
+          // into the running turn's next step; the badge names it so the
+          // reader can tell it from a new ask.
+          if (steering) const _SteeringBadge(),
           Align(
             alignment: Alignment.centerRight,
             child: LayoutBuilder(
@@ -3022,6 +3086,14 @@ class MessageRow extends StatelessWidget {
             elapsedDuration: message.reasoningDuration,
           ),
         if (message.text.isNotEmpty) MarkdownText(text: message.text),
+        // The step's own range, beside the answer it produced. A step whose
+        // start or end fell outside the folded window renders nothing rather
+        // than a guess; the turn control keeps the turn's total.
+        if (stepStartedAtEpochMs != null && stepEndedAtEpochMs != null)
+          _StepDuration(
+            startedAtEpochMs: stepStartedAtEpochMs!,
+            endedAtEpochMs: stepEndedAtEpochMs!,
+          ),
         for (final ref in message.images)
           AttachmentImageRow(
             sessionId: message.sessionId,
@@ -3072,6 +3144,45 @@ class MessageRow extends StatelessWidget {
 /// ([kShapeBubble]), every corner alike. Long-press copies the text — the
 /// gesture every mobile transcript carries — so the bubble needs no chrome of
 /// its own.
+/// The eyebrow over a steering message — one a durable `agent/inbox/spliced`
+/// claimed from the running turn's next-step inbox.
+///
+/// The reference renders a user row and a steering row on one shared bubble
+/// (`MessageItem.tsx:161`) and marks the row only with `data-pending-steering`
+/// (`:191`), which carries no visible style, so nothing in the pin tells the
+/// two apart: this badge is the phone's own affordance over a fact the fold
+/// already decided ([TimelineMessage.steering]).
+class _SteeringBadge extends StatelessWidget {
+  const _SteeringBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4, bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.subdirectory_arrow_right,
+            size: 14,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            l10n.steeringMessageBadge,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UserBubble extends StatefulWidget {
   const _UserBubble({required this.text, this.onFork});
 

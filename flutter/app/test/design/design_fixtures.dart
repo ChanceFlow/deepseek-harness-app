@@ -159,6 +159,48 @@ const List<TimelineItem> _conversation = <TimelineItem>[
 /// a shot that needs a different fold (the outline's turn groups) while
 /// keeping the session chrome identical. [permissions] mounts the dock's
 /// access chip, which a live host always publishes.
+/// A running turn the reader steered mid-step, then an answer that closed its
+/// step: the two wire facts nothing rendered yet — the spliced row's
+/// `steering` badge and the step's own `step/end − step/start` range.
+ChatUiState steeringAndStepState() => busyState(
+  timeline: const <TimelineItem>[
+    TimelineTurnBoundary(1, startedAtEpochMs: 1700000000000),
+    TimelineMessage(
+      ChatMessage(
+        id: 'ss-u1',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: 'Take the parser first.',
+        createdAtEpochMs: 1700000000000,
+        seq: 1,
+      ),
+    ),
+    TimelineMessage(
+      ChatMessage(
+        id: 'ss-u2',
+        sessionId: 's1',
+        role: MessageRole.user,
+        text: 'Stop; use the other branch.',
+        createdAtEpochMs: 1700000002000,
+        seq: 3,
+      ),
+      steering: true,
+    ),
+    TimelineMessage(
+      ChatMessage(
+        id: 'ss-a1',
+        sessionId: 's1',
+        role: MessageRole.assistant,
+        text: 'Switched to the other branch and re-ran the parser.',
+        createdAtEpochMs: 1700000009000,
+        seq: 5,
+      ),
+      stepStartedAtEpochMs: 1700000003000,
+      stepEndedAtEpochMs: 1700000008000,
+    ),
+  ],
+);
+
 ChatUiState busyState({
   List<TimelineItem>? timeline,
   PermissionSelect? permissions,

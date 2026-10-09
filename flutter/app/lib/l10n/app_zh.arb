@@ -212,6 +212,7 @@
   "codeStreamingLabel": "接收中",
   "forkFromHere": "从这里分叉",
   "copiedTooltip": "已复制",
+  "steeringMessageBadge": "追加指令",
   "waitingForApproval": "等待审批",
   "approveToolFallback": "批准工具：{tool}",
   "toolRequestsPrivileged": "工具 {tool} 请求越权执行",
