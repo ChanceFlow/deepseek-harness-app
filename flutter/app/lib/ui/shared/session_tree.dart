@@ -413,6 +413,12 @@ class SessionTreeRow extends StatelessWidget {
       showModalBottomSheet<void>(
         context: context,
         backgroundColor: Colors.transparent,
+        // The pin's session-row verbs are a `Menu` anchored to the row's ⋮
+        // (`ui-workspace/src/client/rows/Rows.tsx:665-686`: portaled, closed
+        // on an outside click) — a popover with no mask. The route's default
+        // barrier would dim the app behind it, so it is kept for the outside
+        // tap and paints nothing.
+        barrierColor: Colors.transparent,
         builder: (_) => _SessionVerbsSheet(
           title: session.blank ? l10n.newSession : session.displayTitle,
           items: items,

@@ -116,6 +116,35 @@ void main() {
     expect(tester.widget<BottomSheet>(find.byType(BottomSheet)).elevation, 0);
   });
 
+  testWidgets('a menu dims nothing: its barrier paints no colour', (
+    tester,
+  ) async {
+    final card = await _openMenu(tester);
+    expect(card, findsOneWidget);
+    // `showModalBottomSheet` defaults to a `Colors.black54` barrier, which
+    // dims the whole app behind every menu. The pin's menu is a popover —
+    // `MenuSurface.module.css` carries only the surface material and
+    // `Menu.tsx:131-142` closes it on an outside click — so the barrier is
+    // kept for that tap and paints nothing.
+    final ModalBarrier barrier = tester
+        .widgetList<ModalBarrier>(find.byType(ModalBarrier))
+        .firstWhere((ModalBarrier candidate) => candidate.dismissible);
+    // A null colour paints no `ColoredBox` at all
+    // (`widgets/modal_barrier.dart:249`); a transparent one is the same
+    // nothing through a `ColoredBox`.
+    expect(barrier.color?.a ?? 0, 0);
+  });
+
+  testWidgets('tapping outside the card still closes the menu', (tester) async {
+    final card = await _openMenu(tester);
+    expect(card, findsOneWidget);
+    // A transparent barrier must still swallow the outside tap: dimming and
+    // dismissal are one route's job, and only the paint was wrong.
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(card, findsNothing);
+  });
+
   testWidgets('a ListTile row keeps an ink surface inside the panel', (
     tester,
   ) async {

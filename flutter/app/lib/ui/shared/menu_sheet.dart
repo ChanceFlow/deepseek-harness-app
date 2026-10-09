@@ -6,6 +6,14 @@
 /// stroke (`Menu.module.css:16-18`) — floating on a transparent modal bottom
 /// sheet.
 ///
+/// The pin's menu is a **popover**: `MenuSurface.module.css` carries the
+/// surface material and nothing else, and `Menu.tsx:131-142` dismisses on an
+/// outside click, Escape or blur — there is no mask in front of the page. This
+/// opener keeps the modal route for that dismissal semantics and passes a
+/// barrier that paints no colour, so a menu never dims the app behind it. A
+/// genuinely modal decision takes a scrim of its own and the modal card
+/// material (`ui-primitives/Modal.module.css`), never this surface.
+///
 /// The card is drawn by [MenuMaterial], the same construction the chat's own
 /// floating panels use, so a menu opened from the chat and one opened from
 /// settings cannot drift apart. It carries the material because the fill's
@@ -57,6 +65,12 @@ Future<T?> showMenuSheet<T>(
     // Flutter version — `showModalBottomSheet` takes no `shadowColor`, and a
     // zero elevation paints none.
     elevation: 0,
+    // The pin's menu paints no mask (`MenuSurface.module.css` carries only the
+    // surface material; `Menu.tsx:131-142` closes on an outside click), so the
+    // modal route's default `Colors.black54` barrier is not this surface's: it
+    // dims the whole app behind every menu. The barrier stays — that is what
+    // makes the outside tap land — and paints nothing.
+    barrierColor: Colors.transparent,
     builder: (sheetContext) {
       final scheme = Theme.of(sheetContext).colorScheme;
       return Padding(
