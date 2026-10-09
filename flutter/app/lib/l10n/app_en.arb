@@ -2832,6 +2832,70 @@
   "@settingsTranscriptViewDescription": {
     "description": "The transcript view sheet's one-line explanation (the reference's settings.transcript.description)."
   },
+  "settingsSessionLogTitle": "Upload Session Log when using the official model API",
+  "@settingsSessionLogTitle": {
+    "description": "Settings row switching the Host session-log upload (the reference's settings.sessionLog.title)."
+  },
+  "settingsSessionLogDescription": "Help improve DeepSeek models and products.",
+  "@settingsSessionLogDescription": {
+    "description": "The session-log row's one-line explanation (the reference's settings.sessionLog.description)."
+  },
+  "settingsSessionLogSaveFailed": "Couldn''t save the preference",
+  "@settingsSessionLogSaveFailed": {
+    "description": "Shown when the Host refuses the session-log preference write (the reference's settings.sessionLog.failed)."
+  },
+  "settingsGesturesTitle": "Gestures",
+  "@settingsGesturesTitle": {
+    "description": "Settings row opening the phone's gesture reference (the reference's shortcuts entry)."
+  },
+  "settingsGesturesIntro": "A phone has no keyboard shortcuts: the app''s actions ride its controls and the gestures listed here.",
+  "@settingsGesturesIntro": {
+    "description": "The gesture page's explanation of why it is a read-only list and not a key-binding editor."
+  },
+  "settingsGesturesEditorNote": "Recording or remapping key bindings belongs to the desktop app.",
+  "@settingsGesturesEditorNote": {
+    "description": "States that the reference's editor half has no phone counterpart, so the absence is deliberate."
+  },
+  "settingsGesturesMessageTitle": "Long-press a message",
+  "@settingsGesturesMessageTitle": {
+    "description": "Gesture row: the message bubble's own menu."
+  },
+  "settingsGesturesMessageBody": "Copy it, or fork the conversation from it.",
+  "@settingsGesturesMessageBody": {
+    "description": "Gesture row body: the two verbs the bubble menu offers (copy, fork)."
+  },
+  "settingsGesturesSessionTitle": "Long-press a session row",
+  "@settingsGesturesSessionTitle": {
+    "description": "Gesture row: the session row's verbs menu."
+  },
+  "settingsGesturesSessionBody": "Rename, fork, pin or archive that session.",
+  "@settingsGesturesSessionBody": {
+    "description": "Gesture row body: the session verbs menu entries."
+  },
+  "settingsGesturesProjectTitle": "Long-press a project header",
+  "@settingsGesturesProjectTitle": {
+    "description": "Gesture row: creating a session from a project header."
+  },
+  "settingsGesturesProjectBody": "Start a new session in that project.",
+  "@settingsGesturesProjectBody": {
+    "description": "Gesture row body: the project header's long-press action."
+  },
+  "settingsGesturesVoiceTitle": "Hold the microphone",
+  "@settingsGesturesVoiceTitle": {
+    "description": "Gesture row: hold-to-talk voice input."
+  },
+  "settingsGesturesVoiceBody": "Talk instead of typing while you hold it.",
+  "@settingsGesturesVoiceBody": {
+    "description": "Gesture row body: hold-to-talk."
+  },
+  "settingsGesturesHistoryTitle": "Scroll to the top of the transcript",
+  "@settingsGesturesHistoryTitle": {
+    "description": "Gesture row: loading older history by scrolling to the transcript's top."
+  },
+  "settingsGesturesHistoryBody": "Loads the conversation''s older history.",
+  "@settingsGesturesHistoryBody": {
+    "description": "Gesture row body: the older-history load."
+  },
   "settingsTranscriptViewCompact": "Compact",
   "settingsTranscriptViewStandard": "Standard",
   "settingsTranscriptViewDetailed": "Detailed",

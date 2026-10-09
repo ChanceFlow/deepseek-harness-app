@@ -60,6 +60,7 @@ class _FakeAgentLoopRepository implements ChatRepository {
               revision: revision,
               hasUserLayer: true,
               secretCount: 0,
+              schema: SettingsSchema.empty,
               value: fieldPresent
                   ? <String, Object?>{kMaxParallelToolCallsField: stored}
                   : <String, Object?>{},
