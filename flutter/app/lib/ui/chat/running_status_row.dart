@@ -34,8 +34,17 @@ class RunningStatusRow extends StatefulWidget {
   const RunningStatusRow({
     this.startedAtEpochMs,
     this.showDivider = false,
+    this.clock,
     super.key,
   });
+
+  /// The row's time source, in epoch milliseconds.
+  ///
+  /// Null reads the wall clock, which is what the app does. A test injects a
+  /// fixed source instead: the label is whole seconds, so a wall-clock read
+  /// that lands a second later than the fixture computed its start turns a
+  /// loaded machine into a failing assertion rather than a slower test.
+  final int Function()? clock;
 
   /// The running Turn's start, or null when its boundary sits outside the
   /// loaded window; the label then carries the state without a clock.
@@ -59,7 +68,7 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     duration: kSweepCycle,
   );
   Timer? _tick;
-  late int _nowMs = DateTime.now().millisecondsSinceEpoch;
+  late int _nowMs = _readClock();
 
   @override
   void initState() {
@@ -76,7 +85,7 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     // The baseline refreshes with it, so a late start reads its own age on the
     // first frame instead of the previous start's.
     if (widget.startedAtEpochMs != null) {
-      _nowMs = DateTime.now().millisecondsSinceEpoch;
+      _nowMs = _readClock();
     }
     _syncTick();
   }
@@ -87,6 +96,11 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     _syncSweep();
   }
 
+  /// One reading of the row's time source: the wall clock unless a caller
+  /// injected a fixed one.
+  int _readClock() =>
+      widget.clock?.call() ?? DateTime.now().millisecondsSinceEpoch;
+
   /// Keeps the 1 Hz clock alive exactly while a start can be named: without it
   /// the label freezes at its first value, and with a stale one the row
   /// rebuilds once a second against a label that cannot change.
@@ -94,7 +108,7 @@ class _RunningStatusRowState extends State<RunningStatusRow>
     if (widget.startedAtEpochMs != null) {
       _tick ??= Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
-        setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+        setState(() => _nowMs = _readClock());
       });
       return;
     }
