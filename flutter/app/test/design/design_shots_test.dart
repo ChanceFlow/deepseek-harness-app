@@ -1034,23 +1034,55 @@ Widget _settingsHost(ThemeData theme, Locale? locale) =>
 
 /// The subagent page on its own, over a plane that serves `subagent` and
 /// `subagent-model-selection-settings`.
-Widget _subagentHost(ThemeData theme, Locale? locale) => ProviderScope(
-  overrides: [
-    activeBackendIdProvider.overrideWith((Ref ref) async* {
-      yield 'default';
-    }),
-    chatRepositoryProvider('default')
-        .overrideWithValue(_SubagentShotRepository()),
-  ],
-  child: MaterialApp(
-    debugShowCheckedModeBanner: false,
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    locale: locale,
-    theme: theme,
-    home: const SettingsSubagentPage(backendId: 'default'),
-  ),
-);
+Widget _subagentHost(ThemeData theme, Locale? locale) {
+  final registryDir = Directory.systemTemp.createTempSync(
+    'dsh-design-registry',
+  );
+  addTearDown(() => registryDir.deleteSync(recursive: true));
+  final registryFile = File('${registryDir.path}/backends.json');
+  registryFile.writeAsStringSync(kSettingsRegistryDoc);
+  final stateDir = Directory.systemTemp.createTempSync('dsh-design-state');
+  addTearDown(() => stateDir.deleteSync(recursive: true));
+  return ProviderScope(
+    overrides: [
+      backendStoreProvider.overrideWith(
+        (ref) async => BackendStore(registryFile, seedBaseUrl: kDshBaseUrl),
+      ),
+      localStateStoreProvider.overrideWith(
+        (ref) async =>
+            LocalStateStore(File('${stateDir.path}/local_state.json')),
+      ),
+      activeBackendIdProvider.overrideWith((Ref ref) async* {
+        yield 'default';
+      }),
+      chatRepositoryProvider('default')
+          .overrideWithValue(_SubagentShotRepository()),
+      // The catalog is the session-scoped models list in production
+      // (`subagentModelCatalogProvider`); the shot stands in for it with one
+      // advertised route, so the stored route the catalog no longer carries
+      // renders as the unavailable row beside it.
+      subagentModelCatalogProvider('default').overrideWith(
+        (Ref ref) =>
+            Stream<List<SubagentModelRoute>>.value(const <SubagentModelRoute>[
+              SubagentModelRoute(
+                provider: 'deepseek',
+                model: 'deepseek-chat',
+                providerName: 'DeepSeek',
+                modelName: 'DeepSeek Chat',
+              ),
+            ]),
+      ),
+    ],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: theme,
+      home: const SettingsSubagentPage(backendId: 'default'),
+    ),
+  );
+}
 
 /// The subagent plane for that shot: both namespaces, and nothing else.
 class _SubagentShotRepository extends ChatRepository {
@@ -1079,6 +1111,7 @@ class _SubagentShotRepository extends ChatRepository {
           'enabled': true,
           'allowedModels': <Map<String, String>>[
             <String, String>{'provider': 'deepseek', 'model': 'deepseek-chat'},
+            <String, String>{'provider': 'deepseek', 'model': 'retired-model'},
           ],
         },
       ),
