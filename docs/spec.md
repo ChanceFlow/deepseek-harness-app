@@ -444,6 +444,29 @@ a dense `index` instead of `seq`, and the opening snapshot's
 `assistantStream` baseline seeds the partial for a reply that is already in
 flight. Neither the frames nor the baseline touches durable history.
 
+### 6.1 Unwired vocabulary
+
+Nine names the adapter reports as `timeline.event` debug — an unrecognised
+session event type, or a projection value this client never reads — are the
+outstanding coverage against the folded table above. Five are the reference
+client's own folds and this client's ports; the port is scheduled as one
+change and none is folded here. The three `team/*` journal events are not a
+client surface: the reference folds them **host-side** into the `agentTeam`
+projection, which this client already decodes. `sessionListMetadata` needs no
+port at all, because the host folds it into the list row this client reads.
+
+| name | kind | Reference | Verdict |
+|---|---|---|---|
+| `agent/inbox/spliced` | session event | declared `packages/core/agent/src/types.ts:96`; folded by `packages/client/ui-chat/src/client/conversation-nodes/inbox.ts:119-124`, with steering provenance from `ui-chat/src/client/model/steering-history.ts:47` | **port** — the transcript's steering rows |
+| `step/end` | session event | declared `packages/core/session/src/types.ts:301`; folded by `packages/client/ui-chat/src/client/conversation-nodes/turn-tail.ts:44` and `turn-process.ts:222` | **port, timeline item only** — `session_stats_fold.dart:121` already counts the step |
+| `workspace/changes` | session event | declared `packages/deliverables/workspace-changes/src/types.ts:106`; folded by `packages/client/ui-deliverables/src/client/turn-deliverables.ts:171,182` | **port** — a turn's changed-file deliverable |
+| `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |
+| `team/message/queued` | session event | declared `packages/experimental/agent-team/src/types.ts:236`; the same `agentTeam` fold | **do not port** — same projection surface |
+| `team/message/delivered` | session event | declared `packages/experimental/agent-team/src/types.ts:238-243`; the same `agentTeam` fold | **do not port** — same projection surface |
+| `turnOutline` | projection | registered `packages/session/session-turn-outline/src/projection.ts:86`; read by `packages/client/ui-chat/src/client/chat/ChatView.tsx:124-127` | **port** — the chat turn rail |
+| `subagentTiming` | projection | registered `packages/subagent/subagent/src/projection.ts:69`; read by `packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx:83-84` | **port** — a child's last-turn completion |
+| `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148`), which `SessionWire` decodes |
+
 ## 7. Android UI Contract
 
 ``AppRoot` owns bottom navigation. `ChatScreen`, `WorkspaceScreen`, and

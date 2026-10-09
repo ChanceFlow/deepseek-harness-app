@@ -28,6 +28,12 @@ The integration fake host carried the same wrong reading — it answered
 and no test could catch it. `PluginManagerController._refreshNow` reads both
 in one `Future.wait`, so both were broken and the page could not refresh.
 
+A decoder that demands a wrapper key for a parked result is not failing loud;
+it is failing **wrong**. The park is the transport's own convention, so an
+answered call is never a malformed payload, and a decoder that reads it as one
+reports a healthy host as breakage — invisible to a suite whose fake carries
+the same mistake, and visible in production only as a user's device log.
+
 ## Decision
 
 Both decoders read the envelope's `value` slot and require a JSON array there,
