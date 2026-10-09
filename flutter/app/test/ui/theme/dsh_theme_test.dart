@@ -249,26 +249,40 @@ void main() {
     expect(kShapeBubble, 20);
   });
 
-  test('the code stack is the reference\'s, closed by Android\'s mono', () {
-    // base.css:10.
-    expect(kCodeFontFamily, 'SF Mono');
-    expect(
-      kCodeFontFamilyFallback,
-      containsAllInOrder(<String>[
-        'JetBrains Mono',
-        'Fira Code',
-        'Consolas',
-        'Liberation Mono',
-        'Menlo',
-        'Courier',
-        'PingFang SC',
-        'Microsoft YaHei',
-      ]),
-    );
-    // No reference face ships with the app, so the platform's own mono alias
-    // closes the list — the recorded Android limit.
-    expect(kCodeFontFamilyFallback.last, 'monospace');
-  });
+  test(
+    'the code face is the platform\'s mono, the reference\'s stack behind it',
+    () {
+      // An unresolvable `fontFamily` is not walked into the fallback list — the
+      // run falls to the platform's proportional default — so the resolved name
+      // has to be the one Android knows. `base.css:10` is the pin's own stack,
+      // which stays in the tail as the record of it.
+      expect(kCodeFontFamily, 'monospace');
+      expect(
+        kCodeFontFamilyFallback,
+        containsAllInOrder(<String>[
+          'SF Mono',
+          'JetBrains Mono',
+          'Fira Code',
+          'Consolas',
+          'Liberation Mono',
+          'Menlo',
+          'Courier',
+          'PingFang SC',
+          'Microsoft YaHei',
+        ]),
+      );
+      // The tail is a glyph-coverage list: the Han names close it so a code run
+      // keeps resolving a script the mono face does not carry.
+      expect(
+        kCodeFontFamilyFallback,
+        containsAll(<String>[
+          'Noto Sans CJK SC',
+          'Noto Sans SC',
+          'Source Han Sans SC',
+        ]),
+      );
+    },
+  );
 
   test('no deepsuite theme extension is attached', () {
     expect(DshTheme.light().extensions, isEmpty);
