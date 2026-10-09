@@ -166,4 +166,91 @@ void main() {
       expect(controller.state.allowedModels.first.available, isFalse);
     },
   );
+
+  test('the join keeps a dropped route, marked unavailable', () {
+    const SubagentModelRoute stored = SubagentModelRoute(
+      provider: 'deepseek',
+      model: 'gone',
+    );
+    final List<SubagentModelRoute> rows = joinSubagentRoutes(
+      const <SubagentModelRoute>[stored],
+      const <SubagentModelRoute>[
+        SubagentModelRoute(
+          provider: 'deepseek',
+          model: 'live',
+          providerName: 'DeepSeek',
+          modelName: 'Live Model',
+        ),
+      ],
+    );
+
+    expect(rows, hasLength(1));
+    expect(rows.first.key, 'deepseek/gone');
+    expect(rows.first.available, isFalse);
+  });
+
+  test('the join takes the catalog label for an advertised route', () {
+    final List<SubagentModelRoute> rows = joinSubagentRoutes(
+      const <SubagentModelRoute>[
+        SubagentModelRoute(provider: 'deepseek', model: 'live'),
+      ],
+      const <SubagentModelRoute>[
+        SubagentModelRoute(
+          provider: 'deepseek',
+          model: 'live',
+          providerName: 'DeepSeek',
+          modelName: 'Live Model',
+        ),
+      ],
+    );
+
+    expect(rows.first.available, isTrue);
+    expect(rows.first.modelName, 'Live Model');
+    expect(rows.first.providerName, 'DeepSeek');
+  });
+
+  test('an empty catalog strikes nothing out', () {
+    final List<SubagentModelRoute> rows = joinSubagentRoutes(
+      const <SubagentModelRoute>[
+        SubagentModelRoute(provider: 'deepseek', model: 'gone'),
+      ],
+      const <SubagentModelRoute>[],
+    );
+
+    expect(rows.single.available, isTrue);
+  });
+
+  test(
+    'an unavailable route is still written unchanged, never dropped',
+    () async {
+      final repository = _FakeSettingsRepository(<SettingsNamespace>[
+        _ns(kSubagentModelSelectionNamespace, <String, Object?>{
+          kSubagentEnabledField: false,
+          kSubagentAllowedModelsField: <Map<String, String>>[
+            <String, String>{'provider': 'deepseek', 'model': 'gone'},
+          ],
+        }, 6),
+      ]);
+      final controller = await _controller(
+        repository,
+        catalog: const <SubagentModelRoute>[
+          SubagentModelRoute(provider: 'deepseek', model: 'live'),
+        ],
+      );
+
+      expect(controller.state.allowedModels.single.available, isFalse);
+      // Marking is presentation: the entry is a stored authorization, so the
+      // save that follows must not touch `allowedModels` at all.
+      controller.setEnabled(true);
+      await controller.save();
+
+      expect(
+        repository.writes.where((w) => w.$2 == kSubagentAllowedModelsField),
+        isEmpty,
+      );
+      expect(repository.writes, <(String, String, String, int?)>[
+        (kSubagentModelSelectionNamespace, kSubagentEnabledField, 'true', 6),
+      ]);
+    },
+  );
 }

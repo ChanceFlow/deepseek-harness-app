@@ -26,6 +26,7 @@ import 'dart:convert';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:app/ui/state_stream.dart';
+import 'package:domain/model/model_catalog.dart';
 import 'package:domain/repository/chat_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -93,6 +94,71 @@ int? parseSubagentLimit(String text, {required int minimum}) {
   if (value < minimum) return null;
   return value;
 }
+
+/// The pin's join (`subagent-model-selection-card-controller.ts:26-40`): every
+/// **stored** route stays, and one the catalog does not advertise is marked
+/// unavailable. An empty catalog is not evidence — nothing is struck out.
+List<SubagentModelRoute> joinSubagentRoutes(
+  List<SubagentModelRoute> stored,
+  List<SubagentModelRoute> catalog,
+) {
+  if (catalog.isEmpty) return stored;
+  final Map<String, SubagentModelRoute> advertised =
+      <String, SubagentModelRoute>{
+        for (final SubagentModelRoute route in catalog) route.key: route,
+      };
+  return <SubagentModelRoute>[
+    for (final SubagentModelRoute route in stored)
+      SubagentModelRoute(
+        provider: route.provider,
+        model: route.model,
+        providerName: advertised[route.key]?.providerName,
+        modelName: advertised[route.key]?.modelName,
+        available: advertised.containsKey(route.key),
+      ),
+  ];
+}
+
+/// The catalog the subagent page joins its stored routes against.
+///
+/// The allowlist governs **new** sessions, so this is a *proxy* for "what this
+/// Host offers now" — the models the Host reports for the session the app
+/// currently has selected — and **not** a host-wide read. This client has
+/// exactly one models truth and it is session-scoped
+/// ([ChatRepository.observeSessionModels], `chat_repository.dart:659`), the same
+/// list the composer's picker shows (`chat_controller.dart:874`); there is no
+/// session-independent models RPC to read instead. No session selected, no
+/// catalog: the page then marks nothing unavailable rather than calling a
+/// stored route dead on no evidence.
+final subagentModelCatalogProvider =
+    StreamProvider.family<List<SubagentModelRoute>, String>((
+      ref,
+      backendId,
+    ) async* {
+      final String? sessionId = ref.watch(watchedSessionIdProvider(backendId));
+      if (sessionId == null) {
+        yield const <SubagentModelRoute>[];
+        return;
+      }
+      final ChatRepository repository = ref.watch(
+        chatRepositoryProvider(backendId),
+      );
+      yield* repository
+          .observeSessionModels(sessionId)
+          .map(
+            (SessionModels? models) => <SubagentModelRoute>[
+              for (final ModelProviderGroup group
+                  in models?.groups ?? const <ModelProviderGroup>[])
+                for (final ModelCatalogModel model in group.models)
+                  SubagentModelRoute(
+                    provider: group.id,
+                    model: model.id,
+                    providerName: group.name,
+                    modelName: model.name,
+                  ),
+            ],
+          );
+    });
 
 /// What the page renders: the two namespaces' stored values, their revisions,
 /// and whether the Host published each at all.
@@ -447,6 +513,13 @@ class _SettingsSubagentPageState extends ConsumerState<SettingsSubagentPage> {
     final AppLocalizations l10n = AppLocalizations.of(context)!;
     final SubagentSettingsController controller = _controller!;
     final SubagentSettingsState state = controller.state;
+    final List<SubagentModelRoute> catalog =
+        ref.watch(subagentModelCatalogProvider(widget.backendId)).value ??
+        const <SubagentModelRoute>[];
+    final List<SubagentModelRoute> rows = joinSubagentRoutes(
+      state.allowedModels,
+      catalog,
+    );
     return SettingsPageScaffold(
       title: l10n.settingsSubagentTitle,
       children: <Widget>[
@@ -483,7 +556,7 @@ class _SettingsSubagentPageState extends ConsumerState<SettingsSubagentPage> {
                 value: state.enabled,
                 onChanged: state.writable ? controller.setEnabled : null,
               ),
-              for (final SubagentModelRoute route in state.allowedModels) ...[
+              for (final SubagentModelRoute route in rows) ...[
                 const SettingsCardDivider(),
                 CheckboxListTile(
                   title: Text(
