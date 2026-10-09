@@ -859,10 +859,14 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   `ctx.get('pluginManager') !== undefined`).
 - The roster is two reads: `pluginManager/listBundles` (installed and optional
   bundles with their switchable rows) and `pluginManager/listPlugins` (loaded
-  entries with their patch targets). A row or bundle is switchable only when
-  the host addressed it; `readOnlyReason` (`management-required` |
-  `unaddressable`) is why a roster row cannot be changed, and it renders as a
-  reason rather than a disabled control with no explanation.
+  entries with their patch targets). Each answers its rows as the bare JSON
+  array the method returns — `BundleInfo[]` and `PluginInfo[]`
+  (`packages/boot/plugin-manager/src/index.ts`), never an object field — so an
+  empty roster is an empty array, not a missing key. A row or bundle is
+  switchable only when the host addressed it; `readOnlyReason`
+  (`management-required` | `unaddressable`) is why a roster row cannot be
+  changed, and it renders as a reason rather than a disabled control with no
+  explanation.
 - Every mutating method answers a `ChangeResult`, and expected refusals are
   *values* inside it (`error.code`), never transport errors: `changed`,
   `application` (`applied` | `restart-required` | `overridden` | `failed` |
