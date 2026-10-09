@@ -47,6 +47,7 @@ import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/settings/web_search_settings_page.dart';
 import 'package:app/ui/shared/archived_filter.dart';
 import 'package:app/ui/shared/session_archive_confirm_dialog.dart';
+import 'package:app/ui/shared/session_tree.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
@@ -474,6 +475,22 @@ final List<DesignShot> shots = <DesignShot>[
     state: busyState(),
     act: (tester) async {
       await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+    },
+  ),
+  // The session row's verbs menu: the pin portals a `Menu` from the row's ⋮
+  // (`ui-workspace/src/client/rows/Rows.tsx:665-686`), so the panel is the
+  // house menu surface (`menuSurfaceFill` over `menuBackdropFilter`) rather
+  // than a Material card. The phone drawer opens it by long-press (the ⋮ seat
+  // belongs to the management surface), which is the same menu. The shot is
+  // the pair that reviews that material.
+  DesignShot(
+    name: 'session-verbs-menu',
+    state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+      await tester.longPress(find.byType(SessionTreeRow).first);
       await settle(tester);
     },
   ),
