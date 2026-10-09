@@ -3670,5 +3670,13 @@
   "settingsAgentLoopSaveFailed": "Could not save the limit",
   "@settingsAgentLoopSaveFailed": {
     "description": "Agent loop page copy."
-  }
+  },
+  "accessModeIntro": "What the agent may do in this conversation. Picking one switches this session''s permission preset; the default for new sessions lives in Settings.",
+  "@accessModeIntro": {"description": "Subtitle of the access-mode sheet: what the choice governs and where the new-session default lives."},
+  "accessModeLoading": "Reading the access modes…",
+  "@accessModeLoading": {"description": "Stated in the access-mode sheet while the deployment's preset catalog is in flight."},
+  "accessModeUnavailable": "This deployment composes no access modes to switch between.",
+  "@accessModeUnavailable": {"description": "Stated in the access-mode sheet when the catalog carries no pickable preset."},
+  "accessModeLoadFailed": "Could not read the access modes.",
+  "@accessModeLoadFailed": {"description": "Stated in the access-mode sheet when the catalog read failed; a Retry sits beside it."}
 }

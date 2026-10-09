@@ -30,6 +30,7 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/notifications/session_notice.dart';
 import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
 import 'package:app/ui/chat/stats_line.dart';
@@ -557,6 +558,17 @@ final List<DesignShot> shots = <DesignShot>[
     dark: false,
     act: (tester) async {
       await tester.longPress(find.text(kBubbleUnderTest));
+      await settle(tester);
+    },
+  ),
+  // The access-mode seat over the projection the Host actually publishes:
+  // `currentValue` only, its presets read from the process catalog. This card
+  // used to render its heading over nothing here.
+  DesignShot(
+    name: 'access-mode',
+    state: busyState(permissions: kProjectionOnlyAccess),
+    act: (tester) async {
+      await tester.tap(find.byType(PermissionSelectChip));
       await settle(tester);
     },
   ),
@@ -2183,6 +2195,9 @@ Future<void> _render(
                 readWorkspaceFile: shot.readFile ?? _noWorkspaceFileRead,
                 readWorkspaceFileBytes:
                     shot.readFileBytes ?? _noWorkspaceFileBytes,
+                // The route always wires the process catalog; the access seat
+                // reads its preset list from it rather than the projection.
+                loadPermissionCatalog: () async => kPermissionCatalog,
               ),
             ),
           ),

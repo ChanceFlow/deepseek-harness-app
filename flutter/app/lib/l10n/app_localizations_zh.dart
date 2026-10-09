@@ -3757,4 +3757,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAgentLoopSaveFailed => '无法保存该上限';
+
+  @override
+  String get accessModeIntro => '智能体在本会话中可以做什么。选择后会切换当前会话的权限预设；新会话的默认值在设置里。';
+
+  @override
+  String get accessModeLoading => '正在读取访问模式…';
+
+  @override
+  String get accessModeUnavailable => '该部署没有提供可切换的访问模式。';
+
+  @override
+  String get accessModeLoadFailed => '无法读取访问模式。';
 }

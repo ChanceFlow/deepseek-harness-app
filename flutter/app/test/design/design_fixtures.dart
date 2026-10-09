@@ -247,6 +247,45 @@ const PermissionSelect kDockAccess = PermissionSelect(
   ],
 );
 
+/// The `permissions` Session projection as the Host publishes it:
+/// `currentValue` and nothing else (`interaction/permission-presets/src/index.ts:243`).
+/// The selectable presets come from the process catalog, never from here, so a
+/// seat that lists them from this value has nothing to render.
+const PermissionSelect kProjectionOnlyAccess = PermissionSelect(
+  currentValue: 'workspace-write',
+  options: <PermissionPresetOption>[],
+);
+
+/// The process catalog those presets come from
+/// (`permissionPresets/catalog`).
+const PermissionPresetCatalog kPermissionCatalog = PermissionPresetCatalog(
+  options: <PermissionPresetOption>[
+    PermissionPresetOption(
+      value: 'read-only',
+      name: 'read-only',
+      description: 'Reads files without changing anything',
+    ),
+    PermissionPresetOption(
+      value: 'workspace-write',
+      name: 'workspace-write',
+      description: 'Writes inside the workspace directory',
+    ),
+    PermissionPresetOption(
+      value: 'danger-full-access',
+      name: 'danger-full-access',
+      description: 'Runs every action without asking',
+    ),
+  ],
+  defaultOptions: <PermissionPresetOption>[
+    PermissionPresetOption(
+      value: 'workspace-write',
+      name: 'workspace-write',
+      description: 'Writes inside the workspace directory',
+    ),
+  ],
+  defaultPreset: 'workspace-write',
+);
+
 /// A settled turn that both wrote and delivered files: the produced-files
 /// chips row (本轮文件改动) and the delivered-files cards (交付文件) close the
 /// reply, and the `present` call itself is an ordinary transcript row above

@@ -1568,6 +1568,16 @@ class ChatController {
     String path,
   ) => _repository.readWorkspaceFileBytes(sessionId, path);
 
+  /// The deployment's process-level permission-preset catalog
+  /// (`permissionPresets/catalog`). This is where the composer's access seat
+  /// reads its options: the `permissions` Session projection carries the
+  /// current value only (`interaction/permission-presets/src/types.ts:36-41`,
+  /// `src/index.ts:243`), so a seat that builds its list from the projection
+  /// has nothing to render. The controller stays locale-free: a failure
+  /// propagates to the sheet, which states it.
+  Future<PermissionPresetCatalog> loadPermissionPresetCatalog() =>
+      _repository.loadPermissionPresetCatalog();
+
   Future<T> _locked<T>(Future<T> Function() action) {
     final run = _attachmentLock.then((_) => action());
     _attachmentLock = run.then((_) {}, onError: (_) {});
