@@ -18,7 +18,7 @@
 /// (read-only usage: `onAction` no-ops, attachments resolve empty).
 library;
 
-import 'dart:typed_data';
+import '../chat/attachment_read.dart';
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
@@ -1141,5 +1141,9 @@ String _readOnlyBody(SubagentReadOnlyReason reason, AppLocalizations l10n) =>
 
 /// Child records render without durable attachments: the loader always
 /// resolves empty (the null-returning seat `TimelineRow` requires).
-Future<Uint8List?> _noChildAttachment(String sessionId, AttachmentRef ref) =>
-    Future<Uint8List?>.value();
+Future<AttachmentRead> _noChildAttachment(
+  String sessionId,
+  AttachmentRef ref,
+) => Future<AttachmentRead>.value(
+  const AttachmentRead.failed(AttachmentReadFailure.unavailable),
+);

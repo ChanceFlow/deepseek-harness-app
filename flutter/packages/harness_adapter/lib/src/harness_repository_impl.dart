@@ -2588,12 +2588,21 @@ class HarnessRepositoryImpl implements ChatRepository {
     String sessionId,
     String attachmentId,
   ) async {
-    final value = await _call(
-      DshRpcEndpoints.sessionAttachment,
-      DshRpcEndpoints.sessionAttachment,
-      {'sessionId': sessionId, 'attachmentId': attachmentId},
-      _shortCallTimeout,
-    ).valueOrThrow();
+    final JsonMap value;
+    try {
+      value = await _call(
+        DshRpcEndpoints.sessionAttachment,
+        DshRpcEndpoints.sessionAttachment,
+        {'sessionId': sessionId, 'attachmentId': attachmentId},
+        _shortCallTimeout,
+      ).valueOrThrow();
+    } on DshBusinessException catch (error) {
+      // A refusal is the Host's own business code — `session/attachment-invalid`
+      // when no command of this session referenced the attachment — so it
+      // crosses the boundary as a domain failure the caller can branch on, the
+      // way this file's other calls carry theirs.
+      throw RepositoryFailure(error.code, error.message);
+    }
     final downloaded = SessionAttachmentValueWire.fromJson(value);
     return AttachmentData(
       ref: AttachmentRef(

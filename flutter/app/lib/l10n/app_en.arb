@@ -812,6 +812,10 @@
     "description": "Shown when the host has no permission preset catalog."
   },
   "permissionDefaultsReadOnly": "Settings are read-only on this deployment.",
+  "attachmentNotInSession": "This image is no longer part of the session",
+  "@attachmentNotInSession": {
+    "description": "Explains an attachment read the Host refused because no command of this session referenced it (session/attachment-invalid)."
+  },
   "permissionAutoReviewBadge": "EXP",
   "permissionAutoReviewLabel": "Auto review",
   "@permissionAutoReviewLabel": {

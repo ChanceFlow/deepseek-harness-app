@@ -331,6 +331,7 @@
   "permissionDefaultsLoading": "正在读取权限表…",
   "permissionDefaultsUnavailable": "该部署没有组合权限预设目录，因此没有可设的默认值。",
   "permissionDefaultsReadOnly": "该部署的设置是只读的。",
+  "attachmentNotInSession": "这张图片已不属于该会话",
   "permissionAutoReviewBadge": "EXP",
   "permissionAutoReviewLabel": "Auto review",
   "permissionAutoReviewDescription": "无沙箱运行；每次原生工具调用和 PTC 内层调用前由同一模型进行实验性审查。",

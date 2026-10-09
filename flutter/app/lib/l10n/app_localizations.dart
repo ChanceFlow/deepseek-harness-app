@@ -2126,6 +2126,12 @@ abstract class AppLocalizations {
   /// **'Settings are read-only on this deployment.'**
   String get permissionDefaultsReadOnly;
 
+  /// Explains an attachment read the Host refused because no command of this session referenced it (session/attachment-invalid).
+  ///
+  /// In en, this message translates to:
+  /// **'This image is no longer part of the session'**
+  String get attachmentNotInSession;
+
   /// The experimental marker the reference's Auto review preset carries (auto.badge).
   ///
   /// In en, this message translates to:

@@ -174,15 +174,15 @@ ChatUiState _state({
 }
 
 /// Decodes one durable attachment lazily; returns null on any failure.
-typedef AttachmentLoader = Future<Uint8List?> Function(
-  String sessionId,
-  AttachmentRef ref,
-);
 
 /// The bare pump's answer for a durable attachment: nothing was fetched, so
 /// an image row renders its placeholder.
-Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
-    Future<Uint8List?>.value();
+Future<AttachmentRead> _noAttachmentBytes(
+  String sessionId,
+  AttachmentRef ref,
+) => Future<AttachmentRead>.value(
+  const AttachmentRead.failed(AttachmentReadFailure.unavailable),
+);
 
 Future<void> _pump(
   WidgetTester tester,
@@ -3178,7 +3178,9 @@ void main() {
             onAction: (_) {},
             loadAttachment: (sessionId, ref) async {
               loaded.add(ref);
-              return null; // fail to decode → placeholder
+              return const AttachmentRead.failed(
+                AttachmentReadFailure.unavailable,
+              ); // fail to decode → placeholder
             },
           ),
         ),
@@ -4045,7 +4047,7 @@ void main() {
           ],
         ),
         <ChatAction>[],
-        loadAttachment: (sessionId, ref) async => png,
+        loadAttachment: (sessionId, ref) async => AttachmentRead.ready(png),
       );
 
       // The read variant titles the row; the path is its summary.
