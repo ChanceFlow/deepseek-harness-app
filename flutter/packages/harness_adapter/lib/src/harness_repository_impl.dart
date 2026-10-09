@@ -5056,6 +5056,8 @@ class HarnessRepositoryImpl implements ChatRepository {
         revision: wire.revision,
         hasUserLayer: wire.hasUserLayer,
         secretCount: wire.secretCount,
+        autoGenerate: wire.autoGenerate,
+        schema: wire.schema,
         value: wire.value,
         user: wire.user,
       );

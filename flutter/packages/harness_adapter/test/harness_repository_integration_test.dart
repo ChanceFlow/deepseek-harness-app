@@ -1139,7 +1139,8 @@ class HarnessFakeRpc implements DshRpcClient {
           'namespaces': <Object?>[
             <String, Object?>{
               'ns': 'llm-deepseek',
-              'schema': <String, Object?>{'type': 'object'},
+              'autoGenerate': true,
+              'schema': _settingsSchemaFixture,
               'value': <String, Object?>{
                 'providers': <String, Object?>{
                   'deepseek-official': <String, Object?>{
@@ -1160,6 +1161,7 @@ class HarnessFakeRpc implements DshRpcClient {
             },
             <String, Object?>{
               'ns': 'shell',
+              'schema': _settingsSchemaFixture,
               'value': <String, Object?>{},
               'applies': 'restart',
               'secrets': <Object?>[],
@@ -1186,6 +1188,8 @@ class HarnessFakeRpc implements DshRpcClient {
       case DshRpcEndpoints.settingsMutate:
         return <String, Object?>{
           'ns': 'llm-deepseek',
+          'autoGenerate': true,
+          'schema': _settingsSchemaFixture,
           'value': <String, Object?>{},
           'user': <String, Object?>{'touched': true},
           'applies': 'live',
@@ -1353,6 +1357,24 @@ JsonMap _inboxUserMessage(String id, String text) => <String, Object?>{
 };
 
 const String _muxPath = '/api/remote.mux';
+
+/// A valid settings `schema` envelope for the fake host's descriptors.
+///
+/// Schemastery serializes a schema as `{uid, refs}` with child positions as
+/// uids into the same table (`vendor/schemastery/src/index.ts` `toJSON`), so
+/// this is one object root with a single `providers` field.
+const Map<String, Object?> _settingsSchemaFixture = <String, Object?>{
+  'uid': 1,
+  'refs': <String, Object?>{
+    '1': <String, Object?>{
+      'type': 'object',
+      'meta': <String, Object?>{'default': <String, Object?>{}},
+      'dict': <String, Object?>{'providers': 2},
+    },
+    '2': <String, Object?>{'type': 'dict', 'inner': 3},
+    '3': <String, Object?>{'type': 'string'},
+  },
+};
 
 /// A socket seam that can end the current generation: closing the downlink
 /// stream drives [DshConnectionManager] into its reconnect loop, so the next
@@ -6026,11 +6048,17 @@ void main() {
     expect(deepseek.revision, 3);
     expect(deepseek.hasUserLayer, isTrue);
     expect(deepseek.secretCount, 1);
+    expect(deepseek.autoGenerate, isTrue);
+    expect(deepseek.schema.dictOf(deepseek.schema.root).keys, <String>[
+      'providers',
+    ]);
     final shell = snapshot.namespaces.firstWhere(
       (namespace) => namespace.ns == 'shell',
     );
     expect(shell.applies, SettingsApplies.restart);
     expect(shell.hasUserLayer, isFalse);
+    // The fake host withholds `autoGenerate` here, which reads as no page.
+    expect(shell.autoGenerate, isFalse);
     expect(snapshot.credentialRefs, <String>['DEEPSEEK_API_KEY']);
     final settingsPayload = rpc
         .payloads(DshRpcEndpoints.settingsDescribe)
