@@ -111,6 +111,29 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+PermissionPresetCatalog _catalogWithAuto() => const PermissionPresetCatalog(
+  options: <PermissionPresetOption>[
+    PermissionPresetOption(
+      value: 'workspace-write',
+      name: 'Workspace write',
+      description: 'Write inside the workspace.',
+    ),
+  ],
+  defaultOptions: <PermissionPresetOption>[
+    PermissionPresetOption(
+      value: 'workspace-write',
+      name: 'Workspace write',
+      description: 'Write inside the workspace.',
+    ),
+    PermissionPresetOption(
+      value: 'auto',
+      name: 'Auto',
+      description: "The host's own sentence.",
+    ),
+  ],
+  defaultPreset: 'workspace-write',
+);
+
 void main() {
   testWidgets('renders the catalog defaults and marks the effective one', (
     tester,
@@ -219,6 +242,90 @@ void main() {
 
     await tester.tap(find.text('Workspace write'));
     await tester.pumpAndSettle();
+    expect(actions, isEmpty);
+  });
+
+  testWidgets('the auto preset carries the EXP badge and its own sentence', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      repository: _FakeRepository(() async => _catalogWithAuto()),
+      channel: _channel(defaultPreset: 'workspace-write'),
+    );
+
+    // The pin's `auto.badge` and `auto.description`
+    // (`ui-permission-presets/src/client/index.ts:89-91`).
+    // The pin's `auto.label` (`index.ts:87`): the row's name is the
+    // reference's, not the host's bare value.
+    expect(find.text('Auto review'), findsOneWidget);
+    expect(find.text('EXP'), findsOneWidget);
+    expect(
+      find.text(
+        'Runs without a sandbox: every native tool call and PTC inner call '
+        'is reviewed by the same model before it runs.',
+      ),
+      findsOneWidget,
+    );
+    // The host's generic sentence is not what the experimental preset shows.
+    expect(find.text("The host's own sentence."), findsNothing);
+  });
+
+  testWidgets(
+    'choosing auto confirms first and writes only once acknowledged',
+    (tester) async {
+      final actions = <SettingsAction>[];
+      await _pump(
+        tester,
+        repository: _FakeRepository(() async => _catalogWithAuto()),
+        channel: _channel(defaultPreset: 'workspace-write', actions: actions),
+      );
+
+      await tester.tap(find.text('Auto review'));
+      await tester.pumpAndSettle();
+
+      // The pin's own confirmation block (`index.ts:97-101`), and the enable
+      // action is unreachable until the acknowledgement is made.
+      expect(find.text('Enable Auto review (experimental)?'), findsOneWidget);
+      expect(actions, isEmpty);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Enable Auto review'),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      await tester.tap(
+        find.text('I understand these risks and want to continue'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enable Auto review'));
+      await tester.pumpAndSettle();
+
+      final action = actions.single as UpdateSettingAction;
+      expect(action.key, kPermissionDefaultKey);
+      expect(action.jsonValue, '"auto"');
+      expect(action.expectedRevision, 7);
+    },
+  );
+
+  testWidgets('cancelling the auto confirmation writes nothing', (
+    tester,
+  ) async {
+    final actions = <SettingsAction>[];
+    await _pump(
+      tester,
+      repository: _FakeRepository(() async => _catalogWithAuto()),
+      channel: _channel(defaultPreset: 'workspace-write', actions: actions),
+    );
+
+    await tester.tap(find.text('Auto review'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
     expect(actions, isEmpty);
   });
 }

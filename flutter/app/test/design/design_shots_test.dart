@@ -1474,6 +1474,11 @@ class _FakePermissionCatalogRepository implements ChatRepository {
             name: 'danger-full-access',
             description: 'Full file access without approval prompts.',
           ),
+          PermissionPresetOption(
+            value: 'auto',
+            name: 'auto',
+            description: 'Reviews each call before it runs',
+          ),
         ],
         defaultOptions: <PermissionPresetOption>[
           PermissionPresetOption(
@@ -1487,6 +1492,14 @@ class _FakePermissionCatalogRepository implements ChatRepository {
             value: 'danger-full-access',
             name: 'danger-full-access',
             description: 'Full file access without approval prompts.',
+          ),
+          // The host publishes the experimental preset bare: the badge, the
+          // sentence and the confirmation are the client's
+          // (`ui-permission-presets/src/client/index.ts:87-101`).
+          PermissionPresetOption(
+            value: 'auto',
+            name: 'auto',
+            description: 'Reviews each call before it runs',
           ),
         ],
         defaultPreset: 'workspace-write',
