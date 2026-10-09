@@ -56,7 +56,6 @@ import 'plan_detail_surface.dart';
 import 'tool_detail_surface.dart';
 import 'job_list_action.dart';
 import 'message_icon_actions.dart';
-import 'message_feedback_actions.dart';
 import 'message_run_metrics.dart';
 import 'model_select.dart';
 import 'permission_select.dart';
@@ -3027,13 +3026,6 @@ class MessageRow extends StatelessWidget {
             timeEpochMs: message.createdAtEpochMs,
             clockAtStart: false,
             onFork: onFork,
-            feedback: backendId == null
-                ? null
-                : MessageFeedbackActions(
-                    backendId: backendId!,
-                    sessionId: message.sessionId,
-                    messageId: message.id,
-                  ),
             metrics: messageRunMetricsText(
               usage: usage,
               firstTokenAtEpochMs: firstTokenAtEpochMs,
@@ -3041,14 +3033,6 @@ class MessageRow extends StatelessWidget {
               l10n: l10n,
             ),
           ),
-          // A write the host refused, or a load that failed, is stated on
-          // its own line so the footer stays a caption on the message.
-          if (backendId case final String backend)
-            MessageFeedbackNotice(
-              backendId: backend,
-              sessionId: message.sessionId,
-              messageId: message.id,
-            ),
         ],
       ],
     );

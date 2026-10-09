@@ -6366,42 +6366,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sessions'**
   String get sessionReferenceSectionTitle;
-
-  /// Accessible name of the thumbs-up control on an unrated assistant reply.
-  ///
-  /// In en, this message translates to:
-  /// **'Good response'**
-  String get feedbackRateUp;
-
-  /// Accessible name of the thumbs-down control on an unrated assistant reply.
-  ///
-  /// In en, this message translates to:
-  /// **'Bad response'**
-  String get feedbackRateDown;
-
-  /// Accessible name of a thumb whose judgment is the recorded one; pressing it deletes the record.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove rating'**
-  String get feedbackRetract;
-
-  /// Stated on the reply footer when the host refused the write or the write never reached it.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not save feedback'**
-  String get feedbackSaveFailed;
-
-  /// Stated on the reply footer when a version conflict was reconciled from the host's authoritative record.
-  ///
-  /// In en, this message translates to:
-  /// **'This feedback changed elsewhere; the latest state is shown'**
-  String get feedbackChangedElsewhere;
-
-  /// Stated on the reply footer when the session's stored judgments could not be read.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not load feedback'**
-  String get feedbackLoadFailed;
 }
 
 class _AppLocalizationsDelegate

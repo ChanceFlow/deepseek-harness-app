@@ -3753,23 +3753,4 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionReferenceSectionTitle => 'Sessions';
-
-  @override
-  String get feedbackRateUp => 'Good response';
-
-  @override
-  String get feedbackRateDown => 'Bad response';
-
-  @override
-  String get feedbackRetract => 'Remove rating';
-
-  @override
-  String get feedbackSaveFailed => 'Could not save feedback';
-
-  @override
-  String get feedbackChangedElsewhere =>
-      'This feedback changed elsewhere; the latest state is shown';
-
-  @override
-  String get feedbackLoadFailed => 'Could not load feedback';
 }
