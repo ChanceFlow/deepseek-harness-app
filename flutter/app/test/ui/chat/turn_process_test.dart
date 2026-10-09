@@ -7,6 +7,7 @@
 library;
 
 import 'package:app/l10n/app_localizations.dart';
+import 'package:app/ui/chat/chat_screen.dart' show chatFlowGapAfter;
 import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/run_duration.dart';
 import 'package:app/ui/chat/timeline_folding.dart';
@@ -487,6 +488,7 @@ void main() {
                 members: const <TurnProcessMember>[],
               ),
               buildRow: (row) => const SizedBox.shrink(),
+              gapAfter: chatFlowGapAfter,
             ),
           ),
         ),

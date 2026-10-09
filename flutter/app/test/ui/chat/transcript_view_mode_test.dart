@@ -98,6 +98,9 @@ Widget _rows(List<TurnProcessSection> sections) => l10nApp(
           TurnProcessRow(
             key: ValueKey<int>(section.facts.turn),
             section: section,
+            // The transcript's own flow rule, so these rows are spaced exactly
+            // as the real list spaces them.
+            gapAfter: chatFlowGapAfter,
             buildRow: (Object row) => Text(switch (row) {
               TimelineToolCall(:final name) => 'ran $name',
               _ => 'row',
