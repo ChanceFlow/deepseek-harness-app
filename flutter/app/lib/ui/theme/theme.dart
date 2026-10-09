@@ -591,6 +591,40 @@ abstract final class DshType {
   );
 }
 
+/// The UI family stack, ported from the reference's `--dsw-font-family`
+/// (`base.css:7-8`):
+/// `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+/// 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
+/// sans-serif`.
+///
+/// The pin states **one** stack for both scripts: the Latin faces come first and
+/// the Han faces sit inside the same list, so the engine resolves each glyph
+/// against one declared chain — Latin from the first family that has it, Han
+/// from the Han family behind it. Our app used to declare no family at all, so
+/// both scripts came from whatever the platform defaulted to and nothing
+/// recorded which pair that was; this names it.
+///
+/// Android ships none of the pin's Latin faces; `Roboto` is the one it ships for
+/// Latin, and the Han families behind it are the Noto/Source Han family the pin
+/// itself pairs with a platform sans on every platform it names. The pair is
+/// metric-led, from the faces themselves: cap height 0.711 em and x-height
+/// 0.528 em for Roboto Regular against 0.733 em / 0.543 em for Noto Sans SC —
+/// within 3% on both axes, both low-contrast humanist/grotesque designs at
+/// weight class 400, so a mixed paragraph keeps one colour and one optical size.
+/// A face that is not on the device is a request the platform may refuse; that
+/// trade, and the bundled-face alternative, are recorded in the decision note.
+const String kUiFontFamily = 'Roboto';
+const List<String> kUiFontFamilyFallback = <String>[
+  // Android's Han faces, in the order the platform ships them. A device that
+  // names none of them falls back to its own Han default, which is what every
+  // build did before this list existed.
+  'Noto Sans CJK SC',
+  'Noto Sans SC',
+  'Source Han Sans SC',
+  // The pin's own last resort, and Android's generic sans.
+  'sans-serif',
+];
+
 /// The reference's code face (`base.css:10`):
 /// `'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono',
 /// Menlo, Courier, 'PingFang SC', 'Microsoft YaHei'`.
@@ -848,6 +882,13 @@ class DshTheme {
       // Android ripple feel (no-op on iOS).
       splashFactory: InkSparkle.splashFactory,
       textTheme: _typography(base.textTheme),
+      // The same chain on the primary theme: an AppBar title is the one text a
+      // reader sees without a `TextTheme` role of its own, and a family left
+      // null there would resolve both scripts by platform default again.
+      primaryTextTheme: base.primaryTextTheme.apply(
+        fontFamily: kUiFontFamily,
+        fontFamilyFallback: kUiFontFamilyFallback,
+      ),
       // Chrome and content sit on different tones: the transcript keeps
       // `surface`, while every frame around it — bar, dock, drawer —
       // shares `surfaceContainer`. The reader never needs a rule to see
@@ -1008,28 +1049,37 @@ class DshTheme {
   /// tier is 13px on a 20px line (`--dsw-font-xs-13`, :230-235). Titles wear
   /// the reference's one strong weight: its Figma 510 renders as 500
   /// (design-platform.css:1-3, `--dsw-font-s-strong-14-font-weight`, :225).
-  static TextTheme _typography(TextTheme base) => base.copyWith(
-    titleLarge: base.titleLarge?.copyWith(
-      fontWeight: FontWeight.w500,
-      letterSpacing: -0.2,
-    ),
-    titleMedium: base.titleMedium?.copyWith(
-      fontWeight: FontWeight.w500,
-      letterSpacing: -0.1,
-      height: 1.25,
-    ),
-    bodyLarge: base.bodyLarge?.copyWith(height: 1.5),
-    // The transcript's two reading steps are the reference's own markdown
-    // base and its secondary size (`gradient-shadow-text.css:91-93`, :232-234).
-    bodyMedium: base.bodyMedium?.copyWith(
-      fontSize: DshType.markdownBase.size,
-      height: DshType.markdownBase.lineHeight / DshType.markdownBase.size,
-    ),
-    bodySmall: base.bodySmall?.copyWith(
-      fontSize: DshType.xs13.size,
-      height: DshType.xs13.lineHeight / DshType.xs13.size,
-    ),
-    labelLarge: base.labelLarge?.copyWith(fontWeight: FontWeight.w500),
-    labelSmall: base.labelSmall?.copyWith(letterSpacing: 0.4),
-  );
+  static TextTheme _typography(TextTheme base) {
+    // One chain for both scripts, before any per-style tweak: a style that
+    // overrode the family would put its own script back on a second voice.
+    final TextTheme themed = base.apply(
+      fontFamily: kUiFontFamily,
+      fontFamilyFallback: kUiFontFamilyFallback,
+    );
+    return themed.copyWith(
+      titleLarge: themed.titleLarge?.copyWith(
+        fontWeight: FontWeight.w500,
+        letterSpacing: -0.2,
+      ),
+      titleMedium: themed.titleMedium?.copyWith(
+        fontWeight: FontWeight.w500,
+        letterSpacing: -0.1,
+        height: 1.25,
+      ),
+      bodyLarge: themed.bodyLarge?.copyWith(height: 1.5),
+      // The transcript's two reading steps are the reference's own markdown
+      // base and its secondary size (`gradient-shadow-text.css:91-93`,
+      // :232-234).
+      bodyMedium: themed.bodyMedium?.copyWith(
+        fontSize: DshType.markdownBase.size,
+        height: DshType.markdownBase.lineHeight / DshType.markdownBase.size,
+      ),
+      bodySmall: themed.bodySmall?.copyWith(
+        fontSize: DshType.xs13.size,
+        height: DshType.xs13.lineHeight / DshType.xs13.size,
+      ),
+      labelLarge: themed.labelLarge?.copyWith(fontWeight: FontWeight.w500),
+      labelSmall: themed.labelSmall?.copyWith(letterSpacing: 0.4),
+    );
+  }
 }
