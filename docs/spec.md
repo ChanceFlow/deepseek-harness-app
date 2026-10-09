@@ -427,6 +427,7 @@ never the payload), so a wire-coverage gap stays measurable.
 | `approval/requested` | `TimelineItem.ApprovalRequest` |
 | `question/requested` | `TimelineItem.QuestionRequest` |
 | `approval/resolved`, `question/resolved` | removes the matching interactive card |
+| `agent/inbox/spliced` | no item — rebuilds the durable pending next-turn/next-step lists; a later `user/message` whose id the `next-step` list claimed carries `steering = true` on its `TimelineMessage`, the reference's `SteeringHistory` classification |
 | `session/queue` | `TimelineItem.Queue` snapshot with queued/steering/context entries — a live-only view the adapter publishes from the session's `inbox` projection: the history rebuild carries it over, and the session's next `session/subscribed` frame clears it before the generation's snapshot rebuilds it; required `items`/`id`/`placement`/`message` fields fail loud |
 | `command/run` | `TimelineItem.Command` with `status = RUNNING` (name from the run event; `commandId` keys resolution) |
 | `command/done` | resolves the paired `TimelineItem.Command` by `commandId` — `success` (with `text`) or `failed`; a `done` with no run in the window appends the settled card |
@@ -446,9 +447,9 @@ flight. Neither the frames nor the baseline touches durable history.
 
 ### 6.1 Unwired vocabulary
 
-Nine names the adapter reports as `timeline.event` debug — an unrecognised
+Eight names the adapter reports as `timeline.event` debug — an unrecognised
 session event type, or a projection value this client never reads — are the
-outstanding coverage against the folded table above. Five are the reference
+outstanding coverage against the folded table above. Four are the reference
 client's own folds and this client's ports; the port is scheduled as one
 change and none is folded here. The three `team/*` journal events are not a
 client surface: the reference folds them **host-side** into the `agentTeam`
@@ -457,7 +458,6 @@ port at all, because the host folds it into the list row this client reads.
 
 | name | kind | Reference | Verdict |
 |---|---|---|---|
-| `agent/inbox/spliced` | session event | declared `packages/core/agent/src/types.ts:96`; folded by `packages/client/ui-chat/src/client/conversation-nodes/inbox.ts:119-124`, with steering provenance from `ui-chat/src/client/model/steering-history.ts:47` | **port** — the transcript's steering rows |
 | `step/end` | session event | declared `packages/core/session/src/types.ts:301`; folded by `packages/client/ui-chat/src/client/conversation-nodes/turn-tail.ts:44` and `turn-process.ts:222` | **port, timeline item only** — `session_stats_fold.dart:121` already counts the step |
 | `workspace/changes` | session event | declared `packages/deliverables/workspace-changes/src/types.ts:106`; folded by `packages/client/ui-deliverables/src/client/turn-deliverables.ts:171,182` | **port** — a turn's changed-file deliverable |
 | `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |

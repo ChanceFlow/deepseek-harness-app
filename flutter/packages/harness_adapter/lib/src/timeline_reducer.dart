@@ -102,6 +102,18 @@ class TimelineReducer {
   /// reading. Absent for a step whose start fell outside the folded window.
   final Map<String, int> _stepStartedAtMs = <String, int>{};
 
+  /// The durable pending-message lists an `agent/inbox/spliced` rebuilds, by
+  /// target, plus the ids a `next-step` claim removed from them. A later
+  /// `user/message` whose id is claimed is steering input admitted into a live
+  /// turn — the reference's `SteeringHistory`
+  /// (`client/ui-chat/src/client/model/steering-history.ts`), replayed here in
+  /// sequence order so a history rebuild classifies the same rows.
+  final Map<String, List<String>> _inboxPending = <String, List<String>>{
+    'next-turn': <String>[],
+    'next-step': <String>[],
+  };
+  final Set<String> _claimedNextStep = <String>{};
+
   /// Session-level facts folded alongside the timeline: the effective
   /// sandbox mode (`sandbox/mode`), the active schedule reminders
   /// (`schedule/change`), and the durable workflow runs (`tool-workflow/*`).
@@ -281,6 +293,10 @@ class TimelineReducer {
     _seenTurns.clear();
     _stepByTurn.clear();
     _stepStartedAtMs.clear();
+    for (final pending in _inboxPending.values) {
+      pending.clear();
+    }
+    _claimedNextStep.clear();
     _hasSeenInitialSystemPrompt = false;
     _sandboxMode = null;
     _schedules.clear();
@@ -407,6 +423,8 @@ class TimelineReducer {
         _appendTurnStart(event);
       case 'step/start':
         _recordStepStart(event);
+      case 'agent/inbox/spliced':
+        _applyInboxSplice(event);
       case 'compaction/summary':
         _appendCompaction(event);
       case 'command/run':
@@ -703,6 +721,10 @@ class TimelineReducer {
       _items.add(_contextInjection(messageId, data, source, kind));
       return;
     }
+    // A claim is consumed by the message it names, whatever that message's
+    // source kind: the reference's `SteeringHistory.apply` deletes the id
+    // before it checks `source.kind === 'user'`.
+    final claimed = _claimedNextStep.remove(messageId);
     _items.add(
       TimelineMessage(
         ChatMessage(
@@ -714,8 +736,62 @@ class TimelineReducer {
           images: _extractImages(data),
           seq: _lastSeq,
         ),
+        steering: claimed,
       ),
     );
+  }
+
+  /// Replays one durable pending-message mutation
+  /// (`SessionEventMap['agent/inbox/spliced']`,
+  /// `reference/deepseek-harness/packages/core/agent/src/types.ts:96-102`:
+  /// `{target, start, removedCount?, inserted: UserMessage[], outcome?}`).
+  ///
+  /// Mirrors `SteeringHistory.applySplice`
+  /// (`packages/client/ui-chat/src/client/model/steering-history.ts`): the
+  /// splice replaces `removedCount` entries at `start`; an inserted identity
+  /// is no longer claimed, and a removal from the `next-step` list that was
+  /// not discarded claims the removed ids for the message that consumes them.
+  void _applyInboxSplice(JsonMap event) {
+    final data = _eventData(event);
+    final target = wireString(data, 'target');
+    if (target != 'next-turn' && target != 'next-step') {
+      throw FormatException(
+        'agent/inbox/spliced "target" must be next-turn or next-step, got '
+        '"$target"',
+      );
+    }
+    final insertedJson = asJsonArray(data['inserted']);
+    if (insertedJson == null) {
+      throw const FormatException(
+        'agent/inbox/spliced "inserted" must be an array',
+      );
+    }
+    final inserted = <String>[];
+    for (final entry in insertedJson) {
+      final message = asJsonObject(entry);
+      final id = message == null ? null : wireString(message, 'id');
+      if (id == null || id.isEmpty) {
+        throw const FormatException(
+          'agent/inbox/spliced "inserted" entry carries no "id"',
+        );
+      }
+      inserted.add(id);
+    }
+    final pending = _inboxPending[target]!;
+    final start = wireLong(data, 'start').clamp(0, pending.length);
+    final count = wireLong(
+      data,
+      'removedCount',
+    ).clamp(0, pending.length - start);
+    final removed = pending.sublist(start, start + count);
+    pending.replaceRange(start, start + count, inserted);
+    for (final id in inserted) {
+      _claimedNextStep.remove(id);
+    }
+    if (target != 'next-step' || wireString(data, 'outcome') == 'canceled') {
+      return;
+    }
+    _claimedNextStep.addAll(removed);
   }
 
   /// Web context-provenance projection: the transcript role and the

@@ -64,6 +64,12 @@ final class PresentedFile {
 /// time-to-first-token boundary (`firstTokenTime − stepStartTime`,
 /// `client/ui-chat/src/client/contract/turn-metrics.ts`). Either is null
 /// when the folded window did not carry it — never a fabricated value.
+///
+/// [steering] is true when a preceding `agent/inbox/spliced` claimed this
+/// message from the running turn's `next-step` inbox — the reference's
+/// `SteeringHistory` classification
+/// (`client/ui-chat/src/client/model/steering-history.ts`): human input
+/// admitted into a live turn rather than a new user turn.
 final class TimelineMessage extends TimelineItem {
   const TimelineMessage(
     this.value, {
@@ -71,6 +77,7 @@ final class TimelineMessage extends TimelineItem {
     this.usage,
     this.firstTokenAtEpochMs,
     this.stepStartedAtEpochMs,
+    this.steering = false,
   });
 
   final ChatMessage value;
@@ -82,6 +89,10 @@ final class TimelineMessage extends TimelineItem {
   /// outside the folded window.
   final int? stepStartedAtEpochMs;
 
+  /// Whether a durable inbox splice admitted this message into a running
+  /// turn's next step.
+  final bool steering;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -90,7 +101,8 @@ final class TimelineMessage extends TimelineItem {
           other.step == step &&
           other.usage == usage &&
           other.firstTokenAtEpochMs == firstTokenAtEpochMs &&
-          other.stepStartedAtEpochMs == stepStartedAtEpochMs);
+          other.stepStartedAtEpochMs == stepStartedAtEpochMs &&
+          other.steering == steering);
 
   @override
   int get hashCode => Object.hash(
@@ -100,6 +112,7 @@ final class TimelineMessage extends TimelineItem {
     usage,
     firstTokenAtEpochMs,
     stepStartedAtEpochMs,
+    steering,
   );
 }
 
