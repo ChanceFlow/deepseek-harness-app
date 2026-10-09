@@ -2,13 +2,11 @@
 /// centered, ellipsized row of pipe-separated groups above the composer.
 library;
 
-import 'dart:async';
-
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/session_window_stats.dart';
 import 'package:flutter/material.dart';
 
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../theme/theme.dart' show kShapeChip;
 
 /// Compact token count: 517 / 12.2K / 1.2M (one decimal under 100).
@@ -130,131 +128,143 @@ class StatsLine extends StatelessWidget {
       // Caption spacing: the line belongs to the transcript above it, not
       // to the dock it sits on top of.
       padding: const EdgeInsets.only(top: 2, bottom: 8, left: 8, right: 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kShapeChip),
-          onTap: () => _openStatsSheet(context, stats, l10n),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SizedBox(
-                  width: double.infinity,
-                  child: Text(
-                    fitStatsGroups(
-                      groups,
-                      style,
-                      constraints.maxWidth,
-                      MediaQuery.textScalerOf(context),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: style,
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openStatsSheet(
-    BuildContext context,
-    SessionWindowStats stats,
-    AppLocalizations l10n,
-  ) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    unawaited(
-      showMenuSheet<void>(
-        context,
+      child: AnchoredMenu(
+        // The pin's stat dialog is a portaled panel above its trigger with an
+        // 8px gap, clamped to the menu family's 12px viewport margin
+        // (`ui-chat/src/client/chat/stat-dialog.ts:9-50`), and at least as wide
+        // as the panel's own `min(300px, 100vw - 24px)`
+        // (`stat-dialog.module.css:18`).
+        side: MenuSide.top,
+        align: MenuAlign.start,
+        gap: 8,
+        margin: 12,
+        minWidth: 300,
+        // This panel's own content ceiling; the pin's dialog carries no
+        // scrolling list, ours scrolls when the numbers stack up.
         maxHeight: 380,
-        builder: (sheetContext) => SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.analytics_outlined,
-                    size: 18,
-                    color: scheme.primary,
+        cardKey: const ValueKey<String>('anchored-menu-card'),
+        trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(kShapeChip),
+                onTap: toggle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.statsTurnsSteps(stats.steps, stats.turns),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Divider(height: 1, color: scheme.outlineVariant),
-              const SizedBox(height: 12),
-              if (stats.billedInputTokens > 0 || stats.outputTokens > 0) ...[
-                _statRow(
-                  theme,
-                  Icons.data_usage_outlined,
-                  l10n.statsInputTokens(formatTokens(stats.billedInputTokens)),
-                  trailing: l10n.statsOutputTokens(
-                    formatTokens(stats.outputTokens),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          fitStatsGroups(
+                            groups,
+                            style,
+                            constraints.maxWidth,
+                            MediaQuery.textScalerOf(context),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: style,
+                        ),
+                      );
+                    },
                   ),
                 ),
-                if (stats.cacheHitPercent case final hit?)
-                  _statRow(
-                    theme,
-                    Icons.cached_outlined,
-                    l10n.statsCacheHit(hit),
-                  ),
-                const SizedBox(height: 8),
-              ],
-              if (stats.llmMs > 0 || stats.toolMs > 0) ...[
-                if (stats.llmMs > 0)
-                  _statRow(
-                    theme,
-                    Icons.smart_toy_outlined,
-                    l10n.statsLlmDuration(formatDuration(stats.llmMs)),
-                  ),
-                if (stats.toolMs > 0)
-                  _statRow(
-                    theme,
-                    Icons.build_outlined,
-                    l10n.statsToolDuration(formatDuration(stats.toolMs)),
-                  ),
-                const SizedBox(height: 8),
-              ],
-              if (stats.ttftSteps > 0 || stats.decodeMs > 0) ...[
-                if (stats.ttftSteps > 0)
-                  _statRow(
-                    theme,
-                    Icons.speed_outlined,
-                    l10n.statsTtftAvg(
-                      formatDuration(stats.ttftMs ~/ stats.ttftSteps),
+              ),
+            ),
+        card: (BuildContext context, VoidCallback close) {
+          final theme = Theme.of(context);
+          final scheme = theme.colorScheme;
+          final l10n = AppLocalizations.of(context)!;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.analytics_outlined,
+                      size: 18,
+                      color: scheme.primary,
                     ),
-                  ),
-                if (stats.decodeMs > 0)
-                  _statRow(
-                    theme,
-                    Icons.electric_bolt_outlined,
-                    l10n.statsTokensPerSecond(
-                      formatTokensPerSecond(
-                        stats.decodeTokens / (stats.decodeMs / 1000),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.statsTurnsSteps(stats.steps, stats.turns),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Divider(height: 1, color: scheme.outlineVariant),
+                const SizedBox(height: 12),
+                if (stats.billedInputTokens > 0 || stats.outputTokens > 0) ...[
+                  _statRow(
+                    theme,
+                    Icons.data_usage_outlined,
+                    l10n.statsInputTokens(
+                      formatTokens(stats.billedInputTokens),
+                    ),
+                    trailing: l10n.statsOutputTokens(
+                      formatTokens(stats.outputTokens),
+                    ),
                   ),
+                  if (stats.cacheHitPercent case final hit?)
+                    _statRow(
+                      theme,
+                      Icons.cached_outlined,
+                      l10n.statsCacheHit(hit),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+                if (stats.llmMs > 0 || stats.toolMs > 0) ...[
+                  if (stats.llmMs > 0)
+                    _statRow(
+                      theme,
+                      Icons.smart_toy_outlined,
+                      l10n.statsLlmDuration(formatDuration(stats.llmMs)),
+                    ),
+                  if (stats.toolMs > 0)
+                    _statRow(
+                      theme,
+                      Icons.build_outlined,
+                      l10n.statsToolDuration(formatDuration(stats.toolMs)),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+                if (stats.ttftSteps > 0 || stats.decodeMs > 0) ...[
+                  if (stats.ttftSteps > 0)
+                    _statRow(
+                      theme,
+                      Icons.speed_outlined,
+                      l10n.statsTtftAvg(
+                        formatDuration(stats.ttftMs ~/ stats.ttftSteps),
+                      ),
+                    ),
+                  if (stats.decodeMs > 0)
+                    _statRow(
+                      theme,
+                      Icons.electric_bolt_outlined,
+                      l10n.statsTokensPerSecond(
+                        formatTokensPerSecond(
+                          stats.decodeTokens / (stats.decodeMs / 1000),
+                        ),
+                      ),
+                    ),
+                ],
               ],
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

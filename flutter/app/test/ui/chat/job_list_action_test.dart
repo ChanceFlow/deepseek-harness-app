@@ -165,7 +165,7 @@ void main() {
     // (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :41-65), so the
     // opener must seat it on the shared menu material — a `showModalBottomSheet`
     // here would paint Material's own fill and elevation under the card.
-    final card = find.byKey(const ValueKey('menu-sheet-card'));
+    final card = find.byKey(const ValueKey('anchored-menu-card'));
     expect(card, findsOneWidget);
     expect(tester.widget(card), isA<MenuMaterial>());
   });

@@ -30,6 +30,8 @@ import 'package:app/local_state/local_state_store.dart';
 import 'package:app/notifications/session_notice.dart';
 import 'package:app/ui/chat/card_detail.dart';
 import 'package:app/ui/chat/chat_screen.dart';
+import 'package:app/ui/chat/context_ring.dart';
+import 'package:app/ui/chat/model_select.dart';
 import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
 import 'package:app/ui/chat/file_preview_sheet.dart';
@@ -579,7 +581,6 @@ final List<DesignShot> shots = <DesignShot>[
   DesignShot(
     name: 'message-menu',
     state: busyState(),
-    dark: false,
     act: (tester) async {
       await tester.longPress(find.text(kBubbleUnderTest));
       await settle(tester);
@@ -593,6 +594,35 @@ final List<DesignShot> shots = <DesignShot>[
     state: busyState(permissions: kProjectionOnlyAccess),
     act: (tester) async {
       await tester.tap(find.byType(PermissionSelectChip));
+      await settle(tester);
+    },
+  ),
+  // The composer roster as the pin's popover: a card 4px above the ➕, capped
+  // at the pin's 400px (`MenuView.tsx:26-40`) instead of the dock's seam.
+  DesignShot(
+    name: 'command-roster',
+    state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byTooltip('Commands'));
+      await settle(tester);
+    },
+  ),
+  // The menu family as the pin's popovers: the meter's panel and the model
+  // seat's card, each placed against its own trigger instead of seated at the
+  // bottom seam.
+  DesignShot(
+    name: 'context-ring-popover',
+    state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byType(ContextRing));
+      await settle(tester);
+    },
+  ),
+  DesignShot(
+    name: 'model-picker-popover',
+    state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byType(ModelSelect));
       await settle(tester);
     },
   ),

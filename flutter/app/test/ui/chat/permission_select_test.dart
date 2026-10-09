@@ -265,7 +265,7 @@ void main() {
     expect(actions, isEmpty);
   });
 
-  testWidgets('the sheet lists the catalog presets the projection omits', (
+  testWidgets('the card lists the catalog presets the projection omits', (
     tester,
   ) async {
     final actions = <ChatAction>[];
@@ -286,7 +286,9 @@ void main() {
     // The photographed defect: the card showed its title over nothing. The
     // options are the catalog's, and the current one is marked. The chip also
     // renders the current label, so the row assertions read inside the card.
-    final Finder card = find.byKey(const ValueKey<String>('menu-sheet-card'));
+    final Finder card = find.byKey(
+      const ValueKey<String>('anchored-menu-card'),
+    );
     Finder inCard(Finder matching) =>
         find.descendant(of: card, matching: matching);
     expect(inCard(find.text('Read Only')), findsOneWidget);

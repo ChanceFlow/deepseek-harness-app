@@ -7,7 +7,7 @@ import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../theme/theme.dart';
 
 import 'fish_logo.dart';
@@ -154,9 +154,29 @@ class WorkspaceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AnchoredMenu(
+      // A hero chip: the pin's menu family opens below its anchor with the 4px
+      // gap (`Menu.module.css:30-33`) and the start alignment its sibling seat
+      // in this hero uses (`AgentPresetSeat.tsx:192`).
+      side: MenuSide.bottom,
+      align: MenuAlign.start,
+      gap: 4,
+      maxHeight: 440,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          _trigger(context, toggle, l10n),
+      card: (BuildContext context, VoidCallback close) => _card(close),
+    );
+  }
+
+  Widget _trigger(
+    BuildContext context,
+    VoidCallback toggle,
+    AppLocalizations l10n,
+  ) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
     final resolvedLabel = label ?? l10n.heroChooseWorkspace;
     return Tooltip(
       message: l10n.heroChooseWorkspace,
@@ -164,7 +184,7 @@ class WorkspaceChip extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(kShapeChip),
-          onTap: () => _open(context),
+          onTap: toggle,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -210,18 +230,15 @@ class WorkspaceChip extends StatelessWidget {
     );
   }
 
-  Future<void> _open(BuildContext context) {
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 440,
-      builder: (sheetContext) => _WorkspaceSheet(
-        workspaces: workspaces,
-        currentLabel: label,
-        onPickWorkspace: (workspaceId) {
-          Navigator.of(sheetContext).pop();
-          onPickWorkspace(workspaceId);
-        },
-      ),
+  /// The workspace roster card. A pick closes it and then hands the id up.
+  Widget _card(VoidCallback close) {
+    return _WorkspaceSheet(
+      workspaces: workspaces,
+      currentLabel: label,
+      onPickWorkspace: (workspaceId) {
+        close();
+        onPickWorkspace(workspaceId);
+      },
     );
   }
 }

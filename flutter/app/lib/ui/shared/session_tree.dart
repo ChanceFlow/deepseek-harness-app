@@ -14,9 +14,9 @@ import 'package:domain/model/workspace.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../shared/anchored_menu.dart';
 import '../theme/theme.dart';
 import 'archived_filter.dart';
-import 'menu_sheet.dart';
 import 'state_dot.dart';
 
 /// Web tree.ts `COLLAPSED_SESSION_LIMIT`: session rows visible per
@@ -388,7 +388,9 @@ class SessionTreeRow extends StatelessWidget {
       onPin != null ||
       onUnpin != null;
 
-  void _openMenu(BuildContext context) {
+  /// The verbs card: the row's title as a caption and one row per provided
+  /// verb, on the shared popover's menu material.
+  Widget _verbsCard(BuildContext context, VoidCallback close) {
     final l10n = AppLocalizations.of(context)!;
     final archived = session.archived;
     final items = <(IconData, String, VoidCallback)>[
@@ -410,20 +412,19 @@ class SessionTreeRow extends StatelessWidget {
       else if (!archived && onArchive != null)
         (Icons.archive_outlined, l10n.archiveSession, onArchive!),
     ];
-    // The pin ports a `Menu` from the row's ⋮
-    // (`ui-workspace/src/client/rows/Rows.tsx:665-686`), so the panel is the
-    // house menu surface and not a Material card: [showMenuSheet] carries
-    // `menuSurfaceFill` over `menuBackdropFilter`, the `kRadiusLg` corner, the
-    // `borderL1` ring and `DshElevation.prominent` — the material the rest of
-    // the menu family wears.
-    unawaited(
-      showMenuSheet<void>(
-        context,
-        builder: (_) => _SessionVerbsSheet(
-          title: session.blank ? l10n.newSession : session.displayTitle,
-          items: items,
-        ),
-      ),
+    return _SessionVerbsCard(
+      title: session.blank ? l10n.newSession : session.displayTitle,
+      items: <(IconData, String, VoidCallback)>[
+        for (final (icon, label, onTap) in items)
+          (
+            icon,
+            label,
+            () {
+              close();
+              onTap();
+            },
+          ),
+      ],
     );
   }
 
@@ -439,6 +440,44 @@ class SessionTreeRow extends StatelessWidget {
     // grayed ink is what carries the state beside the Archived label.
     final archived = session.archived;
     final rowInk = archived ? scheme.onSurfaceVariant : scheme.onSurface;
+    return AnchoredMenu(
+      // The pin's session-row verbs are a portalled `Menu` from the row
+      // (`ui-workspace/src/client/rows/Rows.tsx:665-686`): below it, with the
+      // family's 4px gap (`Menu.module.css:30`) and the pin's `start`
+      // alignment default. The ⧯ seat and the long-press open the same card.
+      side: MenuSide.bottom,
+      align: MenuAlign.start,
+      gap: 4,
+      margin: 12,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) => _row(
+        context,
+        toggle,
+        l10n,
+        theme,
+        scheme,
+        title,
+        archived,
+        rowInk,
+        hasVerbs,
+      ),
+      // The verbs close the card and then act, the way the route pop did.
+      card: (BuildContext context, VoidCallback close) =>
+          _verbsCard(context, close),
+    );
+  }
+
+  Widget _row(
+    BuildContext context,
+    VoidCallback toggle,
+    AppLocalizations l10n,
+    ThemeData theme,
+    ColorScheme scheme,
+    String title,
+    bool archived,
+    Color rowInk,
+    bool hasVerbs,
+  ) {
     return ListTile(
       dense: true,
       visualDensity: VisualDensity.compact,
@@ -513,15 +552,12 @@ class SessionTreeRow extends StatelessWidget {
                 // opens.
                 if (showVerbButton && hasVerbs) ...[
                   const SizedBox(width: 4),
-                  _SessionVerbButton(
-                    session: session,
-                    onTap: () => _openMenu(context),
-                  ),
+                  _SessionVerbButton(session: session, onTap: toggle),
                 ],
               ],
             ),
       onTap: onSelect,
-      onLongPress: hasVerbs ? () => _openMenu(context) : null,
+      onLongPress: hasVerbs ? toggle : null,
     );
   }
 }
@@ -549,14 +585,13 @@ class _SessionVerbButton extends StatelessWidget {
   }
 }
 
-/// Web Menu (figma MenuDropdown) as a bottom sheet for the session-verb
-/// menu: the row's title as a caption and one row per provided verb, on the
-/// house menu surface. [showMenuSheet] owns that surface — the
-/// `menuSurfaceFill` over `menuBackdropFilter`, the `kRadiusLg` corner, the
-/// `borderL1` ring and the elevated panel padding — so this body paints no
-/// card of its own.
-class _SessionVerbsSheet extends StatelessWidget {
-  const _SessionVerbsSheet({required this.title, required this.items});
+/// The session-verb card's body: the row's title as a caption and one row per
+/// provided verb. The card's fill, hairline and elevation come from the shared
+/// popover's menu material (`shared/anchored_menu.dart`), so this contributes
+/// rows only — it used to carry its own copy of that chrome because it was a
+/// sheet.
+class _SessionVerbsCard extends StatelessWidget {
+  const _SessionVerbsCard({required this.title, required this.items});
 
   final String title;
   final List<(IconData, String, VoidCallback)> items;
@@ -565,32 +600,34 @@ class _SessionVerbsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+    return IntrinsicWidth(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
-        ),
-        for (final (icon, label, onTap) in items)
-          _VerbRow(icon: icon, label: label, onTap: onTap),
-      ],
+          for (final (icon, label, onTap) in items)
+            _VerbRow(icon: icon, label: label, onTap: onTap),
+        ],
+      ),
     );
   }
 }
 
 /// Web Menu `.item`: min-h 44, r10, 14px label, 16px tertiary leading
-/// glyph — now a native [ListTile]; tapping pops the sheet and runs the
-/// verb. The transparent [Material] gives the tile an ink host (the sheet
-/// card behind it is a decorated container).
+/// glyph — now a native [ListTile]; tapping runs the verb, and the card's
+/// owner closes the card around it. The transparent [Material] gives the tile
+/// an ink host (the card behind it is a decorated container).
 class _VerbRow extends StatelessWidget {
   const _VerbRow({
     required this.icon,
@@ -623,10 +660,10 @@ class _VerbRow extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(kShapeChip),
         ),
-        onTap: () {
-          Navigator.of(context).pop();
-          onTap();
-        },
+        // The card's owner closes it (`AnchoredMenu`'s close verb); this row
+        // only runs its verb. A `Navigator.pop` here would pop the page the
+        // card floats over, not a sheet route that no longer exists.
+        onTap: onTap,
       ),
     );
   }

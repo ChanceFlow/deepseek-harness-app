@@ -1,15 +1,19 @@
 /// Composer model seat — mobile adaptation of the web ModelSelect seat
 /// (figma 496:26454). The web's native-select pill becomes a compact
 /// circle button consistent with the composer's ➕ control; the two-level
-/// Model/Effort menu becomes a menu-surface bottom sheet (the web
-/// MenuDropdown form).
+/// Model/Effort menu is the web's own popover: portaled from the trigger
+/// rect, above it with its right edges aligned
+/// (`ModelSelect.tsx:206-235`: `x = rect.right - width`, `y = rect.top - 8 -
+/// height`, clamped to a 12px viewport margin), wearing the menu material and
+/// dismissed by an outside tap (`ModelSelect.tsx:150`), Escape or a window
+/// blur (the `Menu` primitive's three, `Menu.tsx:131-142`).
 library;
 
 import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/model_catalog.dart';
 import 'package:flutter/material.dart';
 
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../shared/tappable_feedback.dart';
 import '../theme/theme.dart';
 
@@ -57,46 +61,57 @@ class ModelSelect extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return DshTappable(
-      enabled: !locked,
-      enableHaptic: true,
-      child: IconButton(
-        // Long-press discloses the active model; the sheet carries the rest.
-        tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
-        onPressed: locked ? null : () => _open(context),
-        // The settings-style glyph (the tune vocabulary the sheet header
-        // uses) — not a sparkle.
-        icon: const Icon(Icons.tune, size: 22),
-        // Native tool control, same family as the composer ➕: a standard
-        // 40px M3 icon button drawn straight on the dock. The control row
-        // fills exactly one seat — send — so a filled tool would read as a
-        // second primary. The press feedback is DshTappable's scale and its
-        // one haptic, so the button's own splash stays off.
-        style: IconButton.styleFrom(
-          foregroundColor: scheme.onSurfaceVariant,
-          disabledForegroundColor: scheme.outline,
-          hoverColor: scheme.surfaceContainerHigh,
-          highlightColor: Colors.transparent,
-          splashFactory: NoSplash.splashFactory,
-          enableFeedback: false,
-          shape: const CircleBorder(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context) {
-    onRefresh();
-    final root = Navigator.of(context);
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 520,
-      builder: (sheetContext) => _ModelSelectSheet(
+    return AnchoredMenu(
+      side: MenuSide.top,
+      // The pin aligns the card's right edge with the trigger's
+      // (`ModelSelect.tsx:216`).
+      align: MenuAlign.end,
+      gap: 8,
+      margin: 12,
+      // The pin's own ceiling for this card: `min(360px, 100vh - 96px)`
+      // (`ModelSelect.module.css:100`).
+      maxHeight: 360,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          DshTappable(
+            enabled: !locked,
+            enableHaptic: true,
+            child: IconButton(
+              // Long-press discloses the active model; the card carries the
+              // rest. The catalog reloads on every open, as the web seat does.
+              tooltip: '${l10n.modelLabel}: ${_modelLabel(l10n)}',
+              onPressed: locked
+                  ? null
+                  : () {
+                      if (!open) onRefresh();
+                      toggle();
+                    },
+              // The settings-style glyph (the tune vocabulary the card header
+              // uses) — not a sparkle.
+              icon: const Icon(Icons.tune, size: 22),
+              // Native tool control, same family as the composer ➕: a standard
+              // 40px M3 icon button drawn straight on the dock. The control row
+              // fills exactly one seat — send — so a filled tool would read as a
+              // second primary. The press feedback is DshTappable's scale and its
+              // one haptic, so the button's own splash stays off.
+              style: IconButton.styleFrom(
+                foregroundColor: scheme.onSurfaceVariant,
+                disabledForegroundColor: scheme.outline,
+                hoverColor: scheme.surfaceContainerHigh,
+                highlightColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
+                enableFeedback: false,
+                shape: const CircleBorder(),
+              ),
+            ),
+          ),
+      // The card's own close verb replaces the route pop the sheet used.
+      card: (BuildContext context, VoidCallback close) => _ModelSelectSheet(
         models: models,
         modelPrefs: modelPrefs,
         onSelect: (selection) {
           onSelect(selection);
-          root.pop();
+          close();
         },
       ),
     );

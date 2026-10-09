@@ -1,7 +1,7 @@
 /// Access-mode chip — mobile port of the web PermissionSelect seat
 /// (ui-conversation skeleton/PermissionSelect.tsx): a compact chip in
 /// the composer's tools row showing the current permission preset,
-/// opening the menu-surface sheet of switchable presets. Selecting one
+/// opening the menu card of switchable presets. Selecting one
 /// submits the `/permission` host command; full access passes a risk
 /// confirmation first, and a `custom` effective value renders the chip
 /// read-only (nothing to switch to).
@@ -23,7 +23,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/permission_select.dart';
 import 'package:flutter/material.dart';
 
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../shared/tappable_feedback.dart';
 import '../theme/theme.dart';
 import 'chat_ui_state.dart';
@@ -86,7 +86,7 @@ class PermissionSelectChip extends StatelessWidget {
 
   final PermissionSelect value;
 
-  /// Reads the preset list the sheet offers. A seat opened without one (a bare
+  /// Reads the preset list the card offers. A seat opened without one (a bare
   /// pump) states that the modes could not be read instead of showing a title
   /// over nothing.
   final PermissionCatalogLoader? loadCatalog;
@@ -98,7 +98,7 @@ class PermissionSelectChip extends StatelessWidget {
   /// Drop the label, keeping the mode glyph and the chevron: web
   /// `PermissionSelect.module.css` `@container (max-width: 460px)` hides
   /// `.triggerLabel` on a narrow composer row so the row keeps fitting.
-  /// The tooltip and the sheet keep the mode's full name reachable.
+  /// The tooltip and the card keep the mode's full name reachable.
   final bool compact;
 
   /// Second tooltip line carrying the session's decoded sandbox-mode fact
@@ -126,21 +126,6 @@ class PermissionSelectChip extends StatelessWidget {
 
   void _submit(String preset) {
     onAction(SendPrompt('/permission $preset'));
-  }
-
-  Future<void> _open(BuildContext context) {
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 360,
-      builder: (sheetContext) => _PermissionSheet(
-        value: value,
-        loadCatalog: loadCatalog,
-        onPick: (preset) {
-          Navigator.of(sheetContext).pop();
-          _choose(sheetContext, preset);
-        },
-      ),
-    );
   }
 
   /// Web `choose`: re-picking the current value is a no-op; full access
@@ -176,63 +161,89 @@ class PermissionSelectChip extends StatelessWidget {
         value.currentOption?.description ??
         l10n.accessModeTooltip(_label(l10n));
     final detail = tooltipDetail;
-    return Tooltip(
-      message: detail == null ? baseTooltip : '$baseTooltip\n$detail',
-      child: Opacity(
-        // Web .trigger:disabled — the locked seat dims.
-        opacity: enabled ? 1 : 0.6,
-        // A hand-built chip, so the wrapper owns the tap and its feedback:
-        // no ink sits under the scale to animate the press twice.
-        child: DshTappable(
-          enabled: enabled,
-          enableHaptic: true,
-          onTap: enabled ? () => _open(context) : null,
-          child: Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(kShapePill),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  permissionGlyph(_currentValue),
-                  size: 14,
-                  color: scheme.onSurfaceVariant,
-                ),
-                if (!compact) ...[
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      _label(l10n),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+    return AnchoredMenu(
+      // The pin's permission menu is portaled above the trigger
+      // (`ui-permission-presets/src/client/PermissionSelect.tsx:167-174`:
+      // `side="top"`, the default `start` alignment) with the family's 4px gap
+      // (`Menu.module.css:30`). The card keeps this seat's own ceiling for its
+      // header, intro line and preset rows.
+      side: MenuSide.top,
+      align: MenuAlign.start,
+      gap: 4,
+      maxHeight: 360,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          Tooltip(
+            message: detail == null ? baseTooltip : '$baseTooltip\n$detail',
+            child: Opacity(
+              // Web .trigger:disabled — the locked seat dims.
+              // Web .trigger:disabled — the locked seat dims.
+              opacity: enabled ? 1 : 0.6,
+              // A hand-built chip, so the wrapper owns the tap and its
+              // feedback: no ink sits under the scale to animate the press
+              // twice.
+              child: DshTappable(
+                enabled: enabled,
+                enableHaptic: true,
+                onTap: enabled ? toggle : null,
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(kShapePill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        permissionGlyph(_currentValue),
+                        size: 14,
                         color: scheme.onSurfaceVariant,
                       ),
-                    ),
+                      if (!compact) ...[
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            _label(l10n),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        size: 12,
+                        color: scheme.outline,
+                      ),
+                    ],
                   ),
-                ],
-                const SizedBox(width: 2),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 12,
-                  color: scheme.outline,
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+      // The full-access confirmation is a genuinely modal decision and keeps
+      // its dialog; the card closes first, and the dialog opens on the chip's
+      // own context rather than the closing overlay's.
+      card: (BuildContext _, VoidCallback close) => _PermissionSheet(
+        value: value,
+        loadCatalog: loadCatalog,
+        onPick: (preset) {
+          close();
+          _choose(context, preset);
+        },
       ),
     );
   }
 }
 
-/// The preset roster sheet: the pickable presets from the deployment's process
+/// The preset roster card: the pickable presets from the deployment's process
 /// catalog (name + description), the current one marked, and — when the
 /// catalog cannot supply them — the state that says so. The heading explains
 /// what the choice governs, so it is never a title over nothing.
@@ -263,7 +274,7 @@ class _PermissionSheetState extends State<_PermissionSheet> {
     if (load == null) {
       // A seat pumped without the repository seam: the projection's own list
       // stands when it carried one (no host at this pin does), otherwise the
-      // sheet states that the modes could not be read.
+      // card states that the modes could not be read.
       _options = _pickable(widget.value.options);
       _loading = false;
       _failed = _options!.isEmpty;
@@ -415,7 +426,7 @@ class _PermissionSheetState extends State<_PermissionSheet> {
     );
   }
 
-  /// One honest state where the options would be: nothing under this sheet is
+  /// One honest state where the options would be: nothing under this card is
   /// a heading over an empty list.
   Widget _stateRow(
     BuildContext context,

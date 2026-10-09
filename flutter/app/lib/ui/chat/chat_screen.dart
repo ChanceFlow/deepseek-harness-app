@@ -45,6 +45,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../di/providers.dart';
 import '../../local_state/local_state_providers.dart';
 import '../../platform/document_picker.dart';
+import '../shared/anchored_menu.dart';
 import '../shared/error_banner.dart';
 import 'card_detail.dart';
 import 'chat_error_banner.dart';
@@ -3205,7 +3206,7 @@ class _UserBubbleState extends State<_UserBubble> {
   String get text => widget.text;
   VoidCallback? get onFork => widget.onFork;
 
-  Future<void> _copy(BuildContext context) async {
+  Future<void> _copy() async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     await Clipboard.setData(ClipboardData(text: text));
@@ -3220,29 +3221,38 @@ class _UserBubbleState extends State<_UserBubble> {
 
   /// The bubble's verbs, at the press point: copy always, fork when the
   /// message has a logged position to cut at.
-  /// The bubble's verbs, in the house menu sheet: the pin's menu material
-  /// (fill over the backdrop, the half-pixel ring, `kRadiusLg` and
-  /// `DshElevation.prominent`) rather than the framework `showMenu`, whose
-  /// `MenuStyle` can carry only the fill composite and a corner.
-  Future<void> _openMenu(BuildContext context) async {
+  ///
+  /// The card is the house menu material (`menu_material.dart`) in the shared
+  /// popover, hung from the bubble's own rect: the pin's menu card keeps a 4px
+  /// gap and clamps to a 12px viewport margin (`Menu.module.css:9-51`), and the
+  /// bubble row is right-aligned, so the card's right edge takes the bubble's
+  /// (`align: end`). The pin's own message actions are an inline icon row rather
+  /// than a card (`MessageItem.tsx:253-259`), so the side is this client's
+  /// choice: below the bubble, where the press landed.
+  Widget _verbs(BuildContext context, VoidCallback close) {
     final l10n = AppLocalizations.of(context)!;
-    final verb = await showMenuSheet<_BubbleVerb>(
-      context,
-      // The pins the tiles' Material directly above them: the menu material's
-      // translucent fill is a decoration between the sheet's Material and the
-      // ListTiles, and a ListTile needs an undecorated Material parent.
-      builder: (sheetContext) => Material(
+    // The pin's card is content-sized with a 144px floor and a 360px ceiling
+    // (`Menu.module.css:9-34`); a `ListTile` would otherwise stretch to the
+    // popover's whole band, and one short verb in a full-width card reads as a
+    // broken row rather than a menu.
+    return IntrinsicWidth(
+      child: Material(
+        // The card's decoration is the menu material; a ListTile needs an
+        // undecorated Material parent.
         type: MaterialType.transparency,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+          children: <Widget>[
             ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.copy_outlined, size: 18),
               title: Text(l10n.copyTooltip),
-              onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.copy),
+              onTap: () {
+                close();
+                unawaited(_copy());
+              },
             ),
             if (onFork != null)
               ListTile(
@@ -3250,53 +3260,54 @@ class _UserBubbleState extends State<_UserBubble> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.alt_route, size: 18),
                 title: Text(l10n.forkFromHere),
-                onTap: () => Navigator.of(sheetContext).pop(_BubbleVerb.fork),
+                onTap: () {
+                  close();
+                  onFork?.call();
+                },
               ),
           ],
         ),
       ),
     );
-    if (!context.mounted) return;
-    switch (verb) {
-      case _BubbleVerb.copy:
-        await _copy(context);
-      case _BubbleVerb.fork:
-        onFork?.call();
-      case null:
-        break;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (text.isEmpty) return const SizedBox.shrink();
-    return Material(
-      color: theme.colorScheme.bubble,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kShapeBubble),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onLongPress: () => _openMenu(context),
-        child: Padding(
-          // The reference's 42px single-line bubble: a 22px line plus 10px of
-          // vertical padding, 16px at the sides (`MessageItem.module.css`
-          // .bubble, :24-33).
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(
-            text,
-            // The reference's bubble reads the content size on its 22px line
-            // in `label-primary` (`MessageItem.module.css:24-33`).
-            style: DshType.s14.style(color: theme.colorScheme.labelPrimary),
+    return AnchoredMenu(
+      // Below the bubble, its right edge on the bubble's own.
+      side: MenuSide.bottom,
+      align: MenuAlign.end,
+      // `Menu.module.css:30`: the list sits 4px off the anchor.
+      gap: 4,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) => Material(
+        color: theme.colorScheme.bubble,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kShapeBubble),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onLongPress: toggle,
+          child: Padding(
+            // The reference's 42px single-line bubble: a 22px line plus 10px of
+            // vertical padding, 16px at the sides (`MessageItem.module.css`
+            // .bubble, :24-33).
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              text,
+              // The reference's bubble reads the content size on its 22px line
+              // in `label-primary` (`MessageItem.module.css:24-33`).
+              style: DshType.s14.style(color: theme.colorScheme.labelPrimary),
+            ),
           ),
         ),
       ),
+      card: _verbs,
     );
   }
 }
-
-enum _BubbleVerb { copy, fork }
 
 /// Pending steering at the conversation tail — the port of the web's
 /// `PendingSteeringBubble` (`ChatView.tsx:454-460`, `MessageItem.tsx:257-
@@ -7086,183 +7097,6 @@ String? guessImageMediaType(String path) {
   }
 }
 
-/// Compact delivery-mode picker for narrow composer rows.
-class PopupMenuEntryShim extends StatelessWidget {
-  const PopupMenuEntryShim({
-    required this.running,
-    required this.enabled,
-    required this.effectiveMode,
-    required this.onModeChange,
-    super.key,
-  });
-
-  final bool running;
-  final bool enabled;
-  final PromptMode effectiveMode;
-  final void Function(PromptMode) onModeChange;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-    final isSteer = effectiveMode == PromptMode.steer;
-    final label = isSteer ? l10n.steer : l10n.queue;
-    return Tooltip(
-      message: l10n.delivery,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kShapeChip),
-          onTap: enabled ? () => _open(context) : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isSteer ? Icons.bolt_outlined : Icons.schedule_send_outlined,
-                  size: 14,
-                  color: isSteer ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: isSteer ? scheme.primary : scheme.onSurfaceVariant,
-                    fontWeight: isSteer ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 12,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context) {
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 240,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        final theme = Theme.of(sheetContext);
-        final l10n = AppLocalizations.of(sheetContext)!;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-              child: Text(l10n.delivery, style: theme.textTheme.titleSmall),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(kShapeChip),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onModeChange(PromptMode.queue);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.schedule_send_outlined,
-                        size: 18,
-                        color: effectiveMode == PromptMode.queue
-                            ? scheme.primary
-                            : scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l10n.queue,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: effectiveMode == PromptMode.queue
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                      if (effectiveMode == PromptMode.queue)
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 18,
-                          color: scheme.primary,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(kShapeChip),
-                onTap: running
-                    ? () {
-                        Navigator.of(sheetContext).pop();
-                        onModeChange(PromptMode.steer);
-                      }
-                    : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.bolt_outlined,
-                        size: 18,
-                        color: !running
-                            ? scheme.outline
-                            : effectiveMode == PromptMode.steer
-                            ? scheme.primary
-                            : scheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l10n.steer,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: !running ? scheme.outline : scheme.onSurface,
-                            fontWeight: effectiveMode == PromptMode.steer
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                      if (effectiveMode == PromptMode.steer)
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 18,
-                          color: scheme.primary,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
 /// The composer's mode seat: the draft field on one side, hold-to-talk on the
 /// other. It is the only place the mode changes, so the band above it is never
 /// a surprise, and it carries the active mode in its own tone rather than in
@@ -7340,52 +7174,57 @@ class _PlusButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    return DshTappable(
-      enabled: enabled,
-      enableHaptic: true,
-      child: IconButton(
-        tooltip: l10n.commandsTooltip,
-        onPressed: enabled ? () => _open(context) : null,
-        icon: const Icon(Icons.add, size: 22),
-        // Native tool control: a standard 40px M3 icon button drawn straight
-        // on the dock surface, with the interactive fill kept for hover and
-        // the splash suppressed — the seat's press feedback is DshTappable's
-        // scale and its one haptic, not a second ripple.
-        style: IconButton.styleFrom(
-          foregroundColor: scheme.onSurfaceVariant,
-          disabledForegroundColor: scheme.outline,
-          hoverColor: scheme.surfaceContainerHigh,
-          highlightColor: Colors.transparent,
-          splashFactory: NoSplash.splashFactory,
-          enableFeedback: false,
-          shape: const CircleBorder(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context) {
-    // The house menu sheet (PopupSelectView .card family), seated above
-    // the composer dock so the roster never covers or competes with the
-    // field the reader stands in.
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 440,
-      builder: (sheetContext) => _CommandSheet(
+    return AnchoredMenu(
+      // The pin's composer roster is a card spanning the composer, 4px above
+      // it, capped at 400px with the conversation header as its top margin
+      // (`ui-input-trigger/.../MenuView.module.css:2-12`, `MenuView.tsx:26-40`);
+      // anchored to the ➕ at the control row's start, its left edge is the
+      // composer's.
+      side: MenuSide.top,
+      align: MenuAlign.start,
+      gap: 4,
+      maxHeight: 400,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          DshTappable(
+            enabled: enabled,
+            enableHaptic: true,
+            child: IconButton(
+              tooltip: l10n.commandsTooltip,
+              onPressed: enabled ? toggle : null,
+              icon: const Icon(Icons.add, size: 22),
+              // Native tool control: a standard 40px M3 icon button drawn
+              // straight on the dock surface, with the interactive fill kept
+              // for hover and the splash suppressed — the seat's press feedback
+              // is DshTappable's scale and its one haptic, not a second ripple.
+              style: IconButton.styleFrom(
+                foregroundColor: scheme.onSurfaceVariant,
+                disabledForegroundColor: scheme.outline,
+                hoverColor: scheme.surfaceContainerHigh,
+                highlightColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
+                enableFeedback: false,
+                shape: const CircleBorder(),
+              ),
+            ),
+          ),
+      // The roster's rows close the card and then act, the way the sheet's
+      // route pop did.
+      card: (BuildContext context, VoidCallback close) => _CommandSheet(
         canPickImages: onPickImages != null,
         canPickFile: onPickFile != null,
         skills: skills,
         commands: commands,
         onPickCommand: (name) {
-          Navigator.of(sheetContext).pop();
+          close();
           onPickCommand(name);
         },
         onPickImagesNow: () {
-          Navigator.of(sheetContext).pop();
+          close();
           onPickImages?.call();
         },
         onPickFileNow: () {
-          Navigator.of(sheetContext).pop();
+          close();
           onPickFile?.call();
         },
       ),

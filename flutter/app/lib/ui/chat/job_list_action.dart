@@ -17,7 +17,7 @@ import 'package:domain/model/jobs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../theme/theme.dart';
 import 'chat_ui_state.dart';
 
@@ -102,6 +102,26 @@ class JobListAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (jobs.isEmpty) return const SizedBox.shrink();
+    return AnchoredMenu(
+      // The pin's job list hangs below its pill with a 5px gap
+      // (`ui-jobs/src/client/JobListAction.module.css:43`) and keeps the menu
+      // family's portal margin (`.tsx:49`); the pill sits in the session
+      // header, so below is the space it has.
+      side: MenuSide.bottom,
+      align: MenuAlign.start,
+      gap: 5,
+      margin: 12,
+      // The pin's own cap: `max-height: min(480px, calc(100vh - 140px))`
+      // (`JobListAction.module.css:52`).
+      maxHeight: kJobsSheetMaxHeight,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          _trigger(context, toggle),
+      card: (BuildContext context, VoidCallback close) => _card(close),
+    );
+  }
+
+  Widget _trigger(BuildContext context, VoidCallback toggle) {
     final l10n = AppLocalizations.of(context)!;
     final liveCount = jobs.where(_isLive).length;
     final count = liveCount > 0 ? liveCount : jobs.length;
@@ -111,7 +131,7 @@ class JobListAction extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(kShapeDock),
-      onTap: () => _open(context),
+      onTap: toggle,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 220),
         height: 28,
@@ -138,23 +158,15 @@ class JobListAction extends StatelessWidget {
     );
   }
 
-  Future<void> _open(BuildContext context) {
-    // The pin draws this list as a menu, not as a Material sheet: `border: 0`,
-    // `--dsw-radius-lg`, `--dsw-specific-menu`, `--dsw-menu-backdrop-filter`,
-    // the `border-l1` stroke rebound and `--dsw-elevation-prominent`
-    // (`ui-jobs/src/client/JobListAction.module.css` `.menu`, :41-65) — the
-    // material `showMenuSheet` already draws (`shared/menu_sheet.dart`). The
-    // cap mirrors the pin's `max-height: min(480px, …)`.
-    return showMenuSheet<void>(
-      context,
-      maxHeight: kJobsSheetMaxHeight,
-      builder: (sheetContext) => _JobsSheet(
-        sessionId: sessionId,
-        initialJobs: jobs,
-        observeJobOutput: observeJobOutput,
-        killJob: killJob,
-        jobRoster: jobRoster,
-      ),
+  /// The ordered list, following the injected roster, with observable rows.
+  Widget _card(VoidCallback close) {
+    return _JobsSheet(
+      onClose: close,
+      sessionId: sessionId,
+      initialJobs: jobs,
+      observeJobOutput: observeJobOutput,
+      killJob: killJob,
+      jobRoster: jobRoster,
     );
   }
 }
@@ -162,12 +174,17 @@ class JobListAction extends StatelessWidget {
 /// The ordered list, following the injected roster, with observable rows.
 class _JobsSheet extends StatefulWidget {
   const _JobsSheet({
+    required this.onClose,
     required this.sessionId,
     required this.initialJobs,
     required this.observeJobOutput,
     required this.killJob,
     required this.jobRoster,
   });
+
+  /// Closes the card that holds this list (the popover's own verb; the sheet's
+  /// route pop is gone).
+  final VoidCallback onClose;
 
   final String sessionId;
 
@@ -322,7 +339,7 @@ class _JobsSheetState extends State<_JobsSheet> {
                 IconButton(
                   tooltip: l10n.close,
                   icon: const Icon(Icons.close, size: 20),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: widget.onClose,
                 ),
               ],
             ),

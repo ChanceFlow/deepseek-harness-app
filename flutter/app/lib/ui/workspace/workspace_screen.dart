@@ -31,7 +31,7 @@ import '../shared/backend_connection_dot.dart';
 import '../shared/backend_error_text.dart';
 import '../shared/edge_fade.dart';
 import '../shared/error_view.dart';
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../shared/session_tree.dart';
 import '../theme/theme.dart';
 import 'workspace_ui_state.dart';
@@ -385,9 +385,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   void _startSession(String workspaceId) =>
       widget.onAction(StartSessionInWorkspace(workspaceId));
 
-  /// Web ProjectRowItem "⋮" menu — mobile form: a menu-surface bottom
-  /// sheet (Rename / Delete workspace / Move up / Move down).
-  Future<void> _showWorkspaceActions(WorkspaceSummary workspace) {
+  /// Web ProjectRowItem "⋮" menu as the pin's popover card: Rename / Delete
+  /// workspace / Move up / Move down. The pin's row menu is `portal` with the
+  /// default `start` alignment and its `bottom` side (`Rows.tsx:665-675`),
+  /// i.e. below the ⋮ with the family's 4px gap; a four-row card takes the
+  /// pin's content width rather than a sheet's full width.
+  Widget _workspaceActionsCard(
+    BuildContext context,
+    WorkspaceSummary workspace,
+    VoidCallback close,
+  ) {
     final workspaces = widget.uiState.workspaces;
     var position = 0;
     for (var i = 0; i < workspaces.length; i++) {
@@ -396,17 +403,26 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         break;
       }
     }
-    return showMenuSheet<void>(
-      context,
-      builder: (_) => _WorkspaceActionSheet(
+    return IntrinsicWidth(
+      child: _WorkspaceActionSheet(
         canMoveUp: position > 0,
         canMoveDown: position < workspaces.length - 1,
-        onRename: () => _showRenameDialog(workspace),
-        onDelete: () => _showDeleteDialog(workspace),
-        onMoveUp: () =>
-            widget.onAction(MoveWorkspaceUpAction(workspace.workspaceId)),
-        onMoveDown: () =>
-            widget.onAction(MoveWorkspaceDownAction(workspace.workspaceId)),
+        onRename: () {
+          close();
+          unawaited(_showRenameDialog(workspace));
+        },
+        onDelete: () {
+          close();
+          unawaited(_showDeleteDialog(workspace));
+        },
+        onMoveUp: () {
+          close();
+          widget.onAction(MoveWorkspaceUpAction(workspace.workspaceId));
+        },
+        onMoveDown: () {
+          close();
+          widget.onAction(MoveWorkspaceDownAction(workspace.workspaceId));
+        },
       ),
     );
   }
@@ -574,7 +590,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       overflowExpandedGroups: _overflowExpandedGroups,
       onToggle: _toggleGroup,
       onToggleOverflow: _toggleOverflow,
-      onMenu: _showWorkspaceActions,
+      onMenu: _workspaceActionsCard,
       onStartSession: _startSession,
       onSelectSession: widget.onSelectSession,
       // Web SessionNodeItem session verbs via long-press: rename / fork /
@@ -922,7 +938,12 @@ class _WorkspaceTree extends StatelessWidget {
   final Set<String> overflowExpandedGroups;
   final void Function(String workspaceId) onToggle;
   final void Function(String workspaceId) onToggleOverflow;
-  final void Function(WorkspaceSummary workspace) onMenu;
+  final Widget Function(
+    BuildContext context,
+    WorkspaceSummary workspace,
+    VoidCallback close,
+  )
+  onMenu;
   final void Function(String workspaceId) onStartSession;
   final void Function(String sessionId)? onSelectSession;
 
@@ -1075,7 +1096,12 @@ class _WorkspaceGroup extends StatelessWidget {
   final String? selectedSessionId;
   final void Function(String workspaceId) onToggle;
   final void Function(String workspaceId) onToggleOverflow;
-  final void Function(WorkspaceSummary workspace) onMenu;
+  final Widget Function(
+    BuildContext context,
+    WorkspaceSummary workspace,
+    VoidCallback close,
+  )
+  onMenu;
   final void Function(String workspaceId) onStartSession;
   final void Function(String sessionId)? onSelectSession;
 
@@ -1242,7 +1268,12 @@ class _WorkspaceRow extends StatelessWidget {
   final WorkspaceSummary workspace;
   final bool expanded;
   final void Function(String workspaceId) onToggle;
-  final void Function(WorkspaceSummary workspace) onMenu;
+  final Widget Function(
+    BuildContext context,
+    WorkspaceSummary workspace,
+    VoidCallback close,
+  )
+  onMenu;
   final void Function(String workspaceId) onStartSession;
 
   @override
@@ -1288,10 +1319,23 @@ class _WorkspaceRow extends StatelessWidget {
               ),
               // Web `.rowActions` gap.
               const SizedBox(width: 12),
-              _RowIconButton(
-                tooltip: l10n.workspaceActionsFor(workspace.title),
-                icon: Icons.more_horiz,
-                onTap: () => onMenu(workspace),
+              AnchoredMenu(
+                // The pin's row menu: below the ⋮ (`Rows.tsx:665-675`), the
+                // menu family's 4px gap (`Menu.module.css:30`).
+                side: MenuSide.bottom,
+                align: MenuAlign.start,
+                gap: 4,
+                margin: 12,
+                cardKey: const ValueKey<String>('anchored-menu-card'),
+                trigger:
+                    (BuildContext context, bool open, VoidCallback toggle) =>
+                        _RowIconButton(
+                          tooltip: l10n.workspaceActionsFor(workspace.title),
+                          icon: Icons.more_horiz,
+                          onTap: toggle,
+                        ),
+                card: (BuildContext context, VoidCallback close) =>
+                    onMenu(context, workspace, close),
               ),
             ],
           ),
@@ -1371,8 +1415,9 @@ class _WorkspaceActionSheet extends StatelessWidget {
         _MenuRow(
           icon: Icons.edit_outlined,
           label: l10n.rename,
+          // The card's owner closes it; a `Navigator.pop` here would pop the
+          // page the card floats over.
           onTap: () {
-            Navigator.of(context).pop();
             onRename();
           },
         ),
@@ -1380,8 +1425,9 @@ class _WorkspaceActionSheet extends StatelessWidget {
           icon: Icons.delete_outline,
           label: l10n.deleteWorkspace,
           isDanger: true,
+          // The card's owner closes it; a `Navigator.pop` here would pop the
+          // page the card floats over.
           onTap: () {
-            Navigator.of(context).pop();
             onDelete();
           },
         ),
@@ -1391,8 +1437,9 @@ class _WorkspaceActionSheet extends StatelessWidget {
           icon: Icons.arrow_upward,
           label: l10n.moveUp,
           enabled: canMoveUp,
+          // The card's owner closes it; a `Navigator.pop` here would pop the
+          // page the card floats over.
           onTap: () {
-            Navigator.of(context).pop();
             onMoveUp();
           },
         ),
@@ -1400,8 +1447,9 @@ class _WorkspaceActionSheet extends StatelessWidget {
           icon: Icons.arrow_downward,
           label: l10n.moveDown,
           enabled: canMoveDown,
+          // The card's owner closes it; a `Navigator.pop` here would pop the
+          // page the card floats over.
           onTap: () {
-            Navigator.of(context).pop();
             onMoveDown();
           },
         ),
