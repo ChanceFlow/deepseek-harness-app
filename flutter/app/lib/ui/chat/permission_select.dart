@@ -5,6 +5,16 @@
 /// submits the `/permission` host command; full access passes a risk
 /// confirmation first, and a `custom` effective value renders the chip
 /// read-only (nothing to switch to).
+///
+/// The option list comes from the deployment's **process catalog**
+/// (`permissionPresets/catalog`, read through [PermissionCatalogLoader]), not
+/// from the session projection: the pin's `permissions` projection is
+/// `{currentValue}` alone (`interaction/permission-presets/src/types.ts:36-41`,
+/// emitted at `src/index.ts:243`), and the pin's seat builds its menu from
+/// `catalog.options` (`ui-permission-presets/src/client/PermissionSelect.tsx:104-105`).
+/// The projection supplies the current value; a seat that renders its rows
+/// from the projection has nothing to show, which is why this card once read
+/// as a bare title.
 library;
 
 import 'dart:async';
@@ -17,6 +27,10 @@ import '../shared/menu_sheet.dart';
 import '../shared/tappable_feedback.dart';
 import '../theme/theme.dart';
 import 'chat_ui_state.dart';
+
+/// Reads the deployment's process permission-preset catalog
+/// (`permissionPresets/catalog`), the list the access-mode seat offers.
+typedef PermissionCatalogLoader = Future<PermissionPresetCatalog> Function();
 
 /// The one preset the host gates behind acknowledgement.
 const String _kFullAccess = 'danger-full-access';
@@ -65,11 +79,17 @@ class PermissionSelectChip extends StatelessWidget {
     required this.locked,
     required this.onAction,
     super.key,
+    this.loadCatalog,
     this.compact = false,
     this.tooltipDetail,
   });
 
   final PermissionSelect value;
+
+  /// Reads the preset list the sheet offers. A seat opened without one (a bare
+  /// pump) states that the modes could not be read instead of showing a title
+  /// over nothing.
+  final PermissionCatalogLoader? loadCatalog;
 
   /// Seat lock: a locked composer (no session / send in flight) offers
   /// no switching.
@@ -114,6 +134,7 @@ class PermissionSelectChip extends StatelessWidget {
       maxHeight: 360,
       builder: (sheetContext) => _PermissionSheet(
         value: value,
+        loadCatalog: loadCatalog,
         onPick: (preset) {
           Navigator.of(sheetContext).pop();
           _choose(sheetContext, preset);
@@ -211,95 +232,225 @@ class PermissionSelectChip extends StatelessWidget {
   }
 }
 
-/// The preset roster sheet: one row per switchable preset (name +
-/// description), the current one marked.
-class _PermissionSheet extends StatelessWidget {
-  const _PermissionSheet({required this.value, required this.onPick});
+/// The preset roster sheet: the pickable presets from the deployment's process
+/// catalog (name + description), the current one marked, and — when the
+/// catalog cannot supply them — the state that says so. The heading explains
+/// what the choice governs, so it is never a title over nothing.
+class _PermissionSheet extends StatefulWidget {
+  const _PermissionSheet({
+    required this.value,
+    required this.loadCatalog,
+    required this.onPick,
+  });
 
   final PermissionSelect value;
+  final PermissionCatalogLoader? loadCatalog;
   final void Function(String preset) onPick;
+
+  @override
+  State<_PermissionSheet> createState() => _PermissionSheetState();
+}
+
+class _PermissionSheetState extends State<_PermissionSheet> {
+  List<PermissionPresetOption>? _options;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final PermissionCatalogLoader? load = widget.loadCatalog;
+    if (load == null) {
+      // A seat pumped without the repository seam: the projection's own list
+      // stands when it carried one (no host at this pin does), otherwise the
+      // sheet states that the modes could not be read.
+      _options = _pickable(widget.value.options);
+      _loading = false;
+      _failed = _options!.isEmpty;
+      return;
+    }
+    unawaited(_load(load));
+  }
+
+  Future<void> _load(PermissionCatalogLoader load) async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final PermissionPresetCatalog catalog = await load();
+      if (!mounted) return;
+      setState(() {
+        _options = _pickable(catalog.options);
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      final List<PermissionPresetOption> fallback = _pickable(
+        widget.value.options,
+      );
+      setState(() {
+        _options = fallback;
+        _loading = false;
+        _failed = fallback.isEmpty;
+      });
+    }
+  }
+
+  /// Web drops `custom` from the menu — it is a derived state, not a
+  /// switch target.
+  static List<PermissionPresetOption> _pickable(
+    List<PermissionPresetOption> options,
+  ) => options.where((option) => option.value != 'custom').toList();
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    // Web drops `custom` from the menu — it is a derived state, not a
-    // switch target.
-    final options = value.options
-        .where((option) => option.value != 'custom')
-        .toList();
+    final List<PermissionPresetOption> options =
+        _options ?? const <PermissionPresetOption>[];
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+      children: <Widget>[
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-          child: Text(l10n.accessModeLabel, style: theme.textTheme.titleSmall),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(l10n.accessModeLabel, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 2),
+              // The choice governs this conversation's tool permissions; the
+              // default for future sessions is a different surface
+              // (Settings → permission defaults). Saying so is what the pin's
+              // own split implies and what a first-time reader needs.
+              Text(
+                l10n.accessModeIntro,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
         Flexible(
           child: ListView(
             shrinkWrap: true,
-            children: [
-              for (final option in options)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(kShapeChip),
-                    onTap: () => onPick(option.value),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            permissionGlyph(option.value),
-                            size: 16,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  permissionOptionLabel(option, l10n),
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontSize: 13,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                ),
-                                if (option.description
-                                    case final String description)
+            children: <Widget>[
+              if (_loading)
+                _stateRow(context, l10n.accessModeLoading)
+              else if (_failed)
+                _stateRow(
+                  context,
+                  l10n.accessModeLoadFailed,
+                  onRetry: widget.loadCatalog == null
+                      ? null
+                      : () => unawaited(_load(widget.loadCatalog!)),
+                )
+              else if (options.isEmpty)
+                _stateRow(context, l10n.accessModeUnavailable)
+              else
+                for (final option in options)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(kShapeChip),
+                      onTap: () => widget.onPick(option.value),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              permissionGlyph(option.value),
+                              size: 16,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
                                   Text(
-                                    description,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontSize: 12,
-                                      color: scheme.onSurfaceVariant,
+                                    permissionOptionLabel(option, l10n),
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontSize: 13,
+                                      color: scheme.onSurface,
                                     ),
                                   ),
-                              ],
+                                  if (option.description
+                                      case final String description)
+                                    Text(
+                                      description,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            fontSize: 12,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                          if (option.value == value.currentValue)
-                            Icon(
-                              Icons.check,
-                              size: 16,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                        ],
+                            if (option.value == widget.value.currentValue)
+                              Icon(
+                                Icons.check,
+                                size: 16,
+                                color: scheme.onSurface,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// One honest state where the options would be: nothing under this sheet is
+  /// a heading over an empty list.
+  Widget _stateRow(
+    BuildContext context,
+    String message, {
+    VoidCallback? onRetry,
+  }) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          if (onRetry != null) ...<Widget>[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                textStyle: theme.textTheme.bodySmall,
+              ),
+              child: Text(l10n.retry),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

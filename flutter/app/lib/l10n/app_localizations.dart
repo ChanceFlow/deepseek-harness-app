@@ -6690,6 +6690,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the limit'**
   String get settingsAgentLoopSaveFailed;
+
+  /// Subtitle of the access-mode sheet: what the choice governs and where the new-session default lives.
+  ///
+  /// In en, this message translates to:
+  /// **'What the agent may do in this conversation. Picking one switches this session\'\'s permission preset; the default for new sessions lives in Settings.'**
+  String get accessModeIntro;
+
+  /// Stated in the access-mode sheet while the deployment's preset catalog is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the access modes…'**
+  String get accessModeLoading;
+
+  /// Stated in the access-mode sheet when the catalog carries no pickable preset.
+  ///
+  /// In en, this message translates to:
+  /// **'This deployment composes no access modes to switch between.'**
+  String get accessModeUnavailable;
+
+  /// Stated in the access-mode sheet when the catalog read failed; a Retry sits beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the access modes.'**
+  String get accessModeLoadFailed;
 }
 
 class _AppLocalizationsDelegate

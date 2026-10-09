@@ -3943,4 +3943,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAgentLoopSaveFailed => 'Could not save the limit';
+
+  @override
+  String get accessModeIntro =>
+      'What the agent may do in this conversation. Picking one switches this session\'s permission preset; the default for new sessions lives in Settings.';
+
+  @override
+  String get accessModeLoading => 'Reading the access modes…';
+
+  @override
+  String get accessModeUnavailable =>
+      'This deployment composes no access modes to switch between.';
+
+  @override
+  String get accessModeLoadFailed => 'Could not read the access modes.';
 }

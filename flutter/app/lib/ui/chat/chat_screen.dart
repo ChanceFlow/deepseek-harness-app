@@ -216,6 +216,7 @@ class ChatRoute extends ConsumerWidget {
                   ),
                   readWorkspaceFile: controller.readWorkspaceFile,
                   readWorkspaceFileBytes: controller.readWorkspaceFileBytes,
+                  loadPermissionCatalog: controller.loadPermissionPresetCatalog,
                   loadWorkspacePathApplications:
                       controller.workspacePathApplications,
                   backendId: resolved,
@@ -307,6 +308,7 @@ class ChatScreen extends StatefulWidget {
     this.readWorkspaceFile = _noWorkspaceFileRead,
     this.readWorkspaceFileBytes = _noWorkspaceFileBytes,
     this.loadWorkspacePathApplications = _noWorkspacePathApplications,
+    this.loadPermissionCatalog,
     this.onRefreshModels,
     this.backendId,
     this.localState,
@@ -348,6 +350,13 @@ class ChatScreen extends StatefulWidget {
   /// Repository seam for the file-preview sheet's byte reads
   /// (`workspaceFiles/readBytes`).
   final WorkspaceFileBytesReader readWorkspaceFileBytes;
+
+  /// Repository seam for the access-mode seat's option list
+  /// (`permissionPresets/catalog`): the `permissions` Session projection
+  /// carries the current value only, so the seat reads its presets here
+  /// (`interaction/permission-presets/src/types.ts:36-41`). Null on a bare
+  /// pump: the sheet then states that it could not read the modes.
+  final PermissionCatalogLoader? loadPermissionCatalog;
 
   /// Repository seam for the Open workspace verb's application query
   /// (`session/workspacePathApplications`).
@@ -733,6 +742,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             readWorkspaceFile: widget.readWorkspaceFile,
                             readWorkspaceFileBytes:
                                 widget.readWorkspaceFileBytes,
+                            loadPermissionCatalog: widget.loadPermissionCatalog,
                             models: uiState.models,
                             onSelectModel: (selection) =>
                                 onAction(SelectModelSeat(selection)),
@@ -818,6 +828,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     loadAttachment: widget.loadAttachment,
                     readWorkspaceFile: widget.readWorkspaceFile,
                     readWorkspaceFileBytes: widget.readWorkspaceFileBytes,
+                    loadPermissionCatalog: widget.loadPermissionCatalog,
                     models: uiState.models,
                     onSelectModel: (selection) =>
                         onAction(SelectModelSeat(selection)),
@@ -1289,6 +1300,7 @@ class ChatPanel extends StatefulWidget {
     required this.presentation,
     required this.readWorkspaceFile,
     required this.readWorkspaceFileBytes,
+    required this.loadPermissionCatalog,
     super.key,
     this.outline = false,
     this.models,
@@ -1310,6 +1322,10 @@ class ChatPanel extends StatefulWidget {
 
   /// Repository seam the file-preview sheet reads bytes through.
   final WorkspaceFileBytesReader readWorkspaceFileBytes;
+
+  /// Repository seam the access-mode seat reads its preset list through; null
+  /// on a bare pump.
+  final PermissionCatalogLoader? loadPermissionCatalog;
 
   /// The backend this surface presents; drives the pushed subagent record a
   /// workflow member row opens. Null leaves member rows read-only.
@@ -2549,6 +2565,7 @@ class _ChatPanelState extends State<ChatPanel> {
                             sessionState: _sessionState,
                             permissions: uiState.permissions,
                             sandboxMode: uiState.sandboxMode,
+                            loadPermissionCatalog: widget.loadPermissionCatalog,
                             // Web ComposerSubmissionPolicy: queue outside a
                             // running turn; inside it the persisted busy-Enter
                             // preference decides (the send button is the only
@@ -5945,6 +5962,7 @@ class ComposerBar extends ConsumerStatefulWidget {
     this.sessionState,
     this.permissions,
     this.sandboxMode,
+    this.loadPermissionCatalog,
   });
 
   final bool enabled;
@@ -5984,6 +6002,10 @@ class ComposerBar extends ConsumerStatefulWidget {
   /// The session whose draft this composer edits; drives draft
   /// persistence alongside [sessionState].
   final String? sessionId;
+
+  /// Repository seam the access-mode seat reads its preset list through;
+  /// null leaves the seat's sheet stating that the modes could not be read.
+  final PermissionCatalogLoader? loadPermissionCatalog;
 
   /// Draft persistence for [sessionId]; null keeps the draft in memory
   /// only.
@@ -6587,6 +6609,7 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                           value: permissions,
                           locked: !widget.enabled,
                           onAction: widget.onAction,
+                          loadCatalog: widget.loadPermissionCatalog,
                           compact: constraints.maxWidth < _kComposerLabelCut,
                           // The session's real confinement level rides this
                           // seat's tooltip: a preset composes a sandbox mode
