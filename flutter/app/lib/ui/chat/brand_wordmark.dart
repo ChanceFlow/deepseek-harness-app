@@ -23,40 +23,52 @@ class BrandWordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = color ?? Theme.of(context).colorScheme.onSurface;
     final inverted = Theme.of(context).colorScheme.surface;
+    // The mark is a row of intrinsic-width parts, so at a large platform text
+    // step the two text runs outgrow the sidebar and the row stripes. Both runs
+    // are therefore flexible and ellipsize inside their share: the mark keeps
+    // its shape and the reader keeps a readable word instead of a cut one.
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         FishLogo(size: height, color: ink),
         const SizedBox(width: 8),
-        Text(
-          'DeepSeek',
-          style: TextStyle(
-            color: ink,
-            fontSize: height * 0.66,
-            fontWeight: FontWeight.w500,
-            letterSpacing: -0.2,
-            height: 1.0,
+        Flexible(
+          child: Text(
+            'DeepSeek',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: ink,
+              fontSize: height * 0.66,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.2,
+              height: 1.0,
+            ),
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: height * 0.18,
-            vertical: height * 0.08,
-          ),
-          decoration: BoxDecoration(
-            color: ink,
-            borderRadius: BorderRadius.circular(kShapeChip),
-          ),
-          child: Text(
-            'HARNESS',
-            style: TextStyle(
-              color: inverted,
-              fontSize: height * 0.36,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 1.0,
-              height: 1.0,
+        Flexible(
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: height * 0.18,
+              vertical: height * 0.08,
+            ),
+            decoration: BoxDecoration(
+              color: ink,
+              borderRadius: BorderRadius.circular(kShapeChip),
+            ),
+            child: Text(
+              'HARNESS',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: inverted,
+                fontSize: height * 0.36,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.0,
+                height: 1.0,
+              ),
             ),
           ),
         ),

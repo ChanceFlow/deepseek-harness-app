@@ -77,6 +77,19 @@ const String? _skip = bool.fromEnvironment('DSH_DESIGN_SHOTS')
 /// absolute path; empty when the script ran without one.
 const String _cjkFontPath = String.fromEnvironment('DSH_DESIGN_CJK_FONT');
 
+/// The platform text scale a shot renders at (`DSH_DESIGN_TEXT_SCALE`), 1.0
+/// when unset. A row that clips its text clips on a phone set to a large step,
+/// and a picture of it is how that is reviewed: `flutter test -t design
+/// --update-goldens app/test/design --dart-define=DSH_DESIGN_SHOTS=true
+/// --dart-define=DSH_DESIGN_TEXT_SCALE=2.0`.
+/// The raw define, read once.
+const String _textScaleDefine = String.fromEnvironment('DSH_DESIGN_TEXT_SCALE');
+
+/// The platform text scale a shot renders at, 1.0 when the define is empty.
+final double _textScale = _textScaleDefine.isEmpty
+    ? 1.0
+    : double.parse(_textScaleDefine);
+
 /// What a shot does after the screen settles, when the state alone cannot
 /// express it — opening the drawer, holding a bubble.
 typedef ShotAction = Future<void> Function(WidgetTester tester);
@@ -89,12 +102,18 @@ final class DesignShot {
     this.act,
     this.dark = true,
     this.locale,
+    this.scale,
     this.loadAttachment,
     this.readFile,
     this.readFileBytes,
   });
 
   final String name;
+
+  /// The platform text step this shot renders at; the harness define when
+  /// unset. A step of its own lets a large-text twin sit beside its default
+  /// twin as a separate picture.
+  final double? scale;
 
   /// Chat fixture; renders [ChatScreen] when set.
   final ChatUiState? state;
@@ -439,6 +458,18 @@ final List<DesignShot> shots = <DesignShot>[
   DesignShot(
     name: 'drawer',
     state: busyState(),
+    act: (tester) async {
+      await tester.tap(find.byIcon(Icons.menu));
+      await settle(tester);
+    },
+  ),
+  // The same drawer at the platform's 2.0x text step. The brand row is the
+  // row that used to stripe from 1.3x and the group header is the one that
+  // striped from 2.0x; the pair of pictures is how the yield reads.
+  DesignShot(
+    name: 'sidebar-scale-20',
+    state: busyState(),
+    scale: 2.0,
     act: (tester) async {
       await tester.tap(find.byIcon(Icons.menu));
       await settle(tester);
@@ -1871,6 +1902,11 @@ Future<void> _render(
   tester.view.devicePixelRatio = _kDevicePixelRatio;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  final double scale = shot.scale ?? _textScale;
+  if (scale != 1.0) {
+    tester.platformDispatcher.textScaleFactorTestValue = scale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
   await tester.pumpWidget(
     shot.host != null
         ? shot.host!(theme, shot.locale)
