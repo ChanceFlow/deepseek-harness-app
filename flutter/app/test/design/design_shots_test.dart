@@ -943,6 +943,21 @@ final Set<String> _registeredFamilies = <String>{};
 
 /// Test fonts default to a blank box face: without these loads every glyph
 /// renders as a rectangle and every icon as an empty square.
+/// The families the harness registers the host's mono under: only names a
+/// platform resolves — Android's generic alias, and the sibling some builds
+/// ship. The pin's faces (`SF Mono`, `JetBrains Mono`, `Fira Code`, `Consolas`,
+/// `Liberation Mono`, `Menlo`, `Courier`) are deliberately absent: no Android
+/// device resolves them, and registering them under every name in the code
+/// stack made a shot paint a face the phone never uses.
+const List<String> kDesignMonoFamilies = <String>['monospace', 'Roboto Mono'];
+
+/// The Han families the harness registers the host's Han face under: the names
+/// Android builds give that face, all one design.
+List<String> get kDesignHanFamilies => <String>[
+  for (final String family in kUiFontFamilyFallback)
+    if (family != 'sans-serif') family,
+];
+
 Future<void> _loadFonts() async {
   final root = Platform.environment['FLUTTER_ROOT'];
   if (root == null) {
@@ -955,22 +970,21 @@ Future<void> _loadFonts() async {
     '$assets/Roboto-Bold.ttf',
   ]);
   await _load('MaterialIcons', <String>['$assets/MaterialIcons-Regular.otf']);
-  // The app's code face is the reference's stack (`kCodeFontFamily` and its
-  // fallbacks); no face in it ships with the app, so the harness registers the
-  // first installed mono face under each name in the stack — the same "first
-  // hit wins" rule the app asks the platform for, resolved here rather than
-  // left to whichever family the engine settles on.
+  // The code face resolves through the platform, so the harness registers the
+  // host's mono only under the names a platform resolves: the generic alias,
+  // and the sibling some builds ship from the engine's own tools bundle. The
+  // pin's faces stay unregistered — a shot that paints one is a face the phone
+  // does not have.
   const List<String> monoPaths = <String>[
     '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
     '/usr/share/fonts/TTF/DejaVuSansMono.ttf',
   ];
-  for (final String family in <String>[
-    kCodeFontFamily,
-    ...kCodeFontFamilyFallback,
-  ]) {
-    await _load(family, monoPaths, first: true);
-  }
+  await _load('monospace', monoPaths, first: true);
+  await _load('Roboto Mono', <String>[
+    '$root/bin/cache/dart-sdk/bin/resources/devtools/assets/fonts/'
+        'Roboto_Mono/RobotoMono-Regular.ttf',
+  ], first: true);
   final home = Platform.environment['HOME'] ?? '';
   // The Han half of the app's own family chain (`kUiFontFamilyFallback`): the
   // harness registers the host's Han face under every family the app declares,
@@ -989,10 +1003,7 @@ Future<void> _loadFonts() async {
     '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
   ];
   _cjkLoaded = false;
-  for (final String family in kUiFontFamilyFallback) {
-    // `sans-serif` is Android's generic alias, not a face a device ships; the
-    // app's chain ends on it the way the pin's stack does.
-    if (family == 'sans-serif') continue;
+  for (final String family in kDesignHanFamilies) {
     _cjkLoaded = await _load(family, hanPaths, first: true) || _cjkLoaded;
   }
   if (!_cjkLoaded) {
@@ -2242,6 +2253,33 @@ Future<void> _render(
 void main() {
   // Runs even where the shots skip: the guard is about which families the
   // harness registers, not about pixels.
+  test('the harness registers only the faces a platform resolves', () {
+    // The pin's mono names are not names a device resolves: registering the
+    // host face under them is what made a code shot paint a face the phone
+    // never uses, and it made the code-face fix invisible in the pictures.
+    for (final String pinFace in <String>[
+      'SF Mono',
+      'JetBrains Mono',
+      'Fira Code',
+      'Consolas',
+      'Liberation Mono',
+      'Menlo',
+      'Courier',
+    ]) {
+      expect(
+        kDesignMonoFamilies,
+        isNot(contains(pinFace)),
+        reason: '$pinFace is not a face a device resolves',
+      );
+    }
+    // What a platform does resolve: the generic alias, and the sibling.
+    expect(kDesignMonoFamilies, contains('monospace'));
+    expect(kDesignMonoFamilies, contains('Roboto Mono'));
+    // The Han names are platform names, and the generic is not a face.
+    expect(kDesignHanFamilies, contains('Noto Sans CJK SC'));
+    expect(kDesignHanFamilies, isNot(contains('sans-serif')));
+  });
+
   test('the harness registers the families the app declares', () async {
     if (Platform.environment['FLUTTER_ROOT'] == null) {
       markTestSkipped('FLUTTER_ROOT is unset — run through flutter test');
