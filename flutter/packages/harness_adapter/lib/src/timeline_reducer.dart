@@ -425,6 +425,8 @@ class TimelineReducer {
         _recordStepStart(event);
       case 'step/end':
         _recordStepEnd(event);
+      case 'workspace/changes':
+        _recordWorkspaceChanges(event);
       case 'agent/inbox/spliced':
         _applyInboxSplice(event);
       case 'compaction/summary':
@@ -557,6 +559,35 @@ class TimelineReducer {
         steering: item.steering,
         stepEndedAtEpochMs: _eventTime(event),
         stepEndSeq: _lastSeq,
+      );
+      return;
+    }
+  }
+
+  /// Records the turn's latest changed-file announcement
+  /// (`SessionEventMap['workspace/changes']`, `{turn: number}` —
+  /// `reference/deepseek-harness/packages/deliverables/workspace-changes/src/
+  /// types.ts:106`).
+  ///
+  /// The reference's `deliverables` node keeps the event's seq per turn and
+  /// replaces an earlier one (`client/ui-deliverables/src/client/
+  /// turn-deliverables.ts:182`); the summary itself stays on the host, served
+  /// for that sequence while the Session lives. A turn whose boundary is not
+  /// in the folded window folds nothing.
+  void _recordWorkspaceChanges(JsonMap event) {
+    final turn = wireLong(_eventData(event), 'turn');
+    if (turn <= 0) return;
+    for (var index = 0; index < _items.length; index++) {
+      final item = _items[index];
+      if (item is! TimelineTurnBoundary || item.turn != turn) continue;
+      _items[index] = TimelineTurnBoundary(
+        item.turn,
+        usage: item.usage,
+        startedAtEpochMs: item.startedAtEpochMs,
+        endedAtEpochMs: item.endedAtEpochMs,
+        endSeq: item.endSeq,
+        endReason: item.endReason,
+        changesSeq: _lastSeq,
       );
       return;
     }
@@ -1836,6 +1867,7 @@ class TimelineReducer {
       // turn rather than a partial one.
       endSeq: _lastSeq,
       endReason: endReason ?? boundary.endReason,
+      changesSeq: boundary.changesSeq,
     );
   }
 

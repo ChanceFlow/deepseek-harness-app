@@ -146,6 +146,13 @@ final class TimelineMessage extends TimelineItem {
 /// `turn/end` events' own logged times, so a surface can show the turn's
 /// wall time. The end stays null until the matching `turn/end` folds, and
 /// either stays null when a window cut removed its event.
+///
+/// [changesSeq] is the seq of the turn's latest `workspace/changes`
+/// announcement — the reference's `deliverables` node state
+/// (`client/ui-deliverables/src/client/turn-deliverables.ts:182`), whose
+/// summary the host keeps and serves for that sequence while the Session
+/// lives. It is null for a turn that announced no change, and the latest
+/// event replaces an earlier one for the same turn.
 final class TimelineTurnBoundary extends TimelineItem {
   const TimelineTurnBoundary(
     this.turn, {
@@ -154,6 +161,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     this.endedAtEpochMs,
     this.endSeq,
     this.endReason,
+    this.changesSeq,
   });
 
   final int turn;
@@ -174,6 +182,9 @@ final class TimelineTurnBoundary extends TimelineItem {
   /// disclosure, which is what a surface reads this for.
   final String? endReason;
 
+  /// The turn's latest `workspace/changes` event seq.
+  final int? changesSeq;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -183,7 +194,8 @@ final class TimelineTurnBoundary extends TimelineItem {
           other.startedAtEpochMs == startedAtEpochMs &&
           other.endedAtEpochMs == endedAtEpochMs &&
           other.endSeq == endSeq &&
-          other.endReason == endReason);
+          other.endReason == endReason &&
+          other.changesSeq == changesSeq);
 
   @override
   int get hashCode => Object.hash(
@@ -194,6 +206,7 @@ final class TimelineTurnBoundary extends TimelineItem {
     endedAtEpochMs,
     endSeq,
     endReason,
+    changesSeq,
   );
 }
 
