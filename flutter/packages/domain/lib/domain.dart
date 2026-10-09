@@ -43,6 +43,7 @@ export 'model/timeline_window.dart';
 export 'model/token_usage.dart';
 export 'model/todo.dart';
 export 'model/tool_presentation.dart';
+export 'model/turn_outline.dart';
 export 'model/user_question.dart';
 export 'model/workspace.dart';
 export 'model/workspace_file.dart';

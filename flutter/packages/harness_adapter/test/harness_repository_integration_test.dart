@@ -6346,6 +6346,69 @@ void main() {
     },
   );
 
+  test('turnOutline projection decodes the baseline and live frames', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.historyProjections['session-1'] = <String, Object?>{
+      'asOfSeq': 100,
+      'values': <String, Object?>{
+        'turnOutline': <Object?>[
+          <String, Object?>{
+            'turn': 1,
+            'seq': 4,
+            'prompt': 'first ask',
+            'response': 'first answer',
+          },
+        ],
+      },
+    };
+
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-outline-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'turnOutline',
+            'seq': 110,
+            'value': <Object?>[
+              <String, Object?>{
+                'turn': 1,
+                'seq': 4,
+                'prompt': 'first ask',
+                'response': 'first answer',
+              },
+              <String, Object?>{
+                'turn': 2,
+                'seq': 9,
+                'prompt': 'second ask',
+                'response': 'second answer',
+              },
+            ],
+          },
+        ),
+      ],
+    );
+
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    final baseline = await repository.observeTurnOutline('session-1').first;
+    expect(baseline, hasLength(1));
+    expect(baseline.single.turn, 1);
+    expect(baseline.single.prompt, 'first ask');
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final live = await repository.observeTurnOutline('session-1').first;
+    expect(live.map((entry) => entry.turn), <int>[1, 2]);
+    expect(live.last.response, 'second answer');
+  });
+
   test(
     'contextBreakdown projection frames update live and drop stale seq frames',
     () async {

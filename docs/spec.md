@@ -449,10 +449,10 @@ flight. Neither the frames nor the baseline touches durable history.
 
 ### 6.1 Unwired vocabulary
 
-Six names the adapter reports as `timeline.event` debug — an unrecognised
+Five names the adapter reports as `timeline.event` debug — an unrecognised
 session event type, or a projection value this client never reads — are the
-outstanding coverage against the folded table above. Two are the reference
-client's own folds and this client's ports; the port is scheduled as one
+outstanding coverage against the folded table above. One is the reference
+client's own fold and this client's port; the port is scheduled as one
 change and none is folded here. The three `team/*` journal events are not a
 client surface: the reference folds them **host-side** into the `agentTeam`
 projection, which this client already decodes. `sessionListMetadata` needs no
@@ -463,9 +463,20 @@ port at all, because the host folds it into the list row this client reads.
 | `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |
 | `team/message/queued` | session event | declared `packages/experimental/agent-team/src/types.ts:236`; the same `agentTeam` fold | **do not port** — same projection surface |
 | `team/message/delivered` | session event | declared `packages/experimental/agent-team/src/types.ts:238-243`; the same `agentTeam` fold | **do not port** — same projection surface |
-| `turnOutline` | projection | registered `packages/session/session-turn-outline/src/projection.ts:86`; read by `packages/client/ui-chat/src/client/chat/ChatView.tsx:124-127` | **port** — the chat turn rail |
 | `subagentTiming` | projection | registered `packages/subagent/subagent/src/projection.ts:69`; read by `packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx:83-84` | **port** — a child's last-turn completion |
 | `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148`), which `SessionWire` decodes |
+
+### 6.2 Projection folds
+
+Session projection values reach the client on four carriers — `session.list`
+and `session.history` baselines, `session/projections`, and live
+`session/projection` frames. The keys below are folded into a per-Session
+stream the UI reads; a malformed value is reported as an adapter diagnostic
+and leaves the last good value standing, never an empty one.
+
+| key | Domain surface | Fold |
+|---|---|---|
+| `turnOutline` | `ChatRepository.observeTurnOutline` → `List<TurnOutlineEntry>` | every started turn's rail facts: `turn`, `turn/start` `seq`, bounded `prompt` and `response` previews, strictly increasing by turn (`packages/session/session-turn-outline/src/projection.ts:61-71`) |
 
 ## 7. Android UI Contract
 

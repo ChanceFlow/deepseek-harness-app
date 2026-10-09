@@ -24,6 +24,7 @@ import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/settings.dart';
 import 'package:domain/model/terminal.dart';
 import 'package:domain/model/token_usage.dart';
+import 'package:domain/model/turn_outline.dart';
 
 import 'rpc_map.dart';
 import 'wire_json.dart';
@@ -319,6 +320,52 @@ final class SessionModelsValueWire {
   final List<String> routableProviders;
   final List<ModelProviderGroupWire> groups;
   final List<ModelCatalogFailureWire> failures;
+}
+
+// ---------------------------------------------------------------------------
+// Turn outline — the `turnOutline` session projection
+// (reference/deepseek-harness/packages/session/session-turn-outline/src/
+// types.ts `TurnOutlineEntry`, `projection.ts:61-71` `wire.view`).
+// ---------------------------------------------------------------------------
+
+/// Decodes the `turnOutline` projection value: every started turn's outline
+/// facts, strictly increasing by turn.
+///
+/// The wire view is the entry array itself (`view: state => state.turns`), so
+/// a value that is not an array fails loud, as does an entry missing `turn`,
+/// `seq`, `prompt`, or `response`, and a sequence that does not strictly
+/// increase — the host's own `superRefine` invariant.
+List<TurnOutlineEntry> decodeTurnOutlineProjection(Object? value) {
+  final entries = asJsonArray(value);
+  if (entries == null) {
+    throw const FormatException(
+      'turnOutline projection value must be a JSON array',
+    );
+  }
+  var previousTurn = -1;
+  final outline = <TurnOutlineEntry>[];
+  for (final entry in entries) {
+    final json = asJsonObject(entry);
+    if (json == null) {
+      throw const FormatException('turnOutline entry must be an object');
+    }
+    final turn = _reqLong(json, 'turn');
+    if (turn <= previousTurn) {
+      throw const FormatException(
+        'turnOutline entries must be strictly increasing by turn',
+      );
+    }
+    previousTurn = turn;
+    outline.add(
+      TurnOutlineEntry(
+        turn: turn,
+        seq: _reqLong(json, 'seq'),
+        prompt: _reqString(json, 'prompt'),
+        response: _reqString(json, 'response'),
+      ),
+    );
+  }
+  return outline;
 }
 
 // ---------------------------------------------------------------------------
