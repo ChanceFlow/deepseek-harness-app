@@ -107,6 +107,13 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.add));
       await tester.pumpAndSettle();
+      // The roster carries the pin's 400px height (`MenuView.tsx:26-40`), so
+      // the attach row at its tail is reached by scrolling the card.
+      await tester.scrollUntilVisible(
+        find.text('Attach a file'),
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(find.text('Attach a file'), findsOneWidget);
       await tester.tap(find.text('Attach a file'));
       await tester.pumpAndSettle();
@@ -137,6 +144,11 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Attach a file'),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.text('Attach a file'));
     await tester.pumpAndSettle();
 

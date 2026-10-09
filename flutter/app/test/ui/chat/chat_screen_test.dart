@@ -37,7 +37,6 @@ import 'package:app/ui/chat/reasoning_row.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/permission_select.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
-import 'package:app/ui/shared/dock_anchor.dart';
 import 'package:app/ui/chat/stats_line.dart';
 import 'package:app/ui/chat/sweep_highlight.dart';
 import 'package:app/ui/chat/tool_images.dart';
@@ -2669,7 +2668,7 @@ void main() {
     expect(find.text('Search commands'), findsNothing);
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('menu-sheet-card')),
+        of: find.byKey(const ValueKey('anchored-menu-card')),
         matching: find.byType(TextField),
       ),
       findsNothing,
@@ -2680,19 +2679,38 @@ void main() {
     expect(find.text('/permission'), findsOneWidget);
     expect(find.text('/feedback'), findsOneWidget);
     expect(find.text('/review'), findsOneWidget);
+
+    // The card carries the pin's roster height — 400px (`MenuView.tsx:26-40`)
+    // with the conversation header as its top margin — so the tail rows are
+    // reached by scrolling the roster rather than being mounted at once.
+    final roster = find.byType(Scrollable).last;
+    await tester.scrollUntilVisible(
+      find.text('Pick from gallery'),
+      120,
+      scrollable: roster,
+    );
     expect(find.text('/rust'), findsOneWidget);
     expect(find.text('Attach images'), findsOneWidget);
     expect(find.text('Pick from gallery'), findsOneWidget);
 
-    // The card floats above the composer dock, not on the screen's
-    // bottom edge: its bottom clears the dock's top.
-    final anchor = tester.widget<DockAnchor>(find.byType(DockAnchor));
-    final dockBox =
-        anchor.dockKey.currentContext!.findRenderObject()! as RenderBox;
-    final dockTop = dockBox.localToGlobal(Offset.zero).dy;
-    expect(
-      tester.getRect(find.byKey(const ValueKey('menu-sheet-card'))).bottom,
-      lessThanOrEqualTo(dockTop),
+    // It hangs from the ➕'s own rect with the pin's 4px gap
+    // (`Menu.module.css:30`) instead of sitting on the screen's bottom seam.
+    final trigger = tester.getRect(
+      find.ancestor(
+        of: find.byTooltip('Commands'),
+        matching: find.byType(IconButton),
+      ),
+    );
+    final card = tester.getRect(
+      find.byKey(const ValueKey('anchored-menu-card')),
+    );
+    expect(card.bottom, trigger.top - 4);
+
+    // Back to the head for the pick.
+    await tester.scrollUntilVisible(
+      find.text('/plan'),
+      -120,
+      scrollable: roster,
     );
 
     // Picking an input-hinted host command lands the literal text like a skill does.
@@ -2920,8 +2938,15 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Model 3-7'), findsNothing);
 
-      final listFinder = find.byType(ListView).last;
-      await tester.drag(listFinder, const Offset(0, -1500));
+      // The card is the pin's own popover cap — `min(360px, 100vh - 96px)`
+      // (`ModelSelect.module.css:100`) — so its tail sits further down than a
+      // drag of the old sheet's height reached. Scroll until the row the
+      // assertion names is actually visible rather than a fixed distance.
+      await tester.scrollUntilVisible(
+        find.text('Model 3-7'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('Model 3-7'), findsOneWidget);

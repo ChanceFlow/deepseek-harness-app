@@ -58,7 +58,7 @@ void main() {
     expect(find.text('Unpin session'), findsNothing);
     // The panel rides the house menu surface, not a Material card:
     // `showMenuSheet` mounts its material under this anchor key.
-    expect(find.byKey(const ValueKey('menu-sheet-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('anchored-menu-card')), findsOneWidget);
 
     await tester.tap(find.text('Pin session'));
     await tester.pumpAndSettle();

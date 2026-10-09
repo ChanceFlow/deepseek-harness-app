@@ -145,13 +145,16 @@ void main() {
     // The row's ⋮ verbs are the pin's Menu, so they open on the shared menu
     // material (`ui-primitives/Menu.module.css` `.list`, :15-31) rather than a
     // Material sheet carrying its own fill and elevation.
-    final card = find.byKey(const ValueKey('menu-sheet-card'));
+    final card = find.byKey(const ValueKey('anchored-menu-card'));
     expect(card, findsOneWidget);
     expect(tester.widget(card), isA<MenuMaterial>());
 
     await tester.tap(find.text('Move down'));
     await tester.pumpAndSettle();
     expect(actions, contains(const MoveWorkspaceDownAction('w1')));
+    // The card closed; the browser it floated over is still the reader's page.
+    expect(find.text('Workspaces'), findsOneWidget);
+    expect(find.text('one'), findsOneWidget);
   });
 
   testWidgets('search dispatches the session query and renders results', (

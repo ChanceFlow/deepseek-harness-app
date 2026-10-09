@@ -12,7 +12,7 @@ import 'package:domain/model/session.dart';
 import 'package:flutter/material.dart';
 
 import '../shared/agent_preset_display.dart';
-import '../shared/menu_sheet.dart';
+import '../shared/anchored_menu.dart';
 import '../theme/theme.dart';
 
 /// The roster a picker may offer: every entry that can compose a
@@ -76,13 +76,38 @@ class AgentPresetSeat extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    return AnchoredMenu(
+      // The pin's seat is a portaled menu aligned to its trigger's start edge
+      // (`ui-agent-preset/src/client/AgentPresetSeat.tsx:158-193`), and its
+      // `Menu` default side is below the anchor with the family's 4px gap
+      // (`Menu.module.css:30-33`) — right for a chip in the hero, where the
+      // space below is the reader's.
+      side: MenuSide.bottom,
+      align: MenuAlign.start,
+      gap: 4,
+      maxHeight: 440,
+      cardKey: const ValueKey<String>('anchored-menu-card'),
+      trigger: (BuildContext context, bool open, VoidCallback toggle) =>
+          _trigger(context, toggle, current, l10n, scheme, theme),
+      card: (BuildContext context, VoidCallback close) => _card(options, close),
+    );
+  }
+
+  Widget _trigger(
+    BuildContext context,
+    VoidCallback toggle,
+    String current,
+    AppLocalizations l10n,
+    ColorScheme scheme,
+    ThemeData theme,
+  ) {
     return Tooltip(
       message: l10n.agentPresetTooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(kShapeChip),
-          onTap: () => _open(context, options),
+          onTap: toggle,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -121,18 +146,16 @@ class AgentPresetSeat extends StatelessWidget {
     );
   }
 
-  Future<void> _open(BuildContext context, List<AgentPresetEntry> options) {
-    return showMenuSheet<void>(
-      context,
-      maxHeight: 440,
-      builder: (sheetContext) => _PresetSheet(
-        options: options,
-        currentId: currentId,
-        onSelect: (presetId) {
-          Navigator.of(sheetContext).pop();
-          onSelect(presetId);
-        },
-      ),
+  /// The roster card: display name + description per row, the current one
+  /// marked. A pick closes the card and then stages or switches.
+  Widget _card(List<AgentPresetEntry> options, VoidCallback close) {
+    return _PresetSheet(
+      options: options,
+      currentId: currentId,
+      onSelect: (presetId) {
+        close();
+        onSelect(presetId);
+      },
     );
   }
 }
