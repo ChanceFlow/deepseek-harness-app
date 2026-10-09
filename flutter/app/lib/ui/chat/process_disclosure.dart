@@ -434,6 +434,16 @@ class ProcessGroupBody extends StatefulWidget {
 
 class _ProcessGroupBodyState extends State<ProcessGroupBody> {
   final ScrollController _controller = ScrollController();
+
+  /// The edges the last painted mask was built for.
+  ///
+  /// These are only the repaint trigger — what the mask paints with is
+  /// [_edges], read after layout on the frame that paints. A remembered copy is
+  /// what a child-driven resize strands: the body's content can grow or shrink
+  /// (a pin tool row discloses in place, a streaming row grows) with no scroll
+  /// event and no rebuild of this widget, and a stale `true` then paints an
+  /// active fade over an edge with nothing behind it — the 24px ramp erases the
+  /// last line, with its own stop as the hard edge.
   bool _canScrollUp = false;
   bool _canScrollDown = false;
   bool _staged = false;
@@ -450,15 +460,30 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
     super.dispose();
   }
 
-  void _readEdges() {
-    if (!_controller.hasClients) return;
+  /// Whether each edge has content behind it, read from the live position.
+  ///
+  /// Read inside [ShaderMask.shaderCallback], so it is a fact of the frame that
+  /// paints rather than of the notifications that happened to arrive before it.
+  ({bool up, bool down}) get _edges {
+    if (!_controller.hasClients) return (up: false, down: false);
     final position = _controller.position;
-    final up = position.pixels > 0;
-    final down = position.pixels < position.maxScrollExtent;
-    if (up == _canScrollUp && down == _canScrollDown) return;
+    return (
+      up: position.pixels > 0,
+      down: position.pixels < position.maxScrollExtent,
+    );
+  }
+
+  /// Schedules the repaint that re-reads [_edges], and only when an edge has
+  /// flipped: the alphas are binary, so the intermediate pixels of a scroll
+  /// change nothing. The mask's own box is the other trigger — it is
+  /// `min(content, cap)`, so crossing the cap, the one way an edge flips
+  /// without a scroll, resizes the mask and repaints it.
+  void _readEdges() {
+    final edges = _edges;
+    if (edges.up == _canScrollUp && edges.down == _canScrollDown) return;
     setState(() {
-      _canScrollUp = up;
-      _canScrollDown = down;
+      _canScrollUp = edges.up;
+      _canScrollDown = edges.down;
     });
   }
 
@@ -484,16 +509,24 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
     final maxHeight = math.min(400.0, MediaQuery.sizeOf(context).height * 0.5);
     // Under `dstIn` only the shader's alpha ramp reads through, so the surface
     // role is the ramp's opaque end — the `EdgeFade` convention, which keeps a
-    // mask value out of the palette and the gate's way. The mask is always in
-    // the tree, even with both edges opaque: inserting it when an edge opens
-    // would change the scroller's position in the tree and rebuild it, dropping
-    // the scroll the group is holding.
+    // mask value out of the palette and the gate's way.
+    //
+    // The mask is unconditional *and* correct, because neither property rides on
+    // the other's mechanism. It stays in the tree in every state — inserting it
+    // when an edge opens would change the scroller's position in the tree and
+    // rebuild it, dropping the scroll the group is holding — and the alphas it
+    // paints come from the live position read in the shader callback, so no
+    // remembered value can go stale behind a child that resized itself.
     final surface = Theme.of(context).colorScheme.surface;
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: ShaderMask(
         blendMode: BlendMode.dstIn,
         shaderCallback: (Rect rect) {
+          // The edges, read here rather than remembered: this callback runs
+          // after layout on the frame that paints, so a body whose content
+          // changed since the last notification cannot carry a stale fade.
+          final edges = _edges;
           // A fixed ramp, not a share of the box: the reference's mask is
           // `transparent 0, #000 24px` (`ChatGroupSeat.module.css:102-110`), so
           // the fade stays 24px whatever height the body resolves to.
@@ -502,10 +535,10 @@ class _ProcessGroupBodyState extends State<ProcessGroupBody> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: <Color>[
-              surface.withValues(alpha: _canScrollUp ? 0 : 1),
+              surface.withValues(alpha: edges.up ? 0 : 1),
               surface.withValues(alpha: 1),
               surface.withValues(alpha: 1),
-              surface.withValues(alpha: _canScrollDown ? 0 : 1),
+              surface.withValues(alpha: edges.down ? 0 : 1),
             ],
             stops: <double>[0, ramp, 1 - ramp, 1],
           ).createShader(rect);
