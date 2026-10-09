@@ -137,8 +137,10 @@ void main() {
     ]);
 
     expect(find.text('Re-ran the parser.'), findsOneWidget);
-    // `step/end − step/start`, in the turn label's own units.
-    expect(find.text('5s'), findsOneWidget);
+    // `step/end − step/start`, in the turn label's own units, attributed to
+    // the step by its quiet prefix rather than left as a bare number.
+    expect(find.text('Step 5s'), findsOneWidget);
+    expect(find.text('5s'), findsNothing);
   });
 
   testWidgets('a step whose range fell outside the window shows none', (
@@ -149,6 +151,6 @@ void main() {
     ]);
 
     expect(find.text('Re-ran the parser.'), findsOneWidget);
-    expect(find.text('5s'), findsNothing);
+    expect(find.textContaining('5s'), findsNothing);
   });
 }

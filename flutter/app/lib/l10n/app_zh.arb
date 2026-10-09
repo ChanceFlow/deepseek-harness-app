@@ -605,6 +605,7 @@
   "chatLoadOlderRetry": "加载更早记录失败，点击重试",
   "queue": "排队发送",
   "thinkLabel": "思考",
+  "stepDuration": "本步用时 {duration}",
   "thoughtDuration": "已思考 {duration}",
   "thinkingDuration": "思考中 · {duration}",
   "exploringFiles": "正在浏览 {count} 个文件",

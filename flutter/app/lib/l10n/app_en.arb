@@ -665,6 +665,15 @@
     "description": "Tool row title for the todo_write tool."
   },
   "toolTodoPlanCompleted": "{done}/{total} completed",
+  "stepDuration": "Step {duration}",
+  "@stepDuration": {
+    "description": "Quiet prefix attributing a step's own elapsed span to that step, not to the turn.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
   "thoughtDuration": "Thought {duration}",
   "thinkingDuration": "Thinking · {duration}",
   "exploringFiles": "{count, plural, =1{Exploring 1 file} other{Exploring {count} files}}",
