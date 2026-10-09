@@ -38,7 +38,9 @@ import 'package:app/ui/chat/tool_detail_surface.dart';
 import 'package:app/ui/chat/tool_row_model.dart';
 import 'package:app/ui/chat/transcript_view_mode.dart';
 import 'package:app/ui/settings/settings_screen.dart';
+import 'package:app/ui/settings/shell_settings_page.dart';
 import 'package:app/ui/settings/theme_preference.dart';
+import 'package:app/ui/settings/web_search_settings_page.dart';
 import 'package:app/ui/shared/archived_filter.dart';
 import 'package:app/ui/shared/session_archive_confirm_dialog.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
@@ -672,6 +674,15 @@ final List<DesignShot> shots = <DesignShot>[
     act: _openPluginsPage,
     dark: false,
   ),
+  // The two plugin config pages the pin serves from its Plugins page: the
+  // shell executor's two numeric limits, and the web-search provider's key,
+  // endpoint and search budget.
+  const DesignShot(
+    name: 'settings-shell',
+    host: _settingsShellHost,
+    dark: false,
+  ),
+  const DesignShot(name: 'settings-web-search', host: _settingsWebSearchHost),
   // A single-choice picker is a sheet, not a page: three options cost the
   // index one row instead of three capsules.
   const DesignShot(
@@ -1311,10 +1322,76 @@ class _FakeThemeNamespaceRepository implements ChatRepository {
       throw UnsupportedError('${invocation.memberName}');
 }
 
+/// The shell page over a Host that serves the POSIX executor namespace.
+Widget _settingsShellHost(ThemeData theme, Locale? locale) => _settingsTree(
+  theme,
+  locale,
+  repository: _FakePluginConfigRepository(),
+  page: const SettingsShellPage(backendId: 'default'),
+);
+
+/// The web-search page over a Host that serves the provider namespace and
+/// already holds a key.
+Widget _settingsWebSearchHost(ThemeData theme, Locale? locale) => _settingsTree(
+  theme,
+  locale,
+  repository: _FakePluginConfigRepository(apiKeyConfigured: true),
+  page: const SettingsWebSearchPage(backendId: 'default'),
+);
+
+/// The two plugin namespaces as the Host would describe them, with the
+/// provider's credential reported as configured.
+class _FakePluginConfigRepository implements ChatRepository {
+  _FakePluginConfigRepository({this.apiKeyConfigured = false});
+
+  final bool apiKeyConfigured;
+
+  @override
+  Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
+    writable: true,
+    hasDocument: true,
+    namespaces: <SettingsNamespace>[
+      SettingsNamespace(
+        ns: 'bash-sandbox',
+        applies: SettingsApplies.live,
+        revision: 7,
+        hasUserLayer: true,
+        secretCount: 0,
+        value: <String, Object?>{'timeoutMs': 30000, 'maxOutputBytes': 1048576},
+        user: <String, Object?>{'timeoutMs': 30000},
+      ),
+      SettingsNamespace(
+        ns: 'web-search-deepseek',
+        applies: SettingsApplies.live,
+        revision: 3,
+        hasUserLayer: false,
+        secretCount: 1,
+        value: <String, Object?>{'maxUses': 5},
+      ),
+    ],
+    credentialRefs: <String>['DEEPSEEK_API_KEY'],
+  );
+
+  @override
+  Future<List<CredentialStatus>> describeCredentials(List<String> refs) async =>
+      <CredentialStatus>[
+        CredentialStatus(
+          ref: refs.first,
+          configured: apiKeyConfigured,
+          writable: true,
+        ),
+      ];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
+
 Widget _settingsTree(
   ThemeData theme,
   Locale? locale, {
   ChatRepository? repository,
+  Widget? page,
 }) {
   final registryDir = Directory.systemTemp.createTempSync(
     'dsh-design-registry',
@@ -1349,7 +1426,8 @@ Widget _settingsTree(
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
       theme: theme,
-      home: SettingsScreen(uiState: settingsUiState(), onAction: (_) {}),
+      home:
+          page ?? SettingsScreen(uiState: settingsUiState(), onAction: (_) {}),
     ),
   );
 }

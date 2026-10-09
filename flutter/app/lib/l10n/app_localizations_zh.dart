@@ -3595,6 +3595,76 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionReferenceSectionTitle => '会话';
 
   @override
+  String get settingsNavShell => '终端';
+
+  @override
+  String get settingsShellDescription => '限制每条命令最多能跑多久、最多输出多少内容。';
+
+  @override
+  String get settingsShellTimeoutMsLabel => '命令超时（毫秒）';
+
+  @override
+  String get settingsShellTimeoutMsHint => '单条命令允许运行多久，超时即终止。';
+
+  @override
+  String get settingsShellMaxOutputBytesLabel => '单流输出上限（字节）';
+
+  @override
+  String get settingsShellMaxOutputBytesHint => '超出部分会转存到临时文件，而不是被丢弃。';
+
+  @override
+  String get settingsNavWebSearch => '网页搜索';
+
+  @override
+  String get settingsWebSearchDescription => '设置 DeepSeek 的搜索提供方。';
+
+  @override
+  String get settingsWebSearchApiKeyLabel => 'API Key';
+
+  @override
+  String get settingsWebSearchApiKeyHint => '不写入设置文件。留空表示保持当前密钥。';
+
+  @override
+  String get settingsWebSearchApiKeySet => '已配置密钥。';
+
+  @override
+  String get settingsWebSearchApiKeyUnset =>
+      '未配置密钥；仅使用 DeepSeek 账号模型的对话可以通过默认接口地址搜索。';
+
+  @override
+  String get settingsWebSearchBaseUrlLabel => '接口地址';
+
+  @override
+  String get settingsWebSearchBaseUrlHint => '留空则使用提供方默认地址。';
+
+  @override
+  String get settingsWebSearchMaxUsesLabel => '单次请求最多搜索次数';
+
+  @override
+  String get settingsWebSearchMaxUsesHint => '一次请求在必须作答前最多可以搜索多少次。';
+
+  @override
+  String get settingsFormOverridden => '已覆盖';
+
+  @override
+  String get settingsFormReset => '恢复默认';
+
+  @override
+  String get settingsFormReadOnly => '本部署的设置为只读。';
+
+  @override
+  String get settingsFormUnavailable => '该插件当前未加载，暂时无法配置。';
+
+  @override
+  String get settingsFormSaving => '保存中…';
+
+  @override
+  String get settingsFormSaveFailed => '本部署没有接受这些值，已保留供你修改。';
+
+  @override
+  String get settingsFormInvalidNumber => '请填数字；留空表示使用默认值。';
+
+  @override
   String get settingsAgentLoopTitle => '智能体循环';
 
   @override

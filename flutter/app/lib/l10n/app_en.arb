@@ -3458,6 +3458,98 @@
   "@sessionReferenceSectionTitle": {
     "description": "Group label above the composer @ session-reference candidates."
   },
+  "settingsNavShell": "Shell",
+  "@settingsNavShell": {
+    "description": "Settings → Plugins row and page title of the shell executor's settings page (pin settings.shell title)."
+  },
+  "settingsShellDescription": "Limit how long each command may run and how much it may output.",
+  "@settingsShellDescription": {
+    "description": "Intro of the shell settings page (pin settings.shell description)."
+  },
+  "settingsShellTimeoutMsLabel": "Command timeout (ms)",
+  "@settingsShellTimeoutMsLabel": {
+    "description": "Label of the shell namespace's timeoutMs field (pin ShellCard.tsx:29)."
+  },
+  "settingsShellTimeoutMsHint": "How long one command may run before it is terminated.",
+  "@settingsShellTimeoutMsHint": {
+    "description": "Hint under the shell timeout field (pin settings.shell timeoutMsHint)."
+  },
+  "settingsShellMaxOutputBytesLabel": "Output cap per stream (bytes)",
+  "@settingsShellMaxOutputBytesLabel": {
+    "description": "Label of the shell namespace's maxOutputBytes field (pin ShellCard.tsx:42)."
+  },
+  "settingsShellMaxOutputBytesHint": "Output beyond this spills to a temporary file rather than being lost.",
+  "@settingsShellMaxOutputBytesHint": {
+    "description": "Hint under the shell output-cap field (pin settings.shell maxOutputBytesHint)."
+  },
+  "settingsNavWebSearch": "Web search",
+  "@settingsNavWebSearch": {
+    "description": "Settings → Plugins row and page title of the web-search provider's settings page (pin settings.webSearch title)."
+  },
+  "settingsWebSearchDescription": "Set up the DeepSeek search provider.",
+  "@settingsWebSearchDescription": {
+    "description": "Intro of the web-search settings page (pin settings.webSearch description)."
+  },
+  "settingsWebSearchApiKeyLabel": "API key",
+  "@settingsWebSearchApiKeyLabel": {
+    "description": "Label of the web-search provider's credential row (pin WebSearchCard.tsx:33)."
+  },
+  "settingsWebSearchApiKeyHint": "Stored outside the settings file. Leave blank to keep the current key.",
+  "@settingsWebSearchApiKeyHint": {
+    "description": "Hint under the web-search key field (pin settings.webSearch apiKeyHint)."
+  },
+  "settingsWebSearchApiKeySet": "A key is configured.",
+  "@settingsWebSearchApiKeySet": {
+    "description": "Reported under the key field when the credentials domain holds a value (pin apiKeySet)."
+  },
+  "settingsWebSearchApiKeyUnset": "No key is configured; only conversations using a DeepSeek Account model can search, through the default endpoint.",
+  "@settingsWebSearchApiKeyUnset": {
+    "description": "Reported under the key field when no credential is configured (pin apiKeyUnset)."
+  },
+  "settingsWebSearchBaseUrlLabel": "Endpoint",
+  "@settingsWebSearchBaseUrlLabel": {
+    "description": "Label of the web-search provider's baseURL field (pin WebSearchCard.tsx:47)."
+  },
+  "settingsWebSearchBaseUrlHint": "Leave blank to use the provider default.",
+  "@settingsWebSearchBaseUrlHint": {
+    "description": "Hint under the endpoint field (pin settings.webSearch baseUrlHint)."
+  },
+  "settingsWebSearchMaxUsesLabel": "Max searches per request",
+  "@settingsWebSearchMaxUsesLabel": {
+    "description": "Label of the web-search provider's maxUses field (pin WebSearchCard.tsx:59)."
+  },
+  "settingsWebSearchMaxUsesHint": "How many times one request may search before it must answer.",
+  "@settingsWebSearchMaxUsesHint": {
+    "description": "Hint under the search-budget field (pin settings.webSearch maxUsesHint)."
+  },
+  "settingsFormOverridden": "Overridden",
+  "@settingsFormOverridden": {
+    "description": "Mark on a settings field the user layer overrides (pin overridden)."
+  },
+  "settingsFormReset": "Reset to default",
+  "@settingsFormReset": {
+    "description": "Verb that stages one settings field back to the deployment default (pin reset)."
+  },
+  "settingsFormReadOnly": "This deployment stores settings read-only.",
+  "@settingsFormReadOnly": {
+    "description": "Stated on a namespace page whose settings document refuses writes (pin readOnly)."
+  },
+  "settingsFormUnavailable": "This plugin is not loaded, so it cannot be configured right now.",
+  "@settingsFormUnavailable": {
+    "description": "Stated when the Host serves none of the namespaces a page binds (pin unavailable)."
+  },
+  "settingsFormSaving": "Saving…",
+  "@settingsFormSaving": {
+    "description": "Save button while a namespace write is in flight (pin saving)."
+  },
+  "settingsFormSaveFailed": "The deployment did not accept these values; they were left for you to correct.",
+  "@settingsFormSaveFailed": {
+    "description": "Stated under a namespace form the Host refused (pin saveFailed)."
+  },
+  "settingsFormInvalidNumber": "Enter a number, or leave blank to use the default.",
+  "@settingsFormInvalidNumber": {
+    "description": "Inline error under a numeric field whose draft is not a number (pin invalidNumber)."
+  },
   "settingsAgentLoopTitle": "Agent loop",
   "@settingsAgentLoopTitle": {
     "description": "Agent loop page copy."

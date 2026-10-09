@@ -6367,6 +6367,144 @@ abstract class AppLocalizations {
   /// **'Sessions'**
   String get sessionReferenceSectionTitle;
 
+  /// Settings → Plugins row and page title of the shell executor's settings page (pin settings.shell title).
+  ///
+  /// In en, this message translates to:
+  /// **'Shell'**
+  String get settingsNavShell;
+
+  /// Intro of the shell settings page (pin settings.shell description).
+  ///
+  /// In en, this message translates to:
+  /// **'Limit how long each command may run and how much it may output.'**
+  String get settingsShellDescription;
+
+  /// Label of the shell namespace's timeoutMs field (pin ShellCard.tsx:29).
+  ///
+  /// In en, this message translates to:
+  /// **'Command timeout (ms)'**
+  String get settingsShellTimeoutMsLabel;
+
+  /// Hint under the shell timeout field (pin settings.shell timeoutMsHint).
+  ///
+  /// In en, this message translates to:
+  /// **'How long one command may run before it is terminated.'**
+  String get settingsShellTimeoutMsHint;
+
+  /// Label of the shell namespace's maxOutputBytes field (pin ShellCard.tsx:42).
+  ///
+  /// In en, this message translates to:
+  /// **'Output cap per stream (bytes)'**
+  String get settingsShellMaxOutputBytesLabel;
+
+  /// Hint under the shell output-cap field (pin settings.shell maxOutputBytesHint).
+  ///
+  /// In en, this message translates to:
+  /// **'Output beyond this spills to a temporary file rather than being lost.'**
+  String get settingsShellMaxOutputBytesHint;
+
+  /// Settings → Plugins row and page title of the web-search provider's settings page (pin settings.webSearch title).
+  ///
+  /// In en, this message translates to:
+  /// **'Web search'**
+  String get settingsNavWebSearch;
+
+  /// Intro of the web-search settings page (pin settings.webSearch description).
+  ///
+  /// In en, this message translates to:
+  /// **'Set up the DeepSeek search provider.'**
+  String get settingsWebSearchDescription;
+
+  /// Label of the web-search provider's credential row (pin WebSearchCard.tsx:33).
+  ///
+  /// In en, this message translates to:
+  /// **'API key'**
+  String get settingsWebSearchApiKeyLabel;
+
+  /// Hint under the web-search key field (pin settings.webSearch apiKeyHint).
+  ///
+  /// In en, this message translates to:
+  /// **'Stored outside the settings file. Leave blank to keep the current key.'**
+  String get settingsWebSearchApiKeyHint;
+
+  /// Reported under the key field when the credentials domain holds a value (pin apiKeySet).
+  ///
+  /// In en, this message translates to:
+  /// **'A key is configured.'**
+  String get settingsWebSearchApiKeySet;
+
+  /// Reported under the key field when no credential is configured (pin apiKeyUnset).
+  ///
+  /// In en, this message translates to:
+  /// **'No key is configured; only conversations using a DeepSeek Account model can search, through the default endpoint.'**
+  String get settingsWebSearchApiKeyUnset;
+
+  /// Label of the web-search provider's baseURL field (pin WebSearchCard.tsx:47).
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint'**
+  String get settingsWebSearchBaseUrlLabel;
+
+  /// Hint under the endpoint field (pin settings.webSearch baseUrlHint).
+  ///
+  /// In en, this message translates to:
+  /// **'Leave blank to use the provider default.'**
+  String get settingsWebSearchBaseUrlHint;
+
+  /// Label of the web-search provider's maxUses field (pin WebSearchCard.tsx:59).
+  ///
+  /// In en, this message translates to:
+  /// **'Max searches per request'**
+  String get settingsWebSearchMaxUsesLabel;
+
+  /// Hint under the search-budget field (pin settings.webSearch maxUsesHint).
+  ///
+  /// In en, this message translates to:
+  /// **'How many times one request may search before it must answer.'**
+  String get settingsWebSearchMaxUsesHint;
+
+  /// Mark on a settings field the user layer overrides (pin overridden).
+  ///
+  /// In en, this message translates to:
+  /// **'Overridden'**
+  String get settingsFormOverridden;
+
+  /// Verb that stages one settings field back to the deployment default (pin reset).
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get settingsFormReset;
+
+  /// Stated on a namespace page whose settings document refuses writes (pin readOnly).
+  ///
+  /// In en, this message translates to:
+  /// **'This deployment stores settings read-only.'**
+  String get settingsFormReadOnly;
+
+  /// Stated when the Host serves none of the namespaces a page binds (pin unavailable).
+  ///
+  /// In en, this message translates to:
+  /// **'This plugin is not loaded, so it cannot be configured right now.'**
+  String get settingsFormUnavailable;
+
+  /// Save button while a namespace write is in flight (pin saving).
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get settingsFormSaving;
+
+  /// Stated under a namespace form the Host refused (pin saveFailed).
+  ///
+  /// In en, this message translates to:
+  /// **'The deployment did not accept these values; they were left for you to correct.'**
+  String get settingsFormSaveFailed;
+
+  /// Inline error under a numeric field whose draft is not a number (pin invalidNumber).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number, or leave blank to use the default.'**
+  String get settingsFormInvalidNumber;
+
   /// Agent loop page copy.
   ///
   /// In en, this message translates to:
