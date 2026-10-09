@@ -72,9 +72,13 @@ the default step. The design harness renders a shot at a step of its own
 
 The default-step sidebar is pixel-identical to what shipped (the `drawer` shot
 compares equal, both twins). The brand row's target is 48dp tall where it was
-28; the group header keeps its dense 40 (the pin's own sidebar row is 34), and
-at the steps where a caption cannot share the line the tile grows a line instead
-of striping. The wordmark ellipsizes (`DeepSe…`) at 2.0×, which is the yield: the
-mark stays and the reader keeps a word. The design sweep at 3.0× stripes other
-surfaces too — `card_detail.dart`, `voice_hold_bar.dart`, three chat-screen rows,
-`empty_hero.dart` and four settings rows — none of them owned here.
+28. **The group header keeps its dense 40dp on purpose:** the ≥48dp rule for this
+fix means the yield must not shrink a target, not that the sidebar's rhythm
+changes to meet a number — the pin's own sidebar row is 34dp
+(`Rows.module.css` `.projectRow`), so a 48dp header would depart from the design
+to satisfy a constant. At the steps where a caption cannot share the line the
+tile grows a line instead of striping. The wordmark ellipsizes (`DeepSe…`) at
+2.0×, which is the yield: the mark stays and the reader keeps a word. The design
+sweep at 3.0× stripes other surfaces too — `card_detail.dart`,
+`voice_hold_bar.dart`, three chat-screen rows, `empty_hero.dart` and four
+settings rows — none of them owned here.
