@@ -423,6 +423,8 @@ class TimelineReducer {
         _appendTurnStart(event);
       case 'step/start':
         _recordStepStart(event);
+      case 'step/end':
+        _recordStepEnd(event);
       case 'agent/inbox/spliced':
         _applyInboxSplice(event);
       case 'compaction/summary':
@@ -515,6 +517,49 @@ class TimelineReducer {
     _stepByTurn[turn] = step;
     final time = _eventTime(event);
     if (time != null) _stepStartedAtMs[_turnStepKey(turn, step)] = time;
+  }
+
+  /// Bounds the step the rows after it belong to, the reference's `stepEnd`
+  /// (`client/ui-trajectory/src/client/trajectory-assistant-definition.ts:247`
+  /// sets `stepEnd` on the step's assistant state; `turn-tail.ts:44` and
+  /// `turn-process.ts:222` use the same event to locate the turn and step).
+  ///
+  /// The fact lands on the step's own assistant message, so a surface can
+  /// separate the step's process rows from its answer. A step that assembled
+  /// no message, or whose `turn/start` fell outside the folded window, leaves
+  /// no row to bound and folds nothing — the fold never attaches a step's end
+  /// to another turn's row.
+  void _recordStepEnd(JsonMap event) {
+    final data = _eventData(event);
+    final turn = wireLong(data, 'turn');
+    final step = wireLong(data, 'step');
+    if (turn <= 0 || step <= 0) return;
+    // Rows after the turn's own boundary belong to that turn; without that
+    // boundary in the window the owning row cannot be identified.
+    int? turnStart;
+    for (var index = _items.length - 1; index >= 0; index--) {
+      final item = _items[index];
+      if (item is TimelineTurnBoundary && item.turn == turn) {
+        turnStart = index + 1;
+        break;
+      }
+    }
+    if (turnStart == null) return;
+    for (var index = _items.length - 1; index >= turnStart; index--) {
+      final item = _items[index];
+      if (item is! TimelineMessage || item.step != step) continue;
+      _items[index] = TimelineMessage(
+        item.value,
+        step: item.step,
+        usage: item.usage,
+        firstTokenAtEpochMs: item.firstTokenAtEpochMs,
+        stepStartedAtEpochMs: item.stepStartedAtEpochMs,
+        steering: item.steering,
+        stepEndedAtEpochMs: _eventTime(event),
+        stepEndSeq: _lastSeq,
+      );
+      return;
+    }
   }
 
   /// A summary shadows its range; the marker captures counts and optional summary.

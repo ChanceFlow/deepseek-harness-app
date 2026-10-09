@@ -70,6 +70,13 @@ final class PresentedFile {
 /// `SteeringHistory` classification
 /// (`client/ui-chat/src/client/model/steering-history.ts`): human input
 /// admitted into a live turn rather than a new user turn.
+///
+/// [stepEndedAtEpochMs] and [stepEndSeq] are the owning step's `step/end`
+/// event, the reference's `stepEnd`
+/// (`client/ui-trajectory/src/client/trajectory-assistant-definition.ts:247`):
+/// they bound the step's rows so a surface can separate a step's process from
+/// its answer. Both are null for a step whose end fell outside the folded
+/// window, and for a step that assembled no message at all.
 final class TimelineMessage extends TimelineItem {
   const TimelineMessage(
     this.value, {
@@ -78,6 +85,8 @@ final class TimelineMessage extends TimelineItem {
     this.firstTokenAtEpochMs,
     this.stepStartedAtEpochMs,
     this.steering = false,
+    this.stepEndedAtEpochMs,
+    this.stepEndSeq,
   });
 
   final ChatMessage value;
@@ -93,6 +102,12 @@ final class TimelineMessage extends TimelineItem {
   /// turn's next step.
   final bool steering;
 
+  /// The owning `step/end` event's logged time.
+  final int? stepEndedAtEpochMs;
+
+  /// The owning `step/end` event's seq.
+  final int? stepEndSeq;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -102,7 +117,9 @@ final class TimelineMessage extends TimelineItem {
           other.usage == usage &&
           other.firstTokenAtEpochMs == firstTokenAtEpochMs &&
           other.stepStartedAtEpochMs == stepStartedAtEpochMs &&
-          other.steering == steering);
+          other.steering == steering &&
+          other.stepEndedAtEpochMs == stepEndedAtEpochMs &&
+          other.stepEndSeq == stepEndSeq);
 
   @override
   int get hashCode => Object.hash(
@@ -113,6 +130,8 @@ final class TimelineMessage extends TimelineItem {
     firstTokenAtEpochMs,
     stepStartedAtEpochMs,
     steering,
+    stepEndedAtEpochMs,
+    stepEndSeq,
   );
 }
 
