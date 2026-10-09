@@ -80,10 +80,19 @@ Widget flatInkOverlay(BuildContext context, Widget child) => Theme(
 /// state. A Turn that is still running, was stopped or failed, or had a human
 /// speak inside it keeps its body: the reference's `turnProcessAlwaysOpen` plus
 /// its interleaved-input rule.
+///
+/// The reference lays the control out as one flow item and its rows as the
+/// siblings after it, so the column's own flow gap spaces them: the row that
+/// follows a `turn-process` item takes the item's clearance, and the rows
+/// under it step apart (`ChatView.module.css:70-94`,
+/// `ChatGroupSeat.module.css:87`). This port nests those rows in the section
+/// to keep one fold over them, so [gapAfter] — the transcript's own rule — is
+/// applied between them here instead.
 class TurnProcessRow extends StatefulWidget {
   const TurnProcessRow({
     required this.section,
     required this.buildRow,
+    required this.gapAfter,
     super.key,
     this.expansion,
   });
@@ -92,6 +101,11 @@ class TurnProcessRow extends StatefulWidget {
 
   /// Renders one of the section's own rows through the transcript's row path.
   final Widget Function(Object row) buildRow;
+
+  /// The transcript's flow gap between two of its rows. The section's control
+  /// is handed in as the row above its first member, so the hairline keeps the
+  /// clearance the reference gives the sibling after a `turn-process` item.
+  final double Function(Object above, Object? below) gapAfter;
 
   /// The reader's fold, keyed by the block's identity rather than held in the
   /// element: a remount (an older page arriving, or a Turn boundary entering
@@ -254,14 +268,33 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
         // Transcript order, with the folded rows dropped rather than moved: a
         // collapsed Turn hides what the agent did, and never relocates the
         // reader's own message or the answer that followed the work.
-        for (final member in widget.section.members)
-          if (open || !member.folds)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: widget.buildRow(member.row),
-            ),
+        ..._members(open),
       ],
     );
+  }
+
+  /// The section's rows under the transcript's own flow gap.
+  ///
+  /// The reference spaces a `turn-process` item's following rows with the
+  /// column gap, not with the item's own padding (`ChatView.module.css:70-94`):
+  /// the row right after the control takes its clearance, and the rows under it
+  /// step apart. The control stands in as the first member's row above, so the
+  /// hairline keeps the clearance the reference gives the sibling after a
+  /// `turn-process` item instead of the flush edge a bare padding produced.
+  List<Widget> _members(bool open) {
+    final rows = <Widget>[];
+    Object above = widget.section;
+    for (final member in widget.section.members) {
+      if (!open && member.folds) continue;
+      rows.add(
+        Padding(
+          padding: EdgeInsets.only(top: widget.gapAfter(above, member.row)),
+          child: widget.buildRow(member.row),
+        ),
+      );
+      above = member.row;
+    }
+    return rows;
   }
 }
 

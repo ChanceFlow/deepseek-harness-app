@@ -1221,6 +1221,49 @@ class _OlderHistorySlot {
 /// timeline item, only a row the gap math and the builder dispatch on.
 const Object _olderHistorySlot = _OlderHistorySlot();
 
+/// Vertical rhythm between two transcript rows — the reference's
+/// `--dsh-chat-flow-gap` (`ChatView.module.css:70-95`). A run of steps sits
+/// [kChatFlowGapStep] apart and closes up; a message opens a new paragraph at
+/// [kChatFlowGap]; a Turn's process control opens its own block at
+/// [kChatFlowGapAfterTurnHeader] and holds that clearance on both sides, so the
+/// row after it — the first row of its own section, or the next block — is
+/// never flush against its hairline (`:91-94`). Equal gaps everywhere read as a
+/// list of unrelated lines, which is what the transcript stopped looking like a
+/// conversation. The tail signals — the turn-status line and a pending steering
+/// row — open their own block like a message does (steering is the reader's own
+/// words). A null [below] is the tail: block.
+///
+/// A Turn's `turn/start` boundary never reaches here: the Turn's process control
+/// takes its place in the list, and its hairline rule carries the break the
+/// boundary used to. The section's own rows come through here too, with the
+/// section handed in as the row above its first member.
+double chatFlowGapAfter(Object above, Object? below) {
+  if (below == null) return kChatFlowGap;
+  // A Turn's process control opens the Turn's own block: its border and its
+  // label carry the break, so it takes the header clearance.
+  if (below is TurnProcessSection) return kChatFlowGapAfterTurnHeader;
+  // The reference gives the sibling that follows a `turn-process` item the same
+  // clearance (`ChatView.module.css:93-94`), which is the rule between the
+  // control's hairline and everything under it: this port nests the Turn's rows
+  // in the section, so that is what keeps them off the rule.
+  if (above is TurnProcessSection) return kChatFlowGapAfterTurnHeader;
+  final bool aboveIsStep = !_opensBlock(above);
+  final bool belowIsStep = !_opensBlock(below);
+  return aboveIsStep && belowIsStep ? kChatFlowGapStep : kChatFlowGap;
+}
+
+/// Whether a row opens its own paragraph: a message with text, a queued prompt,
+/// a Turn's process control, or one of the transcript's tail rows.
+bool _opensBlock(Object row) {
+  if (row is TimelineMessage) {
+    return row.value.text.trim().isNotEmpty;
+  }
+  return row is SessionQueueItem ||
+      row is TurnProcessSection ||
+      identical(row, _turnStatusSlot) ||
+      identical(row, _olderHistorySlot);
+}
+
 /// Share of the chat panel the input dock may occupy. The rest stays with the
 /// transcript, which is the surface the reader is reading while a decision
 /// waits; the floor is the smallest cap worth giving the dock on a short panel
@@ -2088,6 +2131,7 @@ class _ChatPanelState extends State<ChatPanel> {
           key: key,
           section: row,
           buildRow: buildRow,
+          gapAfter: chatFlowGapAfter,
           expansion: _sessionState,
         );
       }
@@ -2155,7 +2199,7 @@ class _ChatPanelState extends State<ChatPanel> {
       itemCount: rows.length,
       findItemIndexCallback: (Key key) => rowIndexByKey[key],
       separatorBuilder: (_, index) => SizedBox(
-        height: _gapAfter(
+        height: chatFlowGapAfter(
           rows[index],
           index + 1 < rows.length ? rows[index + 1] : null,
         ),
@@ -2225,39 +2269,6 @@ class _ChatPanelState extends State<ChatPanel> {
       },
       child: child,
     );
-  }
-
-  /// Vertical rhythm between two transcript rows — the reference's
-  /// `--dsh-chat-flow-gap` (`ChatView.module.css:70-95`). A run of steps sits
-  /// [kChatFlowGapStep] apart and closes up; a message opens a new paragraph
-  /// at [kChatFlowGap]; a Turn's process control opens its own block at
-  /// [kChatFlowGapAfterTurnHeader]. Equal gaps everywhere read as a list of
-  /// unrelated lines, which is what the transcript stopped looking like a
-  /// conversation. The tail signals — the turn-status line and a pending
-  /// steering row — open their own block like a message does (steering is the
-  /// reader's own words). A null `below` is the tail: block.
-  ///
-  /// A Turn's `turn/start` boundary no longer reaches here: the Turn's process
-  /// control takes its place in the list, and its hairline rule carries the
-  /// break the boundary used to.
-  static double _gapAfter(Object above, Object? below) {
-    if (below == null) return kChatFlowGap;
-    // A Turn's process control opens the Turn's own block: its border and its
-    // label carry the break, so it takes the header clearance.
-    if (below is TurnProcessSection) return kChatFlowGapAfterTurnHeader;
-    final bool aboveIsStep = !_opensBlock(above);
-    final bool belowIsStep = !_opensBlock(below);
-    return aboveIsStep && belowIsStep ? kChatFlowGapStep : kChatFlowGap;
-  }
-
-  static bool _opensBlock(Object row) {
-    if (row is TimelineMessage) {
-      return row.value.text.trim().isNotEmpty;
-    }
-    return row is SessionQueueItem ||
-        row is TurnProcessSection ||
-        identical(row, _turnStatusSlot) ||
-        identical(row, _olderHistorySlot);
   }
 
   /// Whether the row above the running status carries output, so the status
