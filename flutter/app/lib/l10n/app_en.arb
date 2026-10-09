@@ -3457,5 +3457,25 @@
   "sessionReferenceSectionTitle": "Sessions",
   "@sessionReferenceSectionTitle": {
     "description": "Group label above the composer @ session-reference candidates."
+  },
+  "settingsAgentLoopTitle": "Agent loop",
+  "@settingsAgentLoopTitle": {
+    "description": "Agent loop page copy."
+  },
+  "settingsAgentLoopDescription": "How the agent batches its work.",
+  "@settingsAgentLoopDescription": {
+    "description": "Agent loop page copy."
+  },
+  "settingsAgentLoopMaxParallel": "Parallel tool calls per step",
+  "@settingsAgentLoopMaxParallel": {
+    "description": "Agent loop page copy."
+  },
+  "settingsAgentLoopUnpublished": "This host does not publish an agent-loop setting.",
+  "@settingsAgentLoopUnpublished": {
+    "description": "Agent loop page copy."
+  },
+  "settingsAgentLoopSaveFailed": "Could not save the limit",
+  "@settingsAgentLoopSaveFailed": {
+    "description": "Agent loop page copy."
   }
 }

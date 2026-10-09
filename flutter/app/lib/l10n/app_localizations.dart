@@ -6366,6 +6366,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sessions'**
   String get sessionReferenceSectionTitle;
+
+  /// Agent loop page copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent loop'**
+  String get settingsAgentLoopTitle;
+
+  /// Agent loop page copy.
+  ///
+  /// In en, this message translates to:
+  /// **'How the agent batches its work.'**
+  String get settingsAgentLoopDescription;
+
+  /// Agent loop page copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Parallel tool calls per step'**
+  String get settingsAgentLoopMaxParallel;
+
+  /// Agent loop page copy.
+  ///
+  /// In en, this message translates to:
+  /// **'This host does not publish an agent-loop setting.'**
+  String get settingsAgentLoopUnpublished;
+
+  /// Agent loop page copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the limit'**
+  String get settingsAgentLoopSaveFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -1073,5 +1073,10 @@
   "accountBonusAckFailed": "主机未把此赠金记录为已展示。",
   "accountBonusAckRetry": "重试",
   "fileReferenceSectionTitle": "文件与文件夹",
-  "sessionReferenceSectionTitle": "会话"
+  "sessionReferenceSectionTitle": "会话",
+  "settingsAgentLoopTitle": "智能体循环",
+  "settingsAgentLoopDescription": "智能体如何批量执行工作。",
+  "settingsAgentLoopMaxParallel": "每步并行工具调用上限",
+  "settingsAgentLoopUnpublished": "此宿主未发布智能体循环设置。",
+  "settingsAgentLoopSaveFailed": "无法保存该上限"
 }
