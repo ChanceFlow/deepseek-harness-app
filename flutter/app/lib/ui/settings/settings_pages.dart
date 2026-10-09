@@ -178,7 +178,7 @@ class SettingsPluginsPage extends StatelessWidget {
             children: <Widget>[
               SettingsSectionHeading(
                 title: l10n.settingsSectionPlugins,
-                intro: l10n.pluginsIntro,
+                intro: l10n.pluginsRawNamespaceNotice,
                 showTitle: false,
               ),
               _PluginsCard(

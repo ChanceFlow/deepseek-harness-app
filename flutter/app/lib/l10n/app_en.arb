@@ -703,8 +703,8 @@
   "languageOptionEn": "English",
   "settingsNavGeneral": "General",
   "settingsNavModels": "Models",
-  "settingsNavPlugins": "Plugins",
-  "settingsNavPluginSettings": "Plugin settings",
+  "settingsNavPlugins": "Host namespace values",
+  "settingsNavPluginSettings": "Host namespace values",
   "settingsNavAgentPresets": "Agent presets",
   "settingsNavCredentials": "Credentials",
   "settingsScopeTitle": "Choose a host",
@@ -848,6 +848,7 @@
   "presetBrokenBadge": "Failed to load",
   "presetInUseBadge": "In use",
   "pluginsIntro": "Configure and inspect the plugins installed in this deployment.",
+  "pluginsRawNamespaceNotice": "Raw Host values: this client does not receive a plugin''s field labels or descriptions yet, so each key is shown as the Host sends it. A plugin''s own configuration page belongs to the plugin that serves the namespace.",
   "noPluginSettings": "This deployment exposes no plugin settings.",
   "settingsSectionPluginInventory": "Plugin inventory",
   "@settingsSectionPluginInventory": {

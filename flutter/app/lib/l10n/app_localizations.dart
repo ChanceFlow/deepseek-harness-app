@@ -1871,13 +1871,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsNavPlugins.
   ///
   /// In en, this message translates to:
-  /// **'Plugins'**
+  /// **'Host namespace values'**
   String get settingsNavPlugins;
 
   /// No description provided for @settingsNavPluginSettings.
   ///
   /// In en, this message translates to:
-  /// **'Plugin settings'**
+  /// **'Host namespace values'**
   String get settingsNavPluginSettings;
 
   /// No description provided for @settingsNavAgentPresets.
@@ -2251,6 +2251,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Configure and inspect the plugins installed in this deployment.'**
   String get pluginsIntro;
+
+  /// No description provided for @pluginsRawNamespaceNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw Host values: this client does not receive a plugin\'\'s field labels or descriptions yet, so each key is shown as the Host sends it. A plugin\'\'s own configuration page belongs to the plugin that serves the namespace.'**
+  String get pluginsRawNamespaceNotice;
 
   /// No description provided for @noPluginSettings.
   ///

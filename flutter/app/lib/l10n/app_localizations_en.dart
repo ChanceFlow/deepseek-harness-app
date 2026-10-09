@@ -1095,10 +1095,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNavModels => 'Models';
 
   @override
-  String get settingsNavPlugins => 'Plugins';
+  String get settingsNavPlugins => 'Host namespace values';
 
   @override
-  String get settingsNavPluginSettings => 'Plugin settings';
+  String get settingsNavPluginSettings => 'Host namespace values';
 
   @override
   String get settingsNavAgentPresets => 'Agent presets';
@@ -1312,6 +1312,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pluginsIntro =>
       'Configure and inspect the plugins installed in this deployment.';
+
+  @override
+  String get pluginsRawNamespaceNotice =>
+      'Raw Host values: this client does not receive a plugin\'s field labels or descriptions yet, so each key is shown as the Host sends it. A plugin\'s own configuration page belongs to the plugin that serves the namespace.';
 
   @override
   String get noPluginSettings => 'This deployment exposes no plugin settings.';

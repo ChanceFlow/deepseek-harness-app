@@ -366,7 +366,7 @@ void main() {
       expect(find.text('Standard mode'), findsOneWidget);
       expect(find.text('Credentials'), findsOneWidget);
       expect(find.text('Providers'), findsOneWidget);
-      expect(find.text('Plugin settings'), findsOneWidget);
+      expect(find.text('Host namespace values'), findsOneWidget);
       expect(find.text('Plugin inventory'), findsOneWidget);
       expect(find.text('About'), findsOneWidget);
 
@@ -597,7 +597,7 @@ void main() {
     final List<SettingsAction> actions = <SettingsAction>[];
     await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
-    await tester.tap(find.text('Plugin settings'));
+    await tester.tap(find.text('Host namespace values'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
@@ -639,7 +639,7 @@ void main() {
     final List<SettingsAction> actions = <SettingsAction>[];
     await _pump(tester, const SettingsUiState(snapshot: _snapshot), actions);
 
-    await tester.tap(find.text('Plugin settings'));
+    await tester.tap(find.text('Host namespace values'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('llm-deepseek'));
     await tester.pumpAndSettle();
@@ -741,9 +741,12 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // The plugins page states the namespace is inert instead of an editor.
-    await tester.tap(find.text('Plugin settings'));
+    // The plugins page states the namespace is inert instead of an editor,
+    // and says plainly that its keys are the Host's raw values rather than a
+    // plugin's labelled configuration.
+    await tester.tap(find.text('Host namespace values'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Raw Host values'), findsOneWidget);
     await tester.tap(find.text('shell'));
     await tester.pumpAndSettle();
     expect(find.text('Patch key'), findsNothing);
