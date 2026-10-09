@@ -388,6 +388,13 @@ abstract class ChatRepository {
   Stream<List<TurnOutlineEntry>> observeTurnOutline(String sessionId) =>
       const Stream<List<TurnOutlineEntry>>.empty();
 
+  /// A descriptor-backed child's active-turn duration and latest closed-turn
+  /// completion, from the host's `subagentTiming` projection. Null until the
+  /// host publishes one, for a Session that is no subagent, and for a host
+  /// that mounts no subagent timing unit.
+  Stream<SubagentTiming?> observeSubagentTiming(String sessionId) =>
+      const Stream<SubagentTiming?>.empty();
+
   /// Non-activating read of one Session's `agentTeam` projection
   /// (`session/projections`), for the cold seed a stream cannot give.
   ///

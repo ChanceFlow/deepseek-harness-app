@@ -22,6 +22,7 @@ import 'package:domain/model/plugin_management.dart';
 import 'package:domain/model/schedule.dart';
 import 'package:domain/model/session_reference.dart';
 import 'package:domain/model/settings.dart';
+import 'package:domain/model/subagent.dart';
 import 'package:domain/model/terminal.dart';
 import 'package:domain/model/token_usage.dart';
 import 'package:domain/model/turn_outline.dart';
@@ -320,6 +321,54 @@ final class SessionModelsValueWire {
   final List<String> routableProviders;
   final List<ModelProviderGroupWire> groups;
   final List<ModelCatalogFailureWire> failures;
+}
+
+// ---------------------------------------------------------------------------
+// Subagent timing — the `subagentTiming` session projection
+// (reference/deepseek-harness/packages/subagent/subagent/src/projection.ts:
+// 32-42 `projectionSchema` and its `wire.view`).
+// ---------------------------------------------------------------------------
+
+/// Decodes the `subagentTiming` projection value, or null when the host
+/// publishes none.
+///
+/// The wire view is `{settledMs, active?: {since, through},
+/// lastTurnCompleted?}`; a non-object value, a non-integer `settledMs`, an
+/// `active` without both ends, and a mistyped `lastTurnCompleted` all fail
+/// loud. Only the host's own omission is a null.
+SubagentTiming? decodeSubagentTimingProjection(Object? value) {
+  if (value == null || value == 'null') return null;
+  final json = asJsonObject(value);
+  if (json == null) {
+    throw const FormatException(
+      'subagentTiming projection value must be a JSON object',
+    );
+  }
+  final active = json['active'];
+  SubagentActiveInterval? interval;
+  if (active != null) {
+    final activeJson = asJsonObject(active);
+    if (activeJson == null) {
+      throw const FormatException(
+        'subagentTiming "active" must be a JSON object',
+      );
+    }
+    interval = SubagentActiveInterval(
+      since: _reqLong(activeJson, 'since'),
+      through: _reqLong(activeJson, 'through'),
+    );
+  }
+  final completed = json['lastTurnCompleted'];
+  if (completed != null && completed is! bool) {
+    throw const FormatException(
+      'subagentTiming "lastTurnCompleted" must be a boolean',
+    );
+  }
+  return SubagentTiming(
+    settledMs: _reqLong(json, 'settledMs'),
+    active: interval,
+    lastTurnCompleted: completed as bool?,
+  );
 }
 
 // ---------------------------------------------------------------------------

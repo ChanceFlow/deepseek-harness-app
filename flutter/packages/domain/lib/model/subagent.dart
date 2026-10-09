@@ -70,6 +70,57 @@ final class SubagentCatalog {
   int get hashCode => Object.hash(parentSessionId, Object.hashAll(entries));
 }
 
+/// One descriptor-backed subagent's timing, the parent Session's
+/// `subagentTiming` projection (`reference/deepseek-harness/packages/
+/// subagent/subagent/src/projection.ts:32-42`).
+///
+/// [settledMs] is the child's closed-turn wall time; [active] is the interval
+/// its currently open turn has occupied, absent while no turn is open;
+/// [lastTurnCompleted] says whether the latest closed turn ended `completed`
+/// (the reference's one-shot completion signal,
+/// `client/ui-subagent/src/client/SubagentHeaderLineage.tsx:244`). Absent
+/// before the child's own descriptor reset the fold.
+final class SubagentTiming {
+  const SubagentTiming({
+    required this.settledMs,
+    this.active,
+    this.lastTurnCompleted,
+  });
+
+  final int settledMs;
+  final SubagentActiveInterval? active;
+  final bool? lastTurnCompleted;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubagentTiming &&
+          other.settledMs == settledMs &&
+          other.active == active &&
+          other.lastTurnCompleted == lastTurnCompleted);
+
+  @override
+  int get hashCode => Object.hash(settledMs, active, lastTurnCompleted);
+}
+
+/// One open turn's occupied interval on a subagent.
+final class SubagentActiveInterval {
+  const SubagentActiveInterval({required this.since, required this.through});
+
+  final int since;
+  final int through;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubagentActiveInterval &&
+          other.since == since &&
+          other.through == through);
+
+  @override
+  int get hashCode => Object.hash(since, through);
+}
+
 bool _listEquals<T>(List<T> a, List<T> b) {
   if (identical(a, b)) return true;
   if (a.length != b.length) return false;

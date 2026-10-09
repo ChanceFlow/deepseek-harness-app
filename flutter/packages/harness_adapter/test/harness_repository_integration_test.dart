@@ -6409,6 +6409,54 @@ void main() {
     expect(live.last.response, 'second answer');
   });
 
+  test('subagentTiming folds the baseline and a live frame', () async {
+    final rpc = HarnessFakeRpc();
+    rpc.historyProjections['session-1'] = <String, Object?>{
+      'asOfSeq': 100,
+      'values': <String, Object?>{
+        'subagentTiming': <String, Object?>{'settledMs': 400},
+      },
+    };
+
+    final socket = ScriptedHarnessSocket(
+      muxFrames: <ServerRequest>[
+        ServerRequest(
+          rpcId: 'rpc-timing-1',
+          method: 'session/projection',
+          payload: <String, Object?>{
+            'type': 'session/projection',
+            'sessionId': 'session-1',
+            'key': 'subagentTiming',
+            'seq': 110,
+            'value': <String, Object?>{
+              'settledMs': 1200,
+              'active': <String, Object?>{'since': 5, 'through': 9},
+              'lastTurnCompleted': true,
+            },
+          },
+        ),
+      ],
+    );
+
+    final repository = await harnessRepository(rpc, socket);
+    await pumpEventQueue();
+    await repository.openSession('session-1');
+    await pumpEventQueue();
+
+    final baseline = await repository.observeSubagentTiming('session-1').first;
+    expect(baseline, isNotNull);
+    expect(baseline!.settledMs, 400);
+    expect(baseline.active, isNull);
+
+    socket.releaseMuxFrames();
+    await pumpEventQueue();
+
+    final live = await repository.observeSubagentTiming('session-1').first;
+    expect(live!.settledMs, 1200);
+    expect(live.active!.through, 9);
+    expect(live.lastTurnCompleted, isTrue);
+  });
+
   test(
     'contextBreakdown projection frames update live and drop stale seq frames',
     () async {

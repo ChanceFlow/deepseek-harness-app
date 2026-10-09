@@ -449,21 +449,17 @@ flight. Neither the frames nor the baseline touches durable history.
 
 ### 6.1 Unwired vocabulary
 
-Five names the adapter reports as `timeline.event` debug — an unrecognised
-session event type, or a projection value this client never reads — are the
-outstanding coverage against the folded table above. One is the reference
-client's own fold and this client's port; the port is scheduled as one
-change and none is folded here. The three `team/*` journal events are not a
-client surface: the reference folds them **host-side** into the `agentTeam`
-projection, which this client already decodes. `sessionListMetadata` needs no
-port at all, because the host folds it into the list row this client reads.
+Four names in the dsh vocabulary stay unfolded, and none is a port. The
+three `team/*` journal events are not a client surface: the reference folds
+them **host-side** into the `agentTeam` projection, which this client already
+decodes. `sessionListMetadata` needs no client fold at all, because the host
+folds it into the list row this client reads.
 
 | name | kind | Reference | Verdict |
 |---|---|---|---|
 | `team/task` | session event | declared `packages/experimental/agent-team/src/types.ts:234`; folded host-side by `packages/experimental/agent-team/src/projection.ts:387-388` (`agentTeam`) | **do not port** — the client-side surface is the projection this client already decodes |
 | `team/message/queued` | session event | declared `packages/experimental/agent-team/src/types.ts:236`; the same `agentTeam` fold | **do not port** — same projection surface |
 | `team/message/delivered` | session event | declared `packages/experimental/agent-team/src/types.ts:238-243`; the same `agentTeam` fold | **do not port** — same projection surface |
-| `subagentTiming` | projection | registered `packages/subagent/subagent/src/projection.ts:69`; read by `packages/client/ui-subagent/src/client/SubagentHeaderLineage.tsx:83-84` | **port** — a child's last-turn completion |
 | `sessionListMetadata` | projection | registered host-side `packages/api/session-controller/src/list.ts:80` | **covered** — the host folds it into the row's `blank`/`updatedAt` (`list.ts:109,148`), which `SessionWire` decodes |
 
 ### 6.2 Projection folds
@@ -477,6 +473,7 @@ and leaves the last good value standing, never an empty one.
 | key | Domain surface | Fold |
 |---|---|---|
 | `turnOutline` | `ChatRepository.observeTurnOutline` → `List<TurnOutlineEntry>` | every started turn's rail facts: `turn`, `turn/start` `seq`, bounded `prompt` and `response` previews, strictly increasing by turn (`packages/session/session-turn-outline/src/projection.ts:61-71`) |
+| `subagentTiming` | `ChatRepository.observeSubagentTiming` → `SubagentTiming?` | a descriptor-backed child's `settledMs`, the open turn's `active` interval, and `lastTurnCompleted` (`packages/subagent/subagent/src/projection.ts:32-42,107-115`) |
 
 ## 7. Android UI Contract
 
