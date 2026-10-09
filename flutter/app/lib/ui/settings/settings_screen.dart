@@ -40,6 +40,7 @@ import 'plugin_manager.dart';
 import 'schedule_manager.dart';
 import 'session_log_settings.dart';
 import 'settings_backend_scope.dart';
+import 'settings_subagent_page.dart';
 import 'settings_agent_loop_page.dart';
 import 'settings_chrome.dart';
 import 'settings_controller.dart';
@@ -311,6 +312,15 @@ class _HostSection extends ConsumerWidget {
               onTap: () => _pushSettingsPage(
                 context,
                 SettingsAgentLoopPage(backendId: scopedId),
+              ),
+            ),
+            const SettingsCardDivider(),
+            SettingsNavRow(
+              title: l10n.settingsSubagentTitle,
+              leading: const Icon(Icons.account_tree_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                SettingsSubagentPage(backendId: scopedId),
               ),
             ),
           ],

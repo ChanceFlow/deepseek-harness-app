@@ -3902,6 +3902,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAgentLoopTitle => 'Agent loop';
 
   @override
+  String get settingsSubagentTitle => 'Subagents';
+
+  @override
+  String get settingsSubagentMaxDepth => 'Maximum depth';
+
+  @override
+  String get settingsSubagentMaxActive => 'Maximum active subagents';
+
+  @override
+  String get settingsSubagentLimitRejected =>
+      'Enter a whole number at or above the minimum.';
+
+  @override
+  String get settingsSubagentModelSelection => 'Model selection';
+
+  @override
+  String get settingsSubagentModelSelectionBody =>
+      'Let new sessions choose a child model route.';
+
+  @override
+  String get settingsSubagentUnavailable => 'Unavailable';
+
+  @override
+  String get settingsSubagentSave => 'Save';
+
+  @override
+  String get settingsSubagentSaveFailed =>
+      'Couldn\'t save the subagent settings';
+
+  @override
   String get settingsAgentLoopDescription => 'How the agent batches its work.';
 
   @override

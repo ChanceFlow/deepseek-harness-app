@@ -3619,6 +3619,42 @@
   "@settingsAgentLoopTitle": {
     "description": "Agent loop page copy."
   },
+  "settingsSubagentTitle": "Subagents",
+  "@settingsSubagentTitle": {
+    "description": "Settings row opening the subagent page (the reference's settings.subagent.title)."
+  },
+  "settingsSubagentMaxDepth": "Maximum depth",
+  "@settingsSubagentMaxDepth": {
+    "description": "The subagent limits card's depth field (the reference's settings.subagent.limits.maxDepth)."
+  },
+  "settingsSubagentMaxActive": "Maximum active subagents",
+  "@settingsSubagentMaxActive": {
+    "description": "The subagent limits card's concurrency field (settings.subagent.limits.maxActiveSubagents)."
+  },
+  "settingsSubagentLimitRejected": "Enter a whole number at or above the minimum.",
+  "@settingsSubagentLimitRejected": {
+    "description": "Shown when a limit entry is refused rather than clamped, as the reference's guard does."
+  },
+  "settingsSubagentModelSelection": "Model selection",
+  "@settingsSubagentModelSelection": {
+    "description": "The subagent page's model-selection card title (settings.subagent.modelSelection)."
+  },
+  "settingsSubagentModelSelectionBody": "Let new sessions choose a child model route.",
+  "@settingsSubagentModelSelectionBody": {
+    "description": "The model-selection card's one-line explanation of the enabled field."
+  },
+  "settingsSubagentUnavailable": "Unavailable",
+  "@settingsSubagentUnavailable": {
+    "description": "Marks a stored route the adapter catalog no longer advertises, which still renders."
+  },
+  "settingsSubagentSave": "Save",
+  "@settingsSubagentSave": {
+    "description": "Writes the subagent page's two namespaces together."
+  },
+  "settingsSubagentSaveFailed": "Couldn''t save the subagent settings",
+  "@settingsSubagentSaveFailed": {
+    "description": "Shown when the Host refuses a subagent write."
+  },
   "settingsAgentLoopDescription": "How the agent batches its work.",
   "@settingsAgentLoopDescription": {
     "description": "Agent loop page copy."

@@ -3720,6 +3720,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAgentLoopTitle => '智能体循环';
 
   @override
+  String get settingsSubagentTitle => '子代理';
+
+  @override
+  String get settingsSubagentMaxDepth => '最大深度';
+
+  @override
+  String get settingsSubagentMaxActive => '最大并发子代理数';
+
+  @override
+  String get settingsSubagentLimitRejected => '请输入不低于下限的整数。';
+
+  @override
+  String get settingsSubagentModelSelection => '模型选择';
+
+  @override
+  String get settingsSubagentModelSelectionBody => '允许新会话选择子模型路由。';
+
+  @override
+  String get settingsSubagentUnavailable => '不可用';
+
+  @override
+  String get settingsSubagentSave => '保存';
+
+  @override
+  String get settingsSubagentSaveFailed => '无法保存子代理设置';
+
+  @override
   String get settingsAgentLoopDescription => '智能体如何批量执行工作。';
 
   @override

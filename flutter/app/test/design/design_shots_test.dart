@@ -40,6 +40,7 @@ import 'package:app/ui/chat/transcript_view_mode.dart';
 import 'package:app/ui/settings/gesture_shortcuts_section.dart';
 import 'package:app/ui/settings/session_log_settings.dart';
 import 'package:app/ui/settings/settings_screen.dart';
+import 'package:app/ui/settings/settings_subagent_page.dart';
 import 'package:app/ui/settings/shell_settings_page.dart';
 import 'package:app/ui/settings/theme_preference.dart';
 import 'package:app/ui/settings/web_search_settings_page.dart';
@@ -632,6 +633,9 @@ final List<DesignShot> shots = <DesignShot>[
   // answer to the pin's shortcut surface — read-only, because a phone has no
   // keyboard to bind — and the session-log switch is the Host entry's accepted
   // value, which is why it needs a settings plane that serves the namespace.
+  // The subagent page over a Host plane that publishes both of its
+  // namespaces, with one stored route the catalog no longer advertises.
+  const DesignShot(name: 'settings-subagent', host: _subagentHost),
   const DesignShot(name: 'settings-gestures', host: _gesturesHost),
   const DesignShot(
     name: 'settings-session-log',
@@ -1010,6 +1014,64 @@ Future<bool> _load(
 /// the document names.
 Widget _settingsHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale);
+
+/// The subagent page on its own, over a plane that serves `subagent` and
+/// `subagent-model-selection-settings`.
+Widget _subagentHost(ThemeData theme, Locale? locale) => ProviderScope(
+  overrides: [
+    activeBackendIdProvider.overrideWith((Ref ref) async* {
+      yield 'default';
+    }),
+    chatRepositoryProvider('default')
+        .overrideWithValue(_SubagentShotRepository()),
+  ],
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    locale: locale,
+    theme: theme,
+    home: const SettingsSubagentPage(backendId: 'default'),
+  ),
+);
+
+/// The subagent plane for that shot: both namespaces, and nothing else.
+class _SubagentShotRepository extends ChatRepository {
+  @override
+  Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
+    writable: true,
+    hasDocument: true,
+    namespaces: <SettingsNamespace>[
+      SettingsNamespace(
+        ns: kSubagentLimitsNamespace,
+        applies: SettingsApplies.live,
+        revision: 3,
+        hasUserLayer: false,
+        secretCount: 0,
+        schema: SettingsSchema.empty,
+        value: <String, Object?>{'maxDepth': 2, 'maxActiveSubagents': 3},
+      ),
+      SettingsNamespace(
+        ns: kSubagentModelSelectionNamespace,
+        applies: SettingsApplies.live,
+        revision: 4,
+        hasUserLayer: false,
+        secretCount: 0,
+        schema: SettingsSchema.empty,
+        value: <String, Object?>{
+          'enabled': true,
+          'allowedModels': <Map<String, String>>[
+            <String, String>{'provider': 'deepseek', 'model': 'deepseek-chat'},
+          ],
+        },
+      ),
+    ],
+    credentialRefs: <String>[],
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 /// The gesture reference on its own: the page the Settings entry opens.
 Widget _gesturesHost(ThemeData theme, Locale? locale) => MaterialApp(
