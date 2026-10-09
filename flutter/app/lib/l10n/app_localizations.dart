@@ -1382,6 +1382,12 @@ abstract class AppLocalizations {
   /// **'Copied'**
   String get copiedTooltip;
 
+  /// Eyebrow on a user row a running turn's inbox splice admitted mid-step (the model's steering flag).
+  ///
+  /// In en, this message translates to:
+  /// **'Steering'**
+  String get steeringMessageBadge;
+
   /// Approval panel header strip.
   ///
   /// In en, this message translates to:

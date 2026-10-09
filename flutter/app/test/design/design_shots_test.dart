@@ -478,6 +478,11 @@ final List<DesignShot> shots = <DesignShot>[
       await settle(tester);
     },
   ),
+  // The two wire facts the fold carried and nothing rendered: the steering
+  // badge on the row a running turn's inbox splice admitted, and the step's
+  // own range under the answer that closed it.
+  DesignShot(name: 'steering-message', state: steeringAndStepState()),
+  DesignShot(name: 'step-duration', state: steeringAndStepState()),
   // The session row's verbs menu: the pin portals a `Menu` from the row's ⋮
   // (`ui-workspace/src/client/rows/Rows.tsx:665-686`), so the panel is the
   // house menu surface (`menuSurfaceFill` over `menuBackdropFilter`) rather
