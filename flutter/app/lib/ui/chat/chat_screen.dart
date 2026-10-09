@@ -2968,10 +2968,16 @@ class _StepDuration extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final int elapsed = endedAtEpochMs - startedAtEpochMs;
-    final String text = runDurationParts(
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    final String span = runDurationParts(
       elapsed < 1000 ? 1000 : elapsed,
-      AppLocalizations.of(context)!,
+      l10n,
     ).map((part) => part.text).join();
+    // A bare duration under an answer reads as the turn's, not the step's. The
+    // number is attributed to the step by one quiet prefix on the same line —
+    // the pin states no label of its own for this span, so it is ours and
+    // stays a prefix rather than a second full label.
+    final String text = l10n.stepDuration(span);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Text(

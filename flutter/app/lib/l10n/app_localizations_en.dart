@@ -894,6 +894,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String stepDuration(String duration) {
+    return 'Step $duration';
+  }
+
+  @override
   String thoughtDuration(String duration) {
     return 'Thought $duration';
   }

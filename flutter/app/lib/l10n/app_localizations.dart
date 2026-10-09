@@ -1622,6 +1622,12 @@ abstract class AppLocalizations {
   /// **'{done}/{total} completed'**
   String toolTodoPlanCompleted(int done, int total);
 
+  /// Quiet prefix attributing a step's own elapsed span to that step, not to the turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {duration}'**
+  String stepDuration(String duration);
+
   /// Collapsed thought block header with completed duration.
   ///
   /// In en, this message translates to:

@@ -872,6 +872,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String stepDuration(String duration) {
+    return '本步用时 $duration';
+  }
+
+  @override
   String thoughtDuration(String duration) {
     return '已思考 $duration';
   }
