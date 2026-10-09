@@ -16,6 +16,12 @@ import '../../l10n_app.dart';
 ///
 /// The ambient [MediaQuery] is copied rather than replaced, so the surface
 /// keeps its size while the accessibility facts change.
+/// The row's injected time source: a fixed epoch the test moves itself, so the
+/// whole-second label never depends on how long the machine took to get here.
+int _clockMs = 1700000000000;
+
+int _clock() => _clockMs;
+
 Future<void> _pump(
   WidgetTester tester, {
   int? startedAtEpochMs,
@@ -40,6 +46,7 @@ Future<void> _pump(
                 child: RunningStatusRow(
                   startedAtEpochMs: startedAtEpochMs,
                   showDivider: showDivider,
+                  clock: _clock,
                 ),
               ),
             ),
@@ -51,18 +58,19 @@ Future<void> _pump(
   await tester.pump();
 }
 
-int _startedAgo(int ms) => DateTime.now().millisecondsSinceEpoch - ms;
+int _startedAgo(int ms) => _clockMs - ms;
 
-/// One second of the row's clock: a real wall-clock advance (the label reads
-/// `DateTime.now`) plus the fake tick that republishes it (the 1 Hz timer).
+/// One second of the row's clock: the injected source moves, and the 1 Hz timer
+/// republishes it. No real delay is involved, so the assertion is the same on an
+/// idle machine and a loaded one.
 Future<void> _tick(WidgetTester tester) async {
-  await tester.runAsync(() async {
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-  });
+  _clockMs += 1000;
   await tester.pump(const Duration(seconds: 1));
 }
 
 void main() {
+  setUp(() => _clockMs = 1700000000000);
+
   testWidgets('the clock reads unpadded minutes', (tester) async {
     await _pump(tester, startedAtEpochMs: _startedAgo(123000));
     // Not `2m 03s`: the reference pushes whole numerals, never zero-padded.
