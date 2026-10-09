@@ -1245,6 +1245,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Settings are read-only on this deployment.';
 
   @override
+  String get attachmentNotInSession =>
+      'This image is no longer part of the session';
+
+  @override
   String get permissionAutoReviewBadge => 'EXP';
 
   @override

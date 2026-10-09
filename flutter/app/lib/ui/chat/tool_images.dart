@@ -16,7 +16,7 @@ import 'package:app/l10n/app_localizations.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:flutter/material.dart';
 
-import 'chat_screen.dart' show AttachmentLoader;
+import 'attachment_read.dart';
 import '../theme/theme.dart';
 
 /// Long edge of a single-image card (web `singleFit`).
@@ -88,6 +88,9 @@ class _ToolImageFrameState extends State<_ToolImageFrame> {
   Uint8List? _bytes;
   bool _failed = false;
 
+  /// The Host refused it as a business rule rather than failing to serve it.
+  bool _notReferenced = false;
+
   @override
   void initState() {
     super.initState();
@@ -95,11 +98,15 @@ class _ToolImageFrameState extends State<_ToolImageFrame> {
   }
 
   Future<void> _load() async {
-    final bytes = await widget.loadAttachment(widget.sessionId, widget.ref);
+    final AttachmentRead read = await widget.loadAttachment(
+      widget.sessionId,
+      widget.ref,
+    );
     if (!mounted) return;
     setState(() {
-      _bytes = bytes;
-      _failed = bytes == null;
+      _bytes = read.bytes;
+      _failed = !read.hasBytes;
+      _notReferenced = read.failure == AttachmentReadFailure.notReferenced;
     });
   }
 
@@ -182,6 +189,18 @@ class _ToolImageFrameState extends State<_ToolImageFrame> {
 
   Widget _placeholder(BuildContext context, AppLocalizations l10n) {
     final scheme = Theme.of(context).colorScheme;
+    if (_notReferenced) {
+      // The Host's rule, in the reader's terms: the attachment is not part of
+      // this session any more (`session/attachment-invalid`).
+      return Tooltip(
+        message: l10n.attachmentNotInSession,
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: 18,
+          color: scheme.outline,
+        ),
+      );
+    }
     return Center(
       child: _failed
           ? Icon(Icons.broken_image_outlined, size: 18, color: scheme.outline)

@@ -1199,6 +1199,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get permissionDefaultsReadOnly => '该部署的设置是只读的。';
 
   @override
+  String get attachmentNotInSession => '这张图片已不属于该会话';
+
+  @override
   String get permissionAutoReviewBadge => 'EXP';
 
   @override

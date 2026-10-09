@@ -5,6 +5,11 @@
 /// like the Compose `remember` blocks they replace.
 library;
 
+import 'attachment_read.dart';
+
+export 'attachment_read.dart'
+    show AttachmentLoader, AttachmentRead, AttachmentReadFailure;
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -111,12 +116,6 @@ export 'session_panel.dart';
 export 'timeline_folding.dart'
     show TimelineActivityGroup, foldTimelineActivities;
 
-/// Decodes one durable attachment lazily; returns null on any failure.
-typedef AttachmentLoader = Future<Uint8List?> Function(
-  String sessionId,
-  AttachmentRef ref,
-);
-
 /// The serving desktop's registered applications for one workspace path
 /// (dsh `session/workspacePathApplications`), read when the Open workspace
 /// verb is used. A failure propagates: the verb then falls back to the
@@ -132,8 +131,12 @@ Future<List<WorkspacePathApplication>> _noWorkspacePathApplications(
 ) async => const <WorkspacePathApplication>[];
 
 /// Bare pumps own no repository: a durable image stays a placeholder frame.
-Future<Uint8List?> _noAttachmentBytes(String sessionId, AttachmentRef ref) =>
-    Future<Uint8List?>.value();
+Future<AttachmentRead> _noAttachmentBytes(
+  String sessionId,
+  AttachmentRef ref,
+) => Future<AttachmentRead>.value(
+  const AttachmentRead.failed(AttachmentReadFailure.unavailable),
+);
 
 /// Bare pumps own no jobs: an expanded row reports no output rather than
 /// reaching for a connection the test never wired.
@@ -399,8 +402,13 @@ class ChatScreen extends StatefulWidget {
   final void Function(String backendId, String workspaceId)?
   onCreateSessionInWorkspace;
 
-  static Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) {
-    return Future<Uint8List?>.value();
+  static Future<AttachmentRead> _noAttachment(
+    String sessionId,
+    AttachmentRef ref,
+  ) {
+    return Future<AttachmentRead>.value(
+      const AttachmentRead.failed(AttachmentReadFailure.unavailable),
+    );
   }
 
   /// Bare pumps own no repository: a preview opened without a real reader
@@ -3482,6 +3490,9 @@ class AttachmentImageRow extends StatefulWidget {
 class _AttachmentImageRowState extends State<AttachmentImageRow> {
   Uint8List? _bytes;
 
+  /// The refusal, when the Host would not hand the bytes over.
+  AttachmentReadFailure? _failure;
+
   @override
   void initState() {
     super.initState();
@@ -3490,8 +3501,14 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
 
   void _load() {
     unawaited(
-      widget.loadAttachment(widget.sessionId, widget.ref).then((bytes) {
-        if (mounted) setState(() => _bytes = bytes);
+      widget.loadAttachment(widget.sessionId, widget.ref).then((
+        AttachmentRead read,
+      ) {
+        if (!mounted) return;
+        setState(() {
+          _bytes = read.bytes;
+          _failure = read.failure;
+        });
       }),
     );
   }
@@ -3520,6 +3537,28 @@ class _AttachmentImageRowState extends State<AttachmentImageRow> {
   Widget _placeholder(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final ref = widget.ref;
+    // The Host's rule, said in the reader's own terms rather than as a raw
+    // business exception (`session/attachment-invalid`).
+    if (_failure == AttachmentReadFailure.notReferenced) {
+      return Row(
+        children: <Widget>[
+          Icon(
+            Icons.image_not_supported_outlined,
+            size: 18,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              l10n.attachmentNotInSession,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     final name = ref.name;
     final nameSuffix = name == null ? '' : l10n.imagePlaceholderSuffix(name);
     return Row(

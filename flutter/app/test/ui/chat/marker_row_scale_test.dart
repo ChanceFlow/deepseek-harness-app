@@ -156,7 +156,8 @@ void main() {
           body: ActivityGroupRow(
             group: group,
             onAction: (_) {},
-            loadAttachment: (_, _) async => null,
+            loadAttachment: (_, _) async =>
+                const AttachmentRead.failed(AttachmentReadFailure.unavailable),
           ),
         ),
       ),

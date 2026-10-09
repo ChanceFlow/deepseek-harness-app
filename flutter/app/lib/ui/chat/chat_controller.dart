@@ -5,6 +5,8 @@
 /// same state, mirroring the Kotlin combine chain semantics.
 library;
 
+import 'attachment_read.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:typed_data';
@@ -1521,16 +1523,22 @@ class ChatController {
   }
 
   /// Download one durable image through `session.attachment`, caching bytes
-  /// per attachment id. Returns null on failure; the UI shows a
+  /// per attachment id.
+  ///
+  /// A refusal is classified rather than flattened: the Host's own rule
+  /// (`session/attachment-invalid`, [kAttachmentInvalidCode]) reaches the UI as
+  /// an explained state, because no retry and no ordering change on this side
+  /// can satisfy it — the reference belongs to a command the Host admitted.
+  /// Every other failure keeps the warning breadcrumb and the generic
   /// placeholder.
-  Future<Uint8List?> loadAttachmentBytes(
+  Future<AttachmentRead> loadAttachmentBytes(
     String sessionId,
     AttachmentRef ref,
   ) async {
     final cached = await _locked(
       () async => _attachmentBytes[ref.attachmentId],
     );
-    if (cached != null) return cached;
+    if (cached != null) return AttachmentRead.ready(cached);
     try {
       final downloaded = await _repository.readAttachment(
         sessionId,
@@ -1542,13 +1550,23 @@ class ChatController {
         }
         _attachmentBytes[ref.attachmentId] = downloaded.data;
       });
-      return downloaded.data;
+      return AttachmentRead.ready(downloaded.data);
+    } on RepositoryFailure catch (failure) {
+      if (failure.code == kAttachmentInvalidCode) {
+        return const AttachmentRead.failed(AttachmentReadFailure.notReferenced);
+      }
+      ErrorLogCollector.instance.addBreadcrumb(
+        'Failed to read attachment ${ref.attachmentId} for $sessionId: '
+        '$failure',
+        level: 'warning',
+      );
+      return const AttachmentRead.failed(AttachmentReadFailure.unavailable);
     } catch (e) {
       ErrorLogCollector.instance.addBreadcrumb(
         'Failed to read attachment ${ref.attachmentId} for $sessionId: $e',
         level: 'warning',
       );
-      return null;
+      return const AttachmentRead.failed(AttachmentReadFailure.unavailable);
     }
   }
 

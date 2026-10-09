@@ -160,8 +160,10 @@ final class DesignShot {
 
 /// The bare harness' answer for a durable attachment: nothing was fetched,
 /// so an image card renders its placeholder frame.
-Future<Uint8List?> _noAttachment(String sessionId, AttachmentRef ref) =>
-    Future<Uint8List?>.value();
+Future<AttachmentRead> _noAttachment(String sessionId, AttachmentRef ref) =>
+    Future<AttachmentRead>.value(
+      const AttachmentRead.failed(AttachmentReadFailure.unavailable),
+    );
 
 /// The bare harness' answer for a workspace-file read: the seam is unwired, so
 /// the preview sheet renders its failure state rather than a fetched file.
@@ -437,7 +439,7 @@ final List<DesignShot> shots = <DesignShot>[
     name: 'tool-image',
     state: toolImageState(),
     loadAttachment: (sessionId, ref) async =>
-        base64Decode(kDesignImagePngBase64),
+        AttachmentRead.ready(base64Decode(kDesignImagePngBase64)),
     act: (tester) async {
       await tester.tap(find.text('Read'));
       await settle(tester);
@@ -675,6 +677,9 @@ final List<DesignShot> shots = <DesignShot>[
   // The subagent page over a Host plane that publishes both of its
   // namespaces, with one stored route the catalog no longer advertises.
   const DesignShot(name: 'settings-subagent', host: _subagentHost),
+  // The Host's rule, seen: an image the session refuses to hand over because
+  // no command of that session referenced it (`session/attachment-invalid`).
+  const DesignShot(name: 'attachment-refused', host: _attachmentRefusedHost),
   const DesignShot(name: 'settings-gestures', host: _gesturesHost),
   const DesignShot(
     name: 'settings-session-log',
@@ -1155,6 +1160,33 @@ class _SubagentShotRepository extends ChatRepository {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// One durable image the Host refuses: the explained state, not a gap.
+Widget _attachmentRefusedHost(ThemeData theme, Locale? locale) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  locale: locale,
+  theme: theme,
+  home: Scaffold(
+    body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: AttachmentImageRow(
+        sessionId: 's1',
+        ref: const AttachmentRef(
+          attachmentId: 'sha256:refused',
+          mediaType: 'image/png',
+          bytes: 69120,
+          width: 512,
+          height: 512,
+          name: 'screenshot.png',
+        ),
+        loadAttachment: (_, _) async =>
+            const AttachmentRead.failed(AttachmentReadFailure.notReferenced),
+      ),
+    ),
+  ),
+);
 
 /// The gesture reference on its own: the page the Settings entry opens.
 Widget _gesturesHost(ThemeData theme, Locale? locale) => MaterialApp(
