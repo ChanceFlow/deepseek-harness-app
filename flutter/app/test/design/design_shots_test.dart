@@ -859,6 +859,10 @@ class _SilentSocket implements DshEventSocket {
 /// discover it in the PNG.
 bool _cjkLoaded = false;
 
+/// The families [_load] registered, so a test can assert the harness paints
+/// with the app's own names rather than one no device resolves.
+final Set<String> _registeredFamilies = <String>{};
+
 /// Test fonts default to a blank box face: without these loads every glyph
 /// renders as a rectangle and every icon as an empty square.
 Future<void> _loadFonts() async {
@@ -867,7 +871,7 @@ Future<void> _loadFonts() async {
     fail('FLUTTER_ROOT is unset — run through scripts/render_design.py');
   }
   final assets = '$root/bin/cache/artifacts/material_fonts';
-  await _load('Roboto', <String>[
+  await _load(kUiFontFamily, <String>[
     '$assets/Roboto-Regular.ttf',
     '$assets/Roboto-Medium.ttf',
     '$assets/Roboto-Bold.ttf',
@@ -890,7 +894,14 @@ Future<void> _loadFonts() async {
     await _load(family, monoPaths, first: true);
   }
   final home = Platform.environment['HOME'] ?? '';
-  _cjkLoaded = await _load('NotoSansCJK', <String>[
+  // The Han half of the app's own family chain (`kUiFontFamilyFallback`): the
+  // harness registers the host's Han face under every family the app declares,
+  // in the app's order and by the same "first hit wins" rule the code face
+  // uses, so a shot resolves what the phone asks for. It used to register a
+  // family named `NotoSansCJK`, which no device knows and no theme names — the
+  // shots rendered a face the app never requested, and which one it was
+  // depended on the host.
+  final List<String> hanPaths = <String>[
     // The path the script resolved on the host travels as a define: the
     // renderer runs in a container that mounts the tree, not the home dir.
     if (_cjkFontPath.isNotEmpty) _cjkFontPath,
@@ -898,7 +909,14 @@ Future<void> _loadFonts() async {
     '$home/.local/share/fonts/NotoSansSC.ttf',
     '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-  ], first: true);
+  ];
+  _cjkLoaded = false;
+  for (final String family in kUiFontFamilyFallback) {
+    // `sans-serif` is Android's generic alias, not a face a device ships; the
+    // app's chain ends on it the way the pin's stack does.
+    if (family == 'sans-serif') continue;
+    _cjkLoaded = await _load(family, hanPaths, first: true) || _cjkLoaded;
+  }
   if (!_cjkLoaded) {
     stderr.writeln(
       'design shots: no CJK font — Chinese renders as boxes. '
@@ -924,24 +942,8 @@ Future<bool> _load(
     );
   }
   await loader.load();
+  _registeredFamilies.add(family);
   return true;
-}
-
-/// The loaded faces carry real names, so the theme's null family — which
-/// resolves to the test's box face — is pointed at Roboto, with Han
-/// behind it the way a device's fallback chain would sit.
-ThemeData _withRealFonts(ThemeData base) {
-  final fallback = _cjkLoaded ? <String>['NotoSansCJK'] : null;
-  return base.copyWith(
-    textTheme: base.textTheme.apply(
-      fontFamily: 'Roboto',
-      fontFamilyFallback: fallback,
-    ),
-    primaryTextTheme: base.primaryTextTheme.apply(
-      fontFamily: 'Roboto',
-      fontFamilyFallback: fallback,
-    ),
-  );
 }
 
 /// The settings shots' tree: a root ProviderScope over the settings
@@ -959,7 +961,7 @@ Widget _toolDetailHost(ThemeData theme, Locale? locale) => MaterialApp(
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   locale: locale,
-  theme: _withRealFonts(theme),
+  theme: theme,
   home: ToolDetailSurface(
     args: const ToolDetailArgs(
       title: 'Edit chat_screen.dart',
@@ -1006,7 +1008,7 @@ Widget _archiveConfirmHost(ThemeData theme, Locale? locale) => MaterialApp(
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   locale: locale,
-  theme: _withRealFonts(theme),
+  theme: theme,
   home: Scaffold(
     body: Center(
       child: Builder(
@@ -1068,7 +1070,7 @@ Widget _archivedSidebarHost(ThemeData theme, Locale? locale) {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
-      theme: _withRealFonts(theme),
+      theme: theme,
       home: Scaffold(
         body: SizedBox(
           width: 320,
@@ -1315,7 +1317,7 @@ Widget _settingsTree(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
-      theme: _withRealFonts(theme),
+      theme: theme,
       home: SettingsScreen(uiState: settingsUiState(), onAction: (_) {}),
     ),
   );
@@ -1513,7 +1515,7 @@ Widget _voiceRecordingHost(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
-      theme: _withRealFonts(theme),
+      theme: theme,
       home: ChatScreen(uiState: busyState(), onAction: (_) {}),
     ),
   );
@@ -1526,7 +1528,7 @@ Widget _voiceNoModelDialogHost(ThemeData theme, Locale? locale, bool zh) {
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
-    theme: _withRealFonts(theme),
+    theme: theme,
     home: Scaffold(
       body: Center(
         child: AlertDialog(
@@ -1583,7 +1585,7 @@ Widget _settingsAsrOnlineHost(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
-    theme: _withRealFonts(theme),
+    theme: theme,
     home: AsrModelsScreen(uiState: state, onAction: (_) {}),
   );
 }
@@ -1647,7 +1649,7 @@ Widget _settingsAsrHost(ThemeData theme, Locale? locale, bool zh) {
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
-    theme: _withRealFonts(theme),
+    theme: theme,
     home: AsrModelsScreen(uiState: state, onAction: (_) {}),
   );
 }
@@ -1716,7 +1718,7 @@ Widget _settingsErrorLogsHost(ThemeData theme, Locale? locale, bool zh) {
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
-    theme: _withRealFonts(theme),
+    theme: theme,
     home: ErrorLogsScreen(uiState: state, onAction: (_) {}),
   );
 }
@@ -1730,7 +1732,7 @@ Widget _subagentsHost(ThemeData theme, Locale? locale, SubagentUiState state) {
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
-    theme: _withRealFonts(theme),
+    theme: theme,
     home: SubagentScreen(uiState: state, onAction: (_) {}),
   );
 }
@@ -1785,7 +1787,7 @@ Widget _sidebarMultiBackendHost(ThemeData theme, Locale? locale) {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: locale,
-      theme: _withRealFonts(theme),
+      theme: theme,
       home: ChatScreen(
         uiState: multiBackendDrawerState(),
         backendSlices: kCrowdedBackendSlices,
@@ -1887,7 +1889,7 @@ Future<void> _render(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               locale: shot.locale,
-              theme: _withRealFonts(theme),
+              theme: theme,
               home: ChatScreen(
                 uiState: shot.state!,
                 onAction: (_) {},
@@ -1904,6 +1906,32 @@ Future<void> _render(
 }
 
 void main() {
+  // Runs even where the shots skip: the guard is about which families the
+  // harness registers, not about pixels.
+  test('the harness registers the families the app declares', () async {
+    if (Platform.environment['FLUTTER_ROOT'] == null) {
+      markTestSkipped('FLUTTER_ROOT is unset — run through flutter test');
+      return;
+    }
+    await _loadFonts();
+    // The Latin half always resolves: the engine ships it.
+    expect(_registeredFamilies, contains(kUiFontFamily));
+    if (!_cjkLoaded) {
+      markTestSkipped('no Han face on this host — see --fetch-fonts');
+      return;
+    }
+    // Every Han family the app names is registered under that name; a harness
+    // that invented one (it used to register `NotoSansCJK`) fails here.
+    for (final String family in kUiFontFamilyFallback) {
+      if (family == 'sans-serif') continue;
+      expect(
+        _registeredFamilies,
+        contains(family),
+        reason: 'the app declares $family for Han',
+      );
+    }
+  });
+
   // The group carries the skip so the reason reaches the reader who ran
   // the suite and wondered where the shots went.
   group('design shots', () {
