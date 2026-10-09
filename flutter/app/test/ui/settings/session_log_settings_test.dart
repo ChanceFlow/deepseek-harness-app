@@ -56,6 +56,7 @@ class _FakeSettingsRepository extends ChatRepository {
           revision: revision,
           hasUserLayer: false,
           secretCount: 0,
+          schema: SettingsSchema.empty,
           value: <String, Object?>{kSessionLogEnabledField: enabled},
         ),
     ],

@@ -86,6 +86,7 @@ class _FakeSettingsRepository implements ChatRepository {
       revision: before.revision + 1,
       hasUserLayer: user.isNotEmpty,
       secretCount: before.secretCount,
+      schema: SettingsSchema.empty,
       value: value,
       user: user,
     );
@@ -128,6 +129,7 @@ SettingsNamespace _namespace(
   revision: revision,
   hasUserLayer: user.isNotEmpty,
   secretCount: 0,
+  schema: SettingsSchema.empty,
   value: value,
   user: user,
 );
