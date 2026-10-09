@@ -629,32 +629,40 @@ const List<String> kUiFontFamilyFallback = <String>[
 /// `'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono',
 /// Menlo, Courier, 'PingFang SC', 'Microsoft YaHei'`.
 ///
-/// No face in that stack ships with the app and `pubspec.yaml` bundles none,
-/// so the names are a request the platform resolves, not a guarantee: on
-/// Android none of the Latin faces exist and the stack lands on the platform's
-/// own mono. `monospace` closes the list because it is the one mono family
-/// Android resolves by name; the reference omits it (its comment: a bare
-/// `monospace` tail makes Windows CJK fall back to SimSun), and this app pays
-/// that trade for a resolved code face on its only shipping platform.
-const String kCodeFontFamily = 'SF Mono';
+/// No face in that stack ships with the app and `pubspec.yaml` bundles none, so
+/// the names are a request the platform resolves, not a guarantee — and an
+/// unresolvable `fontFamily` is **not** walked into [kCodeFontFamilyFallback]:
+/// the run falls to the platform's *proportional* default instead, which is how
+/// inline code stopped reading as code. The primary is therefore `monospace`,
+/// the one mono family Android resolves by name. Measured on the test engine:
+/// primary `'SF Mono'` with `['Roboto Mono', 'monospace']` behind it paints one
+/// solid box, while primary `'monospace'` paints real mono glyphs.
+///
+/// The tail is consequently a *glyph-coverage* list, not a preference list: the
+/// engine consults it only for glyphs the resolved family lacks. That is what
+/// the Han names are for — a path, flag or identifier can carry a Han character,
+/// and Android's are the Noto names the UI chain already declares, so a code run
+/// mixes scripts at the code step instead of falling through to tofu. The pin's
+/// own faces stay listed as the record of its stack; the pin omits a bare
+/// `monospace` tail (its comment: a bare `monospace` tail makes Windows CJK
+/// fall back to SimSun), and this app pays that trade for a code face that
+/// resolves on its only shipping platform.
+const String kCodeFontFamily = 'monospace';
 const List<String> kCodeFontFamilyFallback = <String>[
+  // The pin's stack, retained as the record of it (`base.css:10`).
+  'SF Mono',
   'JetBrains Mono',
   'Fira Code',
   'Consolas',
   'Liberation Mono',
   'Menlo',
   'Courier',
+  // The pin's Han faces, then Android's, for glyphs the mono face lacks.
   'PingFang SC',
   'Microsoft YaHei',
-  // The pin's code stack ends on its Han faces (PingFang SC, Microsoft YaHei,
-  // `base.css:10`), because a path, flag or identifier can carry a Han
-  // character. Those two are Apple's and Microsoft's; Android's are the Noto
-  // names the UI chain already declares, so a code run mixes scripts at the code
-  // step instead of falling through to tofu.
   'Noto Sans CJK SC',
   'Noto Sans SC',
   'Source Han Sans SC',
-  'monospace',
 ];
 
 /// Global unified motion design tokens: durations, easing curves, and
