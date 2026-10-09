@@ -864,6 +864,7 @@ final class SettingsNamespaceWire {
       autoGenerate = wireBool(json, 'autoGenerate'),
       schema = decodeSettingsSchema(json['schema']),
       value = json['value'],
+      base = json['base'],
       user = json['user'],
       applies = wireString(json, 'applies') ?? 'live',
       secrets = (asJsonArray(json['secrets']) ?? const <Object?>[])
@@ -881,6 +882,11 @@ final class SettingsNamespaceWire {
   /// The namespace's decoded field projection ([decodeSettingsSchema]).
   final SettingsSchema schema;
   final Object? value;
+
+  /// Redacted composition base layer, with defaults resolved; absent when the
+  /// registrant declared none (`SettingsNamespaceView.base?`, forwarded from
+  /// `SettingsDescriptor.base`).
+  final Object? base;
 
   /// Raw `user` layer element; `hasUserLayer` checks object non-emptiness.
   final Object? user;

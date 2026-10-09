@@ -375,6 +375,36 @@ void main() {
       expect(wire.schema.dictOf(wire.schema.root), hasLength(9));
     });
 
+    test('decodes the composition base layer', () {
+      final wire = SettingsNamespaceWire.fromJson(<String, Object?>{
+        'ns': 'llm-deepseek',
+        'schema': jsonDecode(_recordedSchema),
+        'value': <String, Object?>{'providers': <String, Object?>{}},
+        'base': <String, Object?>{
+          'providers': <String, Object?>{'apiKeyEnv': 'DEEPSEEK_API_KEY'},
+        },
+        'user': <String, Object?>{'touched': true},
+        'applies': 'live',
+        'revision': 4,
+      });
+
+      expect(wire.base, <String, Object?>{
+        'providers': <String, Object?>{'apiKeyEnv': 'DEEPSEEK_API_KEY'},
+      });
+      expect(wire.user, <String, Object?>{'touched': true});
+    });
+
+    test('an undeclared base layer stays null', () {
+      final wire = SettingsNamespaceWire.fromJson(<String, Object?>{
+        'ns': 'shell',
+        'schema': jsonDecode(_recordedSchema),
+        'applies': 'live',
+        'revision': 0,
+      });
+
+      expect(wire.base, isNull);
+    });
+
     test('a withheld autoGenerate reads as no generated page', () {
       final wire = SettingsNamespaceWire.fromJson(<String, Object?>{
         'ns': 'shell',
@@ -416,6 +446,9 @@ void main() {
       final namespace = snapshot.namespaces.single;
       expect(namespace.ns, 'llm-deepseek');
       expect(namespace.autoGenerate, isTrue);
+      expect(namespace.base, <String, Object?>{
+        'providers': <String, Object?>{'apiKeyEnv': 'DEEPSEEK_API_KEY'},
+      });
       final fields = namespace.schema.dictOf(namespace.schema.root);
       expect(fields.keys, <String>['mode', 'count']);
       expect(fields['mode']!.type, 'const');
@@ -472,6 +505,9 @@ class _FakeSettingsRpc implements DshRpcClient {
             'autoGenerate': true,
             'schema': schema,
             'value': <String, Object?>{'mode': 'one'},
+            'base': <String, Object?>{
+              'providers': <String, Object?>{'apiKeyEnv': 'DEEPSEEK_API_KEY'},
+            },
             'applies': 'live',
             'secrets': <Object?>[],
             'revision': 1,

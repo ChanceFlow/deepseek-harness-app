@@ -6056,6 +6056,7 @@ void main() {
     expect(deepseek.hasUserLayer, isTrue);
     expect(deepseek.secretCount, 1);
     expect(deepseek.autoGenerate, isTrue);
+    expect(deepseek.base, <String, Object?>{});
     expect(deepseek.schema.dictOf(deepseek.schema.root).keys, <String>[
       'providers',
     ]);

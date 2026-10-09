@@ -5152,6 +5152,7 @@ class HarnessRepositoryImpl implements ChatRepository {
         autoGenerate: wire.autoGenerate,
         schema: wire.schema,
         value: wire.value,
+        base: wire.base,
         user: wire.user,
       );
 
