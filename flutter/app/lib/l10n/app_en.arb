@@ -812,6 +812,34 @@
     "description": "Shown when the host has no permission preset catalog."
   },
   "permissionDefaultsReadOnly": "Settings are read-only on this deployment.",
+  "permissionAutoReviewBadge": "EXP",
+  "permissionAutoReviewLabel": "Auto review",
+  "@permissionAutoReviewLabel": {
+    "description": "The reference's own label for the Auto review preset (auto.label)."
+  },
+  "@permissionAutoReviewBadge": {
+    "description": "The experimental marker the reference's Auto review preset carries (auto.badge)."
+  },
+  "permissionAutoReviewDescription": "Runs without a sandbox: every native tool call and PTC inner call is reviewed by the same model before it runs.",
+  "@permissionAutoReviewDescription": {
+    "description": "The reference's own sentence for the Auto review preset (auto.description)."
+  },
+  "permissionAutoReviewConfirmTitle": "Enable Auto review (experimental)?",
+  "@permissionAutoReviewConfirmTitle": {
+    "description": "The confirmation title the reference gives the Auto review preset (auto.confirm.title)."
+  },
+  "permissionAutoReviewConfirmDescription": "Auto review does not use a sandbox. Every native tool call and PTC inner call is reviewed by the same model as the current agent; a call the review rejects is yours to approve or deny. It is still experimental: it can let through or refuse the wrong call, and it costs extra tokens.",
+  "@permissionAutoReviewConfirmDescription": {
+    "description": "The confirmation body the reference gives the Auto review preset (auto.confirm.description)."
+  },
+  "permissionAutoReviewConfirmAcknowledge": "I understand these risks and want to continue",
+  "@permissionAutoReviewConfirmAcknowledge": {
+    "description": "The acknowledgement the reference requires before Auto review can be enabled (auto.confirm.acknowledge)."
+  },
+  "permissionAutoReviewConfirmEnable": "Enable Auto review",
+  "@permissionAutoReviewConfirmEnable": {
+    "description": "The confirmation's enable action for the Auto review preset (auto.confirm.enable)."
+  },
   "agentPresetViewDeclaration": "View",
   "@agentPresetViewDeclaration": {
     "description": "Card affordance that opens a preset's declared composition."

@@ -1242,6 +1242,31 @@ class AppLocalizationsEn extends AppLocalizations {
       'Settings are read-only on this deployment.';
 
   @override
+  String get permissionAutoReviewBadge => 'EXP';
+
+  @override
+  String get permissionAutoReviewLabel => 'Auto review';
+
+  @override
+  String get permissionAutoReviewDescription =>
+      'Runs without a sandbox: every native tool call and PTC inner call is reviewed by the same model before it runs.';
+
+  @override
+  String get permissionAutoReviewConfirmTitle =>
+      'Enable Auto review (experimental)?';
+
+  @override
+  String get permissionAutoReviewConfirmDescription =>
+      'Auto review does not use a sandbox. Every native tool call and PTC inner call is reviewed by the same model as the current agent; a call the review rejects is yours to approve or deny. It is still experimental: it can let through or refuse the wrong call, and it costs extra tokens.';
+
+  @override
+  String get permissionAutoReviewConfirmAcknowledge =>
+      'I understand these risks and want to continue';
+
+  @override
+  String get permissionAutoReviewConfirmEnable => 'Enable Auto review';
+
+  @override
   String get agentPresetViewDeclaration => 'View';
 
   @override

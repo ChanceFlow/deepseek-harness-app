@@ -148,8 +148,19 @@ class _SettingsPermissionDefaultsPageState
                     // one top-level key patch guarded by the described
                     // revision (web settings-store `write`).
                     groupValue: writable ? current : null,
-                    onChanged: (value) {
+                    onChanged: (value) async {
                       if (!writable || value == null) return;
+                      // The experimental preset carries its own confirmation,
+                      // gated on an explicit acknowledgement
+                      // (`ui-permission-presets/src/client/index.ts:97-101`).
+                      if (value == kAutoReviewPreset) {
+                        final bool? acknowledged = await showDialog<bool>(
+                          context: context,
+                          builder: (BuildContext dialogContext) =>
+                              const _AutoReviewConfirmation(),
+                        );
+                        if (acknowledged != true) return;
+                      }
                       onAction(
                         UpdateSettingAction(
                           ns: kPermissionSettingsNamespace,
@@ -186,6 +197,92 @@ class _SettingsPermissionDefaultsPageState
   }
 }
 
+/// The experimental preset's identity (`permission-presets/src/index.ts:82`,
+/// `AUTO_PRESET = 'auto'`), which the pin's client keys its badge, its sentence
+/// and its confirmation on (`ui-permission-presets/src/client/index.ts:89-101`).
+const String kAutoReviewPreset = 'auto';
+
+/// The pin's `auto.badge` — the marker that this preset is experimental
+/// (`ui-permission-presets/src/client/locales.ts:54`).
+class _ExpBadge extends StatelessWidget {
+  const _ExpBadge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: scheme.onSecondaryContainer,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+/// The experimental preset's confirmation: the pin's own title, its own
+/// explanation, and an acknowledgement the reader has to make before the
+/// enable action becomes reachable
+/// (`ui-permission-presets/src/client/index.ts:97-101`).
+class _AutoReviewConfirmation extends StatefulWidget {
+  const _AutoReviewConfirmation();
+
+  @override
+  State<_AutoReviewConfirmation> createState() =>
+      _AutoReviewConfirmationState();
+}
+
+class _AutoReviewConfirmationState extends State<_AutoReviewConfirmation> {
+  bool _acknowledged = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      title: Text(l10n.permissionAutoReviewConfirmTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(l10n.permissionAutoReviewConfirmDescription),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _acknowledged,
+            onChanged: (bool? value) =>
+                setState(() => _acknowledged = value ?? false),
+            title: Text(l10n.permissionAutoReviewConfirmAcknowledge),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: _acknowledged
+              ? () => Navigator.of(context).pop(true)
+              : null,
+          child: Text(l10n.permissionAutoReviewConfirmEnable),
+        ),
+      ],
+    );
+  }
+}
+
 /// One selectable default: the preset's own label and sentence, and the
 /// radio mark the reader picks. The ancestor [RadioGroup] owns the group
 /// value and change routing; the tile carries only its own value.
@@ -198,7 +295,13 @@ class _PresetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-    final description = option.description;
+    // The pin overrides the label and the sentence for the experimental
+    // preset and gives it a badge; every other value keeps the host's own
+    // copy (`ui-permission-presets/src/client/index.ts:87-91`).
+    final bool autoReview = option.value == kAutoReviewPreset;
+    final String? description = autoReview
+        ? l10n.permissionAutoReviewDescription
+        : option.description;
     return RadioListTile<String>(
       value: option.value,
       controlAffinity: ListTileControlAffinity.trailing,
@@ -210,7 +313,17 @@ class _PresetRow extends StatelessWidget {
             color: scheme.onSurfaceVariant,
           ),
           const SizedBox(width: 8),
-          Expanded(child: Text(permissionOptionLabel(option, l10n))),
+          Expanded(
+            child: Text(
+              autoReview
+                  ? l10n.permissionAutoReviewLabel
+                  : permissionOptionLabel(option, l10n),
+            ),
+          ),
+          if (autoReview) ...<Widget>[
+            const SizedBox(width: 8),
+            _ExpBadge(text: l10n.permissionAutoReviewBadge),
+          ],
         ],
       ),
       subtitle: description == null || description.trim().isEmpty

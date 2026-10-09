@@ -2126,6 +2126,48 @@ abstract class AppLocalizations {
   /// **'Settings are read-only on this deployment.'**
   String get permissionDefaultsReadOnly;
 
+  /// The experimental marker the reference's Auto review preset carries (auto.badge).
+  ///
+  /// In en, this message translates to:
+  /// **'EXP'**
+  String get permissionAutoReviewBadge;
+
+  /// The reference's own label for the Auto review preset (auto.label).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto review'**
+  String get permissionAutoReviewLabel;
+
+  /// The reference's own sentence for the Auto review preset (auto.description).
+  ///
+  /// In en, this message translates to:
+  /// **'Runs without a sandbox: every native tool call and PTC inner call is reviewed by the same model before it runs.'**
+  String get permissionAutoReviewDescription;
+
+  /// The confirmation title the reference gives the Auto review preset (auto.confirm.title).
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Auto review (experimental)?'**
+  String get permissionAutoReviewConfirmTitle;
+
+  /// The confirmation body the reference gives the Auto review preset (auto.confirm.description).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto review does not use a sandbox. Every native tool call and PTC inner call is reviewed by the same model as the current agent; a call the review rejects is yours to approve or deny. It is still experimental: it can let through or refuse the wrong call, and it costs extra tokens.'**
+  String get permissionAutoReviewConfirmDescription;
+
+  /// The acknowledgement the reference requires before Auto review can be enabled (auto.confirm.acknowledge).
+  ///
+  /// In en, this message translates to:
+  /// **'I understand these risks and want to continue'**
+  String get permissionAutoReviewConfirmAcknowledge;
+
+  /// The confirmation's enable action for the Auto review preset (auto.confirm.enable).
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Auto review'**
+  String get permissionAutoReviewConfirmEnable;
+
   /// Card affordance that opens a preset's declared composition.
   ///
   /// In en, this message translates to:
