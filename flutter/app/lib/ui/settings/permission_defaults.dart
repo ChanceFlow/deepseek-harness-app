@@ -16,6 +16,8 @@
 /// preset that is switchable per session but not acceptable as a default.
 library;
 
+import '../theme/theme.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -217,7 +219,7 @@ class _ExpBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
         color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(kShapeChip),
       ),
       child: Text(
         text,
