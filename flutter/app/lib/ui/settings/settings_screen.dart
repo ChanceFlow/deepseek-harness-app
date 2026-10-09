@@ -44,8 +44,10 @@ import 'settings_controller.dart';
 import 'permission_defaults.dart';
 import 'settings_pages.dart';
 import 'settings_ui_state.dart';
+import 'shell_settings_page.dart';
 import 'theme_preference.dart';
 import 'transcript_view_row.dart';
+import 'web_search_settings_page.dart';
 
 class SettingsRoute extends ConsumerWidget {
   const SettingsRoute({super.key, this.backendId});
@@ -545,6 +547,13 @@ class _PluginsSection extends StatelessWidget {
                 const SettingsPluginInventoryPage(),
               ),
             ),
+            // The pin's two plugin config pages (`ui-settings-shell`,
+            // `ui-settings-web-search`), which register into the Plugins page
+            // while the Host serves their namespaces.
+            const SettingsCardDivider(),
+            const SettingsShellEntryRow(),
+            const SettingsCardDivider(),
+            const SettingsWebSearchEntryRow(),
           ],
         ),
       ],

@@ -3755,6 +3755,88 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sessionReferenceSectionTitle => 'Sessions';
 
   @override
+  String get settingsNavShell => 'Shell';
+
+  @override
+  String get settingsShellDescription =>
+      'Limit how long each command may run and how much it may output.';
+
+  @override
+  String get settingsShellTimeoutMsLabel => 'Command timeout (ms)';
+
+  @override
+  String get settingsShellTimeoutMsHint =>
+      'How long one command may run before it is terminated.';
+
+  @override
+  String get settingsShellMaxOutputBytesLabel =>
+      'Output cap per stream (bytes)';
+
+  @override
+  String get settingsShellMaxOutputBytesHint =>
+      'Output beyond this spills to a temporary file rather than being lost.';
+
+  @override
+  String get settingsNavWebSearch => 'Web search';
+
+  @override
+  String get settingsWebSearchDescription =>
+      'Set up the DeepSeek search provider.';
+
+  @override
+  String get settingsWebSearchApiKeyLabel => 'API key';
+
+  @override
+  String get settingsWebSearchApiKeyHint =>
+      'Stored outside the settings file. Leave blank to keep the current key.';
+
+  @override
+  String get settingsWebSearchApiKeySet => 'A key is configured.';
+
+  @override
+  String get settingsWebSearchApiKeyUnset =>
+      'No key is configured; only conversations using a DeepSeek Account model can search, through the default endpoint.';
+
+  @override
+  String get settingsWebSearchBaseUrlLabel => 'Endpoint';
+
+  @override
+  String get settingsWebSearchBaseUrlHint =>
+      'Leave blank to use the provider default.';
+
+  @override
+  String get settingsWebSearchMaxUsesLabel => 'Max searches per request';
+
+  @override
+  String get settingsWebSearchMaxUsesHint =>
+      'How many times one request may search before it must answer.';
+
+  @override
+  String get settingsFormOverridden => 'Overridden';
+
+  @override
+  String get settingsFormReset => 'Reset to default';
+
+  @override
+  String get settingsFormReadOnly =>
+      'This deployment stores settings read-only.';
+
+  @override
+  String get settingsFormUnavailable =>
+      'This plugin is not loaded, so it cannot be configured right now.';
+
+  @override
+  String get settingsFormSaving => 'Saving…';
+
+  @override
+  String get settingsFormSaveFailed =>
+      'The deployment did not accept these values; they were left for you to correct.';
+
+  @override
+  String get settingsFormInvalidNumber =>
+      'Enter a number, or leave blank to use the default.';
+
+  @override
   String get settingsAgentLoopTitle => 'Agent loop';
 
   @override
