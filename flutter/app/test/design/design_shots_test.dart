@@ -453,6 +453,11 @@ final List<DesignShot> shots = <DesignShot>[
   // Inline code in both scripts and across a wrap: the chip, its Han fallback
   // and the body step's line height, in the transcript the reader sees.
   DesignShot(name: 'prose-code', state: proseCodeState()),
+  // One mixed Latin+Han paragraph at each shipped weight — 400 body, 500
+  // title, 600 strong, 700 heading — in the app's own styles: the pair the
+  // weight measurements are read against, and where a step that does not sit
+  // with the other script shows.
+  const DesignShot(name: 'font-weights', host: _fontWeightHost),
   DesignShot(name: 'empty', state: emptyState(), dark: false),
   DesignShot(
     name: 'workspace-sheet',
@@ -1054,6 +1059,51 @@ class _SessionLogShotRepository extends ChatRepository {
 
 /// The tool payload's surface, on a real edit: the diff the row peeks at, the
 /// call's arguments, and its settled result.
+/// The mixed sentence at each shipped weight, in the app's own styles.
+Widget _fontWeightHost(ThemeData theme, Locale? locale) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  locale: locale,
+  theme: theme,
+  home: Scaffold(
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: <Widget>[
+          for (final (String label, FontWeight weight)
+              in const <(String, FontWeight)>[
+                ('body 400', FontWeight.w400),
+                ('title 500', FontWeight.w500),
+                ('strong 600', FontWeight.w600),
+                ('heading 700', FontWeight.w700),
+              ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(label, style: theme.textTheme.labelSmall),
+                  Text.rich(
+                    const TextSpan(
+                      children: <InlineSpan>[
+                        TextSpan(text: 'The dock is capped — '),
+                        TextSpan(text: '输入区封顶，待办折起来。'),
+                      ],
+                    ),
+                    style: theme.textTheme.bodyMedium!.copyWith(
+                      fontWeight: weight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  ),
+);
+
 Widget _toolDetailHost(ThemeData theme, Locale? locale) => MaterialApp(
   debugShowCheckedModeBanner: false,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
