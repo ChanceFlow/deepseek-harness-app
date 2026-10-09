@@ -394,12 +394,21 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(kShapeChip),
-                  onTap: () => widget.onCreateSession(null),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: BrandWordmark(height: 22),
+                child: SizedBox(
+                  // The mark itself is 16px of ink; the wordmark's tap target
+                  // is the platform minimum around it, so a thumb on the brand
+                  // row lands.
+                  height: kMinInteractiveDimension,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(kShapeChip),
+                    onTap: () => widget.onCreateSession(null),
+                    child: const Center(
+                      // Hugs the mark: the 48dp target is the height, not a
+                      // ripple across the whole header band, and the mark keeps
+                      // the x it had when the target was the ink box.
+                      widthFactor: 1,
+                      child: BrandWordmark(height: 22),
+                    ),
                   ),
                 ),
               ),
@@ -1122,6 +1131,25 @@ class _BackendSectionHeader extends StatelessWidget {
   }
 }
 
+/// The gap between a row's label and its trailing caption.
+const double _kCaptionGap = 6;
+
+/// The width [text] needs on one line at [style], in the ambient text scale.
+///
+/// The style and the scaler are the ones the row paints with, so the
+/// one-line-or-two decision cannot drift from the layout it decides.
+double _intrinsicWidth(BuildContext context, String text, TextStyle? style) {
+  final TextPainter painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: 1,
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  final double width = painter.width;
+  painter.dispose();
+  return width;
+}
+
 /// Web WorkspaceBrowser `.groupSection`: the group header plus its
 /// expanded session run (2px intra-group rhythm) and the local overflow
 /// control — now a native [ExpansionTile] with the M3 expansion
@@ -1249,27 +1277,69 @@ class _GroupSectionState extends State<_GroupSection> {
             : scheme.onSurfaceVariant,
       ),
       // The session-count caption rides beside the label (the web's
-      // single-line header), ahead of the M3 trailing chevron.
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              group.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelLarge?.copyWith(height: 1.2),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            l10n.sessionCount(sessions.length),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+      // single-line header), ahead of the M3 trailing chevron. Both texts are
+      // intrinsic-width, so at a large platform text step the pair outgrows the
+      // tile and the row stripes; the caption drops to its own line instead,
+      // where it wraps rather than being cut.
+      title: LayoutBuilder(
+        builder: (context, constraints) {
+          final TextStyle? labelStyle = theme.textTheme.labelLarge?.copyWith(
+            height: 1.2,
+          );
+          final TextStyle? captionStyle = theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          );
+          final String caption = l10n.sessionCount(sessions.length);
+          // The label is the row's flexible half — it ellipsizes into whatever
+          // the caption leaves, which is how the header has always read. Only
+          // the caption can force the two-line form, and only when it cannot
+          // fit in the row beside the label at all.
+          final bool oneLine =
+              !constraints.maxWidth.isFinite ||
+              _intrinsicWidth(context, caption, captionStyle) + _kCaptionGap <=
+                  constraints.maxWidth;
+          if (oneLine) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    group.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: labelStyle,
+                  ),
+                ),
+                const SizedBox(width: _kCaptionGap),
+                Text(
+                  caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: captionStyle,
+                ),
+              ],
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+              // Two lines are what the largest platform step needs for
+              // "7 sessions"; past that the ellipsis takes the rest.
+              Text(
+                caption,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: captionStyle,
+              ),
+            ],
+          );
+        },
       ),
       tilePadding: const EdgeInsets.symmetric(horizontal: 8),
       childrenPadding: const EdgeInsets.only(top: 2, bottom: 2),
