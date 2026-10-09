@@ -2031,7 +2031,7 @@
   "asrRuntimeTitle": "On-device engine",
   "asrRuntimeDesc": "Speech recognition runs locally with sherpa-onnx. The engine is downloaded during setup instead of shipping inside the APK, which keeps the download small.",
   "asrRuntimeReady": "Installed",
-  "asrRuntimeProgress": "{size} \u00b7 {percent}%",
+  "asrRuntimeProgress": "{size} · {percent}%",
   "@asrRuntimeProgress": {
     "description": "Runtime download progress: bytes and percent.",
     "placeholders": {
@@ -2044,7 +2044,7 @@
     }
   },
   "asrRuntimeFailed": "Install failed",
-  "asrRuntimeSize": "{version} \u00b7 {size} to download",
+  "asrRuntimeSize": "{version} · {size} to download",
   "@asrRuntimeSize": {
     "description": "Runtime identity and one-time download size.",
     "placeholders": {
@@ -2060,8 +2060,8 @@
   "asrRuntimeInstall": "Install engine",
   "asrRuntimeDelete": "Delete engine",
   "voiceInputNoRuntimeTitle": "Speech Engine Required",
-  "voiceInputNoRuntimeBody": "Install the on-device speech engine in Settings \u2192 Voice input to use offline voice input.",
-  "voiceInputRuntimeNotInstalled": "The on-device speech engine isn''t installed. Install it in Settings \u2192 Voice input.",
+  "voiceInputNoRuntimeBody": "Install the on-device speech engine in Settings → Voice input to use offline voice input.",
+  "voiceInputRuntimeNotInstalled": "The on-device speech engine isn''t installed. Install it in Settings → Voice input.",
   "asrModelStatusIdle": "Not downloaded",
   "asrModelStatusDownloading": "Downloading",
   "asrModelStatusDownloaded": "Installed",
@@ -2897,7 +2897,7 @@
   "@backendProbeUnreachable": {
     "description": "Probe outcome: connection refused, DNS failure, or the request deadline elapsed."
   },
-  "backendProbeCertificateNotTrusted": "TLS handshake failed. The host''s certificate is not trusted — if you control this gateway, turn on \u201cTrust this host''s certificate\u201d above.",
+  "backendProbeCertificateNotTrusted": "TLS handshake failed. The host''s certificate is not trusted — if you control this gateway, turn on “Trust this host''s certificate” above.",
   "@backendProbeCertificateNotTrusted": {
     "description": "Probe outcome: TLS handshake failure, pointing at the per-host certificate-trust toggle."
   },
@@ -3328,7 +3328,7 @@
   "turnProcessWorked": "Completed",
   "turnProcessFailed": "Failed",
   "turnProcessStopped": "Stopped",
-  "turnProcessSeparator": " \u00b7 ",
+  "turnProcessSeparator": " · ",
   "runDurationHourUnit": "h ",
   "@runDurationHourUnit": {
     "description": "Hours unit of a run duration, including the space that separates it from the next part."
@@ -3457,29 +3457,5 @@
   "sessionReferenceSectionTitle": "Sessions",
   "@sessionReferenceSectionTitle": {
     "description": "Group label above the composer @ session-reference candidates."
-  },
-  "feedbackRateUp": "Good response",
-  "@feedbackRateUp": {
-    "description": "Accessible name of the thumbs-up control on an unrated assistant reply."
-  },
-  "feedbackRateDown": "Bad response",
-  "@feedbackRateDown": {
-    "description": "Accessible name of the thumbs-down control on an unrated assistant reply."
-  },
-  "feedbackRetract": "Remove rating",
-  "@feedbackRetract": {
-    "description": "Accessible name of a thumb whose judgment is the recorded one; pressing it deletes the record."
-  },
-  "feedbackSaveFailed": "Could not save feedback",
-  "@feedbackSaveFailed": {
-    "description": "Stated on the reply footer when the host refused the write or the write never reached it."
-  },
-  "feedbackChangedElsewhere": "This feedback changed elsewhere; the latest state is shown",
-  "@feedbackChangedElsewhere": {
-    "description": "Stated on the reply footer when a version conflict was reconciled from the host's authoritative record."
-  },
-  "feedbackLoadFailed": "Could not load feedback",
-  "@feedbackLoadFailed": {
-    "description": "Stated on the reply footer when the session's stored judgments could not be read."
   }
 }

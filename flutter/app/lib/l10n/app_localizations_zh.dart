@@ -3593,22 +3593,4 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sessionReferenceSectionTitle => '会话';
-
-  @override
-  String get feedbackRateUp => '回答不错';
-
-  @override
-  String get feedbackRateDown => '回答有问题';
-
-  @override
-  String get feedbackRetract => '取消评价';
-
-  @override
-  String get feedbackSaveFailed => '反馈保存失败';
-
-  @override
-  String get feedbackChangedElsewhere => '这条反馈已在别处改动，已显示最新状态';
-
-  @override
-  String get feedbackLoadFailed => '反馈状态加载失败';
 }

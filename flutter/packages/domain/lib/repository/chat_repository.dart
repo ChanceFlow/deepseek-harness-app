@@ -889,7 +889,14 @@ abstract class ChatRepository {
   ) => _unsupported('listWorkspaceDirectory');
 
   // -------------------------------------------------------------------------
-  // Human feedback (`messageFeedback/*`, `sessionFeedback/record`)
+  // Human feedback (`messageFeedback/*`, `sessionFeedback/record`).
+  //
+  // Deliberately unexposed in the UI: the per-message like/dislike control was
+  // removed at the reader's request, and no client widget renders this surface.
+  // The methods stay because they are the client's coverage of a contract the
+  // host still exposes, and `docs/spec.md` counts that coverage; removing them
+  // would be a wire decision, not a UI preference. Do not delete them as dead
+  // code, and do not re-add a control by accident.
   // -------------------------------------------------------------------------
 
   /// Every current judgment for one persisted Session

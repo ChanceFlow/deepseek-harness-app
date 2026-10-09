@@ -1073,11 +1073,5 @@
   "accountBonusAckFailed": "主机未把此赠金记录为已展示。",
   "accountBonusAckRetry": "重试",
   "fileReferenceSectionTitle": "文件与文件夹",
-  "sessionReferenceSectionTitle": "会话",
-  "feedbackRateUp": "回答不错",
-  "feedbackRateDown": "回答有问题",
-  "feedbackRetract": "取消评价",
-  "feedbackSaveFailed": "反馈保存失败",
-  "feedbackChangedElsewhere": "这条反馈已在别处改动，已显示最新状态",
-  "feedbackLoadFailed": "反馈状态加载失败"
+  "sessionReferenceSectionTitle": "会话"
 }
