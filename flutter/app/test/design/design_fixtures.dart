@@ -753,6 +753,7 @@ const SettingsSnapshot kSettingsSnapshot = SettingsSnapshot(
       revision: 3,
       hasUserLayer: true,
       secretCount: 1,
+      schema: SettingsSchema.empty,
     ),
     SettingsNamespace(
       ns: 'shell',
@@ -760,6 +761,7 @@ const SettingsSnapshot kSettingsSnapshot = SettingsSnapshot(
       revision: 0,
       hasUserLayer: false,
       secretCount: 0,
+      schema: SettingsSchema.empty,
     ),
   ],
   credentialRefs: ['DEEPSEEK_API_KEY'],

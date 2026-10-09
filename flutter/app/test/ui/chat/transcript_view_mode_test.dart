@@ -149,6 +149,7 @@ class _RecordingSettingsHost implements ChatRepository {
           revision: 7,
           hasUserLayer: true,
           secretCount: 0,
+          schema: SettingsSchema.empty,
           value: <String, Object?>{
             if (stored != null) kTranscriptViewField: stored,
           },

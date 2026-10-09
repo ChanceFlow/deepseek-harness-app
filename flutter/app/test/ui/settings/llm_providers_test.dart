@@ -77,6 +77,7 @@ class _FakeProvidersRepository implements ChatRepository {
         revision: revision,
         hasUserLayer: true,
         secretCount: 0,
+        schema: SettingsSchema.empty,
         value: _profileValue,
         user: _profileUser,
       ),
@@ -132,6 +133,7 @@ class _FakeProvidersRepository implements ChatRepository {
       revision: revision,
       hasUserLayer: true,
       secretCount: 0,
+      schema: SettingsSchema.empty,
       value: _profileValue,
       user: _profileUser,
     );

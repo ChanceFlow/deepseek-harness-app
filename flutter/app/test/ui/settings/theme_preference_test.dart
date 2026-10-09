@@ -84,6 +84,7 @@ class _FakeThemeRepository implements ChatRepository {
                 revision: revision,
                 hasUserLayer: true,
                 secretCount: 0,
+                schema: SettingsSchema.empty,
                 value: <String, Object?>{kThemePreferenceField: preference},
               ),
             ]

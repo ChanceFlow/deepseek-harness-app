@@ -573,10 +573,13 @@ rename/fork, queue text edit/steer/remove, approvals, and questions
   ops, `SettingPathOp`) backs the provider-profile editor in Models &
   credentials — pasting a key's env ref, adding or configuring a profile,
   and removing one; the namespace editor's two modes cover every other
-  namespace. Schema-driven forms (the
-  Web's schema-form engine), secret-slot writes, and `settings.openDocument`
-  stay deferred. `credentials.set`/`unset` store and clear writable
-  credential refs; the whole plane stays loopback-gated.
+  namespace. Each row carries the descriptor's `schema` — the schemastery
+  `{uid, refs}` envelope of the namespace's live fields, with their kinds,
+  labels, defaults, bounds, and renderer roles — and `autoGenerate`, the
+  host's permission to generate a page when no custom page exists; a row that
+  omits `autoGenerate` gets no generated page. Secret-slot writes and
+  `settings.openDocument` stay deferred. `credentials.set`/`unset` store and
+  clear writable credential refs; the whole plane stays loopback-gated.
 - **No mid-stream token cancellation.** `session.cancel` is wired; per-turn UI
   behavior depends on backend event delivery.
 - **Question cards are MVP-only.** Multi-select, optionless text, custom

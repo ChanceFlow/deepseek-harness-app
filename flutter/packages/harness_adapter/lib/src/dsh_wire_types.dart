@@ -551,9 +551,222 @@ final class DirectoryListingValueWire {
 // Settings / credentials
 // ---------------------------------------------------------------------------
 
+/// Decodes the `schema` one settings namespace's descriptor carries
+/// (`reference/deepseek-harness/packages/settings/settings/src/index.ts:326`
+/// `schema: form.toJSON()`; the wire view forwards it verbatim at
+/// `packages/api/settings-controller/src/index.ts:52`).
+///
+/// Schemastery serializes a schema as `{uid, refs}` rather than a nested tree:
+/// `refs` maps a uid to that node's plain JSON, and a node's child positions
+/// (`sKey`, `inner`, `list`, `dict`) hold uids into the same table, because one
+/// schema may reference a node twice or reference an ancestor
+/// (`reference/deepseek-harness/vendor/schemastery/src/index.ts` `toJSON` and
+/// the `options.refs` branch of the `Schema` constructor). This decode keeps
+/// the table and resolves nothing eagerly, so a recursive schema cannot loop.
+///
+/// Fails loud — naming the offending key — on an envelope that is not an
+/// object, a missing or empty `refs` table, a refs key that is not a uid or a
+/// node object, a node without a `type`, a child reference the table does not
+/// carry, or a mistyped `meta` member. An empty form is never the result of a
+/// decode failure.
+SettingsSchema decodeSettingsSchema(Object? json) {
+  final envelope = asJsonObject(json);
+  if (envelope == null) {
+    throw const FormatException('settings namespace "schema" is not an object');
+  }
+  final refs = asJsonObject(envelope['refs']);
+  if (refs == null || refs.isEmpty) {
+    throw const FormatException(
+      'settings namespace "schema" carries no "refs" table',
+    );
+  }
+  final raw = <int, JsonMap>{};
+  refs.forEach((key, value) {
+    final uid = int.tryParse(key);
+    final node = asJsonObject(value);
+    if (uid == null || node == null) {
+      throw FormatException('settings schema ref "$key" is not a node object');
+    }
+    raw[uid] = node;
+  });
+  final nodes = <int, SettingsSchemaNode>{};
+  raw.forEach((uid, node) {
+    nodes[uid] = _settingsSchemaNode(uid, node, raw);
+  });
+  final rootUid = _reqLong(envelope, 'uid');
+  final root = nodes[rootUid];
+  if (root == null) {
+    throw FormatException('settings schema root uid $rootUid names no ref');
+  }
+  return SettingsSchema(root: root, nodes: nodes);
+}
+
+SettingsSchemaNode _settingsSchemaNode(
+  int uid,
+  JsonMap json,
+  Map<int, JsonMap> refs,
+) {
+  final meta = asJsonObject(json['meta']);
+  return SettingsSchemaNode(
+    uid: uid,
+    type: _reqString(json, 'type'),
+    meta: meta == null ? const SettingsSchemaMeta() : _settingsSchemaMeta(meta),
+    value: json['value'],
+    callback: wireString(json, 'callback'),
+    bits: _settingsSchemaBits(json['bits']),
+    sKeyUid: _settingsSchemaRef(json, 'sKey', refs),
+    innerUid: _settingsSchemaRef(json, 'inner', refs),
+    listUids: _settingsSchemaRefList(json['list'], refs),
+    dictUids: _settingsSchemaRefMap(json['dict'], refs),
+  );
+}
+
+int? _settingsSchemaRef(JsonMap json, String key, Map<int, JsonMap> refs) {
+  if (json[key] == null) return null;
+  final uid = _reqLong(json, key);
+  if (!refs.containsKey(uid)) {
+    throw FormatException('settings schema "$key" names missing ref $uid');
+  }
+  return uid;
+}
+
+List<int> _settingsSchemaRefList(Object? value, Map<int, JsonMap> refs) {
+  if (value == null) return const <int>[];
+  final list = asJsonArray(value);
+  if (list == null) {
+    throw const FormatException('settings schema "list" is not an array');
+  }
+  return list.map((entry) {
+    if (entry is! int || !refs.containsKey(entry)) {
+      throw FormatException('settings schema "list" names missing ref $entry');
+    }
+    return entry;
+  }).toList();
+}
+
+Map<String, int> _settingsSchemaRefMap(Object? value, Map<int, JsonMap> refs) {
+  if (value == null) return const <String, int>{};
+  final map = asJsonObject(value);
+  if (map == null) {
+    throw const FormatException('settings schema "dict" is not an object');
+  }
+  final fields = <String, int>{};
+  map.forEach((key, entry) {
+    if (entry is! int || !refs.containsKey(entry)) {
+      throw FormatException(
+        'settings schema "dict" field "$key" names missing ref $entry',
+      );
+    }
+    fields[key] = entry;
+  });
+  return fields;
+}
+
+Map<String, int> _settingsSchemaBits(Object? value) {
+  if (value == null) return const <String, int>{};
+  final map = asJsonObject(value);
+  if (map == null) {
+    throw const FormatException('settings schema "bits" is not an object');
+  }
+  final bits = <String, int>{};
+  map.forEach((key, entry) {
+    if (entry is! int) {
+      throw FormatException('settings schema bit "$key" is not an integer');
+    }
+    bits[key] = entry;
+  });
+  return bits;
+}
+
+SettingsSchemaMeta _settingsSchemaMeta(JsonMap json) => SettingsSchemaMeta(
+  defaultValue: json['default'],
+  required: wireBool(json, 'required'),
+  volatile: wireBool(json, 'volatile'),
+  disabled: wireBool(json, 'disabled'),
+  collapse: wireBool(json, 'collapse'),
+  hidden: wireBool(json, 'hidden'),
+  loose: wireBool(json, 'loose'),
+  role: wireString(json, 'role'),
+  extra: json['extra'],
+  link: wireString(json, 'link'),
+  description: _settingsSchemaDescription(json['description']),
+  comment: wireString(json, 'comment'),
+  pattern: _settingsSchemaPattern(json['pattern']),
+  max: _settingsSchemaNumber(json, 'max'),
+  min: _settingsSchemaNumber(json, 'min'),
+  step: _settingsSchemaNumber(json, 'step'),
+  badges: _settingsSchemaBadges(json['badges']),
+);
+
+num? _settingsSchemaNumber(JsonMap json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is num) return value;
+  throw FormatException('settings schema "$key" is not a number');
+}
+
+/// Decodes `meta.description`, which schemastery stores either as one string
+/// or as a locale map whose `''` entry is the unlocalized text
+/// (`vendor/schemastery/src/index.ts:357` `mergeDesc`).
+Map<String, String>? _settingsSchemaDescription(Object? value) {
+  if (value == null) return null;
+  if (value is String) return <String, String>{'': value};
+  final map = asJsonObject(value);
+  if (map == null) {
+    throw const FormatException(
+      'settings schema "description" is neither a string nor a locale map',
+    );
+  }
+  final texts = <String, String>{};
+  map.forEach((locale, text) {
+    if (text is! String) {
+      throw FormatException(
+        'settings schema "description" locale "$locale" is not a string',
+      );
+    }
+    texts[locale] = text;
+  });
+  return texts;
+}
+
+SettingsSchemaPattern? _settingsSchemaPattern(Object? value) {
+  if (value == null) return null;
+  final map = asJsonObject(value);
+  if (map == null) {
+    throw const FormatException('settings schema "pattern" is not an object');
+  }
+  return SettingsSchemaPattern(
+    source: _reqString(map, 'source'),
+    flags: wireString(map, 'flags'),
+  );
+}
+
+List<SettingsSchemaBadge> _settingsSchemaBadges(Object? value) {
+  if (value == null) return const <SettingsSchemaBadge>[];
+  final list = asJsonArray(value);
+  if (list == null) {
+    throw const FormatException('settings schema "badges" is not an array');
+  }
+  return list.map((entry) {
+    final map = asJsonObject(entry);
+    if (map == null) {
+      throw const FormatException(
+        'settings schema "badges" entry is not an object',
+      );
+    }
+    return SettingsSchemaBadge(
+      text: _reqString(map, 'text'),
+      type: _reqString(map, 'type'),
+    );
+  }).toList();
+}
+
 final class SettingsNamespaceWire {
   SettingsNamespaceWire.fromJson(JsonMap json)
     : ns = _reqString(json, 'ns'),
+      // A host that withheld the field offers this client no generated page.
+      autoGenerate = wireBool(json, 'autoGenerate'),
+      schema = decodeSettingsSchema(json['schema']),
       value = json['value'],
       user = json['user'],
       applies = wireString(json, 'applies') ?? 'live',
@@ -564,6 +777,13 @@ final class SettingsNamespaceWire {
       revision = wireLong(json, 'revision');
 
   final String ns;
+
+  /// Whether this client may render a generated page for the namespace when no
+  /// custom page exists (`SettingsDescriptor.autoGenerate`).
+  final bool autoGenerate;
+
+  /// The namespace's decoded field projection ([decodeSettingsSchema]).
+  final SettingsSchema schema;
   final Object? value;
 
   /// Raw `user` layer element; `hasUserLayer` checks object non-emptiness.

@@ -81,6 +81,7 @@ SettingsChannel _channel({
           revision: 7,
           hasUserLayer: true,
           secretCount: 0,
+          schema: SettingsSchema.empty,
           value: defaultPreset == null
               ? const <String, Object?>{}
               : <String, Object?>{kPermissionDefaultKey: defaultPreset},
