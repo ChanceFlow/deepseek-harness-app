@@ -296,4 +296,67 @@ void main() {
     expect(decoration.borderRadius, BorderRadius.circular(kRadiusLg));
     expect(decoration.border, isNull);
   });
+
+  testWidgets('an inline code run wears the reference chip, both brightnesses', (
+    tester,
+  ) async {
+    for (final ThemeData theme in <ThemeData>[
+      DshTheme.light(),
+      DshTheme.dark(),
+    ]) {
+      await _pumpThemed(tester, 'run `root:root` here', theme);
+
+      // `markdown/MarkdownText.module.css` `:not(pre) > code` (:155-166): the
+      // inline-code alias, the half-pixel `border-l1`, `--dsw-radius-sm` and
+      // 5px side padding. The 1px vertical padding is what a `Container` needs
+      // to stand in for a CSS inline background, which covers the line box.
+      final Finder chip = find.ancestor(
+        of: find.text('root:root'),
+        matching: find.byType(Container),
+      );
+      expect(chip, findsOneWidget);
+      final Container container = tester.widget<Container>(chip);
+      final BoxDecoration decoration = container.decoration! as BoxDecoration;
+      expect(decoration.color, theme.colorScheme.markdownInlineCode);
+      expect(decoration.borderRadius, BorderRadius.circular(kRadiusSm));
+      expect(
+        decoration.border,
+        Border.all(color: theme.colorScheme.borderL1, width: 0.5),
+      );
+      expect(
+        container.padding,
+        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      );
+    }
+  });
+
+  testWidgets('a chip leaves the paragraph on the body step', (tester) async {
+    // The pin's body step is 14/24 (`gradient-shadow-text.css:91`). A
+    // placeholder whose box outgrows the line's descent would raise it, which
+    // is why the chip is a widget and why this is asserted rather than eyeballed.
+    await _pump(tester, 'a plain body line');
+    final double plain = tester.getSize(find.byType(Text).first).height;
+
+    await _pump(tester, 'a line with `root:root` in it');
+    final double chipped = tester.getSize(find.byType(Text).first).height;
+
+    expect(chipped, plain);
+    expect(chipped, DshType.markdownBase.lineHeight);
+  });
+
+  testWidgets('a Han character inside a code run resolves the code chain', (
+    tester,
+  ) async {
+    // The code face has no Han: a path or flag with Chinese around it has to
+    // fall back through the chain's own names, at the code step's size, rather
+    // than reflowing or vanishing.
+    await _pump(tester, '建立 `root:root` 目录下的 文件');
+    final Text run = tester.widget<Text>(find.text('root:root'));
+    expect(run.style?.fontFamily, kCodeFontFamily);
+    expect(run.style?.fontFamilyFallback, kCodeFontFamilyFallback);
+    expect(run.style?.fontSize, DshType.markdownCode.size);
+    expect(run.style?.fontFamilyFallback, contains('Noto Sans CJK SC'));
+    // The block's tracking must not leak back in with the chip.
+    expect(run.style?.letterSpacing, 0);
+  });
 }

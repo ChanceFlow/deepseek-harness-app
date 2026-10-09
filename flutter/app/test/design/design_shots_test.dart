@@ -427,6 +427,9 @@ final List<DesignShot> shots = <DesignShot>[
     },
   ),
   DesignShot(name: 'prose-lists', state: proseListsState(), dark: false),
+  // Inline code in both scripts and across a wrap: the chip, its Han fallback
+  // and the body step's line height, in the transcript the reader sees.
+  DesignShot(name: 'prose-code', state: proseCodeState()),
   DesignShot(name: 'empty', state: emptyState(), dark: false),
   DesignShot(
     name: 'workspace-sheet',
