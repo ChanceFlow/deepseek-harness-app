@@ -3593,4 +3593,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sessionReferenceSectionTitle => '会话';
+
+  @override
+  String get settingsAgentLoopTitle => '智能体循环';
+
+  @override
+  String get settingsAgentLoopDescription => '智能体如何批量执行工作。';
+
+  @override
+  String get settingsAgentLoopMaxParallel => '每步并行工具调用上限';
+
+  @override
+  String get settingsAgentLoopUnpublished => '此宿主未发布智能体循环设置。';
+
+  @override
+  String get settingsAgentLoopSaveFailed => '无法保存该上限';
 }

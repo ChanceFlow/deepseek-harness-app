@@ -38,6 +38,7 @@ import 'locale_preference.dart';
 import 'plugin_manager.dart';
 import 'schedule_manager.dart';
 import 'settings_backend_scope.dart';
+import 'settings_agent_loop_page.dart';
 import 'settings_chrome.dart';
 import 'settings_controller.dart';
 import 'permission_defaults.dart';
@@ -296,6 +297,19 @@ class _HostSection extends ConsumerWidget {
         const SizedBox(height: 12),
         const SettingsSectionCard(
           children: <Widget>[SettingsBatteryOptimizationRow()],
+        ),
+        const SizedBox(height: 12),
+        SettingsSectionCard(
+          children: <Widget>[
+            SettingsNavRow(
+              title: l10n.settingsAgentLoopTitle,
+              leading: const Icon(Icons.loop_outlined),
+              onTap: () => _pushSettingsPage(
+                context,
+                SettingsAgentLoopPage(backendId: scopedId),
+              ),
+            ),
+          ],
         ),
       ],
     );

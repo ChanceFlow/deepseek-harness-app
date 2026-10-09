@@ -3753,4 +3753,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionReferenceSectionTitle => 'Sessions';
+
+  @override
+  String get settingsAgentLoopTitle => 'Agent loop';
+
+  @override
+  String get settingsAgentLoopDescription => 'How the agent batches its work.';
+
+  @override
+  String get settingsAgentLoopMaxParallel => 'Parallel tool calls per step';
+
+  @override
+  String get settingsAgentLoopUnpublished =>
+      'This host does not publish an agent-loop setting.';
+
+  @override
+  String get settingsAgentLoopSaveFailed => 'Could not save the limit';
 }

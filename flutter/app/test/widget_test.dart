@@ -7,7 +7,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart'
     show Icons, NavigationBar, Size, TextField;
-import 'package:flutter/widgets.dart' show IconData;
+import 'package:flutter/widgets.dart' show IconData, Scrollable;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app/backends/backend_store.dart';
 import 'package:app/config.dart';
@@ -15,6 +15,7 @@ import 'package:app/di/providers.dart';
 import 'package:app/local_state/local_state_providers.dart';
 import 'package:app/local_state/local_state_store.dart';
 import 'package:app/main.dart';
+import 'package:app/ui/settings/settings_screen.dart' show SettingsScreen;
 
 class _FakeRpc implements DshRpcClient {
   _FakeRpc([this._sessions = const <Object?>[]]);
@@ -85,6 +86,13 @@ LocalStateStore _testLocalState() {
   addTearDown(() => dir.deleteSync(recursive: true));
   return LocalStateStore(File('${dir.path}/local_state.json'));
 }
+
+/// The scrollable the settings tab's rows live in: the page's own
+/// `Expanded > ListView`, and the only scrollable inside [SettingsScreen].
+Finder _settingsList() => find.descendant(
+  of: find.byType(SettingsScreen),
+  matching: find.byType(Scrollable),
+);
 
 Future<void> _pumpApp(
   WidgetTester tester, {
@@ -261,6 +269,18 @@ void main() {
     // Settings → Language row of the App preferences section.
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
+    // The sections above this row push it past the first screen. The rows live
+    // in the settings page's own list — `SettingsScreen`'s `Expanded >
+    // ListView`, the only scrollable inside it — so the row is reached through
+    // that list rather than by an index into every Scrollable the shell keeps
+    // alive (the transcript's and the sidebar's are both in this tree), and
+    // rather than by `ensureVisible`, which needs the row already built.
+    await tester.scrollUntilVisible(
+      find.text('Language'),
+      120,
+      scrollable: _settingsList(),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Language').hitTestable(), findsOneWidget);
 
     // Picking 中文 in the row's sheet pins the app locale: DshApp
@@ -289,7 +309,15 @@ void main() {
     expect(find.text('Chat'), findsNothing);
 
     // Follow system releases the pin; the shell returns to the device
-    // locale. The row now states 跟随系统 in the localized chrome.
+    // locale. The row now states 跟随系统 in the localized chrome — and picking
+    // 中文 re-resolved the app, which put the settings list back at its first
+    // screen, so this row is scrolled to exactly as it was the first time.
+    await tester.scrollUntilVisible(
+      find.text('语言'),
+      120,
+      scrollable: _settingsList(),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('语言').hitTestable());
     await tester.pumpAndSettle();
     await tester.tap(find.text('跟随系统').hitTestable());
