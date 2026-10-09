@@ -149,4 +149,133 @@ void main() {
       }
     });
   }
+
+  // The steps the app paints, each with the reference's own token: body and
+  // secondary at 400 (`gradient-shadow-text.css:91`, :232), titles and labels
+  // at 500 (:225, :211), markdown strong at 600 (:98) and headings at 700
+  // (:63). A step whose weight drifts, or a run that carries one of its own,
+  // changes how the two scripts sit beside each other, so every step is pinned
+  // with both scripts in one paragraph.
+  final Map<String, (TextStyle Function(ThemeData), FontWeight, String)>
+  shippedSteps = <String, (TextStyle Function(ThemeData), FontWeight, String)>{
+    'body 400': (
+      (theme) => theme.textTheme.bodyMedium!,
+      FontWeight.w400,
+      'gradient-shadow-text.css:91',
+    ),
+    'secondary 400': (
+      (theme) => theme.textTheme.bodySmall!,
+      FontWeight.w400,
+      'gradient-shadow-text.css:232',
+    ),
+    'title 500': (
+      (theme) => theme.textTheme.titleMedium!,
+      FontWeight.w500,
+      'gradient-shadow-text.css:190',
+    ),
+    'label 500': (
+      (theme) => theme.textTheme.labelLarge!,
+      FontWeight.w500,
+      'gradient-shadow-text.css:225',
+    ),
+    'strong 600': (
+      (theme) =>
+          theme.textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600),
+      FontWeight.w600,
+      'gradient-shadow-text.css:98',
+    ),
+    'heading 700': (
+      (theme) =>
+          theme.textTheme.titleLarge!.copyWith(fontWeight: FontWeight.w700),
+      FontWeight.w700,
+      'gradient-shadow-text.css:63',
+    ),
+  };
+
+  test('the shipped weights are exactly the reference\'s four steps', () {
+    expect(shippedSteps.values.map((step) => step.$2).toSet(), <FontWeight>[
+      FontWeight.w400,
+      FontWeight.w500,
+      FontWeight.w600,
+      FontWeight.w700,
+    ]);
+  });
+
+  for (final MapEntry<
+        String,
+        (TextStyle Function(ThemeData), FontWeight, String)
+      >
+      step
+      in shippedSteps.entries) {
+    testWidgets('${step.key}: a Latin run and a Han run resolve one family and '
+        'one weight', (tester) async {
+      final ThemeData theme = _themes['light']!();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            // The step is the paragraph's ambient style, so an unstyled run
+            // resolves exactly what the app paints at this step.
+            body: DefaultTextStyle(
+              style: step.value.$1(theme),
+              child: const Text.rich(
+                TextSpan(
+                  children: <InlineSpan>[
+                    TextSpan(text: _latinRun),
+                    TextSpan(text: _hanRun),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final RichText rich = tester.widget<RichText>(
+        find
+            .descendant(of: find.byType(Text), matching: find.byType(RichText))
+            .first,
+      );
+      final List<InlineSpan> runs = <InlineSpan>[];
+      void visit(InlineSpan span) {
+        if (span is! TextSpan) return;
+        if (span.text != null) runs.add(span);
+        for (final InlineSpan child in span.children ?? const <InlineSpan>[]) {
+          visit(child);
+        }
+      }
+
+      visit(rich.text);
+      expect(runs.map((run) => run.toPlainText()), <String>[
+        _latinRun,
+        _hanRun,
+      ]);
+      // A style that names no weight renders the face's regular: the step's
+      // effective weight is 400 either way.
+      final TextStyle ambient = _ambient(tester);
+      expect(
+        ambient.fontWeight ?? FontWeight.w400,
+        step.value.$2,
+        reason: 'the step resolves ${step.value.$3}',
+      );
+      for (final InlineSpan run in runs) {
+        final String where = 'run "${run.toPlainText()}" at ${step.key}';
+        expect(
+          run.style?.fontFamily ?? ambient.fontFamily,
+          kUiFontFamily,
+          reason: where,
+        );
+        expect(
+          run.style?.fontFamilyFallback ?? ambient.fontFamilyFallback,
+          kUiFontFamilyFallback,
+          reason: where,
+        );
+        expect(
+          run.style?.fontWeight ?? ambient.fontWeight ?? FontWeight.w400,
+          step.value.$2,
+          reason: where,
+        );
+      }
+    });
+  }
 }
