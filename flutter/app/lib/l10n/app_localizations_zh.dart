@@ -1059,10 +1059,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNavModels => '模型';
 
   @override
-  String get settingsNavPlugins => '插件';
+  String get settingsNavPlugins => '主机命名空间值';
 
   @override
-  String get settingsNavPluginSettings => '插件设置';
+  String get settingsNavPluginSettings => '主机命名空间值';
 
   @override
   String get settingsNavAgentPresets => 'Agent 预设';
@@ -1258,6 +1258,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pluginsIntro => '配置并检查此部署中安装的插件。';
+
+  @override
+  String get pluginsRawNamespaceNotice =>
+      '主机原始值：本客户端尚未收到插件的字段标签与说明，因此每个键都按主机发送的原样显示。插件自己的配置页面由提供该命名空间的插件负责。';
 
   @override
   String get noPluginSettings => '此部署未暴露任何插件设置。';

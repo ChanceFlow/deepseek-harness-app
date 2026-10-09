@@ -1967,7 +1967,7 @@ Future<void> _openCredentialsPage(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Credentials');
 
 Future<void> _openPluginsPage(WidgetTester tester) =>
-    _tapSettingsRow(tester, 'Plugin settings');
+    _tapSettingsRow(tester, 'Host namespace values');
 
 Future<void> _openLanguageSheet(WidgetTester tester) =>
     _tapSettingsRow(tester, 'Language');
