@@ -5383,6 +5383,102 @@ abstract class AppLocalizations {
   /// **'Choose how much detail to show for tool calls'**
   String get settingsTranscriptViewDescription;
 
+  /// Settings row switching the Host session-log upload (the reference's settings.sessionLog.title).
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Session Log when using the official model API'**
+  String get settingsSessionLogTitle;
+
+  /// The session-log row's one-line explanation (the reference's settings.sessionLog.description).
+  ///
+  /// In en, this message translates to:
+  /// **'Help improve DeepSeek models and products.'**
+  String get settingsSessionLogDescription;
+
+  /// Shown when the Host refuses the session-log preference write (the reference's settings.sessionLog.failed).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'\'t save the preference'**
+  String get settingsSessionLogSaveFailed;
+
+  /// Settings row opening the phone's gesture reference (the reference's shortcuts entry).
+  ///
+  /// In en, this message translates to:
+  /// **'Gestures'**
+  String get settingsGesturesTitle;
+
+  /// The gesture page's explanation of why it is a read-only list and not a key-binding editor.
+  ///
+  /// In en, this message translates to:
+  /// **'A phone has no keyboard shortcuts: the app\'\'s actions ride its controls and the gestures listed here.'**
+  String get settingsGesturesIntro;
+
+  /// States that the reference's editor half has no phone counterpart, so the absence is deliberate.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording or remapping key bindings belongs to the desktop app.'**
+  String get settingsGesturesEditorNote;
+
+  /// Gesture row: the message bubble's own menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a message'**
+  String get settingsGesturesMessageTitle;
+
+  /// Gesture row body: the two verbs the bubble menu offers (copy, fork).
+  ///
+  /// In en, this message translates to:
+  /// **'Copy it, or fork the conversation from it.'**
+  String get settingsGesturesMessageBody;
+
+  /// Gesture row: the session row's verbs menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a session row'**
+  String get settingsGesturesSessionTitle;
+
+  /// Gesture row body: the session verbs menu entries.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename, fork, pin or archive that session.'**
+  String get settingsGesturesSessionBody;
+
+  /// Gesture row: creating a session from a project header.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a project header'**
+  String get settingsGesturesProjectTitle;
+
+  /// Gesture row body: the project header's long-press action.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new session in that project.'**
+  String get settingsGesturesProjectBody;
+
+  /// Gesture row: hold-to-talk voice input.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold the microphone'**
+  String get settingsGesturesVoiceTitle;
+
+  /// Gesture row body: hold-to-talk.
+  ///
+  /// In en, this message translates to:
+  /// **'Talk instead of typing while you hold it.'**
+  String get settingsGesturesVoiceBody;
+
+  /// Gesture row: loading older history by scrolling to the transcript's top.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll to the top of the transcript'**
+  String get settingsGesturesHistoryTitle;
+
+  /// Gesture row body: the older-history load.
+  ///
+  /// In en, this message translates to:
+  /// **'Loads the conversation\'\'s older history.'**
+  String get settingsGesturesHistoryBody;
+
   /// The most folded transcript view: group headers collapse and no live call detail shows.
   ///
   /// In en, this message translates to:

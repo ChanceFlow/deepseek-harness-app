@@ -34,9 +34,11 @@ import 'account.dart';
 import 'backend_reachability.dart';
 import 'battery_optimization_section.dart';
 import 'busy_enter_preference.dart';
+import 'gesture_shortcuts_section.dart';
 import 'locale_preference.dart';
 import 'plugin_manager.dart';
 import 'schedule_manager.dart';
+import 'session_log_settings.dart';
 import 'settings_backend_scope.dart';
 import 'settings_agent_loop_page.dart';
 import 'settings_chrome.dart';
@@ -416,6 +418,12 @@ class _AppSection extends StatelessWidget {
         ),
         const SettingsSectionCard(
           children: <Widget>[
+            // The reference's general items: its shortcut entry sits early
+            // (`ui-shortcuts/src/client/index.ts:54-59`, order 16) and the
+            // session-log preference late (`ui-settings-session-log/src/client/index.ts:45-46`,
+            // order 90). This card is the phone's general surface.
+            SettingsGesturesEntryRow(),
+            SettingsCardDivider(),
             _AccountEntryRow(),
             SettingsCardDivider(),
             _LanguageRow(),
@@ -425,6 +433,8 @@ class _AppSection extends StatelessWidget {
             _AsrModelsEntryRow(),
             SettingsCardDivider(),
             _ErrorLogsEntryRow(),
+            SettingsCardDivider(),
+            SettingsSessionLogRow(),
           ],
         ),
       ],

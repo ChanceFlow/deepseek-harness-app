@@ -3043,6 +3043,54 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTranscriptViewDescription => '选择希望看到多少工具调用细节';
 
   @override
+  String get settingsSessionLogTitle => '在使用官方模型 API 时上传 Session Log';
+
+  @override
+  String get settingsSessionLogDescription => '帮助改进 DeepSeek 模型与产品';
+
+  @override
+  String get settingsSessionLogSaveFailed => '无法保存设置';
+
+  @override
+  String get settingsGesturesTitle => '手势';
+
+  @override
+  String get settingsGesturesIntro => '手机没有键盘快捷键：应用的操作在控件和这里列出的手势上。';
+
+  @override
+  String get settingsGesturesEditorNote => '录制或修改按键绑定属于桌面端。';
+
+  @override
+  String get settingsGesturesMessageTitle => '长按一条消息';
+
+  @override
+  String get settingsGesturesMessageBody => '复制该消息，或从它分叉会话。';
+
+  @override
+  String get settingsGesturesSessionTitle => '长按会话行';
+
+  @override
+  String get settingsGesturesSessionBody => '重命名、分叉、置顶或归档该会话。';
+
+  @override
+  String get settingsGesturesProjectTitle => '长按项目组头';
+
+  @override
+  String get settingsGesturesProjectBody => '在该项目中新建会话。';
+
+  @override
+  String get settingsGesturesVoiceTitle => '按住麦克风';
+
+  @override
+  String get settingsGesturesVoiceBody => '按住说话，不必打字。';
+
+  @override
+  String get settingsGesturesHistoryTitle => '滚动到对话顶部';
+
+  @override
+  String get settingsGesturesHistoryBody => '加载更早的会话历史。';
+
+  @override
   String get settingsTranscriptViewCompact => '简洁';
 
   @override

@@ -3183,6 +3183,64 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose how much detail to show for tool calls';
 
   @override
+  String get settingsSessionLogTitle =>
+      'Upload Session Log when using the official model API';
+
+  @override
+  String get settingsSessionLogDescription =>
+      'Help improve DeepSeek models and products.';
+
+  @override
+  String get settingsSessionLogSaveFailed => 'Couldn\'t save the preference';
+
+  @override
+  String get settingsGesturesTitle => 'Gestures';
+
+  @override
+  String get settingsGesturesIntro =>
+      'A phone has no keyboard shortcuts: the app\'s actions ride its controls and the gestures listed here.';
+
+  @override
+  String get settingsGesturesEditorNote =>
+      'Recording or remapping key bindings belongs to the desktop app.';
+
+  @override
+  String get settingsGesturesMessageTitle => 'Long-press a message';
+
+  @override
+  String get settingsGesturesMessageBody =>
+      'Copy it, or fork the conversation from it.';
+
+  @override
+  String get settingsGesturesSessionTitle => 'Long-press a session row';
+
+  @override
+  String get settingsGesturesSessionBody =>
+      'Rename, fork, pin or archive that session.';
+
+  @override
+  String get settingsGesturesProjectTitle => 'Long-press a project header';
+
+  @override
+  String get settingsGesturesProjectBody =>
+      'Start a new session in that project.';
+
+  @override
+  String get settingsGesturesVoiceTitle => 'Hold the microphone';
+
+  @override
+  String get settingsGesturesVoiceBody =>
+      'Talk instead of typing while you hold it.';
+
+  @override
+  String get settingsGesturesHistoryTitle =>
+      'Scroll to the top of the transcript';
+
+  @override
+  String get settingsGesturesHistoryBody =>
+      'Loads the conversation\'s older history.';
+
+  @override
   String get settingsTranscriptViewCompact => 'Compact';
 
   @override

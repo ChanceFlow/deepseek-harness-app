@@ -37,6 +37,8 @@ import 'package:app/ui/chat/process_disclosure.dart';
 import 'package:app/ui/chat/tool_detail_surface.dart';
 import 'package:app/ui/chat/tool_row_model.dart';
 import 'package:app/ui/chat/transcript_view_mode.dart';
+import 'package:app/ui/settings/gesture_shortcuts_section.dart';
+import 'package:app/ui/settings/session_log_settings.dart';
 import 'package:app/ui/settings/settings_screen.dart';
 import 'package:app/ui/settings/shell_settings_page.dart';
 import 'package:app/ui/settings/theme_preference.dart';
@@ -50,9 +52,9 @@ import 'package:asr/asr.dart';
 import 'package:domain/model/attachment.dart';
 import 'package:domain/model/session.dart';
 import 'package:domain/model/session_archive.dart';
+import 'package:domain/model/settings.dart';
 import 'package:domain/model/agent_preset.dart';
 import 'package:domain/model/permission_select.dart';
-import 'package:domain/model/settings.dart';
 import 'package:domain/model/workspace.dart';
 import 'package:domain/model/workspace_file.dart';
 import 'package:domain/repository/chat_repository.dart';
@@ -626,6 +628,16 @@ final List<DesignShot> shots = <DesignShot>[
     host: _settingsHost,
     act: _loadRegistry,
   ),
+  // The two general items this pass adds. The gesture reference is the phone's
+  // answer to the pin's shortcut surface — read-only, because a phone has no
+  // keyboard to bind — and the session-log switch is the Host entry's accepted
+  // value, which is why it needs a settings plane that serves the namespace.
+  const DesignShot(name: 'settings-gestures', host: _gesturesHost),
+  const DesignShot(
+    name: 'settings-session-log',
+    host: _sessionLogHost,
+    act: _loadRegistry,
+  ),
   // The zh twin: the index reads 主机 / 应用设置 and the language row states
   // 跟随系统.
   const DesignShot(
@@ -998,6 +1010,46 @@ Future<bool> _load(
 /// the document names.
 Widget _settingsHost(ThemeData theme, Locale? locale) =>
     _settingsTree(theme, locale);
+
+/// The gesture reference on its own: the page the Settings entry opens.
+Widget _gesturesHost(ThemeData theme, Locale? locale) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  locale: locale,
+  theme: theme,
+  home: const SettingsGesturesPage(),
+);
+
+/// The settings index over a plane that serves the `session-log-deepseek`
+/// entry, so the row the Host publishes is the one on screen. A plane that
+/// does not serve it renders no row at all, which is the row's own test.
+Widget _sessionLogHost(ThemeData theme, Locale? locale) =>
+    _settingsTree(theme, locale, repository: _SessionLogShotRepository());
+
+/// The settings plane for that shot: one namespace, its `enabled` field, and
+/// nothing else reachable from the settings surface.
+class _SessionLogShotRepository extends ChatRepository {
+  @override
+  Future<SettingsSnapshot> describeSettings() async => const SettingsSnapshot(
+    writable: true,
+    hasDocument: true,
+    namespaces: <SettingsNamespace>[
+      SettingsNamespace(
+        ns: kSessionLogSettingsNs,
+        applies: SettingsApplies.live,
+        revision: 3,
+        hasUserLayer: false,
+        secretCount: 0,
+        value: <String, Object?>{kSessionLogEnabledField: true},
+      ),
+    ],
+    credentialRefs: <String>[],
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 /// The tool payload's surface, on a real edit: the diff the row peeks at, the
 /// call's arguments, and its settled result.
