@@ -98,6 +98,28 @@ void main() {
     expect(card.bottom, lessThan(anchor.top));
   });
 
+  testWidgets('a viewport change while open re-seats the card on its anchor', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester);
+    await _open(tester);
+
+    final Rect before = tester.getRect(find.byKey(_kAnchor));
+    // Shrink the page under the open card. The trigger moves up with the
+    // bottom edge, so a card placed from a rectangle measured during build
+    // stays where the old anchor was — the stale rect this contract exists to
+    // prevent (the reference re-reads the anchor every frame while open,
+    // `Menu.tsx:154-160`).
+    tester.view.physicalSize = const Size(400, 420);
+    await tester.pumpAndSettle();
+
+    final Rect anchor = tester.getRect(find.byKey(_kAnchor));
+    final Rect card = tester.getRect(find.byKey(_kCard));
+    expect(anchor.top, lessThan(before.top));
+    expect(anchor.top - card.bottom, 8);
+    expect(card.left, anchor.left);
+  });
+
   testWidgets('align end lines the card up with the trigger\'s right edge', (
     WidgetTester tester,
   ) async {
