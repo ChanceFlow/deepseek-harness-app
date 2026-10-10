@@ -107,8 +107,9 @@ List<String> reconcileManualOrder(
   void placeFork(String id) {
     if (!pending.remove(id)) return;
     final String? parentId = facts[id]?.parentId;
-    if (parentId == null || parentId == id || !result.contains(parentId))
+    if (parentId == null || parentId == id || !result.contains(parentId)) {
       return;
+    }
     placeFork(parentId);
     result.remove(id);
     result.insert(result.indexOf(parentId), id);
