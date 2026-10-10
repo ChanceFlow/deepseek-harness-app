@@ -74,6 +74,21 @@ const Duration _debounceWindow = Duration(milliseconds: 600);
 
 /// A fresh temp-file-backed store (empty cache: every read returns the
 /// pre-cache default, matching the app's pre-load window).
+/// The group folds as they stand in the browser's viewing document. The folds
+/// moved out of their own key into that document (the reference's
+/// `groupExpansion`), so a panel assertion reads them from there.
+Map<String, bool> _folds(LocalStateStore store) {
+  final Object? doc = store.read('sidebar.view');
+  if (doc is! Map) return const <String, bool>{};
+  final Object? expansion = doc['groupExpansion'];
+  if (expansion is! Map) return const <String, bool>{};
+  return <String, bool>{
+    for (final entry in expansion.entries)
+      if (entry.key is String && entry.value is bool)
+        entry.key as String: entry.value as bool,
+  };
+}
+
 LocalStateStore _store() {
   final dir = Directory.systemTemp.createTempSync('session_panel_state');
   addTearDown(() => dir.deleteSync(recursive: true));
@@ -90,6 +105,7 @@ Future<ProviderContainer> _pumpPanel(
   LocalStateStore? store,
   String selectedSessionId = 's1',
   ThemeData? theme,
+  void Function(String backendId, String sessionId)? onPinSession,
 }) async {
   // Phone-scale logical surface so the tree rows and the foot lay out
   // naturally.
@@ -119,6 +135,7 @@ Future<ProviderContainer> _pumpPanel(
             onSelectSession: (_) {},
             onCreateSession: (_) {},
             onSearchSessions: (_) {},
+            onPinSession: onPinSession,
           ),
         ),
       ),
@@ -297,7 +314,7 @@ void main() {
       await tester.tap(find.text('proj'));
       await tester.pumpAndSettle();
       expect(find.text('session 1'), findsOneWidget);
-      expect(store.read('sidebar.groupOverrides'), isNull);
+      expect(_folds(store), isEmpty);
 
       // A non-current group starts folded (default); the toggle expands
       // it and the override writes through to the store's cache.
@@ -305,12 +322,12 @@ void main() {
       await tester.tap(find.text('other'));
       await tester.pumpAndSettle();
       expect(find.text('other session'), findsOneWidget);
-      expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': true});
+      expect(_folds(store), <String, bool>{'w2': true});
       // Folding it back writes the collapse override.
       await tester.tap(find.text('other'));
       await tester.pumpAndSettle();
       expect(find.text('other session'), findsNothing);
-      expect(store.read('sidebar.groupOverrides'), <String, bool>{'w2': false});
+      expect(_folds(store), <String, bool>{'w2': false});
       await tester.pump(_debounceWindow);
 
       // A fresh panel instance seeded from the same store keeps the
