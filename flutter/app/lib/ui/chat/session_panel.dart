@@ -28,6 +28,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../local_state/local_state_providers.dart';
 import '../shared/archived_filter.dart';
+import '../shared/session_view_store.dart';
 import '../shared/backend_connection_dot.dart';
 import '../shared/edge_fade.dart';
 import '../shared/session_tree.dart';
@@ -80,12 +81,11 @@ final class BackendSessionSlice {
   }
 }
 
-/// Local state store key: per-group expansion overrides
-/// (`sidebar.groupOverrides`, `Map<String, bool>`).
-const String _groupOverridesKey = 'sidebar.groupOverrides';
-
 /// Local state store key: groups whose overflow control is expanded
-/// (`sidebar.overflowExpanded`, `List<String>`).
+/// (`sidebar.overflowExpanded`, `List<String>`). The group folds are not a
+/// key of their own any more — they live in the browser's viewing document
+/// ([SessionViewStore]); `sidebar.groupOverrides` is read once by that store's
+/// migration so an install keeps its folds.
 const String _overflowExpandedKey = 'sidebar.overflowExpanded';
 
 class SessionPanel extends ConsumerStatefulWidget {
@@ -271,7 +271,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   /// the rail avatars, so all three agree.
   ArchivedFilter _archivedFilter() => ref.watch(archivedFilterProvider);
 
-  /// Applies the persisted browsing toggles ([_groupOverridesKey],
+  /// Applies the persisted browsing toggles (the viewing document's folds and
   /// [_overflowExpandedKey]) once the store resolves; until then the
   /// panel runs on the defaults, and a user toggle inside that window
   /// cancels the snapshot (live intent wins). Runs inside build without
@@ -281,9 +281,14 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     if (store == null || _seededFromStore) return;
     _seededFromStore = true;
     if (_userToggled) return;
-    _groupOverrides.addAll(
-      _decodeGroupOverrides(store.read(_groupOverridesKey)),
-    );
+    // The folds live in the browser's one viewing document — the reference's
+    // `groupExpansion` — which is also where the order mode and the saved
+    // manual order live. The overflow expander keeps its own key: an expanded
+    // "show more" and an expanded group are different facts about the same
+    // group key, and folding one into the other opens groups the reader had
+    // collapsed.
+    final SessionViewState? view = SessionViewStore(store).read();
+    if (view != null) _groupOverrides.addAll(view.groupExpansion);
     _overflowExpandedGroups.addAll(
       _decodeOverflowExpanded(store.read(_overflowExpandedKey)),
     );
@@ -295,7 +300,13 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
   void _persistBrowsingState() {
     final store = ref.read(localStateStoreProvider).value;
     if (store == null) return;
-    store.write(_groupOverridesKey, Map<String, bool>.of(_groupOverrides));
+    // Write the folds back into the same document, preserving the order mode,
+    // the saved orders and the archived filter it already carries.
+    final SessionViewStore view = SessionViewStore(store);
+    final SessionViewState state = view.read() ?? const SessionViewState();
+    view.write(
+      state.copyWith(groupExpansion: Map<String, bool>.of(_groupOverrides)),
+    );
     store.write(_overflowExpandedKey, _overflowExpandedGroups.toList());
   }
 
@@ -341,6 +352,47 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
     final backendId = _actionBackend(slice);
     if (backendId == null || verb == null) return;
     verb(backendId, sessionId);
+  }
+
+  /// Pin: two facts together, the way the reference writes them. The Host owns
+  /// the pin (`workspace/pinSession`), and the browser records where the row
+  /// goes in that account's saved order (`pinSessionOrder`) — which is what
+  /// lets a pinned row lead once the order is the reader's own.
+  void _pinSession(
+    BackendSessionSlice? slice,
+    String accountKey,
+    String sessionId,
+  ) {
+    final store = ref.read(localStateStoreProvider).value;
+    if (store != null) {
+      final SessionViewStore view = SessionViewStore(store);
+      final SessionViewState? state = view.read();
+      if (state != null) {
+        view.pinSessionOrder(
+          state,
+          sessionId,
+          <String>{accountKey},
+          <String, List<String>>{
+            accountKey: widget.sessions
+                .map((SessionSummary session) => session.id)
+                .toList(),
+          },
+          <String, SessionOrderFacts>{
+            for (final SessionSummary session in widget.sessions)
+              session.id: (
+                updatedAt: session.updatedAtEpochMs,
+                parentId: session.parentSessionId,
+              ),
+          },
+          pinnedSessionIds: widget.pinnedSessionIds,
+          archivedSessionIds: <String>[
+            for (final SessionSummary session in widget.sessions)
+              if (session.archived) session.id,
+          ],
+        );
+      }
+    }
+    _sessionVerb(slice, sessionId, widget.onPinSession);
   }
 
   /// Project-header long-press verb: a new session in that workspace. The
@@ -677,7 +729,7 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
             onUnarchiveSession: (sessionId) =>
                 _sessionVerb(null, sessionId, widget.onUnarchiveSession),
             onPinSession: (sessionId) =>
-                _sessionVerb(null, sessionId, widget.onPinSession),
+                _pinSession(null, groups[i].key, sessionId),
             onUnpinSession: (sessionId) =>
                 _sessionVerb(null, sessionId, widget.onUnpinSession),
             pinnedSessionIds: widget.pinnedSessionIds,
@@ -777,8 +829,11 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
               _sessionVerb(slice, sessionId, widget.onArchiveSession),
           onUnarchiveSession: (sessionId) =>
               _sessionVerb(slice, sessionId, widget.onUnarchiveSession),
-          onPinSession: (sessionId) =>
-              _sessionVerb(slice, sessionId, widget.onPinSession),
+          onPinSession: (sessionId) => _pinSession(
+            slice,
+            _sliceGroupKey(slice, groups[i].key),
+            sessionId,
+          ),
           onUnpinSession: (sessionId) =>
               _sessionVerb(slice, sessionId, widget.onUnpinSession),
           pinnedSessionIds: widget.pinnedSessionIds,
@@ -910,18 +965,6 @@ class _SidebarScrollBehavior extends MaterialScrollBehavior {
       child: child,
     );
   }
-}
-
-/// Decodes [_groupOverridesKey]: the store's JSON round-trip yields
-/// `Map<String, dynamic>`, so members are checked, not cast wholesale —
-/// a malformed entry drops out, never throws.
-Map<String, bool> _decodeGroupOverrides(Object? raw) {
-  if (raw is! Map) return const <String, bool>{};
-  return <String, bool>{
-    for (final entry in raw.entries)
-      if (entry.key is String && entry.value is bool)
-        entry.key as String: entry.value as bool,
-  };
 }
 
 /// Decodes [_overflowExpandedKey] under the same checked rule.
