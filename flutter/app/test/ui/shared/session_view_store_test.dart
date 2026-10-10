@@ -1,6 +1,7 @@
 /// The session browser's persisted viewing state: each action the reference
 /// carries, the pin that writes a saved position as well as the Host fact, and
-/// the two legacy keys an existing install still has.
+/// the legacy fold key an existing install still has, and the overflow key
+/// it must not be read as.
 library;
 
 import 'dart:io';
@@ -235,33 +236,37 @@ void main() {
     expect(order.indexOf('fork'), order.indexOf('c') - 1);
   });
 
-  test(
-    'an install with only the two legacy keys keeps its expansion',
-    () async {
-      final ({LocalStateStore store, File file}) fixture = _emptyStore();
-      await fixture.store.load();
-      fixture.store.write(
-        SessionViewStore.legacyGroupOverridesKey,
-        <String, Object?>{'workspace:one': false},
-      );
-      fixture.store.write(SessionViewStore.legacyOverflowExpandedKey, <String>[
-        'workspace:two',
-      ]);
+  test('an install with the legacy fold key keeps its folds and leaves the '
+      'overflow key alone', () async {
+    final ({LocalStateStore store, File file}) fixture = _emptyStore();
+    await fixture.store.load();
+    fixture.store.write(
+      SessionViewStore.legacyGroupOverridesKey,
+      <String, Object?>{'workspace:one': false},
+    );
+    fixture.store.write(SessionViewStore.legacyOverflowExpandedKey, <String>[
+      'workspace:two',
+    ]);
 
-      final SessionViewStore view = SessionViewStore(fixture.store);
-      final SessionViewState migrated = view.read()!;
-      expect(migrated.groupExpansion['workspace:one'], isFalse);
-      expect(migrated.groupExpansion['workspace:two'], isTrue);
-      await fixture.store.flush();
+    final SessionViewStore view = SessionViewStore(fixture.store);
+    final SessionViewState migrated = view.read()!;
+    expect(migrated.groupExpansion['workspace:one'], isFalse);
+    // The overflow expander is a different fact about the same group key:
+    // it must not arrive here as a fold.
+    expect(migrated.groupExpansion.containsKey('workspace:two'), isFalse);
+    expect(
+      fixture.store.read(SessionViewStore.legacyOverflowExpandedKey),
+      <String>['workspace:two'],
+    );
+    await fixture.store.flush();
 
-      // The migration is written, so the next read takes the new document.
-      final LocalStateStore reopened = await _loaded(fixture.file);
-      expect(
-        SessionViewStore(reopened).read()!.groupExpansion['workspace:two'],
-        isTrue,
-      );
-    },
-  );
+    // The migration is written, so the next read takes the new document.
+    final LocalStateStore reopened = await _loaded(fixture.file);
+    expect(
+      SessionViewStore(reopened).read()!.groupExpansion['workspace:one'],
+      isFalse,
+    );
+  });
 
   test('the archived filter persists', () async {
     final ({LocalStateStore store, File file}) fixture = _emptyStore();

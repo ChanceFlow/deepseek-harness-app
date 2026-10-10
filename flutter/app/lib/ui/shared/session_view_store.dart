@@ -217,9 +217,14 @@ class SessionViewStore {
   /// The single key this state lives under.
   static const String key = 'sidebar.view';
 
-  /// The two keys this client wrote before this store existed. Read once, so
-  /// an install that has them keeps its expansion.
+  /// The key this client wrote its group folds under before this store
+  /// existed. Read once, so an install that has them keeps its expansion.
   static const String legacyGroupOverridesKey = 'sidebar.groupOverrides';
+
+  /// The "show more" expander's key. Deliberately **not** migrated into
+  /// [SessionViewState.groupExpansion]: an expanded overflow control and an
+  /// expanded group are different facts about the same group key, and folding
+  /// one into the other opens groups the reader had collapsed.
   static const String legacyOverflowExpandedKey = 'sidebar.overflowExpanded';
 
   /// The persisted state, with the legacy keys folded in when the new document
@@ -234,22 +239,16 @@ class SessionViewStore {
 
   SessionViewState _migrateLegacy() {
     final Object? overrides = _store.read(legacyGroupOverridesKey);
-    final Object? overflow = _store.read(legacyOverflowExpandedKey);
     final Map<String, bool> expansion = SessionViewState._decodeBoolMap(
       overrides,
     );
-    final List<String> expandedOverflow = overflow is List<Object?>
-        ? overflow.whereType<String>().toList(growable: false)
-        : const <String>[];
-    if (expansion.isEmpty && expandedOverflow.isEmpty) {
-      return const SessionViewState();
-    }
-    // The overflow rows were expanded, so they seed as expanded groups.
-    final Map<String, bool> seeded = <String, bool>{
-      ...expansion,
-      for (final String group in expandedOverflow) group: true,
-    };
-    final SessionViewState migrated = SessionViewState(groupExpansion: seeded);
+    if (expansion.isEmpty) return const SessionViewState();
+    // Only the group folds migrate. `sidebar.overflowExpanded` is the "show
+    // more" expander's state, a different fact about the same group key:
+    // reading it as a fold would open a group the reader had collapsed.
+    final SessionViewState migrated = SessionViewState(
+      groupExpansion: expansion,
+    );
     write(migrated);
     return migrated;
   }
