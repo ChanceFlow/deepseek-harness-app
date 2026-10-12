@@ -831,6 +831,119 @@ const String kSettingsRegistryDoc =
     '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"}'
     '], "activeId": "default"}';
 
+/// The registry document the banner shot runs on: the three hosts
+/// [hostBannerSlices] names, so each one's live connection dot resolves.
+const String kHostBannerRegistryDoc =
+    '{"backends": ['
+    '{"id": "default", "label": "Laptop", "baseUrl": "http://10.0.2.2:3080"},'
+    '{"id": "b1", "label": "Build box", "baseUrl": "http://10.0.2.2:3081"},'
+    '{"id": "b2", "label": "GPU Cluster", "baseUrl": "http://10.0.2.2:3082"}'
+    '], "activeId": "default"}';
+
+/// The session the banner shot shows as open: the one running turn in
+/// [hostBannerSlices], so the strip's facts and the tree's selection agree.
+const String kHostBannerSelectedId = 's1';
+
+/// The multi-host banner's content: the host the reader is on, a peer with one
+/// session, and a third whose one session is still running — enough to read a
+/// host strip's counts and its active marker. Offsets from [nowEpochMs], so the
+/// relative labels read the way a real drawer's do.
+List<BackendSessionSlice> hostBannerSlices(int nowEpochMs) {
+  const int hour = 3600000;
+  const String harnessApp = '/home/user/Projects/deepseek-harness-app';
+  return <BackendSessionSlice>[
+    BackendSessionSlice(
+      backend: kBackendLaptop,
+      active: true,
+      sessions: <SessionSummary>[
+        SessionSummary(
+          id: 's1',
+          title: 'dock vertical budget',
+          running: true,
+          blank: false,
+          updatedAtEpochMs: nowEpochMs - 20000,
+          cwd: harnessApp,
+        ),
+        SessionSummary(
+          id: 's2',
+          title: 'wire parity for session/fork',
+          blank: false,
+          pendingInteraction: SessionPendingInteraction.question,
+          updatedAtEpochMs: nowEpochMs - 3 * hour,
+          cwd: harnessApp,
+        ),
+        SessionSummary(
+          id: 's3',
+          title: 'telemetry sampling',
+          completed: true,
+          blank: false,
+          updatedAtEpochMs: nowEpochMs - 26 * hour,
+          cwd: harnessApp,
+        ),
+      ],
+      workspaces: const <WorkspaceSummary>[
+        WorkspaceSummary(
+          workspaceId: 'w1',
+          path: harnessApp,
+          title: 'deepseek-harness-app',
+          sessionIds: <String>['s1', 's2', 's3'],
+        ),
+        // A workspace holding none of this slice's sessions: the drawer drops
+        // the empty group, and the strip's count follows it.
+        WorkspaceSummary(
+          workspaceId: 'w2',
+          path: '/home/user/Projects/signoz-stack',
+          title: 'signoz-stack',
+          sessionIds: <String>['s6', 's7'],
+        ),
+      ],
+    ),
+    BackendSessionSlice(
+      backend: kBackendBuildBox,
+      active: false,
+      sessions: <SessionSummary>[
+        SessionSummary(
+          id: 'sb1',
+          title: 'nightly release verification',
+          blank: false,
+          updatedAtEpochMs: nowEpochMs - 2 * hour,
+          cwd: '/opt/builds/release',
+        ),
+      ],
+      workspaces: const <WorkspaceSummary>[
+        WorkspaceSummary(
+          workspaceId: 'wb1',
+          title: 'builds',
+          path: '/opt/builds',
+          sessionIds: <String>['sb1'],
+        ),
+      ],
+    ),
+    BackendSessionSlice(
+      backend: kBackendGpuServer,
+      active: false,
+      sessions: <SessionSummary>[
+        SessionSummary(
+          id: 'sg1',
+          title: 'eval benchmark run 42',
+          running: true,
+          blank: false,
+          updatedAtEpochMs: nowEpochMs - 1800000,
+          cwd: '/srv/models/eval',
+        ),
+      ],
+      workspaces: const <WorkspaceSummary>[
+        WorkspaceSummary(
+          workspaceId: 'wg1',
+          title: 'eval',
+          path: '/srv/models/eval',
+          sessionIds: <String>['sg1'],
+        ),
+      ],
+    ),
+  ];
+}
+
 /// The described host snapshot for the General page's fact rows.
 const SettingsSnapshot kSettingsSnapshot = SettingsSnapshot(
   writable: true,

@@ -50,6 +50,7 @@ import 'package:app/ui/settings/web_search_settings_page.dart';
 import 'package:app/ui/shared/archived_filter.dart';
 import 'package:app/ui/shared/session_archive_confirm_dialog.dart';
 import 'package:app/ui/shared/session_tree.dart';
+import 'package:app/ui/shared/state_dot.dart';
 import 'package:app/ui/subagents/subagent_screen.dart';
 import 'package:app/ui/subagents/subagent_ui_state.dart';
 import 'package:app/ui/theme/theme.dart';
@@ -558,6 +559,25 @@ final List<DesignShot> shots = <DesignShot>[
       await tester.tap(find.byTooltip('Collapse sidebar'));
       await settle(tester);
     },
+  ),
+  // The session drawer's multi-host banner, alone: the real panel on the
+  // banner fixture (the host the reader is on, a peer, a third whose session
+  // is still running), in the panel-only frame. This is the surface the
+  // host-strip rework changes, reviewed by eye against the capture it
+  // replaced.
+  const DesignShot(
+    name: 'host-banner',
+    host: _hostBannerSidebarHost,
+    act: _bannerAct,
+  ),
+  // The same strips at the platform's 2.0x text step: three facts and a host's
+  // name cannot share a 320dp line there, so a strip has to yield to two lines
+  // rather than stripe.
+  const DesignShot(
+    name: 'host-banner-scale-20',
+    host: _hostBannerSidebarHost,
+    act: _bannerAct,
+    scale: 2.0,
   ),
   // The archive prompt family: the Host's running-work refusal as the
   // confirmation that names the work, and the browsing sidebar under the
@@ -1402,6 +1422,116 @@ Widget _archiveConfirmHost(ThemeData theme, Locale? locale) => MaterialApp(
     ),
   ),
 );
+
+/// The direction shots render the panel alone: the viewport narrows to the
+/// drawer's own width, so no phone frame and no neighbour surface enter the
+/// picture the pick is made from.
+Future<void> _panelOnly(WidgetTester tester) async {
+  tester.view.physicalSize = Size(kSidebarWidth * 2, _kPhone.height);
+  await settle(tester);
+}
+
+/// The live dot inside one host's strip.
+StateDotState? _hostDot(WidgetTester tester, String backendId) {
+  final finder = find.descendant(
+    of: find.byKey(ValueKey<String>('backend-strip-$backendId')),
+    matching: find.byType(StateDot),
+  );
+  if (finder.evaluate().isEmpty) return null;
+  return tester.widget<StateDot>(finder).state;
+}
+
+/// The banner shot's act: the strip's headline fact is the connection, so pump
+/// real async turns until the fakes' handshake lands and the host the reader is
+/// on reports connected — a picture of three unreachable hosts reviews the
+/// strip's worst case as if it were the normal one. Then narrow the viewport to
+/// the panel.
+Future<void> _bannerAct(WidgetTester tester) async {
+  // The registry is a real file read inside the fake-async zone, so it has to
+  // be resolved through `runAsync` before any connection exists at all; then
+  // the keep-alive map is read so every enabled host's manager starts. This is
+  // the shape the provider suite drives connections with.
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(SessionPanel)),
+  );
+  await tester.runAsync(() => container.read(backendRegistryProvider.future));
+  container.read(allBackendConnectionsProvider);
+  for (var i = 0; i < 60; i++) {
+    if (_hostDot(tester, 'default') == StateDotState.done) break;
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    });
+    await tester.pump();
+  }
+  await _panelOnly(tester);
+}
+
+/// The real session panel on the banner fixture, in the panel-only frame: the
+/// surface whose host strips this pass changes, reviewed on its own — no phone
+/// frame, no chat behind it.
+Widget _hostBannerSidebarHost(ThemeData theme, Locale? locale) {
+  final registryDir = Directory.systemTemp.createTempSync('dsh-design-hosts');
+  addTearDown(() => registryDir.deleteSync(recursive: true));
+  final registryFile = File('${registryDir.path}/backends.json');
+  registryFile.writeAsStringSync(kHostBannerRegistryDoc);
+  final stateDir = Directory.systemTemp.createTempSync(
+    'dsh-design-hosts-state',
+  );
+  addTearDown(() => stateDir.deleteSync(recursive: true));
+  final stateFile = File('${stateDir.path}/local_state.json');
+  final slices = hostBannerSlices(DateTime.now().millisecondsSinceEpoch);
+  return ProviderScope(
+    overrides: [
+      backendStoreProvider.overrideWith(
+        (ref) async => BackendStore(registryFile, seedBaseUrl: kDshBaseUrl),
+      ),
+      localStateStoreProvider.overrideWith(
+        (ref) async => LocalStateStore(stateFile),
+      ),
+      // Every fixture host is reachable: an unreachable one leaves the
+      // connection manager retrying on a backoff timer, and the test binding
+      // rejects a pending timer at teardown. How a host that is down reads is
+      // `BackendConnectionDot`'s vocabulary, reviewed where that widget lives
+      // (the Settings host rows).
+      for (final port in <int>[3080, 3081, 3082]) ...[
+        dshRpcClientProvider(Uri.parse('http://10.0.2.2:$port'))
+            .overrideWithValue(_FakeRpc()),
+        dshEventSocketProvider(Uri.parse('http://10.0.2.2:$port'))
+            .overrideWithValue(_SilentSocket()),
+      ],
+    ],
+    child: MaterialApp(
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      theme: theme,
+      home: Scaffold(
+        body: SessionPanel(
+          inDrawer: true,
+          sessions: slices.first.sessions,
+          workspaces: slices.first.workspaces,
+          searchResults: const <SessionSearchResult>[],
+          selectedSessionId: kHostBannerSelectedId,
+          onSelectSession: (_) {},
+          onCreateSession: (_) {},
+          onSearchSessions: (_) {},
+          backendId: slices.first.backend.id,
+          backendSlices: slices,
+          onSelectBackend: (_) {},
+          onSelectBackendSession: (_, _) {},
+          onRenameSession: (_, _) {},
+          onForkSession: (_, _) {},
+          onArchiveSession: (_, _) {},
+          onUnarchiveSession: (_, _) {},
+          onPinSession: (_, _) {},
+          onUnpinSession: (_, _) {},
+          pinnedSessionIds: const <String>[],
+        ),
+      ),
+    ),
+  );
+}
 
 /// The browsing sidebar under "show archived", with one archived row: the
 /// grayed row, its badge, its unarchive verb, and the filter menu are the

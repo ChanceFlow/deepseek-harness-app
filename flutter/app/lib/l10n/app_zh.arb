@@ -319,6 +319,8 @@
   "backendStatusActive": "当前",
   "backendStatusStandby": "待机",
   "backendStatusDisabled": "已停用",
+  "hostRunningCount": "{count, plural, other{{count} 个运行中}}",
+  "hostWaitingCount": "{count, plural, other{{count} 个待处理}}",
   "backendEnableTooltip": "启用该主机",
   "backendDisableTooltip": "停用该主机",
   "hostSettingsUnavailable": "主机设置不可用",

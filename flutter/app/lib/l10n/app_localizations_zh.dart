@@ -1164,6 +1164,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get backendStatusDisabled => '已停用';
 
   @override
+  String hostRunningCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个运行中',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String hostWaitingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个待处理',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get backendEnableTooltip => '启用该主机';
 
   @override
