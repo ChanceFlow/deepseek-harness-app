@@ -2060,6 +2060,18 @@ abstract class AppLocalizations {
   /// **'Disabled'**
   String get backendStatusDisabled;
 
+  /// Sessions under one host whose turn is running, on that host's sidebar strip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 running} other{{count} running}}'**
+  String hostRunningCount(int count);
+
+  /// Sessions under one host waiting on the reader (approval, plan review, or a question), on that host's sidebar strip.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 waiting} other{{count} waiting}}'**
+  String hostWaitingCount(int count);
+
   /// No description provided for @backendEnableTooltip.
   ///
   /// In en, this message translates to:

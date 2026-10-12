@@ -46,9 +46,10 @@ values; the generated deepsuite tokens stay the identity.
   deepsuite surface tokens (elevated fill, l2 border, r12 shape, 38px).
 - **Section and per-backend headers → native `IconButton` / `ListTile`**: the
   section's search seat is a standard `IconButton` (the custom
-  `_HeaderIconButton` is deleted); the per-backend header is a `ListTile`
-  with the live dot leading, label over host:port, and the Active/Standby
-  badge trailing, keeping the nav-item fill on the active backend.
+  `_HeaderIconButton` is deleted); the per-backend header was a `ListTile` with
+  the live dot leading, label over host:port, and the Active/Standby badge
+  trailing, and is now a status strip
+  ([2026-10-12-host-banner-status-strip.md](2026-10-12-host-banner-status-strip.md)).
 - **Verbs sheet rows → native `ListTile`** inside the transparent `Material`
   ink host the sheet's decorated container requires; the always-visible
   ellipsis seat becomes a compact `IconButton`. `_GroupSection` becomes a

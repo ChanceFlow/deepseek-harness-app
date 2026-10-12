@@ -800,6 +800,24 @@
   "backendStatusActive": "Active",
   "backendStatusStandby": "Standby",
   "backendStatusDisabled": "Disabled",
+  "hostRunningCount": "{count, plural, =1{1 running} other{{count} running}}",
+  "@hostRunningCount": {
+    "description": "Sessions under one host whose turn is running, on that host's sidebar strip.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hostWaitingCount": "{count, plural, =1{1 waiting} other{{count} waiting}}",
+  "@hostWaitingCount": {
+    "description": "Sessions under one host waiting on the reader (approval, plan review, or a question), on that host's sidebar strip.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "backendEnableTooltip": "Enable this host",
   "backendDisableTooltip": "Disable this host",
   "hostSettingsUnavailable": "Host settings unavailable",

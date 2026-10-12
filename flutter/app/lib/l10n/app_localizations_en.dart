@@ -1206,6 +1206,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backendStatusDisabled => 'Disabled';
 
   @override
+  String hostRunningCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count running',
+      one: '1 running',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String hostWaitingCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count waiting',
+      one: '1 waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get backendEnableTooltip => 'Enable this host';
 
   @override

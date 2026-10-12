@@ -751,18 +751,10 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
       padding: const EdgeInsets.only(bottom: 16),
       children: [
         for (var i = 0; i < widget.backendSlices!.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          _BackendSectionHeader(
-            slice: widget.backendSlices![i],
-            // The active backend's header is not a switch control (the
-            // registry would no-op the redundant select anyway).
-            onSelectBackend: widget.backendSlices![i].active
-                ? null
-                : () => widget.onSelectBackend?.call(
-                    widget.backendSlices![i].backend.id,
-                  ),
-          ),
-          ..._sliceGroupSections(
+          // The strip rules itself off from the tree it owns, so a host's
+          // section needs no space above it: the rule is the separation.
+          if (i > 0) const SizedBox(height: 8),
+          ..._hostSection(
             context,
             scheme,
             widget.backendSlices![i],
@@ -771,6 +763,54 @@ class _SessionPanelState extends ConsumerState<SessionPanel> {
         ],
       ],
     );
+  }
+
+  /// One host's section: its strip, then its workspace-grouped tree.
+  List<Widget> _hostSection(
+    BuildContext context,
+    ColorScheme scheme,
+    BackendSessionSlice slice,
+    int nowEpochMs,
+  ) {
+    final counts = _hostCounts(slice);
+    return <Widget>[
+      _BackendSectionHeader(
+        slice: slice,
+        // The active backend's header is not a switch control (the registry
+        // would no-op the redundant select anyway).
+        onSelectBackend: slice.active
+            ? null
+            : () => widget.onSelectBackend?.call(slice.backend.id),
+        runningCount: counts.running,
+        waitingCount: counts.waiting,
+      ),
+      ..._sliceGroupSections(context, scheme, slice, nowEpochMs),
+    ];
+  }
+
+  /// What one host's strip reports: the work in flight under it. Both counts
+  /// follow the tree's own visibility rule — the archived filter, blank
+  /// placeholders, subagent children — so a strip can never report on a row
+  /// its tree is hiding.
+  ({int running, int waiting}) _hostCounts(BackendSessionSlice slice) {
+    // A non-active host carries no selection of its own: its slice is browsed
+    // with nothing selected, exactly as its tree renders.
+    final selectedSessionId = slice.active ? widget.selectedSessionId : null;
+    final archivedFilter = _archivedFilter();
+    var running = 0;
+    var waiting = 0;
+    for (final session in slice.sessions) {
+      if (!sessionVisible(
+        session,
+        selectedSessionId,
+        archivedFilter: archivedFilter,
+      )) {
+        continue;
+      }
+      if (session.running) running++;
+      if (session.pendingInteraction != null) waiting++;
+    }
+    return (running: running, waiting: waiting);
   }
 
   /// One backend's grouped-tree rows (no header): the slice's own
@@ -1103,16 +1143,22 @@ class _SearchCapsule extends StatelessWidget {
   }
 }
 
-/// One backend's section header in the multi-backend browsing region:
-/// the live connection dot, the backend label over `host:port`, and
-/// the Active marker — the same vocabulary as the Workspaces tab's
-/// backend headers — now a native [ListTile] carrying the sidebar
-/// nav-item active fill on the active backend. Tapping a non-active
-/// header selects that backend.
+/// One backend's section header in the multi-backend browsing region: what
+/// this host *is doing* on one line — the live connection dot, the host's
+/// name, the work in flight under it, and how many sessions it holds — with
+/// the host the reader is on marked by a primary bar.
+///
+/// The address is deliberately absent: `host:port` is the host's business and
+/// it lives on that host's row in Settings, where the reader goes to manage
+/// hosts. What the browsing column needs is whose tree this is, how it is
+/// reaching it, and what is moving there. Tapping a non-active header selects
+/// that backend; the active one is not a switch control.
 class _BackendSectionHeader extends StatelessWidget {
   const _BackendSectionHeader({
     required this.slice,
     required this.onSelectBackend,
+    required this.runningCount,
+    required this.waitingCount,
   });
 
   final BackendSessionSlice slice;
@@ -1121,55 +1167,173 @@ class _BackendSectionHeader extends StatelessWidget {
   /// switch wiring was provided.
   final VoidCallback? onSelectBackend;
 
+  /// Sessions under this host whose turn is running.
+  final int runningCount;
+
+  /// Sessions under this host waiting on the reader (approval, plan review,
+  /// or a question).
+  final int waitingCount;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final backend = slice.backend;
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      minLeadingWidth: 24,
-      horizontalTitleGap: 8,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      selected: slice.active,
-      tileColor: Colors.transparent,
-      selectedTileColor: scheme.secondaryContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kShapeChip),
-      ),
-      leading: BackendConnectionDot(backendId: backend.id),
-      title: Text(
+    final active = slice.active;
+    // The host's name is a level above the workspace headers below it
+    // (`labelLarge`): a strip that used the same size would read as another
+    // row of the tree instead of the thing the tree belongs to.
+    final TextStyle? labelStyle = theme.textTheme.titleMedium?.copyWith(
+      // The host the reader is on takes the reading ink; a host they could
+      // switch to stays quiet.
+      color: active ? scheme.onSurface : scheme.onSurfaceVariant,
+    );
+    final TextStyle? factStyle = theme.textTheme.labelSmall;
+    // What the host is doing: the work in flight under it. Inventory is the
+    // tree's business — every workspace header below prints its own count, and
+    // a host total printed above them reads as the same number twice.
+    final List<(String, Color)> facts = <(String, Color)>[
+      if (runningCount > 0)
+        (l10n.hostRunningCount(runningCount), scheme.primary),
+      if (waitingCount > 0)
+        (l10n.hostWaitingCount(waitingCount), scheme.warning),
+    ];
+    // The bullet before the host's name: the slot the active bar occupies on
+    // the host the reader is on, and the live connection dot. The bar's slot is
+    // reserved on every host — a marker that pushed its own host's name 11px
+    // right would break the one column the reader scans down.
+    final Widget leading = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        SizedBox(
+          width: 11,
+          child: active
+              ? Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    key: const ValueKey<String>('backend-active-bar'),
+                    width: 3,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(kShapePill),
+                    ),
+                  ),
+                )
+              : null,
+        ),
+        BackendConnectionDot(backendId: backend.id),
+        const SizedBox(width: 8),
+      ],
+    );
+    const double leadingWidth = 11 + 8 + 8;
+    final Widget factsRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (var i = 0; i < facts.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(width: 8),
+          Text(
+            facts[i].$1,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: factStyle?.copyWith(color: facts[i].$2),
+          ),
+        ],
+      ],
+    );
+    // The name keeps its own width and the facts follow it: a label that
+    // expanded would push the state to the far edge and leave a gap where the
+    // reader expects one phrase.
+    final Widget label = Flexible(
+      child: Text(
         backend.label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelMedium,
+        style: labelStyle,
       ),
-      subtitle: Text(
-        '${backend.baseUri.host}:${backend.baseUri.port}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: scheme.onSurfaceVariant,
-        ),
+    );
+    return Container(
+      key: ValueKey<String>('backend-strip-${backend.id}'),
+      // The host's strip rules itself off from the tree it owns; the strip
+      // that follows starts on that same rule.
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: slice.active ? scheme.primaryContainer : null,
-          borderRadius: BorderRadius.circular(kShapePill),
-        ),
-        child: Text(
-          slice.active ? l10n.backendStatusActive : l10n.backendStatusStandby,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: slice.active
-                ? scheme.onSurfaceVariant
-                : scheme.onSurfaceVariant,
+      child: Semantics(
+        // The active host is a state, not only a colour: a screen reader
+        // hears it, and the bar says it to everyone else.
+        selected: active,
+        child: InkWell(
+          onTap: onSelectBackend,
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              // The strip yields the way a group header does: the facts drop
+              // to their own line rather than striping the row, which is what
+              // happens at the largest platform text steps — three facts and
+              // a host's name do not fit a 320dp column at 2.0x.
+              double factsWidth = 0;
+              for (final (String text, Color _) in facts) {
+                factsWidth += 8 + _intrinsicWidth(context, text, factStyle);
+              }
+              final double available = constraints.maxWidth - 16;
+              final bool oneLine =
+                  !constraints.maxWidth.isFinite ||
+                  leadingWidth +
+                          _intrinsicWidth(context, backend.label, labelStyle) +
+                          8 +
+                          factsWidth <=
+                      available;
+              if (oneLine) {
+                return SizedBox(
+                  height: 44,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: <Widget>[
+                        leading,
+                        label,
+                        if (facts.isNotEmpty) ...<Widget>[
+                          const SizedBox(width: 8),
+                          factsRow,
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(children: <Widget>[leading, label]),
+                    Padding(
+                      padding: const EdgeInsets.only(left: leadingWidth),
+                      // A wrap, not a row: at the largest steps the facts
+                      // themselves need two lines, and a row would stripe.
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 2,
+                        children: <Widget>[
+                          for (final (String text, Color color) in facts)
+                            Text(
+                              text,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: factStyle?.copyWith(color: color),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
-      onTap: onSelectBackend,
     );
   }
 }

@@ -9,6 +9,11 @@ regression baseline, so nothing here can fail on a pixel.
     python3 scripts/render_design.py --publish       # render + publish
     python3 scripts/render_design.py --publish --baseline
     python3 scripts/render_design.py --publish --notes /tmp/pass.md
+    python3 scripts/render_design.py --only sidebar --shots sidebar --publish
+
+`--shots` narrows a publish to the screenshots whose name matches its regex,
+for a pass that reviews one surface: the page then carries that surface alone
+instead of every screen the app has.
 
 --baseline rotates what is already published into the "before" column, so
 the page shows this pass against the last one. Run it once per pass,
@@ -148,13 +153,31 @@ def rotate(www: Path) -> None:
     shutil.move(str(now), str(before))
 
 
-def publish(www: Path, url: str, notes: Path | None) -> None:
+def publish(
+    www: Path,
+    url: str,
+    notes: Path | None,
+    shots: re.Pattern[str] | None = None,
+) -> None:
     now = www / "now"
+    if shots is not None:
+        # A focused pass publishes the surface under review and nothing else,
+        # so the page is one decision instead of the whole app. `now` is rebuilt
+        # rather than filtered: a shot that a later pass deleted from the
+        # catalog would otherwise keep its copy — and its figure — alive here,
+        # because a stale name still matches the pattern. The shots left out
+        # keep whatever the `before` column already holds.
+        if now.is_dir():
+            shutil.rmtree(now)
     now.mkdir(parents=True, exist_ok=True)
+    copied = 0
     for png in sorted(SHOTS.glob("*.png")):
+        if shots is not None and not shots.search(png.stem):
+            continue
         shutil.copy2(png, now / png.name)
+        copied += 1
     (www / "index.html").write_text(page(www, notes), encoding="utf-8")
-    print(f"published {len(list(now.glob('*.png')))} shots -> {url}")
+    print(f"published {copied} shots -> {url}")
     if www != DEFAULT_WWW:
         print(f"(written to {www}, which $DSH_DESIGN_URL may not serve)")
 
@@ -351,6 +374,13 @@ def main() -> int:
     )
     parser.add_argument("--notes", type=Path, help="markdown read into the page")
     parser.add_argument("--www", type=Path, help="publish directory")
+    parser.add_argument(
+        "--shots",
+        help=(
+            "publish only shots whose name matches this regex, so the page "
+            "carries the surface under review alone"
+        ),
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -372,7 +402,12 @@ def main() -> int:
     # Rotate only once the render has produced something to replace it with.
     if args.baseline:
         rotate(www)
-    publish(www, url, args.notes)
+    publish(
+        www,
+        url,
+        args.notes,
+        re.compile(args.shots) if args.shots else None,
+    )
     return 0
 
 

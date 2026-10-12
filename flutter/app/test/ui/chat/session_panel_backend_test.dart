@@ -19,6 +19,7 @@ import 'package:app/config.dart';
 import 'package:app/di/providers.dart';
 import 'package:app/ui/chat/chat_screen.dart';
 import 'package:app/ui/chat/chat_ui_state.dart';
+import 'package:app/ui/theme/theme.dart';
 
 import '../../l10n_app.dart';
 
@@ -139,6 +140,7 @@ Future<void> _pumpSlices(
   required List<String> backendSelections,
   required List<(String, String)> backendSessionSelections,
   List<BackendSessionSlice>? slices,
+  ThemeData? theme,
 }) async {
   tester.view.physicalSize = const Size(800, 1280);
   tester.view.devicePixelRatio = 1.0;
@@ -154,6 +156,7 @@ Future<void> _pumpSlices(
             .overrideWithValue(_QuietSocket()),
       ],
       child: l10nApp(
+        theme: theme,
         home: ChatScreen(
           uiState: uiState,
           onAction: actions.add,
@@ -185,13 +188,37 @@ void main() {
       backendSessionSelections: [],
     );
 
-    // Both backends' headers with the live-host line and the markers.
+    // Both hosts' strips: the name, what the host holds, and the primary
+    // bar on the host the reader is on — never on one they could switch to.
     expect(find.text('Laptop'), findsOneWidget);
     expect(find.text('Build box'), findsOneWidget);
-    expect(find.text('10.0.2.2:3080'), findsOneWidget);
-    expect(find.text('10.0.2.2:3081'), findsOneWidget);
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('Standby'), findsOneWidget);
+    // The workspace header below each strip prints its own session count; the
+    // strip reports state only, so it never repeats that number.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-default')),
+        matching: find.text('1 session'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-default')),
+        matching: find.byKey(const ValueKey<String>('backend-active-bar')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-b1')),
+        matching: find.byKey(const ValueKey<String>('backend-active-bar')),
+      ),
+      findsNothing,
+    );
+    // The address is the host's own business: it lives on that host's row in
+    // Settings, not in the browsing column.
+    expect(find.text('10.0.2.2:3080'), findsNothing);
+    expect(find.text('10.0.2.2:3081'), findsNothing);
 
     // Both slices' workspace groups render (default collapsed — only
     // group headers, no session rows yet).
@@ -341,12 +368,14 @@ void main() {
         ),
       ],
     );
-    // Connection status never rides the main surface (Settings shows
-    // it); a single backend is unambiguous, so no strip or headers.
+    // Connection status never rides the main surface (Settings shows it);
+    // a single host is unambiguous, so it gets no strip and no headers.
     expect(find.text('Laptop'), findsNothing);
     expect(find.textContaining('connected'), findsNothing);
-    expect(find.text('Active'), findsNothing);
-    expect(find.text('Standby'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('backend-strip-default')),
+      findsNothing,
+    );
   });
 
   testWidgets('tapping another backend\'s session switches the active backend', (
@@ -443,24 +472,126 @@ void main() {
     await tester.tap(find.text('Beta on buildbox'));
     await tester.pumpAndSettle();
 
-    // The chat surface followed the registry switch: the Active marker
-    // moved to the now-active backend's header, and its session is the
-    // selected one.
-    final buildBoxRow = find.ancestor(
-      of: find.text('Build box'),
-      matching: find.byType(InkWell),
-    );
+    // The chat surface followed the registry switch: the marker moved to
+    // the now-active host's strip.
     expect(
-      find.descendant(of: buildBoxRow, matching: find.text('Active')),
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-b1')),
+        matching: find.byKey(const ValueKey<String>('backend-active-bar')),
+      ),
       findsOneWidget,
     );
-    final laptopRow = find.ancestor(
-      of: find.text('Laptop'),
-      matching: find.byType(InkWell),
-    );
     expect(
-      find.descendant(of: laptopRow, matching: find.text('Standby')),
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-default')),
+        matching: find.byKey(const ValueKey<String>('backend-active-bar')),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a host strip reports the work in flight under it', (
+    tester,
+  ) async {
+    await _pumpSlices(
+      tester,
+      uiState: _state(
+        sessions: const [
+          SessionSummary(
+            id: 's1',
+            title: 'Alpha on laptop',
+            running: true,
+            blank: false,
+          ),
+        ],
+      ),
+      actions: [],
+      backendSelections: [],
+      backendSessionSelections: [],
+      slices: [
+        BackendSessionSlice(
+          backend: _laptop,
+          active: true,
+          sessions: const [
+            SessionSummary(
+              id: 's1',
+              title: 'Alpha on laptop',
+              running: true,
+              blank: false,
+            ),
+            SessionSummary(
+              id: 's2',
+              title: 'Beta waits on the reader',
+              blank: false,
+              pendingInteraction: SessionPendingInteraction.question,
+            ),
+            // A subagent child never surfaces in the browsing tree, so the
+            // strip must not count its running turn: a header may not report
+            // on a row its tree is hiding.
+            SessionSummary(
+              id: 's3',
+              title: 'Child turn',
+              origin: 'subagent',
+              running: true,
+              blank: false,
+            ),
+          ],
+          workspaces: const [],
+        ),
+        BackendSessionSlice(
+          backend: _buildBox,
+          active: false,
+          sessions: const [
+            SessionSummary(id: 'sB1', title: 'Beta on buildbox', blank: false),
+          ],
+          workspaces: const [],
+        ),
+      ],
+    );
+
+    // One running row is visible; the hidden child's running turn is not the
+    // strip's to report.
+    expect(find.text('1 running'), findsOneWidget);
+    expect(find.text('1 waiting'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('backend-strip-default')),
+        matching: find.textContaining('running'),
+      ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the active host marker rides the primary role in both themes', (
+    tester,
+  ) async {
+    // One pump per brightness: a marker that names a colour instead of the
+    // role passes one theme and fails the other.
+    for (final ThemeData theme in <ThemeData>[
+      DshTheme.light(),
+      DshTheme.dark(),
+    ]) {
+      await _pumpSlices(
+        tester,
+        theme: theme,
+        uiState: _state(
+          sessions: const [
+            SessionSummary(id: 's1', title: 'Alpha on laptop', blank: false),
+          ],
+        ),
+        actions: [],
+        backendSelections: [],
+        backendSessionSelections: [],
+      );
+      // The theme swap animates: read the painted colour past the lerp.
+      await tester.pump(const Duration(milliseconds: 400));
+      final bar = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('backend-active-bar')),
+      );
+      expect(
+        (bar.decoration! as BoxDecoration).color,
+        theme.colorScheme.primary,
+      );
+    }
   });
 }
