@@ -135,6 +135,19 @@ final class DshRemoteInvoker {
         'path': payload['path'],
       };
     }
+    if (endpoint == DshRpcEndpoints.officeToPdfRender) {
+      // `render(workspaceFileScope, path, priority, signal)` takes the same
+      // shared scope lookup as the workspaceFiles reads, so its argument is
+      // `workspaceFileScopeId`; `priority` is required on the wire
+      // (`'foreground' | 'background'`) and is forwarded as given, never
+      // defaulted. Cancellation is the transport's injected `signal`, not an
+      // `args` member.
+      return <String, Object?>{
+        'workspaceFileScopeId': payload['sessionId'],
+        'path': payload['path'],
+        'priority': payload['priority'],
+      };
+    }
     if (endpoint == DshRpcEndpoints.goalsCreate) {
       final req = asJsonObject(payload['request']) ?? payload;
       return <String, Object?>{
